@@ -37,7 +37,12 @@ export class StyleManager {
 
   /** The managed `<style>` element (created on demand). */
   get element(): HTMLStyleElement {
-    if (!this.el || !this.el.isConnected) {
+    return this.mount();
+  }
+
+  /** Adds the `<style>` element (again, if it was removed) with all its rules. */
+  private mount(): HTMLStyleElement {
+    if (!this.el?.isConnected) {
       const el = this.doc.createElement("style");
       el.dataset.nailTheme = "";
       el.textContent = this.themeCss;
@@ -85,7 +90,7 @@ export class StyleManager {
     if (this.el?.isConnected) {
       entry.rule = this.insert(id, clean);
     } else {
-      void this.element; // creating the element inserts all geometry rules
+      this.mount(); // creating the element inserts all geometry rules
     }
   }
 

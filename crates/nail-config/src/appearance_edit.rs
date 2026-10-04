@@ -69,7 +69,8 @@ fn override_lines(
     let font_size = overrides.font_size.map(|size| {
         let mut line = token_line(FONT_SIZE_TOKEN, &size.to_string());
         if let Some(compact) = compact_font_size(size) {
-            line.push_str(&format!(" compact={compact}"));
+            line.push_str(" compact=");
+            line.push_str(&compact.to_string());
         }
         line
     });
@@ -110,8 +111,11 @@ pub(crate) fn compact_font_size(size: u32) -> Option<u32> {
         return None;
     }
     let scaled = (f64::from(size) * compact / base).round();
-    // `scaled` is between 0 and `size`, so the conversion is exact.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "`scaled` is between 0 and `size`, so the conversion is exact"
+    )]
     let scaled = scaled as u32;
     (scaled < size).then_some(scaled)
 }
@@ -157,16 +161,12 @@ impl ThemeEditor {
     fn body(&mut self) -> &mut KdlDocument {
         let style = self.style.clone();
         let root = self.root_mut();
-        if root.children().is_none() {
-            if let Some(format) = root.format_mut() {
-                format.before_children = " ".to_owned();
-            }
-            root.ensure_children();
+        if root.children().is_none()
+            && let Some(format) = root.format_mut()
+        {
+            " ".clone_into(&mut format.before_children);
         }
-        let body = root
-            .children_mut()
-            .as_mut()
-            .expect("children were just ensured");
+        let body = root.ensure_children();
         ensure_multiline(body, 1, &style);
         body
     }
@@ -228,10 +228,8 @@ impl ThemeEditor {
             }
             let keep = match (&line, sites.first()) {
                 (Some(line), Some(&(b, t))) => {
-                    let block = body.nodes_mut()[b]
-                        .children_mut()
-                        .as_mut()
-                        .expect("tokens block has children");
+                    // `sites` only holds blocks with children.
+                    let block = body.nodes_mut()[b].ensure_children();
                     ensure_multiline(block, 2, &style);
                     replace_rendered(block, t, &format!("{}{line}{}", style.pad(2), style.nl));
                     // A line that ended an inline block keeps its line break
@@ -246,26 +244,22 @@ impl ThemeEditor {
                 }
                 (Some(line), None) => {
                     let rendered = format!("{}{line}{}", style.pad(2), style.nl);
-                    match body.nodes().iter().position(|n| is_named(n, "tokens")) {
-                        Some(b) => {
-                            let tokens = &mut body.nodes_mut()[b];
-                            if tokens.children().is_none() {
-                                if let Some(format) = tokens.format_mut() {
-                                    format.before_children = " ".to_owned();
-                                }
-                                tokens.ensure_children();
-                            }
-                            let block = tokens.children_mut().as_mut().expect("ensured");
-                            append_rendered(block, 2, &rendered, &style);
+                    if let Some(b) = body.nodes().iter().position(|n| is_named(n, "tokens")) {
+                        let tokens = &mut body.nodes_mut()[b];
+                        if tokens.children().is_none()
+                            && let Some(format) = tokens.format_mut()
+                        {
+                            " ".clone_into(&mut format.before_children);
                         }
-                        None => {
-                            let block = format!(
-                                "{pad}tokens {{{nl}{rendered}{pad}}}{nl}",
-                                pad = style.pad(1),
-                                nl = style.nl
-                            );
-                            append_rendered(body, 1, &block, &style);
-                        }
+                        let block = tokens.ensure_children();
+                        append_rendered(block, 2, &rendered, &style);
+                    } else {
+                        let block = format!(
+                            "{pad}tokens {{{nl}{rendered}{pad}}}{nl}",
+                            pad = style.pad(1),
+                            nl = style.nl
+                        );
+                        append_rendered(body, 1, &block, &style);
                     }
                     None
                 }
@@ -277,10 +271,7 @@ impl ThemeEditor {
                 if Some((b, t)) == keep {
                     continue;
                 }
-                let block = body.nodes_mut()[b]
-                    .children_mut()
-                    .as_mut()
-                    .expect("tokens block has children");
+                let block = body.nodes_mut()[b].ensure_children();
                 ensure_multiline(block, 2, &style);
                 remove_node(block, t, &style);
             }

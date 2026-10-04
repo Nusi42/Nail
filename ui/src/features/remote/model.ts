@@ -160,7 +160,7 @@ function isIpv6(text: string): boolean {
   let groups = text.split(":").filter((g) => g !== "");
   const last = groups.at(-1);
   let extra = 0;
-  if (last !== undefined && last.includes(".")) {
+  if (last?.includes(".")) {
     if (parseIpv4(last) === null) return false;
     groups = groups.slice(0, -1);
     extra = 2;

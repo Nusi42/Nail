@@ -10,6 +10,7 @@ import {
   showView,
   viewRegion,
 } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -27,7 +28,8 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
@@ -145,7 +147,7 @@ test("an Exchange Online account is added through Autodiscover and syncs", async
   const authorize = await link.getAttribute("href");
   expect(authorize).toBeTruthy();
   // Plays the browser: the mock signs in and redirects to Nail's listener.
-  await page.request.get(authorize!);
+  await page.request.get(defined(authorize, "the sign-in link"));
   await finishSetup(page, dialog);
   const grace = accountSectionNamed(page, "grace@contoso.example");
   await expect(grace).toHaveAttribute("data-account-kind", "exchange");
@@ -218,7 +220,10 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
   const move = page.getByRole("dialog", { name: "Move to folder" });
   await move.getByRole("button", { name: "Receipts", exact: true }).click();
   await expect(rows(page)).toHaveCount(1);
-  const receipts = (await graphFolders()).find((f) => f.name === "Receipts")!;
+  const receipts = defined(
+    (await graphFolders()).find((f) => f.name === "Receipts"),
+    "the Receipts folder",
+  );
   await expect
     .poll(async () => (await graphMessage("Engine review on Monday"))?.folder)
     .toBe(receipts.id);

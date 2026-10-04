@@ -30,6 +30,7 @@ import {
   tooltipMessage,
   wrapEdges,
 } from "./toolbarModel";
+import { must } from "../test/must";
 
 function layoutWith(extra: Record<string, unknown>): ResolvedLayout {
   return normalizeLayout({ ...createMockData(1).layout, ...extra });
@@ -46,8 +47,8 @@ describe("toolbar model", () => {
     const [plain, icon] = layoutWith({
       toolbars: { t: [action("mail.reply"), action("mail.archive", { display: "icon" })] },
     }).toolbars.t as Extract<ToolbarItem, { type: "action" }>[];
-    expect(displayOf(plain as Extract<ToolbarItem, { type: "action" }>)).toBe("icon-label");
-    expect(displayOf(icon as Extract<ToolbarItem, { type: "action" }>)).toBe("icon");
+    expect(displayOf(must(plain))).toBe("icon-label");
+    expect(displayOf(must(icon))).toBe("icon");
   });
 
   it("looks a bar's shortcuts up in its own key context before the one around it", () => {

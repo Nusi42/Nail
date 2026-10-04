@@ -29,9 +29,17 @@ pub(crate) fn write_atomic(path: &Path, text: &str) -> io::Result<()> {
         .unwrap_or_default();
     let temp = dir.join(format!(".{name}.tmp"));
     std::fs::write(&temp, text.as_bytes())?;
-    std::fs::rename(&temp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&temp);
-    })
+    std::fs::rename(&temp, path).inspect_err(|_| remove_temp(&temp))
+}
+
+/// Removes a temporary file after a failed write (best effort: a leftover
+/// is only logged, and the next write replaces it).
+pub(crate) fn remove_temp(temp: &Path) {
+    if let Err(err) = std::fs::remove_file(temp)
+        && err.kind() != io::ErrorKind::NotFound
+    {
+        tracing::debug!(%err, temp = %temp.display(), "temporary file not removed");
+    }
 }
 
 /// Reads a file; `None` when it does not exist.
@@ -130,7 +138,10 @@ pub(crate) fn take(dir: &Path, file: ConfigFile) -> io::Result<ConfigBackup> {
         current.as_deref().unwrap_or_default(),
     )?;
     for old in existing.iter().skip(KEEP.saturating_sub(1)) {
-        let _ = std::fs::remove_file(backup_path(dir, old));
+        let old = backup_path(dir, old);
+        if let Err(err) = std::fs::remove_file(&old) {
+            tracing::debug!(%err, backup = %old.display(), "old backup not removed");
+        }
     }
     Ok(to_backup(file, &entry))
 }

@@ -114,7 +114,7 @@ export function createPluginApiError(code: PluginApiErrorCode, message: string):
 
 /** The host's API; throws when the code does not run inside Nail. */
 export function host(): NailApi {
-  const api = (globalThis as { nail?: NailApi }).nail;
+  const api = (globalThis as { nail?: NailApi | null }).nail;
   if (api === undefined || api === null) {
     throw createPluginApiError(
       "unsupported",
@@ -165,14 +165,20 @@ function forward<T extends object>(pick: (api: NailApi) => T): T {
     get(_target, prop) {
       const target = pick(host()) as Record<PropertyKey, unknown>;
       const value = target[prop];
-      return typeof value === "function" ? value.bind(target) : value;
+      return typeof value === "function"
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
     },
   });
 }
 
 const ui: SdkUiApi = {
-  registerCommand: (name, handler) => host().ui.registerCommand(name, handler),
-  registerPanel: (name, panel) => host().ui.registerPanel(name, toPanelProvider(panel)),
+  registerCommand: (name, handler) => {
+    host().ui.registerCommand(name, handler);
+  },
+  registerPanel: (name, panel) => {
+    host().ui.registerPanel(name, toPanelProvider(panel));
+  },
   showDialog: (spec, options) => host().ui.showDialog(toDialogSpec(spec), options),
   notify: (notification) => host().ui.notify(toNotificationSpec(notification)),
   updatePanel: (name, content) => host().ui.updatePanel(name, toNodes(content)),

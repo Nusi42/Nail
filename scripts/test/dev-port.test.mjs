@@ -18,13 +18,33 @@ import {
   tauriDevConfig,
   writeTauriDevConfig,
 } from "../lib/dev-port.mjs";
+import { readJson } from "../lib/json.mjs";
 
-/** Holds a free 127.0.0.1 port for the duration of a test. */
+/**
+ * Holds a free 127.0.0.1 port for the duration of a test.
+ *
+ * @returns {Promise<{ port: number, release: () => Promise<void> }>}
+ */
 function hold() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.once("error", reject);
-    server.listen({ port: 0, host: "127.0.0.1" }, () => resolve(server));
+    server.listen({ port: 0, host: "127.0.0.1" }, () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        reject(new Error("not a TCP server"));
+        return;
+      }
+      resolve({
+        port: address.port,
+        release: () =>
+          new Promise((done) => {
+            server.close(() => {
+              done();
+            });
+          }),
+      });
+    });
   });
 }
 
@@ -42,10 +62,9 @@ test("NAIL_DEV_PORT values are checked", () => {
 });
 
 test("a held port is not free, a released one is", async () => {
-  const server = await hold();
-  const { port } = server.address();
+  const { port, release } = await hold();
   assert.equal(await isPortFree(port), false);
-  await new Promise((resolve) => server.close(resolve));
+  await release();
   assert.equal(await isPortFree(port), true);
   const any = await freePort();
   assert.ok(any > 0 && any <= 65535);
@@ -60,15 +79,14 @@ test("the preferred port is used when free", async () => {
 });
 
 test("a taken preferred port falls back to a free one", async () => {
-  const server = await hold();
-  const taken = server.address().port;
+  const { port: taken, release } = await hold();
   try {
     const picked = await pickDevPort({ env: {}, preferred: taken });
     assert.equal(picked.source, "free");
     assert.notEqual(picked.port, taken);
     assert.equal(await isPortFree(picked.port), true);
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await release();
   }
 });
 
@@ -78,12 +96,11 @@ test("NAIL_DEV_PORT is used exactly and a taken one is an error", async () => {
     port: wanted,
     source: "env",
   });
-  const server = await hold();
-  const taken = server.address().port;
+  const { port: taken, release } = await hold();
   try {
     await assert.rejects(pickDevPort({ env: { [DEV_PORT_ENV]: String(taken) } }), /is taken/);
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await release();
   }
 });
 
@@ -95,7 +112,7 @@ test("the Tauri override points devUrl at the port and drops beforeDevCommand", 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nail-dev-port-"));
   try {
     const file = writeTauriDevConfig(6123, dir);
-    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), tauriDevConfig(6123));
+    assert.deepEqual(readJson(file), tauriDevConfig(6123));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -110,8 +127,8 @@ test("`tauri` as the first argument runs the desktop app with the rest", () => {
 });
 
 test("tauri.conf.json has no fixed Vite port and no dev command of its own", () => {
-  const conf = JSON.parse(
-    fs.readFileSync(new URL("../../app/src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+  const conf = /** @type {{ build: { beforeDevCommand?: string, devUrl?: string } }} */ (
+    readJson(new URL("../../app/src-tauri/tauri.conf.json", import.meta.url))
   );
   assert.equal(conf.build.beforeDevCommand, undefined);
   assert.equal(conf.build.devUrl, devUrl(PREFERRED_DEV_PORT));

@@ -1,9 +1,7 @@
 //! Autocrypt Level 1: headers, peer state, gossip, recommendation and
 //! setup messages (incl. GnuPG-made vectors).
 
-mod common;
-
-use common::{Env, fixture, fixture_text};
+use crate::common::{Env, fixture, fixture_text};
 use nail_api::AccountId;
 use nail_api::security::{
     AutocryptPreference, AutocryptRecommendation, DecryptionState, KeyAlgorithm, KeySource,
@@ -229,12 +227,12 @@ fn invalid_senders_and_headers_are_ignored() {
     );
     let update =
         process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
-    assert_eq!(update, Default::default());
+    assert_eq!(update, nail_pgp::autocrypt::AutocryptUpdate::default());
     let mut report =
         IncomingMessage::from_raw(&plain("carol@example.com", "bob@example.net", jan1, ""));
     report.is_report = true;
     let update = process_incoming(&ring, &account(), &report, &[]).unwrap();
-    assert_eq!(update, Default::default());
+    assert_eq!(update, nail_pgp::autocrypt::AutocryptUpdate::default());
     assert!(
         env.store
             .autocrypt_peer(&account(), "carol@example.com")
@@ -651,7 +649,11 @@ fn autocrypt_keys_vouch_only_for_the_header_address() {
     let update =
         process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
     assert!(update.keys.is_empty());
-    assert!(ring.list(&Default::default()).unwrap().is_empty());
+    assert!(
+        ring.list(&nail_api::security::KeyFilter::default())
+            .unwrap()
+            .is_empty()
+    );
 
     // Gossip is bound to its address the same way.
     let gossip = header_for(

@@ -17,6 +17,7 @@ import { composerWindow, openSettingsTab, showView } from "../support/views";
  * mail still arrives.
  */
 const test = base.extend<{ nail: NailServer }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
   nail: async ({}, use) => {
     const server = await startNail({ seed: "demo-multi" });
     await use(server);
@@ -29,12 +30,6 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 /** The settings view at the section of a former settings tab (M5b). */
 function openSettings(page: Page, tab: string): Promise<Locator> {
   return openSettingsTab(page, tab);
-}
-
-async function closeDialog(page: Page, name: string) {
-  const dialog = page.getByRole("dialog", { name });
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
 }
 
 /** Installs a package with every permission allowed; closes the settings. */

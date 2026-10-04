@@ -501,7 +501,10 @@ impl JobProgress {
             (_, Some(0)) | (Some(0), None) => return Some(1.0),
             _ => return None,
         };
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a progress fraction; counts far below 2^52 are exact"
+        )]
         Some((done.min(total) as f64) / (total as f64))
     }
 }

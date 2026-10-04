@@ -27,8 +27,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, FullSyncPage, MailApiEngine,
-    RemoteMessage, RemoteMessageChange, RemoteWrite, SyncDelta, WriteOutcome,
+    BoxFuture, DeltaOutcome, EngineError, FullSyncPage, MailApiEngine, RemoteMessage,
+    RemoteMessageChange, RemoteWrite, SyncDelta, WriteOutcome,
 };
 use nail_api::gmail::{GmailFolder, GmailLabelSettings};
 use nail_api::{
@@ -218,11 +218,8 @@ async fn label(
 /// The Gmail engine of a configured account (OAuth2 tokens from the
 /// core's token manager).
 pub(crate) fn engine_for(service: &Service, account: &AccountConfig) -> Result<GmailEngine> {
-    GmailEngine::for_account(
-        account,
-        Arc::clone(&service.inner.tokens) as Arc<dyn AccessTokenProvider>,
-    )
-    .map_err(|e| CoreError::from(EngineError::from(e)))
+    GmailEngine::for_account(account, service.inner.tokens.clone())
+        .map_err(|e| CoreError::from(EngineError::from(e)))
 }
 
 /// The id of a Gmail message in the store.
@@ -910,9 +907,7 @@ impl GmailExecutor<'_> {
                     else {
                         return Err(crate::api_moves::unsupported_target());
                     };
-                    let source = nail_exchange::transfer::ApiMailbox::Api(
-                        self.engine.as_ref() as &dyn MailApiEngine
-                    );
+                    let source = nail_exchange::transfer::ApiMailbox::Api(self.engine.as_ref());
                     return crate::api_moves::move_out(
                         self.service,
                         message_id,
@@ -989,11 +984,12 @@ impl GmailExecutor<'_> {
                     .await?
                 {
                     let id = message_id.clone();
-                    let _ = self
-                        .service
-                        .store()
-                        .call(move |s| s.set_message_remote_id(&id, Some(&remote)))
-                        .await;
+                    drop(
+                        self.service
+                            .store()
+                            .call(move |s| s.set_message_remote_id(&id, Some(&remote)))
+                            .await,
+                    );
                 }
                 Ok(())
             }
@@ -1016,14 +1012,15 @@ pub(crate) async fn test_gmail(
     server: &nail_api::ServerEndpoint,
     login: std::result::Result<crate::creds::Login, EngineError>,
 ) -> std::result::Result<Vec<String>, EngineError> {
-    let token = match login? {
-        crate::creds::Login::OAuth2 { access_token, .. } => access_token,
-        _ => {
-            return Err(EngineError::permanent(
-                ErrorCode::InvalidRequest,
-                "Gmail accounts sign in with OAuth2",
-            ));
-        }
+    let crate::creds::Login::OAuth2 {
+        access_token: token,
+        ..
+    } = login?
+    else {
+        return Err(EngineError::permanent(
+            ErrorCode::InvalidRequest,
+            "Gmail accounts sign in with OAuth2",
+        ));
     };
     let client = nail_proto_gmail::GmailClient::new(
         &nail_proto_gmail::api_base_for(server),

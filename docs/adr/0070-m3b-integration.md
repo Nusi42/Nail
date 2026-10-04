@@ -125,8 +125,8 @@ into the core, the demo, the default layout and the Playwright suite.
   with no iMIP), `tests/gmail.rs` (sync, labels, categories, replay,
   sending, history, expiry resync, label queue, `TestAccount`),
   `tests/m3b.rs` (every request served).
-- Playwright: `scheduling.spec.ts` (accept + REPLY on the mock SMTP server
-  + calendar, update and cancel, counter-proposal, free/busy from bob) and
+- Playwright: `scheduling.spec.ts` (accept + REPLY on the mock SMTP server +
+  calendar, update and cancel, counter-proposal, free/busy from bob) and
   `gmail.spec.ts` (sync, categories, label, archive, send, history
   polling); the a11y sweep covers the six new dialogs, the meeting panel and
   the Gmail views.

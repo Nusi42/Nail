@@ -4,6 +4,7 @@
 //! so every id is one percent-encoded path segment.
 
 use nail_api::{AccountId, CalendarId, ContactId, FolderId, MessageId, ThreadId};
+use std::fmt::Write as _;
 
 /// The URI scheme prefix.
 pub const SCHEME: &str = "nail://";
@@ -256,7 +257,8 @@ pub fn encode(segment: &str) -> String {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
             out.push(char::from(byte));
         } else {
-            out.push_str(&format!("%{byte:02X}"));
+            // Writing to a String cannot fail.
+            let _ = write!(out, "%{byte:02X}");
         }
     }
     out

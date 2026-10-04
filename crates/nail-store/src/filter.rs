@@ -89,6 +89,7 @@ pub enum MessageFilter {
 
 impl MessageFilter {
     /// `a AND b`, flattening nested ANDs.
+    #[must_use]
     pub fn and(self, other: MessageFilter) -> MessageFilter {
         match (self, other) {
             (MessageFilter::All, x) | (x, MessageFilter::All) => x,

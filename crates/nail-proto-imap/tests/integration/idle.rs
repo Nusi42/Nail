@@ -1,20 +1,18 @@
 //! IDLE on one connection, the NOOP polling fallback, and the
 //! [`MailboxWatcher`] with re-issue, reconnect and fault injection.
 
-mod common;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use common::*;
+use crate::common::*;
 use futures::StreamExt;
 use futures::future::BoxFuture;
 use nail_proto_imap::{
     CredentialProvider, Credentials, IdleEnd, ImapError, MailboxChange, MailboxWatcher,
     WatchConfig, WatchEvent, WatchMode,
 };
-use nail_testkit::MockCapabilities;
+use nail_testkit::{MockCapabilities, NO_FLAGS};
 
 const WAIT: Duration = Duration::from_secs(10);
 
@@ -31,7 +29,7 @@ async fn idle_reports_new_mail_from_another_client() {
     let store = server.store().clone();
     let (outcome, ()) = tokio::join!(client.idle(WAIT, never()), async {
         assert!(server.wait_for_idle(1, WAIT).await);
-        store.add_message("INBOX", &message("pushed"), &[] as &[&str]);
+        store.add_message("INBOX", &message("pushed"), NO_FLAGS);
     });
     let outcome = outcome.unwrap();
     assert_eq!(outcome.end, IdleEnd::Changes);
@@ -145,7 +143,7 @@ async fn changes_seen_before_idle_return_at_once() {
     client.examine("INBOX").await.unwrap();
     server
         .store()
-        .add_message("INBOX", &message("early"), &[] as &[&str]);
+        .add_message("INBOX", &message("early"), NO_FLAGS);
     // NOOP picks up the change; IDLE hands it out without waiting.
     client.noop().await.unwrap();
     assert_eq!(client.pending_changes(), [MailboxChange::Exists(4)]);
@@ -196,7 +194,7 @@ async fn polling_reports_changes_without_idle() {
     server.store().add_flags("INBOX", 3, &["\\Seen"]);
     server
         .store()
-        .add_message("INBOX", &message("polled"), &[] as &[&str]);
+        .add_message("INBOX", &message("polled"), NO_FLAGS);
     let changes = client.poll().await.unwrap();
     assert!(changes.contains(&MailboxChange::Exists(4)), "{changes:?}");
     assert!(
@@ -251,9 +249,7 @@ async fn the_watcher_idles_reconnects_after_a_drop_and_keeps_reporting() {
     );
     expect_connected(&mut watcher, WatchMode::Idle).await;
     assert!(server.wait_for_idle(1, WAIT).await);
-    server
-        .store()
-        .add_message("INBOX", &message("a"), &[] as &[&str]);
+    server.store().add_message("INBOX", &message("a"), NO_FLAGS);
     expect_exists(&mut watcher, 4).await;
 
     // The connection dies mid-IDLE: reported, then re-established.
@@ -268,9 +264,7 @@ async fn the_watcher_idles_reconnects_after_a_drop_and_keeps_reporting() {
     }
     expect_connected(&mut watcher, WatchMode::Idle).await;
     assert!(server.wait_for_idle(1, WAIT).await);
-    server
-        .store()
-        .add_message("INBOX", &message("b"), &[] as &[&str]);
+    server.store().add_message("INBOX", &message("b"), NO_FLAGS);
     expect_exists(&mut watcher, 5).await;
 
     assert!(server.connection_count() >= 2);
@@ -310,9 +304,7 @@ async fn the_watcher_polls_when_idle_is_missing_or_disabled() {
         fast_watch(),
     );
     expect_connected(&mut watcher, WatchMode::Poll).await;
-    server
-        .store()
-        .add_message("INBOX", &message("a"), &[] as &[&str]);
+    server.store().add_message("INBOX", &message("a"), NO_FLAGS);
     expect_exists(&mut watcher, 4).await;
     assert!(server.command_count("NOOP") >= 1);
     watcher.stop().await;
@@ -325,9 +317,7 @@ async fn the_watcher_polls_when_idle_is_missing_or_disabled() {
     );
     expect_connected(&mut watcher, WatchMode::Poll).await;
     // It is a stream, too.
-    server
-        .store()
-        .add_message("INBOX", &message("b"), &[] as &[&str]);
+    server.store().add_message("INBOX", &message("b"), NO_FLAGS);
     let event = tokio::time::timeout(WAIT, watcher.next()).await.unwrap();
     assert!(matches!(event, Some(WatchEvent::Changed(_))), "{event:?}");
     assert_eq!(server.command_count("IDLE"), 0);
@@ -361,11 +351,8 @@ async fn the_watcher_refreshes_rejected_tokens_and_backs_off() {
         calls: AtomicUsize::new(0),
         refreshes: AtomicUsize::new(0),
     });
-    let mut watcher = MailboxWatcher::spawn(
-        config_for(&server),
-        Arc::clone(&provider) as Arc<dyn CredentialProvider>,
-        fast_watch(),
-    );
+    let credentials: Arc<dyn CredentialProvider> = provider.clone();
+    let mut watcher = MailboxWatcher::spawn(config_for(&server), credentials, fast_watch());
     match next(&mut watcher).await {
         WatchEvent::Disconnected { error, .. } => {
             assert!(matches!(error, ImapError::AuthFailed(_)), "{error:?}");
@@ -393,7 +380,7 @@ async fn a_server_that_drops_idle_is_backed_off_from() {
         match next(&mut watcher).await {
             WatchEvent::Connected { .. } => {}
             WatchEvent::Disconnected { retry_in, .. } => delays.push(retry_in.as_millis()),
-            other => panic!("{other:?}"),
+            other @ WatchEvent::Changed(_) => panic!("{other:?}"),
         }
     }
     assert_eq!(delays, [20, 40, 80, 160]);
@@ -458,15 +445,13 @@ async fn a_missing_mailbox_is_reported_and_retried() {
     server
         .store()
         .add_mailbox("Later", nail_api::FolderRole::Other);
-    server
-        .store()
-        .add_message("Later", &message("x"), &[] as &[&str]);
+    server.store().add_message("Later", &message("x"), NO_FLAGS);
     // Skip further failures until the mailbox exists.
     loop {
         match next(&mut watcher).await {
             WatchEvent::Connected { .. } => break,
             WatchEvent::Disconnected { .. } => {}
-            other => panic!("{other:?}"),
+            other @ WatchEvent::Changed(_) => panic!("{other:?}"),
         }
     }
     watcher.stop().await;

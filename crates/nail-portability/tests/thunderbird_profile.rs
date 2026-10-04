@@ -2,6 +2,7 @@
 //! see `tests/fixtures/README.md`): found from `profiles.ini`, previewed
 //! and imported like the core does it (WP125's Playwright scenario uses the
 //! same fixture).
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -77,7 +78,7 @@ type BookContent = (
 );
 
 fn write_book(path: &Path, cards: Cards, lists: Lists) {
-    let _ = std::fs::remove_file(path);
+    drop(std::fs::remove_file(path));
     let connection = Connection::open(path).unwrap();
     connection
         .execute_batch(
@@ -156,7 +157,7 @@ fn expected(cards: Cards, lists: Lists) -> BookContent {
 fn the_fixture_address_books_are_current() {
     let books = [
         ("abook.sqlite", ABOOK_CARDS, ABOOK_LISTS),
-        ("history.sqlite", HISTORY_CARDS, &[] as Lists),
+        ("history.sqlite", HISTORY_CARDS, &[]),
     ];
     let regenerate = std::env::var_os("NAIL_REGENERATE_FIXTURES").is_some();
     for (file, cards, lists) in books {

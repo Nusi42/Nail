@@ -167,7 +167,7 @@ test.describe("windows and dialogs of demo-multi", () => {
     const settings = await openSettings(page);
     const sections = await settingsNav(settings)
       .getByRole("button")
-      .evaluateAll((items) => items.map((item) => item.textContent?.trim() ?? ""));
+      .evaluateAll((items) => items.map((item) => item.textContent.trim()));
     expect(sections.length).toBeGreaterThanOrEqual(15);
     for (const section of sections) {
       await openSettings(page, section);

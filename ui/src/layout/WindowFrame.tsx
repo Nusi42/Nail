@@ -64,13 +64,13 @@ const FOCUSABLE =
 /** What the window layer can ask of a window. */
 export interface WindowFrameHandle {
   /** Maximize or restore (resizable windows only). */
-  toggleMaximize(): void;
+  toggleMaximize: () => void;
   /** Back to the default place (remembered positions were forgotten). */
-  reset(): void;
+  reset: () => void;
   /** Focus the window (its last focused element, else the title bar). */
-  focus(): void;
+  focus: () => void;
   /** Where the window is shown (page pixels). */
-  rect(): WindowRect;
+  rect: () => WindowRect;
 }
 
 /** Keyboard move / size mode (Alt+F7 / Alt+F8). */
@@ -121,9 +121,9 @@ export interface WindowFrameProps {
   loaded: boolean;
   /** Title text. */
   title: string;
-  onRemember(kind: string, geometry: WindowGeometry): void;
-  onClose(): void;
-  onRaise(): void;
+  onRemember: (kind: string, geometry: WindowGeometry) => void;
+  onClose: () => void;
+  onRaise: () => void;
   handle?: Ref<WindowFrameHandle>;
   children: ReactNode;
 }
@@ -223,14 +223,14 @@ export function WindowFrame({
   });
   const geom = `wm-${id}`;
   useGeometry(geom, {
-    left: `${shown.x}px`,
-    top: `${shown.y}px`,
-    width: `${shown.width}px`,
-    "min-width": `${shown.width}px`,
-    "max-width": `${shown.width}px`,
-    height: `${shown.height}px`,
-    "min-height": `${shown.height}px`,
-    "max-height": `${shown.height}px`,
+    left: `${String(shown.x)}px`,
+    top: `${String(shown.y)}px`,
+    width: `${String(shown.width)}px`,
+    "min-width": `${String(shown.width)}px`,
+    "max-width": `${String(shown.width)}px`,
+    height: `${String(shown.height)}px`,
+    "min-height": `${String(shown.height)}px`,
+    "max-height": `${String(shown.height)}px`,
     "z-index": String(z),
   });
 
@@ -294,7 +294,7 @@ export function WindowFrame({
     edge: ResizeEdge | null,
   ) => {
     event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       kind: kindOfDrag,
       edge,
@@ -317,7 +317,7 @@ export function WindowFrame({
 
   const onPointerMove = (event: PointerEvent<HTMLElement>) => {
     const state = drag.current;
-    if (!state || state.pointerId !== event.pointerId) return;
+    if (state?.pointerId !== event.pointerId) return;
     const dx = event.clientX - state.grab.x;
     const dy = event.clientY - state.grab.y;
     if (!state.moved) {
@@ -342,9 +342,9 @@ export function WindowFrame({
 
   const endDrag = (event: PointerEvent<HTMLElement>, cancelled: boolean) => {
     const state = drag.current;
-    if (!state || state.pointerId !== event.pointerId) return;
+    if (state?.pointerId !== event.pointerId) return;
     drag.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    event.currentTarget.releasePointerCapture(event.pointerId);
     setDragging(null);
     const snap =
       state.kind === "move" && spec.resizable ? snapTarget(event.clientX, viewport) : null;
@@ -436,6 +436,7 @@ export function WindowFrame({
       {preview !== null ? (
         <div data-part="window-snap-preview" data-snap={preview} aria-hidden="true" />
       ) : null}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the window raises on any pointer or focus inside it; its keys arrive from the controls inside. */}
       <div
         ref={ref}
         data-part="window"
@@ -464,17 +465,23 @@ export function WindowFrame({
         }}
         onKeyDown={onKeyDown}
       >
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the title bar moves the window by pointer drag and by keyboard. */}
         <div
           ref={headerRef}
           data-part="window.header"
           role="group"
           aria-label={t("window-manager-title-bar", { title })}
           aria-describedby={hintId}
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the title bar is focusable so the window can be moved and resized with the keyboard.
           tabIndex={0}
           onPointerDown={onHeaderPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={(event) => endDrag(event, false)}
-          onPointerCancel={(event) => endDrag(event, true)}
+          onPointerUp={(event) => {
+            endDrag(event, false);
+          }}
+          onPointerCancel={(event) => {
+            endDrag(event, true);
+          }}
           onDoubleClick={(event) => {
             if (event.target instanceof Element && event.target.closest("button")) return;
             toggleMaximize();
@@ -534,8 +541,12 @@ export function WindowFrame({
                   startDrag(event, "resize", edge);
                 }}
                 onPointerMove={onPointerMove}
-                onPointerUp={(event) => endDrag(event, false)}
-                onPointerCancel={(event) => endDrag(event, true)}
+                onPointerUp={(event) => {
+                  endDrag(event, false);
+                }}
+                onPointerCancel={(event) => {
+                  endDrag(event, true);
+                }}
               />
             ))
           : null}

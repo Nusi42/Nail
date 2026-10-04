@@ -177,8 +177,8 @@ pub fn scan(source: &ImportSource) -> Result<SourceScan> {
         ImportFormat::Maildir => out.folders = maildir::scan(path)?,
         ImportFormat::ThunderbirdProfile => {
             let profile = thunderbird::scan_profile(path)?;
-            out.folders = profile.folders.clone();
-            out.collections = profile.collections.clone();
+            out.folders.clone_from(&profile.folders);
+            out.collections.clone_from(&profile.collections);
             out.profile = Some(profile);
         }
         ImportFormat::Ics | ImportFormat::Vcard => {
@@ -248,7 +248,8 @@ pub fn scan_mbox_file_within(
     let estimated = size > scan_bytes;
     if estimated && reader.bytes_read() > 0 {
         let scanned = reader.bytes_read();
-        messages = ((u128::from(messages) * u128::from(size)) / u128::from(scanned)) as u64;
+        let estimate = u128::from(messages) * u128::from(size) / u128::from(scanned);
+        messages = u64::try_from(estimate).unwrap_or(u64::MAX);
     }
     let (folder, renamed) = source_folder(segments);
     Ok(MailFolderSource {
@@ -371,8 +372,8 @@ pub fn run(
         for issue in &profile.issues {
             ctx.issue(issue.clone());
         }
-        ctx.report.accounts = profile.accounts.clone();
-        ctx.report.rules = profile.rules.clone();
+        ctx.report.accounts.clone_from(&profile.accounts);
+        ctx.report.rules.clone_from(&profile.rules);
         ctx.report.counts.accounts = profile.accounts.len() as u64;
         ctx.report.counts.rules = profile.rules.len() as u64;
     }

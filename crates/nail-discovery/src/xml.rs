@@ -23,28 +23,31 @@ pub(crate) const MAX_DOCUMENT: usize = 1024 * 1024;
 
 impl Element {
     /// The first child named `name` (ASCII case-insensitive).
-    pub fn child(&self, name: &str) -> Option<&Element> {
+    pub(crate) fn child(&self, name: &str) -> Option<&Element> {
         self.children
             .iter()
             .find(|c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// Every child named `name`.
-    pub fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Element> + 'a {
+    pub(crate) fn children_named<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a Element> + 'a {
         self.children
             .iter()
             .filter(move |c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// The trimmed, non-empty text of the first child named `name`.
-    pub fn text_of(&self, name: &str) -> Option<String> {
+    pub(crate) fn text_of(&self, name: &str) -> Option<String> {
         self.child(name)
             .map(|c| c.text.trim().to_owned())
             .filter(|t| !t.is_empty())
     }
 
     /// An attribute value.
-    pub fn attr(&self, name: &str) -> Option<&str> {
+    pub(crate) fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case(name))
@@ -66,7 +69,7 @@ fn start(e: &quick_xml::events::BytesStart<'_>) -> Element {
         .map(|a| {
             let value = a
                 .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                .map(|v| v.into_owned())
+                .map(std::borrow::Cow::into_owned)
                 .unwrap_or_default();
             (local(a.key.local_name().as_ref()), value)
         })

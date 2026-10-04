@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { Folder } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
@@ -51,7 +51,7 @@ export function FolderPicker({ node }: WidgetProps) {
     }
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     const first = visible[0];
     if (first) void move(first.folder);
@@ -71,7 +71,9 @@ export function FolderPicker({ node }: WidgetProps) {
           type="text"
           value={filter}
           autoComplete="off"
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => {
+            setFilter(event.target.value);
+          }}
         />
       </label>
       {selectedId === null && (

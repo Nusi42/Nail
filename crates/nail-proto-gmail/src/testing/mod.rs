@@ -232,7 +232,7 @@ impl MockGmailServer {
             .layer(DefaultBodyLimit::max(80 * 1024 * 1024))
             .with_state(state.clone());
         let task = tokio::spawn(async move {
-            let _ = axum::serve(listener, app).await;
+            drop(axum::serve(listener, app).await);
         });
         Ok(Self { addr, state, task })
     }
@@ -288,6 +288,10 @@ impl MockGmailServer {
 
     /// Delivers a new message with `labels` (e.g. `["INBOX", "UNREAD"]`);
     /// returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mock mailbox rejects the change (a mistake in the test).
     pub fn deliver(&self, raw: &[u8], labels: &[&str]) -> String {
         let labels: Vec<String> = labels.iter().map(|l| (*l).to_owned()).collect();
         self.with_mailbox(|m| m.add_message(raw.to_vec(), &labels, None))
@@ -295,6 +299,10 @@ impl MockGmailServer {
     }
 
     /// Changes a message's labels on the server.
+    ///
+    /// # Panics
+    ///
+    /// When the mock mailbox rejects the change (a mistake in the test).
     pub fn modify(&self, id: &str, add: &[&str], remove: &[&str]) {
         let add: Vec<String> = add.iter().map(|l| (*l).to_owned()).collect();
         let remove: Vec<String> = remove.iter().map(|l| (*l).to_owned()).collect();
@@ -303,12 +311,20 @@ impl MockGmailServer {
     }
 
     /// Deletes a message permanently on the server.
+    ///
+    /// # Panics
+    ///
+    /// When the mock mailbox rejects the change (a mistake in the test).
     pub fn delete(&self, id: &str) {
         self.with_mailbox(|m| m.delete(id))
             .unwrap_or_else(|e| panic!("delete: {e:?}"));
     }
 
     /// Creates a user label on the server; returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mock mailbox rejects the change (a mistake in the test).
     pub fn create_label(&self, name: &str) -> String {
         self.with_mailbox(|m| {
             m.create_label(Label {
@@ -321,6 +337,10 @@ impl MockGmailServer {
     }
 
     /// Renames a user label on the server.
+    ///
+    /// # Panics
+    ///
+    /// When the mock mailbox rejects the change (a mistake in the test).
     pub fn rename_label(&self, id: &str, name: &str) {
         self.with_mailbox(|m| m.update_label(id, &serde_json::json!({ "name": name }), false))
             .unwrap_or_else(|e| panic!("rename_label: {e:?}"));

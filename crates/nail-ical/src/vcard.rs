@@ -149,7 +149,13 @@ fn text_of(p: &Property) -> String {
 
 fn non_empty(text: String) -> Option<String> {
     let trimmed = text.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    if trimmed.is_empty() {
+        None
+    } else if trimmed.len() == text.len() {
+        Some(text)
+    } else {
+        Some(trimmed.to_owned())
+    }
 }
 
 fn card_text(c: &Component, name: &str) -> Option<String> {
@@ -450,8 +456,8 @@ fn read_photo_field(c: &Component) -> Option<ContactPhoto> {
 }
 
 fn derived_display_name(
-    name: &Option<ContactName>,
-    org: &Option<ContactOrg>,
+    name: Option<&ContactName>,
+    org: Option<&ContactOrg>,
     emails: &[LabeledValue],
 ) -> Option<String> {
     if let Some(name) = name {
@@ -469,8 +475,7 @@ fn derived_display_name(
             return Some(parts.join(" "));
         }
     }
-    org.as_ref()
-        .map(|o| o.name.clone())
+    org.map(|o| o.name.clone())
         .or_else(|| emails.first().map(|e| e.value.clone()))
 }
 
@@ -483,8 +488,8 @@ pub(crate) fn read_fields(c: &Component) -> Option<ContactFields> {
         .map(|p| read_email(c, p))
         .filter(|e| !e.value.is_empty())
         .collect();
-    let display_name =
-        card_text(c, "FN").or_else(|| derived_display_name(&name, &organization, &emails))?;
+    let display_name = card_text(c, "FN")
+        .or_else(|| derived_display_name(name.as_ref(), organization.as_ref(), &emails))?;
     let mut related: Vec<LabeledValue> = c
         .properties_named("RELATED")
         .map(|p| labeled(c, p, strip_scheme(&text_of(p), "urn:uuid:")))
@@ -625,13 +630,12 @@ pub fn parse_cards(text: &str) -> ParsedCards {
             card.to_text()
         };
         let name = card_text(card, "FN");
-        let uid = match card_text(card, "UID") {
-            Some(uid) => uid,
-            None => {
-                out.issues
-                    .push(Issue::new(IssueKind::MissingUid, Some(card.line)).item(name.clone()));
-                format!("nail-{}", &sha256_hex(card.to_text().as_bytes())[..32])
-            }
+        let uid = if let Some(uid) = card_text(card, "UID") {
+            uid
+        } else {
+            out.issues
+                .push(Issue::new(IssueKind::MissingUid, Some(card.line)).item(name.clone()));
+            format!("nail-{}", &sha256_hex(card.to_text().as_bytes())[..32])
         };
         if let Some(style) = is_group_card(card) {
             let (member_uids, member_emails) = read_members(card);
@@ -780,12 +784,12 @@ fn merged(original: Option<&Property>, mut new: Property, managed: &[&str]) -> P
 fn patch<T: PartialEq>(
     c: &mut Component,
     names: &[&str],
-    current: T,
+    current: &T,
     desired: &T,
     managed: &[&str],
     build: impl FnOnce(&T) -> Vec<Property>,
 ) {
-    if current == *desired {
+    if current == desired {
         return;
     }
     let original = names.iter().find_map(|n| c.property(n)).cloned();
@@ -854,7 +858,10 @@ fn with_types(
 
 /// Rewrites a list of labeled entries (emails, phones, …), keeping
 /// unchanged ones and their labels as written.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one generic patch for every labeled list; each closure is one aspect of the entry type"
+)]
 fn patch_list<T: PartialEq + Clone>(
     c: &mut Component,
     names: &[&str],
@@ -892,37 +899,31 @@ fn patch_list<T: PartialEq + Clone>(
                 // An entry edited in place keeps its position's line.
                 .or_else(|| (index < originals.len() && !used[index]).then_some(index))
         };
-        match exact {
-            Some(i) => {
+        if let Some(i) = exact {
+            used[i] = true;
+            new.push(originals[i].clone());
+            new.extend(labels[i].clone());
+        } else {
+            let original = similar();
+            if let Some(i) = original {
                 used[i] = true;
-                new.push(originals[i].clone());
-                new.extend(labels[i].clone());
             }
-            None => {
-                let original = similar();
-                if let Some(i) = original {
-                    used[i] = true;
-                }
-                let mut p = merged(original.map(|i| &originals[i]), build(entry), managed);
-                match label_of(entry) {
-                    Some(label) => {
-                        let group = p.group.clone().unwrap_or_else(|| {
-                            let g = format!("item{}", base + fresh_groups);
-                            fresh_groups += 1;
-                            g
-                        });
-                        p.group = Some(group.clone());
-                        p.touch();
-                        new.push(p);
-                        new.push(Property::text_value("X-ABLabel", &label).with_group(Some(group)));
-                    }
-                    None => {
-                        // A label that went away goes with its group.
-                        p.group = None;
-                        p.touch();
-                        new.push(p);
-                    }
-                }
+            let mut p = merged(original.map(|i| &originals[i]), build(entry), managed);
+            if let Some(label) = label_of(entry) {
+                let group = p.group.clone().unwrap_or_else(|| {
+                    let g = format!("item{}", base + fresh_groups);
+                    fresh_groups += 1;
+                    g
+                });
+                p.group = Some(group.clone());
+                p.touch();
+                new.push(p);
+                new.push(Property::text_value("X-ABLabel", &label).with_group(Some(group)));
+            } else {
+                // A label that went away goes with its group.
+                p.group = None;
+                p.touch();
+                new.push(p);
             }
         }
     }
@@ -1006,7 +1007,7 @@ fn photo_prop(
 
 fn patch_photo(
     c: &mut Component,
-    desired: &Option<ContactPhoto>,
+    desired: Option<&ContactPhoto>,
     version: VCardVersion,
     options: &CardWriteOptions<'_>,
 ) {
@@ -1019,7 +1020,7 @@ fn patch_photo(
     if unchanged {
         return;
     }
-    let new = desired.as_ref().and_then(|photo| {
+    let new = desired.and_then(|photo| {
         let bytes = match &photo.data {
             Some(data) => base64::engine::general_purpose::STANDARD
                 .decode(
@@ -1051,12 +1052,12 @@ fn patch_fields(
     patch(
         c,
         &["FN"],
-        card_text(c, "FN"),
+        &card_text(c, "FN"),
         &Some(fields.display_name.clone()),
         &[],
         |v| v.iter().map(|t| Property::text_value("FN", t)).collect(),
     );
-    patch(c, &["N"], read_name(c), &fields.name, &[], |n| {
+    patch(c, &["N"], &read_name(c), &fields.name, &[], |n| {
         let n = n.clone().unwrap_or_default();
         // vCard 3 requires N; an empty one is written.
         vec![Property::new(
@@ -1099,7 +1100,7 @@ fn patch_fields(
         .properties_named("NICKNAME")
         .flat_map(|p| decoded(p).texts())
         .collect();
-    patch(c, &["NICKNAME"], nicknames, &fields.nicknames, &[], |n| {
+    patch(c, &["NICKNAME"], &nicknames, &fields.nicknames, &[], |n| {
         if n.is_empty() {
             Vec::new()
         } else {
@@ -1259,7 +1260,7 @@ fn patch_fields(
         },
         LIST_PARAMS,
     );
-    patch(c, &["ORG"], read_org(c), &fields.organization, &[], |o| {
+    patch(c, &["ORG"], &read_org(c), &fields.organization, &[], |o| {
         o.iter()
             .map(|o| {
                 let mut parts = vec![escape_text(&o.name)];
@@ -1276,7 +1277,7 @@ fn patch_fields(
         patch(
             c,
             &[name],
-            card_text(c, name),
+            &card_text(c, name),
             value,
             &["ENCODING", "CHARSET"],
             |v| v.iter().map(|t| Property::text_value(name, t)).collect(),
@@ -1285,7 +1286,7 @@ fn patch_fields(
     patch(
         c,
         &["BDAY"],
-        c.property("BDAY").and_then(read_date),
+        &c.property("BDAY").and_then(read_date),
         &fields.birthday,
         &["VALUE", "X-APPLE-OMIT-YEAR"],
         |d| d.iter().map(|d| write_date(d, version, "BDAY")).collect(),
@@ -1301,7 +1302,7 @@ fn patch_fields(
     patch(
         c,
         &["ANNIVERSARY", "X-ANNIVERSARY"],
-        current,
+        &current,
         &fields.anniversary,
         &["VALUE", "X-APPLE-OMIT-YEAR"],
         |d| {
@@ -1317,7 +1318,7 @@ fn patch_fields(
     patch(
         c,
         &["CATEGORIES"],
-        categories,
+        &categories,
         &fields.categories,
         &[],
         |list| {
@@ -1334,7 +1335,7 @@ fn patch_fields(
             }
         },
     );
-    patch_photo(c, &fields.photo, version, options);
+    patch_photo(c, fields.photo.as_ref(), version, options);
     // Custom fields: X- properties Nail has no field for.
     let current: Vec<CustomField> = c
         .properties
@@ -1359,31 +1360,28 @@ fn patch_fields(
             .filter(|f| !f.name.trim().is_empty())
             .map(|f| {
                 let same = (0..originals.len()).find(|&i| !used[i] && current[i] == *f);
-                match same {
-                    Some(i) => {
-                        used[i] = true;
-                        originals[i].clone()
-                    }
-                    None => {
-                        let name = if f.name.len() > 2 && f.name[..2].eq_ignore_ascii_case("X-") {
-                            f.name.clone()
-                        } else {
-                            // A label the user chose becomes an X- name.
-                            let cleaned: String = f
-                                .name
-                                .chars()
-                                .map(|ch| {
-                                    if ch.is_ascii_alphanumeric() {
-                                        ch.to_ascii_uppercase()
-                                    } else {
-                                        '-'
-                                    }
-                                })
-                                .collect();
-                            format!("X-{cleaned}")
-                        };
-                        Property::text_value(name, &f.value)
-                    }
+                if let Some(i) = same {
+                    used[i] = true;
+                    originals[i].clone()
+                } else {
+                    let name = if f.name.len() > 2 && f.name[..2].eq_ignore_ascii_case("X-") {
+                        f.name.clone()
+                    } else {
+                        // A label the user chose becomes an X- name.
+                        let cleaned: String = f
+                            .name
+                            .chars()
+                            .map(|ch| {
+                                if ch.is_ascii_alphanumeric() {
+                                    ch.to_ascii_uppercase()
+                                } else {
+                                    '-'
+                                }
+                            })
+                            .collect();
+                        format!("X-{cleaned}")
+                    };
+                    Property::text_value(name, &f.value)
                 }
             })
             .collect();
@@ -1401,45 +1399,42 @@ fn card_from(original: Option<&str>, version: VCardVersion) -> Component {
     let found = original
         .map(content::parse)
         .and_then(|doc| doc.components.into_iter().find(|c| c.is("VCARD")));
-    match found {
-        Some(mut card) => {
-            let is_21 = card
-                .property("VERSION")
-                .is_some_and(|v| v.value.trim() == "2.1");
-            if is_21 {
-                // vCard 2.1 constructs (bare types, quoted-printable,
-                // charsets) are rewritten as 3.0.
-                for p in &mut card.properties {
-                    *p = decoded(p);
-                    p.remove_param("CHARSET");
-                    p.touch();
-                }
+    if let Some(mut card) = found {
+        let is_21 = card
+            .property("VERSION")
+            .is_some_and(|v| v.value.trim() == "2.1");
+        if is_21 {
+            // vCard 2.1 constructs (bare types, quoted-printable,
+            // charsets) are rewritten as 3.0.
+            for p in &mut card.properties {
+                *p = decoded(p);
+                p.remove_param("CHARSET");
+                p.touch();
             }
-            if is_21 || version_of(&card) != version {
-                let value = match version {
-                    VCardVersion::V3 => "3.0",
-                    VCardVersion::V4 => "4.0",
-                };
-                replace(
-                    &mut card,
-                    &["VERSION"],
-                    vec![Property::new("VERSION", value)],
-                );
-            }
-            card
         }
-        None => {
-            let mut card = Component::new("VCARD");
-            card.properties.push(Property::new(
-                "VERSION",
-                match version {
-                    VCardVersion::V3 => "3.0",
-                    VCardVersion::V4 => "4.0",
-                },
-            ));
-            card.properties.push(Property::new("PRODID", crate::PRODID));
-            card
+        if is_21 || version_of(&card) != version {
+            let value = match version {
+                VCardVersion::V3 => "3.0",
+                VCardVersion::V4 => "4.0",
+            };
+            replace(
+                &mut card,
+                &["VERSION"],
+                vec![Property::new("VERSION", value)],
+            );
         }
+        card
+    } else {
+        let mut card = Component::new("VCARD");
+        card.properties.push(Property::new(
+            "VERSION",
+            match version {
+                VCardVersion::V3 => "3.0",
+                VCardVersion::V4 => "4.0",
+            },
+        ));
+        card.properties.push(Property::new("PRODID", crate::PRODID));
+        card
     }
 }
 
@@ -1504,7 +1499,7 @@ pub fn write_group(
     patch(
         &mut card,
         &["FN"],
-        current_name,
+        &current_name,
         &Some(group.name.clone()),
         &[],
         |v| v.iter().map(|t| Property::text_value("FN", t)).collect(),
@@ -1544,16 +1539,15 @@ pub fn write_group(
         let mut new = Vec::new();
         for uid in &group.member_uids {
             let key = uid_key(uid);
-            match originals.iter().find(|p| uid_key(&text_of(p)) == key) {
-                Some(p) => new.push(p.clone()),
-                None => {
-                    let value = if uid.contains(':') {
-                        uid.clone()
-                    } else {
-                        format!("urn:uuid:{uid}")
-                    };
-                    new.push(Property::new(name, value));
-                }
+            if let Some(p) = originals.iter().find(|p| uid_key(&text_of(p)) == key) {
+                new.push(p.clone());
+            } else {
+                let value = if uid.contains(':') {
+                    uid.clone()
+                } else {
+                    format!("urn:uuid:{uid}")
+                };
+                new.push(Property::new(name, value));
             }
         }
         for email in &group.member_emails {
@@ -1567,7 +1561,7 @@ pub fn write_group(
 
 /// A display name from a structured name, for UIs that need one.
 pub fn display_name_from(name: &ContactName) -> Option<String> {
-    derived_display_name(&Some(name.clone()), &None, &[])
+    derived_display_name(Some(name), None, &[])
 }
 
 #[cfg(test)]

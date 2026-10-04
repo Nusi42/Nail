@@ -8,6 +8,8 @@
 //! client cancelling its confirmations, and (post-M4a, ADR 0086) confirmed
 //! sends pinned to the approved draft revision.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -69,8 +71,8 @@ where
     }
 }
 
-fn control(f: &Fixture, command: &str, args: Value) -> Value {
-    f.demo.control(command, &args).unwrap()
+fn control(f: &Fixture, command: &str, args: &Value) -> Value {
+    f.demo.control(command, args).unwrap()
 }
 
 async fn inbox(f: &Fixture, role: FolderRole) -> Vec<MessageSummary> {
@@ -164,10 +166,12 @@ async fn install_with(f: &Fixture, manifest: Value, js: &str, files: &[(&str, &s
 }
 
 fn manifest(id: &str, permissions: &[&str], contributes: Value) -> Value {
-    json!({
+    let mut manifest = json!({
         "id": id, "name": id, "version": "1.0.0", "apiVersion": "1",
-        "main": "index.js", "permissions": permissions, "contributes": contributes,
-    })
+        "main": "index.js", "permissions": permissions,
+    });
+    manifest["contributes"] = contributes;
+    manifest
 }
 
 fn draft(subject: &str, text: &str) -> Draft {
@@ -199,7 +203,7 @@ fn send(draft_id: nail_api::DraftId) -> Request {
 }
 
 fn smtp_data(f: &Fixture) -> Vec<String> {
-    control(f, "smtp-messages", json!({}))
+    control(f, "smtp-messages", &json!({}))
         .as_array()
         .unwrap()
         .iter()
@@ -249,7 +253,7 @@ async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
     control(
         &f,
         "imap-deliver",
-        json!({"raw": "From: ann@example.org\r\nTo: me@work.example\r\nSubject: Hooked message\r\nMessage-ID: <hooked@example.org>\r\nDate: Thu, 01 Oct 2026 09:00:00 +0000\r\n\r\nHello\r\n"}),
+        &json!({"raw": "From: ann@example.org\r\nTo: me@work.example\r\nSubject: Hooked message\r\nMessage-ID: <hooked@example.org>\r\nDate: Thu, 01 Oct 2026 09:00:00 +0000\r\n\r\nHello\r\n"}),
     );
     eventually("the arrival hook tagged the new mail", || async {
         inbox(&f, FolderRole::Inbox)
@@ -509,7 +513,7 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     );
 
     // The hourly job runs when the core's clock passes the hour.
-    control(&f, "clock-advance", json!({"seconds": 7200}));
+    control(&f, "clock-advance", &json!({"seconds": 7200}));
     f.service.clock_moved();
     eventually("the job ran on the controlled clock", || async {
         let Response::PluginActivity { activity } = f

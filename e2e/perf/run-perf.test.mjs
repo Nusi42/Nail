@@ -1,8 +1,8 @@
 // node --test e2e/perf/run-perf.test.mjs — the perf runner's arguments and
 // the budgets file's shape (the Rust side checks the metrics in depth).
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { readJson } from "../../scripts/lib/json.mjs";
 import { parseArgs } from "./run-perf.mjs";
 
 test("arguments", () => {
@@ -16,7 +16,9 @@ test("arguments", () => {
 });
 
 test("budgets cover the UI metrics the scenarios record", () => {
-  const budgets = JSON.parse(readFileSync(new URL("./budgets.json", import.meta.url), "utf8"));
+  const budgets = /** @type {{ budgets: { metric: string }[], "ci-tolerance": number }} */ (
+    readJson(new URL("./budgets.json", import.meta.url))
+  );
   const metrics = budgets.budgets.map((b) => b.metric);
   for (const m of ["first-render-ms", "scroll-frame-p95-ms", "scroll-long-frames"]) {
     assert.ok(metrics.includes(m), m);

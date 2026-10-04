@@ -2,6 +2,7 @@
 //! RFC 5034 `AUTH`).
 
 use std::fmt;
+use std::fmt::Write as _;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -129,8 +130,10 @@ pub(crate) fn apop_timestamp(greeting: &str) -> Option<String> {
 pub(crate) fn apop_digest(timestamp: &str, password: &str) -> String {
     Md5::digest(format!("{timestamp}{password}").as_bytes())
         .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
 }
 
 fn parse_reply(line: &[u8]) -> Result<Reply> {
@@ -172,7 +175,7 @@ impl Pop3Client {
                 })
         })
         .await?;
-        let _ = tcp.set_nodelay(true);
+        drop(tcp.set_nodelay(true));
         let (stream, encrypted) = match config.tls {
             TlsMode::Implicit => (handshake(config, tcp).await?, true),
             TlsMode::Starttls => (Pop3Stream::Plain(tcp), false),

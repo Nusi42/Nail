@@ -68,7 +68,7 @@ impl CryptoState {
         };
         let http = match &options.key_lookup {
             Some(http) => Arc::clone(http),
-            None => Arc::new(KeyLookupHttp::new()?) as Arc<dyn HttpClient>,
+            None => Arc::new(KeyLookupHttp::new()?),
         };
         Ok(Self {
             pgp_unlock: nail_pgp::keyring::UnlockCache::new(),
@@ -440,7 +440,7 @@ impl Service {
                     allowed_by,
                     sender.as_deref(),
                 );
-                body.security = opened.status.clone();
+                body.security.clone_from(&opened.status);
                 let trusted = service.trusted_authserv_ids(&stored.summary.account_id);
                 body.auth_results = nail_mime::auth_results::auth_results_of_raw(&raw, &trusted);
                 body.warnings = nail_mime::links::message_warnings(&body);

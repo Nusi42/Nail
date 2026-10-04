@@ -38,7 +38,7 @@ function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { 
 }
 
 function openDialog(env: Env, dialog: Partial<PluginDialog> & { spec: PluginDialog["spec"] }) {
-  act(() =>
+  act(() => {
     env.transport.emit({
       type: "PluginDialogOpened",
       dialog: {
@@ -47,8 +47,8 @@ function openDialog(env: Env, dialog: Partial<PluginDialog> & { spec: PluginDial
         client_id: clientIdOf(env.client),
         ...dialog,
       },
-    }),
-  );
+    });
+  });
 }
 
 describe("plugins feature slot", () => {
@@ -248,7 +248,9 @@ describe("plug-in UI trees", () => {
   it("lists the folders of the chosen account", async () => {
     renderTree();
     const select = screen.getByRole("combobox", { name: "Where" });
-    await waitFor(() => expect(within(select).getAllByRole("option").length).toBeGreaterThan(1));
+    await waitFor(() => {
+      expect(within(select).getAllByRole("option").length).toBeGreaterThan(1);
+    });
     expect(within(select).getAllByRole("option")[0]).toHaveTextContent("(no folder)");
   });
 
@@ -303,7 +305,7 @@ describe("plug-in commands, dialogs and notifications", () => {
   }
 
   function renderToolbar(): ReactNode {
-    const View = must(appRegistry.widgets["toolbar"]);
+    const View = must(appRegistry.widgets.toolbar);
     return <View node={widget("toolbar", { options: { toolbar: "reader" } })} nodeKey="t" />;
   }
 
@@ -337,7 +339,9 @@ describe("plug-in commands, dialogs and notifications", () => {
       "invalid",
     );
     expect(within(dialog).getByText("Please correct the marked field.")).toBeInTheDocument();
-    await waitFor(() => expect(document.activeElement).toBe(due));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(due);
+    });
     expect(due).toHaveAccessibleDescription("This field is required.");
 
     fireEvent.change(due, { target: { value: "2026-10-01" } });
@@ -348,7 +352,9 @@ describe("plug-in commands, dialogs and notifications", () => {
       button: "ok",
       values: { due: "2026-10-01", note: "call back" },
     });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(await screen.findByText("Reminder saved")).toBeInTheDocument();
     expect(env.transport.data.features.plugins.host?.storage["follow-up"]?.[first.id]).toEqual({
       due: "2026-10-01",
@@ -360,7 +366,9 @@ describe("plug-in commands, dialogs and notifications", () => {
   it("runs a command from its key binding", async () => {
     const { env, unsubscribe } = await setup();
     fireEvent.keyDown(document.body, { key: "R", shiftKey: true });
-    await waitFor(() => expect(sent(env, "RunPluginCommand")).toHaveLength(1));
+    await waitFor(() => {
+      expect(sent(env, "RunPluginCommand")).toHaveLength(1);
+    });
     unsubscribe();
   });
 
@@ -374,20 +382,24 @@ describe("plug-in commands, dialogs and notifications", () => {
     await user.tab();
     expect(dialog.contains(document.activeElement)).toBe(true);
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(sent(env, "RespondPluginDialog")[0]).toMatchObject({ button: null });
     unsubscribe();
   });
 
   it("disables the command when the plug-in is off or nothing is selected", async () => {
     const { env, unsubscribe } = await setup();
-    act(() => env.store.getState().selectMessage(null));
+    act(() => {
+      env.store.getState().selectMessage(null);
+    });
     // The reader bar hides actions that cannot run (M5b `hide-disabled`).
     expect(screen.queryByRole("button", { name: "Follow up" })).toBeNull();
     unsubscribe();
   });
 
-  it("shows only this UI's dialogs; non-modal ones do not block", async () => {
+  it("shows only this UI's dialogs; non-modal ones do not block", () => {
     const env = createEnv();
     const unsubscribe = wireEvents(env);
     renderWithProviders(
@@ -412,13 +424,13 @@ describe("plug-in commands, dialogs and notifications", () => {
     expect(dialog).not.toHaveAttribute("aria-modal");
     expect(dialog).not.toHaveAttribute("data-modal");
     expect(dialog).toHaveAttribute("data-window", "plugin-dialog-medium:float");
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "PluginDialogClosed",
         dialog_id: "float",
         plugin_id: "follow-up",
-      }),
-    );
+      });
+    });
     expect(screen.queryByRole("dialog")).toBeNull();
     unsubscribe();
   });
@@ -494,7 +506,9 @@ describe("plug-in commands, dialogs and notifications", () => {
     await user.click(within(toast).getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText("Done")).toBeNull();
 
-    act(() => crashPlugin(env.transport, "follow-up", "cpu-budget"));
+    act(() => {
+      crashPlugin(env.transport, "follow-up", "cpu-budget");
+    });
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Follow-up was stopped because it took too long.",
     );
@@ -507,14 +521,16 @@ describe("plug-in commands, dialogs and notifications", () => {
       const env = createEnv();
       const unsubscribe = wireEvents(env);
       renderWithProviders(<PluginNotifications />, env);
-      act(() =>
+      act(() => {
         env.transport.emit({
           type: "PluginNotification",
           notification: { id: "n", plugin_id: "p", client_id: null, spec: { title: "Bye" } },
-        }),
-      );
+        });
+      });
       expect(screen.getByText("Bye")).toBeInTheDocument();
-      act(() => vi.advanceTimersByTime(TOAST_MS + 1));
+      act(() => {
+        vi.advanceTimersByTime(TOAST_MS + 1);
+      });
       expect(screen.queryByText("Bye")).toBeNull();
       unsubscribe();
     } finally {
@@ -527,7 +543,9 @@ describe("plug-in commands, dialogs and notifications", () => {
     const { env, unsubscribe } = await setup();
     await user.click(screen.getByRole("button", { name: "Follow up" }));
     await screen.findByRole("dialog");
-    act(() => crashPlugin(env.transport, "follow-up", "error"));
+    act(() => {
+      crashPlugin(env.transport, "follow-up", "error");
+    });
     expect(screen.queryByRole("dialog")).toBeNull();
     unsubscribe();
   });
@@ -547,7 +565,9 @@ describe("usePluginLayout", () => {
       ),
     });
     expect(result.current).toBe(base);
-    await waitFor(() => expect(result.current.actions[REMIND]?.label).toBe("Follow up"));
+    await waitFor(() => {
+      expect(result.current.actions[REMIND]?.label).toBe("Follow up");
+    });
     expect(result.current.actions[REMIND]?.alias_of).toBe(RUN_COMMAND);
   });
 });
@@ -650,11 +670,11 @@ describe("install dialog", () => {
       expect.objectContaining({ action: REMIND }),
     );
     await user.click(screen.getByRole("button", { name: "Undo" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.layout.keys).not.toContainEqual(
         expect.objectContaining({ action: REMIND }),
-      ),
-    );
+      );
+    });
   });
 
   it("lets the user skip the placements", async () => {
@@ -865,7 +885,9 @@ describe("plug-in manager", () => {
 
   it("shows why a plug-in stopped", async () => {
     const { env, row, unsubscribe } = await renderManager();
-    act(() => crashPlugin(env.transport, "follow-up", "memory-limit"));
+    act(() => {
+      crashPlugin(env.transport, "follow-up", "memory-limit");
+    });
     expect(
       await within(row).findByText("Follow-up was stopped because it used too much memory."),
     ).toBeInTheDocument();
@@ -879,7 +901,9 @@ describe("plug-in manager", () => {
     await user.click(screen.getByRole("button", { name: "Load a development folder…" }));
     expect(env.store.getState().windows).toEqual([INSTALL_DIALOG]);
     expect(pluginsStoreFor(env.store).getState().installMode).toBe("dev");
-    act(() => env.store.getState().closeWindow());
+    act(() => {
+      env.store.getState().closeWindow();
+    });
     await user.click(screen.getByRole("button", { name: "Install a plug-in…" }));
     expect(pluginsStoreFor(env.store).getState().installMode).toBe("package");
     unsubscribe();

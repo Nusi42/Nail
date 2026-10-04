@@ -64,14 +64,15 @@ fn convert(query: &Query, now: i64, offset: i32, exact: &mut bool) -> Option<Sea
     match query {
         Query::All => None,
         Query::Term(term) => term_key(term, now, offset, exact),
-        Query::Not(inner) => match convert(inner, now, offset, exact) {
-            Some(key) => Some(SearchKey::Not(Box::new(key))),
-            None => {
+        Query::Not(inner) => {
+            if let Some(key) = convert(inner, now, offset, exact) {
+                Some(SearchKey::Not(Box::new(key)))
+            } else {
                 // NOT of "anything": the server cannot tell; ask for all.
                 *exact = false;
                 None
             }
-        },
+        }
         Query::And(parts) => {
             let keys: Vec<SearchKey> = parts
                 .iter()

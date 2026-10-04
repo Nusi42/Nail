@@ -239,7 +239,12 @@ fn window_frame(line: Line, frame: &WindowFrame) -> Line {
             line = line.prop(key, flag(value));
         }
     }
-    line.str_prop("instances", frame.instances.map(|i| i.as_str()))
+    line.str_prop(
+        "instances",
+        frame
+            .instances
+            .map(nail_api::windows::WindowInstances::as_str),
+    )
 }
 
 /// `action "<id>" label=… icon=… alias-of=… <args>…`.
@@ -312,7 +317,7 @@ pub(crate) fn toolbar_item(item: &ToolbarItem, depth: usize, style: &Style) -> O
             if let Some(rank) = rank {
                 line = line.prop("rank", &rank.to_string());
             }
-            line.str_prop("display", display.map(|d| d.as_str()))
+            line.str_prop("display", display.map(nail_api::ItemDisplay::as_str))
                 .end(depth, style)
         }
         ToolbarItem::More { label, icon, items } => {
@@ -335,7 +340,7 @@ pub(crate) fn toolbar_item(item: &ToolbarItem, depth: usize, style: &Style) -> O
 pub(crate) fn toolbar(
     name: &str,
     items: &[ToolbarItem],
-    settings: &ToolbarSettings,
+    settings: ToolbarSettings,
     depth: usize,
     style: &Style,
 ) -> Option<String> {
@@ -502,11 +507,11 @@ mod tests {
         ];
         let plain = ToolbarSettings::default();
         assert_eq!(
-            toolbar("reader", &items, &plain, 0, &style).unwrap(),
+            toolbar("reader", &items, plain, 0, &style).unwrap(),
             "toolbar \"reader\" {\n    item \"mail.reply\" label=\"@x\"\n    spacer\n}\n"
         );
         assert_eq!(
-            toolbar("x", &[], &plain, 0, &style).unwrap(),
+            toolbar("x", &[], plain, 0, &style).unwrap(),
             "toolbar \"x\" {}\n"
         );
         // M5b: settings, rank / display and the More menu with a header.
@@ -540,7 +545,7 @@ mod tests {
             overflow: ToolbarOverflow::Wrap,
         };
         assert_eq!(
-            toolbar("reader", &items, &settings, 0, &style).unwrap(),
+            toolbar("reader", &items, settings, 0, &style).unwrap(),
             "toolbar \"reader\" hide-disabled=#true overflow=\"wrap\" {\n    item \"mail.archive\" rank=4 display=\"icon\"\n    more icon=\"ellipsis\" {\n        header \"@toolbar.group.message\"\n        item \"mail.toggle-read\"\n    }\n}\n"
         );
         let def = ActionDef {

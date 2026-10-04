@@ -26,38 +26,49 @@ export const MAX_ALERTS = 5;
 
 export interface RemoteFeatureState {
   alerts: ShownAlert[];
-  pushAlert(alert: RemoteAlert): void;
-  dismissAlert(id: number): void;
+  pushAlert: (alert: RemoteAlert) => void;
+  dismissAlert: (id: number) => void;
   /** The user the `remote-pair` dialog preselects. */
   pairUser: RemoteUserId | null;
-  setPairUser(id: RemoteUserId | null): void;
+  setPairUser: (id: RemoteUserId | null) => void;
   /** The remote-UI session of this browser (set after login). */
   session: RemoteSession | null;
   /** Why this browser's session ended (then the app shows the login page). */
   ended: SessionEndReason | null;
-  setSession(session: RemoteSession | null): void;
-  endSession(reason: SessionEndReason): void;
-  clear(): void;
+  setSession: (session: RemoteSession | null) => void;
+  endSession: (reason: SessionEndReason) => void;
+  clear: () => void;
 }
 
 let nextAlert = 1;
 
 export const remoteStore = createStore<RemoteFeatureState>()((set) => ({
   alerts: [],
-  pushAlert: (alert) =>
+  pushAlert: (alert) => {
     set((s) => ({
       alerts: [...s.alerts, { id: nextAlert++, alert, at: new Date().toISOString() }].slice(
         -MAX_ALERTS,
       ),
-    })),
-  dismissAlert: (id) => set((s) => ({ alerts: s.alerts.filter((a) => a.id !== id) })),
+    }));
+  },
+  dismissAlert: (id) => {
+    set((s) => ({ alerts: s.alerts.filter((a) => a.id !== id) }));
+  },
   pairUser: null,
-  setPairUser: (pairUser) => set({ pairUser }),
+  setPairUser: (pairUser) => {
+    set({ pairUser });
+  },
   session: null,
   ended: null,
-  setSession: (session) => set({ session, ended: null }),
-  endSession: (ended) => set({ ended }),
-  clear: () => set({ alerts: [], pairUser: null, session: null, ended: null }),
+  setSession: (session) => {
+    set({ session, ended: null });
+  },
+  endSession: (ended) => {
+    set({ ended });
+  },
+  clear: () => {
+    set({ alerts: [], pairUser: null, session: null, ended: null });
+  },
 }));
 
 export function useRemoteState<T>(selector: (state: RemoteFeatureState) => T): T {

@@ -49,7 +49,7 @@ describe("former settings tabs (the M5b move lost no setting)", () => {
     // M5a's `window "settings"` (WP165 replaces its tabs by the page; the
     // checklist above keeps the ids after that).
     const settingsWindow = layout.windows.settings?.[0]?.root;
-    if (!settingsWindow || settingsWindow.type !== "tabs") return;
+    if (settingsWindow?.type !== "tabs") return;
     const nodes = allNodes(settingsWindow).filter((n) => n !== settingsWindow);
     expect(nodes.length).toBeGreaterThan(30);
     for (const node of nodes) {

@@ -30,14 +30,14 @@ test("a signature made by the Tauri CLI verifies against the committed dev key",
   const fields = verifySignature({ data: fixture, signature: fixtureSig, publicKey: devPub });
   assert.equal(fields.file, "fixture.txt");
   assert.equal(fields.version, "0.1.1");
-  assert.match(fields.timestamp, /^\d+$/);
+  assert.match(fields.timestamp ?? "", /^\d+$/);
   // requireSignedVersion: the same version (with or without "v") passes.
   verifySignature({ data: fixture, signature: fixtureSig, publicKey: devPub, version: "v0.1.1" });
 });
 
 test("tampered data, another version or another key are refused", () => {
   const changed = Buffer.from(fixture);
-  changed[0] ^= 1;
+  changed.writeUInt8(changed.readUInt8(0) ^ 1, 0);
   assert.throws(
     () => verifySignature({ data: changed, signature: fixtureSig, publicKey: devPub }),
     /does not match the file/,

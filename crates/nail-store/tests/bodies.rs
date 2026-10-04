@@ -1,5 +1,6 @@
 //! Body-less messages and on-demand bodies (M2c WP53): headers-only merges,
 //! attaching / detaching bodies, fetch targets and the MCP settings.
+#![cfg(test)]
 
 mod common;
 

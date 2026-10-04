@@ -57,6 +57,12 @@ import { answerSieve, isSieveRequest } from "../features/sieve/mock";
 import { answerSync, isSyncRequest } from "../features/sync/mock";
 import { answerTriage, decorateJunk, isTriageRequest } from "../features/triage/mock";
 
+/**
+ * The security demo data of the dev mailbox (`?mock=1`), re-exported so the
+ * transport selection loads it with the mock transport, in one chunk.
+ */
+export { securityDemoBySender } from "../features/security/mock";
+
 export interface MockTransportOptions {
   data?: MockData;
   /** Artificial latency per request in ms (0 = next microtask). */
@@ -105,7 +111,7 @@ export class MockTransport implements Transport, MockCore {
 
   nextId(prefix: string): string {
     this.counter++;
-    return `${prefix}${this.counter}`;
+    return `${prefix}${String(this.counter)}`;
   }
 
   onEvent(listener: (event: NailEvent) => void): () => void {

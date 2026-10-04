@@ -15,7 +15,7 @@ pub(super) struct Line {
 }
 
 impl Line {
-    pub fn new(name: &str, value: &str) -> Self {
+    pub(super) fn new(name: &str, value: &str) -> Self {
         Self {
             name: name.to_owned(),
             params: Vec::new(),
@@ -23,14 +23,14 @@ impl Line {
         }
     }
 
-    pub fn param(&self, name: &str) -> Option<&str> {
+    pub(super) fn param(&self, name: &str) -> Option<&str> {
         self.params
             .iter()
             .find(|(n, _)| n == name)
             .map(|(_, v)| v.as_str())
     }
 
-    pub fn set_param(&mut self, name: &str, value: &str) {
+    pub(super) fn set_param(&mut self, name: &str, value: &str) {
         if let Some(slot) = self.params.iter_mut().find(|(n, _)| n == name) {
             value.clone_into(&mut slot.1);
         } else {
@@ -38,11 +38,11 @@ impl Line {
         }
     }
 
-    pub fn remove_param(&mut self, name: &str) {
+    pub(super) fn remove_param(&mut self, name: &str) {
         self.params.retain(|(n, _)| n != name);
     }
 
-    pub fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         let mut out = self.name.clone();
         for (name, value) in &self.params {
             out.push(';');

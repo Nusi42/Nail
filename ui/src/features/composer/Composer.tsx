@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
   type DragEvent,
-  type FormEvent,
+  type SubmitEvent,
   type KeyboardEvent,
 } from "react";
 import { contextsOf, isFieldCombo } from "../../actions/ActionsProvider";
@@ -98,7 +98,9 @@ function useAutosave(
     }
     if (key === savedKey || busy !== null) return;
     const timer = setTimeout(() => void saveRich(ctx, { quiet: true, window }), autosaveDelay());
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [ctx, window, key, savedKey, busy]);
 }
 
@@ -145,7 +147,7 @@ function TextField({
 }: {
   field: "subject";
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
 }) {
   const t = useT();
   const id = useId();
@@ -161,7 +163,9 @@ function TextField({
         value={value}
         autoComplete="off"
         spellCheck
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
     </div>
   );
@@ -204,7 +208,7 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
       <ul data-part="composer.attachments.list" aria-label={t("composer-attachments-label")}>
         {attachments.map((a, index) => (
           <li
-            key={`${a.blob}-${index}`}
+            key={`${a.blob}-${String(index)}`}
             data-part="composer.attachment"
             data-state={a.content_id !== null ? "inline" : undefined}
           >
@@ -219,7 +223,9 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
               data-part="form.button"
               data-action="remove-attachment"
               aria-label={t("composer-attachment-remove", { name: a.filename })}
-              onClick={() => removeAttachment(ctx, index, window)}
+              onClick={() => {
+                removeAttachment(ctx, index, window);
+              }}
             >
               <Icon name="x" part="form.button.icon" />
               <span data-part="form.button.label">{t("composer-attachment-remove-short")}</span>
@@ -260,7 +266,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   const layout = useLayoutConfig();
   const composer = useUi((s) => composerOf(s, window));
   const updateComposer = useCallback(
-    (patch: Partial<ComposerState>) => patchComposer(ctx.store, window, patch),
+    (patch: Partial<ComposerState>) => {
+      patchComposer(ctx.store, window, patch);
+    },
     [ctx.store, window],
   );
   const accountId = useUi((s) => s.activeAccountId);
@@ -278,7 +286,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   useAutosave(ctx, window, composer, rich);
 
   // The rich editors live in their own chunks: start loading them now.
-  useEffect(() => prefetchEditors(), []);
+  useEffect(() => {
+    prefetchEditors();
+  }, []);
 
   // `composer.attach` asks for the file picker.
   useEffect(() => {
@@ -340,7 +350,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   const send = (force = false) =>
     void sendRich(ctx, later ? localToIso(sendAt) : null, { window, force });
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     send();
   };
@@ -368,7 +378,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   };
 
   const onDrop = (event: DragEvent<HTMLFormElement>) => {
-    const files = [...(event.dataTransfer?.files ?? [])];
+    const files = [...event.dataTransfer.files];
     if (files.length === 0) return;
     event.preventDefault();
     addFiles(files);
@@ -395,6 +405,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
           : null;
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the composer's shortcuts (send, save) and file drops arrive from the fields inside the form.
     <form
       data-part="composer"
       data-node-id={node.id ?? undefined}
@@ -406,7 +417,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       onSubmit={submit}
       onKeyDown={onKeyDown}
       onDragOver={(event) => {
-        if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
       }}
       onDrop={onDrop}
     >
@@ -419,7 +430,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
           id={`${ids}-identity`}
           data-part="composer.identity"
           value={composer.identityId ?? ""}
-          onChange={(event) => changeIdentity(event.target.value)}
+          onChange={(event) => {
+            changeIdentity(event.target.value);
+          }}
         >
           {composer.identityId === null && <option value="">{t("composer-no-identity")}</option>}
           {(identities.data ?? []).map((identity) => (
@@ -432,20 +445,26 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       <AddressField
         field="to"
         value={composer.to}
-        onChange={(to) => updateComposer({ to, error: null })}
+        onChange={(to) => {
+          updateComposer({ to, error: null });
+        }}
       />
       {composer.showCc && (
         <AddressField
           field="cc"
           value={composer.cc}
-          onChange={(cc) => updateComposer({ cc, error: null })}
+          onChange={(cc) => {
+            updateComposer({ cc, error: null });
+          }}
         />
       )}
       {composer.showBcc && (
         <AddressField
           field="bcc"
           value={composer.bcc}
-          onChange={(bcc) => updateComposer({ bcc, error: null })}
+          onChange={(bcc) => {
+            updateComposer({ bcc, error: null });
+          }}
         />
       )}
       {(!composer.showCc || !composer.showBcc) && (
@@ -455,7 +474,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               type="button"
               data-part="form.button"
               data-action="add-field"
-              onClick={() => updateComposer({ showCc: true })}
+              onClick={() => {
+                updateComposer({ showCc: true });
+              }}
             >
               {t("composer-add-cc")}
             </button>
@@ -465,7 +486,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               type="button"
               data-part="form.button"
               data-action="add-field"
-              onClick={() => updateComposer({ showBcc: true })}
+              onClick={() => {
+                updateComposer({ showBcc: true });
+              }}
             >
               {t("composer-add-bcc")}
             </button>
@@ -475,7 +498,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       <TextField
         field="subject"
         value={composer.subject}
-        onChange={(subject) => updateComposer({ subject, error: null })}
+        onChange={(subject) => {
+          updateComposer({ subject, error: null });
+        }}
       />
 
       <div data-part="composer.toolbar">
@@ -488,7 +513,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               data-action="toggle-preview"
               aria-pressed={rich.preview}
               data-state={rich.preview ? "selected" : undefined}
-              onClick={() => richApi.setState({ preview: !rich.preview })}
+              onClick={() => {
+                richApi.setState({ preview: !rich.preview });
+              }}
             >
               {t("composer-preview-toggle")}
             </button>
@@ -497,7 +524,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
                 type="checkbox"
                 data-part="composer.option.checkbox"
                 checked={rich.markdownPart}
-                onChange={(event) => richApi.setState({ markdownPart: event.target.checked })}
+                onChange={(event) => {
+                  richApi.setState({ markdownPart: event.target.checked });
+                }}
               />
               <span data-part="composer.option.label">{t("composer-markdown-part")}</span>
             </label>
@@ -542,7 +571,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
             data-part="form.button"
             data-action="confirm-switch"
             data-variant="primary"
-            onClick={() => confirmSwitch(ctx, window)}
+            onClick={() => {
+              confirmSwitch(ctx, window);
+            }}
           >
             {t("composer-lossy-confirm")}
           </button>
@@ -550,7 +581,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
             type="button"
             data-part="form.button"
             data-action="cancel-switch"
-            onClick={() => cancelSwitch(ctx, window)}
+            onClick={() => {
+              cancelSwitch(ctx, window);
+            }}
           >
             {t("composer-lossy-cancel")}
           </button>
@@ -567,7 +600,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
             id={`${ids}-body`}
             data-part="composer.body"
             value={composer.text}
-            onChange={(event) => updateComposer({ text: event.target.value, error: null })}
+            onChange={(event) => {
+              updateComposer({ text: event.target.value, error: null });
+            }}
           />
         </>
       )}
@@ -576,10 +611,14 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
           value={rich.html}
           label={bodyLabel}
           previews={rich.inlinePreviews}
-          onChange={(html) => richApi.setState({ html })}
+          onChange={(html) => {
+            richApi.setState({ html });
+          }}
           onInsertImages={(files) => uploadFiles(ctx, files, true, window)}
           source={rich.htmlSource}
-          onToggleSource={() => richApi.setState({ htmlSource: !rich.htmlSource })}
+          onToggleSource={() => {
+            richApi.setState({ htmlSource: !rich.htmlSource });
+          }}
         />
       )}
       {mode === "markdown" && (
@@ -587,7 +626,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
           <LazyMarkdownEditor
             value={rich.markdown}
             label={bodyLabel}
-            onChange={(markdown) => richApi.setState({ markdown })}
+            onChange={(markdown) => {
+              richApi.setState({ markdown });
+            }}
           />
           {rich.preview && <Preview markdown={rich.markdown} identityId={composer.identityId} />}
           {rich.preview && <PluginBlocks markdown={rich.markdown} />}
@@ -632,7 +673,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
                 type="button"
                 data-part="form.button"
                 data-action="dismiss-reminder"
-                onClick={() => richApi.setState({ reminder: "dismissed" })}
+                onClick={() => {
+                  richApi.setState({ reminder: "dismissed" });
+                }}
               >
                 {t("composer-reminder-dismiss")}
               </button>
@@ -655,7 +698,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               data-part="composer.send-at"
               type="datetime-local"
               value={sendAt}
-              onChange={(event) => setSendAt(event.target.value)}
+              onChange={(event) => {
+                setSendAt(event.target.value);
+              }}
             />
           </div>
         )}
@@ -680,7 +725,9 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               aria-pressed={later}
               data-state={later ? "selected" : undefined}
               disabled={busy}
-              onClick={() => setLater(!later)}
+              onClick={() => {
+                setLater(!later);
+              }}
             >
               {t("composer-send-later")}
             </button>

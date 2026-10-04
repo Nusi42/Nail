@@ -109,7 +109,11 @@ export const actions: Feature["actions"] = {
       ctx.store.getState().openWindow(FIND_TIME_DIALOG);
     },
   },
-  "scheduling.settings": { run: (ctx) => ctx.store.getState().openWindow(SETTINGS_DIALOG) },
+  "scheduling.settings": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(SETTINGS_DIALOG);
+    },
+  },
 };
 
 /** Dialog names → components. */

@@ -723,6 +723,7 @@ export interface NailHttpApi {
  */
 export interface NailSettingsApi {
   /** One setting's value (`undefined` for a key the schema does not have). */
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- public API: callers name the setting's type (`get<string>(key)`); changing it breaks plug-ins
   get<T extends JsonValue = JsonValue>(key: string): T | undefined;
   /** Every setting's value. */
   all(): Record<string, JsonValue>;
@@ -807,6 +808,7 @@ export interface PluginHookMessage {
   body?: PluginMessageBody;
 }
 
+/* eslint-disable @typescript-eslint/no-invalid-void-type -- `void`: a handler may be a plain function without `return` (inferred `void`), which `undefined` would not accept */
 /**
  * The arrival hook (`hooks.arrival`): called for each new message that
  * matches the hook's `filter`, after the user's own rules. Answers actions
@@ -820,7 +822,9 @@ export type PluginArrivalHook = (
   | undefined
   | void
   | Promise<PluginArrivalResult | null | undefined | void>;
+/* eslint-enable @typescript-eslint/no-invalid-void-type */
 
+/* eslint-disable @typescript-eslint/no-invalid-void-type -- `void`: a handler may be a plain function without `return` (inferred `void`), which `undefined` would not accept */
 /**
  * The before-send hook (`hooks.beforeSend`): called with every outgoing
  * message before it is queued. Answers headers / content to add or a veto,
@@ -835,7 +839,9 @@ export type PluginBeforeSendHook = (
   | undefined
   | void
   | Promise<PluginBeforeSendResult | null | undefined | void>;
+/* eslint-enable @typescript-eslint/no-invalid-void-type */
 
+/* eslint-disable @typescript-eslint/no-invalid-void-type -- `void`: a handler may be a plain function without `return` (inferred `void`), which `undefined` would not accept */
 /**
  * The open hook (`hooks.open`): called when the user opens a message that
  * matches the hook's `filter`. Answers banners and badges, or nothing.
@@ -845,6 +851,7 @@ export type PluginOpenHook = (
   mail: PluginHookMessage,
 ) =>
   PluginOpenResult | null | undefined | void | Promise<PluginOpenResult | null | undefined | void>;
+/* eslint-enable @typescript-eslint/no-invalid-void-type */
 
 /** A press on a button of a banner an open hook answered. */
 export interface PluginBannerAction {
@@ -879,7 +886,7 @@ export type PluginActionHandler = (
   bytes?: Uint8Array,
 ) => void | Promise<void>;
 
-/** Renders a Markdown block (```` ```<plugin>.<block> ````) to HTML and text. */
+/** Renders a Markdown block (a fenced block whose info string is `<plugin>.<block>`) to HTML and text. */
 export type PluginMarkdownBlockRenderer = (
   input: PluginMarkdownBlockInput,
 ) => PluginMarkdownBlockResult | Promise<PluginMarkdownBlockResult>;
@@ -893,6 +900,7 @@ export type PluginPreviewRenderer = (
 /** Runs a background job; the trigger says why. */
 export type PluginJobHandler = (trigger: PluginJobTrigger) => void | Promise<void>;
 
+/* eslint-disable @typescript-eslint/no-invalid-void-type -- `void`: a handler may be a plain function without `return` (inferred `void`), which `undefined` would not accept */
 /**
  * Serves an MCP tool call (`contributes.mcpTools`): the agent's arguments
  * in, a JSON result (or text) out. The result is handed to the agent as
@@ -901,6 +909,7 @@ export type PluginJobHandler = (trigger: PluginJobTrigger) => void | Promise<voi
 export type PluginMcpToolHandler = (
   args: Record<string, JsonValue>,
 ) => JsonValue | undefined | void | Promise<JsonValue | undefined | void>;
+/* eslint-enable @typescript-eslint/no-invalid-void-type */
 
 /** Hook registrations (`ctx.hooks`). */
 export interface PluginHooksRegistry {

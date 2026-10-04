@@ -46,11 +46,11 @@ use crate::error::Result;
 use crate::service::Service;
 
 #[cfg(windows)]
-pub use windows::WindowsSystemAppearance;
+pub(crate) use windows::WindowsSystemAppearance;
 
 fn send_all(events: &broadcast::Sender<Event>, updates: &[ConfigUpdate]) {
     for update in updates {
-        let _ = events.send(update.to_event());
+        drop(events.send(update.to_event()));
     }
 }
 
@@ -114,7 +114,10 @@ fn handle_blocking(
 /// UI's `prefers-color-scheme`, a desktop-shell notification) and
 /// broadcasts the result; returns the new [`Appearance`]. `None` = unknown
 /// (Follow Windows then uses the light theme).
-pub fn report_system_appearance(service: &Service, system: Option<SystemAppearance>) -> Appearance {
+pub(crate) fn report_system_appearance(
+    service: &Service,
+    system: Option<SystemAppearance>,
+) -> Appearance {
     let config = service.config();
     send_all(&service.inner.events, &config.set_system_appearance(system));
     config.appearance()
@@ -123,7 +126,7 @@ pub fn report_system_appearance(service: &Service, system: Option<SystemAppearan
 /// Remote sessions whose reported light / dark state is kept (M5b); when a
 /// new session would exceed it, the remembered states are dropped (those
 /// sessions fall back to the host's state until they report again).
-pub const SESSION_APPEARANCE_LIMIT: usize = 1024;
+pub(crate) const SESSION_APPEARANCE_LIMIT: usize = 1024;
 
 impl Service {
     /// Remembers what a remote session's browser reported (M5b, ADR 0109).
@@ -157,10 +160,11 @@ impl Service {
 /// The platform's source of the OS light / dark state: the registry
 /// watcher on Windows, nothing elsewhere (the UI reports
 /// `prefers-color-scheme` through [`report_system_appearance`] instead).
-pub fn platform_source() -> Option<Arc<dyn SystemAppearanceSource>> {
+pub(crate) fn platform_source() -> Option<Arc<dyn SystemAppearanceSource>> {
     #[cfg(windows)]
     {
-        Some(Arc::new(WindowsSystemAppearance::new()))
+        WindowsSystemAppearance::new()
+            .map(|source| -> Arc<dyn SystemAppearanceSource> { Arc::new(source) })
     }
     #[cfg(not(windows))]
     {
@@ -171,7 +175,7 @@ pub fn platform_source() -> Option<Arc<dyn SystemAppearanceSource>> {
 /// Keeps a [`SystemAppearanceSource`] subscribed; dropping it unsubscribes
 /// (and, for the Windows source, stops its watcher thread once the last
 /// reference is gone).
-pub struct SystemAppearanceWatch {
+pub(crate) struct SystemAppearanceWatch {
     source: Arc<dyn SystemAppearanceSource>,
     handle: u64,
 }
@@ -198,7 +202,7 @@ impl Drop for SystemAppearanceWatch {
 ///
 /// The listener holds the config manager and the event sender, not the
 /// service, so storing the guard in the service makes no reference cycle.
-pub fn watch_system_appearance(
+pub(crate) fn watch_system_appearance(
     service: &Service,
     source: Option<Arc<dyn SystemAppearanceSource>>,
 ) -> Option<SystemAppearanceWatch> {
@@ -222,7 +226,10 @@ mod windows {
     //! The Windows source of the OS light / dark and high-contrast state.
     // Win32 calls (registry notifications, events, SystemParametersInfoW);
     // every block states why it is sound.
-    #![allow(unsafe_code)]
+    #![expect(
+        unsafe_code,
+        reason = "Win32 calls (registry notifications, events, SystemParametersInfoW)"
+    )]
 
     use std::sync::{Arc, Mutex, PoisonError};
     use std::thread::JoinHandle;
@@ -291,7 +298,7 @@ mod windows {
 
     /// Reads the OS state from the registry and `SystemParametersInfoW`
     /// and, while anyone watches, notices changes on a background thread.
-    pub struct WindowsSystemAppearance {
+    pub(crate) struct WindowsSystemAppearance {
         shared: Arc<Shared>,
         thread: Mutex<Option<JoinHandle<()>>>,
     }
@@ -311,26 +318,18 @@ mod windows {
         }
     }
 
-    impl Default for WindowsSystemAppearance {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
     impl WindowsSystemAppearance {
         /// A source; the watcher thread starts with the first `watch`.
-        ///
-        /// # Panics
-        ///
-        /// When Windows cannot create an event object (out of handles).
-        pub fn new() -> Self {
-            Self {
+        /// `None` when Windows cannot create an event object (out of
+        /// handles).
+        pub(crate) fn new() -> Option<Self> {
+            Some(Self {
                 shared: Arc::new(Shared {
                     listeners: Mutex::new(Listeners::default()),
-                    stop: Event::new().expect("CreateEventW failed"),
+                    stop: Event::new()?,
                 }),
                 thread: Mutex::new(None),
-            }
+            })
         }
     }
 
@@ -474,7 +473,7 @@ mod windows {
                 .unwrap_or_else(PoisonError::into_inner)
                 .take();
             if let Some(thread) = thread {
-                let _ = thread.join();
+                drop(thread.join());
             }
         }
     }
@@ -711,7 +710,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn the_windows_source_reads_and_watches() {
-        let source = WindowsSystemAppearance::new();
+        let source = WindowsSystemAppearance::new().unwrap();
         let current = source.current();
         assert_eq!(current, windows::read_current());
         if let Ok(key) = windows_registry::CURRENT_USER.open(windows::PERSONALIZE_KEY)

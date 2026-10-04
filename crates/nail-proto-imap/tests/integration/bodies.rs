@@ -5,11 +5,10 @@
 //! keys it does not implement (`SINCE`, `TEXT`, `CHARSET`) are checked
 //! against a small scripted server that records the commands it gets.
 
-mod common;
-
+use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 
-use common::{login, modern_server};
+use crate::common::{login, modern_server};
 use nail_proto_imap::{
     BodyFetch, Credentials, ImapClient, ImapConfig, ImapDate, SearchKey, Security,
 };
@@ -126,23 +125,20 @@ async fn scripted_server(capabilities: &'static str) -> (u16, Arc<Mutex<Vec<Stri
                     .strip_suffix('}')
                     .and_then(|l| l.rsplit_once('{'))
                     .map(|(head, n)| (head.to_owned(), n.to_owned()));
-                match literal {
-                    Some((head, n)) => {
-                        let sync = !n.ends_with('+');
-                        let len: usize = n.trim_end_matches('+').parse().unwrap();
-                        if sync {
-                            write.write_all(b"+ go ahead\r\n").await.unwrap();
-                        }
-                        let mut bytes = vec![0; len];
-                        read.read_exact(&mut bytes).await.unwrap();
-                        command.push_str(&head);
-                        command.push_str(&format!("{{{len}}}"));
-                        command.push_str(&String::from_utf8_lossy(&bytes));
+                if let Some((head, n)) = literal {
+                    let sync = !n.ends_with('+');
+                    let len: usize = n.trim_end_matches('+').parse().unwrap();
+                    if sync {
+                        write.write_all(b"+ go ahead\r\n").await.unwrap();
                     }
-                    None => {
-                        command.push_str(&line);
-                        break;
-                    }
+                    let mut bytes = vec![0; len];
+                    read.read_exact(&mut bytes).await.unwrap();
+                    command.push_str(&head);
+                    write!(command, "{{{len}}}").unwrap();
+                    command.push_str(&String::from_utf8_lossy(&bytes));
+                } else {
+                    command.push_str(&line);
+                    break;
                 }
             }
             let (tag, rest) = command.split_once(' ').unwrap();
@@ -180,12 +176,13 @@ async fn scripted_server(capabilities: &'static str) -> (u16, Arc<Mutex<Vec<Stri
                     } else {
                         ("BODY[]", format!("Subject: {uid}\r\n\r\nbody {uid}\r\n"))
                     };
-                    out.push_str(&format!(
+                    write!(
+                        out,
                         "* {uid} FETCH (UID {uid} FLAGS () RFC822.SIZE 30 {section} {{{}}}\r\n{data})\r\n",
                         data.len()
-                    ));
+                    ).unwrap();
                 }
-                out.push_str(&format!("{tag} OK done\r\n"));
+                write!(out, "{tag} OK done\r\n").unwrap();
                 out
             } else if upper.starts_with("LOGOUT") {
                 format!("* BYE bye\r\n{tag} OK done\r\n")
@@ -202,7 +199,7 @@ async fn scripted_client(port: u16) -> ImapClient {
     let config = ImapConfig::new("127.0.0.1")
         .with_port(port)
         .with_security(Security::InsecurePlaintext)
-        .with_timeout(common::TIMEOUT)
+        .with_timeout(crate::common::TIMEOUT)
         .with_compress(false)
         .with_client_id(None);
     ImapClient::connect(&config, &Credentials::new("sam", "secret"))

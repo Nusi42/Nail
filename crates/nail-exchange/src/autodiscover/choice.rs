@@ -191,7 +191,7 @@ pub fn automapped(mailboxes: &[AlternativeMailbox], own: &str) -> Vec<ExchangeMa
             continue;
         }
         let mut settings = ExchangeMailboxSettings::shared(mailbox.address.clone());
-        settings.name = mailbox.display_name.clone();
+        settings.name.clone_from(&mailbox.display_name);
         settings.kind = ExchangeMailboxKind::Shared;
         if settings.issues(own).is_empty() {
             out.push(settings);

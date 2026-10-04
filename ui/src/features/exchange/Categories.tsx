@@ -12,7 +12,7 @@
  *   message as coloured chips (list rows, reader).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   CategoryColor,
@@ -72,7 +72,13 @@ export function CategoryList({ node }: WidgetProps) {
     >
       <div data-part="exchange-categories.header">
         <h2 data-part="exchange-categories.title">{t("exchange-categories-title")}</h2>
-        <button type="button" data-part="exchange-categories.new" onClick={() => edit(null)}>
+        <button
+          type="button"
+          data-part="exchange-categories.new"
+          onClick={() => {
+            edit(null);
+          }}
+        >
           <Icon name="plus" part="exchange-categories.icon" />
           <span data-part="exchange-categories.action.text">{t("exchange-category-new")}</span>
         </button>
@@ -105,7 +111,9 @@ export function CategoryList({ node }: WidgetProps) {
                     unread: showCounts ? c.unread : 0,
                     pending: c.sync === "pending" ? "yes" : "no",
                   })}
-                  onClick={() => showCategory(store, account.id, c.name)}
+                  onClick={() => {
+                    showCategory(store, account.id, c.name);
+                  }}
                 >
                   <CategorySwatch color={c.color} />
                   <span data-part="exchange-categories.name">{c.name}</span>
@@ -123,7 +131,9 @@ export function CategoryList({ node }: WidgetProps) {
                   data-part="exchange-categories.edit"
                   aria-label={t("exchange-category-edit", { name: c.name })}
                   title={t("exchange-category-edit", { name: c.name })}
-                  onClick={() => edit(c.id)}
+                  onClick={() => {
+                    edit(c.id);
+                  }}
                 >
                   <Icon name="settings" part="exchange-categories.icon" />
                   <span data-part="exchange-categories.action.text">
@@ -191,7 +201,7 @@ function ColorOption({
   color: CategoryColor;
   group: string;
   checked: boolean;
-  onPick(): void;
+  onPick: () => void;
 }) {
   const t = useT();
   return (
@@ -252,7 +262,7 @@ function CategoryEditor({
   accountId: string;
   category: ExchangeCategory | null;
   categories: readonly ExchangeCategory[];
-  close(): void;
+  close: () => void;
 }) {
   const t = useT();
   const ctx = useWriteContext();
@@ -268,7 +278,7 @@ function CategoryEditor({
     close();
   };
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const settings = { name: name.trim(), color };
     const issue = categoryIssues(
@@ -308,7 +318,9 @@ function CategoryEditor({
           value={name}
           maxLength={255}
           aria-invalid={problem !== null}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
         />
       </div>
       {renaming && (
@@ -324,7 +336,9 @@ function CategoryEditor({
             color={c}
             group={ids.colors}
             checked={color === c}
-            onPick={() => setColor(c)}
+            onPick={() => {
+              setColor(c);
+            }}
           />
         ))}
       </fieldset>
@@ -431,7 +445,7 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
     summary.tags.some((tag) => tag.toLowerCase() === name.toLowerCase());
   const selected = chosen ?? new Set(list.filter((c) => has(c.name)).map((c) => c.name));
 
-  const apply = async (event: FormEvent) => {
+  const apply = async (event: SubmitEvent) => {
     event.preventDefault();
     const add = list.filter((c) => selected.has(c.name) && !has(c.name)).map((c) => c.name);
     const remove = summary.tags.filter(

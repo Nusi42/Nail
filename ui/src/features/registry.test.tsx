@@ -6,7 +6,6 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { App } from "../App";
 import { builtinActions } from "../actions/registry";
-import type { Request } from "../api/generated";
 import { COMPOSER_REQUESTS, isComposerRequest } from "./composer/mock";
 import { CUSTOMIZATION_REQUESTS } from "./customization/mock";
 import { MCP_REQUESTS } from "./mcp/mock";
@@ -176,7 +175,7 @@ describe("feature registry", () => {
     ];
     const all: string[] = lists.flat();
     expect(new Set(all).size).toBe(all.length);
-    expect(isComposerRequest({ type: "ListRules" } as Request)).toBe(false);
+    expect(isComposerRequest({ type: "ListRules" })).toBe(false);
   });
 });
 
@@ -240,12 +239,20 @@ describe("feature slots in the app shell", () => {
     expect((await screen.findAllByRole("treeitem", { name: /Inbox/ })).length).toBeGreaterThan(0);
     expect(mounted).toBe(1);
 
-    act(() => env.transport.emit({ type: "RulesChanged" }));
+    act(() => {
+      env.transport.emit({ type: "RulesChanged" });
+    });
     expect(seen).toContain("RulesChanged");
 
-    act(() => env.store.getState().openWindow("test-dialog"));
+    act(() => {
+      env.store.getState().openWindow("test-dialog");
+    });
     const button = await screen.findByRole("button", { name: "test-dialog" });
-    act(() => button.click());
-    await waitFor(() => expect(env.store.getState().windows).toEqual([]));
+    act(() => {
+      button.click();
+    });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
   });
 });

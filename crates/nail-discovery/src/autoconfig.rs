@@ -78,8 +78,7 @@ fn endpoint(server: &Element, protocol: MailProtocol, email: &Email) -> Option<S
         .unwrap_or_else(|| default_port(protocol, tls));
     let username = server
         .text_of("username")
-        .map(|u| expand(&u, email))
-        .unwrap_or_else(|| email.address.clone());
+        .map_or_else(|| email.address.clone(), |u| expand(&u, email));
     let auth = auth(server, &host, &username)?;
     Some(ServerEndpoint {
         host,

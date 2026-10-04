@@ -1,6 +1,12 @@
 //! Sessions: device-bound cookies, tampering, rotation with a grace
 //! period, idle and absolute expiry, revocation, logout.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;

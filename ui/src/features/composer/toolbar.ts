@@ -8,7 +8,7 @@ export type Chain = ReturnType<Editor["chain"]>;
 
 export interface Command {
   id: string;
-  run(chain: Chain): Chain;
+  run: (chain: Chain) => Chain;
   /** Mark or node name (and attributes) that shows the button as pressed. */
   active?: [string, Record<string, unknown>?];
 }

@@ -27,26 +27,38 @@ impl PrintCtl {
 
     fn insert(&self, mut job: PrintJob) -> PrintJob {
         let id = {
-            let mut next = self.next.lock().unwrap_or_else(|e| e.into_inner());
+            let mut next = self
+                .next
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *next += 1;
             PrintJobId::new(format!("print-{}-{}", std::process::id(), *next))
         };
         job.view = print_view_route(&id);
         job.job_id = id.clone();
-        let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
+        let mut jobs = self
+            .jobs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Self::sweep(&mut jobs);
         jobs.insert(id, (job.clone(), Instant::now()));
         job
     }
 
     fn get(&self, id: &PrintJobId) -> Option<PrintJob> {
-        let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
+        let mut jobs = self
+            .jobs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Self::sweep(&mut jobs);
         jobs.get(id).map(|(job, _)| job.clone())
     }
 
     fn mark_ready(&self, id: &PrintJobId) -> bool {
-        let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
+        let mut jobs = self
+            .jobs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match jobs.get_mut(id) {
             Some((job, _)) => {
                 job.ready = true;
@@ -118,12 +130,12 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             };
             nail_portability::files::check_target(&target, overwrite).map_err(portability)?;
             let temp = nail_portability::files::temp_path(&target);
-            let _ = std::fs::remove_file(&temp);
+            drop(std::fs::remove_file(&temp));
             let written = host.print_to_pdf(&job, &temp.display().to_string()).await;
             let size_bytes = match written {
                 Ok(size) => size,
                 Err(err) => {
-                    let _ = std::fs::remove_file(&temp);
+                    drop(std::fs::remove_file(&temp));
                     return Err(err.into());
                 }
             };

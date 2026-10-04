@@ -153,6 +153,7 @@ dialog title `window-security-autocrypt-import`.
 
 1. `crates/nail-config/src/widgets/security.rs`: register the kinds
    (no options):
+
    ```rust
    pub(crate) const WIDGETS: &[WidgetSpec] = &[
        widget("security-keys", &[], &[], false),
@@ -164,18 +165,21 @@ dialog title `window-security-autocrypt-import`.
        widget("security-composer", &[], &[], false),
    ];
    ```
+
    plus a parse test like `mcp.rs`, and `userDocs/en/layout-reference.md`.
 2. `ui/src/api/mock.ts` `GetMessage`: answer
    `decorateMessageBody(this, body)` (from `features/security/mock`), and
    for the dev mock (`?mock=1`) set
    `data.features.security.bySender = securityDemoBySender()`.
 3. `defaults/layout.kdl`: settings tabs
+
    ```kdl
    security-keys id="security-keys" label="@security.settings.tab.keys"
    security-identities id="security-identities" label="@security.settings.tab.identities"
    security-settings id="security-settings" label="@security.settings.tab.protection"
    security-autocrypt id="security-autocrypt" label="@security.settings.tab.autocrypt"
    ```
+
    `security-message` and `security-warnings` in both reader panes (above
    `message-view`), `security-composer` in `window "composer"`, and the
    action `action "security.autocrypt.import" label="@security.action.autocrypt-import"`.
@@ -257,6 +261,7 @@ dialog title `window-security-autocrypt-import`.
     part "security-autocrypt.code.warning" { color "$color.warning"; }
     part "form.file" { font "inherit"; }
 ```
+
 (The token names follow the existing theme; adjust where a token such as
 `$font.mono` is named differently. Several selectors per `part` are
 shorthand here — write one `part` per selector if the theme format needs

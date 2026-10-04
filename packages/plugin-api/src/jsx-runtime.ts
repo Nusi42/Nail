@@ -94,10 +94,16 @@ export const NODE_TYPES: readonly PluginUiNodeType[] = Object.keys(
 
 const NODE_TYPE_SET: ReadonlySet<string> = new Set<string>(NODE_TYPES);
 
-/** Compile-time check: every node type has JSX props. */
+/** Node types without JSX props (`never` when every node type has them). */
 type MissingElements = Exclude<PluginUiNodeType, keyof UiIntrinsicElements>;
-const everyElementTyped: MissingElements extends never ? true : MissingElements = true;
-void everyElementTyped;
+/**
+ * Compile-time check for `JSX.IntrinsicElements`: when a node type lacks JSX
+ * props, every element fails to type-check and the error names the missing
+ * types.
+ */
+type CheckedIntrinsicElements = [MissingElements] extends [never]
+  ? UiIntrinsicElements
+  : { missingJsxProps: MissingElements };
 
 /** Whether `value` looks like a {@link PluginUiNode} (an object with a known `type`). */
 export function isUiNode(value: unknown): value is PluginUiNode {
@@ -140,7 +146,9 @@ export function toNodes(content: UiChild): PluginUiNode[] {
 
 function describe(value: unknown): string {
   try {
-    return JSON.stringify(value) ?? String(value);
+    // `undefined` for functions, symbols and `undefined` itself.
+    const json = JSON.stringify(value) as string | undefined;
+    return json ?? String(value);
   } catch {
     return String(value);
   }
@@ -217,46 +225,44 @@ export function Fragment(props: { children?: UiChild }): PluginUiNode[] {
 type ElementType = string | UiComponent<never>;
 
 /**
- * The JSX factory (automatic runtime). `key` is accepted and ignored.
+ * The JSX factory (automatic runtime). The third argument (`key`) is
+ * accepted and ignored.
  */
-export function jsx(
+export const jsx: (
   type: ElementType,
   props: Record<string, unknown> | null,
-  _key?: unknown,
-): UiContent {
+  key?: unknown,
+) => UiContent = (type, props) => {
   const p = props ?? {};
   if (typeof type === "function") {
-    const result = (type as UiComponent<Record<string, unknown>>)(p);
-    return result === null ? [] : result;
+    return (type as UiComponent)(p) ?? [];
   }
   if (typeof type !== "string") {
     throw new TypeError(`Not a Nail UI element: ${describe(type)}`);
   }
   return intrinsic(type, p);
-}
+};
 
 /** The JSX factory for static children lists (same as {@link jsx}). */
 export const jsxs = jsx;
 
-/** The development JSX factory (same as {@link jsx}; source info ignored). */
-export function jsxDEV(
+/** The development JSX factory (same as {@link jsx}; key and source info ignored). */
+export const jsxDEV: (
   type: ElementType,
   props: Record<string, unknown> | null,
   key?: unknown,
-  _isStatic?: boolean,
-  _source?: unknown,
-  _self?: unknown,
-): UiContent {
-  return jsx(type, props, key);
-}
+  isStatic?: boolean,
+  source?: unknown,
+  self?: unknown,
+) => UiContent = (type, props) => jsx(type, props);
 
 /** TypeScript's view of the JSX in plug-ins. */
-// eslint-disable-next-line @typescript-eslint/no-namespace
+// eslint-disable-next-line @typescript-eslint/no-namespace -- TypeScript looks the JSX types up in a namespace named `JSX`
 export namespace JSX {
   /** The value of every JSX expression. */
   export type Element = UiContent;
   /** The elements `<text>`, `<stack>`, `<date>` … with their props. */
-  export type IntrinsicElements = UiIntrinsicElements;
+  export type IntrinsicElements = CheckedIntrinsicElements;
   /** Children are passed as the `children` prop. */
   export interface ElementChildrenAttribute {
     children: unknown;

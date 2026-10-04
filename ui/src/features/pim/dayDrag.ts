@@ -40,17 +40,17 @@ export function useDayDrag(tz: string) {
     /** The day a dragged event would land on. */
     over: drag?.moved ? drag.over : null,
     dragging: drag?.moved ? drag.instance : null,
-    start(event: ReactPointerEvent<HTMLElement>, instance: EventInstance, from: string) {
+    start: (event: ReactPointerEvent<HTMLElement>, instance: EventInstance, from: string) => {
       if (event.button !== 0 || instance.read_only) return;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      event.currentTarget.setPointerCapture(event.pointerId);
       setDrag({ instance, from, over: from, moved: false });
     },
-    move(event: ReactPointerEvent<HTMLElement>) {
+    move: (event: ReactPointerEvent<HTMLElement>) => {
       if (!drag) return;
       const over = dayAt(event.clientX, event.clientY);
       if (over && over !== drag.over) setDrag({ ...drag, over, moved: true });
     },
-    end() {
+    end: () => {
       if (!drag) return;
       const finished = drag;
       setDrag(null);
@@ -61,10 +61,10 @@ export function useDayDrag(tz: string) {
       const { start, end } = movedTimes(finished.instance, days, 0, tz);
       void requestMove(ctx, finished.instance, start, end);
     },
-    cancel() {
+    cancel: () => {
       setDrag(null);
     },
-    suppressClick() {
+    suppressClick: () => {
       if (!justDragged.current) return false;
       justDragged.current = false;
       return true;

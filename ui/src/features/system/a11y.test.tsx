@@ -8,13 +8,16 @@ import { act, screen, waitFor } from "@testing-library/react";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
-import { setUpdateState, systemStoreFor } from ".";
+import { systemStoreFor } from ".";
+import { setUpdateState } from "./mock";
 import { AboutNail } from "./AboutNail";
 import { FirstRun } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });

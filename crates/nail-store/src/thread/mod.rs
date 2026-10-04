@@ -196,7 +196,13 @@ fn assign_thread_with(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Re
         threads.insert(current.clone());
     }
 
-    let winner = if threads.is_empty() {
+    let winner = if let Some(first) = threads.pop_first() {
+        if threads.is_empty() {
+            first
+        } else {
+            merge_threads(tx, &first, &threads)?
+        }
+    } else {
         let fallback = if row.parents.is_empty() && row.remote_thread.is_none() {
             subject_fallback(tx, &row)?
         } else {
@@ -213,10 +219,6 @@ fn assign_thread_with(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Re
                 .unwrap_or_else(|| format!("row:{}", row.id));
             thread_id_for(&seed)
         })
-    } else if threads.len() == 1 {
-        threads.into_iter().next().expect("one thread")
-    } else {
-        merge_threads(tx, threads)?
     };
 
     {
@@ -277,22 +279,22 @@ fn subject_fallback(tx: &Transaction<'_>, row: &ThreadRow) -> Result<Option<Stri
 
 /// Merges threads into the one with the oldest message (ties: smallest
 /// id); returns the survivor.
-fn merge_threads(tx: &Transaction<'_>, threads: BTreeSet<String>) -> Result<String> {
-    let mut best: Option<(i64, String)> = None;
-    {
+fn merge_threads(tx: &Transaction<'_>, first: &str, others: &BTreeSet<String>) -> Result<String> {
+    let all = || std::iter::once(first).chain(others.iter().map(String::as_str));
+    let winner = {
         let mut stmt = tx.prepare_cached(
             "SELECT COALESCE(MIN(date_sort), 9223372036854775807) FROM messages WHERE thread_id = ?1",
         )?;
-        for t in &threads {
-            let oldest: i64 = stmt.query_row([t], |r| r.get(0))?;
-            let candidate = (oldest, t.clone());
-            if best.as_ref().is_none_or(|b| candidate < *b) {
+        let mut best: Option<(i64, &str)> = None;
+        for t in all() {
+            let candidate = (stmt.query_row([t], |r| r.get(0))?, t);
+            if best.is_none_or(|b| candidate < b) {
                 best = Some(candidate);
             }
         }
-    }
-    let (_, winner) = best.expect("at least two threads");
-    for loser in threads.iter().filter(|t| **t != winner) {
+        best.map_or(first, |(_, t)| t).to_owned()
+    };
+    for loser in all().filter(|t| *t != winner) {
         tx.execute(
             "UPDATE messages SET thread_id = ?2 WHERE thread_id = ?1",
             params![loser, winner],

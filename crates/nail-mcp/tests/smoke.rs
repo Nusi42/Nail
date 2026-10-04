@@ -1,6 +1,8 @@
 //! WP20 smoke test: an rmcp server served over Streamable HTTP on
 //! 127.0.0.1 answers an rmcp client (the setup WP23 builds on).
 
+#![cfg(test)]
+
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -34,6 +36,7 @@ impl EchoServer {
     }
 
     #[tool(description = "Echo the text")]
+    #[expect(clippy::unused_self, reason = "rmcp's #[tool] methods take &self")]
     fn echo(&self, Parameters(EchoRequest { text }): Parameters<EchoRequest>) -> String {
         text
     }
@@ -51,14 +54,14 @@ async fn streamable_http_round_trip() {
     let service: StreamableHttpService<EchoServer, LocalSessionManager> =
         StreamableHttpService::new(
             || Ok(EchoServer::new()),
-            Default::default(),
+            std::sync::Arc::default(),
             StreamableHttpServerConfig::default().with_sse_keep_alive(None),
         );
     let router = axum::Router::new().nest_service("/mcp", service);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        let _ = axum::serve(listener, router).await;
+        drop(axum::serve(listener, router).await);
     });
 
     // The workspace builds reqwest with `rustls-no-provider` (ADR 0014), so
@@ -83,7 +86,7 @@ async fn streamable_http_round_trip() {
     let text = serde_json::to_value(&result.content).unwrap().to_string();
     assert!(text.contains("hi"), "{text}");
 
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
     server.abort();
 }
 

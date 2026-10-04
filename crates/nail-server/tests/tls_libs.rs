@@ -3,6 +3,8 @@
 //! TLS 1.3 / 1.2 only) completes a handshake with a client that pins it;
 //! `instant-acme` builds with ring (no aws-lc) and knows Let's Encrypt.
 
+#![cfg(test)]
+
 use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};

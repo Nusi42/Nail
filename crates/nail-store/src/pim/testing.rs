@@ -17,40 +17,37 @@ use super::time::{cache_time, parse_local, parse_zone, resolve_wall, time_like};
 use crate::store::Store;
 
 /// Local calendar.
-pub const CAL: &str = "cal";
+pub(crate) const CAL: &str = "cal";
 /// Local address book.
-pub const BOOK: &str = "book";
+pub(crate) const BOOK: &str = "book";
 /// CalDAV calendar of source [`DAV`].
-pub const DAV_CAL: &str = "dcal";
+pub(crate) const DAV_CAL: &str = "dcal";
 /// CardDAV address book of source [`DAV`].
-pub const DAV_BOOK: &str = "dbook";
+pub(crate) const DAV_BOOK: &str = "dbook";
 /// A CalDAV source (holds both kinds of collection in tests).
-pub const DAV: &str = "dav";
+pub(crate) const DAV: &str = "dav";
 /// A subscription calendar (read-only).
-pub const ICS_CAL: &str = "ics";
+pub(crate) const ICS_CAL: &str = "ics";
 
-/// Builds items.
-pub struct Fixtures;
-
-impl Fixtures {
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// A one-hour event in the local calendar on 2026-10-01 09:00 Berlin.
-    pub fn event(&self, id: &str, uid: &str, title: &str) -> CalendarEvent {
-        event_at(
-            id,
-            uid,
-            title,
-            PimTime::zoned("2026-10-01T09:00:00", "Europe/Berlin"),
-            PimTime::zoned("2026-10-01T10:00:00", "Europe/Berlin"),
-        )
-    }
+/// A one-hour event in the local calendar on 2026-10-01 09:00 Berlin.
+pub(crate) fn event(id: &str, uid: &str, title: &str) -> CalendarEvent {
+    event_at(
+        id,
+        uid,
+        title,
+        PimTime::zoned("2026-10-01T09:00:00", "Europe/Berlin"),
+        PimTime::zoned("2026-10-01T10:00:00", "Europe/Berlin"),
+    )
 }
 
 /// An event in [`CAL`].
-pub fn event_at(id: &str, uid: &str, title: &str, start: PimTime, end: PimTime) -> CalendarEvent {
+pub(crate) fn event_at(
+    id: &str,
+    uid: &str,
+    title: &str,
+    start: PimTime,
+    end: PimTime,
+) -> CalendarEvent {
     CalendarEvent {
         id: id.into(),
         calendar_id: CAL.into(),
@@ -67,14 +64,14 @@ pub fn event_at(id: &str, uid: &str, title: &str, start: PimTime, end: PimTime) 
 }
 
 /// A daily rule.
-pub fn daily(end: RecurrenceEnd) -> Recurrence {
+pub(crate) fn daily(end: RecurrenceEnd) -> Recurrence {
     let mut rule = RecurrenceRule::new(Frequency::Daily);
     rule.end = end;
     Recurrence::rule(rule)
 }
 
 /// A task in [`CAL`].
-pub fn task(id: &str, uid: &str, title: &str) -> Task {
+pub(crate) fn task(id: &str, uid: &str, title: &str) -> Task {
     Task {
         id: id.into(),
         calendar_id: CAL.into(),
@@ -90,7 +87,7 @@ pub fn task(id: &str, uid: &str, title: &str) -> Task {
 }
 
 /// A contact in [`BOOK`] with emails.
-pub fn contact(id: &str, uid: &str, name: &str, emails: &[&str]) -> Contact {
+pub(crate) fn contact(id: &str, uid: &str, name: &str, emails: &[&str]) -> Contact {
     let mut fields = ContactFields::named(name);
     fields.emails = emails.iter().map(|e| LabeledValue::new(*e)).collect();
     Contact {
@@ -108,7 +105,7 @@ pub fn contact(id: &str, uid: &str, name: &str, emails: &[&str]) -> Contact {
 }
 
 /// A group in [`BOOK`].
-pub fn group(id: &str, uid: &str, name: &str, member_ids: &[&str]) -> ContactGroup {
+pub(crate) fn group(id: &str, uid: &str, name: &str, member_ids: &[&str]) -> ContactGroup {
     ContactGroup {
         id: id.into(),
         address_book_id: BOOK.into(),
@@ -148,7 +145,7 @@ fn book(id: &str, source: &str) -> AddressBook {
 
 /// A store with [`CAL`], [`BOOK`], [`DAV_CAL`], [`DAV_BOOK`] and
 /// [`ICS_CAL`].
-pub fn store() -> Store {
+pub(crate) fn store() -> Store {
     let store = Store::open_in_memory().unwrap();
     store
         .ensure_pim_source(&PimSourceId::new(DAV), PimSourceKind::Caldav, 0)
@@ -176,12 +173,12 @@ pub fn store() -> Store {
 }
 
 /// Raw text standing in for the iCalendar / vCard of an item.
-pub fn raw(tag: &str) -> String {
+pub(crate) fn raw(tag: &str) -> String {
     format!("BEGIN:VCALENDAR\r\nX-TEST:{tag}\r\nEND:VCALENDAR\r\n")
 }
 
 /// Unix seconds of an RFC 3339 instant.
-pub fn at(text: &str) -> i64 {
+pub(crate) fn at(text: &str) -> i64 {
     super::time::parse_instant(text).unwrap()
 }
 
@@ -189,7 +186,7 @@ pub fn at(text: &str) -> i64 {
 /// EXDATEs and overrides, stepping the wall clock in the event's zone so
 /// DST is right. Counts expansions.
 #[derive(Default)]
-pub struct TestExpander {
+pub(crate) struct TestExpander {
     pub calls: std::sync::atomic::AtomicUsize,
 }
 
@@ -264,21 +261,20 @@ impl InstanceExpander for TestExpander {
             if recurrence.exceptions.iter().any(|x| wall_of(x) == wall) {
                 continue;
             }
-            let (start_time, end_time, overridden, cancelled) = match event
+            let (start_time, end_time, overridden, cancelled) = if let Some(o) = event
                 .overrides
                 .iter()
                 .find(|o| wall_of(&o.recurrence_id) == wall)
             {
-                Some(o) => (
+                (
                     o.fields.start.clone(),
                     o.fields.end.clone(),
                     true,
                     o.fields.status == nail_api::pim::calendar::EventStatus::Cancelled,
-                ),
-                None => {
-                    let s = cache_time(&rid).unwrap().secs;
-                    (rid.clone(), time_like(start, s + duration), false, false)
-                }
+                )
+            } else {
+                let s = cache_time(&rid).unwrap().secs;
+                (rid.clone(), time_like(start, s + duration), false, false)
             };
             let s = cache_time(&start_time).unwrap().secs;
             if s < from || s >= until {

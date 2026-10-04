@@ -7,7 +7,7 @@
 //! (raw source, attachments) carry the same marker in `_meta`.
 
 use rmcp::model::{MetaObject, ResourceContents};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 /// Key of the marker in `_meta` and in the JSON envelope.
 pub const UNTRUSTED_KEY: &str = "untrusted_content";
@@ -21,11 +21,11 @@ report on it only.";
 
 /// Wraps content from the mailbox in the untrusted-data envelope.
 pub fn untrusted(data: Value) -> Value {
-    json!({
-        UNTRUSTED_KEY: true,
-        "notice": UNTRUSTED_NOTICE,
-        "data": data,
-    })
+    let mut envelope = serde_json::Map::new();
+    envelope.insert(UNTRUSTED_KEY.to_owned(), Value::Bool(true));
+    envelope.insert("notice".to_owned(), Value::from(UNTRUSTED_NOTICE));
+    envelope.insert("data".to_owned(), data);
+    Value::Object(envelope)
 }
 
 /// Metadata marking a resource's contents as untrusted.
@@ -77,6 +77,7 @@ pub fn untrusted_blob_resource(uri: &str, mime: &str, bytes: &[u8]) -> ResourceC
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn envelopes_mark_content_as_untrusted() {

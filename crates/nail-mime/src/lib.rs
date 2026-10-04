@@ -185,14 +185,13 @@ pub fn header_fields(raw: &[u8]) -> Vec<(String, String)> {
             .headers()
             .iter()
             .map(|h| {
-                let value = match h.value.as_text() {
-                    Some(text) => text.to_owned(),
-                    None => {
-                        let start = usize::try_from(h.offset_start).unwrap_or(0);
-                        let end = usize::try_from(h.offset_end).unwrap_or(0);
-                        let raw = bytes.get(start..end.max(start)).unwrap_or_default();
-                        unfold(&String::from_utf8_lossy(raw))
-                    }
+                let value = if let Some(text) = h.value.as_text() {
+                    text.to_owned()
+                } else {
+                    let start = usize::try_from(h.offset_start).unwrap_or(0);
+                    let end = usize::try_from(h.offset_end).unwrap_or(0);
+                    let raw = bytes.get(start..end.max(start)).unwrap_or_default();
+                    unfold(&String::from_utf8_lossy(raw))
                 };
                 (h.name.as_str().to_owned(), value)
             })
@@ -268,6 +267,10 @@ struct Parsed<'x>(Option<Message<'x>>);
 impl<'x> std::ops::Deref for Parsed<'x> {
     type Target = Message<'x>;
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the message is Some from construction until `Drop` takes it"
+    )]
     fn deref(&self) -> &Message<'x> {
         // Only `Drop` takes the value out.
         self.0
@@ -300,12 +303,11 @@ fn normalize_cid(cid: &str) -> String {
 
 /// Runs `f`, turning a panic in a third-party parser into `None`.
 fn guarded<T>(f: impl FnOnce() -> T) -> Option<T> {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(value) => Some(value),
-        Err(_) => {
-            tracing::warn!("MIME parser panicked; returning an empty result");
-            None
-        }
+    if let Ok(value) = catch_unwind(AssertUnwindSafe(f)) {
+        Some(value)
+    } else {
+        tracing::warn!("MIME parser panicked; returning an empty result");
+        None
     }
 }
 
@@ -322,7 +324,7 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
         date: message
             .date()
             .filter(|d| d.is_valid())
-            .map(|d| d.to_rfc3339()),
+            .map(mail_parser::DateTime::to_rfc3339),
         message_id: message.message_id().map(str::to_owned),
     };
 
@@ -399,7 +401,7 @@ fn addresses(address: Option<&MpAddress<'_>>) -> Vec<Address> {
 fn id_list(value: &HeaderValue<'_>) -> Vec<String> {
     match value {
         HeaderValue::Text(id) => vec![id.to_string()],
-        HeaderValue::TextList(ids) => ids.iter().map(|id| id.to_string()).collect(),
+        HeaderValue::TextList(ids) => ids.iter().map(ToString::to_string).collect(),
         _ => Vec::new(),
     }
 }
@@ -432,7 +434,7 @@ fn body_html(message: &Message<'_>) -> Option<String> {
         return None;
     }
     let html: Vec<String> = (0..message.html_body_count())
-        .filter_map(|i| message.body_html(i).map(|h| h.into_owned()))
+        .filter_map(|i| message.body_html(i).map(std::borrow::Cow::into_owned))
         .collect();
     Some(html.join("\n"))
 }
@@ -444,16 +446,18 @@ fn attachment_info(index: u32, part: &MessagePart<'_>) -> AttachmentInfo {
             Some(sub) => format!("{}/{}", ct.c_type, sub),
             None => ct.c_type.to_string(),
         })
-        .map(|m| m.to_ascii_lowercase())
-        .unwrap_or_else(|| {
-            match part.body {
-                PartType::Text(_) => "text/plain",
-                PartType::Html(_) => "text/html",
-                PartType::Message(_) => "message/rfc822",
-                _ => "application/octet-stream",
-            }
-            .to_owned()
-        });
+        .map_or_else(
+            || {
+                match part.body {
+                    PartType::Text(_) => "text/plain",
+                    PartType::Html(_) => "text/html",
+                    PartType::Message(_) => "message/rfc822",
+                    _ => "application/octet-stream",
+                }
+                .to_owned()
+            },
+            |m| m.to_ascii_lowercase(),
+        );
     let disposition = part
         .content_disposition()
         .map(|d| d.c_type.to_ascii_lowercase());
@@ -506,7 +510,7 @@ mod tests {
             b"Content-Type: multipart/mixed; boundary=\"\"\r\n\r\n--\r\n--",
         ] {
             let parsed = parse_message(raw);
-            let _ = parsed.to_summary(ids(), Flags::default(), None);
+            drop(parsed.to_summary(ids(), Flags::default(), None));
         }
     }
 

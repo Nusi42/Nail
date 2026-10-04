@@ -463,7 +463,10 @@ pub fn learn_authserv_id<'a>(
         return None;
     }
     let (id, n) = counts.into_iter().max_by_key(|(_, n)| *n)?;
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "header counts are far below 2^52, where f64 starts to round"
+    )]
     let share = n as f64 / total as f64;
     (share >= min_share).then_some(id)
 }
@@ -549,8 +552,8 @@ mod tests {
         assert_eq!(p.results[0].property("smtp", "helo"), Some("relay"));
         // Garbage never panics.
         for junk in ["(((", "\"", ";;;;", "a;=;=", "x; =pass", "x; dkim=", "=;"] {
-            let _ = parse_header(junk);
-            let _ = parse_arc_header(junk);
+            drop(parse_header(junk));
+            drop(parse_arc_header(junk));
         }
     }
 

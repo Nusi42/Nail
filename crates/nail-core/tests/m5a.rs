@@ -3,6 +3,8 @@
 //! `ReportSystemAppearance`, density, the resync events, and attachments of
 //! received mail (`GetMessageAttachment`, `SaveAttachment`).
 
+#![cfg(test)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,7 +33,7 @@ fn open() -> Fixture {
     let config_dir = tempfile::tempdir().unwrap();
     let os = Arc::new(ManualSystemAppearance::new(Some(SystemAppearance::LIGHT)));
     let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
-    options.system_appearance = Some(Arc::clone(&os) as _);
+    options.system_appearance = Some(os.clone());
     let options = nail_core::demo::demo_options(options);
     let service = Service::open(options).unwrap();
     seed_demo(service.store(), service.blobs()).unwrap();
@@ -212,7 +214,7 @@ async fn browser_reports_apply_without_an_os_source() {
     let store = nail_store::Store::open_in_memory().unwrap();
     let blobs = nail_store::BlobStore::open(dir.path().join("blobs")).unwrap();
     let config = nail_config::ConfigManager::load(dir.path());
-    let service = Service::from_parts(store, blobs, config, None);
+    let service = Service::from_parts(store, blobs, config, None).unwrap();
     let mut events = service.subscribe();
     let appearance = themes(
         &service,

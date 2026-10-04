@@ -46,7 +46,7 @@ const manifest: PluginManifest = {
 describe("nail outside Nail", () => {
   it("fails with a clear unsupported error", async () => {
     expect(() => nail.plugin).toThrow(/must run inside Nail/);
-    expect(() => nail.mail.get).toThrow(/must run inside Nail/);
+    expect(() => nail.mail.get.name).toThrow(/must run inside Nail/);
     expect(() => nail.ui.notify("x")).toThrow(/must run inside Nail/);
     try {
       await nail.storage.get("k");
@@ -69,7 +69,9 @@ describe("nail with a host", () => {
     });
     restore = host.install();
   });
-  afterEach(() => restore());
+  afterEach(() => {
+    restore();
+  });
 
   it("forwards to the host and exposes its identity", async () => {
     expect(nail.plugin).toEqual({ id: "follow-up", version: "1.2.3" });
@@ -122,9 +124,15 @@ describe("nail with a host", () => {
   });
 
   it("registers commands through nail.ui and nail.commands", () => {
-    nail.ui.registerCommand("hello", () => {});
+    nail.ui.registerCommand("hello", () => {
+      /* no-op */
+    });
     expect(host.commandNames()).toEqual(["hello"]);
-    expect(() => nail.commands.register("other", () => {})).toThrow(/not in the manifest/);
+    expect(() => {
+      nail.commands.register("other", () => {
+        /* no-op */
+      });
+    }).toThrow(/not in the manifest/);
   });
 });
 
@@ -138,7 +146,9 @@ describe("helpers", () => {
     expect(toDialogSpec({ title: "T", body: <text>x</text> }).body).toEqual([
       { type: "text", value: "x" },
     ]);
-    const onAction = () => {};
+    const onAction = () => {
+      /* no-op */
+    };
     const provider = toPanelProvider({ render: () => "plain", onAction });
     expect(provider.onAction).toBe(onAction);
     const ctx = { selection: { messageIds: [] } };
@@ -163,7 +173,9 @@ describe("definePlugin", () => {
     host = createTestHost({ manifest });
     restore = host.install();
   });
-  afterEach(() => restore());
+  afterEach(() => {
+    restore();
+  });
 
   it("marks the definition and passes the host context through", async () => {
     const seen: string[] = [];
@@ -178,7 +190,7 @@ describe("definePlugin", () => {
     });
     expect(plugin.kind).toBe(PLUGIN_MARKER);
     expect(plugin.apiVersion).toBe("1");
-    expect(plugin.deactivate).toBeUndefined();
+    expect(plugin).not.toHaveProperty("deactivate");
     await plugin.activate(host.activationContext());
     expect(host.commandNames()).toEqual(["hello"]);
     expect(await host.renderPanel("due")).toEqual([{ type: "text", value: "side" }]);
@@ -220,7 +232,9 @@ describe("definePlugin", () => {
   it("passes deactivate on", () => {
     let stopped = false;
     const plugin = definePlugin({
-      activate() {},
+      activate() {
+        /* no-op */
+      },
       deactivate() {
         stopped = true;
       },

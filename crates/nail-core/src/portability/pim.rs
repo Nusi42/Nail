@@ -129,25 +129,22 @@ impl PimImportSink for PimBuffer {
     fn exists(&mut self, collection: &SourceCollection, uid: &str) -> bool {
         let store = self.service.store();
         let key = collection.key.clone();
-        match collection.kind {
-            ImportCollectionKind::AddressBook => {
-                let books = [AddressBookId::new(key)];
-                store
-                    .contacts(Some(&books))
-                    .is_ok_and(|all| all.iter().any(|c| c.uid == uid))
-                    || store
-                        .contact_groups(Some(&books))
-                        .is_ok_and(|all| all.iter().any(|g| g.uid == uid))
-            }
-            _ => {
-                let cals = [CalendarId::new(key)];
-                store
-                    .events(Some(&cals))
-                    .is_ok_and(|all| all.iter().any(|e| e.uid == uid))
-                    || store
-                        .list_tasks(Some(&cals), true)
-                        .is_ok_and(|all| all.iter().any(|t| t.uid == uid))
-            }
+        if collection.kind == ImportCollectionKind::AddressBook {
+            let books = [AddressBookId::new(key)];
+            store
+                .contacts(Some(&books))
+                .is_ok_and(|all| all.iter().any(|c| c.uid == uid))
+                || store
+                    .contact_groups(Some(&books))
+                    .is_ok_and(|all| all.iter().any(|g| g.uid == uid))
+        } else {
+            let cals = [CalendarId::new(key)];
+            store
+                .events(Some(&cals))
+                .is_ok_and(|all| all.iter().any(|e| e.uid == uid))
+                || store
+                    .list_tasks(Some(&cals), true)
+                    .is_ok_and(|all| all.iter().any(|t| t.uid == uid))
         }
     }
 }
@@ -385,41 +382,38 @@ impl PimExportSource for StorePimSource {
             return Ok(());
         };
         let store = self.service.store();
-        let refs: Vec<PimItemRef> = match kind {
-            ImportCollectionKind::AddressBook => {
-                let books = [AddressBookId::new(collection.key.clone())];
-                let mut refs: Vec<PimItemRef> = store
-                    .contacts(Some(&books))
+        let refs: Vec<PimItemRef> = if kind == &ImportCollectionKind::AddressBook {
+            let books = [AddressBookId::new(collection.key.clone())];
+            let mut refs: Vec<PimItemRef> = store
+                .contacts(Some(&books))
+                .map_err(store_err)?
+                .into_iter()
+                .map(|c| PimItemRef::Contact { contact_id: c.id })
+                .collect();
+            refs.extend(
+                store
+                    .contact_groups(Some(&books))
                     .map_err(store_err)?
                     .into_iter()
-                    .map(|c| PimItemRef::Contact { contact_id: c.id })
-                    .collect();
-                refs.extend(
-                    store
-                        .contact_groups(Some(&books))
-                        .map_err(store_err)?
-                        .into_iter()
-                        .map(|g| PimItemRef::ContactGroup { group_id: g.id }),
-                );
-                refs
-            }
-            _ => {
-                let cals = [CalendarId::new(collection.key.clone())];
-                let mut refs: Vec<PimItemRef> = store
-                    .events(Some(&cals))
+                    .map(|g| PimItemRef::ContactGroup { group_id: g.id }),
+            );
+            refs
+        } else {
+            let cals = [CalendarId::new(collection.key.clone())];
+            let mut refs: Vec<PimItemRef> = store
+                .events(Some(&cals))
+                .map_err(store_err)?
+                .into_iter()
+                .map(|e| PimItemRef::Event { event_id: e.id })
+                .collect();
+            refs.extend(
+                store
+                    .list_tasks(Some(&cals), true)
                     .map_err(store_err)?
                     .into_iter()
-                    .map(|e| PimItemRef::Event { event_id: e.id })
-                    .collect();
-                refs.extend(
-                    store
-                        .list_tasks(Some(&cals), true)
-                        .map_err(store_err)?
-                        .into_iter()
-                        .map(|t| PimItemRef::Task { task_id: t.id }),
-                );
-                refs
-            }
+                    .map(|t| PimItemRef::Task { task_id: t.id }),
+            );
+            refs
         };
         for item in refs {
             let text = match store.pim_object(&item) {

@@ -5,12 +5,15 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
-import { CENTER_DIALOG, seedAgentsDemo } from "../agents";
+import { CENTER_DIALOG } from "../agents";
+import { seedAgentsDemo } from "../agents/mockSeed";
 import { DEFAULT_RATE_LIMITS, rateLimitIssues, WRITE_SCOPES } from "./queries";
 import { runtimeIds } from "./messages";
 
 async function settle(env: Env) {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 function demo(env: Env) {
@@ -93,11 +96,11 @@ describe("MCP client settings (M4a)", () => {
     const draft = policy.querySelector<HTMLElement>('[data-kind="draft"]');
     if (!draft) throw new Error("no draft row");
     await user.click(within(draft).getByRole("radio", { name: /Ask first/ }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).toEqual({
         draft: "ask",
-      }),
-    );
+      });
+    });
     expect(policy.querySelector('[data-kind="permanent-delete"]')).toHaveAttribute(
       "data-locked",
       "",

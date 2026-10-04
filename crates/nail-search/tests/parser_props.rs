@@ -1,4 +1,5 @@
 //! Property tests for the query language parser.
+#![cfg(test)]
 
 use nail_api::search::utf16_offset;
 use nail_search::parse_query;

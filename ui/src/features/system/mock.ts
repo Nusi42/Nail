@@ -249,7 +249,7 @@ function startDownload(core: MockCore, update: UpdateInfo): void {
   const total = update.size_bytes;
   move(core, { state: "downloading", update, downloaded_bytes: 0, total_bytes: total });
   const steps = Math.max(1, state.downloadSteps);
-  const step = (n: number) =>
+  const step = (n: number) => {
     later(core, () => {
       if (n === 1) {
         const failure = takeFailure(state);
@@ -266,6 +266,7 @@ function startDownload(core: MockCore, update: UpdateInfo): void {
       move(core, { state: "downloading", update, downloaded_bytes: done, total_bytes: total });
       step(n + 1);
     });
+  };
   step(1);
 }
 

@@ -3,6 +3,8 @@
 //! bodies on demand), Graph conversation ids as Nail threads, moves into a
 //! shared mailbox and into another Exchange account.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -75,7 +77,7 @@ account "fabrikam" email="bo@fabrikam.example" name="Fabrikam" {{
     }
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
-    options.secrets = Some(secrets as Arc<dyn SecretStore>);
+    options.secrets = Some(secrets);
     options.timing = EngineTiming::fast();
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     Env {
@@ -321,7 +323,7 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
     .await;
     // 5 MiB of incompressible-looking bytes: over Graph's 4 MB limit.
     let bytes: Vec<u8> = (0..5 * 1024 * 1024u32)
-        .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+        .map(|i| (i.wrapping_mul(2_654_435_761) >> 13).to_le_bytes()[0])
         .collect();
     let Response::AttachmentUploaded { attachment } = request(
         service,
@@ -370,9 +372,8 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
                 total_bytes,
                 ..
             })) => progress.push((sent_bytes, total_bytes)),
-            Ok(Ok(_)) => {}
-            Ok(Err(_)) => {}
-            Err(_) => panic!("no upload progress; saw {progress:?}"),
+            Ok(Ok(_) | Err(_)) => {}
+            Err(elapsed) => panic!("no upload progress ({elapsed}); saw {progress:?}"),
         }
     }
     let (_, total) = progress[0];

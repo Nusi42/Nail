@@ -34,7 +34,7 @@ function dispatcher(env: Env) {
       t: (id) => id,
       locale: "en",
     },
-    appRegistry.actions as Record<string, (typeof appRegistry.actions)[string]>,
+    appRegistry.actions,
   );
 }
 
@@ -170,7 +170,9 @@ describe("junk and snooze actions", () => {
     const close = vi.fn();
     renderWithProviders(<SnoozeDialog name={SNOOZE_DIALOG} close={close} />, env);
     await user.click(screen.getByRole("button", { name: /Tomorrow/ }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     const [request] = sent(env, "SnoozeMessages");
     const expected = presetTime("tomorrow", new Date());
     expect(Date.parse(request?.until ?? "")).toBe(expected?.getTime());
@@ -181,7 +183,7 @@ describe("junk and snooze actions", () => {
     const user = userEvent.setup();
     const env = createEnv();
     triageStoreFor(env.store).getState().setSnoozing(["x"]);
-    renderWithProviders(<SnoozeDialog name={SNOOZE_DIALOG} close={() => {}} />, env);
+    renderWithProviders(<SnoozeDialog name={SNOOZE_DIALOG} close={vi.fn()} />, env);
     const field = screen.getByLabelText("Date and time");
     fireEvent.change(field, { target: { value: "2020-01-01T08:00" } });
     await user.click(screen.getByRole("button", { name: "Snooze" }));
@@ -220,19 +222,21 @@ describe("triage widgets", () => {
     const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
     if (!message) throw new Error("no inbox message");
     await env.client.request({ type: "MarkJunk", message_ids: [message.id], junk: true }, "Queued");
-    act(() => env.store.getState().selectMessage(message.id));
+    act(() => {
+      env.store.getState().selectMessage(message.id);
+    });
     renderWithProviders(<NodeView node={widget("junk-verdict")} path="t" />, env);
     const bar = await screen.findByRole("status", { name: "Junk mail" });
     expect(bar).toHaveTextContent("This message is junk.");
     expect(bar).toHaveTextContent("Marked by you");
     await user.click(within(bar).getByRole("button", { name: "Not junk" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "MarkJunk").at(-1)).toEqual({
         type: "MarkJunk",
         message_ids: [message.id],
         junk: false,
-      }),
-    );
+      });
+    });
   });
 
   it("edits the junk filter with validation", async () => {
@@ -298,12 +302,12 @@ describe("web notifications", () => {
     const shown: { title: string; options: NotificationOptions }[] = [];
     class FakeNotification {
       static permission: NotificationPermission = "granted";
-      static requestPermission = vi.fn(async () => "granted" as NotificationPermission);
+      static requestPermission = vi.fn(() => Promise.resolve("granted"));
       onclick: (() => void) | null = null;
       constructor(title: string, options: NotificationOptions) {
         shown.push({ title, options });
       }
-      close() {}
+      close = vi.fn();
     }
     Object.defineProperty(globalThis, "Notification", {
       configurable: true,
@@ -316,7 +320,9 @@ describe("web notifications", () => {
     }
     renderWithProviders(<Probe />, env);
     await env.client.request({ type: "TestNotification" }, "Done");
-    await waitFor(() => expect(shown).toHaveLength(1));
+    await waitFor(() => {
+      expect(shown).toHaveLength(1);
+    });
     expect(shown[0]).toEqual({
       title: "Notifications work",
       options: { body: "This is how Nail tells you about new mail.", tag: "test", silent: false },
@@ -352,7 +358,9 @@ describe("junk actions apply only where they make sense (M5b review)", () => {
     );
     env.queryClient.setQueryData(queryKeys.folders("acc-personal"), folders.folders);
     const inboxMessage = env.transport.data.messages.find((m) => m.folder_id === INBOX)?.id ?? "";
-    act(() => env.store.getState().selectMessage(inboxMessage));
+    act(() => {
+      env.store.getState().selectMessage(inboxMessage);
+    });
     expect(d.isEnabled("junk.mark")).toBe(true);
     expect(d.isEnabled("junk.not-junk")).toBe(false);
     // The classifier's verdict on the loaded message.

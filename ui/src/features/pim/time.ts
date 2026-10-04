@@ -48,7 +48,15 @@ export function isViewKind(value: unknown): value is ViewKind {
 }
 
 /** Weekdays in RFC 5545 order starting Monday, as the contract names them. */
-export const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export const WEEKDAYS = [
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+] as const satisfies readonly Weekday[];
 
 /** `@internationalized/date` names of the weekdays (`firstDayOfWeek`). */
 const DAY_OF_WEEK: Record<Weekday, DayOfWeek> = {

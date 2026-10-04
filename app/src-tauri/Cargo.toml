@@ -14,6 +14,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "nail-app"
 path = "src/main.rs"
+# main.rs only calls `nail_app_lib::run` and has no tests; an empty test
+# executable would only link the /DELAYLOAD of build.rs without any
+# comctl32 import (LNK4199).
+test = false
 
 [features]
 # Test-only (M4b review): honour the environment overrides of the registry
@@ -37,7 +41,6 @@ tauri-plugin-single-instance.workspace = true
 # OS notifications for new mail (M2c; shown from Rust, ADR 0043).
 tauri-plugin-notification.workspace = true
 clap.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
 tokio.workspace = true

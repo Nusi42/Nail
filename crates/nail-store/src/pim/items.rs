@@ -376,10 +376,9 @@ pub(crate) fn event_span(event: &CalendarEvent) -> (i64, Option<i64>) {
             last = last.max(e.secs);
         }
     }
-    if !event.is_recurring() {
+    let Some(recurrence) = event.recurrence.as_ref().filter(|_| event.is_recurring()) else {
         return (first, Some(last));
-    }
-    let recurrence = event.recurrence.as_ref().expect("recurring");
+    };
     for rule in &recurrence.rules {
         match &rule.end {
             nail_api::pim::RecurrenceEnd::Until { until } => match cache_time(until) {
@@ -500,14 +499,8 @@ fn write_task(
 /// Lower-case sort key, family name first.
 pub(crate) fn sort_name(contact: &Contact) -> String {
     let name = contact.fields.name.as_ref();
-    let family = name
-        .and_then(|n| n.family.as_deref())
-        .map(str::trim)
-        .unwrap_or("");
-    let given = name
-        .and_then(|n| n.given.as_deref())
-        .map(str::trim)
-        .unwrap_or("");
+    let family = name.and_then(|n| n.family.as_deref()).map_or("", str::trim);
+    let given = name.and_then(|n| n.given.as_deref()).map_or("", str::trim);
     let key = if family.is_empty() {
         contact.fields.display_name.trim().to_owned()
     } else {
@@ -1525,7 +1518,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     fn dav_event(id: &str, uid: &str, title: &str) -> CalendarEvent {
-        let mut e = testing::Fixtures::new().event(id, uid, title);
+        let mut e = testing::event(id, uid, title);
         e.calendar_id = DAV_CAL.into();
         e
     }
@@ -1533,7 +1526,7 @@ mod tests {
     #[test]
     fn local_items_are_saved_without_queueing() {
         let store = testing::store();
-        let event = testing::Fixtures::new().event("ev1", "u1", "Standup");
+        let event = testing::event("ev1", "u1", "Standup");
         let write = store
             .save_pim_item(&PimItem::Event(event.clone()), &raw("e1"), 10)
             .unwrap();
@@ -1561,7 +1554,7 @@ mod tests {
     #[test]
     fn writes_are_checked() {
         let store = testing::store();
-        let mut event = testing::Fixtures::new().event("ev1", "u1", "X");
+        let mut event = testing::event("ev1", "u1", "X");
         event.calendar_id = ICS_CAL.into();
         assert!(matches!(
             store.save_pim_item(&PimItem::Event(event.clone()), &raw("x"), 1),
@@ -1840,7 +1833,7 @@ mod tests {
     fn ics_feeds_are_retained_by_uid() {
         let store = testing::store();
         for (id, uid) in [("h1", "x1"), ("h2", "x2"), ("h3", "x3")] {
-            let mut e = testing::Fixtures::new().event(id, uid, id);
+            let mut e = testing::event(id, uid, id);
             e.calendar_id = ICS_CAL.into();
             store
                 .apply_server_item(&PimItem::Event(e), &raw(id), None, None, 1)
@@ -1870,7 +1863,7 @@ mod tests {
     #[test]
     fn forgotten_server_versions_are_rewritten() {
         let store = testing::store();
-        let mut e = testing::Fixtures::new().event("h1", "x1", "Plain");
+        let mut e = testing::event("h1", "x1", "Plain");
         e.calendar_id = ICS_CAL.into();
         let item = PimItem::Event(e.clone());
         store
@@ -2095,7 +2088,7 @@ mod tests {
     #[test]
     fn search_hits_and_spans() {
         let store = testing::store();
-        let mut e = testing::Fixtures::new().event("e1", "u1", "Lunch");
+        let mut e = testing::event("e1", "u1", "Lunch");
         e.fields.location = Some("Canteen".into());
         store
             .save_pim_item(&PimItem::Event(e), &raw("e"), 1)
@@ -2115,7 +2108,7 @@ mod tests {
         assert_eq!(hits[0].detail.as_deref(), Some("ada@example.org"));
         assert_eq!(hits[1].detail.as_deref(), Some("Canteen"));
         // Range columns of a recurring series.
-        let mut series = testing::Fixtures::new().event("s", "us", "Daily");
+        let mut series = testing::event("s", "us", "Daily");
         series.recurrence = Some(testing::daily(nail_api::pim::RecurrenceEnd::Count {
             count: 3,
         }));

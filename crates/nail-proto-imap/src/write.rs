@@ -3,6 +3,7 @@
 //! results) and folder `CREATE` / `RENAME` / `DELETE`.
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 use std::time::Duration;
 
 use imap_proto::Response;
@@ -345,7 +346,7 @@ impl ImapClient {
                     "{date:?} is not an IMAP date-time"
                 )));
             }
-            command.push_str(&format!(" \"{date}\""));
+            let _ = write!(command, " \"{date}\"");
         }
         command.push(' ');
         let parts = [Part::Text(Cow::Owned(command)), Part::Literal(raw)];

@@ -12,6 +12,8 @@
 //! (`W. Europe Standard Time`) or `UTC`: wall times are sent without an
 //! offset under a `TimeZoneContext` of the event's zone.
 
+use std::fmt::Write as _;
+
 use chrono::{Duration, NaiveDate, Timelike};
 use nail_api::exchange::engine::MeetingSend;
 use nail_api::exchange::pim::{
@@ -85,10 +87,10 @@ pub const VIEW_FIELDS: [&str; 14] = [
 
 /// An item shape with `fields`.
 pub fn shape(fields: &[&str]) -> String {
-    let list: String = fields
-        .iter()
-        .map(|f| format!(r#"<t:FieldURI FieldURI="{f}"/>"#))
-        .collect();
+    let list: String = fields.iter().fold(String::new(), |mut out, f| {
+        let _ = write!(out, r#"<t:FieldURI FieldURI="{f}"/>"#);
+        out
+    });
     format!(
         "<m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>{list}</t:AdditionalProperties></m:ItemShape>"
     )
@@ -110,11 +112,11 @@ pub fn parse_bias(text: &str) -> Option<i64> {
         match c {
             '0'..='9' | '.' => number.push(c),
             'H' => {
-                minutes += number.parse::<f64>().ok()? as i64 * 60;
+                minutes += whole_number(&number)? * 60;
                 number.clear();
             }
             'M' => {
-                minutes += number.parse::<f64>().ok()? as i64;
+                minutes += whole_number(&number)?;
                 number.clear();
             }
             'S' => number.clear(),
@@ -122,6 +124,19 @@ pub fn parse_bias(text: &str) -> Option<i64> {
         }
     }
     Some(if negative { -minutes } else { minutes })
+}
+
+/// The whole part of a duration number (`1.5` is 1; fractions of hours
+/// and minutes are dropped, as Exchange never writes them).
+fn whole_number(number: &str) -> Option<i64> {
+    let (whole, fraction) = number.split_once('.').unwrap_or((number, ""));
+    if !fraction.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if whole.is_empty() {
+        return (!fraction.is_empty()).then_some(0);
+    }
+    whole.parse().ok()
 }
 
 /// The zone id and standard bias (minutes; UTC = local + bias) of a
@@ -426,23 +441,25 @@ fn time_value(time: &ExchangeDateTime) -> String {
 }
 
 fn attendees_xml(event: &ExchangeEvent, kind: AttendeeKind) -> Option<String> {
-    let list: String = event
-        .attendees
-        .iter()
-        .filter(|a| a.kind == kind)
-        .map(|a| {
-            let name = a
-                .email
-                .name
-                .as_deref()
-                .map(|n| el("t:Name", n))
-                .unwrap_or_default();
-            format!(
-                "<t:Attendee><t:Mailbox>{name}{}</t:Mailbox></t:Attendee>",
-                el("t:EmailAddress", &a.email.address)
-            )
-        })
-        .collect();
+    let list: String =
+        event
+            .attendees
+            .iter()
+            .filter(|a| a.kind == kind)
+            .fold(String::new(), |mut out, a| {
+                let name = a
+                    .email
+                    .name
+                    .as_deref()
+                    .map(|n| el("t:Name", n))
+                    .unwrap_or_default();
+                let _ = write!(
+                    out,
+                    "<t:Attendee><t:Mailbox>{name}{}</t:Mailbox></t:Attendee>",
+                    el("t:EmailAddress", &a.email.address)
+                );
+                out
+            });
     (!list.is_empty()).then_some(list)
 }
 
@@ -878,6 +895,10 @@ mod tests {
         assert_eq!(parse_bias("-PT5H30M"), Some(-330));
         assert_eq!(parse_bias("PT0M"), Some(0));
         assert_eq!(parse_bias("bogus"), None);
+        assert_eq!(parse_bias("PT1.5H"), Some(60));
+        assert_eq!(parse_bias("PT.5M"), Some(0));
+        assert_eq!(parse_bias("PT.H"), None);
+        assert_eq!(parse_bias("PT1.xH"), None);
     }
 
     #[test]

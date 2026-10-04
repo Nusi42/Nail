@@ -83,7 +83,7 @@ impl std::fmt::Display for MessageArg {
 
 /// A user-facing message: a Fluent id and its arguments.
 ///
-/// JSON: `{"id": "config-unknown-node", "args": {"name": "windw"}}`
+/// JSON: `{"id": "config-unknown-node", "args": {"name": "gizmo"}}`
 /// (`args` is omitted when empty).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct LocalizedMessage {
@@ -214,12 +214,12 @@ mod tests {
             json!({"id": "sieve-uploaded"})
         );
         let with = LocalizedMessage::new("config-unknown-node")
-            .arg("name", "windw")
+            .arg("name", "gizmo")
             .arg("line", 3u32);
         let value = serde_json::to_value(&with).unwrap();
         assert_eq!(
             value,
-            json!({"id": "config-unknown-node", "args": {"name": "windw", "line": 3}})
+            json!({"id": "config-unknown-node", "args": {"name": "gizmo", "line": 3}})
         );
         assert_eq!(
             serde_json::from_value::<LocalizedMessage>(value).unwrap(),

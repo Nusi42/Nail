@@ -375,7 +375,7 @@ fn layout_items(file: &LayoutFile, keys: &[KeyBinding]) -> Items {
     }
     for (name, toolbar) in &file.toolbars {
         let settings = file.toolbar_settings.get(name).copied().unwrap_or_default();
-        if let Some(text) = render::toolbar(name, toolbar, &settings, 0, &style) {
+        if let Some(text) = render::toolbar(name, toolbar, settings, 0, &style) {
             items.insert(Item::Toolbar(name.clone()), text);
         }
     }
@@ -729,7 +729,7 @@ impl Plan {
         for choice in choices {
             if !ids.contains(&choice.item_id) {
                 return Err(EditError::Invalid(
-                    msg("config-merge-item-unknown").arg("item", choice.item_id.to_string()),
+                    msg("config-merge-item-unknown").arg("item", choice.item_id.clone()),
                 ));
             }
             chosen.insert(&choice.item_id, choice.take);
@@ -1070,7 +1070,7 @@ fn apply_theme_item(editor: &mut LayoutEditor, item: &Item, theirs: &ThemeFile) 
                         e.append_in_section(
                             "tokens",
                             &render::token(category, name, def, 2, &style),
-                        )
+                        );
                     },
                 ),
                 None => remove_sites(editor, found),
@@ -1126,7 +1126,7 @@ fn apply_theme_item(editor: &mut LayoutEditor, item: &Item, theirs: &ThemeFile) 
                     let line =
                         |depth| render::setting(event, std::slice::from_ref(sound), depth, &style);
                     put(editor, found, &|depth| Some(line(depth)), &|e| {
-                        e.append_in_section("sounds", &line(2))
+                        e.append_in_section("sounds", &line(2));
                     });
                 }
                 None => remove_sites(editor, found),
@@ -1187,7 +1187,7 @@ fn apply_layout_item(
                         return Err(plain());
                     }
                     put(editor, found, &line, &|e| {
-                        e.append_in_section("actions", &line(2).unwrap_or_default())
+                        e.append_in_section("actions", &line(2).unwrap_or_default());
                     });
                 }
                 None => remove_sites(editor, found),
@@ -1214,7 +1214,7 @@ fn apply_layout_item(
                             .get(name)
                             .copied()
                             .unwrap_or_default();
-                        render::toolbar(name, items, &settings, depth, &style)
+                        render::toolbar(name, items, settings, depth, &style)
                     })
                 } else {
                     theirs

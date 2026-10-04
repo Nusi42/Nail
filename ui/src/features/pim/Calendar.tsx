@@ -120,7 +120,7 @@ function ViewSwitch({
   views: readonly ViewKind[];
   view: ViewKind;
   menu: boolean;
-  onChange(view: ViewKind): void;
+  onChange: (view: ViewKind) => void;
 }) {
   const t = useT();
   const id = useId();
@@ -163,7 +163,9 @@ function ViewSwitch({
           data-value={kind}
           data-view={kind}
           aria-pressed={kind === view}
-          onClick={() => onChange(kind)}
+          onClick={() => {
+            onChange(kind);
+          }}
         >
           {t(`pim-view-${kind}`)}
         </button>
@@ -213,7 +215,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
     pim.getState().setShown({ view, days: options.days });
   }, [pim, view, options.days]);
 
-  const goTo = (day: CalendarDate) => pim.getState().setAnchor(dateString(day));
+  const goTo = (day: CalendarDate) => {
+    pim.getState().setAnchor(dateString(day));
+  };
   const showDay = (day: CalendarDate) => {
     goTo(day);
     pim.getState().setView("day");
@@ -297,7 +301,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
               data-part="form.button"
               data-field="calendar-today"
               aria-current={anchor.compare(today) === 0 ? "date" : undefined}
-              onClick={() => pim.getState().setAnchor(null)}
+              onClick={() => {
+                pim.getState().setAnchor(null);
+              }}
             >
               {t("pim-nav-today")}
             </button>
@@ -308,7 +314,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
               data-field="calendar-previous"
               aria-label={t("pim-nav-previous")}
               title={t("pim-nav-previous")}
-              onClick={() => goTo(stepAnchor(view, anchor, -1, options))}
+              onClick={() => {
+                goTo(stepAnchor(view, anchor, -1, options));
+              }}
             >
               <Icon name="chevron-left" part="form.button.icon" />
             </button>
@@ -319,7 +327,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
               data-field="calendar-next"
               aria-label={t("pim-nav-next")}
               title={t("pim-nav-next")}
-              onClick={() => goTo(stepAnchor(view, anchor, 1, options))}
+              onClick={() => {
+                goTo(stepAnchor(view, anchor, 1, options));
+              }}
             >
               <Icon name="chevron-right" part="form.button.icon" />
             </button>
@@ -332,7 +342,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
               views={views}
               view={view}
               menu={switchStyle === "menu" || narrowSwitch}
-              onChange={(kind) => pim.getState().setView(kind)}
+              onChange={(kind) => {
+                pim.getState().setView(kind);
+              }}
             />
           )}
           <button
@@ -340,7 +352,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
             data-part="form.button"
             data-variant="primary"
             data-field="calendar-new-event"
-            onClick={() => openNewEvent(ctx, anchor, { hour: 9, minute: 0 }, tz)}
+            onClick={() => {
+              openNewEvent(ctx, anchor, { hour: 9, minute: 0 }, tz);
+            }}
           >
             <Icon name="plus" part="form.button.icon" />
             <span data-part="form.button.label">{t("pim-new-event")}</span>

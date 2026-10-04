@@ -286,7 +286,7 @@ pub fn redact_subjects(text: &str) -> String {
                         let end = value_start + 1 + close;
                         return format!(
                             "{}{REDACTED}{}",
-                            &line[..value_start + 1],
+                            &line[..=value_start],
                             redact_display_names(&line[end..])
                         );
                     }
@@ -320,12 +320,12 @@ fn redact_display_names(line: &str) -> String {
                 out.push(' ');
                 out.push_str(REDACTED);
                 out.push(' ');
-                out.push_str(&rest[lt..lt + gt + 1]);
+                out.push_str(&rest[lt..=(lt + gt)]);
                 rest = &rest[lt + gt + 1..];
                 continue;
             }
         }
-        out.push_str(&rest[..lt + gt + 1]);
+        out.push_str(&rest[..=(lt + gt)]);
         rest = &rest[lt + gt + 1..];
     }
     out.push_str(rest);
@@ -463,7 +463,7 @@ pub fn write_bundle(
     // overwrite replaces the old bundle atomically.
     let temp = crate::files::temp_path(path);
     if let Err(err) = write_zip(&temp, manifest, entries) {
-        let _ = fs::remove_file(&temp);
+        drop(fs::remove_file(&temp));
         return Err(err);
     }
     crate::files::persist(&temp, path, overwrite)?;

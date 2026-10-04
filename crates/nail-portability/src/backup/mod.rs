@@ -480,7 +480,7 @@ pub(crate) struct HashingWriter<W> {
 }
 
 impl<W: Write> HashingWriter<W> {
-    pub fn new(inner: W) -> Self {
+    pub(crate) fn new(inner: W) -> Self {
         Self {
             inner,
             hasher: Sha256::new(),
@@ -488,7 +488,7 @@ impl<W: Write> HashingWriter<W> {
         }
     }
 
-    pub fn digest(self) -> (String, u64) {
+    pub(crate) fn digest(self) -> (String, u64) {
         (hex::encode(self.hasher.finalize()), self.bytes)
     }
 }
@@ -601,7 +601,7 @@ pub fn write_backup(
     let temp = temp_path(path);
     let result = write_archive(&temp, options, &manifest, &planned, source, ctx);
     if let Err(e) = result {
-        let _ = fs::remove_file(&temp);
+        drop(fs::remove_file(&temp));
         return Err(e);
     }
     // Replaces an existing archive only when the caller confirmed it.

@@ -76,7 +76,7 @@ export function createMcpMockState(): McpMockState {
     id,
     client_id: demo.id,
     client_name: demo.name,
-    at: `2026-09-29T07:4${id}:00Z`,
+    at: `2026-09-29T07:4${String(id)}:00Z`,
     kind: name.startsWith("nail://") ? "resource" : "tool",
     name,
     outcome,
@@ -112,7 +112,8 @@ function state(core: MockCore): McpMockState {
 function randomToken(): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   let token = "nail_mcp_";
-  for (let i = 0; i < 43; i++) token += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 43; i++)
+    token += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   return token;
 }
 
@@ -170,7 +171,7 @@ export function answerMcp(core: MockCore, request: McpRequest): Response {
       }
       const token = randomToken();
       const client: McpClient = {
-        id: `mcp-${s.nextClient++}`,
+        id: `mcp-${String(s.nextClient++)}`,
         name,
         created_at: new Date().toISOString(),
         last_used_at: null,

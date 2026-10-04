@@ -75,7 +75,9 @@ function Highlight({ element }: { element: Element }) {
   const geom = useId();
   const [rect, setRect] = useState(() => element.getBoundingClientRect());
   useEffect(() => {
-    const update = () => setRect(element.getBoundingClientRect());
+    const update = () => {
+      setRect(element.getBoundingClientRect());
+    };
     update();
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
@@ -87,10 +89,10 @@ function Highlight({ element }: { element: Element }) {
   useGeometry(geom, {
     position: "fixed",
     "pointer-events": "none",
-    left: `${Math.round(rect.left)}px`,
-    top: `${Math.round(rect.top)}px`,
-    width: `${Math.round(rect.width)}px`,
-    height: `${Math.round(rect.height)}px`,
+    left: `${String(Math.round(rect.left))}px`,
+    top: `${String(Math.round(rect.top))}px`,
+    width: `${String(Math.round(rect.width))}px`,
+    height: `${String(Math.round(rect.height))}px`,
   });
   return <div data-part="inspector.highlight" data-geom={geom} aria-hidden="true" />;
 }
@@ -225,7 +227,9 @@ function Panel({ element, pinned }: { element: Element | null; pinned: boolean }
             type="button"
             data-part="inspector.button"
             data-action="pick"
-            onClick={() => inspect(null, false)}
+            onClick={() => {
+              inspect(null, false);
+            }}
           >
             {t("inspector-pick-again")}
           </button>
@@ -234,7 +238,9 @@ function Panel({ element, pinned }: { element: Element | null; pinned: boolean }
           type="button"
           data-part="inspector.button"
           data-action="close"
-          onClick={() => setInspecting(false)}
+          onClick={() => {
+            setInspecting(false);
+          }}
         >
           {t("inspector-close")}
         </button>

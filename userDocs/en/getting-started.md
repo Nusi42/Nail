@@ -5,9 +5,8 @@ file, `theme.kdl`, and its structure (which panes exist, where they sit,
 which keys do what) comes from another, `layout.kdl`. You can change either
 while Nail is running and see the result immediately.
 
-This guide covers the current preview version (milestone M0). The preview
-reads mail but does not send or change it. See
-[What the preview can do](#what-the-preview-can-do).
+This guide covers the first steps. See
+[What Nail can do](#what-nail-can-do) for everything else.
 
 ## Start Nail
 

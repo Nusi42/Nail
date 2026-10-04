@@ -85,7 +85,7 @@ fn schema_json(kind: SchemaKind) -> serde_json::Result<String> {
     }
 }
 
-/// Warnings only (NAIL_LOG overrides), on stderr.
+/// Warnings only (`NAIL_LOG` overrides), on stderr.
 fn init_tracing_quiet() {
     use tracing_subscriber::EnvFilter;
     let filter = EnvFilter::try_from_env("NAIL_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));

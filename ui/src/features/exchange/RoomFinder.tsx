@@ -28,9 +28,9 @@ export interface RoomFinderProps {
   start: PimTime;
   end: PimTime;
   attendees: readonly Attendee[];
-  onAttendeesChange(attendees: Attendee[]): void;
+  onAttendeesChange: (attendees: Attendee[]) => void;
   location: string;
-  onLocationChange(location: string): void;
+  onLocationChange: (location: string) => void;
   /** The viewer's zone (times of busy periods). */
   tz: string;
 }
@@ -68,8 +68,8 @@ function RoomRow({
   availability: RoomAvailability;
   booked: boolean;
   tz: string;
-  onAdd(): void;
-  onRemove(): void;
+  onAdd: () => void;
+  onRemove: () => void;
 }) {
   const t = useT();
   const { room } = availability;
@@ -201,7 +201,9 @@ function Finder({
                 data-part="form.button"
                 data-action="remove-room"
                 aria-label={t("exchange-room-remove-named", { name: a.name ?? a.email })}
-                onClick={() => remove(a.email, a.name)}
+                onClick={() => {
+                  remove(a.email, a.name);
+                }}
               >
                 {t("exchange-room-remove")}
               </button>
@@ -215,7 +217,9 @@ function Finder({
         data-action="find-room"
         aria-expanded={open}
         aria-controls={open ? ids.panel : undefined}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => !o);
+        }}
       >
         {t(open ? "exchange-rooms-hide" : "exchange-rooms-find")}
       </button>
@@ -230,7 +234,9 @@ function Finder({
                 id={ids.list}
                 data-part="form.select"
                 value={list}
-                onChange={(e) => setList(e.target.value)}
+                onChange={(e) => {
+                  setList(e.target.value);
+                }}
               >
                 <option value="">{t("exchange-rooms-all")}</option>
                 {(lists.data ?? []).map((l) => (
@@ -251,7 +257,9 @@ function Finder({
                 inputMode="numeric"
                 min={1}
                 value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
+                onChange={(e) => {
+                  setCapacity(e.target.value);
+                }}
               />
             </div>
             <label data-part="form.check" data-field="only-free">
@@ -259,7 +267,9 @@ function Finder({
                 data-part="form.checkbox"
                 type="checkbox"
                 checked={onlyFree}
-                onChange={(e) => setOnlyFree(e.target.checked)}
+                onChange={(e) => {
+                  setOnlyFree(e.target.checked);
+                }}
               />
               <span data-part="form.check.label">{t("exchange-rooms-only-free")}</span>
             </label>
@@ -283,8 +293,12 @@ function Finder({
                   availability={r}
                   booked={bookedSet.has(r.room.address.toLowerCase())}
                   tz={tz}
-                  onAdd={() => add(r)}
-                  onRemove={() => remove(r.room.address, r.room.name)}
+                  onAdd={() => {
+                    add(r);
+                  }}
+                  onRemove={() => {
+                    remove(r.room.address, r.room.name);
+                  }}
                 />
               ))}
             </ul>

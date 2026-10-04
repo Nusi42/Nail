@@ -37,8 +37,9 @@ export function loadMarkdownEditor(): Promise<MarkdownModule> {
 
 /** Starts loading both editors without waiting (the composer opened). */
 export function prefetchEditors(): void {
-  void loadHtmlEditor().catch(() => {});
-  void loadMarkdownEditor().catch(() => {});
+  // A failed load shows when the editor is rendered (`useModule`).
+  loadHtmlEditor().catch(() => null);
+  loadMarkdownEditor().catch(() => null);
 }
 
 function useModule<M>(current: M | null, load: () => Promise<M>): M | null | "failed" {

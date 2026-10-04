@@ -3,6 +3,7 @@
 //! directory, logins and the request log.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -89,16 +90,13 @@ impl MockItem {
 
     /// Sets a simple property.
     pub fn set(&mut self, name: &str, value: &str) {
-        match self.props.child_mut(name) {
-            Some(child) => {
-                child.text = value.to_owned();
-                child.children.clear();
-            }
-            None => {
-                let mut child = Element::new(name);
-                child.text = value.to_owned();
-                self.props.children.push(child);
-            }
+        if let Some(child) = self.props.child_mut(name) {
+            value.clone_into(&mut child.text);
+            child.children.clear();
+        } else {
+            let mut child = Element::new(name);
+            value.clone_into(&mut child.text);
+            self.props.children.push(child);
         }
     }
 
@@ -199,7 +197,7 @@ pub struct MeetingMessage {
 }
 
 /// A room list: address, name and rooms (address, name).
-pub type RoomListEntry = (String, String, Vec<(String, String)>);
+pub(super) type RoomListEntry = (String, String, Vec<(String, String)>);
 
 /// The whole server state.
 #[derive(Debug)]
@@ -369,18 +367,20 @@ impl State {
     }
 
     /// Renders an item element (with `MimeContent` when asked).
-    pub fn render_item(&self, item: &MockItem, mime: bool) -> String {
+    pub fn render_item(item: &MockItem, mime: bool) -> String {
         let mut out = format!("<t:{}>", item.tag);
         if mime && let Some(raw) = &item.mime {
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 r#"<t:MimeContent CharacterSet="UTF-8">{}</t:MimeContent>"#,
                 base64::engine::general_purpose::STANDARD.encode(raw)
-            ));
+            );
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             r#"<t:ItemId Id="{}" ChangeKey="{}"/><t:ParentFolderId Id="{}"/>"#,
             item.id, item.change_key, item.folder
-        ));
+        );
         for child in &item.props.children {
             if child.name == "StartTimeZone" {
                 if let Some(zone) = child.attr("Id").and_then(zones::zone) {
@@ -394,11 +394,12 @@ impl State {
             if !item.exceptions.is_empty() {
                 out.push_str("<t:ModifiedOccurrences>");
                 for (index, exception) in &item.exceptions {
-                    out.push_str(&format!(
+                    let _ = write!(
+                        out,
                         r#"<t:Occurrence><t:ItemId Id="{}" ChangeKey="{}"/>"#,
                         occurrence_id(&item.id, *index),
                         item.change_key
-                    ));
+                    );
                     for name in ["Start", "End", "OriginalStart"] {
                         if let Some(value) = exception.child_text(name) {
                             out.push_str(&xml::el(&format!("t:{name}"), value));
@@ -412,27 +413,28 @@ impl State {
                 out.push_str("<t:DeletedOccurrences>");
                 for (index, start, _) in occurrences(item, 1000) {
                     if item.deleted.contains(&index) {
-                        out.push_str(&format!(
+                        let _ = write!(
+                            out,
                             "<t:DeletedOccurrence>{}</t:DeletedOccurrence>",
                             xml::el("t:Start", &start)
-                        ));
+                        );
                     }
                 }
                 out.push_str("</t:DeletedOccurrences>");
             }
         }
-        out.push_str(&format!("</t:{}>", item.tag));
+        let _ = write!(out, "</t:{}>", item.tag);
         out
     }
 }
 
 /// The id of a series' occurrence.
-pub fn occurrence_id(master: &str, index: u32) -> String {
+pub(super) fn occurrence_id(master: &str, index: u32) -> String {
     format!("{master}_occ_{index}")
 }
 
 /// The master id and index of an occurrence id.
-pub fn split_occurrence(id: &str) -> Option<(&str, u32)> {
+pub(super) fn split_occurrence(id: &str) -> Option<(&str, u32)> {
     let (master, index) = id.rsplit_once("_occ_")?;
     Some((master, index.parse().ok()?))
 }
@@ -444,7 +446,7 @@ fn naive(text: &str) -> Option<NaiveDateTime> {
 /// The occurrences of a series (index from 1, start, end; UTC), at most
 /// `limit`. Daily and weekly patterns are expanded; others yield the first
 /// occurrence only.
-pub fn occurrences(item: &MockItem, limit: usize) -> Vec<(u32, String, String)> {
+pub(super) fn occurrences(item: &MockItem, limit: usize) -> Vec<(u32, String, String)> {
     let (Some(start), Some(end)) = (
         item.text("Start").and_then(naive),
         item.text("End").and_then(naive),
@@ -471,7 +473,10 @@ pub fn occurrences(item: &MockItem, limit: usize) -> Vec<(u32, String, String)> 
     let mut out = Vec::new();
     let mut day = start;
     let mut index = 0u32;
-    for _ in 0..(limit * 7 * interval as usize).min(20_000) {
+    let steps = usize::try_from(interval)
+        .map_or(usize::MAX, |i| limit.saturating_mul(7).saturating_mul(i))
+        .min(20_000);
+    for _ in 0..steps {
         if out.len() >= max_count.min(limit) {
             break;
         }
@@ -514,7 +519,7 @@ pub fn occurrences(item: &MockItem, limit: usize) -> Vec<(u32, String, String)> 
 
 /// The busy periods of a calendar item between two UTC times (start,
 /// end, busy type), occurrences expanded.
-pub fn busy_periods(item: &MockItem, from: &str, to: &str) -> Vec<(String, String, String)> {
+pub(super) fn busy_periods(item: &MockItem, from: &str, to: &str) -> Vec<(String, String, String)> {
     let kind = item
         .text("LegacyFreeBusyStatus")
         .unwrap_or("Busy")

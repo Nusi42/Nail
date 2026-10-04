@@ -45,11 +45,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             )
             .await
         }
-        Request::ReturnPopOut { window } => {
-            end_pop_out(service, window, PopOutChange::Returned).await
-        }
-        Request::ClosePopOut { window } => end_pop_out(service, window, PopOutChange::Closed).await,
-        Request::FocusPopOut { window } => focus_pop_out(service, window),
+        Request::ReturnPopOut { window } => end_pop_out(service, &window, PopOutChange::Returned),
+        Request::ClosePopOut { window } => end_pop_out(service, &window, PopOutChange::Closed),
+        Request::FocusPopOut { window } => focus_pop_out(service, &window),
         other => Err(ApiError::internal(format!(
             "{} is not a window request",
             crate::service::request_name(&other)
@@ -70,7 +68,7 @@ async fn state_request(service: &Service, request: Request) -> Result<Response> 
                     Ok((states, changed)) => {
                         if changed {
                             let state = states.get(&window).copied();
-                            let _ = events.send(Event::WindowStateChanged { window, state });
+                            drop(events.send(Event::WindowStateChanged { window, state }));
                         }
                         states
                     }
@@ -82,10 +80,10 @@ async fn state_request(service: &Service, request: Request) -> Result<Response> 
                     .reset_window_states()
                     .map_err(|err| state_error("*", err))?;
                 for window in removed {
-                    let _ = events.send(Event::WindowStateChanged {
+                    drop(events.send(Event::WindowStateChanged {
                         window,
                         state: None,
-                    });
+                    }));
                 }
                 config.window_states()
             }
@@ -246,17 +244,17 @@ async fn pop_out(
     Ok(pop_outs_response(service))
 }
 
-async fn end_pop_out(service: &Service, window: String, change: PopOutChange) -> Result<Response> {
+fn end_pop_out(service: &Service, window: &str, change: PopOutChange) -> Result<Response> {
     let host = host(service)?;
-    if !is_open(service, &window) {
+    if !is_open(service, window) {
         return Err(issue_error(
             ErrorCode::Conflict,
-            &window,
+            window,
             PopOutIssue::NotOpen,
         ));
     }
-    host.close_pop_out(&window)?;
-    finish(service, &window, change);
+    host.close_pop_out(window)?;
+    finish(service, window, change);
     Ok(pop_outs_response(service))
 }
 
@@ -276,18 +274,18 @@ fn finish(service: &Service, window: &str, change: PopOutChange) {
     changed(service, window, change);
 }
 
-fn focus_pop_out(service: &Service, window: String) -> Result<Response> {
+fn focus_pop_out(service: &Service, window: &str) -> Result<Response> {
     let host = host(service)?;
-    if !is_open(service, &window) {
+    if !is_open(service, window) {
         return Err(issue_error(
             ErrorCode::Conflict,
-            &window,
+            window,
             PopOutIssue::NotOpen,
         ));
     }
-    host.focus_pop_out(&window)?;
-    set_focused(service, &window);
-    changed(service, &window, PopOutChange::Focused);
+    host.focus_pop_out(window)?;
+    set_focused(service, window);
+    changed(service, window, PopOutChange::Focused);
     Ok(pop_outs_response(service))
 }
 
@@ -453,7 +451,7 @@ mod tests {
         let mut options = crate::ServiceOptions::new(data, config);
         options.watch_config = false;
         options.start_engines = false;
-        options.desktop = host.map(|h| h as Arc<dyn DesktopHost>);
+        options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
         Service::open(crate::demo::demo_options(options)).unwrap()
     }
 

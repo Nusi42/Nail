@@ -3,6 +3,8 @@
 //! servers, offline replay, sending with undo, virtual accounts, search,
 //! threads and account setup.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -130,12 +132,12 @@ async fn find(service: &Service, account: &str, role: FolderRole, subject: &str)
         .unwrap_or_else(|| panic!("no message {subject:?} in {account} {role:?}"))
 }
 
-fn control(f: &Fixture, command: &str, args: serde_json::Value) -> serde_json::Value {
-    f.demo.control(command, &args).unwrap()
+fn control(f: &Fixture, command: &str, args: &serde_json::Value) -> serde_json::Value {
+    f.demo.control(command, args).unwrap()
 }
 
 fn server_flags(f: &Fixture, mailbox: &str, subject: &str) -> Option<Vec<String>> {
-    let list = control(f, "imap-messages", json!({ "mailbox": mailbox }));
+    let list = control(f, "imap-messages", &json!({ "mailbox": mailbox }));
     list.as_array()?
         .iter()
         .find(|m| m["subject"].as_str().unwrap_or_default().contains(subject))
@@ -381,7 +383,7 @@ async fn server_flag_changes_arrive_through_idle() {
     control(
         &f,
         "imap-flags",
-        json!({ "subject": "Welcome to Nail", "flags": ["\\Flagged", "\\Seen"] }),
+        &json!({ "subject": "Welcome to Nail", "flags": ["\\Flagged", "\\Seen"] }),
     );
     eventually("flag change pushed", || async {
         let m = find(
@@ -399,7 +401,7 @@ async fn server_flag_changes_arrive_through_idle() {
     control(
         &f,
         "imap-deliver",
-        json!({ "raw": "From: x@y.example\r\nSubject: Pushed by IDLE\r\nMessage-ID: <idle@y.example>\r\n\r\nhi" }),
+        &json!({ "raw": "From: x@y.example\r\nSubject: Pushed by IDLE\r\nMessage-ID: <idle@y.example>\r\n\r\nhi" }),
     );
     eventually("new mail pushed", || async {
         inbox_count(&f.service, MULTI_WORK_ID).await == 16
@@ -420,7 +422,7 @@ async fn server_flag_changes_arrive_through_idle() {
 async fn writes_made_offline_replay_after_reconnecting() {
     let f = setup().await;
     synced(&f).await;
-    control(&f, "imap-offline", json!({ "offline": true }));
+    control(&f, "imap-offline", &json!({ "offline": true }));
     eventually("work offline", || async {
         statuses(&f.service)
             .await
@@ -466,7 +468,7 @@ async fn writes_made_offline_replay_after_reconnecting() {
             .is_some_and(|flags| !flags.iter().any(|x| x == "\\Flagged"))
     );
 
-    control(&f, "imap-offline", json!({ "offline": false }));
+    control(&f, "imap-offline", &json!({ "offline": false }));
     eventually("replayed after reconnecting", || async {
         server_flags(&f, "INBOX", "Welcome to Nail")
             .is_some_and(|flags| flags.iter().any(|x| x == "\\Flagged"))
@@ -486,7 +488,7 @@ async fn pop3_receives_and_deletes_by_policy() {
     control(
         &f,
         "pop3-deliver",
-        json!({ "raw": "From: grace@home.example\r\nSubject: Fresh from POP3\r\nMessage-ID: <fresh@home.example>\r\n\r\nnew", "uid": "home-3" }),
+        &json!({ "raw": "From: grace@home.example\r\nSubject: Fresh from POP3\r\nMessage-ID: <fresh@home.example>\r\n\r\nnew", "uid": "home-3" }),
     );
     request(
         &f.service,
@@ -526,7 +528,7 @@ async fn pop3_receives_and_deletes_by_policy() {
     )
     .await;
     eventually("deleted on the POP3 server", || async {
-        control(&f, "pop3-state", json!({}))["deleted"]
+        control(&f, "pop3-state", &json!({}))["deleted"]
             .as_array()
             .is_some_and(|d| d.iter().any(|u| u == "home-3"))
     })
@@ -567,7 +569,7 @@ async fn save(service: &Service, draft: Draft) -> nail_api::DraftId {
 }
 
 fn smtp_subjects(f: &Fixture) -> Vec<String> {
-    control(f, "smtp-messages", json!({}))
+    control(f, "smtp-messages", &json!({}))
         .as_array()
         .unwrap()
         .iter()
@@ -971,7 +973,7 @@ async fn accounts_are_discovered_tested_added_and_removed() {
         incoming: candidate.incoming.clone(),
         outgoing: candidate.outgoing.clone(),
         identities: vec![],
-        sync: Default::default(),
+        sync: nail_api::accounts::SyncPolicy::default(),
         save_sent_copy: None,
         authserv_ids: Vec::new(),
         sieve: None,
@@ -1008,7 +1010,10 @@ async fn accounts_are_discovered_tested_added_and_removed() {
     assert!(result.incoming.ok(), "{result:?}");
     assert!(result.incoming.capabilities.iter().any(|c| c == "IDLE"));
     assert!(
-        result.outgoing.as_ref().is_some_and(|o| o.ok()),
+        result
+            .outgoing
+            .as_ref()
+            .is_some_and(nail_api::accounts::EndpointTestResult::ok),
         "{result:?}"
     );
 
@@ -1430,7 +1435,7 @@ async fn failed_sends_are_retried_or_reported() {
     f.service.shutdown().await;
 }
 
-/// The next final (non-`sending`) SendStatus.
+/// The next final (non-`sending`) `SendStatus`.
 async fn send_outcome(events: &mut broadcast::Receiver<Event>) -> (OutboxState, Option<ErrorCode>) {
     let deadline = tokio::time::Instant::now() + TIMEOUT;
     loop {
@@ -1605,7 +1610,7 @@ async fn send_later_waits_for_its_time() {
 }
 
 async fn go_offline(f: &Fixture) {
-    control(f, "imap-offline", json!({ "offline": true }));
+    control(f, "imap-offline", &json!({ "offline": true }));
     eventually("work offline", || async {
         statuses(&f.service)
             .await
@@ -1618,7 +1623,7 @@ fn server_subjects(f: &Fixture, account: &str, mailbox: &str) -> Vec<String> {
     control(
         f,
         "imap-messages",
-        json!({ "account": account, "mailbox": mailbox }),
+        &json!({ "account": account, "mailbox": mailbox }),
     )
     .as_array()
     .unwrap()
@@ -1735,7 +1740,7 @@ async fn queued_writes_survive_a_uidvalidity_change() {
     let before = server_subjects(&f, MULTI_WORK_ID, "INBOX");
     assert_eq!(count(&before, "Grüße aus München"), 1);
 
-    control(&f, "imap-offline", json!({ "offline": false }));
+    control(&f, "imap-offline", &json!({ "offline": false }));
     queue_empty(&f).await;
     eventually("the right messages changed on the server", || async {
         let inbox = server_subjects(&f, MULTI_WORK_ID, "INBOX");
@@ -1812,7 +1817,7 @@ async fn moves_and_deletes_made_before_replay_are_all_applied() {
     flag(&f.service, &invoice).await;
     move_to(&f.service, &invoice, FolderRole::Inbox).await;
 
-    control(&f, "imap-offline", json!({ "offline": false }));
+    control(&f, "imap-offline", &json!({ "offline": false }));
     queue_empty(&f).await;
     let failed = f
         .service
@@ -2016,7 +2021,7 @@ async fn the_sent_copy_waits_for_the_imap_server() {
     );
     assert!(f.service.store().pending_op_count().unwrap() >= 1);
 
-    control(&f, "imap-offline", json!({ "offline": false }));
+    control(&f, "imap-offline", &json!({ "offline": false }));
     eventually("filed on the server", || async {
         count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT) == 1
     })

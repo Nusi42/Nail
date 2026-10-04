@@ -28,7 +28,7 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::dev::{DevWatcher, PluginReload, ReloadOutcome};
 use crate::gate::Gate;
-use crate::jobs::{CpuMeter, JobTable};
+use crate::jobs::{CpuMeter, JobContext, JobTable};
 use crate::l10n::{self, PluginCatalogs};
 use crate::limits::HostLimits;
 use crate::package::{PackageError, PackageFiles, load_folder};
@@ -202,18 +202,18 @@ impl Inner {
     /// Stores and broadcasts a log line.
     pub(crate) fn log(&self, line: HostLogLine) {
         self.services.log(line.clone());
-        let _ = self.logs.send(line);
+        drop(self.logs.send(line));
     }
 
     /// Tells [`PluginHost::subscribe_reloads`] subscribers about a reload.
     fn notify_reload(&self, id: &PluginId, outcome: ReloadOutcome) {
         let generation = lock(&self.slots).get(id).map(|s| s.generation);
         // An error only means nobody listens.
-        let _ = self.reloads.send(PluginReload {
+        drop(self.reloads.send(PluginReload {
             plugin_id: id.clone(),
             outcome,
             generation,
-        });
+        }));
     }
 
     pub(crate) fn host_log(
@@ -361,7 +361,7 @@ impl Inner {
                 *gate = Gate::default();
             }
             if let Some(tx) = slot.tx.take() {
-                let _ = tx.send(ThreadMsg::Stop);
+                drop(tx.send(ThreadMsg::Stop));
             }
             slot.state = match reason {
                 PluginStopReason::Disabled => PluginRunState::Disabled,
@@ -496,11 +496,7 @@ impl Inner {
 
     /// The generation, job table, CPU meter and name of a running plug-in
     /// that may run jobs (`unavailable` otherwise).
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn job_context(
-        &self,
-        id: &PluginId,
-    ) -> Result<(u64, Arc<Mutex<JobTable>>, Arc<Mutex<CpuMeter>>, String), ApiError> {
+    pub(crate) fn job_context(&self, id: &PluginId) -> Result<JobContext, ApiError> {
         let slots = lock(&self.slots);
         let slot = slots
             .get(id)
@@ -521,12 +517,12 @@ impl Inner {
                 format!("plug-in `{id}` has no permission for background jobs"),
             ));
         }
-        Ok((
-            slot.generation,
-            Arc::clone(&slot.jobs),
-            Arc::clone(&slot.cpu),
-            slot.display_name.clone(),
-        ))
+        Ok(JobContext {
+            generation: slot.generation,
+            table: Arc::clone(&slot.jobs),
+            cpu: Arc::clone(&slot.cpu),
+            name: slot.display_name.clone(),
+        })
     }
 
     /// Calls a registered handler of a running plug-in (of `generation`,
@@ -746,7 +742,7 @@ impl PluginHost {
         let values = effective_settings(&slot.manifest, &stored);
         slot.spec.settings = stored;
         if let Some(tx) = &slot.tx {
-            let _ = tx.send(ThreadMsg::Settings(values));
+            drop(tx.send(ThreadMsg::Settings(values)));
         }
         true
     }
@@ -811,11 +807,11 @@ impl PluginHost {
             && slot.generation == entry.generation
             && let Some(tx) = &slot.tx
         {
-            let _ = tx.send(ThreadMsg::DialogResponse {
+            drop(tx.send(ThreadMsg::DialogResponse {
                 call_id: entry.call_id,
                 button,
                 values,
-            });
+            }));
         }
         Ok(())
     }
@@ -1075,7 +1071,7 @@ impl PluginHost {
                     return;
                 };
                 // A dev plug-in the user switched off stays off.
-                let _ = reload(&inner, &id, ReloadKind::FileChange).await;
+                drop(reload(&inner, &id, ReloadKind::FileChange).await);
             });
         })
         .map_err(|e| DevLoadError::Watch(e.to_string()))?;
@@ -1228,7 +1224,7 @@ async fn start_unless_disabled(
         .stack_size(8 * 1024 * 1024)
         .spawn(move || {
             let end = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                runtime::run(Arc::clone(&thread_inner), launch)
+                runtime::run(&thread_inner, launch)
             }))
             .unwrap_or_else(|_| {
                 ThreadEnd::Crash(runtime::Crash {
@@ -1267,7 +1263,7 @@ async fn start_unless_disabled(
                 .filter(|s| s.generation == generation)
                 .and_then(|s| s.tx.clone())
             {
-                let _ = tx.send(ThreadMsg::Stop);
+                drop(tx.send(ThreadMsg::Stop));
             }
             inner.thread_ended(&id, generation, ThreadEnd::Crash(crash));
             Err(error)

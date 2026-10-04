@@ -119,7 +119,6 @@ pub(crate) fn choose_login(
         AuthMechanism::Login if login_disabled => {
             Err(ImapError::AuthUnsupported("LOGINDISABLED".to_owned()))
         }
-        AuthMechanism::Login => Ok(Login::Login),
         AuthMechanism::Auto if token => {
             if caps.has_auth("OAUTHBEARER") {
                 Ok(Login::Sasl(Mechanism::OAuthBearer))
@@ -135,7 +134,7 @@ pub(crate) fn choose_login(
         AuthMechanism::Auto if login_disabled => Err(ImapError::AuthUnsupported(
             "LOGINDISABLED without AUTH=PLAIN".to_owned(),
         )),
-        AuthMechanism::Auto => Ok(Login::Login),
+        AuthMechanism::Login | AuthMechanism::Auto => Ok(Login::Login),
     }
 }
 

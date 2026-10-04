@@ -25,11 +25,11 @@ use crate::error::Result;
 use crate::service::Service;
 
 /// `app_settings` key of [`UpdateSettings`].
-pub const UPDATE_SETTINGS_KEY: &str = "desktop.updates";
+pub(crate) const UPDATE_SETTINGS_KEY: &str = "desktop.updates";
 /// `app_settings` key of [`DesktopSettings`].
-pub const DESKTOP_SETTINGS_KEY: &str = "desktop.settings";
+pub(crate) const DESKTOP_SETTINGS_KEY: &str = "desktop.settings";
 /// `app_settings` key of [`FirstRunState`].
-pub const FIRST_RUN_KEY: &str = "desktop.first-run";
+pub(crate) const FIRST_RUN_KEY: &str = "desktop.first-run";
 
 /// Hands the host a notifier that turns its changes into events (called
 /// once from `Service::open`), and the stored settings to start from.

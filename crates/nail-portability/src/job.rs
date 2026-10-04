@@ -51,6 +51,16 @@ pub struct JobContext<'a> {
     pub report: JobReport,
 }
 
+impl std::fmt::Debug for JobContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JobContext")
+            .field("progress", &self.progress)
+            .field("cancel", &self.cancel)
+            .field("report", &self.report)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> JobContext<'a> {
     /// A context reporting progress to `callback`.
     pub fn new(

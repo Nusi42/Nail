@@ -85,6 +85,7 @@ fn bare_id(id: &str) -> String {
 
 /// A new `Message-ID` (without brackets) in the sender's domain.
 pub fn new_message_id(sender: &str, seed: &[u8]) -> String {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let domain = sender
         .rsplit_once('@')
         .map(|(_, d)| d.trim())
@@ -100,7 +101,6 @@ pub fn new_message_id(sender: &str, seed: &[u8]) -> String {
             .to_le_bytes(),
     );
     hasher.update(std::process::id().to_le_bytes());
-    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     hasher.update(
         COUNTER
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -138,7 +138,7 @@ pub fn envelope_of(draft: &Draft, identity: &Identity) -> Envelope {
 
 /// The `Sender` address of an identity sending on behalf of a mailbox
 /// (its `sender`, when set; the core fills in the account's address).
-pub fn on_behalf_sender(identity: &Identity) -> Option<&str> {
+pub(crate) fn on_behalf_sender(identity: &Identity) -> Option<&str> {
     identity
         .send_as
         .as_ref()
@@ -170,10 +170,10 @@ fn address_list(addresses: &[Address]) -> MbAddress<'static> {
     )
 }
 
-fn text_part(content_type: ContentType<'static>, body: String) -> MimePart<'static> {
+fn text_part(content_type: ContentType<'static>, body: &str) -> MimePart<'static> {
     MimePart::new(
         content_type,
-        BodyPart::Text(Cow::Owned(normalize_newlines(&body))),
+        BodyPart::Text(Cow::Owned(normalize_newlines(body))),
     )
 }
 
@@ -261,7 +261,7 @@ fn bodies(draft: &Draft, style: &MailStyle) -> Bodies {
         ComposerMode::Plain => Bodies {
             text: text_part(
                 utf8("text/plain").attribute("format", "flowed"),
-                encode_flowed(&draft.text),
+                &encode_flowed(&draft.text),
             ),
             markdown: None,
             html: None,
@@ -269,22 +269,19 @@ fn bodies(draft: &Draft, style: &MailStyle) -> Bodies {
         ComposerMode::Html => {
             let html = sanitize_outgoing(draft.html.as_deref().unwrap_or_default());
             Bodies {
-                text: text_part(utf8("text/plain"), html_to_text(&html)),
+                text: text_part(utf8("text/plain"), &html_to_text(&html)),
                 markdown: None,
                 html: Some(html),
             }
         }
         ComposerMode::Markdown => {
-            let source = draft.markdown.as_deref().unwrap_or_default().to_owned();
+            let source = draft.markdown.as_deref().unwrap_or_default();
             Bodies {
-                text: text_part(utf8("text/plain"), source.clone()),
-                markdown: draft.markdown_part.then(|| {
-                    text_part(
-                        utf8("text/markdown").attribute("variant", "GFM"),
-                        source.clone(),
-                    )
-                }),
-                html: Some(render_markdown(&source, style)),
+                text: text_part(utf8("text/plain"), source),
+                markdown: draft
+                    .markdown_part
+                    .then(|| text_part(utf8("text/markdown").attribute("variant", "GFM"), source)),
+                html: Some(render_markdown(source, style)),
             }
         }
     }
@@ -358,7 +355,7 @@ pub fn build_message(
         None => text,
         Some(html) => {
             let document = mail_document(&html, style)?;
-            let mut html_part = text_part(utf8("text/html"), document);
+            let mut html_part = text_part(utf8("text/html"), &document);
             if !related.is_empty() {
                 let mut parts = vec![html_part];
                 parts.append(&mut related);

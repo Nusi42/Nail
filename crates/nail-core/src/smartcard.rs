@@ -35,7 +35,7 @@ use crate::error::Result;
 use crate::service::{Service, lock};
 
 /// `app_settings` key of [`SmartcardSettings`].
-pub const SMARTCARD_SETTINGS_KEY: &str = "security.smartcards";
+pub(crate) const SMARTCARD_SETTINGS_KEY: &str = "security.smartcards";
 
 /// How often the poller looks for inserted / removed tokens.
 const POLL: Duration = Duration::from_secs(5);
@@ -53,9 +53,10 @@ pub(crate) struct CorePinSource {
 
 impl CorePinSource {
     fn close(&self, prompt_id: PinPromptId, reason: PinPromptCloseReason) {
-        let _ = self
-            .events
-            .send(Event::PinPromptClosed { prompt_id, reason });
+        drop(
+            self.events
+                .send(Event::PinPromptClosed { prompt_id, reason }),
+        );
     }
 }
 
@@ -68,7 +69,7 @@ impl PinSource for CorePinSource {
             lock(&self.waiting).insert(prompt_id.clone(), tx);
             let expires = crate::engine::unix_now()
                 + i64::try_from(PIN_PROMPT_TIMEOUT_SECS).unwrap_or(i64::MAX);
-            let _ = self.events.send(Event::PinRequested {
+            drop(self.events.send(Event::PinRequested {
                 prompt: PinPrompt {
                     prompt_id: prompt_id.clone(),
                     token_label: request.token_label,
@@ -79,7 +80,7 @@ impl PinSource for CorePinSource {
                     retry: request.retry,
                     expires_at: crate::rules::rfc3339(expires),
                 },
-            });
+            }));
             match tokio::time::timeout(Duration::from_secs(PIN_PROMPT_TIMEOUT_SECS), rx).await {
                 Ok(Ok(pin)) => Ok(pin),
                 Ok(Err(_)) => {
@@ -187,7 +188,7 @@ impl SmartcardCtl {
         match lock(&self.pins.waiting).remove(prompt_id) {
             Some(tx) => {
                 let cancelled = pin.is_none();
-                let _ = tx.send(pin);
+                drop(tx.send(pin));
                 self.pins.close(
                     prompt_id.clone(),
                     if cancelled {
@@ -403,10 +404,7 @@ mod tests {
             None,
             true,
         );
-        let ctl = Arc::new(SmartcardCtl::new(
-            events.clone(),
-            Some(vec![token as Arc<dyn Module>]),
-        ));
+        let ctl = Arc::new(SmartcardCtl::new(events.clone(), Some(vec![token])));
         ctl.cards(&nail_store::Store::open_in_memory().unwrap());
         (ctl, events)
     }

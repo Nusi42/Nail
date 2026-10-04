@@ -316,24 +316,21 @@ pub fn apply_cancel(
 /// Sets an attendee's answer on a field set, adding the attendee when
 /// missing (an answer from someone not invited: RFC 5546 §2.1.5).
 fn set_status(fields: &mut EventFields, from: &Attendee) {
-    match fields
+    if let Some(a) = fields
         .attendees
         .iter_mut()
         .find(|a| same(&a.email, &from.email))
     {
-        Some(a) => {
-            a.status = from.status;
-            a.rsvp = false;
-            a.delegated_to.clone_from(&from.delegated_to);
-            if a.name.is_none() {
-                a.name.clone_from(&from.name);
-            }
+        a.status = from.status;
+        a.rsvp = false;
+        a.delegated_to.clone_from(&from.delegated_to);
+        if a.name.is_none() {
+            a.name.clone_from(&from.name);
         }
-        None => {
-            let mut added = from.clone();
-            added.rsvp = false;
-            fields.attendees.push(added);
-        }
+    } else {
+        let mut added = from.clone();
+        added.rsvp = false;
+        fields.attendees.push(added);
     }
 }
 

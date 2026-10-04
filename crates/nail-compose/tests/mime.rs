@@ -4,6 +4,7 @@
 //! compares the bytes with `tests/golden/<case>.eml`. Regenerate the files
 //! with `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-compose --test mime` and
 //! review the diff. Every case is also parsed back with `nail-mime`.
+#![cfg(test)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

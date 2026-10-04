@@ -26,8 +26,6 @@ import { agentsStoreFor } from "./store";
 
 export * from "./model";
 export * from "./names";
-export { requestConfirmation } from "./mock";
-export { seedAgentsDemo } from "./mockSeed";
 export { agentsKeys, pendingOf, usePendingConfirmations } from "./queries";
 export { agentsStoreFor } from "./store";
 export { AGENTS_BASE_CSS } from "./parts";
@@ -50,7 +48,11 @@ export const widgets: Feature["widgets"] = {
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Opens the confirmation center window. */
-  [OPEN_CENTER_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(CENTER_DIALOG) },
+  [OPEN_CENTER_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(CENTER_DIALOG);
+    },
+  },
 };
 
 /** Dialog names → components. */

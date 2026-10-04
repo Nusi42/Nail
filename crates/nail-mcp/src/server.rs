@@ -11,8 +11,8 @@
 //! entry (a write that waits for a confirmation writes it when it ends).
 //!
 //! M4a (ADR 0079): calls count against the client's rate limits
-//! ([`crate::limits`]); write tools ([`crate::writes`]) and prompts
-//! ([`crate::prompts`]).
+//! ([`crate::limits`]); write tools (`crate::writes`) and prompts
+//! (`crate::prompts`).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -702,6 +702,12 @@ pub struct NailMcp<D: McpData> {
     session: Arc<SessionGuard>,
 }
 
+impl<D: McpData> std::fmt::Debug for NailMcp<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NailMcp").finish_non_exhaustive()
+    }
+}
+
 impl<D: McpData> NailMcp<D> {
     pub(crate) fn new(shared: Arc<Shared<D>>, source: ClientSource) -> Self {
         let session = Arc::new(SessionGuard {
@@ -871,7 +877,6 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
             .map_err(|f| f.to_error())
     }
 
-    #[allow(deprecated)]
     async fn subscribe(
         &self,
         request: SubscribeRequestParams,
@@ -904,7 +909,6 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         Ok(())
     }
 
-    #[allow(deprecated)]
     async fn unsubscribe(
         &self,
         request: UnsubscribeRequestParams,

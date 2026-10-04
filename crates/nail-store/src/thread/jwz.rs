@@ -242,12 +242,13 @@ fn group_by_subject<K>(roots: Vec<Node>, messages: &[ThreadMessage<K>]) -> Vec<N
             let better = match table.get(key) {
                 None => true,
                 Some(&j) => {
-                    let (_, other_kind) = keys[j].as_ref().expect("keyed root");
+                    // Only keyed roots are in the table.
+                    let other_kind = keys[j].as_ref().map(|(_, k)| *k);
                     // Prefer a dummy, then a non-reply.
                     (roots[i].message.is_none() && roots[j].message.is_some())
                         || (roots[i].message.is_some() == roots[j].message.is_some()
                             && *kind == SubjectKind::Original
-                            && *other_kind != SubjectKind::Original)
+                            && other_kind != Some(SubjectKind::Original))
                 }
             };
             if better {
@@ -267,8 +268,15 @@ fn group_by_subject<K>(roots: Vec<Node>, messages: &[ThreadMessage<K>]) -> Vec<N
         if target == i {
             continue;
         }
-        let this = slots[i].take().expect("unmerged root");
-        let that = slots[target].take().expect("preferred root");
+        // A preferred root is never merged away, and each root is merged
+        // once, so both slots are still full.
+        let Some(this) = slots[i].take() else {
+            continue;
+        };
+        let Some(that) = slots[target].take() else {
+            slots[i] = Some(this);
+            continue;
+        };
         let that_kind = keys[target].as_ref().map(|(_, k)| *k);
         let merged = match (this.message.is_none(), that.message.is_none()) {
             // Both dummies: that takes this one's children.

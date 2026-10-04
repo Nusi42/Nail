@@ -77,28 +77,28 @@ mod tests {
     use nail_api::ErrorCode;
     use nail_api::engine::SyncDelta;
 
-    fn delta(changes: usize, more: bool) -> Result<DeltaOutcome, EngineError> {
-        Ok(DeltaOutcome::Delta(SyncDelta {
+    fn delta(changes: usize, more: bool) -> DeltaOutcome {
+        DeltaOutcome::Delta(SyncDelta {
             cursor: "5".into(),
             removed: (0..changes).map(|i| i.to_string()).collect(),
             more,
             ..SyncDelta::default()
-        }))
+        })
     }
 
     #[test]
     fn backs_off_when_quiet_and_resets_on_changes() {
         let mut timer = PollTimer::new(&GmailOptions::default());
         assert_eq!(timer.next_delay(), Duration::from_secs(30));
-        timer.observe(&delta(0, false));
-        assert_eq!(timer.next_delay(), Duration::from_secs(60));
+        timer.observe(&Ok(delta(0, false)));
+        assert_eq!(timer.next_delay(), Duration::from_mins(1));
         for _ in 0..10 {
-            timer.observe(&delta(0, false));
+            timer.observe(&Ok(delta(0, false)));
         }
-        assert_eq!(timer.next_delay(), Duration::from_secs(300));
-        timer.observe(&delta(2, false));
+        assert_eq!(timer.next_delay(), Duration::from_mins(5));
+        timer.observe(&Ok(delta(2, false)));
         assert_eq!(timer.next_delay(), Duration::from_secs(30));
-        timer.observe(&delta(0, false));
+        timer.observe(&Ok(delta(0, false)));
         timer.user_activity();
         assert_eq!(timer.next_delay(), Duration::from_secs(30));
     }
@@ -109,11 +109,11 @@ mod tests {
             poll_interval_secs: Some(20),
             max_poll_interval_secs: Some(40),
         });
-        timer.observe(&delta(1, true));
+        timer.observe(&Ok(delta(1, true)));
         assert_eq!(timer.next_delay(), Duration::ZERO);
-        timer.observe(&delta(0, true));
+        timer.observe(&Ok(delta(0, true)));
         assert_eq!(timer.next_delay(), Duration::ZERO);
-        timer.observe(&delta(0, false));
+        timer.observe(&Ok(delta(0, false)));
         assert_eq!(timer.next_delay(), Duration::from_secs(40));
         timer.observe(&Ok(DeltaOutcome::CursorExpired));
         assert_eq!(timer.next_delay(), Duration::from_secs(20));
@@ -123,11 +123,11 @@ mod tests {
     fn honours_retry_after_once() {
         let mut timer = PollTimer::new(&GmailOptions::default());
         timer.observe(&Err(EngineError::rate_limited("quota", 900)));
-        assert_eq!(timer.next_delay(), Duration::from_secs(900));
-        timer.observe(&delta(0, false));
-        assert_eq!(timer.next_delay(), Duration::from_secs(120));
+        assert_eq!(timer.next_delay(), Duration::from_mins(15));
+        timer.observe(&Ok(delta(0, false)));
+        assert_eq!(timer.next_delay(), Duration::from_mins(2));
         timer.observe(&Err(EngineError::temporary(ErrorCode::Network, "down")));
-        assert_eq!(timer.next_delay(), Duration::from_secs(240));
+        assert_eq!(timer.next_delay(), Duration::from_mins(4));
         assert_eq!(timer.poll().next_delay_secs(), 240);
     }
 }

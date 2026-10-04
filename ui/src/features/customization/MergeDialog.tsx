@@ -12,7 +12,7 @@
  * re-fetches) the real one.
  */
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { errorMessageIdOf, type NailClient } from "../../api/client";
 import type {
   ConfigBackup,
@@ -143,7 +143,7 @@ function Backups({ file, client }: { file: ConfigFile; client: NailClient }) {
 interface ItemProps {
   item: MergeItem;
   take: MergeTake;
-  onTake(take: MergeTake): void;
+  onTake: (take: MergeTake) => void;
 }
 
 function ItemRow({ item, take, onTake }: ItemProps) {
@@ -171,7 +171,9 @@ function ItemRow({ item, take, onTake }: ItemProps) {
                 name={name}
                 data-take="mine"
                 checked={take === "mine"}
-                onChange={() => onTake("mine")}
+                onChange={() => {
+                  onTake("mine");
+                }}
               />
               {t("merge-dialog-keep-mine")}
             </label>
@@ -181,7 +183,9 @@ function ItemRow({ item, take, onTake }: ItemProps) {
                 name={name}
                 data-take="theirs"
                 checked={take === "theirs"}
-                onChange={() => onTake("theirs")}
+                onChange={() => {
+                  onTake("theirs");
+                }}
               />
               {t("merge-dialog-take-theirs")}
             </label>
@@ -233,8 +237,8 @@ interface SectionProps {
   choices: Choices;
   fallback: MergeTake;
   showUnchanged: boolean;
-  onTake(item: MergeItem, take: MergeTake): void;
-  onTakeAll(take: MergeTake): void;
+  onTake: (item: MergeItem, take: MergeTake) => void;
+  onTakeAll: (take: MergeTake) => void;
 }
 
 function SectionView({
@@ -260,7 +264,9 @@ function SectionView({
               type="button"
               data-part="form.button"
               data-action="keep-section"
-              onClick={() => onTakeAll("mine")}
+              onClick={() => {
+                onTakeAll("mine");
+              }}
             >
               {t("merge-dialog-keep-section", { section: name })}
             </button>
@@ -268,7 +274,9 @@ function SectionView({
               type="button"
               data-part="form.button"
               data-action="take-section"
-              onClick={() => onTakeAll("theirs")}
+              onClick={() => {
+                onTakeAll("theirs");
+              }}
             >
               {t("merge-dialog-take-section", { section: name })}
             </button>
@@ -281,7 +289,9 @@ function SectionView({
             key={item.id}
             item={item}
             take={takeOf(choices, item, fallback)}
-            onTake={(take) => onTake(item, take)}
+            onTake={(take) => {
+              onTake(item, take);
+            }}
           />
         ))}
       </ul>
@@ -314,7 +324,12 @@ export function MergeDialog({ close }: DialogProps) {
   const fallback: MergeTake = "mine";
 
   // Closing without applying restores the real configuration.
-  useEffect(() => () => live.restore(), [live]);
+  useEffect(
+    () => () => {
+      live.restore();
+    },
+    [live],
+  );
 
   const preview = stage.kind === "preview" ? stage.preview : null;
 
@@ -372,12 +387,13 @@ export function MergeDialog({ close }: DialogProps) {
 
   // A prefilled file is compared at once (once; after the first render).
   const compared = useRef(false);
+  const comparePrefill = useEffectEvent(() => {
+    void Promise.resolve().then(compare);
+  });
   useEffect(() => {
     if (prefill === null || compared.current) return;
     compared.current = true;
-    void Promise.resolve().then(compare);
-    // `compare` reads the state of this render; it runs once for the prefill.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    comparePrefill();
   }, [prefill]);
 
   const apply = async () => {
@@ -456,7 +472,9 @@ export function MergeDialog({ close }: DialogProps) {
                   name={`${fieldId}-file`}
                   data-file={f}
                   checked={file === f}
-                  onChange={() => setFile(f)}
+                  onChange={() => {
+                    setFile(f);
+                  }}
                 />
                 {t(`merge-dialog-file-${f}`)}
               </label>
@@ -479,7 +497,9 @@ export function MergeDialog({ close }: DialogProps) {
             data-part="merge-dialog.text"
             value={incoming}
             spellCheck={false}
-            onChange={(e) => setIncoming(e.target.value)}
+            onChange={(e) => {
+              setIncoming(e.target.value);
+            }}
           />
           <div data-part="merge-dialog.actions">
             <button
@@ -515,14 +535,16 @@ export function MergeDialog({ close }: DialogProps) {
             type="button"
             data-part="form.button"
             data-action="back"
-            onClick={() => setStage({ kind: "input" })}
+            onClick={() => {
+              setStage({ kind: "input" });
+            }}
           >
             {t("merge-dialog-back")}
           </button>
         </section>
       )}
 
-      {preview && preview.errors.length === 0 && (
+      {preview?.errors.length === 0 && (
         <PreviewView
           preview={preview}
           choices={choices}
@@ -575,11 +597,11 @@ interface PreviewViewProps {
   showUnchanged: boolean;
   livePreview: boolean;
   busy: boolean;
-  onChoices(choices: Choices): void;
-  onShowUnchanged(on: boolean): void;
-  onLivePreview(on: boolean): void;
-  onBack(): void;
-  onApply(): void;
+  onChoices: (choices: Choices) => void;
+  onShowUnchanged: (on: boolean) => void;
+  onLivePreview: (on: boolean) => void;
+  onBack: () => void;
+  onApply: () => void;
 }
 
 function PreviewView({
@@ -613,7 +635,9 @@ function PreviewView({
           type="button"
           data-part="form.button"
           data-action="keep-all"
-          onClick={() => onChoices(chooseAll(choices, preview, "mine"))}
+          onClick={() => {
+            onChoices(chooseAll(choices, preview, "mine"));
+          }}
         >
           {t("merge-dialog-keep-all")}
         </button>
@@ -621,7 +645,9 @@ function PreviewView({
           type="button"
           data-part="form.button"
           data-action="take-all"
-          onClick={() => onChoices(chooseAll(choices, preview, "theirs"))}
+          onClick={() => {
+            onChoices(chooseAll(choices, preview, "theirs"));
+          }}
         >
           {t("merge-dialog-take-all")}
         </button>
@@ -630,7 +656,9 @@ function PreviewView({
             type="checkbox"
             data-option="live"
             checked={livePreview}
-            onChange={(e) => onLivePreview(e.target.checked)}
+            onChange={(e) => {
+              onLivePreview(e.target.checked);
+            }}
           />
           {t("merge-dialog-live-preview")}
         </label>
@@ -639,7 +667,9 @@ function PreviewView({
             type="checkbox"
             data-option="unchanged"
             checked={showUnchanged}
-            onChange={(e) => onShowUnchanged(e.target.checked)}
+            onChange={(e) => {
+              onShowUnchanged(e.target.checked);
+            }}
           />
           {t("merge-dialog-show-unchanged")}
         </label>
@@ -651,8 +681,12 @@ function PreviewView({
           choices={choices}
           fallback={fallback}
           showUnchanged={showUnchanged}
-          onTake={(item, take) => onChoices({ ...choices, [item.id]: take })}
-          onTakeAll={(take) => onChoices(chooseAll(choices, preview, take, section.section))}
+          onTake={(item, take) => {
+            onChoices({ ...choices, [item.id]: take });
+          }}
+          onTakeAll={(take) => {
+            onChoices(chooseAll(choices, preview, take, section.section));
+          }}
         />
       ))}
       <div data-part="merge-dialog.actions">

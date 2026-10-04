@@ -21,7 +21,7 @@ apps", the Simple MAPI pipe server and the `nail plugin dev` endpoint.
 
 | Module | What |
 | --- | --- |
-| `registry.rs` | `Registry` trait over the Windows registry: `WindowsRegistry` (real; with `NAIL_REGISTRY_ROOT` both hives map below `HKCU\<root>\HKCU|HKLM`) and `MemoryRegistry` |
+| `registry.rs` | `Registry` trait over the Windows registry: `WindowsRegistry` (real; with `NAIL_REGISTRY_ROOT` both hives map below `HKCU\<root>\HKCU` or `HKCU\<root>\HKLM`) and `MemoryRegistry` |
 | `install.rs` | `InstallationInfo` from the installers' values + policy; `UpdateSource` (update endpoints + key) |
 | `default_apps.rs` | `DefaultAppsStatus` from `RegisteredApplications`, Capabilities, `UserChoice(Latest)`, `Software\Clients\Mail` |
 | `startup.rs` | the Run key (`"<exe>" --autostart`), "start hidden" rule |

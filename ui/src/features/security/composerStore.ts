@@ -23,18 +23,24 @@ export interface ComposerCryptoState {
   report: RecipientKeysReport | null;
   /** The sending identity's technology preference. */
   preference: CryptoPreference;
-  setChoice(choice: SendCrypto | null): void;
-  setReport(report: RecipientKeysReport | null, preference: CryptoPreference): void;
-  reset(): void;
+  setChoice: (choice: SendCrypto | null) => void;
+  setReport: (report: RecipientKeysReport | null, preference: CryptoPreference) => void;
+  reset: () => void;
 }
 
 export const composerCryptoStore = createStore<ComposerCryptoState>()((set) => ({
   choice: null,
   report: null,
   preference: "auto",
-  setChoice: (choice) => set({ choice }),
-  setReport: (report, preference) => set({ report, preference }),
-  reset: () => set({ choice: null, report: null, preference: "auto" }),
+  setChoice: (choice) => {
+    set({ choice });
+  },
+  setReport: (report, preference) => {
+    set({ report, preference });
+  },
+  reset: () => {
+    set({ choice: null, report: null, preference: "auto" });
+  },
 }));
 
 export function useComposerCrypto<T>(selector: (state: ComposerCryptoState) => T): T {

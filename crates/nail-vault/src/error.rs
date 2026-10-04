@@ -74,10 +74,8 @@ impl VaultError {
                 return Some(LocalizedMessage::new(issue.message_id()));
             }
             Self::RecoveryKeyWrong => "recovery-key-wrong",
-            Self::Locked(_) => "vault-key-missing",
-            Self::Crypto(_) => "vault-key-mismatch",
-            Self::Store(nail_store::Error::Locked(_)) => "vault-key-missing",
-            Self::Store(nail_store::Error::Crypto(_)) => "vault-key-mismatch",
+            Self::Locked(_) | Self::Store(nail_store::Error::Locked(_)) => "vault-key-missing",
+            Self::Crypto(_) | Self::Store(nail_store::Error::Crypto(_)) => "vault-key-mismatch",
             Self::VaultFile(_) => "vault-file-damaged",
             _ => return None,
         };

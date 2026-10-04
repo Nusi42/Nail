@@ -52,11 +52,12 @@ fn ada() -> UserAddresses {
 
 fn stored_event(text: &str, sequence: u32) -> CalendarEvent {
     let object = parse_itip(text, None);
-    let mut event =
-        object
-            .event
-            .unwrap()
-            .into_event("ev-1".into(), "cal-1".into(), false, Default::default());
+    let mut event = object.event.unwrap().into_event(
+        "ev-1".into(),
+        "cal-1".into(),
+        false,
+        nail_api::pim::PimItemSync::default(),
+    );
     event.sequence = sequence;
     event
 }

@@ -11,14 +11,14 @@
  */
 
 interface TrustedTypePolicyLike {
-  createHTML(input: string): unknown;
+  createHTML: (input: string) => unknown;
 }
 
 interface TrustedTypesLike {
-  createPolicy(
+  createPolicy: (
     name: string,
     rules: { createHTML: (input: string) => string },
-  ): TrustedTypePolicyLike;
+  ) => TrustedTypePolicyLike;
 }
 
 /** The policy name the server's CSP allows for mail HTML. */

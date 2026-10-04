@@ -98,7 +98,7 @@ pub fn run(action: &SetupAction) -> i32 {
 }
 
 #[cfg(windows)]
-#[allow(unsafe_code)] // Credential Manager and window-message FFI only.
+#[expect(unsafe_code, reason = "Credential Manager and window-message FFI only")]
 mod os {
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::Security::Credentials::{
@@ -157,6 +157,10 @@ mod os {
 
     /// Deletes every generic credential whose target name matches;
     /// returns how many were deleted.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the same signature as the non-Windows stub, which fails"
+    )]
     pub(super) fn purge_credentials(matches: impl Fn(&str) -> bool) -> Result<usize, Error> {
         let mut targets = Vec::new();
         let mut count = 0u32;
@@ -164,7 +168,7 @@ mod os {
         // SAFETY: CredEnumerateW fills `count` / `list`; the list is read
         // only within its `count` bounds and freed with CredFree.
         unsafe {
-            if CredEnumerateW(PCWSTR::null(), None, &mut count, &mut list).is_err() {
+            if CredEnumerateW(PCWSTR::null(), None, &raw mut count, &raw mut list).is_err() {
                 // ERROR_NOT_FOUND: no credentials at all.
                 return Ok(0);
             }

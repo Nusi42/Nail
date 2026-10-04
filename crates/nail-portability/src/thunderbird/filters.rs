@@ -342,7 +342,7 @@ impl Converter<'_> {
             "age in days" => {
                 return self.number(term, |cmp, n| Condition::Age {
                     cmp,
-                    days: n as u32,
+                    days: u32::try_from(n).unwrap_or(u32::MAX),
                 });
             }
             "size" => {
@@ -566,11 +566,11 @@ fn parse_tb_date(value: &str) -> Option<String> {
 /// Thunderbird's filter type bits (`16` = manual: every Nail rule can be
 /// run by hand).
 mod bits {
-    pub const INBOX: u32 = 1;
-    pub const POST_PLUGIN: u32 = 32;
-    pub const POST_OUTGOING: u32 = 64;
-    pub const ARCHIVE: u32 = 128;
-    pub const PERIODIC: u32 = 256;
+    pub(super) const INBOX: u32 = 1;
+    pub(super) const POST_PLUGIN: u32 = 32;
+    pub(super) const POST_OUTGOING: u32 = 64;
+    pub(super) const ARCHIVE: u32 = 128;
+    pub(super) const PERIODIC: u32 = 256;
 }
 
 /// Converts one filter.
@@ -597,51 +597,48 @@ pub fn convert(filter: &RawFilter, index: usize, ctx: &FilterContext) -> RulePro
     if triggers.is_empty() {
         triggers.push(RuleTrigger::Manual);
     }
-    let conditions = match parse_condition(&filter.condition) {
-        Some(terms) => {
-            let mut result: Option<Condition> = None;
-            for term in &terms {
-                let Some(next) = c.term(term) else {
-                    continue;
-                };
-                result = Some(match result {
-                    None => next,
-                    Some(previous) => {
-                        // Thunderbird evaluates left to right.
-                        let merge = |previous: Condition, and: bool| match (previous, and) {
-                            (Condition::All { mut conditions }, true) => {
-                                conditions.push(next.clone());
-                                Condition::All { conditions }
-                            }
-                            (Condition::Any { mut conditions }, false) => {
-                                conditions.push(next.clone());
-                                Condition::Any { conditions }
-                            }
-                            (previous, true) => Condition::All {
-                                conditions: vec![previous, next.clone()],
-                            },
-                            (previous, false) => Condition::Any {
-                                conditions: vec![previous, next.clone()],
-                            },
-                        };
-                        merge(previous, term.and)
-                    }
-                });
-            }
-            match result {
-                Some(condition) => condition,
-                None if terms.is_empty() => Condition::always(),
-                // Every condition was dropped: never match by itself.
-                None => Condition::Any {
-                    conditions: Vec::new(),
-                },
-            }
+    let conditions = if let Some(terms) = parse_condition(&filter.condition) {
+        let mut result: Option<Condition> = None;
+        for term in &terms {
+            let Some(next) = c.term(term) else {
+                continue;
+            };
+            result = Some(match result {
+                None => next,
+                Some(previous) => {
+                    // Thunderbird evaluates left to right.
+                    let merge = |previous: Condition, and: bool| match (previous, and) {
+                        (Condition::All { mut conditions }, true) => {
+                            conditions.push(next.clone());
+                            Condition::All { conditions }
+                        }
+                        (Condition::Any { mut conditions }, false) => {
+                            conditions.push(next.clone());
+                            Condition::Any { conditions }
+                        }
+                        (previous, true) => Condition::All {
+                            conditions: vec![previous, next.clone()],
+                        },
+                        (previous, false) => Condition::Any {
+                            conditions: vec![previous, next.clone()],
+                        },
+                    };
+                    merge(previous, term.and)
+                }
+            });
         }
-        None => {
-            c.drop(format!("condition {}", filter.condition));
-            Condition::Any {
+        match result {
+            Some(condition) => condition,
+            None if terms.is_empty() => Condition::always(),
+            // Every condition was dropped: never match by itself.
+            None => Condition::Any {
                 conditions: Vec::new(),
-            }
+            },
+        }
+    } else {
+        c.drop(format!("condition {}", filter.condition));
+        Condition::Any {
+            conditions: Vec::new(),
         }
     };
     let actions: Vec<RuleAction> = filter

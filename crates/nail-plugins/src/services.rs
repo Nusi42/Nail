@@ -53,6 +53,7 @@ impl AccountScope {
     }
 
     /// The intersection of two scopes.
+    #[must_use]
     pub fn intersect(&self, other: &AccountScope) -> AccountScope {
         match (self, other) {
             (Self::All, x) | (x, Self::All) => x.clone(),
@@ -305,11 +306,10 @@ pub trait PluginServices: Send + Sync + 'static {
     /// `calendar.read`). The default answers `unsupported`.
     fn calendar_events(
         &self,
-        from: String,
-        to: String,
-        limit: u32,
+        _from: String,
+        _to: String,
+        _limit: u32,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginCalendarEvent>>> {
-        let _ = (from, to, limit);
         Box::pin(async { Err(ApiError::unsupported("no calendars")) })
     }
 
@@ -377,9 +377,8 @@ pub trait PluginServices: Send + Sync + 'static {
     /// confirmations cap, …).
     fn write(
         &self,
-        request: PluginWriteRequest,
+        _request: PluginWriteRequest,
     ) -> BoxFuture<'static, ServiceResult<McpWriteResult>> {
-        let _ = request;
         unsupported("plug-in writes")
     }
 
@@ -403,10 +402,9 @@ pub trait PluginServices: Send + Sync + 'static {
     /// `limit` (`contacts.write`).
     fn find_contacts(
         &self,
-        email: String,
-        limit: u32,
+        _email: String,
+        _limit: u32,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginContact>>> {
-        let _ = (email, limit);
         unsupported("contacts")
     }
 
@@ -417,18 +415,16 @@ pub trait PluginServices: Send + Sync + 'static {
     /// return decrypted end-to-end encrypted content here.
     fn attachment(
         &self,
-        message: MessageId,
-        index: u32,
-        max_bytes: u64,
+        _message: MessageId,
+        _index: u32,
+        _max_bytes: u64,
     ) -> BoxFuture<'static, ServiceResult<Option<AttachmentData>>> {
-        let _ = (message, index, max_bytes);
         unsupported("attachments")
     }
 
     /// The mode of a saved draft (`plain`, `html`, `markdown`); `None` when
     /// it does not exist (composer actions).
-    fn draft_mode(&self, draft: DraftId) -> BoxFuture<'static, ServiceResult<Option<String>>> {
-        let _ = draft;
+    fn draft_mode(&self, _draft: DraftId) -> BoxFuture<'static, ServiceResult<Option<String>>> {
         unsupported("drafts")
     }
 
@@ -436,10 +432,9 @@ pub trait PluginServices: Send + Sync + 'static {
     /// `filter` of arrival and open hooks). An error skips the hook.
     fn message_matches(
         &self,
-        message: MessageId,
-        query: String,
+        _message: MessageId,
+        _query: String,
     ) -> BoxFuture<'static, ServiceResult<bool>> {
-        let _ = (message, query);
         unsupported("hook filters")
     }
 
@@ -464,35 +459,31 @@ pub trait PluginServices: Send + Sync + 'static {
     /// The stored state of a plug-in's jobs (`Store::plugin_job_states`).
     fn job_states(
         &self,
-        plugin: PluginId,
+        _plugin: PluginId,
     ) -> BoxFuture<'static, ServiceResult<Vec<StoredJobState>>> {
-        let _ = plugin;
         Box::pin(async { Ok(Vec::new()) })
     }
 
     /// Stores when a job runs next (`Store::set_plugin_job_next_run`).
     fn set_job_next_run(
         &self,
-        plugin: PluginId,
-        job: String,
-        next_run_at: Option<i64>,
+        _plugin: PluginId,
+        _job: String,
+        _next_run_at: Option<i64>,
     ) -> BoxFuture<'static, ServiceResult<()>> {
-        let _ = (plugin, job, next_run_at);
         done()
     }
 
     /// Records a job run (`Store::record_plugin_job_run`); the host emits
     /// [`Event::PluginActivityChanged`] afterwards.
-    fn record_job_run(&self, record: JobRunRecord) -> BoxFuture<'static, ServiceResult<()>> {
-        let _ = record;
+    fn record_job_run(&self, _record: JobRunRecord) -> BoxFuture<'static, ServiceResult<()>> {
         done()
     }
 
     /// Records a hook call (`Store::record_plugin_hook_call`). The core
     /// decides when to emit [`Event::PluginActivityChanged`] for hooks
     /// (they run often; the host does not emit for them).
-    fn record_hook_call(&self, record: HookCallRecord) -> BoxFuture<'static, ServiceResult<()>> {
-        let _ = record;
+    fn record_hook_call(&self, _record: HookCallRecord) -> BoxFuture<'static, ServiceResult<()>> {
         done()
     }
 
@@ -500,11 +491,10 @@ pub trait PluginServices: Send + Sync + 'static {
     /// seconds; flushed about once a minute per plug-in).
     fn record_cpu(
         &self,
-        plugin: PluginId,
-        at: i64,
-        cpu_ms: u64,
+        _plugin: PluginId,
+        _at: i64,
+        _cpu_ms: u64,
     ) -> BoxFuture<'static, ServiceResult<()>> {
-        let _ = (plugin, at, cpu_ms);
         done()
     }
 }

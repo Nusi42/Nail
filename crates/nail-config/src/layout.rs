@@ -159,6 +159,7 @@ impl LayoutFile {
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
+    #[must_use]
     pub fn merge(mut self, overlay: LayoutFile) -> LayoutFile {
         self.name = overlay.name;
         self.extends = None;
@@ -1529,6 +1530,15 @@ impl LayoutFile {
     /// All resolution errors in the order they are found; the first one is
     /// what [`Self::resolve`] reports.
     fn resolve_unsorted(&self) -> Result<ResolvedLayout, Vec<ConfigError>> {
+        fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
+            for item in items {
+                match item {
+                    MenuItem::Action { action, .. } => out.push(action),
+                    MenuItem::Submenu { items, .. } => menu_actions(items, out),
+                    MenuItem::Separator | MenuItem::Header { .. } => {}
+                }
+            }
+        }
         let mut errors = Vec::new();
         if !self.windows.contains_key("main") {
             errors.push(ConfigError::invalid(
@@ -1584,15 +1594,6 @@ impl LayoutFile {
         // Every used action gets an entry in `actions`.
         let mut actions = self.actions.clone();
         let mut used: Vec<&str> = keys.iter().map(|k| k.action.as_str()).collect();
-        fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
-            for item in items {
-                match item {
-                    MenuItem::Action { action, .. } => out.push(action),
-                    MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                    MenuItem::Separator | MenuItem::Header { .. } => {}
-                }
-            }
-        }
         for items in self.toolbars.values() {
             for item in items {
                 match item {

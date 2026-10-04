@@ -212,7 +212,13 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
               { name: rule.name },
             )}
           </span>
-          <button type="button" data-part="form.button" onClick={() => setConfirm(false)}>
+          <button
+            type="button"
+            data-part="form.button"
+            onClick={() => {
+              setConfirm(false);
+            }}
+          >
             {t("exchange-cancel")}
           </button>
           <button
@@ -230,7 +236,9 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
           data-part="form.button"
           data-action="delete"
           aria-label={t("exchange-rules-delete-named", { name: rule.name })}
-          onClick={() => setConfirm(true)}
+          onClick={() => {
+            setConfirm(true);
+          }}
         >
           {t("exchange-rules-delete")}
         </button>
@@ -342,7 +350,9 @@ export function ExchangeRulesWidget({ node }: WidgetProps) {
                 id={ids.account}
                 data-part="form.select"
                 value={account.id}
-                onChange={(e) => setChosen(e.target.value)}
+                onChange={(e) => {
+                  setChosen(e.target.value);
+                }}
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>

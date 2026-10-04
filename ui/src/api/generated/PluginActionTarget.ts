@@ -5,7 +5,7 @@ import type { MessageId } from "./MessageId";
 
 /**
  * Where a plug-in action was invoked ([`crate::Request::RunPluginAction`];
- * protocol, snake_case).
+ * protocol, `snake_case`).
  */
 export type PluginActionTarget = { "kind": "composer", 
 /**

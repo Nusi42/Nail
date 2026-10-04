@@ -1819,7 +1819,7 @@ mod tests {
     use super::*;
     use crate::StoredMessage;
     use nail_api::exchange::AutomaticRepliesStatus;
-    use nail_api::exchange::rules::ExchangeRuleActions;
+    use nail_api::exchange::rules::{ExchangeRuleActions, ExchangeRuleConditions};
     use nail_api::pim::{CalendarComponent, CalendarSettings};
     use nail_api::{Account, AccountKind, Calendar, ErrorCode, Flags, Folder, MessageSummary};
 
@@ -2372,8 +2372,8 @@ mod tests {
             name: id.into(),
             sequence,
             enabled: true,
-            conditions: Default::default(),
-            exceptions: Default::default(),
+            conditions: ExchangeRuleConditions::default(),
+            exceptions: ExchangeRuleConditions::default(),
             actions: ExchangeRuleActions {
                 mark_as_read: true,
                 ..ExchangeRuleActions::default()

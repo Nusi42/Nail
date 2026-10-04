@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AuthRequest, AuthResponse, AuthStatus, Request, Response } from "./api/generated";
 import { ReauthTransport, reauthStore } from "./api/reauth";
 import { configureRemoteAuth, remoteStore } from "./features/remote";
-import { AuthTransportError } from "./features/remote/authClient";
+import { AuthTransportError, NO_LOGIN_STATUS } from "./features/remote/authClient";
 import { ReauthPrompt, checkRemoteGate } from "./RemoteGate";
 import { WindowLayer } from "./layout/WindowLayer";
 import { createEnv, renderWithProviders } from "./test/harness";
@@ -50,7 +50,13 @@ afterEach(() => {
 });
 
 describe("the remote login gate", () => {
-  it("opens the local UI, which has no login route", async () => {
+  it("opens the local UI, whose server answers that it has no login", async () => {
+    transport(() => Promise.reject(new AuthTransportError(NO_LOGIN_STATUS, "no login")));
+    expect(await checkRemoteGate()).toBe("open");
+    expect(remoteStore.getState().session).toBeNull();
+  });
+
+  it("opens the local UI of an older server, which has no login route", async () => {
     transport(() => Promise.reject(new AuthTransportError(404, "not found")));
     expect(await checkRemoteGate()).toBe("open");
     expect(remoteStore.getState().session).toBeNull();
@@ -74,9 +80,9 @@ class ScriptedTransport extends MockTransport {
   answers: Response[] = [];
   sent: Request[] = [];
 
-  override async send(request: Request): Promise<Response> {
+  override send(request: Request): Promise<Response> {
     this.sent.push(request);
-    return this.answers.shift() ?? { type: "Done" };
+    return Promise.resolve(this.answers.shift() ?? { type: "Done" });
   }
 }
 
@@ -89,7 +95,9 @@ describe("re-authentication", () => {
     ];
     const wrapped = new ReauthTransport(inner);
     const answer = wrapped.send({ type: "ListRemoteUsers" });
-    await waitFor(() => expect(reauthStore.getState().pending).toBe(true));
+    await waitFor(() => {
+      expect(reauthStore.getState().pending).toBe(true);
+    });
     reauthStore.getState().finish(true);
     expect((await answer).type).toBe("RemoteUsers");
     expect(inner.sent.map((r) => r.type)).toEqual(["ListRemoteUsers", "ListRemoteUsers"]);
@@ -103,7 +111,9 @@ describe("re-authentication", () => {
     ];
     const wrapped = new ReauthTransport(inner);
     const answer = wrapped.send({ type: "ListRemoteUsers" });
-    await waitFor(() => expect(reauthStore.getState().pending).toBe(true));
+    await waitFor(() => {
+      expect(reauthStore.getState().pending).toBe(true);
+    });
     reauthStore.getState().finish(false);
     expect(await answer).toMatchObject({ code: "reauth_required" });
     expect(await wrapped.send({ type: "ListRemoteUsers" })).toMatchObject({ code: "forbidden" });
@@ -142,7 +152,9 @@ describe("re-authentication", () => {
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText("Password"), "a long enough password");
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(resumed).toBe(true));
+    await waitFor(() => {
+      expect(resumed).toBe(true);
+    });
     expect(sent.some((r) => r.type === "Password" && r.purpose === "reauth")).toBe(true);
     expect(screen.queryByRole("dialog")).toBeNull();
   });

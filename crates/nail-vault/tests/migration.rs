@@ -2,6 +2,7 @@
 //! store, tantivy index) is encrypted and decrypted, interrupted at many
 //! points (panics standing in for crashes, pauses, errors), and must come
 //! out intact, readable and without plaintext on disk.
+#![cfg(test)]
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -191,7 +192,7 @@ fn assert_intact(data: &DataDir, store: &Store, blobs: &BlobStore, vault: &Vault
     let index = SearchIndex::open_with(
         data.index_dir(),
         CommitPolicy::default(),
-        vault.index_wrapper().unwrap(),
+        vault.index_wrapper().unwrap().as_ref(),
     )
     .unwrap();
     assert!(!index.was_rebuilt(), "the index must survive the migration");
@@ -206,7 +207,7 @@ fn assert_encrypted_on_disk(data: &DataDir) {
     for file in files_under(&data.root) {
         let bytes = std::fs::read(&file).unwrap();
         for needle in [&b"secret-preview"[..], b"secret-draft", b"secret-body"] {
-            assert!(!contains(&bytes, needle), "plaintext in {file:?}");
+            assert!(!contains(&bytes, needle), "plaintext in {}", file.display());
         }
     }
     for hash in &data.hashes {
@@ -216,7 +217,7 @@ fn assert_encrypted_on_disk(data: &DataDir) {
     }
     for file in files_under(&data.index_dir()) {
         let name = file.file_name().unwrap().to_string_lossy().into_owned();
-        if name.ends_with(".lock") || name == INDEX_VERSION_FILE {
+        if file.extension().is_some_and(|ext| ext == "lock") || name == INDEX_VERSION_FILE {
             continue;
         }
         let bytes = std::fs::read(&file).unwrap();
@@ -238,7 +239,11 @@ fn assert_plain_on_disk(data: &DataDir) {
     }
     for file in files_under(&data.index_dir()) {
         let bytes = std::fs::read(&file).unwrap();
-        assert!(!bytes.starts_with(&SEALED_MAGIC), "{file:?} still sealed");
+        assert!(
+            !bytes.starts_with(&SEALED_MAGIC),
+            "{} still sealed",
+            file.display()
+        );
     }
     let conn = rusqlite_free_check(&data.db());
     assert!(conn.iter().all(|v| v.starts_with("secret-")), "{conn:?}");
@@ -396,8 +401,8 @@ fn a_crash_at_any_point_resumes_to_intact_data_in_both_directions() {
                 vault.open().unwrap();
                 vault.set_enabled(enable).unwrap();
             }
-            let crashed = crash_at(&data, k);
-            if crashed {
+            let did_crash = crash_at(&data, k);
+            if did_crash {
                 crashes += 1;
                 let phase = data.open().2.status().unwrap().phase;
                 crashed_phases.insert(phase.map(VaultPhase::as_str));
@@ -407,7 +412,7 @@ fn a_crash_at_any_point_resumes_to_intact_data_in_both_directions() {
             // The next start resumes and completes.
             let (store, blobs, vault) = data.open();
             let status = vault.open().unwrap();
-            if crashed {
+            if did_crash {
                 assert!(
                     matches!(
                         status.state,
@@ -493,7 +498,7 @@ fn the_index_phase_can_wait_until_the_index_is_closed() {
     let index = SearchIndex::open_with(
         data.index_dir(),
         CommitPolicy::default(),
-        vault.index_wrapper().unwrap(),
+        vault.index_wrapper().unwrap().as_ref(),
     )
     .unwrap();
     let status = vault
@@ -517,7 +522,7 @@ fn the_index_phase_can_wait_until_the_index_is_closed() {
     let index = SearchIndex::open_with(
         data.index_dir(),
         CommitPolicy::default(),
-        vault.index_wrapper().unwrap(),
+        vault.index_wrapper().unwrap().as_ref(),
     )
     .unwrap();
     assert_eq!(
@@ -528,7 +533,7 @@ fn the_index_phase_can_wait_until_the_index_is_closed() {
         1
     );
     drop(index);
-    let _ = (store, blobs);
+    drop((store, blobs));
     assert_encrypted_on_disk(&data);
 }
 

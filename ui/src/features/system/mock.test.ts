@@ -4,7 +4,8 @@ import type { Event as NailEvent, UpdateStatus } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { appRegistry } from "../registry";
 import type { FeatureEventContext } from "../types";
-import { SYSTEM_EVENTS, handleSystemEvent, setUpdateState, systemKeys } from ".";
+import { SYSTEM_EVENTS, handleSystemEvent, systemKeys } from ".";
+import { setUpdateState } from "./mock";
 import { runtimeIds } from "./messages";
 import {
   SYSTEM_REQUESTS,

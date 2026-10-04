@@ -102,8 +102,8 @@ raw MIME (`fetch_raw`); `attachments.get` serves `format=full` views.
   `move_change`, using `trash` into Trash and `untrash` out of it;
   `Trash` / `Delete`; a missing message is `WriteOutcome::Gone`;
   `Append` first searches `rfc822msgid:` (a replayed append finds its
-  copy), then `drafts.create` for Drafts or `insert` with the folder label
-  + `UNREAD` / `STARRED`, filed into the thread of its `In-Reply-To` /
+  copy), then `drafts.create` for Drafts or `insert` with the folder label +
+  `UNREAD` / `STARRED`, filed into the thread of its `In-Reply-To` /
   `References` when that is in the mailbox.
 - **Sending** (`OutgoingTransport::send`, `send_raw`): `messages.send`
   with the raw MIME. Gmail takes the recipients from the headers, so

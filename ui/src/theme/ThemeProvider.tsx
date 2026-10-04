@@ -68,7 +68,12 @@ export function ThemeProvider({ theme, modeOverride = null, children }: ThemePro
     }
   }, [manager, compiled]);
 
-  useLayoutEffect(() => () => manager.dispose(), [manager]);
+  useLayoutEffect(
+    () => () => {
+      manager.dispose();
+    },
+    [manager],
+  );
 
   useLayoutEffect(() => {
     document.documentElement.dataset.nailMode = mode;
@@ -124,7 +129,12 @@ export function useReaderCss(): string {
 export function useGeometry(id: string, declarations: Declarations): void {
   const { manager } = useThemeContext();
   const key = JSON.stringify(declarations);
-  useLayoutEffect(() => () => manager.removeGeometry(id), [manager, id]);
+  useLayoutEffect(
+    () => () => {
+      manager.removeGeometry(id);
+    },
+    [manager, id],
+  );
   useLayoutEffect(() => {
     manager.setGeometry(id, JSON.parse(key) as Declarations);
   }, [manager, id, key]);

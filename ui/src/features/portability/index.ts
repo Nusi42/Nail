@@ -51,7 +51,6 @@ export { portabilityKeys } from "./queries";
 export { portabilityStoreFor } from "./store";
 export { PathField } from "./PathField";
 export { PORTABILITY_BASE_CSS } from "./parts";
-export { advancePortabilityJobs, finishPortabilityJobs, type PortabilityMockState } from "./mock";
 
 /** The core's events that change what this feature shows. */
 export const PORTABILITY_EVENTS = [
@@ -69,13 +68,29 @@ export const widgets: Feature["widgets"] = {
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Opens the import wizard (also offered by the first-run screen). */
-  [IMPORT_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(IMPORT_DIALOG) },
+  [IMPORT_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(IMPORT_DIALOG);
+    },
+  },
   /** Opens the export wizard (the current folder / message preselected). */
-  [EXPORT_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(EXPORT_DIALOG) },
+  [EXPORT_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(EXPORT_DIALOG);
+    },
+  },
   /** Opens the backup wizard. */
-  [BACKUP_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(BACKUP_DIALOG) },
+  [BACKUP_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(BACKUP_DIALOG);
+    },
+  },
   /** Opens the restore wizard. */
-  [RESTORE_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(RESTORE_DIALOG) },
+  [RESTORE_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(RESTORE_DIALOG);
+    },
+  },
   /**
    * Opens the diagnostics bundle dialog; the selected message is offered
    * (never included unless ticked).

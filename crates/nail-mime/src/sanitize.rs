@@ -475,7 +475,7 @@ mod tests {
             "\u{0}\u{1}<b>x",
             "<img src=\"cid:",
         ] {
-            let _ = clean(input);
+            drop(clean(input));
         }
     }
 }

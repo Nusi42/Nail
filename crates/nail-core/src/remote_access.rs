@@ -149,6 +149,10 @@ impl Service {
     /// outbox entry and operation `request` names is within the grant (and
     /// content of encrypted mail it would reveal is covered by the
     /// `encrypted` scope). Exhaustive on purpose: no default arm.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "arms are grouped by why a request is allowed (each group with its comment); merging them would hide that"
+    )]
     async fn check_remote_request(&self, access: &Access, request: &Request) -> Result<()> {
         match request {
             // Nothing named, or the answer is narrowed afterwards.
@@ -978,7 +982,7 @@ impl Service {
                 }));
             let probe = SearchQuery {
                 offset: 0,
-                limit: limit as u32,
+                limit: u32::try_from(limit).unwrap_or(u32::MAX),
                 ..query.clone()
             };
             if let Response::SearchResults {
@@ -1277,6 +1281,10 @@ impl Service {
     /// with user names and addresses, the remote-UI status, MCP clients)
     /// only for admin sessions; mail and account events only for granted
     /// accounts and folders; desktop-only events never.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "arms are grouped by why an event reaches a session (each group with its comment); merging them would hide that"
+    )]
     pub async fn remote_event(&self, ctx: &RemoteSessionCtx, event: Event) -> Option<Event> {
         // M5b: theme events as the session sees them (its own light / dark).
         let event = match event {

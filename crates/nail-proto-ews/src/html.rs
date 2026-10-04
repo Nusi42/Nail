@@ -35,7 +35,7 @@ pub fn html_to_text(html: &str) -> String {
         let name: String = tag
             .trim_start_matches('/')
             .chars()
-            .take_while(|c| c.is_ascii_alphanumeric())
+            .take_while(char::is_ascii_alphanumeric)
             .collect::<String>()
             .to_ascii_lowercase();
         let closing = tag.starts_with('/');
@@ -89,21 +89,17 @@ fn push_text(out: &mut String, text: &str) {
     while let Some(amp) = rest.find('&') {
         out.push_str(&rest[..amp]);
         let after = &rest[amp + 1..];
-        match after.find(';').filter(|i| *i <= 10) {
-            Some(semi) => {
-                match decode_entity(&after[..semi]) {
-                    Some(c) => out.push(c),
-                    None => {
-                        out.push('&');
-                        out.push_str(&after[..=semi]);
-                    }
-                }
-                rest = &after[semi + 1..];
-            }
-            None => {
+        if let Some(semi) = after.find(';').filter(|i| *i <= 10) {
+            if let Some(c) = decode_entity(&after[..semi]) {
+                out.push(c);
+            } else {
                 out.push('&');
-                rest = after;
+                out.push_str(&after[..=semi]);
             }
+            rest = &after[semi + 1..];
+        } else {
+            out.push('&');
+            rest = after;
         }
     }
     out.push_str(rest);

@@ -881,7 +881,12 @@ impl Store {
                 tx.execute(
                     "INSERT INTO notify_overrides (scope, target_id, notify, position)
                      VALUES (?1, ?2, ?3, ?4)",
-                    params![scope, target, o.notify, position as i64],
+                    params![
+                        scope,
+                        target,
+                        o.notify,
+                        i64::try_from(position).unwrap_or(i64::MAX)
+                    ],
                 )?;
             }
             tx.execute(

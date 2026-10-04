@@ -1,13 +1,11 @@
 //! Flag and expunge resynchronization: QRESYNC, CONDSTORE and the full
 //! flag-diff fallback must all find the same changes.
 
-mod common;
-
 use std::collections::BTreeMap;
 
-use common::*;
+use crate::common::*;
 use nail_proto_imap::{FlagResync, ImapClient, MessageFlags, ResyncMethod, ResyncState, UidRange};
-use nail_testkit::{MockCapabilities, MockImapServer};
+use nail_testkit::{MockCapabilities, MockImapServer, NO_FLAGS};
 
 /// Local knowledge after a first full fetch: flags per UID and the state.
 async fn snapshot(client: &mut ImapClient) -> (BTreeMap<u32, MessageFlags>, ResyncState) {
@@ -43,7 +41,7 @@ fn change_on_server(server: &MockImapServer) {
     let store = server.store();
     store.add_flags("INBOX", 1, &["\\Flagged", "$Work"]);
     store.remove_message("INBOX", 2);
-    store.append("INBOX", &message("new"), &[] as &[&str]);
+    store.append("INBOX", &message("new"), NO_FLAGS);
 }
 
 fn assert_changes(result: &FlagResync) {

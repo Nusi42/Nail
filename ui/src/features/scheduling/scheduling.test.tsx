@@ -43,7 +43,7 @@ function Picker({
   onTime,
 }: {
   initial: Attendee[];
-  onTime(start: PimTime, end: PimTime): void;
+  onTime: (start: PimTime, end: PimTime) => void;
 }) {
   const [value, setValue] = useState(initial);
   const [time, setTime] = useState({ start: at(14, 30), end: at(15, 30) });
@@ -118,13 +118,17 @@ describe("attendee picker and free/busy timeline", () => {
     );
     await screen.findByRole("img", { name: /^grace@navy.example: / });
     await user.click(screen.getByRole("button", { name: "Next day" }));
-    await waitFor(() => expect(requests(env, "QueryFreeBusy").length).toBe(2));
+    await waitFor(() => {
+      expect(requests(env, "QueryFreeBusy").length).toBe(2);
+    });
     const [first, second] = requests(env, "QueryFreeBusy");
     expect(Date.parse(second?.from ?? "") - Date.parse(first?.from ?? "")).toBeGreaterThan(
       20 * 3_600_000,
     );
     await user.click(screen.getByRole("button", { name: "Today" }));
-    await waitFor(() => expect(requests(env, "QueryFreeBusy").length).toBe(3));
+    await waitFor(() => {
+      expect(requests(env, "QueryFreeBusy").length).toBe(3);
+    });
   });
 
   it("adds people, refuses bad addresses and offers kinds", async () => {
@@ -187,7 +191,9 @@ describe("meeting panel", () => {
     expect(within(panel).getByRole("button", { name: "Send invitations" })).toBeDisabled();
     await user.click(within(panel).getByRole("checkbox", { name: /Katherine Johnson/ }));
     await user.click(within(panel).getByRole("button", { name: "Send invitations" }));
-    await waitFor(() => expect(requests(env, "SendInvitations")).toHaveLength(2));
+    await waitFor(() => {
+      expect(requests(env, "SendInvitations")).toHaveLength(2);
+    });
     expect(requests(env, "SendInvitations")[1]?.attendees).toEqual(["katherine@nasa.example"]);
   });
 
@@ -207,7 +213,9 @@ describe("meeting panel", () => {
     expect(screen.getByRole("button", { name: "Cancel and notify" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Katherine Johnson/ }));
     await user.click(screen.getByRole("button", { name: "Cancel and notify" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "CancelMeeting")[0]).toMatchObject({
       scope: "attendees",
       attendees: ["katherine@nasa.example"],
@@ -219,22 +227,24 @@ describe("meeting panel", () => {
     const user = userEvent.setup();
     const env = setup();
     const recurrenceId = at(11);
-    act(() =>
+    act(() => {
       schedulingStoreFor(env.store).getState().setCancelTarget({
         eventId: "ev-review",
         title: "Design review",
         recurrenceId,
         recurring: true,
         attendees: [],
-      }),
-    );
+      });
+    });
     const Dialog = dialogs[CANCEL_DIALOG];
     if (!Dialog) throw new Error("no dialog");
     renderWithProviders(<Dialog name={CANCEL_DIALOG} close={() => undefined} />, env);
     expect(screen.getByRole("radio", { name: /Only the occurrence on/ })).toBeChecked();
     await user.click(screen.getByRole("radio", { name: "The whole meeting" }));
     await user.click(screen.getByRole("button", { name: "Cancel and notify" }));
-    await waitFor(() => expect(requests(env, "CancelMeeting")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "CancelMeeting")).toHaveLength(1);
+    });
     expect(requests(env, "CancelMeeting")[0]).toMatchObject({
       scope: "meeting",
       recurrence_id: null,
@@ -279,7 +289,9 @@ describe("meeting panel", () => {
       <MeetingPanel event={lunch} recurrenceId={null} />,
       env,
     );
-    await waitFor(() => expect(requests(env, "ListIdentities").length).toBeGreaterThan(0));
+    await waitFor(() => {
+      expect(requests(env, "ListIdentities").length).toBeGreaterThan(0);
+    });
     expect(container.querySelector('[data-part="scheduling.meeting"]')).toBeNull();
   });
 });
@@ -299,7 +311,9 @@ describe("scheduling settings and actions", () => {
     );
     await user.selectOptions(screen.getByLabelText("Calendar for new invitations"), "cal-personal");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(env.transport.data.features.scheduling.settings).toMatchObject({
       confirm_replies: true,
       apply_cancellations: true,
@@ -339,10 +353,10 @@ describe("scheduling settings and actions", () => {
     });
   });
 
-  it("opens its dialogs", () => {
+  it("opens its dialogs", async () => {
     const env = setup();
-    actions["scheduling.settings"]?.run(ctx(env), []);
-    actions["scheduling.find-time"]?.run(ctx(env), []);
+    await actions["scheduling.settings"]?.run(ctx(env), []);
+    await actions["scheduling.find-time"]?.run(ctx(env), []);
     expect(env.store.getState().windows).toEqual([SETTINGS_DIALOG, FIND_TIME_DIALOG]);
   });
 });

@@ -270,7 +270,7 @@ impl FolderResolver for StoreFolders {
             } => Some("INBOX".to_owned()),
             FolderRef::Role { role, .. } => self.roles.get(role).cloned(),
             FolderRef::Path { path, .. } if self.paths.contains(path) => Some(path.clone()),
-            other => self.fallback.mailbox(other),
+            other @ FolderRef::Path { .. } => self.fallback.mailbox(other),
         }
     }
 }
@@ -651,8 +651,7 @@ impl Service {
             &account.id,
             &server.auth,
             std::sync::Arc::clone(&self.inner.secrets),
-            std::sync::Arc::clone(&self.inner.tokens)
-                as std::sync::Arc<dyn nail_api::engine::AccessTokenProvider>,
+            self.inner.tokens.clone(),
         )
         .map_err(|e| SieveError::AuthUnsupported(e.message))?;
         let config = SieveConfig::from_endpoint(endpoint);
@@ -706,8 +705,8 @@ impl Service {
         let Some(server) = imap_server(account) else {
             return false;
         };
-        let (endpoint, script_name) = match location {
-            Some(at) => (
+        let (endpoint, script_name) = if let Some(at) = location {
+            (
                 ServerEndpoint {
                     host: at.host,
                     port: at.port,
@@ -715,19 +714,18 @@ impl Service {
                     auth: server.auth.clone(),
                 },
                 at.script_name,
-            ),
-            None => {
-                let sieve = account.sieve.clone().unwrap_or_default();
-                (
-                    sieve.endpoint(server),
-                    sieve.effective_script_name().to_owned(),
-                )
-            }
+            )
+        } else {
+            let sieve = account.sieve.clone().unwrap_or_default();
+            (
+                sieve.endpoint(server),
+                sieve.effective_script_name().to_owned(),
+            )
         };
         let result = async {
             let mut session = self.sieve_login(account, &endpoint).await?;
             let restored = nail_sieve::remove(&mut session, &script_name).await;
-            let _ = session.logout().await;
+            drop(session.logout().await);
             restored
         }
         .await;
@@ -779,7 +777,7 @@ impl Service {
 /// recompiles vacation scripts on their day.
 pub(crate) async fn run_sieve(service: Service) {
     service.queue_sieve(None);
-    let tick = std::time::Duration::from_secs(60).min(service.inner.timing.reconnect_max);
+    let tick = std::time::Duration::from_mins(1).min(service.inner.timing.reconnect_max);
     loop {
         let now = service.triage_now();
         let mut due: HashSet<AccountId> = std::mem::take(&mut *lock(&service.inner.sieve.queued));

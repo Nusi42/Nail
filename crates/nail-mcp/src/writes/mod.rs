@@ -34,7 +34,8 @@ pub(crate) mod pim;
 pub(crate) mod plan;
 pub(crate) mod rules;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -359,7 +360,7 @@ impl<D: McpData> Shared<D> {
                         WriteOutcome::Result(result) => {
                             WriteOutcome::Result(with_confirmation(result, &id))
                         }
-                        failed => failed,
+                        failed @ WriteOutcome::Failed(_) => failed,
                     }
                 }
                 ConfirmationState::Denied => WriteOutcome::Result(McpWriteResult::Denied {
@@ -411,7 +412,7 @@ impl<D: McpData> Shared<D> {
                 .clone()
                 .confirmed(client, tool, key, plan, id.clone())
                 .await;
-            let _ = tx.send(Some(outcome));
+            drop(tx.send(Some(outcome)));
             lock(&shared.writes.waiting).remove(&id);
         });
         rx
@@ -477,7 +478,7 @@ impl<D: McpData> Shared<D> {
         } else {
             (
                 LocalizedMessage::new("mcp-tool-elicit-destructive").arg("summary", summary),
-                Default::default(),
+                BTreeMap::default(),
             )
         };
         ElicitRequestParams::FormElicitationParams {
@@ -487,7 +488,7 @@ impl<D: McpData> Shared<D> {
         }
     }
 
-    fn mrtr_token(&self) -> String {
+    fn mrtr_token() -> String {
         let mut bytes = [0u8; 16];
         if getrandom::fill(&mut bytes).is_err() {
             // Unique enough without the OS: time and a counter.
@@ -496,7 +497,11 @@ impl<D: McpData> Shared<D> {
             bytes[..8].copy_from_slice(&n.to_le_bytes());
             bytes[8..].copy_from_slice(&now().to_le_bytes());
         }
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
+        bytes.iter().fold(String::with_capacity(32), |mut out, b| {
+            // Writing to a String cannot fail.
+            let _ = write!(out, "{b:02x}");
+            out
+        })
     }
 }
 
@@ -556,7 +561,7 @@ pub(crate) async fn call<D: McpData>(
             .await;
         return Err(err);
     }
-    let _serial = match &key {
+    let serial = match &key {
         Some(k) => Some(shared.writes.lock_key(&client.id, k).await),
         None => None,
     };
@@ -724,10 +729,10 @@ pub(crate) async fn call<D: McpData>(
     let kind = plan.kind;
     let form = shared.elicitation(&plan);
     let rx = shared.wait_for(client, tool, key.as_deref(), plan, &id);
-    drop(_serial);
+    drop(serial);
     if elicits(context) {
         if stateless(context) {
-            let token = shared.mrtr_token();
+            let token = Shared::<D>::mrtr_token();
             let mut rounds = lock(&shared.writes.mrtr);
             let max_age = Duration::from_secs(
                 nail_api::agents::MAX_CONFIRMATION_TIMEOUT_SECS.saturating_add(60),

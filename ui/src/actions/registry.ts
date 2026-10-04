@@ -63,9 +63,9 @@ export function moveTargetOf(arg: JsonValue | undefined): MoveTarget | null {
 
 export interface ActionHandler {
   /** Runs the action. */
-  run(ctx: ActionContext, args: readonly JsonValue[]): void | Promise<void>;
+  run: (ctx: ActionContext, args: readonly JsonValue[]) => void | Promise<void>;
   /** Whether the action can run now (default: always). */
-  enabled?(ctx: ActionContext, args: readonly JsonValue[]): boolean;
+  enabled?: (ctx: ActionContext, args: readonly JsonValue[]) => boolean;
 }
 
 function step(ctx: ActionContext, delta: number): void {
@@ -85,11 +85,15 @@ function step(ctx: ActionContext, delta: number): void {
 /** Built-in handlers by action id. */
 export const builtinActions: Record<string, ActionHandler> = {
   "mail.next": {
-    run: (ctx) => step(ctx, 1),
+    run: (ctx) => {
+      step(ctx, 1);
+    },
     enabled: (ctx) => ctx.store.getState().messageOrder.length > 0,
   },
   "mail.previous": {
-    run: (ctx) => step(ctx, -1),
+    run: (ctx) => {
+      step(ctx, -1);
+    },
     enabled: (ctx) => ctx.store.getState().messageOrder.length > 0,
   },
   "view.toggle": {
@@ -119,7 +123,9 @@ export const builtinActions: Record<string, ActionHandler> = {
   },
   "mail.delete-permanently": {
     // Asks first (a modal confirmation, M5c).
-    run: (ctx) => askDeletePermanently(ctx, selected(ctx)),
+    run: (ctx) => {
+      askDeletePermanently(ctx, selected(ctx));
+    },
     enabled: hasSelection,
   },
   "mail.toggle-read": {
@@ -139,7 +145,9 @@ export const builtinActions: Record<string, ActionHandler> = {
     enabled: hasSelection,
   },
   "mail.move": {
-    run: (ctx) => ctx.store.getState().openWindow(WINDOWS.move),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(WINDOWS.move);
+    },
     enabled: hasSelection,
   },
   "mail.move-to": {
@@ -188,8 +196,16 @@ export const builtinActions: Record<string, ActionHandler> = {
   },
 
   // ---- Search, windows, accounts ----
-  "search.focus": { run: (ctx) => ctx.store.getState().requestFocus("search") },
-  "search.clear": { run: (ctx) => ctx.store.getState().setSearch(null) },
+  "search.focus": {
+    run: (ctx) => {
+      ctx.store.getState().requestFocus("search");
+    },
+  },
+  "search.clear": {
+    run: (ctx) => {
+      ctx.store.getState().setSearch(null);
+    },
+  },
   "window.open": {
     run: (ctx, args) => {
       if (typeof args[0] === "string") ctx.store.getState().openWindow(args[0]);
@@ -199,12 +215,15 @@ export const builtinActions: Record<string, ActionHandler> = {
       (Object.hasOwn(ctx.layout.windows, args[0]) || (ctx.dialogs?.has(args[0]) ?? false)),
   },
   "window.close": {
-    run: (ctx, args) =>
-      ctx.store.getState().closeWindow(typeof args[0] === "string" ? args[0] : undefined),
+    run: (ctx, args) => {
+      ctx.store.getState().closeWindow(typeof args[0] === "string" ? args[0] : undefined);
+    },
     enabled: (ctx) => ctx.store.getState().windows.length > 0,
   },
   "account.add": {
-    run: (ctx) => ctx.store.getState().openWindow(WINDOWS.accountSetup),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(WINDOWS.accountSetup);
+    },
     enabled: (ctx) => Object.hasOwn(ctx.layout.windows, WINDOWS.accountSetup),
   },
 };
@@ -238,8 +257,8 @@ export function resolveAction(
 }
 
 export interface ActionDispatcher {
-  dispatch(id: string, args?: readonly JsonValue[]): Promise<void>;
-  isEnabled(id: string, args?: readonly JsonValue[]): boolean;
+  dispatch: (id: string, args?: readonly JsonValue[]) => Promise<void>;
+  isEnabled: (id: string, args?: readonly JsonValue[]) => boolean;
 }
 
 export function createDispatcher(

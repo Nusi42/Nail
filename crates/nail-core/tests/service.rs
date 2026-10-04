@@ -1,6 +1,8 @@
 //! `Service::handle` for every request, against a store seeded with the demo
 //! corpus.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::{
@@ -752,7 +754,7 @@ async fn m2a_security_requests() {
     assert_eq!(
         fx.service
             .handle(Request::ListKeys {
-                filter: Default::default(),
+                filter: nail_api::security::KeyFilter::default(),
             })
             .await,
         Response::Keys { keys: vec![] }
@@ -877,7 +879,7 @@ async fn m2b_remote_requests() {
                 .handle(Request::CreateRemoteUser {
                     name: "ADA".into(),
                     display_name: None,
-                    grant: Default::default(),
+                    grant: nail_api::remote::RemoteGrant::default(),
                 })
                 .await
         ),

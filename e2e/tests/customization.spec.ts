@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test as base } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
 import { openSettings, toolbarAction } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Customization tooling (ADR 0026) on a private `nail serve`: the inspector,
@@ -10,6 +11,7 @@ import { openSettings, toolbarAction } from "../support/views";
  * revert, and every error of every broken config file at once.
  */
 const test = base.extend<{ nail: NailServer }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
   nail: async ({}, use) => {
     const server = await startNail();
     await use(server);
@@ -61,7 +63,7 @@ test("dragging a divider writes the sizes into layout.kdl", async ({ page, nail 
   expect(existsSync(layoutFile)).toBe(false);
 
   const divider = page.getByRole("separator", { name: "Resize panes" }).first();
-  const box = (await divider.boundingBox())!;
+  const box = defined(await divider.boundingBox(), "the divider's box");
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
   await page.mouse.move(x, y);
@@ -132,10 +134,12 @@ test("the config error list shows every error of two broken files", async ({ pag
   // Nothing is shown while every file is valid.
   await expect(page.locator('[data-part="config-errors"][data-state="invalid"]')).toHaveCount(0);
 
+  // Misspelled on purpose: two unknown properties. spellchecker:off
   writeFileSync(
     path.join(nail.configDir, "theme.kdl"),
     'theme "Broken" extends="default" {\n    part "app" {\n        colr "red"\n    }\n    part "toolbar" {\n        paddin 4\n    }\n}\n',
   );
+  // spellchecker:on
   writeFileSync(
     path.join(nail.configDir, "layout.kdl"),
     'layout "Broken" extends="default" {\n    window "main" {\n        no-such-widget\n    }\n}\n',

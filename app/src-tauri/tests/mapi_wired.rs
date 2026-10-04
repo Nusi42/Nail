@@ -6,6 +6,7 @@
 //! becomes a saved draft with its files and a `ComposeDraft` launch
 //! request; nothing is sent.
 
+#![cfg(test)]
 #![cfg(windows)]
 
 use std::sync::Arc;
@@ -79,7 +80,7 @@ fn transport(name: &str) -> PipeTransport {
         // Never start an app from a test.
         app: None,
         connect_timeout: Duration::from_secs(5),
-        response_timeout: Duration::from_secs(60),
+        response_timeout: Duration::from_mins(1),
     }
 }
 

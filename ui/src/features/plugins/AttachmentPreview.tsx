@@ -110,7 +110,9 @@ export function AttachmentPreviewPane({
             <select
               data-part="plugin-preview.select"
               value={renderer.id}
-              onChange={(event) => setChosen(event.target.value)}
+              onChange={(event) => {
+                setChosen(event.target.value);
+              }}
             >
               {renderers.map((r) => (
                 <option key={r.id} value={r.id}>

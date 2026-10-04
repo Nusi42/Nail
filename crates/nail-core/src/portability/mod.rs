@@ -37,20 +37,10 @@ pub(crate) use jobs::PortabilityCtl;
 use mail::{ImportTarget, StoreMailSource};
 use pim::{PimBuffer, PimMode, StorePimSource};
 
-/// The answer of requests the core does not serve (kept for requests a
-/// later wave may route here).
-#[allow(dead_code)]
-pub(crate) fn not_ready(request: &Request) -> CoreError {
-    ApiError::unsupported(format!(
-        "{} is not available yet",
-        crate::service::request_name(request)
-    ))
-    .with_localized(LocalizedMessage::new("m4c-not-ready"))
-    .into()
-}
-
-fn api(err: nail_portability::PortabilityError) -> CoreError {
-    err.to_api_error().into()
+impl From<nail_portability::PortabilityError> for CoreError {
+    fn from(err: nail_portability::PortabilityError) -> Self {
+        err.to_api_error().into()
+    }
 }
 
 fn invalid(message: &str, id: &str) -> CoreError {
@@ -109,7 +99,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             existing(&source.path)?;
             let preview = service
                 .blocking(move |s| {
-                    let mut preview = import::preview(&source).map_err(api)?;
+                    let mut preview = import::preview(&source).map_err(CoreError::from)?;
                     thunderbird::mark_duplicates(
                         &mut preview.accounts,
                         &s.inner.accounts.config().accounts,
@@ -150,7 +140,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 nail_portability::backup::restore::inspect(&path, &passphrase)
             })
             .await?
-            .map_err(api)?;
+            .map_err(CoreError::from)?;
             Ok(Response::BackupManifest {
                 manifest: Box::new(manifest),
             })
@@ -173,10 +163,13 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             let file = existing(&path)?;
             let plan = service
                 .blocking(move |s| {
-                    let mut archive = BackupArchive::open(&file, &passphrase).map_err(api)?;
+                    let mut archive =
+                        BackupArchive::open(&file, &passphrase).map_err(CoreError::from)?;
                     let contents = contents.unwrap_or_else(|| archive.manifest().contents.clone());
                     let mut target = backup::CoreRestoreTarget::new(s, true);
-                    archive.plan(&contents, &mut target).map_err(api)
+                    archive
+                        .plan(&contents, &mut target)
+                        .map_err(CoreError::from)
                 })
                 .await?;
             Ok(Response::RestorePlan {
@@ -227,7 +220,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     nail_portability::diagnostics::write_bundle(
                         &file, &manifest, &entries, overwrite,
                     )
-                    .map_err(api)
+                    .map_err(CoreError::from)
                 })
                 .await?;
             Ok(Response::DiagnosticsBundle {
@@ -372,7 +365,7 @@ async fn start_export(
     let single = match &exported {
         Exported::Mail(_, single) | Exported::Pim(_, single) => *single,
     };
-    export::check_target(&target, !single, options.overwrite).map_err(api)?;
+    export::check_target(&target, !single, options.overwrite).map_err(CoreError::from)?;
     let work: jobs::JobWork = Box::new(move |_service, ctx| {
         let now = chrono::Utc::now();
         let result = match exported {
@@ -408,7 +401,7 @@ fn start_backup(
     }
     // An existing archive is replaced only when the user confirmed it
     // (`overwrite`, the Save dialog); the job then replaces it atomically.
-    nail_portability::files::check_target(&file, overwrite).map_err(api)?;
+    nail_portability::files::check_target(&file, overwrite).map_err(CoreError::from)?;
     let work: jobs::JobWork = Box::new(move |service, ctx| {
         let mut source = backup::CoreBackupSource {
             service: service.clone(),

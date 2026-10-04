@@ -20,7 +20,7 @@ import { backupsKey } from "../customization/MergeDialog";
 interface Props {
   pluginId: string;
   /** Called when the user is done (applied, skipped or nothing to place). */
-  onDone(): void;
+  onDone: () => void;
 }
 
 /** The merge choices: checked items taken from the proposal, the rest kept. */

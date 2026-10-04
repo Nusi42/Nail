@@ -4,7 +4,7 @@
 //!
 //! Plug-in-facing types (what `@nail/plugin-api` hands to plug-in code)
 //! are camelCase; the wrappers that travel in [`crate::Event`]s are
-//! snake_case like the rest of the protocol.
+//! `snake_case` like the rest of the protocol.
 //!
 //! **Which UI.** Several UIs can be connected (desktop window, browser
 //! tabs of the remote UI). A UI sends a random `client_id` with

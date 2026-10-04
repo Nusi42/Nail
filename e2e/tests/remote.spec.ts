@@ -52,7 +52,7 @@ async function logout(page: Page) {
           ...(csrf ? { "x-nail-csrf": csrf } : {}),
         },
         body: JSON.stringify(body),
-      }).then((r) => r.json());
+      }).then((r) => r.json() as Promise<{ status: { csrf_token?: string } }>);
     const status = await post({ type: "Status" });
     await post({ type: "Logout" }, status.status.csrf_token);
   });
@@ -207,7 +207,7 @@ test("guessing passwords is slowed down", async ({ page }) => {
   const signIn = phone.getByRole("button", { name: "Sign in" });
   await phone.getByRole("textbox", { name: "User name" }).fill("ada");
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await phone.getByLabel("Password", { exact: true }).fill(`wrong guess ${attempt}`);
+    await phone.getByLabel("Password", { exact: true }).fill(`wrong guess ${String(attempt)}`);
     await signIn.click();
     await expect(phone.getByText("The user name or password is wrong.")).toBeVisible();
   }
@@ -280,7 +280,9 @@ test("the local UI's CSP blocks an injected inline script", async ({ page }) => 
         const script = document.createElement("script");
         script.textContent = "window.__injected = 1";
         document.body.append(script);
-        setTimeout(() => resolve(seen), 1500);
+        setTimeout(() => {
+          resolve(seen);
+        }, 1500);
       }),
   );
   expect(violations).toContain("script-src-elem");

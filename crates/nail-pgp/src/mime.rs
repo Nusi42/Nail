@@ -20,7 +20,7 @@ pub(crate) struct HeaderField {
 impl HeaderField {
     /// A new field `Name: value` (the value is written as given; fold
     /// long values before).
-    pub fn new(name: &str, value: &str) -> Self {
+    pub(crate) fn new(name: &str, value: &str) -> Self {
         Self {
             name: name.to_owned(),
             raw: format!("{name}: {value}").into_bytes(),
@@ -28,12 +28,12 @@ impl HeaderField {
     }
 
     /// Whether the field has this name (case-insensitive).
-    pub fn is(&self, name: &str) -> bool {
+    pub(crate) fn is(&self, name: &str) -> bool {
         self.name.eq_ignore_ascii_case(name)
     }
 
     /// The unfolded value after the colon, trimmed (lossy UTF-8).
-    pub fn value(&self) -> String {
+    pub(crate) fn value(&self) -> String {
         let text = String::from_utf8_lossy(&self.raw);
         let value = text.split_once(':').map_or("", |(_, v)| v);
         let mut out = String::with_capacity(value.len());
@@ -60,7 +60,7 @@ pub(crate) struct Entity<'a> {
 impl<'a> Entity<'a> {
     /// Splits `raw` at the first empty line. Without one the whole input
     /// is headers and the body is empty.
-    pub fn parse(raw: &'a [u8]) -> Self {
+    pub(crate) fn parse(raw: &'a [u8]) -> Self {
         let (head, body) = split_header_block(raw);
         Self {
             headers: parse_fields(head),
@@ -69,17 +69,17 @@ impl<'a> Entity<'a> {
     }
 
     /// The first field with this name.
-    pub fn header(&self, name: &str) -> Option<&HeaderField> {
+    pub(crate) fn header(&self, name: &str) -> Option<&HeaderField> {
         self.headers.iter().find(|h| h.is(name))
     }
 
     /// The unfolded value of the first field with this name.
-    pub fn header_value(&self, name: &str) -> Option<String> {
+    pub(crate) fn header_value(&self, name: &str) -> Option<String> {
         self.header(name).map(HeaderField::value)
     }
 
     /// The parsed `Content-Type` (default `text/plain`).
-    pub fn content_type(&self) -> ContentType {
+    pub(crate) fn content_type(&self) -> ContentType {
         self.header_value("Content-Type")
             .map_or_else(ContentType::default_text, |v| ContentType::parse(&v))
     }
@@ -115,8 +115,9 @@ fn parse_fields(head: &[u8]) -> Vec<HeaderField> {
         if line.is_empty() {
             continue;
         }
-        if (line[0] == b' ' || line[0] == b'\t') && !fields.is_empty() {
-            let last = fields.last_mut().expect("checked");
+        if (line[0] == b' ' || line[0] == b'\t')
+            && let Some(last) = fields.last_mut()
+        {
             last.raw.extend_from_slice(b"\r\n");
             last.raw.extend_from_slice(line);
             continue;
@@ -167,7 +168,7 @@ impl ContentType {
     }
 
     /// Parses a header value with `mail-parser` (RFC 2045 / 2231).
-    pub fn parse(value: &str) -> Self {
+    pub(crate) fn parse(value: &str) -> Self {
         let synthetic = format!("Content-Type: {value}\r\n\r\n");
         let parsed = MessageParser::default().parse(synthetic.as_bytes());
         let Some(ct) = parsed.as_ref().and_then(|m| m.root_part().content_type()) else {
@@ -191,7 +192,7 @@ impl ContentType {
     }
 
     /// A parameter (case-insensitive name).
-    pub fn param(&self, name: &str) -> Option<&str> {
+    pub(crate) fn param(&self, name: &str) -> Option<&str> {
         self.params
             .iter()
             .find(|(n, _)| n.eq_ignore_ascii_case(name))
@@ -199,7 +200,7 @@ impl ContentType {
     }
 
     /// Whether this is `mime` (lowercase).
-    pub fn is(&self, mime: &str) -> bool {
+    pub(crate) fn is(&self, mime: &str) -> bool {
         self.mime == mime
     }
 }

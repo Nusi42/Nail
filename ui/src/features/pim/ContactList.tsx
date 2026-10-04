@@ -42,6 +42,7 @@ import {
   useContacts,
 } from "./queries";
 import { usePim, usePimStore } from "./store";
+import { nonEmpty } from "../../text/empty";
 
 /** Initials for the avatar placeholder. */
 export function initialsOf(name: string): string {
@@ -79,8 +80,12 @@ export function ContactList({ node }: WidgetProps) {
   useEffect(() => {
     const next = query.trim();
     if (next === debounced) return;
-    const timer = setTimeout(() => setDebounced(next), 150);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setDebounced(next);
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [query, debounced]);
 
   const contacts: ContactSummary[] = useMemo(() => {
@@ -186,7 +191,9 @@ export function ContactList({ node }: WidgetProps) {
     pim.getState().editContact({ mode: "new", addressBookId: book || null, fields: null });
     ctx.store.getState().openWindow(CONTACT_DIALOG);
   };
-  const openGroups = () => ctx.store.getState().openWindow(GROUPS_DIALOG);
+  const openGroups = () => {
+    ctx.store.getState().openWindow(GROUPS_DIALOG);
+  };
   const openMerge = () => {
     pim.getState().setMergeIds(selection.length >= 2 ? selection : []);
     ctx.store.getState().openWindow(MERGE_DIALOG);
@@ -237,7 +244,9 @@ export function ContactList({ node }: WidgetProps) {
               data-part="form.input"
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+              }}
             />
           </div>
           <div data-part="pim.view-header.actions">
@@ -271,7 +280,9 @@ export function ContactList({ node }: WidgetProps) {
               data-part="form.input"
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+              }}
             />
           </div>
         )}
@@ -308,7 +319,9 @@ export function ContactList({ node }: WidgetProps) {
             id={ids.group}
             data-part="form.select"
             value={group}
-            onChange={(e) => setGroup(e.target.value)}
+            onChange={(e) => {
+              setGroup(e.target.value);
+            }}
           >
             <option value="">{t("pim-contacts-all-groups")}</option>
             {visibleGroups.map((g) => (
@@ -378,6 +391,7 @@ export function ContactList({ node }: WidgetProps) {
               c.read_only ? "read-only" : null,
             ].filter(Boolean);
             return (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the listbox handles the keyboard for its options (roving tabindex).
               <li
                 key={c.id}
                 role="option"
@@ -386,7 +400,9 @@ export function ContactList({ node }: WidgetProps) {
                 data-state={states.join(" ") || undefined}
                 aria-selected={selected}
                 tabIndex={c.id === active ? 0 : -1}
-                onClick={(e) => onClick(e, c.id)}
+                onClick={(e) => {
+                  onClick(e, c.id);
+                }}
                 onDoubleClick={() => {
                   pim.getState().editContact({ mode: "edit", contactId: c.id });
                   ctx.store.getState().openWindow(CONTACT_DIALOG);
@@ -394,13 +410,13 @@ export function ContactList({ node }: WidgetProps) {
               >
                 <span
                   data-part="contact-list.avatar"
-                  data-color={colorSlot(c.email || c.display_name || c.id)}
+                  data-color={colorSlot(nonEmpty(c.email) ?? nonEmpty(c.display_name) ?? c.id)}
                   aria-hidden="true"
                 >
-                  {initialsOf(c.display_name || c.email || "")}
+                  {initialsOf(nonEmpty(c.display_name) ?? c.email ?? "")}
                 </span>
                 <span data-part="contact-list.name">
-                  {c.display_name || c.email || t("pim-contact-unnamed")}
+                  {nonEmpty(c.display_name) ?? nonEmpty(c.email) ?? t("pim-contact-unnamed")}
                 </span>
                 {c.email && <span data-part="contact-list.email">{c.email}</span>}
                 {c.organization && (
@@ -422,7 +438,9 @@ export function ContactList({ node }: WidgetProps) {
           type="button"
           data-part="form.button"
           data-action="more"
-          onClick={() => setLimit((l) => l + pageSize)}
+          onClick={() => {
+            setLimit((l) => l + pageSize);
+          }}
         >
           {t("pim-contacts-more", { count: total - contacts.length })}
         </button>

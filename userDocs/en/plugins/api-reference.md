@@ -988,7 +988,7 @@ The selection in the composer.
 
 ### `PluginMarkdownBlockRenderer`
 
-Renders a Markdown block (<plugin>.<block> ````) to HTML and text.
+Renders a Markdown block (a fenced block whose info string is `<plugin>.<block>`) to HTML and text.
 
 ```ts
 type PluginMarkdownBlockRenderer = ( input: PluginMarkdownBlockInput, ) => PluginMarkdownBlockResult | Promise<PluginMarkdownBlockResult>;
@@ -1392,7 +1392,7 @@ A mail address with an optional display name.
 | Member | Type | Description |
 | --- | --- | --- |
 | `name` | `string \| null` | Display name, e.g. "Ada Lovelace". `null` when the header has none. |
-| `email` | `string` | The address itself, e.g. "ada@example.org". |
+| `email` | `string` | The address itself, e.g. "`ada@example.org`". |
 
 ### `Flags`
 
@@ -1704,7 +1704,7 @@ A command.
 
 ### `PluginPlacement`
 
-A suggested placement. Exactly one of `toolbar`, `menu` and `panel` is set; at most one of `after` and `before`. * `{"toolbar": "reader", "command": "x", "after": "mail.forward"}` — an item in a toolbar of `layout.kdl`. * `{"menu": "context:message-list.row", "command": "x"}` — an item in a menu (`app` or `context:<part>`). * `{"panel": "due", "after": "message-view"}` — the panel after (or before) the first widget of that kind; at the end of the main window when there is none.
+A suggested placement. Exactly one of `toolbar`, `menu` and `panel` is set; at most one of `after` and `before`. • `{"toolbar": "reader", "command": "x", "after": "mail.forward"}` — an item in a toolbar of `layout.kdl`. • `{"menu": "context:message-list.row", "command": "x"}` — an item in a menu (`app` or `context:<part>`). • `{"panel": "due", "after": "message-view"}` — the panel after (or before) the first widget of that kind; at the end of the main window when there is none.
 
 | Member | Type | Description |
 | --- | --- | --- |

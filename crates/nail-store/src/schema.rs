@@ -11,7 +11,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Error, Result};
 
 /// Schema v1: accounts, folders, messages and the operation queue.
-const V1: &str = r#"
+const V1: &str = r"
 CREATE TABLE accounts (
     id    TEXT PRIMARY KEY NOT NULL,
     name  TEXT NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE messages (
     from_email      TEXT,
     to_json         TEXT NOT NULL DEFAULT '[]',
     date            TEXT NOT NULL,
-    -- Unix seconds (UTC) parsed from `date`; 0 when unparseable. Sort key.
+    -- Unix seconds (UTC) parsed from `date`; 0 when unparsable. Sort key.
     date_sort       INTEGER NOT NULL DEFAULT 0,
     seen            INTEGER NOT NULL DEFAULT 0,
     flagged         INTEGER NOT NULL DEFAULT 0,
@@ -74,13 +74,13 @@ CREATE TABLE op_queue (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX op_queue_state ON op_queue(state, id);
-"#;
+";
 
 /// Schema v2 (M1a): threading headers and thread ids, tags, message size,
 /// per-message operation index, drafts and the outbox. Identities and
 /// virtual accounts are **not** stored: `accounts.kdl` is their only source
 /// of truth (ADR 0012). `folders.highestmodseq` exists since v1.
-const V2: &str = r#"
+const V2: &str = r"
 -- Message-ID without angle brackets; NULL when the message has none.
 ALTER TABLE messages ADD COLUMN message_id TEXT;
 ALTER TABLE messages ADD COLUMN in_reply_to_json TEXT NOT NULL DEFAULT '[]';
@@ -147,13 +147,13 @@ CREATE TABLE outbox (
 );
 CREATE INDEX outbox_due ON outbox(state, send_at);
 CREATE INDEX outbox_draft ON outbox(draft_id);
-"#;
+";
 
 /// Schema v3 (M1a WP14): POP3 bookkeeping. POP3 has no folders or numeric
 /// UIDs on the server; the core remembers which `UIDL`s it downloaded (and
 /// when), which local message each became, and whether the user deleted
 /// that local copy, for the leave-on-server policies.
-const V3: &str = r#"
+const V3: &str = r"
 CREATE TABLE pop3_uids (
     account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     uidl            TEXT NOT NULL,
@@ -165,7 +165,7 @@ CREATE TABLE pop3_uids (
     PRIMARY KEY (account_id, uidl)
 ) WITHOUT ROWID;
 CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT NULL;
-"#;
+";
 
 /// Schema v4 (M1b WP20, ADR 0022): rich drafts, collected addresses,
 /// rule runs, MCP clients and saved searches.
@@ -179,7 +179,7 @@ CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT 
 ///   with every queued action and its inverse (undo as one unit), and the
 ///   messages waiting for arrival rules.
 /// * MCP clients are stored with a SHA-256 hash of their token only.
-const V4: &str = r#"
+const V4: &str = r"
 ALTER TABLE drafts ADD COLUMN mode TEXT NOT NULL DEFAULT 'plain'
     CHECK (mode IN ('plain', 'html', 'markdown'));
 ALTER TABLE drafts ADD COLUMN context_mode TEXT
@@ -304,7 +304,7 @@ CREATE TABLE saved_searches (
     sort       TEXT NOT NULL DEFAULT 'date' CHECK (sort IN ('date', 'relevance')),
     position   INTEGER NOT NULL
 );
-"#;
+";
 
 /// Schema v5 (M2a WP30, ADR 0029): the keyring, Autocrypt peer state,
 /// trust decisions, encryption-at-rest state, cached message security and
@@ -327,7 +327,7 @@ CREATE TABLE saved_searches (
 ///   content), for list badges and rule conditions.
 /// * `app_settings` holds small JSON settings such as
 ///   [`nail_api::security::SecuritySettings`].
-const V5: &str = r#"
+const V5: &str = r"
 CREATE TABLE crypto_keys (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
@@ -434,7 +434,7 @@ CREATE TABLE app_settings (
     -- JSON.
     value TEXT NOT NULL
 ) WITHOUT ROWID;
-"#;
+";
 
 /// Schema v6 (M2b WP40, ADR 0036): the remote UI and remote content.
 ///
@@ -459,7 +459,7 @@ CREATE TABLE app_settings (
 /// * `remote_content_allow` — remote-content allow-lists (per message,
 ///   sender, domain). Message entries have no foreign key (ids are
 ///   strings, also of virtual messages); the core removes stale ones.
-const V6: &str = r#"
+const V6: &str = r"
 CREATE TABLE remote_users (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -592,7 +592,7 @@ CREATE TABLE remote_content_allow (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (scope, value)
 ) WITHOUT ROWID;
-"#;
+";
 
 /// Schema v7 (M2c WP50, ADR 0043): sync policies, snooze, the junk
 /// classifier, notification overrides and the Sieve state.
@@ -616,7 +616,7 @@ CREATE TABLE remote_content_allow (
 /// * `sieve_state` — per account: hash and time of the uploaded script,
 ///   the server's extensions and other scripts, the vacation settings and
 ///   the last error.
-const V7: &str = r#"
+const V7: &str = r"
 ALTER TABLE messages ADD COLUMN body_state TEXT NOT NULL DEFAULT 'synced'
     CHECK (body_state IN ('synced', 'headers-only', 'on-demand'));
 CREATE INDEX messages_headers_only ON messages(folder_id) WHERE body_state = 'headers-only';
@@ -695,7 +695,7 @@ CREATE TABLE sieve_state (
     -- JSON (nail_api::ApiError) of the last failure; NULL = none.
     last_error    TEXT
 ) WITHOUT ROWID;
-"#;
+";
 
 /// Schema v8 (M2c review fixes, ADR 0049):
 ///
@@ -712,7 +712,7 @@ CREATE TABLE sieve_state (
 ///   hidden Snoozed folder). A user folder that happens to be called
 ///   `Snoozed` is not marked and stays visible. Removed with the folder.
 ///   Existing top-level `Snoozed` folders holding snoozed mail are marked.
-const V8: &str = r#"
+const V8: &str = r"
 ALTER TABLE sieve_state ADD COLUMN location TEXT;
 ALTER TABLE sieve_state ADD COLUMN server_rules TEXT NOT NULL DEFAULT '[]';
 
@@ -728,7 +728,7 @@ INSERT OR IGNORE INTO folder_marks (folder_id, account_id, kind)
     WHERE f.parent_id IS NULL AND f.path = 'Snoozed'
       AND EXISTS (SELECT 1 FROM messages m JOIN snoozed_messages s ON s.message_id = m.id
                   WHERE m.folder_id = f.id);
-"#;
+";
 
 /// Schema v9 (M2d, ADR 0050): the plug-in preview.
 ///
@@ -747,7 +747,7 @@ INSERT OR IGNORE INTO folder_marks (folder_id, account_id, kind)
 ///   the message is sealed at rest (it may quote mail).
 ///
 /// Everything of a plug-in goes with it (`ON DELETE CASCADE`).
-const V9: &str = r#"
+const V9: &str = r"
 CREATE TABLE plugins (
     id             TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 64),
     version        TEXT NOT NULL,
@@ -802,7 +802,7 @@ CREATE TABLE plugin_logs (
     localized TEXT
 );
 CREATE INDEX plugin_logs_by_plugin ON plugin_logs(plugin_id, seq);
-"#;
+";
 
 /// Schema v10 (M3a, ADR 0058): calendars, contacts and tasks.
 ///
@@ -835,7 +835,7 @@ CREATE INDEX plugin_logs_by_plugin ON plugin_logs(plugin_id, seq);
 /// * `pim_ops` — the PIM operation queue (like `op_queue`, per source).
 ///
 /// Everything of a source goes with it (`ON DELETE CASCADE`).
-const V10: &str = r#"
+const V10: &str = r"
 CREATE TABLE pim_sources (
     id           TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 64),
     kind         TEXT NOT NULL CHECK (kind IN ('local', 'ics', 'caldav', 'carddav')),
@@ -1048,7 +1048,7 @@ CREATE TABLE pim_ops (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX pim_ops_state ON pim_ops(source_id, state, id);
-"#;
+";
 
 /// Schema v11 (M3b, ADR 0065): scheduling state and Gmail accounts.
 ///
@@ -1071,7 +1071,7 @@ CREATE INDEX pim_ops_state ON pim_ops(source_id, state, id);
 ///   stored Gmail message.
 /// * `gmail_label_ops` — the label operation queue (create / update /
 ///   delete), per account.
-const V11: &str = r#"
+const V11: &str = r"
 ALTER TABLE messages ADD COLUMN remote_id TEXT;
 CREATE UNIQUE INDEX messages_remote_id ON messages(account_id, remote_id)
     WHERE remote_id IS NOT NULL;
@@ -1195,7 +1195,7 @@ CREATE TABLE gmail_label_ops (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
-"#;
+";
 
 /// Schema v12 (M3c, ADR 0072): Exchange accounts.
 ///
@@ -1229,7 +1229,7 @@ CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
 /// * `exchange_rooms` — cached room lists and rooms.
 /// * `exchange_ops` — the Exchange operation queue (categories, automatic
 ///   replies, inbox rules, Focused Inbox); payloads sealed.
-const V12: &str = r#"
+const V12: &str = r"
 CREATE TABLE pim_sources_v12 (
     id           TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 128),
     kind         TEXT NOT NULL
@@ -1417,7 +1417,7 @@ CREATE TABLE exchange_ops (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
-"#;
+";
 
 /// Schema v13 (M3c review fixes, ADR 0078): resumable Exchange listings,
 /// moves seen from other clients, meeting answers.
@@ -1436,7 +1436,7 @@ CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
 /// * `exchange_meeting_answers` — per meeting the user was invited to: the
 ///   own answer as last synced, and an answer queued from Nail with its
 ///   comment (sealed) and whether the organizer is told.
-const V13: &str = r#"
+const V13: &str = r"
 ALTER TABLE exchange_pim_collections ADD COLUMN full_sync_page TEXT;
 
 CREATE TABLE exchange_listed (
@@ -1469,7 +1469,7 @@ CREATE TABLE exchange_meeting_answers (
     comment       TEXT,
     UNIQUE (collection_id, uid)
 );
-"#;
+";
 
 /// Schema v14 (M4a, ADR 0079): writes by MCP clients and plug-ins.
 ///
@@ -1493,7 +1493,7 @@ CREATE TABLE exchange_meeting_answers (
 ///   `plugin_hook_stats` — per hook: calls, failures, time-outs, vetoes,
 ///   time; `plugin_cpu` — CPU time per plug-in and minute for the hourly
 ///   quota. All go with their plug-in.
-const V14: &str = r#"
+const V14: &str = r"
 CREATE TABLE confirmations (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     actor_kind      TEXT NOT NULL CHECK (actor_kind IN ('mcp-client', 'plugin')),
@@ -1587,7 +1587,7 @@ CREATE TABLE plugin_cpu (
     cpu_ms    INTEGER NOT NULL CHECK (cpu_ms >= 0),
     PRIMARY KEY (plugin_id, minute)
 ) WITHOUT ROWID;
-"#;
+";
 
 /// Schema v15 (M4c, ADR 0094): smartcard keys and server threads.
 ///
@@ -1600,7 +1600,7 @@ CREATE TABLE plugin_cpu (
 ///   (Gmail `threadId`, Graph / EWS conversation id); messages sharing one
 ///   share a Nail thread (`thread_refs` key `remote-thread:<account>:<id>`,
 ///   `Store::set_message_remote_thread_id`).
-const V15: &str = r#"
+const V15: &str = r"
 CREATE TABLE crypto_keys_v15 (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
@@ -1643,7 +1643,7 @@ ALTER TABLE crypto_keys_v15 RENAME TO crypto_keys;
 ALTER TABLE messages ADD COLUMN remote_thread_id TEXT;
 CREATE INDEX messages_remote_thread ON messages(account_id, remote_thread_id)
     WHERE remote_thread_id IS NOT NULL;
-"#;
+";
 
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
@@ -1706,7 +1706,12 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
 ];
 
 /// The schema version this build creates and understands.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a few dozen migrations; the assertion below checks the bound at compile time"
+)]
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
+const _: () = assert!(MIGRATIONS.len() < 1 << 16);
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY NOT NULL,
@@ -1758,9 +1763,8 @@ pub(crate) fn migrate_with(conn: &mut Connection, migrations: &[Migration]) -> R
         if restore_fks {
             conn.pragma_update(None, "foreign_keys", true)?;
         }
-        match step_result? {
-            Some(version) => return Ok(version),
-            None => continue,
+        if let Some(version) = step_result? {
+            return Ok(version);
         }
     }
 }

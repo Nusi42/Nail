@@ -5,7 +5,7 @@ Status: accepted · 2026-10-03 · M5a WP150
 ## Context
 
 Milestone M5 (plan section 10) implements the UX proposal the maintainer
-approved (a published page, not linked here
+approved (a published page, not linked here,
 memory `ux-overhaul-proposal`). Wave M5a lays the visual foundation: five
 built-in themes (Frost, Sage — light; Graphite, Nocturne — dark; High
 contrast), "Follow Windows" between a light and a dark theme, Comfortable /

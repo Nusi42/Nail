@@ -505,7 +505,7 @@ pub fn appearance_settings(file: Option<&ThemeFile>) -> AppearanceSettings {
     match file.extends.as_deref() {
         None | Some(DEFAULT_BASE) => {}
         Some(id) => {
-            settings.theme = id.to_owned();
+            id.clone_into(&mut settings.theme);
             settings.follow_system = false;
         }
     }

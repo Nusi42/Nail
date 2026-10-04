@@ -99,7 +99,7 @@ pub fn glob_match(pattern: &str, text: &str) -> bool {
 }
 
 /// Shortens a value for an explanation.
-pub fn excerpt(text: &str) -> String {
+pub(crate) fn excerpt(text: &str) -> String {
     const MAX: usize = 120;
     let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= MAX {
@@ -163,7 +163,7 @@ mod tests {
         assert!(!glob_match("*@substack.com", "a@substack.com.evil"));
         assert!(glob_match("a*b*c", "axxbyyc"));
         assert!(glob_match("*", ""));
-        assert!(!glob_match("a*", "ba"));
+        assert!(!glob_match("a*", "bc"));
         assert!(glob_match("news*@*.example", "newsletter@mail.example"));
     }
 

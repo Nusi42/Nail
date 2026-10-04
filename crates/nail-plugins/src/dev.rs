@@ -133,7 +133,7 @@ mod tests {
         // there so a broken watcher fails instead of hanging (generous for
         // loaded machines).
         std::fs::write(dir.path().join("index.js"), "2").unwrap();
-        rx.recv_timeout(Duration::from_secs(120))
+        rx.recv_timeout(Duration::from_mins(2))
             .expect("a change is reported");
     }
 }

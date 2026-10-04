@@ -164,7 +164,7 @@ class Sweep {
     const view = await openSettings(this.page);
     const names = await settingsNav(view)
       .getByRole("button")
-      .evaluateAll((items) => items.map((item) => item.textContent?.trim() ?? ""));
+      .evaluateAll((items) => items.map((item) => item.textContent.trim()));
     expect(names.length, "settings sections").toBeGreaterThan(0);
     for (const name of names) {
       await openSettings(this.page, name);

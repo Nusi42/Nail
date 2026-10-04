@@ -49,15 +49,15 @@ impl Error {
     /// The protocol error class.
     pub fn code(&self) -> ErrorCode {
         match self {
-            Self::Malformed(_) | Self::Crypto(_) => ErrorCode::Crypto,
+            Self::Malformed(_) | Self::Crypto(_) | Self::Store(nail_store::Error::Crypto(_)) => {
+                ErrorCode::Crypto
+            }
             Self::Unsupported(_) => ErrorCode::Unsupported,
             Self::NoKey(_) => ErrorCode::NoKey,
-            Self::Locked(_) => ErrorCode::Locked,
+            Self::Locked(_) | Self::Store(nail_store::Error::Locked(_)) => ErrorCode::Locked,
             Self::WrongPassphrase => ErrorCode::AuthFailed,
             Self::Store(nail_store::Error::NotFound { .. }) => ErrorCode::NotFound,
             Self::Store(nail_store::Error::Conflict(_)) => ErrorCode::Conflict,
-            Self::Store(nail_store::Error::Locked(_)) => ErrorCode::Locked,
-            Self::Store(nail_store::Error::Crypto(_)) => ErrorCode::Crypto,
             Self::Store(_) | Self::Keychain(_) | Self::Windows(_) => ErrorCode::Internal,
             Self::Smartcard(err) => err.code(),
         }

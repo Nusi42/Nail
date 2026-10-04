@@ -50,7 +50,7 @@ export function bindingOf(
   const find = (context: string) => {
     for (let i = layout.keys.length - 1; i >= 0; i--) {
       const k = layout.keys[i];
-      if (k && k.context === context && k.action === action && sameArgs(k.args, args)) {
+      if (k?.context === context && k.action === action && sameArgs(k.args, args)) {
         return k.key;
       }
     }
@@ -158,8 +158,8 @@ export function wrapEdges(
     if (item.kind !== "separator") return null;
     const prev = rendered[i - 1];
     const next = rendered[i + 1];
-    if (prev === undefined || prev.top !== item.top) return "start";
-    if (next === undefined || next.top !== item.top) return "end";
+    if (prev?.top !== item.top) return "start";
+    if (next?.top !== item.top) return "end";
     return null;
   });
 }

@@ -148,7 +148,7 @@ impl Updater {
 
     /// Keeps the core's notifier.
     pub fn attach(&self, notify: DesktopNotifier) {
-        let _ = self.shared.notify.set(notify);
+        drop(self.shared.notify.set(notify));
     }
 
     fn changed(&self) {
@@ -201,7 +201,7 @@ impl Updater {
         if recheck {
             self.changed();
             if settings.auto_check && self.shared.enabled {
-                let _ = self.check();
+                drop(self.check());
             }
         }
     }
@@ -283,7 +283,7 @@ impl Updater {
         };
         self.changed();
         if download {
-            let _ = self.download();
+            drop(self.download());
         }
     }
 
@@ -450,7 +450,7 @@ impl Updater {
             tokio::time::sleep(schedule.initial_delay).await;
             loop {
                 if this.lock().settings.auto_check {
-                    let _ = this.check();
+                    drop(this.check());
                 }
                 tokio::time::sleep(schedule.interval).await;
             }
@@ -468,7 +468,7 @@ pub fn rfc3339_now() -> String {
 
 /// Unix seconds as RFC 3339 UTC (`1970-01-01T00:00:00Z`).
 pub fn rfc3339(secs: u64) -> String {
-    let days = (secs / 86_400) as i64;
+    let days = i64::try_from(secs / 86_400).unwrap_or(i64::MAX);
     let rem = secs % 86_400;
     // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
     let z = days + 719_468;
@@ -495,7 +495,7 @@ pub(crate) mod testing {
     use std::collections::VecDeque;
 
     /// What a fake release does.
-    pub struct FakeUpdate {
+    pub(crate) struct FakeUpdate {
         pub info: UpdateInfo,
         pub download: Mutex<Option<Result<Vec<u8>, BackendError>>>,
         pub install_result: Mutex<Option<BackendError>>,
@@ -505,7 +505,7 @@ pub(crate) mod testing {
     }
 
     impl FakeUpdate {
-        pub fn new(version: &str, channel: UpdateChannel) -> Arc<Self> {
+        pub(crate) fn new(version: &str, channel: UpdateChannel) -> Arc<Self> {
             Arc::new(Self {
                 info: UpdateInfo {
                     version: version.into(),
@@ -559,13 +559,13 @@ pub(crate) mod testing {
 
     /// Answers checks from a script; records the channels asked.
     #[derive(Default)]
-    pub struct FakeBackend {
+    pub(crate) struct FakeBackend {
         pub answers: Mutex<VecDeque<Result<Option<Arc<FakeUpdate>>, BackendError>>>,
         pub asked: Mutex<Vec<UpdateChannel>>,
     }
 
     impl FakeBackend {
-        pub fn answer(&self, answer: Result<Option<Arc<FakeUpdate>>, BackendError>) {
+        pub(crate) fn answer(&self, answer: Result<Option<Arc<FakeUpdate>>, BackendError>) {
             self.answers.lock().unwrap().push_back(answer);
         }
     }
@@ -582,7 +582,7 @@ pub(crate) mod testing {
                 .unwrap()
                 .pop_front()
                 .unwrap_or(Ok(None))
-                .map(|found| found.map(|f| f as Arc<dyn PendingUpdate>));
+                .map(|found| found.map(|f| -> Arc<dyn PendingUpdate> { f }));
             Box::pin(async move { answer })
         }
     }
@@ -596,7 +596,7 @@ mod tests {
 
     fn updater(backend: &Arc<FakeBackend>, enabled: bool) -> (Updater, Arc<Mutex<u32>>) {
         let updater = Updater::new(
-            Arc::clone(backend) as Arc<dyn UpdateBackend>,
+            backend.clone(),
             tokio::runtime::Handle::current(),
             enabled,
             None,
@@ -790,7 +790,7 @@ mod tests {
     async fn the_policy_channel_wins_and_a_channel_change_rechecks() {
         let backend = Arc::new(FakeBackend::default());
         let forced = Updater::new(
-            Arc::clone(&backend) as Arc<dyn UpdateBackend>,
+            backend.clone(),
             tokio::runtime::Handle::current(),
             true,
             Some(UpdateChannel::Stable),
@@ -833,7 +833,7 @@ mod tests {
         assert_eq!(asked(), 1, "shortly after start");
         tokio::time::sleep(Duration::from_secs(UPDATE_CHECK_INTERVAL_SECS - 60)).await;
         assert_eq!(asked(), 1);
-        tokio::time::sleep(Duration::from_secs(120)).await;
+        tokio::time::sleep(Duration::from_mins(2)).await;
         assert_eq!(asked(), 2, "a day later");
         // Automatic checks off: the schedule asks no more.
         updater.apply_settings(&UpdateSettings {

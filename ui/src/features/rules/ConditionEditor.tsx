@@ -80,9 +80,9 @@ function TextMatchFields({
         name={`${name}-op`}
         value={value?.op ?? ""}
         choices={ops}
-        onChange={(op) =>
-          onChange(op === "" ? null : { ...(value ?? textMatch()), op: op as TextOp })
-        }
+        onChange={(op) => {
+          onChange(op === "" ? null : { ...(value ?? textMatch()), op: op as TextOp });
+        }}
       />
       {value && (
         <>
@@ -90,13 +90,17 @@ function TextMatchFields({
             labelId="rules-value"
             name={`${name}-value`}
             value={value.value}
-            onChange={(text) => onChange({ ...value, value: text })}
+            onChange={(text) => {
+              onChange({ ...value, value: text });
+            }}
           />
           <CheckField
             labelId="rules-case-sensitive"
             name={`${name}-case`}
             checked={value.case_sensitive}
-            onChange={(case_sensitive) => onChange({ ...value, case_sensitive })}
+            onChange={(case_sensitive) => {
+              onChange({ ...value, case_sensitive });
+            }}
           />
         </>
       )}
@@ -133,20 +137,22 @@ export function FolderRefFields({
           { value: "path", label: "rules-folder-by-path" },
           { value: "role", label: "rules-folder-by-role" },
         ]}
-        onChange={(mode) =>
+        onChange={(mode) => {
           onChange(
             mode === "role"
               ? { type: "role", role: "archive", account_id }
               : { type: "path", path: "", account_id },
-          )
-        }
+          );
+        }}
       />
       {value.type === "path" ? (
         <TextField
           labelId="rules-folder-path"
           name={`${name}-path`}
           value={value.path}
-          onChange={(path) => onChange({ ...value, path })}
+          onChange={(path) => {
+            onChange({ ...value, path });
+          }}
         />
       ) : (
         <SelectField
@@ -154,7 +160,9 @@ export function FolderRefFields({
           name={`${name}-role`}
           value={value.role}
           choices={choices(ROLES, "rules-role-")}
-          onChange={(role) => onChange({ ...value, role: role as FolderRole })}
+          onChange={(role) => {
+            onChange({ ...value, role: role as FolderRole });
+          }}
         />
       )}
       <SelectField
@@ -162,7 +170,9 @@ export function FolderRefFields({
         name={`${name}-account`}
         value={account_id ?? ""}
         choices={accountChoices}
-        onChange={(id) => onChange({ ...value, account_id: id === "" ? null : id })}
+        onChange={(id) => {
+          onChange({ ...value, account_id: id === "" ? null : id });
+        }}
       />
     </>
   );
@@ -190,12 +200,16 @@ function LeafFields({
             name={`${name}-field`}
             value={c.field}
             choices={choices(ADDRESS_FIELDS, "rules-field-")}
-            onChange={(field) => onChange({ ...c, field: field as AddressField })}
+            onChange={(field) => {
+              onChange({ ...c, field: field as AddressField });
+            }}
           />
           <TextMatchFields
             name={name}
             value={c.matches}
-            onChange={(m) => onChange({ ...c, matches: m ?? textMatch() })}
+            onChange={(m) => {
+              onChange({ ...c, matches: m ?? textMatch() });
+            }}
           />
         </>
       );
@@ -205,7 +219,9 @@ function LeafFields({
         <TextMatchFields
           name={name}
           value={c.matches}
-          onChange={(m) => onChange({ ...c, matches: m ?? textMatch() })}
+          onChange={(m) => {
+            onChange({ ...c, matches: m ?? textMatch() });
+          }}
         />
       );
     case "header":
@@ -215,13 +231,17 @@ function LeafFields({
             labelId="rules-header-name"
             name={`${name}-header`}
             value={c.name}
-            onChange={(header) => onChange({ ...c, name: header.trim() })}
+            onChange={(header) => {
+              onChange({ ...c, name: header.trim() });
+            }}
           />
           <TextMatchFields
             name={name}
             value={c.matches}
             optional="rules-op-exists"
-            onChange={(matches) => onChange({ ...c, matches })}
+            onChange={(matches) => {
+              onChange({ ...c, matches });
+            }}
           />
         </>
       );
@@ -231,7 +251,9 @@ function LeafFields({
           name={name}
           value={c.matches}
           optional="rules-op-exists"
-          onChange={(matches) => onChange({ ...c, matches })}
+          onChange={(matches) => {
+            onChange({ ...c, matches });
+          }}
         />
       );
     case "query":
@@ -240,7 +262,9 @@ function LeafFields({
           labelId="rules-query"
           name={`${name}-query`}
           value={c.query}
-          onChange={(query) => onChange({ ...c, query })}
+          onChange={(query) => {
+            onChange({ ...c, query });
+          }}
         />
       );
     case "attachment":
@@ -250,13 +274,17 @@ function LeafFields({
             name={`${name}-name`}
             value={c.name}
             optional="rules-op-any-name"
-            onChange={(m) => onChange({ ...c, name: m })}
+            onChange={(m) => {
+              onChange({ ...c, name: m });
+            }}
           />
           <TextMatchFields
             name={`${name}-mime`}
             value={c.mime}
             optional="rules-op-any-type"
-            onChange={(m) => onChange({ ...c, mime: m })}
+            onChange={(m) => {
+              onChange({ ...c, mime: m });
+            }}
           />
         </>
       );
@@ -268,13 +296,17 @@ function LeafFields({
             name={`${name}-cmp`}
             value={c.cmp}
             choices={choices(["greater", "less"], "rules-size-")}
-            onChange={(cmp) => onChange({ ...c, cmp: cmp as "greater" | "less" })}
+            onChange={(cmp) => {
+              onChange({ ...c, cmp: cmp as "greater" | "less" });
+            }}
           />
           <NumberField
             labelId="rules-size-kb"
             name={`${name}-kb`}
             value={Math.round(c.bytes / 1024)}
-            onChange={(kb) => onChange({ ...c, bytes: (kb ?? 0) * 1024 })}
+            onChange={(kb) => {
+              onChange({ ...c, bytes: (kb ?? 0) * 1024 });
+            }}
           />
         </>
       );
@@ -286,12 +318,16 @@ function LeafFields({
             name={`${name}-cmp`}
             value={c.cmp}
             choices={choices(["before", "after"], "rules-date-")}
-            onChange={(cmp) => onChange({ ...c, cmp: cmp as "before" | "after" })}
+            onChange={(cmp) => {
+              onChange({ ...c, cmp: cmp as "before" | "after" });
+            }}
           />
           <DateField
             name={`${name}-date`}
             value={c.date}
-            onChange={(date) => onChange({ ...c, date })}
+            onChange={(date) => {
+              onChange({ ...c, date });
+            }}
           />
         </>
       );
@@ -303,13 +339,17 @@ function LeafFields({
             name={`${name}-cmp`}
             value={c.cmp}
             choices={choices(["greater", "less"], "rules-age-")}
-            onChange={(cmp) => onChange({ ...c, cmp: cmp as "greater" | "less" })}
+            onChange={(cmp) => {
+              onChange({ ...c, cmp: cmp as "greater" | "less" });
+            }}
           />
           <NumberField
             labelId="rules-days"
             name={`${name}-days`}
             value={c.days}
-            onChange={(days) => onChange({ ...c, days: days ?? 0 })}
+            onChange={(days) => {
+              onChange({ ...c, days: days ?? 0 });
+            }}
           />
         </>
       );
@@ -321,14 +361,18 @@ function LeafFields({
             name={`${name}-flag`}
             value={c.flag}
             choices={choices(FLAGS, "rules-flag-")}
-            onChange={(flag) => onChange({ ...c, flag: flag as MessageFlag })}
+            onChange={(flag) => {
+              onChange({ ...c, flag: flag as MessageFlag });
+            }}
           />
           <SelectField
             labelId="rules-flag-state"
             name={`${name}-set`}
             value={c.set ? "set" : "unset"}
             choices={choices(["set", "unset"], "rules-flag-state-")}
-            onChange={(v) => onChange({ ...c, set: v === "set" })}
+            onChange={(v) => {
+              onChange({ ...c, set: v === "set" });
+            }}
           />
         </>
       );
@@ -338,7 +382,9 @@ function LeafFields({
           labelId="rules-tag"
           name={`${name}-tag`}
           value={c.tag}
-          onChange={(tag) => onChange({ ...c, tag: tag.trim() })}
+          onChange={(tag) => {
+            onChange({ ...c, tag: tag.trim() });
+          }}
         />
       );
     case "account":
@@ -351,7 +397,9 @@ function LeafFields({
             { value: "", label: "rules-choose" },
             ...accounts.map((a) => ({ value: a.id, label: a.name || a.email, literal: true })),
           ]}
-          onChange={(account_id) => onChange({ ...c, account_id })}
+          onChange={(account_id) => {
+            onChange({ ...c, account_id });
+          }}
         />
       );
     case "folder":
@@ -360,7 +408,9 @@ function LeafFields({
           name={name}
           value={c.folder}
           accounts={accounts}
-          onChange={(folder) => onChange({ ...c, folder })}
+          onChange={(folder) => {
+            onChange({ ...c, folder });
+          }}
         />
       );
     case "auth":
@@ -371,14 +421,18 @@ function LeafFields({
             name={`${name}-method`}
             value={c.method}
             choices={choices(AUTH_METHODS, "rules-auth-")}
-            onChange={(method) => onChange({ ...c, method: method as AuthMethod })}
+            onChange={(method) => {
+              onChange({ ...c, method: method as AuthMethod });
+            }}
           />
           <SelectField
             labelId="rules-auth-result"
             name={`${name}-result`}
             value={c.result}
             choices={choices(AUTH_RESULTS, "rules-auth-result-")}
-            onChange={(result) => onChange({ ...c, result: result as AuthResult })}
+            onChange={(result) => {
+              onChange({ ...c, result: result as AuthResult });
+            }}
           />
         </>
       );
@@ -409,7 +463,9 @@ function DateField({
         type="date"
         name={name}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
     </div>
   );
@@ -426,13 +482,17 @@ function AddCondition({ path, onAdd }: { path: ConditionPath; onAdd: (c: Conditi
         name={`add-${path.join("-")}`}
         value={kind}
         choices={choices(CONDITION_KINDS, "rules-cond-")}
-        onChange={(k) => setKind(k as ConditionKind)}
+        onChange={(k) => {
+          setKind(k as ConditionKind);
+        }}
       />
       <button
         type="button"
         data-part="form.button"
         data-action="add-condition"
-        onClick={() => onAdd(newCondition(kind))}
+        onClick={() => {
+          onAdd(newCondition(kind));
+        }}
       >
         {t("rules-add-condition")}
       </button>
@@ -462,7 +522,9 @@ function ConditionNode({
         type="button"
         data-part="form.button"
         data-action="remove-condition"
-        onClick={() => onChange(removeAt(root, path))}
+        onClick={() => {
+          onChange(removeAt(root, path));
+        }}
       >
         {t("rules-remove")}
       </button>
@@ -478,14 +540,14 @@ function ConditionNode({
             name={`${name}-mode`}
             value={condition.type}
             choices={choices(["all", "any"], "rules-group-")}
-            onChange={(mode) =>
+            onChange={(mode) => {
               onChange(
                 replaceAt(root, path, {
                   type: mode as "all" | "any",
                   conditions: kids,
                 }),
-              )
-            }
+              );
+            }}
           />
         )}
         <ul data-part="rules.group.items">
@@ -501,7 +563,12 @@ function ConditionNode({
           ))}
         </ul>
         {(condition.type !== "not" || kids.length === 0) && (
-          <AddCondition path={path} onAdd={(c) => onChange(addChild(root, path, c))} />
+          <AddCondition
+            path={path}
+            onAdd={(c) => {
+              onChange(addChild(root, path, c));
+            }}
+          />
         )}
         {remove}
       </fieldset>
@@ -514,13 +581,17 @@ function ConditionNode({
         name={`${name}-kind`}
         value={condition.type}
         choices={choices(CONDITION_KINDS, "rules-cond-")}
-        onChange={(kind) => onChange(replaceAt(root, path, newCondition(kind as ConditionKind)))}
+        onChange={(kind) => {
+          onChange(replaceAt(root, path, newCondition(kind as ConditionKind)));
+        }}
       />
       <LeafFields
         name={name}
         condition={condition}
         accounts={accounts}
-        onChange={(c) => onChange(replaceAt(root, path, c))}
+        onChange={(c) => {
+          onChange(replaceAt(root, path, c));
+        }}
       />
       {remove}
     </div>

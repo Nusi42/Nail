@@ -40,11 +40,15 @@ export const actions: Feature["actions"] = {
   },
   /** Opens the merge dialog (apply a shared theme or layout). */
   "customize.merge": {
-    run: (ctx) => ctx.store.getState().openWindow(DIALOGS.merge),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(DIALOGS.merge);
+    },
   },
   /** Opens the list of configuration errors. */
   "customize.errors": {
-    run: (ctx) => ctx.store.getState().openWindow(DIALOGS.errors),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(DIALOGS.errors);
+    },
   },
 };
 

@@ -42,10 +42,13 @@ let example: PreparedExample;
 beforeAll(() => {
   example = prepareExample("follow-up");
 });
-afterAll(() => example.cleanup());
+afterAll(() => {
+  example.cleanup();
+});
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const isoDate = (d: Date) =>
+  `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 describe("the follow-up plug-in at run time", () => {
   let loaded: LoadedPlugin | undefined;
@@ -252,7 +255,7 @@ describe("the follow-up plug-in at run time", () => {
     ]);
     loaded?.restore();
 
-    host = await load({ taskLists: [lists[2]!] });
+    host = await load({ taskLists: lists.slice(2, 3) });
     await host.runCommand("follow-up", { selection: { messageIds: ["m1"] } });
     expect(host.notifications).toEqual([
       { title: "There is no task list to add the follow-up to.", level: "warning" },

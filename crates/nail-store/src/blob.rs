@@ -609,7 +609,7 @@ mod tests {
         let dir = blobs.path_of(&hash).parent().unwrap().to_owned();
         std::fs::write(dir.join(".tmpABC"), b"torn").unwrap();
         assert_eq!(blobs.hashes().unwrap(), vec![hash.clone()]);
-        let hour = std::time::Duration::from_secs(3600);
+        let hour = std::time::Duration::from_hours(1);
         assert_eq!(blobs.remove_temp_files(hour).unwrap(), 0, "too young");
         assert_eq!(
             blobs.remove_temp_files(std::time::Duration::ZERO).unwrap(),

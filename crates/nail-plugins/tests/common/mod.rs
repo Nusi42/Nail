@@ -1,8 +1,6 @@
 //! A fake core for the host tests: in-memory mail, storage with a small
 //! quota, recorded HTTP requests, events and log lines.
 
-#![allow(dead_code)]
-
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -23,10 +21,10 @@ use nail_plugins::{
 };
 use serde_json::{Value, json};
 
-pub const QUOTA: u64 = 200;
+pub(crate) const QUOTA: u64 = 200;
 
 #[derive(Default)]
-pub struct Fake {
+pub(crate) struct Fake {
     pub messages: Mutex<Vec<(PluginMessage, Option<PluginMessageBody>)>>,
     pub storage: Mutex<BTreeMap<(String, String), Value>>,
     pub fetches: Mutex<Vec<HttpRequest>>,
@@ -49,7 +47,7 @@ pub struct Fake {
     pub fetch_body: Mutex<Option<Vec<u8>>>,
 }
 
-pub fn message(id: &str, account: &str, thread: &str, encrypted: bool) -> PluginMessage {
+pub(crate) fn message(id: &str, account: &str, thread: &str, encrypted: bool) -> PluginMessage {
     PluginMessage {
         id: id.into(),
         uri: format!("nail://messages/{id}"),
@@ -78,7 +76,7 @@ fn body(id: &str) -> PluginMessageBody {
 }
 
 impl Fake {
-    pub fn new() -> Arc<Self> {
+    pub(crate) fn new() -> Arc<Self> {
         let fake = Self::default();
         *fake.messages.lock().unwrap() = vec![
             (message("m1", "work", "t1", false), Some(body("m1"))),
@@ -112,11 +110,11 @@ impl Fake {
         usage
     }
 
-    pub fn events(&self) -> Vec<Event> {
+    pub(crate) fn events(&self) -> Vec<Event> {
         self.events.lock().unwrap().clone()
     }
 
-    pub fn log_messages(&self, plugin: &str) -> Vec<String> {
+    pub(crate) fn log_messages(&self, plugin: &str) -> Vec<String> {
         self.logs
             .lock()
             .unwrap()
@@ -126,7 +124,7 @@ impl Fake {
             .collect()
     }
 
-    pub fn log_lines(&self, plugin: &str) -> Vec<HostLogLine> {
+    pub(crate) fn log_lines(&self, plugin: &str) -> Vec<HostLogLine> {
         self.logs
             .lock()
             .unwrap()
@@ -136,11 +134,11 @@ impl Fake {
             .collect()
     }
 
-    pub fn writes(&self) -> Vec<PluginWriteRequest> {
+    pub(crate) fn writes(&self) -> Vec<PluginWriteRequest> {
         self.writes.lock().unwrap().clone()
     }
 
-    pub fn hook_calls(&self, plugin: &str) -> Vec<HookCallRecord> {
+    pub(crate) fn hook_calls(&self, plugin: &str) -> Vec<HookCallRecord> {
         self.hook_calls
             .lock()
             .unwrap()
@@ -150,7 +148,7 @@ impl Fake {
             .collect()
     }
 
-    pub fn job_runs(&self, plugin: &str) -> Vec<JobRunRecord> {
+    pub(crate) fn job_runs(&self, plugin: &str) -> Vec<JobRunRecord> {
         self.job_runs
             .lock()
             .unwrap()
@@ -160,11 +158,18 @@ impl Fake {
             .collect()
     }
 
-    pub fn set_now(&self, at: &str) {
+    pub(crate) fn set_now(&self, at: &str) {
         *self.now.lock().unwrap() = Some(DateTime::parse_from_rfc3339(at).unwrap().to_utc());
     }
 
-    pub fn add_attachment(&self, message: &str, index: u32, name: &str, mime: &str, bytes: &[u8]) {
+    pub(crate) fn add_attachment(
+        &self,
+        message: &str,
+        index: u32,
+        name: &str,
+        mime: &str,
+        bytes: &[u8],
+    ) {
         self.attachments.lock().unwrap().insert(
             (message.to_owned(), index),
             AttachmentData {
@@ -177,7 +182,7 @@ impl Fake {
     }
 
     /// Host log lines with this Fluent id.
-    pub fn localized(&self, plugin: &str, id: &str) -> Vec<HostLogLine> {
+    pub(crate) fn localized(&self, plugin: &str, id: &str) -> Vec<HostLogLine> {
         self.log_lines(plugin)
             .into_iter()
             .filter(|l| l.localized.as_ref().is_some_and(|m| m.id == id))
@@ -186,7 +191,7 @@ impl Fake {
 
     /// `nail.log` lines of a plug-in starting with `prefix` (the prefix
     /// removed).
-    pub fn results(&self, plugin: &str, prefix: &str) -> Vec<String> {
+    pub(crate) fn results(&self, plugin: &str, prefix: &str) -> Vec<String> {
         self.log_lines(plugin)
             .into_iter()
             .filter(|l| l.source == PluginLogSource::Plugin)
@@ -290,8 +295,7 @@ impl PluginServices for Fake {
             .lock()
             .unwrap()
             .get(&(plugin.to_string(), key.clone()))
-            .map(|v| (key.len() + v.to_string().len()) as u64)
-            .unwrap_or(0);
+            .map_or(0, |v| (key.len() + v.to_string().len()) as u64);
         let new = old - previous + (key.len() + value.to_string().len()) as u64;
         if new > QUOTA {
             return ready(Err(ApiError::new(ErrorCode::TooLarge, "quota exceeded")));
@@ -556,7 +560,7 @@ fn collection(id: &str, name: &str) -> PluginCollection {
 }
 
 /// A manifest like [`manifest`] with more contributions merged in.
-pub fn manifest_with(id: &str, permissions: &[&str], extra: Value) -> PluginManifest {
+pub(crate) fn manifest_with(id: &str, permissions: &[&str], extra: Value) -> PluginManifest {
     let mut value = serde_json::to_value(manifest(id, permissions)).unwrap();
     if let Value::Object(map) = extra {
         for (key, v) in map {
@@ -568,7 +572,7 @@ pub fn manifest_with(id: &str, permissions: &[&str], extra: Value) -> PluginMani
 }
 
 /// A plug-in with extra contributions, every permission granted.
-pub fn spec_with(id: &str, permissions: &[&str], extra: Value, js: &str) -> PluginSpec {
+pub(crate) fn spec_with(id: &str, permissions: &[&str], extra: Value, js: &str) -> PluginSpec {
     let manifest = manifest_with(id, permissions, extra);
     let mut map = BTreeMap::new();
     map.insert("index.js".to_owned(), js.as_bytes().to_vec());
@@ -583,7 +587,7 @@ pub fn spec_with(id: &str, permissions: &[&str], extra: Value, js: &str) -> Plug
     }
 }
 
-pub fn limits() -> HostLimits {
+pub(crate) fn limits() -> HostLimits {
     HostLimits {
         memory_bytes: 16 * 1024 * 1024,
         activation_budget: Duration::from_secs(2),
@@ -594,16 +598,16 @@ pub fn limits() -> HostLimits {
     }
 }
 
-pub fn host(fake: &Arc<Fake>) -> PluginHost {
+pub(crate) fn host(fake: &Arc<Fake>) -> PluginHost {
     host_with(fake, limits())
 }
 
-pub fn host_with(fake: &Arc<Fake>, limits: HostLimits) -> PluginHost {
+pub(crate) fn host_with(fake: &Arc<Fake>, limits: HostLimits) -> PluginHost {
     let services: Arc<dyn PluginServices> = fake.clone();
     PluginHost::new(services, tokio::runtime::Handle::current(), limits)
 }
 
-pub fn manifest(id: &str, permissions: &[&str]) -> PluginManifest {
+pub(crate) fn manifest(id: &str, permissions: &[&str]) -> PluginManifest {
     let json = json!({
         "id": id,
         "name": format!("Test {id}"),
@@ -626,7 +630,7 @@ pub fn manifest(id: &str, permissions: &[&str]) -> PluginManifest {
     PluginManifest::parse(json.to_string().as_bytes()).unwrap()
 }
 
-pub fn all_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
+pub(crate) fn all_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
     manifest
         .permissions
         .iter()
@@ -635,7 +639,7 @@ pub fn all_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
         .collect()
 }
 
-pub fn grant(permission: &str, accounts: Option<&[&str]>) -> PluginGrant {
+pub(crate) fn grant(permission: &str, accounts: Option<&[&str]>) -> PluginGrant {
     PluginGrant {
         permission: PluginPermission::parse(permission).unwrap(),
         accounts: accounts.map(|a| a.iter().map(|x| AccountId::from(*x)).collect()),
@@ -643,11 +647,15 @@ pub fn grant(permission: &str, accounts: Option<&[&str]>) -> PluginGrant {
 }
 
 /// A plug-in `id` with `permissions` (all granted) and `index.js` = `js`.
-pub fn spec(id: &str, permissions: &[&str], js: &str) -> PluginSpec {
+pub(crate) fn spec(id: &str, permissions: &[&str], js: &str) -> PluginSpec {
     spec_with_files(id, permissions, &[("index.js", js)])
 }
 
-pub fn spec_with_files(id: &str, permissions: &[&str], files: &[(&str, &str)]) -> PluginSpec {
+pub(crate) fn spec_with_files(
+    id: &str,
+    permissions: &[&str],
+    files: &[(&str, &str)],
+) -> PluginSpec {
     let manifest = manifest(id, permissions);
     let mut map: BTreeMap<String, Vec<u8>> = files
         .iter()
@@ -665,21 +673,22 @@ pub fn spec_with_files(id: &str, permissions: &[&str], files: &[(&str, &str)]) -
 }
 
 /// Polls `check` until it returns `Some` (10 s at most).
-pub async fn wait_for<T>(what: &str, mut check: impl FnMut() -> Option<T>) -> T {
+pub(crate) async fn wait_for<T>(what: &str, mut check: impl FnMut() -> Option<T>) -> T {
     let started = Instant::now();
     loop {
         if let Some(value) = check() {
             return value;
         }
-        if started.elapsed() > Duration::from_secs(10) {
-            panic!("timed out waiting for {what}");
-        }
+        assert!(
+            started.elapsed() <= Duration::from_secs(10),
+            "timed out waiting for {what}"
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 
 /// Waits for the first `nail.log` line starting with `prefix`.
-pub async fn result(fake: &Fake, plugin: &str, prefix: &str) -> String {
+pub(crate) async fn result(fake: &Fake, plugin: &str, prefix: &str) -> String {
     wait_for(&format!("{plugin}: {prefix}"), || {
         fake.results(plugin, prefix).into_iter().next()
     })
@@ -687,16 +696,16 @@ pub async fn result(fake: &Fake, plugin: &str, prefix: &str) -> String {
 }
 
 /// Waits for the first result and parses it as JSON.
-pub async fn json_result(fake: &Fake, plugin: &str, prefix: &str) -> Value {
+pub(crate) async fn json_result(fake: &Fake, plugin: &str, prefix: &str) -> Value {
     let text = result(fake, plugin, prefix).await;
     serde_json::from_str(&text).unwrap_or_else(|e| panic!("{text}: {e}"))
 }
 
-pub fn plugin_id(id: &str) -> PluginId {
+pub(crate) fn plugin_id(id: &str) -> PluginId {
     PluginId::new(id)
 }
 
-pub fn stop_reasons(fake: &Fake, plugin: &str) -> Vec<nail_api::plugins::PluginStopReason> {
+pub(crate) fn stop_reasons(fake: &Fake, plugin: &str) -> Vec<nail_api::plugins::PluginStopReason> {
     fake.events()
         .into_iter()
         .filter_map(|e| match e {
@@ -708,6 +717,6 @@ pub fn stop_reasons(fake: &Fake, plugin: &str) -> Vec<nail_api::plugins::PluginS
         .collect()
 }
 
-pub fn map(value: Value) -> HashMap<String, Value> {
+pub(crate) fn map(value: Value) -> HashMap<String, Value> {
     serde_json::from_value(value).unwrap()
 }

@@ -35,7 +35,7 @@ export function splitQuotes(text: string): { quoted: boolean; text: string }[] {
   for (const line of text.split("\n")) {
     const quoted = line.startsWith(">");
     const last = blocks[blocks.length - 1];
-    if (last && last.quoted === quoted) last.text += `\n${line}`;
+    if (last?.quoted === quoted) last.text += `\n${line}`;
     else blocks.push({ quoted, text: line });
   }
   return blocks;
@@ -140,7 +140,9 @@ export function ThreadView({ node }: WidgetProps) {
                       type="button"
                       data-part="thread-view.item.toggle"
                       aria-expanded={expanded}
-                      onClick={() => setToggled((old) => ({ ...old, [m.id]: !expanded }))}
+                      onClick={() => {
+                        setToggled((old) => ({ ...old, [m.id]: !expanded }));
+                      }}
                     >
                       <span data-part="thread-view.item.from">
                         {displayName(m.from) || t("composer-unknown-sender")}
@@ -154,7 +156,9 @@ export function ThreadView({ node }: WidgetProps) {
                       type="button"
                       data-part="thread-view.item.open"
                       disabled={m.id === selectedId}
-                      onClick={() => selectMessage(m.id)}
+                      onClick={() => {
+                        selectMessage(m.id);
+                      }}
                     >
                       {t("thread-view-open")}
                     </button>

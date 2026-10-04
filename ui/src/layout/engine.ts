@@ -34,8 +34,9 @@ export interface ParsedSize {
 /** Parses a CSS track size from the layout (`"240px"`, `"1.4fr"`, `"30%"`). */
 export function parseSize(size: string | null | undefined): ParsedSize | null {
   const match = SIZE_RE.exec((size ?? "").trim());
-  if (!match) return null;
-  return { value: Number(match[1]), unit: match[2] as string };
+  const [, value, unit] = match ?? [];
+  if (value === undefined || unit === undefined) return null;
+  return { value: Number(value), unit };
 }
 
 /** A size is valid for CSS output when it parses or is `auto`. */
@@ -56,7 +57,7 @@ export function flexForSize(size: string | undefined): string {
   if (size === "auto") return "0 0 auto";
   const parsed = parseSize(size);
   if (!parsed) return "1 1 0px";
-  if (parsed.unit === "fr") return `${parsed.value} 1 0px`;
+  if (parsed.unit === "fr") return `${String(parsed.value)} 1 0px`;
   return `0 0 ${size}`;
 }
 
@@ -156,16 +157,16 @@ export function resizeSplit(input: ResizeInput): string[] {
   const fi = parseSize(sizes[i]);
   const fj = parseSize(sizes[j]);
   if (fi?.unit !== "fr") {
-    sizes[i] = `${round(Math.max(0, wi + delta))}px`;
+    sizes[i] = `${String(round(Math.max(0, wi + delta)))}px`;
   } else if (fj?.unit !== "fr") {
-    sizes[j] = `${round(Math.max(0, wj - delta))}px`;
+    sizes[j] = `${String(round(Math.max(0, wj - delta)))}px`;
   } else {
     const total = wi + wj;
     if (total <= 0) return sizes;
     const weights = fi.value + fj.value;
     const newI = round((weights * (wi + delta)) / total);
-    sizes[i] = `${newI}fr`;
-    sizes[j] = `${round(weights - newI)}fr`;
+    sizes[i] = `${String(newI)}fr`;
+    sizes[j] = `${String(round(weights - newI))}fr`;
   }
   return sizes;
 }

@@ -2,13 +2,19 @@
 //! user's SID (the Simple MAPI pipe name and its ACL), a security
 //! descriptor from SDDL, random tokens, and opening `ms-settings:` URIs.
 
-#![allow(unsafe_code)] // Win32 calls, each with its SAFETY note.
+#![expect(unsafe_code, reason = "Win32 calls, each with its SAFETY note")]
+
+use std::fmt::Write as _;
 
 /// A random token: 32 bytes from the system RNG, hex.
 pub fn random_token() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     fill_random(&mut bytes)?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+    Ok(bytes.iter().fold(String::with_capacity(64), |mut out, b| {
+        // Writing to a String cannot fail.
+        let _ = write!(out, "{b:02x}");
+        out
+    }))
 }
 
 #[cfg(windows)]
@@ -90,12 +96,12 @@ pub fn current_integrity_rid() -> Result<u32, String> {
     let mut token = HANDLE::default();
     // SAFETY: the pseudo handle of the current process; `token` receives a
     // handle closed below.
-    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
+    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) }
         .map_err(|e| format!("OpenProcessToken: {e}"))?;
     let result = (|| {
         let mut len = 0u32;
         // SAFETY: a size query (no buffer).
-        let _ = unsafe { GetTokenInformation(token, TokenIntegrityLevel, None, 0, &mut len) };
+        drop(unsafe { GetTokenInformation(token, TokenIntegrityLevel, None, 0, &raw mut len) });
         if len == 0 {
             return Err("GetTokenInformation returned no size".to_owned());
         }
@@ -107,7 +113,7 @@ pub fn current_integrity_rid() -> Result<u32, String> {
                 TokenIntegrityLevel,
                 Some(buffer.as_mut_ptr().cast()),
                 len,
-                &mut len,
+                &raw mut len,
             )
         }
         .map_err(|e| format!("GetTokenInformation: {e}"))?;
@@ -124,7 +130,7 @@ pub fn current_integrity_rid() -> Result<u32, String> {
         }
     })();
     // SAFETY: the token handle opened above.
-    let _ = unsafe { CloseHandle(token) };
+    drop(unsafe { CloseHandle(token) });
     result
 }
 
@@ -146,13 +152,13 @@ pub fn current_user_sid() -> Result<String, String> {
     let mut token = HANDLE::default();
     // SAFETY: the pseudo handle of the current process; `token` receives a
     // handle closed below.
-    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
+    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) }
         .map_err(|e| format!("OpenProcessToken: {e}"))?;
     let result = (|| {
         let mut len = 0u32;
         // SAFETY: a size query (no buffer); it fails with
         // ERROR_INSUFFICIENT_BUFFER and sets `len`.
-        let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut len) };
+        drop(unsafe { GetTokenInformation(token, TokenUser, None, 0, &raw mut len) });
         if len == 0 {
             return Err("GetTokenInformation returned no size".to_owned());
         }
@@ -165,7 +171,7 @@ pub fn current_user_sid() -> Result<String, String> {
                 TokenUser,
                 Some(buffer.as_mut_ptr().cast()),
                 len,
-                &mut len,
+                &raw mut len,
             )
         }
         .map_err(|e| format!("GetTokenInformation: {e}"))?;
@@ -174,7 +180,7 @@ pub fn current_user_sid() -> Result<String, String> {
         let mut text = PWSTR::null();
         // SAFETY: the SID points into `buffer`, alive here; `text` is
         // freed with LocalFree.
-        unsafe { ConvertSidToStringSidW(user.User.Sid, &mut text) }
+        unsafe { ConvertSidToStringSidW(user.User.Sid, &raw mut text) }
             .map_err(|e| format!("ConvertSidToStringSidW: {e}"))?;
         // SAFETY: a NUL-terminated string from the call above.
         let sid = unsafe { text.to_string() }.map_err(|e| e.to_string());
@@ -183,7 +189,7 @@ pub fn current_user_sid() -> Result<String, String> {
         sid
     })();
     // SAFETY: the token handle opened above.
-    let _ = unsafe { CloseHandle(token) };
+    drop(unsafe { CloseHandle(token) });
     result
 }
 
@@ -199,6 +205,13 @@ pub fn current_user_sid() -> Result<String, String> {
 pub struct SecurityAttributes {
     descriptor: windows::Win32::Security::PSECURITY_DESCRIPTOR,
     attributes: windows::Win32::Security::SECURITY_ATTRIBUTES,
+}
+
+#[cfg(windows)]
+impl std::fmt::Debug for SecurityAttributes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecurityAttributes").finish_non_exhaustive()
+    }
 }
 
 #[cfg(windows)]
@@ -225,7 +238,7 @@ impl SecurityAttributes {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 &HSTRING::from(sddl),
                 SDDL_REVISION_1,
-                &mut descriptor,
+                &raw mut descriptor,
                 None,
             )
         }
@@ -233,7 +246,7 @@ impl SecurityAttributes {
         Ok(Self {
             descriptor,
             attributes: SECURITY_ATTRIBUTES {
-                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                nLength: u32::try_from(size_of::<SECURITY_ATTRIBUTES>()).unwrap_or(u32::MAX),
                 lpSecurityDescriptor: descriptor.0,
                 bInheritHandle: false.into(),
             },
@@ -306,7 +319,7 @@ mod tests {
     #[test]
     fn secrets_compare_exactly() {
         assert!(secrets_equal(b"abc", b"abc"));
-        assert!(!secrets_equal(b"abc", b"abd"));
+        assert!(!secrets_equal(b"abc", b"abx"));
         assert!(!secrets_equal(b"abc", b"abcd"));
     }
 

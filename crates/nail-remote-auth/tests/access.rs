@@ -2,6 +2,12 @@
 //! self-service, desktop-only requests, audit; and the exhaustiveness of
 //! `required_access`.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;
@@ -144,7 +150,7 @@ async fn admin_needs_the_grant_and_a_fresh_authentication() {
         .authorize(
             &admin_ctx,
             &Request::UpdateRemoteUiSettings {
-                settings: Default::default(),
+                settings: nail_api::RemoteUiSettings::default(),
             },
         )
         .unwrap_err();
@@ -182,7 +188,7 @@ async fn admin_needs_the_grant_and_a_fresh_authentication() {
             .authorize(
                 &admin_ctx,
                 &Request::UpdateRemoteUiSettings {
-                    settings: Default::default(),
+                    settings: nail_api::RemoteUiSettings::default(),
                 }
             )
             .is_ok()
@@ -326,7 +332,7 @@ fn every_request_has_its_wire_name() {
         }
         let name: String = rest
             .chars()
-            .take_while(|c| c.is_ascii_alphanumeric())
+            .take_while(char::is_ascii_alphanumeric)
             .collect();
         if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
             variants.push(name);

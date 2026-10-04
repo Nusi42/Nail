@@ -10,6 +10,7 @@ import {
   toolbarAction,
   viewRegion,
 } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -23,7 +24,8 @@ import {
 let server: NailServer;
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 async function openApp(page: Page) {
@@ -331,7 +333,7 @@ test("an MCP client lists events after a grant", async ({ page }) => {
   const token = (await settings.locator('[data-part="mcp-token.value"]').textContent())?.trim();
   expect(token).toMatch(/^nail_mcp_/);
 
-  const mcp = new McpSession(url!, token!);
+  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
   await mcp.open();
   const before = await mcp.request("tools/call", { name: "list_events", arguments: {} });
   expect(JSON.stringify(before)).toMatch(/denied/);

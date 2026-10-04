@@ -143,7 +143,7 @@ export function colorSlot(key: string): number {
 
 const avatarColors = AVATAR_COLORS.map(
   (color, i) =>
-    `[data-color="${i}"]${p("message-list.row.avatar")}, [data-color="${i}"]${p("tag.dot")}, [data-color="${i}"]${p("avatar")}, [data-color="${i}"]${p("folder-tree.section.dot")} { background-color: var(--nail-color-avatar-${i + 1}, ${color}); }`,
+    `[data-color="${String(i)}"]${p("message-list.row.avatar")}, [data-color="${String(i)}"]${p("tag.dot")}, [data-color="${String(i)}"]${p("avatar")}, [data-color="${String(i)}"]${p("folder-tree.section.dot")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
 ).join("\n");
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;

@@ -4,6 +4,7 @@
 //! contract's `FreeBusyProvider`), schedule-inbox processing, and the
 //! auto-scheduling flow between two principals with `SCHEDULE-AGENT` /
 //! `SCHEDULE-STATUS`.
+#![cfg(test)]
 
 use nail_api::ErrorCode;
 use nail_api::engine::FreeBusyProvider;

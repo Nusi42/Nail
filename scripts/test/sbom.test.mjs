@@ -17,6 +17,13 @@ const REGISTRY = "registry+https://github.com/rust-lang/crates.io-index";
 
 /** A small workspace: app → core → serde; app -dev-> testkit; core -build-> cc. */
 function metadata() {
+  /**
+   * @param {string} name
+   * @param {string} version
+   * @param {string | null} source
+   * @param {Partial<import("../lib/sbom.mjs").CargoPackage>} [extra]
+   * @returns {import("../lib/sbom.mjs").CargoPackage}
+   */
   const pkg = (name, version, source, extra = {}) => ({
     id: `${name} ${version}`,
     name,
@@ -33,6 +40,10 @@ function metadata() {
     pkg("cc", "1.2.0", REGISTRY),
     pkg("odd", "0.1.0", REGISTRY, { license: null, license_file: "LICENSE.txt" }),
   ];
+  /**
+   * @param {string} pkgId
+   * @param {string | null} kind
+   */
   const dep = (pkgId, kind) => ({ pkg: pkgId, dep_kinds: [{ kind, target: null }] });
   return {
     packages,
@@ -122,9 +133,9 @@ test("the CycloneDX document", () => {
     hashes: [{ alg: "SHA-256", content: "abc123" }],
     externalReferences: [{ type: "vcs", url: "https://github.com/serde-rs/serde" }],
   });
-  assert.equal(byName.app.type, "application");
+  assert.equal(byName.app?.type, "application");
   assert.equal(byName.app.purl, undefined);
-  assert.deepEqual(byName.odd.licenses, [{ license: { name: "LicenseRef-file:LICENSE.txt" } }]);
+  assert.deepEqual(byName.odd?.licenses, [{ license: { name: "LicenseRef-file:LICENSE.txt" } }]);
   const deps = Object.fromEntries(bom.dependencies.map((d) => [d.ref, d.dependsOn]));
   assert.deepEqual(deps["Nail@0.1.0"], ["app@0.1.0"]);
   assert.deepEqual(deps["core@0.1.0"], ["pkg:cargo/odd@0.1.0", "pkg:cargo/serde@1.0.0"]);
@@ -191,14 +202,26 @@ test("the UI SBOM has the runtime packages only", () => {
     ],
   );
   const react = bom.components.find((c) => c.version === "19.0.0");
+  assert.ok(react);
   assert.deepEqual(react.hashes, [{ alg: "SHA-512", content: "000102" }]);
   assert.deepEqual(react.licenses, [{ expression: "MIT" }]);
-  assert.equal(bom.dependencies[0].ref, "Nail UI@0.1.0");
+  assert.equal(bom.dependencies[0]?.ref, "Nail UI@0.1.0");
   assert.deepEqual(bom.dependencies[0].dependsOn, [
     "pkg:npm/%40scope/lib@1.0.0",
     "pkg:npm/react@19.0.0",
   ]);
   const lib = bom.dependencies.find((d) => d.ref === "pkg:npm/%40scope/lib@1.0.0");
+  assert.ok(lib);
   assert.deepEqual(lib.dependsOn, ["pkg:npm/react@18.0.0", "pkg:npm/tslib@2.0.0"]);
-  assert.throws(() => npmSbom({ ...NPM_LOCK, lock: NPM_LOCK, workspace: "nope" }), /not in/);
+  assert.throws(
+    () =>
+      npmSbom({
+        lock: NPM_LOCK,
+        workspace: "nope",
+        product: { name: "Nail UI", version: "0.1.0" },
+        serialNumber: "urn:uuid:1",
+        timestamp: "2026-01-01T00:00:00Z",
+      }),
+    /not in/,
+  );
 });

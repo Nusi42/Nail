@@ -3,6 +3,12 @@
 //! (banners, badges, banner buttons), per-hook budgets, failures that never
 //! block, and the statistics the core records.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::collections::BTreeMap;
@@ -20,7 +26,7 @@ use nail_plugins::{AccountScope, PluginWrite};
 use serde_json::{Value, json};
 
 fn hooks(defs: Value) -> Value {
-    json!({ "hooks": defs })
+    Value::Object(serde_json::Map::from_iter([("hooks".to_owned(), defs)]))
 }
 
 const TAGGER: &str = r#"

@@ -44,7 +44,9 @@ describe("test host permissions", () => {
       await expect(call()).rejects.toMatchObject({ code: "forbidden" });
     }
     // Commands, panels, settings and the log need no permission.
-    api.commands.register("c", () => {});
+    api.commands.register("c", () => {
+      /* no-op */
+    });
     api.ui.registerPanel("p", { render: () => [] });
     api.log.info("ok");
     expect(api.settings.all()).toEqual({});
@@ -148,11 +150,23 @@ describe("test host registrations", () => {
         contributes: { commands: [{ id: "x", title: "X" }], panels: [{ id: "side", title: "S" }] },
       },
     });
-    host.api.commands.register("x", () => {});
-    expect(() => host.api.ui.registerCommand("x", () => {})).toThrow(/is registered/);
-    expect(() => host.api.commands.register("y", () => {})).toThrow(/not in the manifest/);
+    host.api.commands.register("x", () => {
+      /* no-op */
+    });
+    expect(() => {
+      host.api.ui.registerCommand("x", () => {
+        /* no-op */
+      });
+    }).toThrow(/is registered/);
+    expect(() => {
+      host.api.commands.register("y", () => {
+        /* no-op */
+      });
+    }).toThrow(/not in the manifest/);
     host.api.ui.registerPanel("side", () => []);
-    expect(() => host.api.ui.registerPanel("other", () => [])).toThrow(/not in the manifest/);
+    expect(() => {
+      host.api.ui.registerPanel("other", () => []);
+    }).toThrow(/not in the manifest/);
     expect(host.commandNames()).toEqual(["x"]);
     expect(host.panelNames()).toEqual(["side"]);
     expect(host.api.plugin).toEqual({ id: "p", version: "1.0.0" });
@@ -284,11 +298,15 @@ describe("checkTree", () => {
   it("limits depth and size", () => {
     let deep: PluginUiNode = { type: "text", value: "x" };
     for (let i = 0; i < MAX_UI_DEPTH; i += 1) deep = { type: "stack", children: [deep] };
-    expect(checkTree([deep]).map((i) => i.message)).toEqual([`nested deeper than ${MAX_UI_DEPTH}`]);
+    expect(checkTree([deep]).map((i) => i.message)).toEqual([
+      `nested deeper than ${String(MAX_UI_DEPTH)}`,
+    ]);
     const many: PluginUiNode[] = Array.from({ length: MAX_UI_NODES + 1 }, () => ({
       type: "text",
       value: "x",
     }));
-    expect(checkTree(many).map((i) => i.message)).toEqual([`more than ${MAX_UI_NODES} nodes`]);
+    expect(checkTree(many).map((i) => i.message)).toEqual([
+      `more than ${String(MAX_UI_NODES)} nodes`,
+    ]);
   });
 });

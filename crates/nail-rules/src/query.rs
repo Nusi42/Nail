@@ -14,7 +14,7 @@ use crate::text::glob_match;
 use crate::time::days_from_civil;
 
 /// Whether `message` matches `query`.
-pub fn matches(query: &Query, message: &dyn MessageView, env: &Env<'_>) -> bool {
+pub(crate) fn matches(query: &Query, message: &dyn MessageView, env: &Env<'_>) -> bool {
     match query {
         Query::All => true,
         Query::Term(term) => term_matches(&term.kind, message, env),

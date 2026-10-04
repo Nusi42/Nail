@@ -146,12 +146,11 @@ impl SequenceSet {
     pub(crate) fn parse(text: &str) -> Option<Self> {
         let mut ranges = Vec::new();
         for part in text.split(',') {
-            let (a, b) = match part.split_once(':') {
-                Some((a, b)) => (parse_bound(a)?, parse_bound(b)?),
-                None => {
-                    let bound = parse_bound(part)?;
-                    (bound, bound)
-                }
+            let (a, b) = if let Some((a, b)) = part.split_once(':') {
+                (parse_bound(a)?, parse_bound(b)?)
+            } else {
+                let bound = parse_bound(part)?;
+                (bound, bound)
             };
             ranges.push((a, b));
         }
@@ -220,7 +219,9 @@ pub(crate) enum Section {
 pub(crate) fn parse_fetch_items(token: &Token) -> Result<Vec<FetchItem>, String> {
     let atoms: Vec<String> = match token {
         Token::Atom(atom) => match atom.to_ascii_uppercase().as_str() {
-            "ALL" => {
+            // `FULL` adds `BODY` (the structure), which the mock does not
+            // serve; it answers like `ALL`.
+            "ALL" | "FULL" => {
                 return Ok(vec![
                     FetchItem::Flags,
                     FetchItem::InternalDate,
@@ -233,14 +234,6 @@ pub(crate) fn parse_fetch_items(token: &Token) -> Result<Vec<FetchItem>, String>
                     FetchItem::Flags,
                     FetchItem::InternalDate,
                     FetchItem::Size,
-                ]);
-            }
-            "FULL" => {
-                return Ok(vec![
-                    FetchItem::Flags,
-                    FetchItem::InternalDate,
-                    FetchItem::Size,
-                    FetchItem::Envelope,
                 ]);
             }
             _ => vec![atom.clone()],

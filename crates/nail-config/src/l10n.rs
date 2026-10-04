@@ -355,7 +355,9 @@ fn bundle(language: &str, files: &[(&str, &str)]) -> Bundle {
             }
         };
         // A duplicate id across files keeps the first definition.
-        let _ = bundle.add_resource(resource);
+        if let Err(errors) = bundle.add_resource(resource) {
+            tracing::debug!(?errors, "duplicate Fluent ids; the first definition wins");
+        }
     }
     bundle
 }
@@ -371,7 +373,7 @@ impl std::fmt::Debug for Catalog {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Catalog")
             .field("language", &self.language)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -439,7 +441,7 @@ impl Catalog {
     pub fn text(&self, id: &str, args: &[(&str, &str)]) -> String {
         let mut message = LocalizedMessage {
             id: id.to_owned(),
-            args: Default::default(),
+            args: indexmap::IndexMap::new(),
         };
         for (name, value) in args {
             message
@@ -545,7 +547,11 @@ mod tests {
         std::fs::read_dir(locales().join(lang))
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .filter(|n| n.ends_with(".ftl"))
+            .filter(|n| {
+                std::path::Path::new(n)
+                    .extension()
+                    .is_some_and(|e| e == "ftl")
+            })
             .collect()
     }
 

@@ -288,31 +288,39 @@ pub fn compile(
     }
     if !required.is_empty() {
         let list: Vec<&String> = required.iter().collect();
-        out.push_str(&format!("require {};\n", Escaper::default().list(&list)));
+        out.push_str("require ");
+        out.push_str(&Escaper::default().list(&list));
+        out.push_str(";\n");
     }
     if esc.variables {
-        out.push_str(&format!("set \"{DOLLAR_VAR}\" \"$\";\n"));
+        out.push_str("set \"");
+        out.push_str(DOLLAR_VAR);
+        out.push_str("\" \"$\";\n");
     }
     if let Some(block) = vacation_plan.block(esc) {
         out.push_str("# nail:vacation\n");
         out.push_str(&block);
     }
     if let Some(name) = &included {
-        out.push_str(&format!("include :personal {};\n", quote(name)));
+        out.push_str("include :personal ");
+        out.push_str(&quote(name));
+        out.push_str(";\n");
     }
     for (rule, _) in &server {
         let rendered = RuleCompiler::new(options, esc).rule(rule);
         out.push_str(RULE_MARKER);
         out.push_str(&quote(&single_line(rule.id.as_str())));
         out.push('\n');
-        out.push_str(&format!("if {} {{\n", rendered.test));
+        out.push_str("if ");
+        out.push_str(&rendered.test);
+        out.push_str(" {\n");
         for emit in &rendered.actions {
             match emit {
-                Emit::Line(line) => out.push_str(&format!("    {line}\n")),
+                Emit::Line(line) => push_indented(&mut out, line),
                 Emit::Stop => {
                     if delivery {
                         for line in flush_lines() {
-                            out.push_str(&format!("    {line}\n"));
+                            push_indented(&mut out, &line);
                         }
                     }
                     out.push_str("    stop;\n");
@@ -387,6 +395,13 @@ fn is_inbox(folder: &FolderRef) -> bool {
     }
 }
 
+/// Appends one line of a block (indented by four spaces).
+fn push_indented(out: &mut String, line: &str) {
+    out.push_str("    ");
+    out.push_str(line);
+    out.push('\n');
+}
+
 fn coverage(rule: &Rule, options: &CompileOptions<'_>) -> Coverage {
     if rule.scope.is_empty() {
         return Coverage::Whole;
@@ -397,7 +412,6 @@ fn coverage(rule: &Rule, options: &CompileOptions<'_>) -> Coverage {
             RuleScope::Account { account_id } if is_this_account(account_id, options) => {
                 return Coverage::Whole;
             }
-            RuleScope::Account { .. } => {}
             RuleScope::Folder { folder } if folder_account_ok(folder, options) => {
                 if is_inbox(folder) {
                     if result == Coverage::None {
@@ -407,7 +421,7 @@ fn coverage(rule: &Rule, options: &CompileOptions<'_>) -> Coverage {
                     result = Coverage::OtherFolders;
                 }
             }
-            RuleScope::Folder { .. } => {}
+            RuleScope::Account { .. } | RuleScope::Folder { .. } => {}
         }
     }
     result
@@ -554,12 +568,11 @@ impl<'o, 'a> RuleCompiler<'o, 'a> {
             }
             TextOp::StartsWith => (":matches", format!("{}*", matches_literal(&m.value))),
             TextOp::EndsWith => (":matches", format!("*{}", matches_literal(&m.value))),
-            TextOp::Regex => match to_posix_ere(&m.value) {
-                Some(ere) => {
+            TextOp::Regex => {
+                if let Some(ere) = to_posix_ere(&m.value) {
                     self.need("regex");
                     (":regex", ere)
-                }
-                None => {
+                } else {
                     let id = if regex::Regex::new(&m.value).is_err() {
                         reasons::INVALID
                     } else {
@@ -568,7 +581,7 @@ impl<'o, 'a> RuleCompiler<'o, 'a> {
                     self.not_expressible(reasons::at_condition(id, path));
                     return None;
                 }
-            },
+            }
         };
         tags.push_str(match_type);
         Some((tags, self.esc.quoted(&key)))
@@ -741,20 +754,19 @@ impl<'o, 'a> RuleCompiler<'o, 'a> {
                 .push(reasons::at_action(reasons::OTHER_ACCOUNT, index));
             return None;
         }
-        match self.options.folders.mailbox(folder) {
-            Some(mailbox) => Some(mailbox),
-            None => {
-                let name = match folder {
-                    FolderRef::Role { role, .. } => format!("{role:?}").to_ascii_lowercase(),
-                    FolderRef::Path { path, .. } => path.clone(),
-                };
-                self.out.client.push(
-                    LocalizedMessage::new(reasons::FOLDER_UNKNOWN)
-                        .arg("folder", name)
-                        .arg("action", index + 1),
-                );
-                None
-            }
+        if let Some(mailbox) = self.options.folders.mailbox(folder) {
+            Some(mailbox)
+        } else {
+            let name = match folder {
+                FolderRef::Role { role, .. } => format!("{role:?}").to_ascii_lowercase(),
+                FolderRef::Path { path, .. } => path.clone(),
+            };
+            self.out.client.push(
+                LocalizedMessage::new(reasons::FOLDER_UNKNOWN)
+                    .arg("folder", name)
+                    .arg("action", index + 1),
+            );
+            None
         }
     }
 
@@ -961,16 +973,16 @@ impl VacationPlan {
         }
         let mut command = format!("vacation :days {}", settings.days);
         if !settings.subject.trim().is_empty() {
-            command.push_str(&format!(
-                " :subject {}",
-                esc.quoted(settings.subject.trim())
-            ));
+            command.push_str(" :subject ");
+            command.push_str(&esc.quoted(settings.subject.trim()));
         }
         if let Some(from) = &settings.from {
-            command.push_str(&format!(" :from {}", esc.quoted(from.trim())));
+            command.push_str(" :from ");
+            command.push_str(&esc.quoted(from.trim()));
         }
         if !self.addresses.is_empty() {
-            command.push_str(&format!(" :addresses {}", esc.list(&self.addresses)));
+            command.push_str(" :addresses ");
+            command.push_str(&esc.list(&self.addresses));
         }
         command.push(' ');
         command.push_str(&multiline(&esc.text(&settings.body)));

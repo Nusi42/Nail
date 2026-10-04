@@ -857,8 +857,8 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    fn p(op: &str, payload: Value) -> Result<PluginWrite, ApiError> {
-        parse(op, &payload, &Blobs::new())
+    fn p(op: &str, payload: &Value) -> Result<PluginWrite, ApiError> {
+        parse(op, payload, &Blobs::new())
     }
 
     #[test]
@@ -874,7 +874,7 @@ mod tests {
     fn mail_updates_and_deletes() {
         let w = p(
             "mail.update",
-            json!({"ids": ["m1", "m2", "m1"], "options": {"addTags": ["crm"], "flagged": true}}),
+            &json!({"ids": ["m1", "m2", "m1"], "options": {"addTags": ["crm"], "flagged": true}}),
         )
         .unwrap();
         let PluginWrite::UpdateMessages(args) = &w else {
@@ -891,25 +891,25 @@ mod tests {
             json!({"ids": ["m1"], "options": {}}),
             json!({"ids": [], "options": {"read": true}}),
             json!({"ids": "m1", "options": {"read": true}}),
-            json!({"ids": ["m1"], "options": {"raed": true}}),
+            json!({"ids": ["m1"], "options": {"raed": true}}), // spellchecker:disable-line
             json!({"ids": ["m1"], "options": {"archive": true, "moveToFolderId": "f"}}),
         ] {
-            assert!(p("mail.update", bad.clone()).is_err(), "{bad}");
+            assert!(p("mail.update", &bad.clone()).is_err(), "{bad}");
         }
         let many: Vec<String> = (0..=MAX_BATCH).map(|i| format!("m{i}")).collect();
         assert!(
             p(
                 "mail.update",
-                json!({"ids": many, "options": {"read": true}})
+                &json!({"ids": many, "options": {"read": true}})
             )
             .is_err()
         );
 
-        let trash = p("mail.delete", json!({"ids": ["m1"]})).unwrap();
+        let trash = p("mail.delete", &json!({"ids": ["m1"]})).unwrap();
         assert_eq!(trash.kind(), ActionKind::Trash);
         let gone = p(
             "mail.delete",
-            json!({"ids": ["m1"], "options": {"permanent": true}}),
+            &json!({"ids": ["m1"], "options": {"permanent": true}}),
         )
         .unwrap();
         assert_eq!(gone.kind(), ActionKind::PermanentDelete);
@@ -958,27 +958,27 @@ mod tests {
         }
         let update = p(
             "mail.updateDraft",
-            json!({"draftId": "d1", "options": {"subject": "New", "format": "html"}}),
+            &json!({"draftId": "d1", "options": {"subject": "New", "format": "html"}}),
         )
         .unwrap();
         assert_eq!(update.kind(), ActionKind::Draft);
-        let send = p("mail.send", json!({"draftId": "d1"})).unwrap();
+        let send = p("mail.send", &json!({"draftId": "d1"})).unwrap();
         assert_eq!(send.kind(), ActionKind::Send);
-        assert!(p("mail.send", json!({})).is_err());
+        assert!(p("mail.send", &json!({})).is_err());
     }
 
     #[test]
     fn calendar_writes() {
         let plain = p(
             "calendar.createEvent",
-            json!({"options": {"title": "Sync", "start": "2026-10-05T09:00:00Z", "end": "2026-10-05T09:30:00Z"}}),
+            &json!({"options": {"title": "Sync", "start": "2026-10-05T09:00:00Z", "end": "2026-10-05T09:30:00Z"}}),
         )
         .unwrap();
         assert_eq!(plain.kind(), ActionKind::Calendar);
         assert_eq!(plain.permissions(), [PluginPermission::CalendarWrite]);
         let invite = p(
             "calendar.createEvent",
-            json!({"options": {"title": "Sync", "start": "a", "end": "b",
+            &json!({"options": {"title": "Sync", "start": "a", "end": "b",
                                "attendees": ["bob@example.com"], "sendInvitations": true}}),
         )
         .unwrap();
@@ -989,26 +989,26 @@ mod tests {
         );
         let update = p(
             "calendar.updateEvent",
-            json!({"eventId": "e1", "options": {"scope": "thisAndFollowing", "occurrence": "x", "title": "T"}}),
+            &json!({"eventId": "e1", "options": {"scope": "thisAndFollowing", "occurrence": "x", "title": "T"}}),
         )
         .unwrap();
         let PluginWrite::UpdateEvent(args) = &update else {
             panic!()
         };
         assert_eq!(args.scope, McpEditScope::ThisAndFollowing);
-        let delete = p("calendar.deleteEvent", json!({"eventId": "e1"})).unwrap();
+        let delete = p("calendar.deleteEvent", &json!({"eventId": "e1"})).unwrap();
         assert_eq!(delete.kind(), ActionKind::PimDelete);
         assert_eq!(delete.permissions(), [PluginPermission::CalendarWrite]);
         let respond = p(
             "calendar.respond",
-            json!({"options": {"messageId": "m1", "response": "accept"}}),
+            &json!({"options": {"messageId": "m1", "response": "accept"}}),
         )
         .unwrap();
         assert_eq!(respond.kind(), ActionKind::Invite);
         assert_eq!(respond.read_messages(), [MessageId::from("m1")]);
         let quiet = p(
             "calendar.respond",
-            json!({"options": {"eventId": "e1", "response": "decline", "send": false}}),
+            &json!({"options": {"eventId": "e1", "response": "decline", "send": false}}),
         )
         .unwrap();
         assert_eq!(quiet.kind(), ActionKind::Calendar);
@@ -1030,7 +1030,7 @@ mod tests {
                 json!({"eventId": "e", "options": {"scope": "some"}}),
             ),
         ] {
-            assert!(p(op, bad.clone()).is_err(), "{bad}");
+            assert!(p(op, &bad.clone()).is_err(), "{bad}");
         }
     }
 
@@ -1038,19 +1038,19 @@ mod tests {
     fn contacts_and_tasks() {
         let c = p(
             "contacts.upsert",
-            json!({"options": {"fullName": "Ada", "emails": ["ada@example.com"]}}),
+            &json!({"options": {"fullName": "Ada", "emails": ["ada@example.com"]}}),
         )
         .unwrap();
         assert_eq!(c.kind(), ActionKind::Contact);
         assert_eq!(c.permissions(), [PluginPermission::ContactsWrite]);
-        let d = p("contacts.delete", json!({"contactId": "c1"})).unwrap();
+        let d = p("contacts.delete", &json!({"contactId": "c1"})).unwrap();
         assert_eq!(d.kind(), ActionKind::PimDelete);
         assert_eq!(d.permissions(), [PluginPermission::ContactsWrite]);
 
         // The design's Follow-up example.
         let t = p(
             "tasks.create",
-            json!({"options": {"list": "inbox-list", "title": "Follow up: Hi", "due": "2026-10-03",
+            &json!({"options": {"list": "inbox-list", "title": "Follow up: Hi", "due": "2026-10-03",
                                "links": ["nail://messages/m1"]}}),
         )
         .unwrap();
@@ -1064,7 +1064,7 @@ mod tests {
         assert_eq!(t.read_messages(), [MessageId::from("m1")]);
         let u = p(
             "tasks.update",
-            json!({"taskId": "t1", "options": {"completed": true}}),
+            &json!({"taskId": "t1", "options": {"completed": true}}),
         )
         .unwrap();
         assert!(matches!(
@@ -1074,7 +1074,7 @@ mod tests {
                 ..
             })
         ));
-        let del = p("tasks.delete", json!({"taskId": "t1"})).unwrap();
+        let del = p("tasks.delete", &json!({"taskId": "t1"})).unwrap();
         assert_eq!(del.permissions(), [PluginPermission::TasksWrite]);
         for (op, bad) in [
             ("tasks.create", json!({"options": {}})),
@@ -1101,7 +1101,7 @@ mod tests {
             ("contacts.delete", json!({})),
             ("unknown.op", json!({})),
         ] {
-            assert!(p(op, bad.clone()).is_err(), "{op} {bad}");
+            assert!(p(op, &bad.clone()).is_err(), "{op} {bad}");
         }
     }
 

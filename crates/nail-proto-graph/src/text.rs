@@ -173,15 +173,12 @@ pub fn decode_entities(text: &str) -> String {
             };
             c.map(|c| (c, e))
         });
-        match decoded {
-            Some((c, e)) => {
-                out.push(c);
-                rest = &rest[e + 1..];
-            }
-            None => {
-                out.push('&');
-                rest = &rest[1..];
-            }
+        if let Some((c, e)) = decoded {
+            out.push(c);
+            rest = &rest[e + 1..];
+        } else {
+            out.push('&');
+            rest = &rest[1..];
         }
     }
     out.push_str(rest);

@@ -48,6 +48,10 @@ use crate::xml::Element;
 
 /// Tunables of an [`EwsEngine`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent per-account switches that mirror the account options"
+)]
 pub struct EwsOptions {
     /// Push through streaming notifications (`false` = the core polls).
     pub streaming: bool,
@@ -283,7 +287,7 @@ impl EwsEngine {
         };
         for item in &changes.created {
             if let Some(mut message) = remote_message(item, folder, mailbox) {
-                message.folder = folder.to_owned();
+                folder.clone_into(&mut message.folder);
                 if first_pass
                     && let (Some(since), Some(date)) = (since, message.internal_date)
                     && date < since
@@ -456,13 +460,12 @@ impl EwsEngine {
             .ok_or_else(|| EwsError::NotFound(format!("inbox rule {}", rule.id)))?;
         let operation = if current.has_unsupported {
             let mut raw: Element = raw;
-            match raw.child_mut("IsEnabled") {
-                Some(enabled) => enabled.text = rule.enabled.to_string(),
-                None => {
-                    let mut enabled = Element::new("IsEnabled");
-                    enabled.text = rule.enabled.to_string();
-                    raw.children.push(enabled);
-                }
+            if let Some(enabled) = raw.child_mut("IsEnabled") {
+                enabled.text = rule.enabled.to_string();
+            } else {
+                let mut enabled = Element::new("IsEnabled");
+                enabled.text = rule.enabled.to_string();
+                raw.children.push(enabled);
             }
             RuleOperation::SetRaw(raw)
         } else {
@@ -494,22 +497,21 @@ impl EwsEngine {
     // -- directory ------------------------------------------------------
 
     async fn all_rooms(&self, room_list: Option<&str>) -> Result<Vec<Room>, EwsError> {
-        let rooms = match room_list {
-            Some(list) => self.client.get_rooms(list).await?,
-            None => {
-                let mut out: Vec<Room> = Vec::new();
-                for list in self.client.get_room_lists().await? {
-                    for room in self.client.get_rooms(&list.address).await? {
-                        if !out
-                            .iter()
-                            .any(|r| r.address.eq_ignore_ascii_case(&room.address))
-                        {
-                            out.push(room);
-                        }
+        let rooms = if let Some(list) = room_list {
+            self.client.get_rooms(list).await?
+        } else {
+            let mut out: Vec<Room> = Vec::new();
+            for list in self.client.get_room_lists().await? {
+                for room in self.client.get_rooms(&list.address).await? {
+                    if !out
+                        .iter()
+                        .any(|r| r.address.eq_ignore_ascii_case(&room.address))
+                    {
+                        out.push(room);
                     }
                 }
-                out
             }
+            out
         };
         self.rooms
             .lock()
@@ -753,7 +755,7 @@ impl EwsEngine {
                     }
                 };
                 let body = format!(
-                    r#"<m:CreateItem{attributes}><m:SavedItemFolderId>{}</m:SavedItemFolderId><m:Items>{xml}</m:Items></m:CreateItem>"#,
+                    r"<m:CreateItem{attributes}><m:SavedItemFolderId>{}</m:SavedItemFolderId><m:Items>{xml}</m:Items></m:CreateItem>",
                     FolderRef::named(mailbox, folder).xml()
                 );
                 let response = self
@@ -822,8 +824,8 @@ impl EwsEngine {
                         zone.as_deref(),
                     )
                     .await;
-                let updated = match result {
-                    Ok(updated) => updated,
+                let saved = match result {
+                    Ok(saved) => saved,
                     Err(EwsError::Conflict(_)) => return Ok(ExchangePimWriteOutcome::Conflict),
                     Err(EwsError::NotFound(_)) => return Ok(ExchangePimWriteOutcome::Gone),
                     Err(e) => return Err(e),
@@ -832,16 +834,16 @@ impl EwsEngine {
                     && (!event.exceptions.is_empty() || !event.cancelled_occurrences.is_empty())
                 {
                     let key = self
-                        .apply_occurrences(mailbox, None, &updated.id, event, *send)
+                        .apply_occurrences(mailbox, None, &saved.id, event, *send)
                         .await?;
                     return Ok(ExchangePimWriteOutcome::Done {
-                        remote_id: updated.id,
-                        change_key: key.or(updated.change_key),
+                        remote_id: saved.id,
+                        change_key: key.or(saved.change_key),
                     });
                 }
                 Ok(ExchangePimWriteOutcome::Done {
-                    remote_id: updated.id,
-                    change_key: updated.change_key,
+                    remote_id: saved.id,
+                    change_key: saved.change_key,
                 })
             }
             ExchangePimWrite::Delete { remote_id, send } => {
@@ -984,8 +986,7 @@ impl EwsEngine {
             let date = exception.original_start.as_ref().map(|s| {
                 if s.time_zone == "UTC" {
                     calendar::local_date(&format!("{}Z", s.date_time), bias)
-                        .map(|d| d.format("%Y-%m-%d").to_string())
-                        .unwrap_or_else(|| s.date().to_owned())
+                        .map_or_else(|| s.date().to_owned(), |d| d.format("%Y-%m-%d").to_string())
                 } else {
                     s.date().to_owned()
                 }

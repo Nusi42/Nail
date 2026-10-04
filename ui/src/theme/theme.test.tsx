@@ -13,6 +13,7 @@ import {
 import { READER_CSP, readerCss, readerDocument } from "./reader";
 import { StyleManager } from "./styleManager";
 import { ThemeProvider, useGeometry } from "./ThemeProvider";
+import { stubProperties } from "../test/stub";
 
 const styleElements = () => document.head.querySelectorAll("style[data-nail-theme]");
 
@@ -231,13 +232,14 @@ describe("ThemeProvider", () => {
   });
 
   it("follows prefers-color-scheme in system mode", () => {
-    const original = window.matchMedia;
-    window.matchMedia = ((query: string) => ({
-      matches: query === "(prefers-color-scheme: dark)",
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    })) as unknown as typeof window.matchMedia;
+    const restore = stubProperties(window, {
+      matchMedia: ((query: string) => ({
+        matches: query === "(prefers-color-scheme: dark)",
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })) as unknown as typeof window.matchMedia,
+    });
     const { unmount } = render(
       <ThemeProvider theme={defaultTheme()}>
         <span />
@@ -245,6 +247,6 @@ describe("ThemeProvider", () => {
     );
     expect(document.documentElement.dataset.nailMode).toBe("dark");
     unmount();
-    window.matchMedia = original;
+    restore();
   });
 });

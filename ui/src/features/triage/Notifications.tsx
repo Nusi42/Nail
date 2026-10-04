@@ -60,7 +60,7 @@ function QuietHoursEditor({
   onChange,
 }: {
   settings: NotificationSettings;
-  onChange(settings: NotificationSettings): void;
+  onChange: (settings: NotificationSettings) => void;
 }) {
   const t = useT();
   const ids = useId();
@@ -72,12 +72,12 @@ function QuietHoursEditor({
         labelId="notification-quiet-enabled"
         name="quiet-hours"
         checked={quiet !== null}
-        onChange={(on) =>
+        onChange={(on) => {
           onChange({
             ...settings,
             quiet_hours: on ? { start: "22:00", end: "07:00", days: [] } : null,
-          })
-        }
+          });
+        }}
       />
       {quiet && (
         <>
@@ -91,9 +91,9 @@ function QuietHoursEditor({
                 data-part="form.input"
                 type="time"
                 value={quiet.start}
-                onChange={(e) =>
-                  onChange({ ...settings, quiet_hours: { ...quiet, start: e.target.value } })
-                }
+                onChange={(e) => {
+                  onChange({ ...settings, quiet_hours: { ...quiet, start: e.target.value } });
+                }}
               />
             </div>
             <div data-part="form.field" data-field="quiet-end">
@@ -105,9 +105,9 @@ function QuietHoursEditor({
                 data-part="form.input"
                 type="time"
                 value={quiet.end}
-                onChange={(e) =>
-                  onChange({ ...settings, quiet_hours: { ...quiet, end: e.target.value } })
-                }
+                onChange={(e) => {
+                  onChange({ ...settings, quiet_hours: { ...quiet, end: e.target.value } });
+                }}
               />
             </div>
           </div>
@@ -119,7 +119,7 @@ function QuietHoursEditor({
                 labelId={`notification-day-${day}`}
                 name={`day-${day}`}
                 checked={quiet.days.includes(day)}
-                onChange={(on) =>
+                onChange={(on) => {
                   onChange({
                     ...settings,
                     quiet_hours: {
@@ -128,8 +128,8 @@ function QuietHoursEditor({
                         ? WEEKDAYS.filter((d) => d === day || quiet.days.includes(d))
                         : quiet.days.filter((d) => d !== day),
                     },
-                  })
-                }
+                  });
+                }}
               />
             ))}
             <p data-part="form.hint">{t("notification-quiet-days-hint")}</p>
@@ -147,7 +147,7 @@ function AccountOverrides({
 }: {
   account: AccountConfig;
   settings: NotificationSettings;
-  onChange(settings: NotificationSettings): void;
+  onChange: (settings: NotificationSettings) => void;
 }) {
   const folders = useFolders(account.id);
   const choices = OVERRIDE_CHOICES.map((c) => ({
@@ -166,15 +166,15 @@ function AccountOverrides({
         name={`account-${account.id}`}
         value={overrideOf(settings, { type: "account", account_id: account.id })}
         choices={choices}
-        onChange={(value) =>
+        onChange={(value) => {
           onChange(
             withOverride(
               settings,
               { type: "account", account_id: account.id },
               value as OverrideChoice,
             ),
-          )
-        }
+          );
+        }}
       />
       {overridden.map((folder) => (
         <SelectField
@@ -184,15 +184,15 @@ function AccountOverrides({
           name={`folder-${folder.id}`}
           value={overrideOf(settings, { type: "folder", folder_id: folder.id })}
           choices={choices}
-          onChange={(value) =>
+          onChange={(value) => {
             onChange(
               withOverride(
                 settings,
                 { type: "folder", folder_id: folder.id },
                 value as OverrideChoice,
               ),
-            )
-          }
+            );
+          }}
         />
       ))}
       {(folders.data ?? []).length > overridden.length && (
@@ -236,7 +236,7 @@ function Editor({
   settings: NotificationSettings;
   /** Kept by the widget: a save re-creates the editor. */
   notice: string | null;
-  setNotice(id: string | null): void;
+  setNotice: (id: string | null) => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -297,26 +297,34 @@ function Editor({
           labelId="notification-enabled"
           name="enabled"
           checked={draft.enabled}
-          onChange={(enabled) => change({ ...draft, enabled })}
+          onChange={(enabled) => {
+            change({ ...draft, enabled });
+          }}
         />
         <CheckField
           labelId="notification-show-preview"
           name="show-preview"
           checked={draft.show_preview}
-          onChange={(show_preview) => change({ ...draft, show_preview })}
+          onChange={(show_preview) => {
+            change({ ...draft, show_preview });
+          }}
         />
         <CheckField
           labelId="notification-sound"
           name="sound"
           checked={draft.sound}
-          onChange={(sound) => change({ ...draft, sound })}
+          onChange={(sound) => {
+            change({ ...draft, sound });
+          }}
         />
         <SelectField
           labelId="notification-folders"
           name="folders"
           value={draft.folders}
           choices={FOLDER_CHOICES.map((f) => ({ value: f, label: `notification-folders-${f}` }))}
-          onChange={(folders) => change({ ...draft, folders: folders as NotifyFolders })}
+          onChange={(folders) => {
+            change({ ...draft, folders: folders as NotifyFolders });
+          }}
         />
       </fieldset>
       <QuietHoursEditor settings={draft} onChange={change} />

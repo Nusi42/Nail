@@ -97,10 +97,14 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
       store.getState().closeWindow(window);
     };
     globalThis.addEventListener(POP_OUT_CLOSE_EVENT, onCloseRequested);
-    return () => globalThis.removeEventListener(POP_OUT_CLOSE_EVENT, onCloseRequested);
+    return () => {
+      globalThis.removeEventListener(POP_OUT_CLOSE_EVENT, onCloseRequested);
+    };
   }, [store, window, layout, specs]);
 
-  const closeContent = () => store.getState().closeWindow(window);
+  const closeContent = () => {
+    store.getState().closeWindow(window);
+  };
   // A layout window wins; a feature dialog fills in for a name the layout lacks.
   const Dialog = Object.hasOwn(layout.windows, kind) ? undefined : dialogs[kind];
   const titleId = `nail-pop-out-${window.replace(":", "-")}-title`;
@@ -133,7 +137,9 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
                 const prepare = preparerOf(window);
                 Promise.resolve(prepare?.(window, { client, store, queryClient }))
                   .then(() => returnPopOut({ client, queryClient }, window))
-                  .catch((e: unknown) => setError(errorMessageId(e)));
+                  .catch((e: unknown) => {
+                    setError(errorMessageId(e));
+                  });
               }}
             >
               <Icon name="app-window" part="pop-out.return.icon" />

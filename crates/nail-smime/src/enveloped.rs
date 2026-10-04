@@ -113,6 +113,10 @@ struct GcmParameters {
 
 /// `ECC-CMS-SharedInfo` (RFC 5753 section 7.2).
 #[derive(Clone, Debug, Eq, PartialEq, Sequence)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "the field names follow the ASN.1 module of RFC 5753 (keyInfo, entityUInfo, suppPubInfo)"
+)]
 struct EccCmsSharedInfo {
     key_info: AlgorithmIdentifierOwned,
     #[asn1(context_specific = "0", tag_mode = "EXPLICIT", optional = "true")]
@@ -565,7 +569,7 @@ pub fn decrypt(input: &[u8], keys: &[DecryptionKey<'_>]) -> Result<(Envelope, De
                 continue;
             };
             let result =
-                recover_cek(ri, target, private).and_then(|cek| decrypt_content(&parsed, &cek));
+                recover_cek(target, private).and_then(|cek| decrypt_content(&parsed, &cek));
             match result {
                 Ok(plaintext) => {
                     return Ok((
@@ -591,6 +595,7 @@ pub fn decrypt(input: &[u8], keys: &[DecryptionKey<'_>]) -> Result<(Envelope, De
 }
 
 /// Which encrypted key of a recipient info belongs to `cert`.
+#[derive(Clone, Copy)]
 enum Target<'r> {
     Ktri(&'r KeyTransRecipientInfo),
     Kari(&'r KeyAgreeRecipientInfo, &'r RecipientEncryptedKey),
@@ -623,12 +628,7 @@ fn recipient_target<'r>(ri: &'r RecipientInfo, cert: &Cert) -> Option<Target<'r>
     }
 }
 
-fn recover_cek(
-    ri: &RecipientInfo,
-    target: Target<'_>,
-    key: &dyn PrivateKeyOps,
-) -> Result<Zeroizing<Vec<u8>>> {
-    let _ = ri;
+fn recover_cek(target: Target<'_>, key: &dyn PrivateKeyOps) -> Result<Zeroizing<Vec<u8>>> {
     match target {
         Target::Ktri(k) => {
             let padding = RsaPadding::resolve(&k.key_enc_alg)?;

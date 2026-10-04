@@ -2,6 +2,7 @@
 //! (loopback only): discovery, queries, multiget, sync (sync-collection,
 //! paging, token resets, ctag / ETag fallback), conditional writes and
 //! conflicts, collection management, authentication, TLS and failures.
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -116,7 +117,11 @@ async fn discovers_calendars_from_the_server_url() {
     assert_eq!(found.principal.path(), server.principal_path());
     assert_eq!(found.home_sets.len(), 1);
     assert_eq!(found.home_sets[0].path(), server.calendar_home());
-    let mut names: Vec<String> = found.collections.iter().map(|c| c.name()).collect();
+    let mut names: Vec<String> = found
+        .collections
+        .iter()
+        .map(nail_dav::DavCollection::name)
+        .collect();
     names.sort();
     assert_eq!(names, ["Holidays", "Personal", "Tasks"]);
     let personal = found
@@ -1142,7 +1147,7 @@ async fn create_rename_and_delete_collections() {
         .collections(&books, CollectionKind::AddressBook)
         .await
         .unwrap();
-    let mut listed: Vec<String> = listed.iter().map(|c| c.name()).collect();
+    let mut listed: Vec<String> = listed.iter().map(nail_dav::DavCollection::name).collect();
     listed.sort();
     assert_eq!(listed, ["Contacts", "Family"]);
 

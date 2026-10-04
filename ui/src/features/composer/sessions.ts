@@ -195,7 +195,8 @@ export function isUnsaved(ui: UiStore, window: string): boolean {
   const rich = isComposerInstance(window)
     ? instanceRichStore(ui, window)?.getState()
     : richStoreFor(ui).getState();
-  if (!composer || !rich || rich.savedKey === null) return false;
+  if (!composer || !rich) return false;
+  if (rich.savedKey === null) return false;
   return draftKey(composer, rich, cryptoFor(ui, window)) !== rich.savedKey;
 }
 

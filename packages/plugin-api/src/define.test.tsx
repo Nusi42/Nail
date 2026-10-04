@@ -90,9 +90,11 @@ const kitchenSink = () =>
     },
     attachments: {
       previews: {
-        text: (attachment, bytes) => <text>{`${attachment.name}: ${bytes.length} bytes`}</text>,
+        text: (attachment, bytes) => (
+          <text>{`${attachment.name}: ${String(bytes.length)} bytes`}</text>
+        ),
       },
-      actions: { count: (_ctx, bytes) => nail.ui.notify(`${bytes?.length ?? 0} bytes`) },
+      actions: { count: (_ctx, bytes) => nail.ui.notify(`${String(bytes?.length ?? 0)} bytes`) },
     },
     links: { open: (ctx) => nail.ui.notify(ctx.link?.url ?? "") },
     jobs: { tick: (trigger) => nail.ui.notify(`tick ${trigger.kind}`) },
@@ -101,8 +103,12 @@ const kitchenSink = () =>
 
 describe("definePlugin with declared handlers", () => {
   let host: TestHost;
-  let restore = () => {};
-  afterEach(() => restore());
+  let restore = () => {
+    /* no-op */
+  };
+  afterEach(() => {
+    restore();
+  });
 
   async function load(options: Parameters<typeof createTestHost>[0] = {}) {
     host = createTestHost({ manifest, messages: [message], ...options });
@@ -116,8 +122,16 @@ describe("definePlugin with declared handlers", () => {
     host = createTestHost({ manifest });
     restore = host.install();
     await definePlugin({
-      commands: { hello: () => {} },
-      jobs: { tick: () => {} },
+      commands: {
+        hello: () => {
+          /* no-op */
+        },
+      },
+      jobs: {
+        tick: () => {
+          /* no-op */
+        },
+      },
       activate() {
         seenInActivate = [...host.commandNames(), ...host.extensionNames().jobs];
       },
@@ -194,22 +208,29 @@ describe("definePlugin with declared handlers", () => {
   it("explains a host without the M4a registries", async () => {
     host = createTestHost({ manifest });
     // An M2d host: neither ctx nor the global nail has the registries.
-    const { hooks: _h, attachments: _a, links: _l, jobs: _j, mcp: _m, ...api } = host.api;
-    void [_h, _a, _l, _j, _m];
+    const { hooks, attachments, links, jobs, mcp, ...api } = host.api;
+    // The test host has them; the M2d host below does not.
+    expect([hooks, attachments, links, jobs, mcp].every((r) => typeof r === "object")).toBe(true);
     const g = globalThis as { nail?: unknown };
     const previous = g.nail;
     g.nail = api;
     restore = () => {
       g.nail = previous;
     };
-    const { hooks: _hooks, ...rest } = host.activationContext();
-    void _hooks;
+    const { hooks: ctxHooks, ...rest } = host.activationContext();
+    expect(ctxHooks).toBeDefined();
     const old = rest as PluginActivationContext;
     await expect(
       (async () => definePlugin({ hooks: { beforeSend: () => null } }).activate(old))(),
     ).rejects.toMatchObject({ code: "unsupported", message: /ctx\.hooks/ });
     // Plug-ins that do not use them still load.
-    await definePlugin({ commands: { hello: () => {} } }).activate(old);
+    await definePlugin({
+      commands: {
+        hello: () => {
+          /* no-op */
+        },
+      },
+    }).activate(old);
     expect(host.commandNames()).toEqual(["hello"]);
   });
 

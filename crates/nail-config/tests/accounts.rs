@@ -1,5 +1,6 @@
 //! `accounts.kdl`: reading, validation errors with positions, and the
 //! format-preserving writer.
+#![cfg(test)]
 
 use nail_api::accounts::{
     AccountConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping, FolderMatch, FolderPolicy,
@@ -59,8 +60,8 @@ virtual-account "everything" name="Everything" default-identity="ada@home.exampl
 }
 "#;
 
-fn secret(s: &str) -> Option<SecretRef> {
-    Some(SecretRef::parse(s).unwrap())
+fn secret(s: &str) -> SecretRef {
+    SecretRef::parse(s).unwrap()
 }
 
 fn endpoint(host: &str, port: u16, tls: TlsMode, auth: AuthConfig) -> ServerEndpoint {
@@ -102,7 +103,7 @@ fn work() -> AccountConfig {
                 TlsMode::Implicit,
                 AuthConfig::Password {
                     username: "ada".into(),
-                    secret: secret("keychain:nail/work/password"),
+                    secret: Some(secret("keychain:nail/work/password")),
                     mechanism: Some(SaslMechanism::Plain),
                 },
             ),
@@ -257,7 +258,7 @@ fn full_file_parses() {
             OAuthProviderConfig {
                 id: "google".into(),
                 client_id: "123.apps.googleusercontent.com".into(),
-                client_secret: secret("keychain:nail/oauth/google"),
+                client_secret: Some(secret("keychain:nail/oauth/google")),
                 auth_url: None,
                 token_url: None,
                 scopes: vec![],
@@ -864,8 +865,8 @@ fn schema_lists_every_section() {
 /// (the canonical fallback would drop them).
 #[test]
 fn many_edits_keep_meaning_and_comments() {
-    let mut d = doc(FULL);
     type Edit = Box<dyn Fn(&mut nail_api::AccountsConfig)>;
+    let mut d = doc(FULL);
     let edits: Vec<(&str, Edit)> = vec![
         ("undo delay", Box::new(|c| c.undo_send_secs = Some(30))),
         ("no undo delay", Box::new(|c| c.undo_send_secs = None)),
@@ -953,7 +954,7 @@ fn many_edits_keep_meaning_and_comments() {
                         account_id: "work".into(),
                         path: "Lists/rust".into(),
                     }],
-                })
+                });
             }),
         ),
         (

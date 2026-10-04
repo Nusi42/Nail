@@ -10,7 +10,8 @@ import type { ReactNode } from "react";
 import type { ActionContext } from "../actions/registry";
 import type { WindowState } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
-import { BUILTIN_THEMES, resolveMockTheme } from "../features/appearance";
+import { BUILTIN_THEMES } from "../features/appearance";
+import { resolveMockTheme } from "../features/appearance/themes";
 import { runWindowCommand } from "../features/windows/commands";
 import { SAVE_DELAY_MS } from "../features/windows/geometry";
 import { WINDOWS_SKIN_CSS, actions as windowActions } from "../features/windows";
@@ -21,6 +22,7 @@ import { WINDOW_CASCADE_OFFSET, WINDOW_KEYBOARD_STEP, WINDOW_MIN_VISIBLE } from 
 import { DialogRegistryContext, type DialogProps } from "./dialogRegistry";
 import { MAIN_OWNER, WindowLayer, modalOwner, openingOrder } from "./WindowLayer";
 import { WindowSpecsContext } from "./windowSpecs";
+import { must } from "../test/must";
 
 /** A dialog with something to focus. */
 function Probe({ name, close }: DialogProps) {
@@ -104,7 +106,7 @@ function rectOf(element: Element) {
 
 /** The window's live region (modes, maximize, snapping). */
 const statusOf = (el: HTMLElement) =>
-  el.querySelector<HTMLElement>('[data-part="window.status"]') as HTMLElement;
+  must(el.querySelector<HTMLElement>('[data-part="window.status"]'));
 
 function frame(id: string): HTMLElement {
   const el = document.querySelector<HTMLElement>(`[data-part="window"][data-window="${id}"]`);
@@ -113,11 +115,9 @@ function frame(id: string): HTMLElement {
 }
 
 const header = (id: string) =>
-  frame(id).querySelector<HTMLElement>('[data-part="window.header"]') as HTMLElement;
+  must(frame(id).querySelector<HTMLElement>('[data-part="window.header"]'));
 const handle = (id: string, edge: string) =>
-  frame(id).querySelector<HTMLElement>(
-    `[data-part="window.handle"][data-edge="${edge}"]`,
-  ) as HTMLElement;
+  must(frame(id).querySelector<HTMLElement>(`[data-part="window.handle"][data-edge="${edge}"]`));
 
 function Wrap({ children }: { children: ReactNode }) {
   return (
@@ -394,9 +394,9 @@ describe("window manager (M5c WP171)", () => {
     expect(z("plugin-manager")).toBeGreaterThan(z("config-errors"));
     expect(order()).toEqual(["plugin-manager", "config-errors"]);
 
-    act(() =>
-      within(frame("config-errors")).getByRole("button", { name: "config-errors" }).focus(),
-    );
+    act(() => {
+      within(frame("config-errors")).getByRole("button", { name: "config-errors" }).focus();
+    });
     expect(env.store.getState().windows).toEqual(["plugin-manager", "config-errors"]);
     // Both stay usable: non-modal windows do not block each other.
     expect(frame("plugin-manager")).not.toHaveAttribute("inert");
@@ -408,17 +408,19 @@ describe("window manager (M5c WP171)", () => {
     outside.textContent = "main";
     document.body.append(outside);
     const { env } = await setup(["plugin-manager", "config-errors"]);
-    act(() => outside.focus());
+    act(() => {
+      outside.focus();
+    });
     // From the main window to the topmost window.
     fireEvent.keyDown(outside, { key: "F6", ctrlKey: true });
     expect(frame("config-errors").contains(document.activeElement)).toBe(true);
     // The bottom window comes up, so every window comes round.
-    fireEvent.keyDown(document.activeElement as Element, { key: "F6", ctrlKey: true });
+    fireEvent.keyDown(must(document.activeElement), { key: "F6", ctrlKey: true });
     expect(env.store.getState().windows).toEqual(["config-errors", "plugin-manager"]);
     expect(frame("plugin-manager").contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(document.activeElement as Element, { key: "F6", ctrlKey: true });
+    fireEvent.keyDown(must(document.activeElement), { key: "F6", ctrlKey: true });
     expect(frame("config-errors").contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(document.activeElement as Element, {
+    fireEvent.keyDown(must(document.activeElement), {
       key: "F6",
       ctrlKey: true,
       shiftKey: true,
@@ -436,10 +438,12 @@ describe("window manager (M5c WP171)", () => {
     const outside = document.createElement("button");
     document.body.append(outside);
     await setup(["plugin-manager"]);
-    act(() => outside.focus());
+    act(() => {
+      outside.focus();
+    });
     fireEvent.keyDown(outside, { key: "F6", ctrlKey: true });
     expect(frame("plugin-manager").contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(document.activeElement as Element, { key: "F6", ctrlKey: true });
+    fireEvent.keyDown(must(document.activeElement), { key: "F6", ctrlKey: true });
     expect(outside).toHaveFocus();
     outside.remove();
   });
@@ -494,11 +498,15 @@ describe("window manager (M5c WP171)", () => {
     );
     // Maximized, then closed before the delay: still remembered.
     fireEvent.doubleClick(header("plugin-manager"));
-    act(() => env.store.getState().closeWindow("plugin-manager"));
+    act(() => {
+      env.store.getState().closeWindow("plugin-manager");
+    });
     await settle(env);
     expect((await remembered(env))["plugin-manager"]?.page?.maximized).toBe(true);
 
-    act(() => env.store.getState().openWindow("plugin-manager"));
+    act(() => {
+      env.store.getState().openWindow("plugin-manager");
+    });
     await settle(env);
     expect(frame("plugin-manager")).toHaveAttribute("data-state", "active maximized");
     fireEvent.click(within(frame("plugin-manager")).getByRole("button", { name: "Restore" }));
@@ -571,7 +579,7 @@ describe("window manager (M5c WP171)", () => {
     expect(confirm).toHaveAttribute("data-modal", "");
     expect(confirm).toHaveAttribute("data-owner", "main");
     expect(confirm.querySelectorAll('[data-part="window.handle"]')).toHaveLength(0);
-    const scrim = container.querySelector('[data-part="window-scrim"]') as HTMLElement;
+    const scrim = must(container.querySelector<HTMLElement>('[data-part="window-scrim"]'));
     expect(scrim).toHaveAttribute("aria-hidden", "true");
     expect(container.querySelector('[data-part="window-layer"]')).toHaveAttribute("data-modal", "");
     // Below every window: only the main window is covered.
@@ -581,15 +589,17 @@ describe("window manager (M5c WP171)", () => {
     expect(frame("plugin-manager")).not.toHaveAttribute("inert");
     // Focus that strays into the main window comes back; Ctrl+Shift+F6 does
     // not leave; Ctrl+F6 reaches the other (usable) window.
-    act(() => outside.focus());
+    act(() => {
+      outside.focus();
+    });
     expect(confirm.contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(document.activeElement as Element, {
+    fireEvent.keyDown(must(document.activeElement), {
       key: "F6",
       ctrlKey: true,
       shiftKey: true,
     });
     expect(confirm.contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(document.activeElement as Element, { key: "F6", ctrlKey: true });
+    fireEvent.keyDown(must(document.activeElement), { key: "F6", ctrlKey: true });
     expect(frame("plugin-manager").contains(document.activeElement)).toBe(true);
     // Raised, it still stays below the confirmation.
     expect(env.store.getState().windows.at(-1)).toBe("plugin-manager");
@@ -604,8 +614,12 @@ describe("window manager (M5c WP171)", () => {
     document.body.append(outside);
     const { env, container } = await setup(["plugin-manager", "config-errors"]);
     // The user works in the plug-in manager when its confirmation opens.
-    act(() => within(frame("plugin-manager")).getByRole("textbox").focus());
-    act(() => env.store.getState().openWindow("gmail-label-delete"));
+    act(() => {
+      within(frame("plugin-manager")).getByRole("textbox").focus();
+    });
+    act(() => {
+      env.store.getState().openWindow("gmail-label-delete");
+    });
     const confirm = await screen.findByRole("dialog", { name: "Delete label" });
     await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
     expect(confirm).not.toHaveAttribute("aria-modal");
@@ -614,10 +628,14 @@ describe("window manager (M5c WP171)", () => {
     expect(frame("config-errors")).not.toHaveAttribute("inert");
     expect(container.querySelector('[data-part="window-scrim"]')).toBeNull();
     // The main window stays usable.
-    act(() => outside.focus());
+    act(() => {
+      outside.focus();
+    });
     expect(document.activeElement).toBe(outside);
     // Closing the confirmation gives the window back.
-    act(() => env.store.getState().closeWindow("gmail-label-delete"));
+    act(() => {
+      env.store.getState().closeWindow("gmail-label-delete");
+    });
     await waitFor(() => expect(frame("plugin-manager")).not.toHaveAttribute("inert"));
     outside.remove();
   });
@@ -627,27 +645,41 @@ describe("window manager (M5c WP171)", () => {
     // The plug-in manager moved to the left (600 x 400 at 140 / 200).
     drag(header("plugin-manager"), [500, 210], [300, 210]);
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 140, y: 200, width: 600, height: 400 });
-    act(() => within(frame("plugin-manager")).getByRole("textbox").focus());
-    act(() => env.store.getState().openWindow("gmail-label-delete"));
+    act(() => {
+      within(frame("plugin-manager")).getByRole("textbox").focus();
+    });
+    act(() => {
+      env.store.getState().openWindow("gmail-label-delete");
+    });
     const confirm = await screen.findByRole("dialog", { name: "Delete label" });
     await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
     // Centred over its owner (440 x 220), not over the page.
-    await waitFor(() =>
-      expect(rectOf(confirm)).toEqual({ x: 220, y: 290, width: 440, height: 220 }),
-    );
+    await waitFor(() => {
+      expect(rectOf(confirm)).toEqual({ x: 220, y: 290, width: 440, height: 220 });
+    });
     const z = (el: Element) => Number(geometry(el)["z-index"]);
     expect(z(confirm)).toBeGreaterThan(z(frame("plugin-manager")));
     // Another window raised over the owner covers the confirmation too.
-    act(() => env.store.getState().focusWindow("config-errors"));
+    act(() => {
+      env.store.getState().focusWindow("config-errors");
+    });
     expect(z(frame("config-errors"))).toBeGreaterThan(z(confirm));
     expect(z(confirm)).toBeGreaterThan(z(frame("plugin-manager")));
     // A confirmation of the main window stays above every window.
-    act(() => env.store.getState().closeWindow("gmail-label-delete"));
-    act(() => document.body.focus());
+    act(() => {
+      env.store.getState().closeWindow("gmail-label-delete");
+    });
+    act(() => {
+      document.body.focus();
+    });
     const outside = document.createElement("button");
     document.body.append(outside);
-    act(() => outside.focus());
-    act(() => env.store.getState().openWindow("gmail-label-delete"));
+    act(() => {
+      outside.focus();
+    });
+    act(() => {
+      env.store.getState().openWindow("gmail-label-delete");
+    });
     const pageModal = await screen.findByRole("dialog", { name: "Delete label" });
     await waitFor(() => expect(pageModal).toHaveAttribute("data-owner", MAIN_OWNER));
     expect(z(pageModal)).toBeGreaterThan(z(frame("config-errors")));
@@ -666,8 +698,12 @@ describe("window manager (M5c WP171)", () => {
     expect(rectOf(frame("plugin-manager"))).toEqual(first);
     expect(rectOf(frame("plugin-manager:w2"))).toEqual(second);
     // The first closes, a third opens: in the free slot, not over the second.
-    act(() => env.store.getState().closeWindow("plugin-manager"));
-    act(() => env.store.getState().openWindow("plugin-manager:w3"));
+    act(() => {
+      env.store.getState().closeWindow("plugin-manager");
+    });
+    act(() => {
+      env.store.getState().openWindow("plugin-manager:w3");
+    });
     await settle(env);
     expect(rectOf(frame("plugin-manager:w3"))).toEqual(first);
     expect(rectOf(frame("plugin-manager:w2"))).toEqual(second);

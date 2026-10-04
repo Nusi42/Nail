@@ -93,21 +93,29 @@ export const RECOVERY_RESTORE_ACTION = "security.recovery-key.restore";
 export const actions: Feature["actions"] = {
   /** Imports the selected Autocrypt setup message (asks for the setup code). */
   "security.autocrypt.import": {
-    run: (ctx) => ctx.store.getState().openWindow(AUTOCRYPT_IMPORT_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(AUTOCRYPT_IMPORT_DIALOG);
+    },
     // Only for Autocrypt Setup Messages (M5b review: not in More for every mail).
     enabled: (ctx) => isAutocryptSetupMessage(ctx),
   },
   /** Creates (or replaces) the vault recovery key. */
   [RECOVERY_CREATE_ACTION]: {
-    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_CREATE_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(RECOVERY_CREATE_DIALOG);
+    },
   },
   /** Checks a stored recovery key. */
   [RECOVERY_CHECK_ACTION]: {
-    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_VERIFY_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(RECOVERY_VERIFY_DIALOG);
+    },
   },
   /** Puts the data key back with the recovery key. */
   [RECOVERY_RESTORE_ACTION]: {
-    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_RESTORE_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(RECOVERY_RESTORE_DIALOG);
+    },
   },
 };
 
@@ -212,12 +220,6 @@ export { attachmentWarning, warningsForLink } from "./model";
 export { AttachmentWarningMark, MessageWarnings } from "./Warnings";
 export { pinStoreFor, PIN_DIALOG } from "./PinPrompt";
 export { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
-export {
-  closePinPrompt,
-  simulateLostVaultKey,
-  simulatePinRequest,
-  type VaultMockState,
-} from "./vaultMock";
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

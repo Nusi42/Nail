@@ -29,7 +29,7 @@ describe("jsx runtime", () => {
   });
 
   it("builds stacks, turning strings into text nodes and dropping empties", () => {
-    const show = false;
+    const show = false as boolean;
     const tree = (
       <stack direction="horizontal">
         plain

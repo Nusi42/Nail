@@ -719,11 +719,12 @@ impl Parser<'_> {
             self.pos += 1;
             items.push(self.and_expr()?);
         }
-        Ok(if items.len() == 1 {
-            items.pop().expect("one item")
-        } else {
-            Query::Or(flatten(items, true))
-        })
+        if items.len() == 1
+            && let Some(only) = items.pop()
+        {
+            return Ok(only);
+        }
+        Ok(Query::Or(flatten(items, true)))
     }
 
     fn and_expr(&mut self) -> Result<Query, ParseError> {
@@ -738,11 +739,12 @@ impl Parser<'_> {
                 _ => break,
             }
         }
-        Ok(if items.len() == 1 {
-            items.pop().expect("one item")
-        } else {
-            Query::And(flatten(items, false))
-        })
+        if items.len() == 1
+            && let Some(only) = items.pop()
+        {
+            return Ok(only);
+        }
+        Ok(Query::And(flatten(items, false)))
     }
 
     fn unary(&mut self) -> Result<Query, ParseError> {
@@ -1039,6 +1041,7 @@ impl fmt::Display for Query {
 
 impl Query {
     /// The same query with every span reset (for comparing ASTs).
+    #[must_use]
     pub fn without_spans(&self) -> Query {
         match self {
             Query::All => Query::All,
@@ -1054,7 +1057,6 @@ impl Query {
 
     /// Every term, in query order.
     pub fn terms(&self) -> Vec<&Term> {
-        let mut out = Vec::new();
         fn walk<'q>(q: &'q Query, out: &mut Vec<&'q Term>) {
             match q {
                 Query::All => {}
@@ -1063,6 +1065,7 @@ impl Query {
                 Query::And(v) | Query::Or(v) => v.iter().for_each(|q| walk(q, out)),
             }
         }
+        let mut out = Vec::new();
         walk(self, &mut out);
         out
     }

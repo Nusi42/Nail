@@ -14,8 +14,8 @@ export const TAURI_EVENT = "nail://event";
 
 /** The two Tauri functions the transport needs (injectable for tests). */
 export interface TauriApi {
-  invoke<T>(cmd: string, args: Record<string, unknown>): Promise<T>;
-  listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>;
+  invoke: <T>(cmd: string, args: Record<string, unknown>) => Promise<T>;
+  listen: (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
 }
 
 const defaultApi: TauriApi = {
@@ -33,7 +33,10 @@ export class TauriTransport implements Transport {
   constructor(api: TauriApi = defaultApi) {
     this.api = api;
     void this.api
-      .listen<NailEvent>(TAURI_EVENT, (event) => this.events.emit(event.payload))
+      .listen(TAURI_EVENT, (event) => {
+        // The core emits protocol events on this channel only.
+        this.events.emit(event.payload as NailEvent);
+      })
       .then((unlisten) => {
         if (this.closed) {
           unlisten();
@@ -41,7 +44,9 @@ export class TauriTransport implements Transport {
           this.unlisten = unlisten;
         }
       })
-      .catch((error: unknown) => console.error("nail: cannot listen for core events", error));
+      .catch((error: unknown) => {
+        console.error("nail: cannot listen for core events", error);
+      });
   }
 
   async send(request: Request): Promise<Response> {

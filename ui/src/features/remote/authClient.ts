@@ -11,12 +11,17 @@ import type { AuthRequest, AuthResponse } from "../../api/generated";
 
 /** `nail_api::remote::AUTH_PATH`. */
 export const AUTH_PATH = "/api/auth";
+/**
+ * The status the local, loopback `nail serve` (no remote login) answers
+ * `POST /api/auth` with: there is nothing to log in to.
+ */
+export const NO_LOGIN_STATUS = 204;
 /** `nail_api::remote::CSRF_HEADER`. */
 export const CSRF_HEADER = "x-nail-csrf";
 
 /** Sends login-protocol requests. */
 export interface AuthTransport {
-  send(request: AuthRequest): Promise<AuthResponse>;
+  send: (request: AuthRequest) => Promise<AuthResponse>;
 }
 
 /** The server could not be reached or did not answer with the protocol. */
@@ -68,8 +73,14 @@ export class HttpAuthTransport implements AuthTransport {
     } catch (e) {
       throw new AuthTransportError(null, e instanceof Error ? e.message : String(e));
     }
+    if (response.status === NO_LOGIN_STATUS) {
+      throw new AuthTransportError(NO_LOGIN_STATUS, `${AUTH_PATH}: this server has no login`);
+    }
     if (!response.ok) {
-      throw new AuthTransportError(response.status, `${AUTH_PATH} answered ${response.status}`);
+      throw new AuthTransportError(
+        response.status,
+        `${AUTH_PATH} answered ${String(response.status)}`,
+      );
     }
     const answer = (await response.json()) as AuthResponse;
     if (answer.type === "Status") this.csrf = answer.status.csrf_token;

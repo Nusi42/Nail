@@ -17,7 +17,7 @@ function SettingField({
 }: {
   def: PluginSettingDef;
   value: JsonValue | undefined;
-  onChange(value: JsonValue): void;
+  onChange: (value: JsonValue) => void;
 }) {
   const id = useId();
   const hint = def.description === undefined ? undefined : `${id}-hint`;
@@ -31,7 +31,9 @@ function SettingField({
           aria-describedby={hint}
           maxLength={def.maxLength}
           value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
         />
       ) : (
         <input
@@ -41,7 +43,9 @@ function SettingField({
           aria-describedby={hint}
           maxLength={def.maxLength}
           value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
         />
       );
       break;
@@ -56,9 +60,9 @@ function SettingField({
           max={def.max}
           aria-describedby={hint}
           value={typeof value === "number" ? String(value) : ""}
-          onChange={(event) =>
-            onChange(event.target.value === "" ? null : Number(event.target.value))
-          }
+          onChange={(event) => {
+            onChange(event.target.value === "" ? null : Number(event.target.value));
+          }}
         />
       );
       break;
@@ -70,7 +74,9 @@ function SettingField({
           type="checkbox"
           aria-describedby={hint}
           checked={value === true}
-          onChange={(event) => onChange(event.target.checked)}
+          onChange={(event) => {
+            onChange(event.target.checked);
+          }}
         />
       );
       break;
@@ -81,7 +87,9 @@ function SettingField({
           data-part="form.select"
           aria-describedby={hint}
           value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
         >
           {def.options.map((option) => (
             <option key={option.value} value={option.value}>

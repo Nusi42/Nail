@@ -65,7 +65,7 @@ pub struct PluginMcpTool {
 /// Longest text of a rendered Markdown block (bytes).
 pub const MAX_BLOCK_TEXT: usize = 256 * 1024;
 
-fn denied(call: &str, permission: impl ToString) -> ApiError {
+fn denied(call: &str, permission: &(impl ToString + ?Sized)) -> ApiError {
     Denied::new(call, permission).to_api_error()
 }
 
@@ -141,7 +141,7 @@ impl Inner {
 fn link_host(url: &str) -> Option<String> {
     let parsed = url::Url::parse(url).ok()?;
     match parsed.scheme() {
-        "http" | "https" => parsed.host_str().map(|h| h.to_ascii_lowercase()),
+        "http" | "https" => parsed.host_str().map(str::to_ascii_lowercase),
         "mailto" => Some(String::new()),
         _ => None,
     }
@@ -243,7 +243,7 @@ impl PluginHost {
                     return Err(unknown());
                 }
                 if !running.gate.has(&PluginPermission::Composer) {
-                    return Err(denied("composer actions", PluginPermission::Composer));
+                    return Err(denied("composer actions", &PluginPermission::Composer));
                 }
                 let mode = inner
                     .services
@@ -458,7 +458,7 @@ impl PluginHost {
             return Err(ApiError::not_found(format!("`{info}` is not declared")));
         }
         if !running.gate.has(&PluginPermission::Composer) {
-            return Err(denied("markdown blocks", PluginPermission::Composer));
+            return Err(denied("markdown blocks", &PluginPermission::Composer));
         }
         if source.len() > MAX_BLOCK_TEXT {
             return Err(ApiError::new(ErrorCode::TooLarge, "the block is too long"));

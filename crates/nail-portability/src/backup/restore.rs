@@ -107,6 +107,15 @@ pub struct BackupArchive {
     path: String,
 }
 
+impl std::fmt::Debug for BackupArchive {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackupArchive")
+            .field("path", &self.path)
+            .field("entries", &self.archive.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Reads an entry, hashing it.
 struct HashingReader<R> {
     inner: R,
@@ -249,18 +258,17 @@ impl BackupArchive {
                             hasher: Sha256::new(),
                             bytes: 0,
                         };
-                        match io::copy(&mut reader, &mut io::sink()) {
-                            Err(e) => Some((PortabilityIssueCode::ChecksumMismatch, e.to_string())),
-                            Ok(_) => {
-                                let sha = hex::encode(reader.hasher.finalize());
-                                if sha == entry.sha256 && reader.bytes == entry.size_bytes {
-                                    None
-                                } else {
-                                    Some((
-                                        PortabilityIssueCode::ChecksumMismatch,
-                                        format!("expected {}, found {sha}", entry.sha256),
-                                    ))
-                                }
+                        if let Err(e) = io::copy(&mut reader, &mut io::sink()) {
+                            Some((PortabilityIssueCode::ChecksumMismatch, e.to_string()))
+                        } else {
+                            let sha = hex::encode(reader.hasher.finalize());
+                            if sha == entry.sha256 && reader.bytes == entry.size_bytes {
+                                None
+                            } else {
+                                Some((
+                                    PortabilityIssueCode::ChecksumMismatch,
+                                    format!("expected {}, found {sha}", entry.sha256),
+                                ))
                             }
                         }
                     }
@@ -366,10 +374,10 @@ impl BackupArchive {
                 let entries: Vec<BackupEntry> = self.manifest.entries_of(item).cloned().collect();
                 match item {
                     BackupItem::LocalMail => {
-                        self.restore_mail(&entries, target, dry_run, ctx, &mut action)?
+                        self.restore_mail(&entries, target, dry_run, ctx, &mut action)?;
                     }
                     BackupItem::PimLocal => {
-                        self.restore_pim(&entries, target, dry_run, ctx, &mut action)?
+                        self.restore_pim(&entries, target, dry_run, ctx, &mut action)?;
                     }
                     BackupItem::Keys | BackupItem::Plugins => {
                         self.restore_merged_files(
@@ -426,7 +434,10 @@ impl BackupArchive {
         Ok(outcome)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the restore state of one item kind; grouping it would only move the list"
+    )]
     fn restore_replaced_files(
         &mut self,
         item: BackupItem,
@@ -595,7 +606,10 @@ impl BackupArchive {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the restore state of one folder; grouping it would only move the list"
+    )]
     fn restore_mbox(
         &mut self,
         entry: &BackupEntry,
@@ -685,7 +699,7 @@ impl BackupArchive {
             }
         }
         // Whatever is left, then the checksum.
-        let _ = io::copy(&mut hashing, &mut io::sink());
+        drop(io::copy(&mut hashing, &mut io::sink()));
         let sha = hex::encode(hashing.hasher.finalize());
         if failed.is_some() || sha != entry.sha256 || hashing.bytes != entry.size_bytes {
             ctx.warning(

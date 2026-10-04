@@ -123,7 +123,8 @@ fn day_number(date: &str) -> Option<i64> {
         30,
         31,
     ];
-    if !(1..=12).contains(&m) || d < 1 || d > days_in[(m - 1) as usize] {
+    let max_day = usize::try_from(m - 1).ok().and_then(|i| days_in.get(i))?;
+    if d < 1 || d > *max_day {
         return None;
     }
     // Howard Hinnant's days_from_civil.
@@ -208,6 +209,10 @@ labeled_enum! {
 /// How to print.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent print switches (one checkbox each)"
+)]
 pub struct PrintOptions {
     /// Paper size.
     pub page_size: PageSize,

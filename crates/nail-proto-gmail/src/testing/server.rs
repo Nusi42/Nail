@@ -1,6 +1,8 @@
 //! The HTTP side of the mock: authentication, injected errors, a quota in
 //! Gmail's units, the REST routes, media uploads and batch requests.
 
+use std::fmt::Write as _;
+
 use serde_json::{Value, json};
 
 use super::mailbox::{Mailbox, MockError, MockResult};
@@ -157,12 +159,11 @@ fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
 /// Gmail's quota units of a call.
 fn cost(method: &str, segments: &[&str]) -> u64 {
     match (method, segments) {
-        (_, ["messages", "send"]) | (_, ["drafts", ..]) => 100,
+        (_, ["messages", "send"] | ["drafts", ..]) => 100,
         (_, ["messages", "batchModify" | "batchDelete"]) => 50,
         ("GET", ["history"]) => 2,
         (_, ["labels", ..]) | ("GET", ["profile"]) => 1,
-        ("DELETE", ["messages", _]) => 10,
-        ("GET", ["threads", _]) => 10,
+        ("DELETE", ["messages", _]) | ("GET", ["threads", _]) => 10,
         _ => 5,
     }
 }
@@ -689,25 +690,27 @@ fn batch(state: &mut State, headers: &[(String, String)], body: &[u8]) -> Reply 
             request_body.as_bytes(),
             true,
         );
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "--{response_boundary}\r\nContent-Type: application/http\r\n"
-        ));
+        );
         if let Some(id) = content_id {
-            out.push_str(&format!("Content-ID: {id}\r\n"));
+            let _ = write!(out, "Content-ID: {id}\r\n");
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\r\nHTTP/1.1 {} {}\r\n",
             reply.status,
             status_text(reply.status)
-        ));
+        );
         for (n, v) in &reply.headers {
-            out.push_str(&format!("{n}: {v}\r\n"));
+            let _ = write!(out, "{n}: {v}\r\n");
         }
         out.push_str("\r\n");
         out.push_str(&String::from_utf8_lossy(&reply.body));
         out.push_str("\r\n");
     }
-    out.push_str(&format!("--{response_boundary}--\r\n"));
+    let _ = write!(out, "--{response_boundary}--\r\n");
     Reply {
         status: 200,
         headers: vec![(

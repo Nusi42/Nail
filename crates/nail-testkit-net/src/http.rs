@@ -128,11 +128,13 @@ impl MockHttpServer {
             .with_state(Arc::clone(&inner));
         let (shutdown, mut stop) = watch::channel(false);
         let task = tokio::spawn(async move {
-            let _ = axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    let _ = stop.changed().await;
-                })
-                .await;
+            drop(
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = stop.changed().await;
+                    })
+                    .await,
+            );
         });
         Ok(Self {
             addr,

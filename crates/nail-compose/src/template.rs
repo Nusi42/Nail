@@ -79,7 +79,7 @@ pub fn expand_template(
     template: &str,
     vars: &BTreeMap<String, String>,
 ) -> Result<String, TemplateError> {
-    expand_with(template, vars, |v| v.to_owned())
+    expand_with(template, vars, ToOwned::to_owned)
 }
 
 /// Expands an HTML template; values are HTML-escaped.

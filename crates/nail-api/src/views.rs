@@ -168,7 +168,7 @@ pub const ACCOUNT_COLOR_SLOTS: u8 = 8;
 /// (display order): the first eight accounts get distinct colours.
 pub fn account_color_slot(index: usize) -> u8 {
     // The remainder is below ACCOUNT_COLOR_SLOTS, so it fits a u8.
-    (index % usize::from(ACCOUNT_COLOR_SLOTS)) as u8 + 1
+    u8::try_from(index % usize::from(ACCOUNT_COLOR_SLOTS)).map_or(1, |slot| slot + 1)
 }
 
 /// The section id of the Favorites section.

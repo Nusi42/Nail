@@ -8,7 +8,7 @@
  * shows both for the selected message (the layout decides where).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type SubmitEvent, type ReactNode } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type {
   AuthMethodResult,
@@ -176,7 +176,7 @@ export function UnlockForm({ keyId, onUnlocked }: { keyId: KeyId; onUnlocked?: (
   const [remember, setRemember] = useState<string>("15");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (passphrase === "" || busy) return;
     setBusy(true);
@@ -440,7 +440,7 @@ export function SecurityMessageWidget({ node }: WidgetProps) {
   const label = useLabel();
   const selectedId = useUi((s) => s.selectedMessageId);
   const message = useMessage(selectedId).data;
-  if (!message || message.id !== selectedId) return null;
+  if (message?.id !== selectedId) return null;
   return (
     <div
       data-part="security-message.slot"

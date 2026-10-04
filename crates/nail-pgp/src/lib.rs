@@ -82,7 +82,9 @@ mod tests {
         let secret = generate("Ada Lovelace <ada@example.org>");
         secret.verify_bindings().unwrap();
         let public = SignedPublicKey::from(secret.clone());
-        let armored = public.to_armored_string(Default::default()).unwrap();
+        let armored = public
+            .to_armored_string(pgp::composed::ArmorOptions::default())
+            .unwrap();
         assert!(armored.starts_with("-----BEGIN PGP PUBLIC KEY BLOCK-----"));
         let (parsed, _) = SignedPublicKey::from_string(&armored).unwrap();
         assert_eq!(parsed.fingerprint(), secret.fingerprint());

@@ -11,6 +11,7 @@
 //! 3. [`vanished`] → forget these UIDs (gone from the server).
 
 use std::collections::{HashMap, HashSet};
+use std::hash::BuildHasher;
 
 use nail_api::accounts::Pop3Options;
 
@@ -57,9 +58,9 @@ impl From<&Pop3Options> for LeavePolicy {
 
 /// Messages to download: those whose UID is not in `known`, in server
 /// order, each UID once (some servers list duplicates).
-pub fn plan_downloads<'a>(
+pub fn plan_downloads<'a, S: BuildHasher>(
     server: &'a [ServerMessage],
-    known: &HashSet<String>,
+    known: &HashSet<String, S>,
 ) -> Vec<&'a ServerMessage> {
     let mut seen = HashSet::new();
     server
@@ -80,11 +81,11 @@ pub fn plan_downloads<'a>(
 /// message is deleted when it is at least `delete_after_days` old (counted
 /// from the download) or, with `delete_when_deleted_locally`, when its local
 /// copy is gone.
-pub fn plan_deletions<'a>(
+pub fn plan_deletions<'a, S1: BuildHasher, S2: BuildHasher>(
     policy: &LeavePolicy,
     server: &'a [ServerMessage],
-    downloaded: &HashMap<String, i64>,
-    locally_deleted: &HashSet<String>,
+    downloaded: &HashMap<String, i64, S1>,
+    locally_deleted: &HashSet<String, S2>,
     now: i64,
 ) -> Vec<&'a ServerMessage> {
     server
@@ -130,7 +131,7 @@ mod tests {
         uids.iter()
             .enumerate()
             .map(|(i, uid)| ServerMessage {
-                number: i as u32 + 1,
+                number: u32::try_from(i + 1).unwrap(),
                 uid: (*uid).to_owned(),
                 size: 100,
             })

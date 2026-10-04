@@ -2,12 +2,14 @@
 //! SASL-IR / LITERAL+) and the extensions switched on after login
 //! (COMPRESS=DEFLATE, ID, ENABLE QRESYNC / CONDSTORE).
 
-mod common;
+use std::fmt::Write as _;
 
-use common::*;
+use crate::common::*;
 use nail_api::ErrorCode;
 use nail_proto_imap::{AuthMechanism, Credentials, ImapClient, ImapError, UidRange};
-use nail_testkit::{MailStore, MockCapabilities, MockImapConfig, MockImapServer, MockTls};
+use nail_testkit::{
+    MailStore, MockCapabilities, MockImapConfig, MockImapServer, MockTls, NO_FLAGS,
+};
 
 async fn connect_with(
     server: &MockImapServer,
@@ -160,11 +162,12 @@ async fn a_modern_server_gets_compression_id_and_qresync() {
 #[tokio::test]
 async fn compression_works_over_tls_with_large_bodies() {
     let store = MailStore::new();
-    let big: String = (0..20_000)
-        .map(|i| format!("line {i} of a long mail\r\n"))
-        .collect();
+    let big: String = (0..20_000).fold(String::new(), |mut out, i| {
+        write!(out, "line {i} of a long mail\r\n").unwrap();
+        out
+    });
     let raw = format!("Subject: big\r\n\r\n{big}");
-    store.append("INBOX", raw.as_bytes(), &[] as &[&str]);
+    store.append("INBOX", raw.as_bytes(), NO_FLAGS);
     let server = MockImapServer::start(
         MockImapConfig {
             tls: MockTls::Implicit,

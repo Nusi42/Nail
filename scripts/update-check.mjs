@@ -15,27 +15,42 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { checkForUpdate, downloadVerified } from "./lib/update-check.mjs";
 
+/** @type {Partial<Record<string, string>>} */
+const OPTIONS = {
+  "--endpoint": "endpoint",
+  "--current": "current",
+  "--arch": "arch",
+  "--installer": "installer",
+  "--pubkey-file": "pubkeyFile",
+  "--out": "out",
+};
+
+/** @param {string[]} argv */
 function parse(argv) {
+  /** @type {Partial<Record<string, string>>} */
   const o = {};
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     const v = argv[++i];
     if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
-    const key = {
-      "--endpoint": "endpoint",
-      "--current": "current",
-      "--arch": "arch",
-      "--installer": "installer",
-      "--pubkey-file": "pubkeyFile",
-      "--out": "out",
-    }[arg];
+    const key = OPTIONS[arg];
     if (!key) throw new Error(`unknown option ${arg}`);
     o[key] = v;
   }
-  for (const key of ["endpoint", "current", "arch", "installer", "pubkeyFile", "out"]) {
-    if (!o[key]) throw new Error(`missing option for ${key}`);
-  }
-  return o;
+  /** @param {string} key */
+  const get = (key) => {
+    const value = o[key];
+    if (!value) throw new Error(`missing option for ${key}`);
+    return value;
+  };
+  return {
+    endpoint: get("endpoint"),
+    current: get("current"),
+    arch: get("arch"),
+    installer: get("installer"),
+    pubkeyFile: get("pubkeyFile"),
+    out: get("out"),
+  };
 }
 
 try {
@@ -54,6 +69,6 @@ try {
     JSON.stringify({ available: update.available, version: update.version, target: update.target }),
   );
 } catch (e) {
-  console.error(`update check failed: ${e.message}`);
+  console.error(`update check failed: ${e instanceof Error ? e.message : String(e)}`);
   process.exit(1);
 }

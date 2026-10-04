@@ -12,6 +12,7 @@ import { RoomFinder, TaskListBadge, TaskListChooser } from ".";
 import { EXCHANGE_ACCOUNT, EXCHANGE_CALENDARS } from "./mockSeed";
 import { eventRange } from "./RoomFinder";
 import { requests, setup } from "./testing";
+import { must } from "../../test/must";
 
 const at = (local: string): PimTime => ({ type: "zoned", local, tz: "UTC" });
 
@@ -55,7 +56,9 @@ describe("room finder", () => {
     const env = setup();
     const spy: Spy = { attendees: [], location: "" };
     const { container } = renderWithProviders(<Editor calendarId="cal-personal" spy={spy} />, env);
-    await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+    await waitFor(() => {
+      expect(env.queryClient.isFetching()).toBe(0);
+    });
     expect(container.querySelector('[data-part="exchange.rooms"]')).toBeNull();
   });
 
@@ -80,7 +83,7 @@ describe("room finder", () => {
       ["Babbage hall", "busy"],
       ["Hopper lab", "unknown"],
     ]);
-    const ada = rows[1] as HTMLElement;
+    const ada = must(rows[1]);
     expect(ada).toHaveTextContent("8 seats");
     expect(ada).toHaveTextContent("Building 1, floor 2");
     expect(ada).toHaveTextContent("Wheelchair accessible");
@@ -117,12 +120,12 @@ describe("room finder", () => {
     await screen.findByRole("list", { name: "Rooms for this time" });
     await user.selectOptions(screen.getByLabelText("Room list"), "Building 2");
     await user.type(screen.getByLabelText("At least this many seats"), "5");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(requests(env, "FindRooms").at(-1)).toMatchObject({
         room_list: "building2@contoso.example",
         min_capacity: 5,
-      }),
-    );
+      });
+    });
     await waitFor(() =>
       expect(screen.getByRole("list", { name: "Rooms for this time" })).toHaveTextContent(
         "Hopper lab",

@@ -141,7 +141,7 @@ function tokenDeclarations(tokens: TokenSet, warnings: string[]): Record<string,
         }
         out[tokenVar(category, name)] = value;
       } catch (error) {
-        warnings.push(String((error as Error).message));
+        warnings.push((error as Error).message);
       }
     }
   }
@@ -218,7 +218,7 @@ ${[
 [data-part="mcp-audit.table"] { border-collapse: collapse; }
 [data-part="search-bar.error.query"] { white-space: pre; }
 [data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
-${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"], [data-part="folder-picker.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}
+${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${String(d)}"], [data-part="folder-picker.item"][data-depth="${String(d)}"] { margin-inline-start: ${String(d * 16)}px; }`).join("\n")}
 [data-part="context-menu"] { position: fixed; z-index: 1000; }
 [data-part="context-menu.item"] { display: flex; align-items: center; width: 100%; font: inherit; text-align: start; }
 [data-part="context-menu.submenu"] { position: relative; }
@@ -341,7 +341,7 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
     try {
       sections.push(`${ruleSelector(rule)} {\n${declarationBlock(rule.declarations)}\n}`);
     } catch (error) {
-      const where = rule.source ? ` (${rule.source.file}:${rule.source.line})` : "";
+      const where = rule.source ? ` (${rule.source.file}:${String(rule.source.line)})` : "";
       warnings.push(`${(error as Error).message}${where}`);
     }
   }

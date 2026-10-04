@@ -50,8 +50,7 @@ use crate::key::{self, KeyInfo, ParsedKey};
 pub(crate) fn unix_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
 /// RFC 3339 (UTC, seconds) of Unix seconds.
@@ -186,7 +185,9 @@ impl UnlockedKey {
     /// The card error of the last failed signature (rPGP reports card
     /// failures as its own errors).
     pub(crate) fn card_error(&self) -> Option<nail_pkcs11::CardError> {
-        self.card.as_ref().and_then(|c| c.last_error())
+        self.card
+            .as_ref()
+            .and_then(super::smartcard::CardSigningKey::last_error)
     }
 
     /// The component that signs at `now`.
@@ -203,7 +204,7 @@ impl UnlockedKey {
                     .secret_subkeys
                     .iter()
                     .find(|s| Some(s.key.fingerprint()) == fingerprint)
-                    .map(|s| &s.key as &dyn SigningKey)
+                    .map(|s| -> &dyn SigningKey { &s.key })
                     .ok_or_else(|| Error::NoKey("the signing subkey has no secret part".into()))?
             }
         })
@@ -485,6 +486,15 @@ pub struct Keyring<'a> {
     unlocked: &'a UnlockCache,
     now: Option<i64>,
     cards: Option<&'a dyn nail_pkcs11::KeyResolver>,
+}
+
+impl std::fmt::Debug for Keyring<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Keyring")
+            .field("now", &self.now)
+            .field("smartcards", &self.cards.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'a> Keyring<'a> {
@@ -1052,7 +1062,7 @@ impl<'a> Keyring<'a> {
         if secret.storage != SecretStorage::Passphrase {
             return Ok(());
         }
-        let key = self.secret_key(&stored)?;
+        let key = Self::secret_key(&stored)?;
         if !password_unlocks(&key, &Password::from(passphrase)) {
             return Err(Error::BadPassphrase);
         }
@@ -1102,7 +1112,7 @@ impl<'a> Keyring<'a> {
         self.get(key_id)
     }
 
-    fn secret_key(&self, stored: &StoredKey) -> Result<SignedSecretKey> {
+    fn secret_key(stored: &StoredKey) -> Result<SignedSecretKey> {
         let data = stored
             .data
             .secret
@@ -1151,7 +1161,7 @@ impl<'a> Keyring<'a> {
         {
             return self.unlocked_card_key(stored);
         }
-        let secret = self.secret_key(stored)?;
+        let secret = Self::secret_key(stored)?;
         let password = self.password_for(stored)?.ok_or_else(|| Error::Locked {
             key_id: stored.id.clone(),
         })?;
@@ -1172,7 +1182,7 @@ impl<'a> Keyring<'a> {
             .store
             .list_keys(Some(CryptoTechnology::OpenPgp), true)?
         {
-            if let Ok(secret) = self.secret_key(&stored) {
+            if let Ok(secret) = Self::secret_key(&stored) {
                 out.push((stored, secret));
             }
         }
@@ -1352,7 +1362,7 @@ mod tests {
     }
 
     impl Env {
-        pub fn new() -> Self {
+        pub(super) fn new() -> Self {
             Self {
                 store: Store::open_in_memory().unwrap(),
                 secrets: MemorySecretStore::new(),
@@ -1360,7 +1370,7 @@ mod tests {
             }
         }
 
-        pub fn keyring(&self) -> Keyring<'_> {
+        pub(super) fn keyring(&self) -> Keyring<'_> {
             Keyring::new(&self.store, &self.secrets, &self.cache)
         }
     }

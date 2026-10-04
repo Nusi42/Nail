@@ -51,7 +51,7 @@ pub struct SmtpConfig {
 
 impl SmtpConfig {
     /// Default per-operation timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
 
     /// Implicit TLS on port 465 with platform trust: the recommended setup
     /// (RFC 8314).

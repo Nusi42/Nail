@@ -5,13 +5,13 @@ import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { actions, handleRemoteEvent } from "./index";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleRemoteEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 /**
@@ -122,7 +122,9 @@ describe("remote content bar", () => {
     const { bar, env, user } = await open({ decorated: false });
     expect(bar).toHaveTextContent("Nail blocked images and other files from the internet");
     await user.click(within(bar).getByRole("button", { name: "Load for this message" }));
-    await waitFor(() => expect(env.transport.data.features.remote.allows).toHaveLength(1));
+    await waitFor(() => {
+      expect(env.transport.data.features.remote.allows).toHaveLength(1);
+    });
   });
 
   it("shows errors and hides for messages without remote content", async () => {
@@ -134,7 +136,9 @@ describe("remote content bar", () => {
     const plain = env.transport.data.messages.find(
       (m) => env.transport.data.bodies.get(m.id)?.remote_content_blocked === false,
     );
-    act(() => env.store.getState().selectMessage(plain?.id ?? null));
+    act(() => {
+      env.store.getState().selectMessage(plain?.id ?? null);
+    });
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "Remote content" })).not.toBeInTheDocument(),
     );
@@ -157,8 +161,12 @@ describe("remote.content.allow action", () => {
     expect(action.enabled?.(ctx, ["domain"])).toBe(true);
     await action.run(ctx, ["domain"]);
     expect(requestsOf(env, "AllowRemoteContent").at(-1)?.scope).toBe("domain");
-    await waitFor(() => expect(action.enabled?.(ctx, [])).toBe(false));
-    act(() => env.store.getState().selectMessage(null));
+    await waitFor(() => {
+      expect(action.enabled?.(ctx, [])).toBe(false);
+    });
+    act(() => {
+      env.store.getState().selectMessage(null);
+    });
     expect(action.enabled?.(ctx, [])).toBe(false);
   });
 });

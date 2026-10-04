@@ -149,7 +149,7 @@ impl Service {
         identity: Option<IdentityId>,
     ) -> Result<()> {
         let (stored, raw) = self.raw_message(message).await?;
-        self.refuse_encrypted(&raw, "forward").await?;
+        Self::refuse_encrypted(&raw, "forward")?;
         let identity = self
             .rule_identity(message, &stored.summary.account_id, identity)
             .await?;
@@ -177,7 +177,7 @@ impl Service {
         identity: Option<IdentityId>,
     ) -> Result<()> {
         let (stored, raw) = self.raw_message(message).await?;
-        self.refuse_encrypted(&raw, "reply to").await?;
+        Self::refuse_encrypted(&raw, "reply to")?;
         let identity_id = self
             .rule_identity(message, &stored.summary.account_id, identity)
             .await?;
@@ -235,7 +235,7 @@ impl Service {
 
     /// Refuses automatic forwards and replies of encrypted mail: they would
     /// send its decrypted content without encryption (ADR 0034).
-    async fn refuse_encrypted(&self, raw: &[u8], action: &str) -> Result<()> {
+    fn refuse_encrypted(raw: &[u8], action: &str) -> Result<()> {
         if crate::crypto::is_encrypted_raw(raw) {
             return Err(ApiError::unsupported(format!(
                 "a rule cannot {action} an encrypted message"

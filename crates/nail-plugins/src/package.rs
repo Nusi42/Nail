@@ -132,7 +132,7 @@ impl PackageError {
         }
     }
 
-    fn detail(mut self, detail: impl ToString) -> Self {
+    fn detail(mut self, detail: &(impl ToString + ?Sized)) -> Self {
         self.detail = Some(detail.to_string());
         self
     }
@@ -217,14 +217,14 @@ impl PackageFiles {
                         return Err(PackageError::at(PackageErrorKind::MissingFile, path));
                     }
                     Err(e) => {
-                        return Err(PackageError::at(PackageErrorKind::Unreadable, path).detail(e));
+                        return Err(PackageError::at(PackageErrorKind::Unreadable, path).detail(&e));
                     }
                 };
                 if !real.starts_with(root) {
                     return Err(PackageError::at(PackageErrorKind::Link, path));
                 }
                 let meta = std::fs::metadata(&real)
-                    .map_err(|e| PackageError::at(PackageErrorKind::Unreadable, path).detail(e))?;
+                    .map_err(|e| PackageError::at(PackageErrorKind::Unreadable, path).detail(&e))?;
                 if !meta.is_file() {
                     return Err(PackageError::at(PackageErrorKind::MissingFile, path));
                 }
@@ -232,7 +232,7 @@ impl PackageFiles {
                     return Err(PackageError::at(PackageErrorKind::TooLarge, path));
                 }
                 std::fs::read(&real)
-                    .map_err(|e| PackageError::at(PackageErrorKind::Unreadable, path).detail(e))
+                    .map_err(|e| PackageError::at(PackageErrorKind::Unreadable, path).detail(&e))
             }
         }
     }
@@ -299,7 +299,7 @@ impl PluginPackage {
             return Err(PackageError::new(K::TooLarge));
         }
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
-            .map_err(|e| PackageError::new(K::NotAZip).detail(e))?;
+            .map_err(|e| PackageError::new(K::NotAZip).detail(&e))?;
         if archive.len() > MAX_FILES {
             return Err(PackageError::new(K::TooManyFiles));
         }
@@ -311,7 +311,7 @@ impl PluginPackage {
             let (name, is_dir) = {
                 let entry = archive
                     .by_index_raw(i)
-                    .map_err(|e| PackageError::new(K::Unreadable).detail(e))?;
+                    .map_err(|e| PackageError::new(K::Unreadable).detail(&e))?;
                 let name = entry.name().to_owned();
                 let is_dir = name.ends_with('/');
                 let plain = name.strip_suffix('/').unwrap_or(&name);
@@ -340,12 +340,12 @@ impl PluginPackage {
             }
             let entry = archive
                 .by_index(i)
-                .map_err(|e| PackageError::at(K::Unreadable, &name).detail(e))?;
+                .map_err(|e| PackageError::at(K::Unreadable, &name).detail(&e))?;
             let mut data = Vec::new();
             entry
                 .take(budget + 1)
                 .read_to_end(&mut data)
-                .map_err(|e| PackageError::at(K::Unreadable, &name).detail(e))?;
+                .map_err(|e| PackageError::at(K::Unreadable, &name).detail(&e))?;
             let len = data.len() as u64;
             if len > budget {
                 return Err(PackageError::at(K::TooLarge, name));
@@ -405,7 +405,7 @@ pub fn load_folder(
     PackageError,
 > {
     let root = folder.canonicalize().map_err(|e| {
-        PackageError::at(PackageErrorKind::Unreadable, folder.display().to_string()).detail(e)
+        PackageError::at(PackageErrorKind::Unreadable, folder.display().to_string()).detail(&e)
     })?;
     if !root.is_dir() {
         return Err(PackageError::at(
@@ -466,10 +466,10 @@ impl PackageStore {
                 .collect::<Vec<_>>()
                 .join("; ");
             return Err(
-                PackageError::at(PackageErrorKind::Unreadable, MANIFEST_FILE).detail(detail),
+                PackageError::at(PackageErrorKind::Unreadable, MANIFEST_FILE).detail(&detail),
             );
         };
-        let io = |e: std::io::Error| PackageError::new(PackageErrorKind::Unreadable).detail(e);
+        let io = |e: std::io::Error| PackageError::new(PackageErrorKind::Unreadable).detail(&e);
         std::fs::create_dir_all(&self.dir).map_err(io)?;
         let target = self.path(&manifest.id);
         let temp = self.dir.join(format!(
@@ -479,7 +479,7 @@ impl PackageStore {
         ));
         std::fs::write(&temp, bytes).map_err(io)?;
         if let Err(e) = std::fs::rename(&temp, &target) {
-            let _ = std::fs::remove_file(&temp);
+            drop(std::fs::remove_file(&temp));
             return Err(io(e));
         }
         Ok(package)
@@ -499,7 +499,7 @@ impl PackageStore {
             } else {
                 PackageErrorKind::Unreadable
             };
-            PackageError::at(kind, path.display().to_string()).detail(e)
+            PackageError::at(kind, path.display().to_string()).detail(&e)
         })?;
         if let Some(expected) = expected_sha256
             && !sha256_hex(&bytes).eq_ignore_ascii_case(expected)
@@ -682,7 +682,7 @@ mod tests {
     #[test]
     fn stops_zip_bombs_at_the_limit() {
         // 21 MiB of zeros deflate to ~21 KiB.
-        let zeros = vec![0u8; (MAX_PACKAGE_BYTES + 1024 * 1024) as usize];
+        let zeros = vec![0u8; usize::try_from(MAX_PACKAGE_BYTES + 1024 * 1024).unwrap()];
         let bytes = zip_with(
             &[("manifest.json", MANIFEST.as_bytes()), ("bomb.bin", &zeros)],
             deflate(),
@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn refuses_oversized_archives_and_garbage() {
-        let big = vec![0u8; (MAX_PACKAGE_BYTES + 1) as usize];
+        let big = vec![0u8; usize::try_from(MAX_PACKAGE_BYTES + 1).unwrap()];
         assert_eq!(kind(&big), PackageErrorKind::TooLarge);
         assert_eq!(kind(b"not a zip at all"), PackageErrorKind::NotAZip);
         let many: Vec<(String, Vec<u8>)> = (0..=MAX_FILES)

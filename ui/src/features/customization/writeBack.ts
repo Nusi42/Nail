@@ -47,10 +47,10 @@ export function splitRefOf(
 ): LayoutNodeRef | null {
   const isResizable = (node: LayoutNode | null) => node?.type === "split" || node?.type === "stack";
   const byPath = PATH_KEY.exec(key);
-  if (byPath) {
-    const window = byPath[1] as string;
-    const breakpoint = Number(byPath[2]);
-    const path = (byPath[3] ?? "").split("/").filter(Boolean).map(Number);
+  const [, window, breakpointText, pathText] = byPath ?? [];
+  if (window !== undefined) {
+    const breakpoint = Number(breakpointText);
+    const path = (pathText ?? "").split("/").filter(Boolean).map(Number);
     const root = layout.windows[window]?.[breakpoint]?.root;
     return root && isResizable(nodeAt(root, path)) ? { window, breakpoint, path } : null;
   }

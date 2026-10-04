@@ -120,8 +120,17 @@ export class FluentCatalog {
   }
 }
 
+/** A selector value as a variant key: strings and numbers (other values match no key). */
+function selectorText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
 function pick(variants: Variant[], value: unknown, locale: string): Variant | undefined {
-  const text = value === undefined || value === null ? undefined : String(value);
+  const text = selectorText(value);
   const exact = variants.find((v) => v.key === text);
   if (exact) return exact;
   if (typeof value === "number") {
@@ -169,7 +178,7 @@ function readPattern(src: string, start: number, inVariant: boolean): [Pattern, 
       if (inVariant) break;
       throw new SyntaxError("unbalanced }");
     }
-    text += c;
+    text += c ?? "";
     i += 1;
   }
   if (text) parts.push({ kind: "text", text: inVariant ? text.replace(/\s+$/, "") : text });
@@ -191,10 +200,11 @@ function readPlaceable(src: string, start: number): [Part, number] {
     while (i < src.length && src[i] !== '"') {
       if (src[i] === "\\" && i + 1 < src.length) {
         const esc = src[i + 1];
-        text += esc === "u" ? String.fromCharCode(parseInt(src.slice(i + 2, i + 6), 16)) : esc;
+        text +=
+          esc === "u" ? String.fromCharCode(parseInt(src.slice(i + 2, i + 6), 16)) : (esc ?? "");
         i += esc === "u" ? 6 : 2;
       } else {
-        text += src[i];
+        text += src[i] ?? "";
         i += 1;
       }
     }

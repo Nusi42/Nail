@@ -16,7 +16,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A local date as `YYYY-MM-DD`. */
 export function isoDate(date: Date): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** Escapes text for HTML. */

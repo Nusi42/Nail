@@ -27,6 +27,7 @@ import { useClient } from "../../state/queries";
 import { PathField } from "../portability/PathField";
 import { securityKeys } from "./queries";
 import { MAX_PIN_CACHE_MINUTES, smartcardSettingsIssue } from "./smartcardModel";
+import { hasText } from "../../text/empty";
 
 export const SMARTCARDS_WIDGET = "security-smartcards";
 
@@ -67,8 +68,8 @@ function ModuleRow({
   onRemove,
 }: {
   module: Pkcs11Module;
-  onChange(module: Pkcs11Module): void;
-  onRemove(): void;
+  onChange: (module: Pkcs11Module) => void;
+  onRemove: () => void;
 }) {
   const t = useT();
   return (
@@ -78,7 +79,9 @@ function ModuleRow({
           data-part="form.checkbox"
           type="checkbox"
           checked={module.enabled}
-          onChange={(e) => onChange({ ...module, enabled: e.target.checked })}
+          onChange={(e) => {
+            onChange({ ...module, enabled: e.target.checked });
+          }}
         />
         <span data-part="form.check.label">{module.name ?? module.path}</span>
       </label>
@@ -141,7 +144,7 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
         <ul data-part="smartcards.modules">
           {draft.modules.map((m, i) => (
             <ModuleRow
-              key={`${m.path}-${i}`}
+              key={`${m.path}-${String(i)}`}
               module={m}
               onChange={(next) => {
                 setDraft({ ...draft, modules: draft.modules.map((x, j) => (j === i ? next : x)) });
@@ -297,7 +300,7 @@ function ObjectRow({ token, object }: { token: SmartcardToken; object: Smartcard
                 {t("security-smartcard-use-smime")}
               </button>
             )}
-            {(object.openpgp_fingerprint || !cert) && (
+            {(hasText(object.openpgp_fingerprint) || !cert) && (
               <button
                 type="button"
                 data-part="form.button"
@@ -346,7 +349,7 @@ function TokenCard({ token }: { token: SmartcardToken }) {
       )}
       <ul data-part="smartcards.objects">
         {token.objects.map((o, i) => (
-          <ObjectRow key={`${o.kind}-${o.id}-${i}`} token={token} object={o} />
+          <ObjectRow key={`${o.kind}-${o.id}-${String(i)}`} token={token} object={o} />
         ))}
       </ul>
     </li>
@@ -397,7 +400,7 @@ export function SmartcardsWidget() {
                 })}
               </p>
             ))}
-            {cards.data && cards.data.tokens.length === 0 ? (
+            {cards.data?.tokens.length === 0 ? (
               <p data-part="form.hint" data-field="no-cards">
                 {t("security-smartcard-no-cards")}
               </p>

@@ -24,8 +24,12 @@ function must<T>(value: T | null | undefined): T {
 }
 
 const BERLIN = "Europe/Berlin";
-beforeAll(() => setLocalTimeZone(BERLIN));
-afterAll(() => resetLocalTimeZone());
+beforeAll(() => {
+  setLocalTimeZone(BERLIN);
+});
+afterAll(() => {
+  resetLocalTimeZone();
+});
 
 type Of<T extends Response["type"]> = Extract<Response, { type: T }>;
 

@@ -1,6 +1,6 @@
 //! The PIM operation queue (`pim_ops`): every write to a CalDAV / CardDAV
 //! server goes through here, per source, like the mail queue
-//! ([`crate::queue`]) per account.
+//! ([`QueuedOp`](crate::QueuedOp)) per account.
 //!
 //! * Item writes are queued by [`Store::save_pim_item`] /
 //!   [`Store::delete_pim_item`] / [`Store::move_pim_item`] in the same
@@ -580,7 +580,7 @@ mod tests {
     }
 
     fn dav_event(id: &str, uid: &str) -> PimItem {
-        let mut e = testing::Fixtures::new().event(id, uid, id);
+        let mut e = testing::event(id, uid, id);
         e.calendar_id = DAV_CAL.into();
         PimItem::Event(e)
     }

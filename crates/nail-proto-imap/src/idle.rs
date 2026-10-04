@@ -13,7 +13,7 @@ use crate::transport::with_timeout;
 
 /// RFC 2177: clients should re-issue `IDLE` at least every 29 minutes to
 /// avoid being logged off by the server's inactivity timer.
-pub const IDLE_REISSUE: Duration = Duration::from_secs(29 * 60);
+pub const IDLE_REISSUE: Duration = Duration::from_mins(29);
 
 /// Why [`ImapClient::idle`] returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

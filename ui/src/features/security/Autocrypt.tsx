@@ -8,7 +8,7 @@
  * the message selected in the list.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { KeyImportResult, MessageId } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
@@ -21,6 +21,7 @@ import { identityText } from "./IdentityCrypto";
 import { ImportResult } from "./KeyTools";
 import { formatPasscode, isCompletePasscode } from "./model";
 import { securityKeys } from "./queries";
+import { nonEmpty } from "../../text/empty";
 
 /** Name of the import dialog (`window.open "security-autocrypt-import"`). */
 export const AUTOCRYPT_IMPORT_DIALOG = "security-autocrypt-import";
@@ -33,7 +34,7 @@ function SendSetup() {
   const [sent, setSent] = useState<{ passcode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const chosen = identity || identities[0]?.id || "";
+  const chosen = nonEmpty(identity) ?? identities[0]?.id ?? "";
 
   const send = async () => {
     if (chosen === "" || busy) return;
@@ -74,7 +75,9 @@ function SendSetup() {
             data-part="form.button"
             data-variant="primary"
             data-action="code-done"
-            onClick={() => setSent(null)}
+            onClick={() => {
+              setSent(null);
+            }}
           >
             {t("security-autocrypt-code-done")}
           </button>
@@ -129,7 +132,7 @@ export function AutocryptImport({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!isCompletePasscode(code) || busy) return;
     setBusy(true);
@@ -171,7 +174,9 @@ export function AutocryptImport({
         name="autocrypt-code"
         autoComplete="one-time-code"
         value={code}
-        onChange={(v) => setCode(formatPasscode(v))}
+        onChange={(v) => {
+          setCode(formatPasscode(v));
+        }}
       />
       <button
         type="submit"
@@ -245,7 +250,12 @@ export function AutocryptImportDialog({ close }: DialogProps) {
       {selectedId === null ? (
         <p data-part="security-autocrypt.hint">{t("security-autocrypt-select-message")}</p>
       ) : (
-        <AutocryptImport messageId={selectedId} onDone={() => setDone(true)} />
+        <AutocryptImport
+          messageId={selectedId}
+          onDone={() => {
+            setDone(true);
+          }}
+        />
       )}
       <button type="button" data-part="form.button" data-action="close" onClick={close}>
         {t(done ? "security-autocrypt-code-done" : "security-cancel")}

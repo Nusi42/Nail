@@ -338,8 +338,10 @@ inspector to find them), and `composer.editor-loading`.
 
 A mistake is reported with the file, line and column, for example:
 
-```
+<!-- A misspelled token on purpose. spellchecker:off -->
+```text
 theme.kdl:12:17: unknown token `$color.acent`
 ```
+<!-- spellchecker:on -->
 
 Until you fix it, Nail keeps using the last theme that worked.

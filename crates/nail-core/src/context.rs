@@ -24,7 +24,7 @@ impl Service {
             }
             host.deliver_event(
                 nail_api::plugins::jobs::PluginEventName::SelectionChanged,
-                ids,
+                &ids,
             );
         }
         // Wakes the MCP server's `nail://ui/context` subscribers.

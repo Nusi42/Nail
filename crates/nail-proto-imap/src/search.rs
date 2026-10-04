@@ -11,6 +11,7 @@
 //! substrings; `TEXT` covers headers and body.
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 
 use imap_proto::Response;
 use imap_proto::types::MailboxDatum;
@@ -118,7 +119,7 @@ impl SearchKey {
             match piece {
                 Piece::Text(text) => out.push_str(&text),
                 Piece::Literal(bytes) => {
-                    out.push_str(&format!("{{{}}}", bytes.len()));
+                    let _ = write!(out, "{{{}}}", bytes.len());
                     out.push_str(&String::from_utf8_lossy(&bytes));
                 }
             }

@@ -180,15 +180,11 @@ export function nextSelection(
   if (selected === null || !removed.includes(selected)) return selected;
   const index = order.indexOf(selected);
   const gone = new Set(removed);
-  for (let i = index + 1; i < order.length; i++) {
-    const id = order[i] as MessageId;
-    if (!gone.has(id)) return id;
-  }
-  for (let i = index - 1; i >= 0; i--) {
-    const id = order[i] as MessageId;
-    if (!gone.has(id)) return id;
-  }
-  return null;
+  const kept = (id: MessageId) => !gone.has(id);
+  // The next message that stays, else the nearest one before.
+  const after = order.slice(index + 1);
+  const before = index > 0 ? order.slice(0, index).reverse() : [];
+  return after.find(kept) ?? before.find(kept) ?? null;
 }
 
 /** Takes messages out of every cached list at once and moves the selection on. */

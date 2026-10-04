@@ -37,7 +37,9 @@ describe.each(EXAMPLES)("the %s example", (name) => {
   beforeAll(() => {
     example = prepareExample(name);
   });
-  afterAll(() => example.cleanup());
+  afterAll(() => {
+    example.cleanup();
+  });
 
   it("uses the template's build and pack scripts and tsconfig", () => {
     for (const file of ["scripts/build.mjs", "scripts/pack.mjs", "tsconfig.json", ".gitignore"]) {

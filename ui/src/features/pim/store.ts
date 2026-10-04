@@ -99,25 +99,25 @@ export interface PimState {
   /** The calendar the remove dialog asks about (M5b). */
   removeCalendarId: CalendarId | null;
 
-  setAnchor(anchor: string | null): void;
-  setView(view: ViewKind | null): void;
-  setShown(shown: { view: ViewKind; days: number } | null): void;
-  select(selected: PimState["selected"]): void;
-  editEvent(target: EventEditorTarget | null): void;
-  setPendingChange(change: PendingChange | null): void;
-  showContact(id: ContactId | null): void;
-  setSelectedContacts(ids: ContactId[]): void;
-  editContact(target: ContactEditorTarget | null): void;
-  setMergeIds(ids: ContactId[]): void;
-  showTask(id: TaskId | null): void;
-  editTask(target: TaskEditorTarget | null): void;
-  pushToast(toast: PimToast): void;
-  dismissToast(id: string): void;
-  setImportPath(path: string | null): void;
-  setSubscribeUrl(url: string | null): void;
-  editCalendar(id: CalendarId | null): void;
-  setNewCalendar(target: NewCalendarTarget | null): void;
-  setRemoveCalendar(id: CalendarId | null): void;
+  setAnchor: (anchor: string | null) => void;
+  setView: (view: ViewKind | null) => void;
+  setShown: (shown: { view: ViewKind; days: number } | null) => void;
+  select: (selected: PimState["selected"]) => void;
+  editEvent: (target: EventEditorTarget | null) => void;
+  setPendingChange: (change: PendingChange | null) => void;
+  showContact: (id: ContactId | null) => void;
+  setSelectedContacts: (ids: ContactId[]) => void;
+  editContact: (target: ContactEditorTarget | null) => void;
+  setMergeIds: (ids: ContactId[]) => void;
+  showTask: (id: TaskId | null) => void;
+  editTask: (target: TaskEditorTarget | null) => void;
+  pushToast: (toast: PimToast) => void;
+  dismissToast: (id: string) => void;
+  setImportPath: (path: string | null) => void;
+  setSubscribeUrl: (url: string | null) => void;
+  editCalendar: (id: CalendarId | null) => void;
+  setNewCalendar: (target: NewCalendarTarget | null) => void;
+  setRemoveCalendar: (id: CalendarId | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PimState>>();
@@ -144,26 +144,63 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     calendarSettingsId: null,
     newCalendar: null,
     removeCalendarId: null,
-    setAnchor: (anchor) => set({ anchor }),
-    setView: (view) => set({ view }),
-    setShown: (shown) => set({ shown }),
-    select: (selected) => set({ selected }),
-    editEvent: (eventEditor) => set({ eventEditor }),
-    setPendingChange: (pendingChange) => set({ pendingChange }),
-    showContact: (contactId) => set({ contactId }),
-    setSelectedContacts: (selectedContacts) => set({ selectedContacts }),
-    editContact: (contactEditor) => set({ contactEditor }),
-    setMergeIds: (mergeIds) => set({ mergeIds }),
-    showTask: (taskId) => set({ taskId }),
-    editTask: (taskEditor) => set({ taskEditor }),
-    pushToast: (toast) =>
-      set((s) => ({ toasts: [...s.toasts.filter((t) => t.id !== toast.id), toast] })),
-    dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-    setImportPath: (importPath) => set({ importPath }),
-    setSubscribeUrl: (subscribeUrl) => set({ subscribeUrl }),
-    editCalendar: (calendarSettingsId) => set({ calendarSettingsId }),
-    setNewCalendar: (newCalendar) => set({ newCalendar }),
-    setRemoveCalendar: (removeCalendarId) => set({ removeCalendarId }),
+    setAnchor: (anchor) => {
+      set({ anchor });
+    },
+    setView: (view) => {
+      set({ view });
+    },
+    setShown: (shown) => {
+      set({ shown });
+    },
+    select: (selected) => {
+      set({ selected });
+    },
+    editEvent: (eventEditor) => {
+      set({ eventEditor });
+    },
+    setPendingChange: (pendingChange) => {
+      set({ pendingChange });
+    },
+    showContact: (contactId) => {
+      set({ contactId });
+    },
+    setSelectedContacts: (selectedContacts) => {
+      set({ selectedContacts });
+    },
+    editContact: (contactEditor) => {
+      set({ contactEditor });
+    },
+    setMergeIds: (mergeIds) => {
+      set({ mergeIds });
+    },
+    showTask: (taskId) => {
+      set({ taskId });
+    },
+    editTask: (taskEditor) => {
+      set({ taskEditor });
+    },
+    pushToast: (toast) => {
+      set((s) => ({ toasts: [...s.toasts.filter((t) => t.id !== toast.id), toast] }));
+    },
+    dismissToast: (id) => {
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    },
+    setImportPath: (importPath) => {
+      set({ importPath });
+    },
+    setSubscribeUrl: (subscribeUrl) => {
+      set({ subscribeUrl });
+    },
+    editCalendar: (calendarSettingsId) => {
+      set({ calendarSettingsId });
+    },
+    setNewCalendar: (newCalendar) => {
+      set({ newCalendar });
+    },
+    setRemoveCalendar: (removeCalendarId) => {
+      set({ removeCalendarId });
+    },
   }));
   stores.set(ui, store);
   return store;

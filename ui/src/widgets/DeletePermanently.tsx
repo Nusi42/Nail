@@ -49,7 +49,9 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const [busy, setBusy] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
   // The safe choice has the focus (after the frame focused its first button).
-  useEffect(() => queueMicrotask(() => cancel.current?.focus()), []);
+  useEffect(() => {
+    queueMicrotask(() => cancel.current?.focus());
+  }, []);
   return (
     <div data-part="mail-confirm" data-confirm="delete-permanently" aria-busy={busy}>
       <p data-part="mail-confirm.question">{t("mail-delete-permanently-question", { count })}</p>
@@ -62,9 +64,9 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
           disabled={busy || count === 0}
           onClick={() => {
             setBusy(true);
-            void confirmDeletePermanently({ client, store, queryClient }).finally(() =>
-              setBusy(false),
-            );
+            void confirmDeletePermanently({ client, store, queryClient }).finally(() => {
+              setBusy(false);
+            });
           }}
         >
           {t("mail-delete-permanently-confirm")}

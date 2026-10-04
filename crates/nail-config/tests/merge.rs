@@ -2,6 +2,7 @@
 //! choices while keeping the user's file intact, "take all" / "keep all".
 //! Results are compared with golden files in `tests/golden/merge/`
 //! (`NAIL_UPDATE_GOLDEN=1` rewrites them).
+#![cfg(test)]
 
 use std::path::PathBuf;
 

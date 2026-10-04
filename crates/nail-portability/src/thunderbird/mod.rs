@@ -232,8 +232,7 @@ pub fn scan_profile(profile: &Path) -> Result<ProfileScan> {
     let local_name = all
         .iter()
         .find(|a| a.server_type == ServerType::None)
-        .map(|a| a.name.clone())
-        .unwrap_or_else(|| "Local Folders".to_owned());
+        .map_or_else(|| "Local Folders".to_owned(), |a| a.name.clone());
 
     // Accounts.
     for account in &all {
@@ -348,7 +347,10 @@ fn read_address_books(profile: &Path, prefs: &Prefs, out: &mut ProfileScan) {
         {
             continue;
         }
-        let location = if file.ends_with(".mab") {
+        let location = if Path::new(&file)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("mab"))
+        {
             PimLocation::Mork(path.clone())
         } else {
             PimLocation::AddressBookSqlite(path.clone())
@@ -357,8 +359,7 @@ fn read_address_books(profile: &Path, prefs: &Prefs, out: &mut ProfileScan) {
             Ok(nail_ical::import::ImportData::Cards(cards)) => {
                 let stem = Path::new(&file)
                     .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| file.clone());
+                    .map_or_else(|| file.clone(), |s| s.to_string_lossy().into_owned());
                 out.collections.push(PimCollectionSource {
                     collection: SourceCollection {
                         key: file.clone(),

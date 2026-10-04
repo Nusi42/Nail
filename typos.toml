@@ -29,6 +29,20 @@ extend-exclude = [
     # German text: typos only knows English.
     "locales/de/",
     "**/locales/de.ftl",
+    # Recorded iCalendar / vCard corpus (byte-exact, folded lines split words).
+    "crates/nail-ical/tests/corpus/",
+]
+
+[default]
+extend-ignore-re = [
+    # Deliberate non-English text or misspellings (German test strings, a
+    # broken config in an error example), marked at the narrowest scope:
+    # one line ending in `spellchecker:disable-line`, or a block between
+    # `spellchecker:off` and `spellchecker:on` comments (`//`, `#`, `<!--`).
+    '(?Rm)^.*(#|//|<!--)\s*spellchecker:disable-line(\s*-->)?$',
+    '(?s)(#|//|<!--)[^\n]*spellchecker:off.*?\n\s*(#|//|<!--)[^\n]*spellchecker:on',
+    # Mork column definitions in Thunderbird address books, e.g. `(BA=AddrCharSet)`.
+    '\(B[0-9A-F]=',
 ]
 
 [default.extend-words]
@@ -46,3 +60,7 @@ SEH = "SEH"                       # Windows structured exception handling
 THRID = "THRID"                   # Gmail IMAP attribute X-GM-THRID
 alikes = "alikes"                 # "look-alikes" (typos splits hyphenated words)
 Cpy = "Cpy"                       # NSIS StrCpy instruction
+flate = "flate"                   # the flate2 crate and zip's deflate-flate2-* features
+# German default folder names Nail recognizes ("Gesendete Elemente", "Archiv").
+elemente = "elemente"
+archiv = "archiv"

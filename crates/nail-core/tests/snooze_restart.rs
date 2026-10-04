@@ -7,6 +7,8 @@
 //! reloaded scheduler wakes each one on time (across a second restart,
 //! too), and an unsnooze after a restart returns the mail at once.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 

@@ -21,7 +21,7 @@ change all the time and live in the store; text lives in the index.
 - Tantivy 0.26 (ADR 0014), on disk in `<data dir>/search/` (constant
   `INDEX_DIR_NAME`) or in RAM for tests and demos.
 - One document per message: `id` (raw, stored), `account` (raw, for
-  dropping an account), and text fields `from`, `to`, `cc` ("Name <addr>"),
+  dropping an account), and text fields `from`, `to`, `cc` (`Name <addr>`),
   `subject`, `body` (the decoded text part, or the HTML part's text),
   `filename` (attachment names). `IndexDocument::from_parsed` /
   `from_raw` build it with `nail-mime`.
@@ -80,7 +80,7 @@ Relevance = sum of the positive full-text scores; date order is the
 default (newest first). `account:` accepts an account id, name or address,
 a virtual account passed in the `SearchContext`, or `all`. The search
 scope (selected account / folder, virtual ones resolved by the core) is
-ANDed in.
+combined with AND.
 
 Alternatives considered: indexing flags / folders in Tantivy (fast, but
 every flag change would rewrite documents and the index would lag the

@@ -358,6 +358,19 @@ impl Reader<'_, '_> {
     /// `contains=`, `starts-with=`, `ends-with=`, `regex=`, plus
     /// `case-sensitive=`. `None` when the node has none and `required` is
     /// false.
+    /// [`Self::text_match`] for a node that must have a comparison.
+    fn required_text_match(&self, node: &KdlNode) -> R<TextMatch> {
+        match self.text_match(node, true)? {
+            Some(matches) => Ok(matches),
+            None => Err(self.src.node_err(
+                node,
+                msg("config-rule-needs-comparison")
+                    .arg("node", name(node))
+                    .arg("ops", names(TEXT_OPS)),
+            )),
+        }
+    }
+
     fn text_match(&self, node: &KdlNode, required: bool) -> R<Option<TextMatch>> {
         let mut found: Option<(TextOp, &KdlEntry)> = None;
         for (key, entry) in props(node) {
@@ -687,7 +700,7 @@ impl Reader<'_, '_> {
             self.check_props(node, &Self::text_props())?;
             self.check_args(node, 0, 0, "")?;
             self.check_no_children(node)?;
-            let matches = self.text_match(node, true)?.expect("required");
+            let matches = self.required_text_match(node)?;
             return Ok(Condition::Address { field, matches });
         }
         if let Some(method) = lookup(AUTH_METHODS, kind) {
@@ -763,7 +776,7 @@ impl Reader<'_, '_> {
                 self.check_props(node, &Self::text_props())?;
                 self.check_args(node, 0, 0, "")?;
                 self.check_no_children(node)?;
-                let matches = self.text_match(node, true)?.expect("required");
+                let matches = self.required_text_match(node)?;
                 Ok(if kind == "subject" {
                     Condition::Subject { matches }
                 } else {
@@ -1104,7 +1117,7 @@ pub(crate) fn is_valid_date(s: &str) -> bool {
         return false;
     }
     let num = |r: std::ops::Range<usize>| s.get(r).and_then(|p| p.parse::<u32>().ok());
-    let (Some(y), Some(m), Some(d)) = (num(0..4), num(5..7), num(8..10)) else {
+    let (Some(year), Some(month), Some(day)) = (num(0..4), num(5..7), num(8..10)) else {
         return false;
     };
     if !s[0..4].bytes().all(|c| c.is_ascii_digit())
@@ -1113,15 +1126,15 @@ pub(crate) fn is_valid_date(s: &str) -> bool {
     {
         return false;
     }
-    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let days = match m {
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let days = match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 if leap => 29,
         2 => 28,
         _ => return false,
     };
-    (1..=days).contains(&d)
+    (1..=days).contains(&day)
 }
 
 /// Parses `"500"`, `"10k"`, `"10kb"`, `"5MB"`, `"1g"` (1024-based).

@@ -84,7 +84,9 @@ export function ActionsProvider({
       if (context) store.getState().setKeyContext(context);
     };
     document.addEventListener("focusin", onFocus);
-    return () => document.removeEventListener("focusin", onFocus);
+    return () => {
+      document.removeEventListener("focusin", onFocus);
+    };
   }, [store]);
 
   // Key bindings.

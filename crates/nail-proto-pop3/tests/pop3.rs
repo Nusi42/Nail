@@ -1,4 +1,5 @@
 //! POP3 client against the mock server of `nail-testkit-net`.
+#![cfg(test)]
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;

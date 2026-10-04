@@ -39,7 +39,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Waits until the client closed its end (it has read the answer), at most
-/// [`DRAIN_TIMEOUT`]. `flush` does nothing on a named pipe, and
+/// `DRAIN_TIMEOUT`. `flush` does nothing on a named pipe, and
 /// `DisconnectNamedPipe` discards what the client has not read yet — so
 /// disconnecting right after the write lost answers the core had already
 /// acted on (WP115). Anything more the client sends is ignored.
@@ -138,7 +138,7 @@ mod imp {
 
     use crate::win::SecurityAttributes;
 
-    #[allow(unsafe_code)]
+    #[expect(unsafe_code, reason = "CreateNamedPipeW with our security attributes")]
     fn create(
         name: &str,
         first: bool,
@@ -190,7 +190,7 @@ mod imp {
                             }
                             Err(err) => tracing::warn!(%err, "Simple MAPI connection failed"),
                         }
-                        let _ = connected.disconnect();
+                        drop(connected.disconnect());
                     });
                 }
             });
@@ -304,7 +304,8 @@ mod tests {
                 f
             },
             // Announces more than the limit.
-            ((nail_api::mapi::MAX_MAPI_FRAME_BYTES + 1) as u32)
+            u32::try_from(nail_api::mapi::MAX_MAPI_FRAME_BYTES + 1)
+                .unwrap()
                 .to_le_bytes()
                 .to_vec(),
         ] {

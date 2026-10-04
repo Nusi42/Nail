@@ -55,9 +55,10 @@ export function parseInline(text: string): Inline[] {
   let i = 0;
   while (i < text.length) {
     const rest = text.slice(i);
-    const ch = text[i] as string;
-    if (ch === "\\" && i + 1 < text.length && /[\\`*_[\]()<>!#-]/.test(text[i + 1] as string)) {
-      buffer += text[i + 1];
+    const ch = text.charAt(i);
+    const after = text.charAt(i + 1);
+    if (ch === "\\" && /[\\`*_[\]()<>!#-]/.test(after)) {
+      buffer += after;
       i += 2;
       continue;
     }
@@ -132,19 +133,20 @@ export function parseMarkdown(source: string): Block[] {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
   const blocks: Block[] = [];
   let i = 0;
-  while (i < lines.length) {
-    const line = lines[i] as string;
+  const peek = (): string | undefined => lines[i];
+  for (let line = peek(); line !== undefined; line = peek()) {
     if (line.trim() === "") {
       i += 1;
       continue;
     }
     const fence = FENCE.exec(line);
     if (fence) {
-      const marker = fence[1] as string;
+      const marker = fence[1] ?? "";
       const body: string[] = [];
       i += 1;
-      while (i < lines.length && !(lines[i] as string).trimStart().startsWith(marker)) {
-        body.push(lines[i] as string);
+      for (let next = peek(); next !== undefined; next = peek()) {
+        if (next.trimStart().startsWith(marker)) break;
+        body.push(next);
         i += 1;
       }
       i += 1;
@@ -155,7 +157,7 @@ export function parseMarkdown(source: string): Block[] {
     if (heading) {
       blocks.push({
         kind: "heading",
-        level: (heading[1] as string).length,
+        level: (heading[1] ?? "").length,
         inline: parseInline(heading[2] ?? ""),
       });
       i += 1;
@@ -168,8 +170,8 @@ export function parseMarkdown(source: string): Block[] {
     }
     if (/^\s{0,3}>/.test(line)) {
       const inner: string[] = [];
-      while (i < lines.length && /^\s{0,3}>/.test(lines[i] as string)) {
-        inner.push((lines[i] as string).replace(/^\s{0,3}>\s?/, ""));
+      for (let next = peek(); next !== undefined && /^\s{0,3}>/.test(next); next = peek()) {
+        inner.push(next.replace(/^\s{0,3}>\s?/, ""));
         i += 1;
       }
       blocks.push({ kind: "quote", blocks: parseMarkdown(inner.join("\n")) });
@@ -180,8 +182,8 @@ export function parseMarkdown(source: string): Block[] {
     if (bullet || ordered) {
       const re = bullet ? BULLET : ORDERED;
       const items: Inline[][] = [];
-      while (i < lines.length) {
-        const match = re.exec(lines[i] as string);
+      for (let next = peek(); next !== undefined; next = peek()) {
+        const match = re.exec(next);
         if (!match) break;
         items.push(parseInline(match[1] ?? ""));
         i += 1;
@@ -190,8 +192,7 @@ export function parseMarkdown(source: string): Block[] {
       continue;
     }
     const paragraph: string[] = [];
-    while (i < lines.length) {
-      const next = lines[i] as string;
+    for (let next = peek(); next !== undefined; next = peek()) {
       if (
         next.trim() === "" ||
         FENCE.test(next) ||
@@ -247,7 +248,9 @@ function Link({ plugin, href, children }: { plugin: string; href: string; childr
             type="button"
             {...partAttrs("plugin.markdown.confirm.button", plugin)}
             data-action="cancel"
-            onClick={() => setConfirming(false)}
+            onClick={() => {
+              setConfirming(false);
+            }}
           >
             {t("plugin-link-cancel")}
           </button>

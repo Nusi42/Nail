@@ -15,7 +15,7 @@ use nail_store::LockError;
 /// An error with its user-facing text; the cause (if any) is kept as the
 /// diagnostic.
 #[derive(Debug)]
-pub struct CliError {
+pub(crate) struct CliError {
     /// What the user reads.
     pub message: LocalizedMessage,
     /// The underlying error.
@@ -31,12 +31,12 @@ impl std::fmt::Display for CliError {
 
 impl std::error::Error for CliError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as _)
+        self.source.as_ref().map(AsRef::as_ref)
     }
 }
 
 /// An error that is only its message.
-pub fn error(message: LocalizedMessage) -> anyhow::Error {
+pub(crate) fn error(message: LocalizedMessage) -> anyhow::Error {
     CliError {
         message,
         source: None,
@@ -45,7 +45,7 @@ pub fn error(message: LocalizedMessage) -> anyhow::Error {
 }
 
 /// Attaches a user-facing message to a failure.
-pub trait Localized<T> {
+pub(crate) trait Localized<T> {
     /// `Err(e)` becomes a [`CliError`] with `message()` and `e` as cause.
     fn localized(self, message: impl FnOnce() -> LocalizedMessage) -> anyhow::Result<T>;
 }
@@ -74,7 +74,7 @@ impl<T> Localized<T> for Option<T> {
 /// The user-facing text of an error: the first message in its chain that
 /// has one (a [`CliError`], a bridge or lock error), else a generic text
 /// with the English error as detail; causes follow as "cause" lines.
-pub fn render_error(error: &anyhow::Error, catalog: &Catalog) -> String {
+pub(crate) fn render_error(error: &anyhow::Error, catalog: &Catalog) -> String {
     let mut lines = Vec::new();
     let mut explained = false;
     for cause in error.chain() {
@@ -109,7 +109,7 @@ pub fn render_error(error: &anyhow::Error, catalog: &Catalog) -> String {
 }
 
 /// The text of a data directory lock failure.
-pub fn lock_message(error: &LockError) -> LocalizedMessage {
+pub(crate) fn lock_message(error: &LockError) -> LocalizedMessage {
     match error {
         LockError::Held(Some(holder)) => LocalizedMessage::new("cli-data-dir-in-use-by")
             .arg("owner", holder.owner.as_str())
@@ -123,7 +123,7 @@ pub fn lock_message(error: &LockError) -> LocalizedMessage {
 
 /// The error of an MCP server that did not start on `port`: why, when the
 /// cause is known (a fixed port in use), else the error as detail.
-pub fn mcp_start_failed(port: u16, err: anyhow::Error) -> anyhow::Error {
+pub(crate) fn mcp_start_failed(port: u16, err: anyhow::Error) -> anyhow::Error {
     let message = err
         .chain()
         .find_map(|cause| cause.downcast_ref::<std::io::Error>())
@@ -139,7 +139,7 @@ pub fn mcp_start_failed(port: u16, err: anyhow::Error) -> anyhow::Error {
 }
 
 /// The catalog for command-line output.
-pub fn catalog() -> Catalog {
+pub(crate) fn catalog() -> Catalog {
     Catalog::for_locale(l10n::locale_from_env().as_deref())
 }
 

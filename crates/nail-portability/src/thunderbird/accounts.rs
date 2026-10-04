@@ -186,14 +186,15 @@ fn auth_of(
             username: (!username.is_empty()).then_some(username),
             secret: None,
         },
-        Some(10) => match oauth_provider(host) {
-            Some(provider) => AuthConfig::OAuth2 {
-                username,
-                provider: provider.to_owned(),
-                secret: None,
-                mechanism: None,
-            },
-            None => {
+        Some(10) => {
+            if let Some(provider) = oauth_provider(host) {
+                AuthConfig::OAuth2 {
+                    username,
+                    provider: provider.to_owned(),
+                    secret: None,
+                    mechanism: None,
+                }
+            } else {
                 issues.push(issue(
                     account,
                     PortabilityIssueCode::AccountNotExpressible,
@@ -202,7 +203,7 @@ fn auth_of(
                 ));
                 password(username)
             }
-        },
+        }
         Some(4..=6) => {
             issues.push(issue(
                 account,

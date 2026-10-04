@@ -2,6 +2,8 @@
 //! server, the tokens used by `TestAccount`, stored by `AddAccount` and used
 //! by the IMAP engine (XOAUTH2 / OAUTHBEARER); `CancelOAuth`.
 
+#![cfg(test)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -85,7 +87,7 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
     .unwrap();
     let secrets = Arc::new(MemorySecretStore::new());
     let mut options = ServiceOptions::new(data.path(), config.path());
-    options.secrets = Some(Arc::clone(&secrets) as Arc<dyn SecretStore>);
+    options.secrets = Some(secrets.clone());
     options.timing = EngineTiming::fast();
     let service = Service::open(options).unwrap();
     let mut events = service.subscribe();
@@ -119,7 +121,7 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
         },
         outgoing: None,
         identities: vec![],
-        sync: Default::default(),
+        sync: nail_api::accounts::SyncPolicy::default(),
         save_sent_copy: None,
         authserv_ids: Vec::new(),
         sieve: None,

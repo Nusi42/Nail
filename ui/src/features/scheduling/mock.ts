@@ -808,7 +808,7 @@ function ownBusy(
     .map((i) => ({
       start: i.start_utc,
       end: i.end_utc,
-      kind: (i.status === "tentative" ? "tentative" : "busy") as BusyKind,
+      kind: i.status === "tentative" ? "tentative" : "busy",
     }));
 }
 

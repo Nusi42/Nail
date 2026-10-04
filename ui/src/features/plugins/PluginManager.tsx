@@ -26,6 +26,7 @@ import { Placements } from "./Placements";
 import { pluginKeys, usePlugins } from "./queries";
 import { Settings } from "./Settings";
 import { pluginsStoreFor, type InstallMode } from "./store";
+import { hasText } from "../../text/empty";
 
 /** Dialog name. */
 export const MANAGER_DIALOG = "plugin-manager";
@@ -191,7 +192,7 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
       <p data-part="plugin-manager.source" data-source={plugin.source.kind}>
         {t(source.id, source.args)}
       </p>
-      {(plugin.localized || plugin.error) && (
+      {(plugin.localized !== undefined || hasText(plugin.error)) && (
         <p data-part="plugin-manager.crash" role="alert">
           {plugin.localized
             ? t(plugin.localized.id, { plugin: plugin.manifest.name, ...plugin.localized.args })
@@ -212,7 +213,9 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
             data-action={section}
             aria-expanded={open === section}
             aria-controls={open === section ? sectionId : undefined}
-            onClick={() => setOpen(open === section ? null : section)}
+            onClick={() => {
+              setOpen(open === section ? null : section);
+            }}
           >
             {t(`plugin-manager-show-${section}`)}
           </button>
@@ -223,7 +226,9 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
           data-action="uninstall"
           data-variant="danger"
           disabled={busy}
-          onClick={() => setConfirming(true)}
+          onClick={() => {
+            setConfirming(true);
+          }}
         >
           {t("plugin-manager-uninstall")}
         </button>
@@ -251,7 +256,9 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
             type="button"
             data-part="form.button"
             data-action="cancel-uninstall"
-            onClick={() => setConfirming(false)}
+            onClick={() => {
+              setConfirming(false);
+            }}
           >
             {t("plugin-manager-uninstall-no")}
           </button>
@@ -269,7 +276,14 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
           {open === "activity" && <Activity plugin={plugin} />}
           {open === "settings" && <Settings pluginId={plugin.id} />}
           {open === "log" && <Logs pluginId={plugin.id} />}
-          {open === "layout" && <Placements pluginId={plugin.id} onDone={() => setOpen(null)} />}
+          {open === "layout" && (
+            <Placements
+              pluginId={plugin.id}
+              onDone={() => {
+                setOpen(null);
+              }}
+            />
+          )}
         </div>
       )}
     </li>
@@ -293,7 +307,9 @@ function ManagerContent() {
           type="button"
           data-part="form.button"
           data-action="install"
-          onClick={() => install("package")}
+          onClick={() => {
+            install("package");
+          }}
         >
           {t("plugin-manager-install")}
         </button>
@@ -301,7 +317,9 @@ function ManagerContent() {
           type="button"
           data-part="form.button"
           data-action="load-dev"
-          onClick={() => install("dev")}
+          onClick={() => {
+            install("dev");
+          }}
         >
           {t("plugin-manager-load-dev")}
         </button>

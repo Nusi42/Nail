@@ -18,15 +18,21 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readJson } from "./lib/json.mjs";
 import { classifyArtifact } from "./lib/update-manifest.mjs";
 import { expandUrl, wingetManifests } from "./lib/winget.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/** @param {string[]} argv */
 function parse(argv) {
+  /**
+   * @type {{ artifacts: string[], version?: string, urlTemplate?: string, out?: string,
+   *   releaseNotesUrl?: string, releaseDate?: string, package?: string }}
+   */
   const o = { artifacts: [] };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     const value = () => {
       const v = argv[++i];
       if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
@@ -41,25 +47,24 @@ function parse(argv) {
     else if (arg === "--package") o.package = value();
     else throw new Error(`unknown option ${arg}`);
   }
-  if (!o.version || !o.urlTemplate || !o.out || !o.artifacts.length) {
+  const { version, urlTemplate, out } = o;
+  if (!version || !urlTemplate || !out || !o.artifacts.length) {
     throw new Error("--version, --artifacts, --installer-url-template and --out are required");
   }
-  return o;
+  return { ...o, version, urlTemplate, out };
 }
 
 function main() {
   const o = parse(process.argv.slice(2));
-  const pkg = JSON.parse(
-    readFileSync(
-      o.package ?? path.join(repoRoot, "packaging", "winget", "nail.winget.json"),
-      "utf8",
-    ),
+  const pkg = /** @type {import("./lib/winget.mjs").WingetInput} */ (
+    readJson(o.package ?? path.join(repoRoot, "packaging", "winget", "nail.winget.json"))
   );
+  /** @type {{ arch: string, url: string, sha256: string }[]} */
   const installers = [];
   for (const dir of o.artifacts) {
     for (const name of readdirSync(dir)) {
       const kind = classifyArtifact(name);
-      if (!kind || kind.installer !== "nsis" || kind.version !== o.version) continue;
+      if (kind?.installer !== "nsis" || kind.version !== o.version) continue;
       const sha256 = createHash("sha256")
         .update(readFileSync(path.join(dir, name)))
         .digest("hex");

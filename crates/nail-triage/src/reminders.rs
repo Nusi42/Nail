@@ -444,6 +444,7 @@ pub enum ReminderOp {
 }
 
 /// The scheduler: reminders in a timer wheel, persisted through a store.
+#[derive(Debug)]
 pub struct ReminderScheduler<S, C> {
     store: S,
     clock: C,
@@ -1277,7 +1278,7 @@ mod tests {
         assert_eq!(err.message_id(), "reminder-error-store");
         fail.store(false, std::sync::atomic::Ordering::Relaxed);
         assert_eq!(s.poll().unwrap().len(), 1);
-        assert!(s.store().0.all()[0].state == ReminderState::Fired);
+        assert_eq!(s.store().0.all()[0].state, ReminderState::Fired);
     }
 
     #[test]

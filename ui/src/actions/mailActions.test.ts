@@ -64,7 +64,7 @@ describe("mail actions", () => {
     await dispatch("mail.toggle-flag");
     const changes = ctx.transport.requests
       .filter((r) => r.type === "UpdateFlags")
-      .map((r) => r.type === "UpdateFlags" && r.change);
+      .map((r) => r.change);
     expect(changes).toEqual([
       expect.objectContaining({ seen: true, flagged: null }),
       expect.objectContaining({ seen: null, flagged: false }),

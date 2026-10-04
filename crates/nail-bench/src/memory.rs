@@ -6,17 +6,17 @@ const MIB: f64 = 1024.0 * 1024.0;
 
 /// The peak working set of this process in MiB, if the platform tells.
 pub fn peak_working_set_mib() -> Option<f64> {
-    peak_bytes().map(|b| b as f64 / MIB)
+    peak_bytes().map(|b| crate::num::f64_of(b) / MIB)
 }
 
 /// The current working set of this process in MiB, if the platform tells.
 pub fn working_set_mib() -> Option<f64> {
-    current_bytes().map(|b| b as f64 / MIB)
+    current_bytes().map(|b| crate::num::f64_of(b) / MIB)
 }
 
 #[cfg(windows)]
 fn counters() -> Option<windows_sys::Win32::System::ProcessStatus::PROCESS_MEMORY_COUNTERS> {
-    #![allow(unsafe_code)]
+    #![expect(unsafe_code, reason = "GetProcessMemoryInfo")]
     use windows_sys::Win32::System::ProcessStatus::{
         GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     };

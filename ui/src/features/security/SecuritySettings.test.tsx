@@ -6,13 +6,13 @@ import { handleSecurityEvent } from "./index";
 import { vaultPercent } from "./SecuritySettings";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleSecurityEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
@@ -109,11 +109,11 @@ describe("security-settings: lookup and indexing", () => {
     const policy = within(section).getByRole("combobox", { name: "Look up recipients’ keys" });
     expect(policy).toHaveValue("on-demand");
     await user.click(within(section).getByRole("checkbox", { name: "Web Key Directory" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(requestsOf(env, "UpdateSecuritySettings").at(-1)?.settings.lookup_sources).toEqual([
         "keys-openpgp-org",
-      ]),
-    );
+      ]);
+    });
     await user.selectOptions(policy, "Never");
     expect(
       await within(section).findByText("Nail never asks a server for keys."),
@@ -131,9 +131,9 @@ describe("security-settings: lookup and indexing", () => {
     expect(await screen.findByText(/Decrypted text is indexed/)).toBeInTheDocument();
     expect(env.transport.data.features.security.settings.index_decrypted).toEqual(["acc-work"]);
     await user.click(work);
-    await waitFor(() =>
-      expect(env.transport.data.features.security.settings.index_decrypted).toEqual([]),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.security.settings.index_decrypted).toEqual([]);
+    });
     expect(
       within(section).queryByRole("checkbox", { name: /All accounts/ }),
     ).not.toBeInTheDocument();

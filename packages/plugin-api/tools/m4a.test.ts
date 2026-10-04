@@ -9,9 +9,9 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import type { CronError } from "./index.mjs";
 import {
   checkManifest,
-  CronError,
   cronMatches,
   FUTURE_PERMISSIONS,
   isCron,
@@ -224,7 +224,10 @@ describe("M4a contributions", () => {
   });
 
   it("counts contributions", () => {
-    const jobs = Array.from({ length: 11 }, (_, i) => ({ id: `j${i}`, schedule: "@hourly" }));
+    const jobs = Array.from({ length: 11 }, (_, i) => ({
+      id: `j${String(i)}`,
+      schedule: "@hourly",
+    }));
     expect(kinds({ ...base, permissions: ["background"], contributes: { jobs } })).toContain(
       "too-many-contributions contributes.jobs",
     );

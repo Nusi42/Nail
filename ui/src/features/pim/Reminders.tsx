@@ -125,7 +125,9 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
             id={select}
             data-part="form.select"
             value={choice}
-            onChange={(e) => setChoice(e.target.value as SnoozeChoice)}
+            onChange={(e) => {
+              setChoice(e.target.value as SnoozeChoice);
+            }}
           >
             {SNOOZE_CHOICES.map((c) => (
               <option key={c} value={c}>
@@ -169,7 +171,13 @@ function ProblemToast({ toast }: { toast: Extract<PimToast, { kind: "problem" }>
         {t(toast.message.id, toast.message.args)}
       </p>
       <div data-part="pim.toast.actions">
-        <button type="button" data-part="form.button" onClick={() => dismissToast(toast.id)}>
+        <button
+          type="button"
+          data-part="form.button"
+          onClick={() => {
+            dismissToast(toast.id);
+          }}
+        >
           {t("pim-close")}
         </button>
       </div>
@@ -195,12 +203,13 @@ export function PimToasts() {
             type="button"
             data-part="form.button"
             data-action="dismiss-all"
-            onClick={async () => {
-              await dismissReminders(
+            onClick={() => {
+              void dismissReminders(
                 ctx,
                 reminders.map((r) => r.reminder.id),
-              );
-              for (const r of reminders) ctx.pim.getState().dismissToast(r.id);
+              ).then(() => {
+                for (const r of reminders) ctx.pim.getState().dismissToast(r.id);
+              });
             }}
           >
             {t("pim-reminder-dismiss-all", { count: reminders.length })}

@@ -9,6 +9,7 @@
 //! Failures are injected per command with [`MockPop3Server::fail`] and
 //! [`MockPop3Server::disconnect_on`].
 
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -28,6 +29,10 @@ use crate::stream::{Connection, MockStream, args, verb};
 
 /// Configuration of a [`MockPop3Server`].
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent feature switches of a mock server; each test turns single ones on or off"
+)]
 pub struct MockPop3Config {
     /// TLS mode. With [`MockTls::StartTls`], logging in requires `STLS`
     /// first.
@@ -244,7 +249,10 @@ impl Drop for MockPop3Server {
 /// The APOP digest: hex MD5 of the greeting timestamp and the password.
 pub fn apop_digest(timestamp: &str, password: &str) -> String {
     let digest = Md5::digest(format!("{timestamp}{password}").as_bytes());
-    digest.iter().map(|b| format!("{b:02x}")).collect()
+    digest.iter().fold(String::new(), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    })
 }
 
 /// Encodes a message as a POP3 multi-line body: CRLF line ends,
@@ -312,7 +320,7 @@ async fn session(
     acceptor: Option<&TlsAcceptor>,
     connection: usize,
 ) -> std::io::Result<()> {
-    let _ = tcp.set_nodelay(true);
+    drop(tcp.set_nodelay(true));
     let mut conn = match (config.tls, acceptor) {
         (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
         _ => Connection::new(MockStream::Plain(tcp)),
@@ -392,11 +400,11 @@ async fn session(
                     }
                 }
                 "USER" if config.user_pass => {
-                    if !tls_ok {
-                        conn.line("-ERR [AUTH] TLS required").await?;
-                    } else {
+                    if tls_ok {
                         user = Some(args(&line).to_owned());
                         conn.line("+OK").await?;
+                    } else {
+                        conn.line("-ERR [AUTH] TLS required").await?;
                     }
                 }
                 "PASS" if user.is_some() => {
@@ -465,7 +473,7 @@ async fn session(
                 if a.is_empty() {
                     let mut out = String::from("+OK\r\n");
                     for (n, m) in mb.live() {
-                        out.push_str(&format!("{n} {}\r\n", value(m)));
+                        let _ = write!(out, "{n} {}\r\n", value(m));
                     }
                     out.push_str(".\r\n");
                     conn.write(out.as_bytes()).await?;
@@ -572,23 +580,22 @@ async fn sasl_auth(
         conn.line("-ERR invalid base64").await?;
         return Ok(false);
     };
-    let ok = match mechanism.as_str() {
-        "PLAIN" => sasl::parse_plain(&decoded)
-            .is_some_and(|(u, p)| u == config.username && p == config.password),
-        _ => {
-            let parsed = if mechanism == "XOAUTH2" {
-                sasl::parse_xoauth2(&decoded)
-            } else {
-                sasl::parse_oauthbearer(&decoded)
-            };
-            let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
-            if !ok {
-                conn.line(&format!("+ {}", sasl::oauth_error_challenge()))
-                    .await?;
-                let _ = conn.read_line().await?;
-            }
-            ok
+    let ok = if mechanism.as_str() == "PLAIN" {
+        sasl::parse_plain(&decoded)
+            .is_some_and(|(u, p)| u == config.username && p == config.password)
+    } else {
+        let parsed = if mechanism == "XOAUTH2" {
+            sasl::parse_xoauth2(&decoded)
+        } else {
+            sasl::parse_oauthbearer(&decoded)
+        };
+        let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
+        if !ok {
+            conn.line(&format!("+ {}", sasl::oauth_error_challenge()))
+                .await?;
+            drop(conn.read_line().await?);
         }
+        ok
     };
     if !ok {
         conn.line("-ERR [AUTH] Authentication failed").await?;

@@ -11,7 +11,7 @@
  *
  * Every write goes through the core (`pimWrite`), which queues it.
  */
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import type { Calendar, CalendarSettings, LocalizedMessage } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -30,7 +30,13 @@ export function calendarFormIssues(name: string, color: string): LocalizedMessag
 }
 
 /** The colour choice: the palette as radio swatches plus any other colour. */
-export function ColorChoice({ value, onChange }: { value: string; onChange(color: string): void }) {
+export function ColorChoice({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+}) {
   const t = useT();
   const name = useId();
   const customId = useId();
@@ -95,11 +101,11 @@ function CalendarFields({
   setReminders,
 }: {
   name: string;
-  setName(name: string): void;
+  setName: (name: string) => void;
   color: string;
-  setColor(color: string): void;
+  setColor: (color: string) => void;
   reminders: boolean;
-  setReminders(on: boolean): void;
+  setReminders: (on: boolean) => void;
 }) {
   const t = useT();
   const ids = { name: useId(), reminders: useId() };
@@ -113,7 +119,9 @@ function CalendarFields({
           id={ids.name}
           data-part="form.input"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
         />
       </div>
       <ColorChoice value={color} onChange={setColor} />
@@ -122,7 +130,9 @@ function CalendarFields({
           id={ids.reminders}
           type="checkbox"
           checked={reminders}
-          onChange={(e) => setReminders(e.target.checked)}
+          onChange={(e) => {
+            setReminders(e.target.checked);
+          }}
         />
         <span>{t("pim-calendar-reminders")}</span>
       </label>
@@ -154,7 +164,7 @@ export function CalendarSettingsDialog({ close }: DialogProps) {
   return <CalendarSettingsForm key={calendar.id} calendar={calendar} close={close} />;
 }
 
-function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close(): void }) {
+function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close: () => void }) {
   const t = useT();
   const ctx = useChangeContext();
   const [name, setName] = useState(calendar.settings.name);
@@ -163,7 +173,7 @@ function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close()
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const issue = calendarFormIssues(name, color);
     setProblem(issue);
@@ -251,7 +261,7 @@ function NewCalendarForm({
   sourceId: string;
   component: "event" | "task";
   calendars: readonly Calendar[];
-  close(): void;
+  close: () => void;
 }) {
   const t = useT();
   const ctx = useChangeContext();
@@ -267,7 +277,7 @@ function NewCalendarForm({
     sourceId,
   );
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const issue = calendarFormIssues(name, color);
     setProblem(issue);

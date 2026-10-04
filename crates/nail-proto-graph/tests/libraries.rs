@@ -2,6 +2,7 @@
 //! reqwest with the ring TLS configuration from nail-auth talks to the
 //! loopback mock server, Graph's MIME upload encoding, and the contract's
 //! Focused Inbox / category / folder mapping of Graph resources.
+#![cfg(test)]
 
 use base64::Engine as _;
 use nail_api::exchange::{CategoryColor, ExchangeWellKnownFolder, InferenceClassification};

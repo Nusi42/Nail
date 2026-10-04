@@ -6,6 +6,7 @@ import { defaultLayout } from "../api/mockData";
 import { shippedCatalogs, groupCatalogs } from "./catalogs";
 import { I18nProvider, useLabel, useT } from "./I18nProvider";
 import { createLocalizer, labelMessageId, negotiateLocale, resolveLabel } from "./localizer";
+import { must } from "../test/must";
 
 const catalogs = {
   en: ["hello = Hello\nbye = Goodbye\ncount = { $n ->\n [one] One mail\n *[other] { $n } mails\n}"],
@@ -23,7 +24,7 @@ describe("localizer", () => {
   });
 
   it("returns the id for keys missing everywhere (and warns in dev)", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
     const l = createLocalizer(catalogs, ["en"], true);
     expect(l.t("missing-key")).toBe("missing-key");
     expect(l.has("missing-key")).toBe(false);
@@ -93,9 +94,8 @@ describe("shipped catalogs", () => {
           if (entry.name !== "generated" && entry.name !== "test") walk(path);
         } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
           const source = readFileSync(path, "utf8");
-          for (const m of source.matchAll(/\bt\(\s*"([a-z0-9-]+)"/g)) ids.add(m[1] as string);
-          for (const m of source.matchAll(/messageId(?:=|: )"([a-z0-9-]+)"/g))
-            ids.add(m[1] as string);
+          for (const m of source.matchAll(/\bt\(\s*"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
+          for (const m of source.matchAll(/messageId(?:=|: )"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
         }
       }
     };

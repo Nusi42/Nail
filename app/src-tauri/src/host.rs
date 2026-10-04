@@ -83,6 +83,15 @@ pub struct HostParts {
     pub opener: Opener,
 }
 
+impl std::fmt::Debug for HostParts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostParts")
+            .field("exe", &self.exe)
+            .field("data_dir", &self.data_dir)
+            .finish_non_exhaustive()
+    }
+}
+
 impl ShellHost {
     /// A new host.
     pub fn new(parts: HostParts) -> Self {
@@ -112,7 +121,7 @@ impl ShellHost {
             app.clone(),
             webview_dir.clone(),
         )));
-        let _ = self.app.set((app, webview_dir));
+        drop(self.app.set((app, webview_dir)));
     }
 
     /// The OS windows pop-outs open in (the app's, [`Self::bind_app`]; a
@@ -213,7 +222,7 @@ impl ShellHost {
 
     /// The service, once opened (the dev endpoint serves it).
     pub fn bind_service(&self, service: Service) {
-        let _ = self.service.set(service);
+        drop(self.service.set(service));
     }
 
     /// The updater.
@@ -270,7 +279,7 @@ impl DesktopHost for ShellHost {
     fn attach(&self, notify: DesktopNotifier) {
         self.updater.attach(Arc::clone(&notify));
         self.pop_outs.attach(Arc::clone(&notify));
-        let _ = self.notify.set(notify);
+        drop(self.notify.set(notify));
     }
 
     fn installation(&self) -> InstallationInfo {
@@ -340,7 +349,7 @@ impl DesktopHost for ShellHost {
                         let _ = (spec, owner);
                         Err("file dialogs need Windows".to_owned())
                     };
-                    let _ = tx.send(answer);
+                    drop(tx.send(answer));
                 })
                 .map_err(|e| ApiError::internal(format!("cannot open the file dialog: {e}")))?;
             rx.await
@@ -439,14 +448,9 @@ mod tests {
         let sink = Arc::clone(&opened);
         let runtime = tokio::runtime::Handle::current();
         let host = Arc::new(ShellHost::new(HostParts {
-            registry: Arc::clone(&registry) as Arc<dyn Registry>,
+            registry: registry.clone(),
             installation: installation(disabled),
-            updater: Updater::new(
-                Arc::clone(&backend) as Arc<dyn crate::updater::UpdateBackend>,
-                runtime.clone(),
-                disabled.is_none(),
-                None,
-            ),
+            updater: Updater::new(backend.clone(), runtime.clone(), disabled.is_none(), None),
             exe: PathBuf::from(r"C:\Nail\Nail.exe"),
             data_dir: data.path().to_path_buf(),
             runtime,
@@ -462,7 +466,7 @@ mod tests {
             ..crate::AppArgs::default()
         };
         let mut options = args.service_options().unwrap();
-        options.desktop = Some(Arc::clone(&host) as Arc<dyn DesktopHost>);
+        options.desktop = Some(host.clone());
         let service = Service::open(options).unwrap();
         host.bind_service(service.clone());
         Fixture {
@@ -697,14 +701,12 @@ mod tests {
     /// returned to the page, and all closed with the main window.
     #[tokio::test(flavor = "multi_thread")]
     async fn pop_outs_round_trip_through_the_core() {
-        use crate::popout::PopOutWindows;
         use crate::popout::testing::FakeWindows;
         use nail_api::windows::{PopOutChange, WindowGeometry, WindowRect};
 
         let f = fixture(None);
         let fake = FakeWindows::single_monitor();
-        f.host
-            .bind_pop_out_windows(Arc::clone(&fake) as Arc<dyn PopOutWindows>);
+        f.host.bind_pop_out_windows(fake.clone());
         let mut events = f.service.subscribe();
 
         let list = pop_outs(

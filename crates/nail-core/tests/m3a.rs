@@ -2,6 +2,8 @@
 //! served by the core (none answers `unsupported` any more). The flows are
 //! tested in `pim.rs` (local data) and `pim_sync.rs` (sources, reminders).
 
+#![cfg(test)]
+
 use nail_api::pim::{
     AddressBookSettings, CalendarComponent, CalendarSettings, ConflictChoice, ContactFields,
     EditScope, EventFields, PimImportSource, PimItemRef, PimSourceConfig, PimSourceSettings,

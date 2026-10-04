@@ -39,7 +39,7 @@ type SourceKind = ExportSource["type"];
 const SOURCE_KINDS: readonly SourceKind[] = ["folders", "messages", "calendars", "address-books"];
 
 /** The export wizard's content. */
-export function ExportWizard({ close }: { close(): void }) {
+export function ExportWizard({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -159,7 +159,9 @@ export function ExportWizard({ close }: { close(): void }) {
               label={t("portability-export-account")}
               field="account"
               value={account ?? ""}
-              onChange={(v) => setAccountId(v)}
+              onChange={(v) => {
+                setAccountId(v);
+              }}
             >
               {real.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -225,7 +227,9 @@ export function ExportWizard({ close }: { close(): void }) {
             label={t("portability-export-mbox-variant")}
             field="mbox-variant"
             value={variant}
-            onChange={(v) => setVariant(v as MboxVariant)}
+            onChange={(v) => {
+              setVariant(v as MboxVariant);
+            }}
           >
             {MBOX_VARIANTS.map((v) => (
               <option key={v} value={v}>

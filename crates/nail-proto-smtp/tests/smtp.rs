@@ -1,4 +1,5 @@
 //! SMTP client against the mock server of `nail-testkit-net`.
+#![cfg(test)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

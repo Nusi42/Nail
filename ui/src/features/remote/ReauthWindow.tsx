@@ -29,15 +29,21 @@ export function ReauthWindow() {
   const pending = useStore(reauthStore, (s) => s.pending);
   const session = useRemoteState((s) => s.session);
   if (!pending || session === null) return null;
-  const finish = (ok: boolean) => reauthStore.getState().finish(ok);
+  const finish = (ok: boolean) => {
+    reauthStore.getState().finish(ok);
+  };
   return (
     <RemoteReauth
       auth={remoteAuth().transport}
       passkeys={remoteAuth().passkeys}
       userName={session.user_name}
       passkeyAvailable={passkeyAvailable}
-      onDone={() => finish(true)}
-      onCancel={() => finish(false)}
+      onDone={() => {
+        finish(true);
+      }}
+      onCancel={() => {
+        finish(false);
+      }}
     />
   );
 }

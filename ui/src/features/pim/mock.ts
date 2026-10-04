@@ -58,6 +58,7 @@ import {
   utcString,
 } from "./time";
 import { fromAbsolute } from "@internationalized/date";
+import { nonEmpty } from "../../text/empty";
 
 /** The requests this feature answers. */
 export const PIM_REQUESTS = [
@@ -559,7 +560,7 @@ function sortName(fields: ContactFields): string {
   const family = fields.name?.family?.trim();
   const given = fields.name?.given?.trim();
   if (family) return `${family}, ${given ?? ""}`.trim();
-  return fields.display_name || fields.organization?.name || "";
+  return nonEmpty(fields.display_name) ?? fields.organization?.name ?? "";
 }
 
 export function summaryOf(contact: Contact): ContactSummary {
@@ -787,11 +788,14 @@ export function parseImport(content: string): {
 function icsTime(value: string | undefined, tz: string): PimTime | null {
   if (!value) return null;
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/.exec(value.trim());
-  if (!m) return null;
-  const date = `${m[1]}-${m[2]}-${m[3]}`;
-  if (!m[4]) return { type: "date", date };
-  const local = `${date}T${m[4]}:${m[5]}:${m[6]}`;
-  return m[7] ? { type: "zoned", local, tz: "UTC" } : { type: "zoned", local, tz };
+  const [, year, month, day, hour, minute, second, utc] = m ?? [];
+  if (year === undefined || month === undefined || day === undefined) return null;
+  const date = `${year}-${month}-${day}`;
+  if (hour === undefined || minute === undefined || second === undefined) {
+    return { type: "date", date };
+  }
+  const local = `${date}T${hour}:${minute}:${second}`;
+  return utc ? { type: "zoned", local, tz: "UTC" } : { type: "zoned", local, tz };
 }
 
 function previewOf(content: string): PimImportPreview | null {
@@ -877,7 +881,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
         request.config.settings.kind === "ics"
           ? request.config.settings.url
           : (request.config.settings.url ?? "");
-      if (/fail/.test(url)) {
+      if (url.includes("fail")) {
         return {
           type: "PimSourceTested",
           result: {
@@ -1397,7 +1401,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
       const parent = request.fields.parent_id
         ? pim.tasks.find((t) => t.id === request.fields.parent_id)
         : null;
-      if (request.fields.parent_id && (!parent || parent.calendar_id !== list.id))
+      if (request.fields.parent_id && parent?.calendar_id !== list.id)
         return notFound("parent task");
       const id = core.nextId("tk-");
       const task: Task = {
@@ -1474,8 +1478,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
       const task = pim.tasks.find((t) => t.id === request.task_id);
       const target = calendarOf(pim, request.calendar_id);
       if (!task) return notFound(`task ${request.task_id}`);
-      if (!target || !target.components.includes("task"))
-        return notFound(`task list ${request.calendar_id}`);
+      if (!target?.components.includes("task")) return notFound(`task list ${request.calendar_id}`);
       if (target.read_only) return forbidden("the task list");
       const from = task.calendar_id;
       setParent(pim, task, null);
@@ -1739,7 +1742,7 @@ function saveSource(core: MockCore, config: PimSourceConfig, add: boolean): Resp
   core.emit({ type: "PimSourcesChanged" });
   core.emit({ type: "CalendarsChanged" });
   core.emit({ type: "AddressBooksChanged" });
-  const saved = pim.sources.find((s) => s.id === id) as PimSource;
+  const saved = existing ?? source;
   core.later(() => {
     if (saved.enabled) {
       saved.state = "idle";

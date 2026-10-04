@@ -882,6 +882,10 @@ impl EditScope {
 /// One expanded occurrence, for calendar views
 /// ([`crate::Request::ListEventInstances`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one occurrence, sent to the calendar views"
+)]
 pub struct EventInstance {
     /// The event (series).
     pub event_id: EventId,

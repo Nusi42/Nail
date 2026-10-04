@@ -1,5 +1,6 @@
 //! `accounts.kdl`: Exchange accounts (`exchange` node, Windows sign-in;
 //! M3c, ADR 0072).
+#![cfg(test)]
 
 use nail_api::accounts::{AuthConfig, IncomingServer, MailProtocol, SspiPackage, TlsMode};
 use nail_api::domain::AccountKind;

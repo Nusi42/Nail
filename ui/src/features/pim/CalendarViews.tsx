@@ -46,7 +46,7 @@ export interface DayViewProps {
   instances: readonly EventInstance[];
   calendars: readonly Calendar[] | undefined;
   tz: string;
-  onDay(day: CalendarDate): void;
+  onDay: (day: CalendarDate) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +208,9 @@ export function MonthView({
                                 ? "dragging"
                                 : null,
                             ].filter((x): x is string => x !== null)}
-                            onDragStart={(event) => drag.start(event, instance, key)}
+                            onDragStart={(event) => {
+                              drag.start(event, instance, key);
+                            }}
                             suppressClick={drag.suppressClick}
                           />
                         </li>
@@ -218,7 +220,9 @@ export function MonthView({
                       <button
                         type="button"
                         data-part="calendar.month.more"
-                        onClick={() => onDay(day)}
+                        onClick={() => {
+                          onDay(day);
+                        }}
                         aria-label={t("pim-more-events-label", {
                           count: more,
                           day: formatDay(format, day, { dateStyle: "full" }),
@@ -358,12 +362,12 @@ function Segment({
   left: number;
   width: number;
   children?: React.ReactNode;
-  onClick?(): void;
+  onClick?: () => void;
   label?: string;
 }) {
   useGeometry(geom, {
-    left: `${Math.round(left * 10000) / 100}%`,
-    width: `${Math.max(0.5, Math.round(width * 10000) / 100)}%`,
+    left: `${String(Math.round(left * 10000) / 100)}%`,
+    width: `${String(Math.max(0.5, Math.round(width * 10000) / 100))}%`,
   });
   if (onClick) {
     return (

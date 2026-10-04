@@ -348,8 +348,7 @@ fn get_key_in(conn: &rusqlite::Connection, n: i64) -> Result<StoredKey> {
 fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
 fn write_emails(tx: &Transaction<'_>, n: i64, emails: &[String]) -> Result<()> {

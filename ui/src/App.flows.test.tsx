@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 import { createEnv, setWindowWidth, stubElementSizes, type Env } from "./test/harness";
+import { must } from "./test/must";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -46,7 +47,7 @@ async function settleUntil<T>(query: () => T | null, what: string): Promise<T> {
     if (found !== null) return found;
     await turn();
   }
-  throw new Error(`${what} did not appear within ${TURNS} event-loop turns`);
+  throw new Error(`${what} did not appear within ${String(TURNS)} event-loop turns`);
 }
 
 /**
@@ -117,7 +118,9 @@ describe("M1a flows", () => {
     const body = within(dialog).getByRole("textbox", { name: "Message" });
     await user.click(body);
     fireEvent.keyDown(body, { key: "Enter", ctrlKey: true });
-    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await eventually(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
 
     const status = screen.getByRole("status", { name: "Status" });
     // The countdown follows the wall clock, so any second of the delay is fine.
@@ -137,7 +140,9 @@ describe("M1a flows", () => {
     fireEvent.keyDown(within(reopened).getByRole("textbox", { name: "Subject" }), {
       key: "Escape",
     });
-    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await eventually(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(env.store.getState().composer).toBeNull();
     expect([...env.transport.data.drafts.values()].map((d) => d.subject)).toEqual(["Lunch"]);
   });
@@ -158,18 +163,20 @@ describe("M1a flows", () => {
       error: null,
       message: null,
     };
-    act(() => env.store.getState().setLastSend(entry));
+    act(() => {
+      env.store.getState().setLastSend(entry);
+    });
     const status = screen.getByRole("status", { name: "Status" });
     expect(within(status).getByText("Sending…")).toBeInTheDocument();
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "SendStatus",
         outbox_id: "out-9",
         state: "failed",
         error: "network",
         message: "x",
-      }),
-    );
+      });
+    });
     expect(
       within(status).getByText("Sending failed: The server could not be reached."),
     ).toBeInTheDocument();
@@ -191,26 +198,28 @@ describe("M1a flows", () => {
       error: null,
       message: null,
     };
-    act(() => env.store.getState().setLastSend(entry));
+    act(() => {
+      env.store.getState().setLastSend(entry);
+    });
     const status = screen.getByRole("status", { name: "Status" });
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "SendProgress",
         outbox_id: "out-7",
         sent_bytes: 3_276_800,
         total_bytes: 13_107_200,
-      }),
-    );
+      });
+    });
     expect(within(status).getByText("Sending… 25% uploaded")).toBeInTheDocument();
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "SendStatus",
         outbox_id: "out-7",
         state: "sent",
         error: null,
         message: null,
-      }),
-    );
+      });
+    });
     expect(env.store.getState().sendProgress).toEqual({});
     expect(within(status).getByText("Message sent.")).toBeInTheDocument();
   });
@@ -219,23 +228,23 @@ describe("M1a flows", () => {
     const user = userEvent.setup();
     const { env } = renderApp();
     const rows = await ready();
-    const first = rows[0] as HTMLElement;
+    const first = must(rows[0]);
     const firstId = first.dataset.message ?? "";
     fireEvent.click(first);
     fireEvent.keyDown(first, { key: "s" });
-    await eventually(() =>
+    await eventually(() => {
       expect(env.transport.requests).toContainEqual(
         expect.objectContaining({ type: "UpdateFlags", message_ids: [firstId] }),
-      ),
-    );
+      );
+    });
     fireEvent.keyDown(document.body, { key: "e" });
-    await eventually(() =>
+    await eventually(() => {
       expect(env.transport.requests).toContainEqual({
         type: "MoveMessages",
         message_ids: [firstId],
         target: { role: "archive" },
-      }),
-    );
+      });
+    });
     const next = env.store.getState().selectedMessageId;
     expect(next).not.toBe(firstId);
     expect(next).not.toBeNull();
@@ -251,7 +260,9 @@ describe("M1a flows", () => {
         "'button', { name: 'Trash' }",
       ),
     );
-    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await eventually(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(env.transport.requests).toContainEqual({
       type: "MoveMessages",
       message_ids: [next],
@@ -259,7 +270,9 @@ describe("M1a flows", () => {
     });
     // The mock core replays the writes with OpStatus events; the status bar
     // follows them until the queue is empty.
-    await eventually(() => expect(env.store.getState().pendingOps).toEqual([]));
+    await eventually(() => {
+      expect(env.store.getState().pendingOps).toEqual([]);
+    });
   });
 
   it("searches with / and the query language, and clears with Escape", async () => {
@@ -313,9 +326,9 @@ describe("M1a flows", () => {
     );
     expect(setup).toHaveAttribute("data-state", "active");
     await user.click(within(setup).getByRole("button", { name: "Close" }));
-    await eventually(() =>
-      expect(screen.queryByRole("dialog", { name: "Add account" })).toBeNull(),
-    );
+    await eventually(() => {
+      expect(screen.queryByRole("dialog", { name: "Add account" })).toBeNull();
+    });
     expect(screen.getByRole("region", { name: "Settings view" })).toBeVisible();
   });
 
@@ -331,7 +344,7 @@ describe("M1a flows", () => {
       "the Work section",
     );
     await eventually(() => expect(work).toHaveAttribute("data-status", "online"));
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "AccountStatus",
         status: {
@@ -341,8 +354,8 @@ describe("M1a flows", () => {
           error: "network",
           message: "down",
         },
-      }),
-    );
+      });
+    });
     // Query observers are notified asynchronously.
     await eventually(() => expect(work).toHaveAttribute("data-status", "offline"));
     // Not online: the section names the state (also for screen readers).
@@ -350,10 +363,12 @@ describe("M1a flows", () => {
     expect(screen.getByRole("status", { name: "Status" })).toHaveTextContent("Work: Offline");
 
     env.transport.data.accounts[1] = {
-      ...(env.transport.data.accounts[1] as (typeof env.transport.data.accounts)[number]),
+      ...must(env.transport.data.accounts[1]),
       name: "Office",
     };
-    act(() => env.transport.emit({ type: "AccountsChanged" }));
+    act(() => {
+      env.transport.emit({ type: "AccountsChanged" });
+    });
     expect(
       await settleUntil(
         () => screen.queryByRole("treeitem", { name: /^Office/ }),
@@ -366,8 +381,8 @@ describe("M1a flows", () => {
     const { env } = renderApp();
     const rows = await ready();
     env.transport.data.behaviour.opError = "auth_failed";
-    fireEvent.click(rows[1] as HTMLElement);
-    fireEvent.keyDown(rows[1] as HTMLElement, { key: "u" });
+    fireEvent.click(must(rows[1]));
+    fireEvent.keyDown(must(rows[1]), { key: "u" });
     expect(
       await settleUntil(
         () => screen.queryByText("A change could not be saved: The server rejected the login."),

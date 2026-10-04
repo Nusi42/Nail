@@ -2,6 +2,7 @@
 //! reqwest with the ring TLS configuration from nail-auth talks to the
 //! loopback mock server, Gmail's base64url `raw` encoding, and the label
 //! mapping of the contract.
+#![cfg(test)]
 
 use base64::Engine as _;
 use nail_api::gmail::{GmailCategory, GmailFolder};

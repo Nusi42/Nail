@@ -37,7 +37,7 @@ import { PrintHost } from "./PrintView";
 import { printStoreFor, type PrintMode } from "./store";
 
 export * from "./names";
-export { printViewRoute } from "./mock";
+export { printViewRoute } from "./model";
 export { PRINT_BASE_CSS } from "./parts";
 export { printStoreFor } from "./store";
 export { closePrintView, openPrintView, PrintHost, PrintView } from "./PrintView";
@@ -88,24 +88,34 @@ export const widgets: Feature["widgets"] = {};
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   [PRINT_MESSAGE_ACTION]: {
-    run: (ctx) => open(ctx, messageTarget(ctx), "print"),
+    run: (ctx) => {
+      open(ctx, messageTarget(ctx), "print");
+    },
     enabled: (ctx) => ctx.store.getState().selectedMessageId !== null,
   },
   [PRINT_THREAD_ACTION]: {
-    run: (ctx) => open(ctx, threadTarget(ctx), "print"),
+    run: (ctx) => {
+      open(ctx, threadTarget(ctx), "print");
+    },
     enabled: (ctx) =>
       ctx.store.getState().selectedThreadId !== null ||
       ctx.store.getState().selectedMessageId !== null,
   },
   [PRINT_EVENT_ACTION]: {
-    run: (ctx, args) => open(ctx, eventTarget(ctx, args), "print"),
+    run: (ctx, args) => {
+      open(ctx, eventTarget(ctx, args), "print");
+    },
     enabled: (ctx, args) => eventTarget(ctx, args) !== null,
   },
   [PRINT_AGENDA_ACTION]: {
-    run: (ctx) => open(ctx, defaultAgenda(), "print"),
+    run: (ctx) => {
+      open(ctx, defaultAgenda(), "print");
+    },
   },
   [PRINT_SAVE_PDF_ACTION]: {
-    run: (ctx) => open(ctx, messageTarget(ctx), "pdf"),
+    run: (ctx) => {
+      open(ctx, messageTarget(ctx), "pdf");
+    },
     enabled: (ctx) => ctx.store.getState().selectedMessageId !== null,
   },
 };

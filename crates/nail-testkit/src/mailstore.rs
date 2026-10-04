@@ -127,6 +127,10 @@ struct State {
     next_uid_validity: u32,
 }
 
+/// An empty flag list for [`MailStore::append`] and friends (a bare `&[]`
+/// has no element type to infer).
+pub const NO_FLAGS: &[&str] = &[];
+
 /// Shared mailbox state of a mock server.
 #[derive(Debug, Clone)]
 pub struct MailStore {
@@ -181,7 +185,7 @@ impl MailStore {
         // A panicking test thread must not wedge the server for other tests.
         self.state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Runs `f` on a mailbox under the lock and wakes waiting sessions
@@ -331,7 +335,7 @@ impl MailStore {
             let prefix = format!("{from_name}/");
             for mailbox in &mut state.mailboxes {
                 if mailbox.name == from_name {
-                    mailbox.name = to.to_owned();
+                    to.clone_into(&mut mailbox.name);
                 } else if let Some(rest) = mailbox.name.strip_prefix(&prefix) {
                     mailbox.name = format!("{to}/{rest}");
                 }
@@ -624,7 +628,7 @@ mod tests {
         let uids: Vec<_> = inbox.messages.iter().map(|m| m.uid).collect();
         let expected: Vec<u32> = (1..=u32::try_from(uids.len()).unwrap()).collect();
         assert_eq!(uids, expected);
-        assert_eq!(inbox.uid_next, expected.len() as u32 + 1);
+        assert_eq!(inbox.uid_next, u32::try_from(expected.len() + 1).unwrap());
         assert_eq!(store.mailboxes().len(), 3);
     }
 

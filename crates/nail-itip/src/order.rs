@@ -82,12 +82,12 @@ fn stamp_key(stamp: &str) -> (i64, String) {
 pub fn fields_change_significantly(old: &EventFields, new: &EventFields) -> bool {
     !same_time(&old.start, &new.start)
         || !same_time(&old.end, &new.end)
-        || trimmed(&old.location) != trimmed(&new.location)
+        || trimmed(old.location.as_deref()) != trimmed(new.location.as_deref())
         || (old.status != new.status && new.status == EventStatus::Cancelled)
 }
 
-fn trimmed(text: &Option<String>) -> Option<&str> {
-    text.as_deref().map(str::trim).filter(|t| !t.is_empty())
+fn trimmed(text: Option<&str>) -> Option<&str> {
+    text.map(str::trim).filter(|t| !t.is_empty())
 }
 
 /// Equal times, also when written in different zones (same instant).
@@ -209,7 +209,7 @@ mod tests {
             created_at: None,
             updated_at: None,
             read_only: false,
-            sync: Default::default(),
+            sync: nail_api::pim::PimItemSync::default(),
         }
     }
 

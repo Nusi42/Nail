@@ -1,6 +1,7 @@
 //! Every Fluent id this crate emits exists in
 //! `locales/en/core-portability.ftl`, and the German catalog is the same
 //! file (texts later).
+#![cfg(test)]
 
 use std::path::Path;
 

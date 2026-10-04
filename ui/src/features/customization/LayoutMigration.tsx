@@ -38,7 +38,7 @@ function hasWidget(node: LayoutNode, kind: string): boolean {
  */
 export function needsLayoutMigration(layout: ResolvedLayout): boolean {
   if (Object.keys(layout.views).length === 0) return false;
-  const main = layout.windows["main"] ?? [];
+  const main = layout.windows.main ?? [];
   return main.length > 0 && !main.some((bp) => hasWidget(bp.root, VIEW_HOST));
 }
 
@@ -53,8 +53,9 @@ export function LayoutMigration() {
   if (!uiState.isSuccess || !needsLayoutMigration(layout)) return null;
   if (Object.hasOwn(uiState.data, UI_STATE_LAYOUT_OFFER)) return null;
 
-  const answer = (value: "dismissed" | "reviewed") =>
+  const answer = (value: "dismissed" | "reviewed") => {
     setUiState.mutate({ key: UI_STATE_LAYOUT_OFFER, value });
+  };
   const review = () => {
     customizationStore.getState().prefillMerge({ file: "layout", incoming: DEFAULT_LAYOUT_TEXT });
     store.getState().openWindow(DIALOGS.merge);
@@ -71,7 +72,13 @@ export function LayoutMigration() {
         <button type="button" data-part="form.button" data-variant="primary" onClick={review}>
           {t("customize-layout-offer-review")}
         </button>
-        <button type="button" data-part="form.button" onClick={() => answer("dismissed")}>
+        <button
+          type="button"
+          data-part="form.button"
+          onClick={() => {
+            answer("dismissed");
+          }}
+        >
           {t("customize-layout-offer-dismiss")}
         </button>
       </div>

@@ -255,9 +255,10 @@ export function readIncoming(
         args: [],
       });
     }
-    const token = /^\s*([a-z-]+)\s+"([a-z0-9-]+)"\s+"([^"]*)"\s*$/.exec(line);
-    if (token && file === "theme" && token[1] !== "bind") {
-      incoming.tokens.set(`${token[1]}.${token[2]}`, token[3] ?? "");
+    const [, group, name, value] =
+      /^\s*([a-z-]+)\s+"([a-z0-9-]+)"\s+"([^"]*)"\s*$/.exec(line) ?? [];
+    if (group !== undefined && name !== undefined && file === "theme" && group !== "bind") {
+      incoming.tokens.set(`${group}.${name}`, value ?? "");
     }
   }
   return { incoming };

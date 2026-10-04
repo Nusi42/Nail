@@ -39,13 +39,13 @@ export interface CustomizationState {
   /** What the merge dialog opens with next (taken once by the dialog). */
   mergePrefill: MergePrefill | null;
 
-  applyEvent(event: NailEvent): void;
-  setInspecting(on: boolean): void;
-  inspect(element: Element | null, pinned: boolean): void;
-  prefillMerge(prefill: MergePrefill | null): void;
+  applyEvent: (event: NailEvent) => void;
+  setInspecting: (on: boolean) => void;
+  inspect: (element: Element | null, pinned: boolean) => void;
+  prefillMerge: (prefill: MergePrefill | null) => void;
   /** Returns and clears the merge prefill. */
-  takeMergePrefill(): MergePrefill | null;
-  reset(): void;
+  takeMergePrefill: () => MergePrefill | null;
+  reset: () => void;
 }
 
 const LEGACY_CLEARED_BY: Partial<Record<NailEvent["type"], readonly string[]>> = {
@@ -120,18 +120,25 @@ export const customizationStore = createStore<CustomizationState>()((set, get) =
     const next = nextConfigErrors(get().configErrors, get().modernFiles, event);
     if (next) set(next);
   },
-  setInspecting: (inspecting) =>
+  setInspecting: (inspecting) => {
     set(
       inspecting ? { inspecting, pinned: false } : { inspecting, inspected: null, pinned: false },
-    ),
-  inspect: (inspected, pinned) => set({ inspected, pinned }),
-  prefillMerge: (mergePrefill) => set({ mergePrefill }),
+    );
+  },
+  inspect: (inspected, pinned) => {
+    set({ inspected, pinned });
+  },
+  prefillMerge: (mergePrefill) => {
+    set({ mergePrefill });
+  },
   takeMergePrefill: () => {
     const prefill = get().mergePrefill;
     if (prefill) set({ mergePrefill: null });
     return prefill;
   },
-  reset: () => set(initial()),
+  reset: () => {
+    set(initial());
+  },
 }));
 
 /** Subscribes to a slice of the feature state. */

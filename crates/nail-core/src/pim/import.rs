@@ -138,8 +138,16 @@ impl Service {
         address_book_id: Option<AddressBookId>,
     ) -> Result<PimImportResult> {
         let issues: Vec<_> = match &data {
-            ImportData::Calendar(c) => c.issues.iter().map(|i| i.to_import_issue()).collect(),
-            ImportData::Cards(c) => c.issues.iter().map(|i| i.to_import_issue()).collect(),
+            ImportData::Calendar(c) => c
+                .issues
+                .iter()
+                .map(nail_ical::Issue::to_import_issue)
+                .collect(),
+            ImportData::Cards(c) => c
+                .issues
+                .iter()
+                .map(nail_ical::Issue::to_import_issue)
+                .collect(),
         };
         let blobs = self.blobs().clone();
         let items: Vec<(PimItem, String)> = match data {
@@ -325,7 +333,10 @@ impl Service {
     async fn event_from_message(&self, id: MessageId) -> Result<EventFields> {
         let (body, link) = self.message_link(&id).await?;
         // An attached invitation or event: its fields.
-        let encrypted = body.security.as_ref().is_some_and(|s| s.is_encrypted());
+        let encrypted = body
+            .security
+            .as_ref()
+            .is_some_and(nail_api::SecurityStatus::is_encrypted);
         if !encrypted
             && let Some(attachment) = body
                 .attachments
@@ -347,10 +358,11 @@ impl Service {
             })
             .await??;
             if let Some(text) = text
-                && let Some(event) = nail_ical::parse_calendar(&text, Default::default())
-                    .events
-                    .into_iter()
-                    .next()
+                && let Some(event) =
+                    nail_ical::parse_calendar(&text, nail_ical::ParseOptions::default())
+                        .events
+                        .into_iter()
+                        .next()
             {
                 let mut fields = event.fields;
                 fields.links.push(link);

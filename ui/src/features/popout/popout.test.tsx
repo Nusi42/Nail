@@ -161,7 +161,9 @@ describe("the pop-out button", () => {
   it("prepares, pops the window out with its title and context, and takes it off the page", async () => {
     const env = desktopEnv();
     const sent = requests(env);
-    act(() => env.store.getState().openWindow("composer:d42"));
+    act(() => {
+      env.store.getState().openWindow("composer:d42");
+    });
     const prepare = vi.fn(async (window: string): Promise<JsonValue> => {
       await Promise.resolve();
       return { draft: window.split(":")[1] ?? "" };
@@ -170,7 +172,9 @@ describe("the pop-out button", () => {
     renderWithProviders(<PopOutButton window="composer:d42" />, env);
     const button = await screen.findByRole("button", { name: "Open in new window" });
     await userEvent.click(button);
-    await waitFor(() => expect(env.store.getState().windows).toEqual([]));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
     expect(prepare).toHaveBeenCalledWith(
       "composer:d42",
       expect.objectContaining({ client: env.client }),
@@ -191,7 +195,9 @@ describe("the pop-out button", () => {
 
   it("keeps the window in the page when popping out fails", async () => {
     const env = desktopEnv();
-    act(() => env.store.getState().openWindow("rules"));
+    act(() => {
+      env.store.getState().openWindow("rules");
+    });
     cleanups.push(
       registerPopOutPreparer("rules", () => {
         throw new Error("cannot save");
@@ -259,24 +265,28 @@ describe("the pop-out page", () => {
     const sent = requests(env);
     renderPopOutPage(env, "about-nail");
     // The content's title wins over the window's (taskbar entry).
-    await waitFor(() => expect(document.title).toBe("Re: Lunch on Friday"));
+    await waitFor(() => {
+      expect(document.title).toBe("Re: Lunch on Friday");
+    });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Re: Lunch on Friday");
-    await waitFor(() =>
-      expect(screen.getByTestId("context").textContent).toBe('{"tab":"licences"}'),
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("context").textContent).toBe('{"tab":"licences"}');
+    });
     // Open in this webview's own store.
     expect(env.store.getState().windows).toEqual(["about-nail"]);
     await userEvent.click(screen.getByRole("button", { name: "Return to main window" }));
-    await waitFor(() =>
-      expect(sent).toContainEqual({ type: "ReturnPopOut", window: "about-nail" }),
-    );
+    await waitFor(() => {
+      expect(sent).toContainEqual({ type: "ReturnPopOut", window: "about-nail" });
+    });
     expect(await popOuts(env)).toEqual([]);
   });
 
   it("uses the window's title without one from the content", async () => {
     const env = desktopEnv();
     renderPopOutPage(env, "about-nail", PlainDialog);
-    await waitFor(() => expect(document.title).toBe("About Nail"));
+    await waitFor(() => {
+      expect(document.title).toBe("About Nail");
+    });
     expect(screen.getByTestId("plain")).toBeTruthy();
   });
 
@@ -286,7 +296,9 @@ describe("the pop-out page", () => {
     const sent = requests(env);
     renderPopOutPage(env, "about-nail");
     await userEvent.click(await screen.findByRole("button", { name: "done" }));
-    await waitFor(() => expect(sent).toContainEqual({ type: "ClosePopOut", window: "about-nail" }));
+    await waitFor(() => {
+      expect(sent).toContainEqual({ type: "ClosePopOut", window: "about-nail" });
+    });
     expect(await popOuts(env)).toEqual([]);
   });
 
@@ -320,16 +332,26 @@ describe("the main page", () => {
     const handle = (event: NailEvent) => {
       for (const handler of events) handler(event, ctx);
     };
-    act(() => env.store.getState().openWindow("settings"));
-    act(() => handle(popOutChanged("settings", "opened")));
+    act(() => {
+      env.store.getState().openWindow("settings");
+    });
+    act(() => {
+      handle(popOutChanged("settings", "opened"));
+    });
     expect(env.store.getState().windows).toEqual([]);
-    act(() => handle(popOutChanged("settings", "closed")));
+    act(() => {
+      handle(popOutChanged("settings", "closed"));
+    });
     expect(env.store.getState().windows).toEqual([]);
-    act(() => handle(popOutChanged("settings", "returned")));
+    act(() => {
+      handle(popOutChanged("settings", "returned"));
+    });
     expect(env.store.getState().windows).toEqual(["settings"]);
     // A pop-out page leaves its store alone.
     window.location.hash = "#/window/settings";
-    act(() => handle(popOutChanged("settings", "opened")));
+    act(() => {
+      handle(popOutChanged("settings", "opened"));
+    });
     expect(env.store.getState().windows).toEqual(["settings"]);
   });
 });
@@ -350,8 +372,12 @@ describe("the router", () => {
     const sent = requests(env);
     renderRouter(env);
     await settleQueries(env);
-    act(() => env.store.getState().openWindow("rules"));
-    await waitFor(() => expect(env.store.getState().windows).toEqual([]));
+    act(() => {
+      env.store.getState().openWindow("rules");
+    });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
     expect(sent).toContainEqual({
       type: "PopOutWindow",
       window: "rules",
@@ -372,7 +398,9 @@ describe("the router", () => {
     const sent = requests(env);
     renderRouter(env);
     await settleQueries(env);
-    act(() => env.store.getState().openWindow("pim-event-editor"));
+    act(() => {
+      env.store.getState().openWindow("pim-event-editor");
+    });
     await settleQueries(env);
     expect(env.store.getState().windows).toEqual(["pim-event-editor"]);
     expect(sent.some((r) => r.type === "PopOutWindow")).toBe(false);
@@ -385,8 +413,12 @@ describe("the router", () => {
     const sent = requests(env);
     renderRouter(env);
     await settleQueries(env);
-    act(() => env.store.getState().openWindow("settings"));
-    await waitFor(() => expect(sent).toContainEqual({ type: "FocusPopOut", window: "settings" }));
+    act(() => {
+      env.store.getState().openWindow("settings");
+    });
+    await waitFor(() => {
+      expect(sent).toContainEqual({ type: "FocusPopOut", window: "settings" });
+    });
     expect(env.store.getState().windows).toEqual([]);
     expect((await popOuts(env)).find((p) => p.focused)?.window).toBe("settings");
   });
@@ -395,7 +427,9 @@ describe("the router", () => {
     const browser = createEnv();
     renderRouter(browser);
     await settleQueries(browser);
-    act(() => browser.store.getState().openWindow("rules"));
+    act(() => {
+      browser.store.getState().openWindow("rules");
+    });
     await settleQueries(browser);
     expect(browser.store.getState().windows).toEqual(["rules"]);
 
@@ -403,7 +437,9 @@ describe("the router", () => {
     const sent = requests(env);
     renderRouter(env);
     await settleQueries(env);
-    act(() => env.store.getState().openWindow("settings"));
+    act(() => {
+      env.store.getState().openWindow("settings");
+    });
     await settleQueries(env);
     expect(env.store.getState().windows).toEqual(["settings"]);
     expect(sent.some((r) => r.type === "PopOutWindow")).toBe(false);
@@ -447,7 +483,9 @@ describe("the actions", () => {
     const action = must(actions[POP_OUT_ACTION]);
     const ctx = { ...ctxOf(env), layout: layout(), t: (id: string) => id, locale: "en" };
     // An editor of the main page's selection: its state would not travel.
-    act(() => env.store.getState().openWindow("pim-event-editor"));
+    act(() => {
+      env.store.getState().openWindow("pim-event-editor");
+    });
     expect(action.enabled?.(ctx, [])).toBe(false);
     await act(async () => {
       await action.run(ctx, []);

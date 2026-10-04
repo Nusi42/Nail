@@ -93,11 +93,11 @@ export interface DateFormatter {
   /** The locale everything is formatted in. */
   readonly locale: string;
   /** See {@link formatDateTime}. */
-  dateTime(value: Date | string | number, options?: Intl.DateTimeFormatOptions): string;
+  dateTime: (value: Date | string | number, options?: Intl.DateTimeFormatOptions) => string;
   /** See {@link formatRelative}. */
-  relative(date: Date, now: number): string;
+  relative: (date: Date, now: number) => string;
   /** See {@link formatShortDate}. */
-  shortDate(date: Date, now: number): string;
+  shortDate: (date: Date, now: number) => string;
 }
 
 /** A {@link DateFormatter} for `locale`. */

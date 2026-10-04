@@ -3,6 +3,7 @@
 //! own; parts that hit a rate limit or a server error are retried in a
 //! later batch with backoff, the rest keep their answer.
 
+use std::fmt::Write as _;
 use std::time::Duration;
 
 use reqwest::Method;
@@ -46,11 +47,12 @@ pub(crate) fn is_plain_id(id: &str) -> bool {
 pub(crate) fn build_batch(boundary: &str, paths: &[(usize, String)]) -> Vec<u8> {
     let mut out = String::new();
     for (index, path) in paths {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "--{boundary}\r\nContent-Type: application/http\r\nContent-ID: <item-{index}>\r\n\r\nGET {path} HTTP/1.1\r\n\r\n"
-        ));
+        );
     }
-    out.push_str(&format!("--{boundary}--\r\n"));
+    let _ = write!(out, "--{boundary}--\r\n");
     out.into_bytes()
 }
 

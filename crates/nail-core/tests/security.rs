@@ -6,6 +6,8 @@
 //! sender authentication and link warnings, key management requests, the
 //! Autocrypt setup message, decrypted indexing and encryption at rest.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -82,8 +84,8 @@ async fn request(f: &Fixture, request: Request) -> Response {
     f.service.handle(request).await
 }
 
-fn control(f: &Fixture, command: &str, args: serde_json::Value) -> serde_json::Value {
-    f.demo.control(command, &args).unwrap()
+fn control(f: &Fixture, command: &str, args: &serde_json::Value) -> serde_json::Value {
+    f.demo.control(command, args).unwrap()
 }
 
 async fn folder(f: &Fixture, account: &str, role: FolderRole) -> Option<Folder> {
@@ -181,7 +183,7 @@ async fn send(f: &Fixture, draft: Draft, crypto: Option<SendCrypto>) -> Response
 
 /// What the SMTP server received: `(envelope recipients, data)`.
 fn received(f: &Fixture) -> Vec<(Vec<String>, String)> {
-    control(f, "smtp-messages", json!({}))
+    control(f, "smtp-messages", &json!({}))
         .as_array()
         .unwrap()
         .iter()
@@ -215,7 +217,7 @@ async fn deliver_home(f: &Fixture, raw: &str) -> MessageSummary {
         .into_iter()
         .map(|m| m.id)
         .collect();
-    control(f, "pop3-deliver", json!({ "raw": raw }));
+    control(f, "pop3-deliver", &json!({ "raw": raw }));
     request(
         f,
         Request::SyncNow {
@@ -242,7 +244,7 @@ async fn deliver_home(f: &Fixture, raw: &str) -> MessageSummary {
 
 /// Delivers raw mail to the IMAP "work" account's INBOX and waits for it.
 async fn deliver_work(f: &Fixture, raw: &str, subject: &str) -> MessageSummary {
-    control(f, "imap-deliver", json!({ "raw": raw }));
+    control(f, "imap-deliver", &json!({ "raw": raw }));
     request(
         f,
         Request::SyncNow {
@@ -462,7 +464,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
         &f,
         Request::GenerateKey {
             identity_id: MULTI_HOME_EMAIL.into(),
-            algorithm: Default::default(),
+            algorithm: nail_api::security::KeyAlgorithm::default(),
             expires_days: None,
             protection: nail_api::security::SecretProtection::Passphrase {
                 passphrase: "correct horse".into(),
@@ -741,9 +743,9 @@ async fn key_requests() {
     // A generated own key lists first.
     let Response::KeyGenerated { key: own } = call(Request::GenerateKey {
         identity_id: "me@example.org".into(),
-        algorithm: Default::default(),
+        algorithm: nail_api::security::KeyAlgorithm::default(),
         expires_days: Some(365),
-        protection: Default::default(),
+        protection: nail_api::security::SecretProtection::default(),
     })
     .await
     else {
@@ -914,7 +916,7 @@ async fn search_count(f: &Fixture, text: &str) -> u32 {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         },
     )
@@ -1213,7 +1215,7 @@ async fn mcp_encrypted_gate_follows_the_reader() {
 }
 
 fn server_drafts(f: &Fixture) -> Vec<String> {
-    control(f, "imap-messages", json!({ "mailbox": "Drafts" }))
+    control(f, "imap-messages", &json!({ "mailbox": "Drafts" }))
         .as_array()
         .unwrap()
         .iter()
@@ -1367,7 +1369,7 @@ async fn deliver_auth_burst(f: &Fixture, tag: &str, hour: u8, auth: &str, count:
              Date: Wed, 30 Dec 2026 {hour:02}:{n:02}:00 +0000\r\nMessage-ID: <{tag}-{n}@bank.example>\r\n\
              Content-Type: text/plain\r\n\r\nPay now.\r\n"
         );
-        control(f, "imap-deliver", json!({ "raw": raw }));
+        control(f, "imap-deliver", &json!({ "raw": raw }));
     }
     request(
         f,

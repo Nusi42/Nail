@@ -15,6 +15,7 @@
 //! message data).
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -34,6 +35,10 @@ use crate::stream::{Connection, MockStream, args, verb};
 
 /// Configuration of a [`MockSmtpServer`].
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent feature switches of a mock server; each test turns single ones on or off"
+)]
 pub struct MockSmtpConfig {
     /// Host name in the greeting and `EHLO` reply.
     pub hostname: String,
@@ -336,7 +341,7 @@ async fn session(
     config: &MockSmtpConfig,
     acceptor: Option<&TlsAcceptor>,
 ) -> std::io::Result<()> {
-    let _ = tcp.set_nodelay(true);
+    drop(tcp.set_nodelay(true));
     let mut conn = match (config.tls, acceptor) {
         (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
         _ => Connection::new(MockStream::Plain(tcp)),
@@ -450,8 +455,10 @@ fn ehlo_lines(config: &MockSmtpConfig, conn: &Connection, client: &str, helo: bo
     lines
         .iter()
         .enumerate()
-        .map(|(i, l)| format!("250{}{l}\r\n", if i == last { ' ' } else { '-' }))
-        .collect()
+        .fold(String::new(), |mut out, (i, l)| {
+            let _ = write!(out, "250{}{l}\r\n", if i == last { ' ' } else { '-' });
+            out
+        })
 }
 
 /// Reads one SASL continuation line; `None` when the client cancelled (`*`).
@@ -469,6 +476,8 @@ async fn auth(
     st: &mut SessionState,
     arguments: &str,
 ) -> std::io::Result<()> {
+    const CANCELLED: &str = "501 5.0.0 Authentication cancelled";
+    const INVALID: &str = "535 5.7.8 Authentication credentials invalid";
     if config.tls == MockTls::StartTls && !conn.is_tls() {
         return conn
             .line("530 5.7.0 Must issue a STARTTLS command first")
@@ -491,8 +500,6 @@ async fn auth(
             .line("504 5.5.4 Unrecognized authentication type")
             .await;
     }
-    const CANCELLED: &str = "501 5.0.0 Authentication cancelled";
-    const INVALID: &str = "535 5.7.8 Authentication credentials invalid";
     let user = match mechanism.as_str() {
         "PLAIN" => {
             let payload = match initial {
@@ -553,18 +560,17 @@ async fn auth(
                     .iter()
                     .any(|(u, t)| u == user && t == token)
             });
-            match valid {
-                Some((user, _)) => Some(user),
-                None => {
-                    // RFC 7628 / XOAUTH2: an error challenge, the client
-                    // answers with a dummy response, then the final failure.
-                    conn.line(&format!("334 {}", sasl::oauth_error_challenge()))
-                        .await?;
-                    let _ = conn.read_line().await?;
-                    return conn
-                        .line("535 5.7.8 Username and Password not accepted")
-                        .await;
-                }
+            if let Some((user, _)) = valid {
+                Some(user)
+            } else {
+                // RFC 7628 / XOAUTH2: an error challenge, the client
+                // answers with a dummy response, then the final failure.
+                conn.line(&format!("334 {}", sasl::oauth_error_challenge()))
+                    .await?;
+                drop(conn.read_line().await?);
+                return conn
+                    .line("535 5.7.8 Username and Password not accepted")
+                    .await;
             }
         }
         _ => {
@@ -662,13 +668,10 @@ async fn data(
     let limit = config.size_limit.unwrap_or(usize::MAX);
     let block = conn.read_dot_block(limit).await?;
     let txn = std::mem::take(&mut st.txn);
-    let data = match block {
-        Ok(data) => data,
-        Err(_) => {
-            return conn
-                .line("552 5.3.4 Message size exceeds fixed maximum message size")
-                .await;
-        }
+    let Ok(data) = block else {
+        return conn
+            .line("552 5.3.4 Message size exceeds fixed maximum message size")
+            .await;
     };
     match shared.take_fault("MESSAGE") {
         Some(Fault::Reply(code, text)) => return conn.line(&format!("{code} {text}")).await,

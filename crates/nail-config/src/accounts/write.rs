@@ -170,7 +170,7 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
         } => Line::new("auth")
             .arg("password")
             .prop("username", username)
-            .prop_opt("secret", secret.as_ref().map(|s| s.as_str()))
+            .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str))
             .prop_opt("mechanism", mechanism.map(mechanism_name)),
         AuthConfig::OAuth2 {
             username,
@@ -181,12 +181,12 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
             .arg("oauth2")
             .prop("provider", provider)
             .prop("username", username)
-            .prop_opt("secret", secret.as_ref().map(|s| s.as_str()))
+            .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str))
             .prop_opt("mechanism", mechanism.map(mechanism_name)),
         AuthConfig::ClientCertificate { username, secret } => Line::new("auth")
             .arg("client-certificate")
             .prop_opt("username", username.as_deref())
-            .prop_opt("secret", secret.as_ref().map(|s| s.as_str())),
+            .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str)),
         AuthConfig::Windows {
             username,
             secret,
@@ -194,8 +194,11 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
         } => Line::new("auth")
             .arg("windows")
             .prop_opt("username", username.as_deref())
-            .prop_opt("secret", secret.as_ref().map(|s| s.as_str()))
-            .prop_opt("package", package.map(|p| p.as_str())),
+            .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str))
+            .prop_opt(
+                "package",
+                package.map(nail_api::accounts::SspiPackage::as_str),
+            ),
         AuthConfig::None => Line::new("auth").arg("none"),
     };
     line.finish(depth, indent, &[])
@@ -438,7 +441,9 @@ fn render_virtual_account(v: &VirtualAccountConfig, indent: &str) -> String {
         .prop("name", &v.name)
         .prop_opt(
             "default-identity",
-            v.default_identity.as_ref().map(|i| i.as_str()),
+            v.default_identity
+                .as_ref()
+                .map(nail_api::IdentityId::as_str),
         )
         .bool_opt("merge-roles", (!v.merge_roles).then_some(false))
         .finish(0, indent, &children)
@@ -458,7 +463,7 @@ fn render_oauth_provider(p: &OAuthProviderConfig, indent: &str) -> String {
         .prop("client-id", &p.client_id)
         .prop_opt(
             "client-secret",
-            p.client_secret.as_ref().map(|s| s.as_str()),
+            p.client_secret.as_ref().map(nail_api::SecretRef::as_str),
         )
         .prop_opt("auth-url", p.auth_url.as_deref())
         .prop_opt("token-url", p.token_url.as_deref())
@@ -467,10 +472,11 @@ fn render_oauth_provider(p: &OAuthProviderConfig, indent: &str) -> String {
 
 /// Renders a `calendar-subscription`, `caldav` or `carddav` node (M3a).
 fn render_pim_source(source: &PimSourceConfig, indent: &str) -> String {
-    let node = source
-        .kind()
-        .node_name()
-        .expect("configured sources have a node name");
+    // Only the kinds with a node name can be configured (the reader
+    // rejects the others); the caller's re-parse would catch a gap.
+    let Some(node) = source.kind().node_name() else {
+        return String::new();
+    };
     let mut line = Line::new(node).arg(source.id.as_str());
     let auth = match &source.settings {
         PimSourceSettings::Ics {
@@ -502,7 +508,7 @@ fn render_pim_source(source: &PimSourceConfig, indent: &str) -> String {
         } => {
             line = line
                 .prop_opt("name", source.name.as_deref())
-                .prop_opt("account", account.as_ref().map(|a| a.as_str()))
+                .prop_opt("account", account.as_ref().map(nail_api::AccountId::as_str))
                 .prop_opt("url", url.as_deref())
                 .num_opt("refresh", *refresh_minutes);
             auth
@@ -636,7 +642,7 @@ fn node_eq(a: &KdlNode, b: &KdlNode) -> bool {
         n.children().map_or(&[], KdlDocument::nodes)
     }
     a.name().value() == b.name().value()
-        && a.ty().map(|t| t.value()) == b.ty().map(|t| t.value())
+        && a.ty().map(kdl::KdlIdentifier::value) == b.ty().map(kdl::KdlIdentifier::value)
         && args(a) == args(b)
         && props(a) == props(b)
         && kids(a).len() == kids(b).len()
@@ -759,7 +765,7 @@ fn is_default_child(parent: &KdlNode, child: &KdlNode, ctx: &Ctx<'_>) -> bool {
     let props: Vec<&str> = child
         .entries()
         .iter()
-        .filter_map(|e| e.name().map(|n| n.value()))
+        .filter_map(|e| e.name().map(kdl::KdlIdentifier::value))
         .collect();
     let arg_count = child
         .entries()
@@ -794,7 +800,7 @@ fn is_default_child(parent: &KdlNode, child: &KdlNode, ctx: &Ctx<'_>) -> bool {
 fn ensure_terminated(node: &mut KdlNode, newline: &str) {
     if let Some(fmt) = node.format_mut() {
         if fmt.terminator.is_empty() && !fmt.trailing.contains('\n') {
-            fmt.terminator = newline.to_owned();
+            newline.clone_into(&mut fmt.terminator);
         }
     } else {
         node.set_format(kdl::KdlNodeFormat {
@@ -816,9 +822,10 @@ fn reconcile_entries(old: &mut KdlNode, new: &KdlNode, ctx: &Ctx<'_>) {
         let mut index = 0;
         entries
             .iter()
-            .map(|e| match e.name() {
-                Some(name) => (Key::Prop(name.value().to_owned()), e),
-                None => {
+            .map(|e| {
+                if let Some(name) = e.name() {
+                    (Key::Prop(name.value().to_owned()), e)
+                } else {
                     index += 1;
                     (Key::Arg(index - 1), e)
                 }
@@ -915,12 +922,12 @@ fn reconcile_node(old: &mut KdlNode, new: &KdlNode, ctx: &Ctx<'_>) {
             if !kids.nodes().is_empty() {
                 old.set_children(kids);
                 if let Some(fmt) = old.format_mut() {
-                    fmt.before_children = " ".to_owned();
+                    " ".clone_into(&mut fmt.before_children);
                 }
             }
         }
         (true, Some(kids)) => {
-            let old_kids = old.children_mut().as_mut().expect("checked above");
+            let old_kids = old.ensure_children();
             reconcile_list(old_kids, kids, ctx, &|_, _| false, Some(new));
         }
     }
@@ -1038,7 +1045,7 @@ fn reconcile_list(
                     ctx.newline.to_owned()
                 };
             }
-            fmt.terminator = ctx.newline.to_owned();
+            ctx.newline.clone_into(&mut fmt.terminator);
             fmt.trailing.clear();
         }
         result.push((Some(j), node));

@@ -5,6 +5,7 @@
 //! older cards are built from their named properties.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
 use nail_ical::content::escape_text;
@@ -137,7 +138,7 @@ fn line(out: &mut String, name: &str, value: &str) {
 /// The vCard of one card: its `_vCard` (with the card's `UID` added when
 /// missing), else vCard 4 built from Thunderbird's property names.
 pub fn card_text(uid: &str, p: &BTreeMap<String, String>) -> String {
-    let get = |name: &str| p.get(name).map(String::as_str).unwrap_or("");
+    let get = |name: &str| p.get(name).map_or("", String::as_str);
     if let Some(vcard) = p.get("_vCard").filter(|v| v.contains("BEGIN:VCARD")) {
         let mut text = vcard.replace("\r\n", "\n").replace('\n', "\r\n");
         if !text.to_ascii_uppercase().contains("\r\nUID:") {
@@ -153,19 +154,22 @@ pub fn card_text(uid: &str, p: &BTreeMap<String, String>) -> String {
     let display = [get("DisplayName"), get("PrimaryEmail")]
         .into_iter()
         .find(|s| !s.trim().is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            format!("{} {}", get("FirstName"), get("LastName"))
-                .trim()
-                .to_owned()
-        });
+        .map_or_else(
+            || {
+                format!("{} {}", get("FirstName"), get("LastName"))
+                    .trim()
+                    .to_owned()
+            },
+            str::to_owned,
+        );
     line(&mut out, "FN", &display);
     if !get("FirstName").is_empty() || !get("LastName").is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "N:{};{};;;\r\n",
             escape_text(get("LastName")),
             escape_text(get("FirstName"))
-        ));
+        );
     }
     line(&mut out, "NICKNAME", get("NickName"));
     line(&mut out, "EMAIL;PREF=1", get("PrimaryEmail"));
@@ -176,11 +180,12 @@ pub fn card_text(uid: &str, p: &BTreeMap<String, String>) -> String {
     line(&mut out, "TEL;TYPE=fax", get("FaxNumber"));
     line(&mut out, "TEL;TYPE=pager", get("PagerNumber"));
     if !get("Company").is_empty() || !get("Department").is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "ORG:{};{}\r\n",
             escape_text(get("Company")),
             escape_text(get("Department"))
-        ));
+        );
     }
     line(&mut out, "TITLE", get("JobTitle"));
     line(&mut out, "NOTE", get("Notes"));
@@ -190,7 +195,8 @@ pub fn card_text(uid: &str, p: &BTreeMap<String, String>) -> String {
         let parts = ["Address2", "Address", "City", "State", "ZipCode", "Country"]
             .map(|f| get(&format!("{prefix}{f}")).to_owned());
         if parts.iter().any(|s| !s.trim().is_empty()) {
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "ADR;TYPE={kind}:;{};{};{};{};{};{}\r\n",
                 escape_text(&parts[0]),
                 escape_text(&parts[1]),
@@ -198,14 +204,18 @@ pub fn card_text(uid: &str, p: &BTreeMap<String, String>) -> String {
                 escape_text(&parts[3]),
                 escape_text(&parts[4]),
                 escape_text(&parts[5]),
-            ));
+            );
         }
     }
     let (y, m, d) = (get("BirthYear"), get("BirthMonth"), get("BirthDay"));
     if let (Ok(m), Ok(d)) = (m.parse::<u32>(), d.parse::<u32>()) {
         match y.parse::<u32>() {
-            Ok(y) => out.push_str(&format!("BDAY:{y:04}{m:02}{d:02}\r\n")),
-            Err(_) => out.push_str(&format!("BDAY:--{m:02}{d:02}\r\n")),
+            Ok(y) => {
+                let _ = write!(out, "BDAY:{y:04}{m:02}{d:02}\r\n");
+            }
+            Err(_) => {
+                let _ = write!(out, "BDAY:--{m:02}{d:02}\r\n");
+            }
         }
     }
     out.push_str("END:VCARD\r\n");
@@ -224,7 +234,7 @@ pub fn list_text(list: &MailList) -> String {
         line(&mut out, "NOTE", description);
     }
     for member in &list.members {
-        out.push_str(&format!("MEMBER:urn:uuid:{member}\r\n"));
+        let _ = write!(out, "MEMBER:urn:uuid:{member}\r\n");
     }
     out.push_str("END:VCARD\r\n");
     out

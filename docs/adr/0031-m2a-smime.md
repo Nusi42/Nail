@@ -77,7 +77,7 @@ diagnostics with an `ErrorCode`; the UI localizes by code).
   recipient), `locked` (the matching key needs its passphrase), `failed`
   (tampered, wrong key, damaged), `unsupported`.
 * **BER**: Thunderbird / NSS, Outlook and `openssl -stream` produce
-  indefinite lengths and chunked OCTET STRINGs; `ber::normalize` rewrites
+  indefinite lengths and chunked OCTET STRING values; `ber::normalize` rewrites
   them into DER without changing values (DER passes through byte for byte),
   including the IMPLICIT `encryptedContent [0]` of an
   `EncryptedContentInfo`.

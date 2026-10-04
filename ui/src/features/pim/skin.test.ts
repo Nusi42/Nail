@@ -133,7 +133,9 @@ describe("PIM skin", () => {
       expect(PIM_SKIN_CSS).toContain(`[data-part="${part}"]`);
     }
     for (let i = 0; i < AVATAR_COLORS.length; i++) {
-      expect(PIM_SKIN_CSS).toContain(`[data-color="${i}"][data-part="contact-list.avatar"]`);
+      expect(PIM_SKIN_CSS).toContain(
+        `[data-color="${String(i)}"][data-part="contact-list.avatar"]`,
+      );
     }
   });
 

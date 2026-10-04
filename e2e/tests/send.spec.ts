@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
 import { composerWindow } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Sending a plain-text mail through the core's outbox to the mock SMTP
@@ -58,10 +59,11 @@ test("a plain-text mail is sent, once cancelled by undo and once for real", asyn
   await expect(status.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
   const mails = await received();
   expect(mails).toHaveLength(1);
-  expect(mails[0]!.from).toBe("ada@work.example");
-  expect(mails[0]!.to).toEqual(["grace@navy.example"]);
-  expect(mails[0]!.data).toContain("Subject: Review notes");
-  expect(mails[0]!.data).toContain("Hello Grace,");
+  const mail = defined(mails[0], "the sent message");
+  expect(mail.from).toBe("ada@work.example");
+  expect(mail.to).toEqual(["grace@navy.example"]);
+  expect(mail.data).toContain("Subject: Review notes");
+  expect(mail.data).toContain("Hello Grace,");
 
   // The Sent copy is on the IMAP server and in the unified Sent folder.
   await expect

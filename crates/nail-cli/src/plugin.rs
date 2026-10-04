@@ -25,16 +25,17 @@ use nail_api::plugins::{PluginGrant, PluginManifest};
 use nail_api::{Event, LocalizedMessage, PluginId, Request, Response, RpcRequest, ServerMessage};
 use nail_config::l10n::Catalog;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 use crate::messages::{self, Localized};
 
 /// The file `nail serve` writes into its data directory with its URL.
-pub use nail_api::desktop::UI_ENDPOINT_FILE;
+pub(crate) use nail_api::desktop::UI_ENDPOINT_FILE;
 use nail_api::desktop::UiEndpointFile;
 
 /// `nail plugin …`
 #[derive(Debug, Subcommand)]
-pub enum PluginCommand {
+pub(crate) enum PluginCommand {
     /// Load an unpacked plug-in folder (with manifest.json) into the
     /// running Nail, reload it when its files change and show its log.
     Dev(PluginDevArgs),
@@ -42,7 +43,7 @@ pub enum PluginCommand {
 
 /// `nail plugin dev …`
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct PluginDevArgs {
+pub(crate) struct PluginDevArgs {
     /// The plug-in folder (holding manifest.json).
     #[arg(value_name = "FOLDER")]
     pub folder: PathBuf,
@@ -56,7 +57,7 @@ pub struct PluginDevArgs {
 }
 
 /// Runs a `nail plugin` command.
-pub async fn run(command: PluginCommand) -> anyhow::Result<()> {
+pub(crate) async fn run(command: PluginCommand) -> anyhow::Result<()> {
     match command {
         PluginCommand::Dev(args) => dev(args).await,
     }
@@ -65,11 +66,11 @@ pub async fn run(command: PluginCommand) -> anyhow::Result<()> {
 /// Writes `<data-dir>/ui-endpoint.json` for `nail plugin dev`; removed
 /// when dropped.
 #[derive(Debug)]
-pub struct UiEndpoint(PathBuf);
+pub(crate) struct UiEndpoint(PathBuf);
 
 impl UiEndpoint {
     /// Writes the file.
-    pub fn write(data_dir: &Path, url: &str) -> std::io::Result<Self> {
+    pub(crate) fn write(data_dir: &Path, url: &str) -> std::io::Result<Self> {
         let path = data_dir.join(UI_ENDPOINT_FILE);
         let body = UiEndpointFile {
             url: url.to_owned(),
@@ -83,7 +84,7 @@ impl UiEndpoint {
 
 impl Drop for UiEndpoint {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        drop(std::fs::remove_file(&self.0));
     }
 }
 
@@ -106,7 +107,7 @@ fn resolve_url(args: &PluginDevArgs) -> anyhow::Result<(String, Option<String>)>
 }
 
 /// `ws://host:port/api/ws` of a UI URL.
-pub fn socket_url(url: &str) -> Option<String> {
+pub(crate) fn socket_url(url: &str) -> Option<String> {
     let mut parsed = url::Url::parse(url).ok()?;
     let scheme = match parsed.scheme() {
         "http" => "ws",
@@ -130,7 +131,6 @@ async fn connect(
 > {
     let socket = socket_url(url)
         .localized(|| LocalizedMessage::new("cli-plugin-dev-not-http").arg("url", url))?;
-    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
     let mut request = socket.as_str().into_client_request()?;
     if let Some(token) = token {
         request
@@ -148,7 +148,7 @@ async fn connect(
 }
 
 /// Every permission the manifest declares, for all accounts.
-pub fn declared_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
+pub(crate) fn declared_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
     manifest
         .permissions
         .iter()
@@ -158,7 +158,7 @@ pub fn declared_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
 }
 
 /// One console line of a log entry.
-pub fn console_line(catalog: &Catalog, entry: &PluginLogEntry) -> String {
+pub(crate) fn console_line(catalog: &Catalog, entry: &PluginLogEntry) -> String {
     let text = entry
         .localized
         .as_deref()
@@ -266,7 +266,7 @@ async fn dev(args: PluginDevArgs) -> anyhow::Result<()> {
             _ => {}
         }
     }
-    let _ = ws.close(None).await;
+    drop(ws.close(None).await);
     Ok(())
 }
 
@@ -388,7 +388,7 @@ mod tests {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut buffer = vec![0u8; 4096];
             let n = socket.read(&mut buffer).await.unwrap();
-            let _ = socket.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await;
+            drop(socket.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await);
             String::from_utf8_lossy(&buffer[..n]).into_owned()
         });
         assert!(connect(&url, Some("s3cret")).await.is_err());

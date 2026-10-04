@@ -9,7 +9,11 @@
  */
 import path from "node:path";
 
-/** Paths of the development key pair. */
+/**
+ * Paths of the development key pair.
+ *
+ * @param {{ base: string, repoRoot: string }} options
+ */
 export function devKeyPaths({ base, repoRoot }) {
   const privateKey = path.join(base, "keys", "nail-updater-dev.key");
   return {

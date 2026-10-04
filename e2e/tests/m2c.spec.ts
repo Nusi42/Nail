@@ -212,7 +212,9 @@ test("new mail notifies, and quiet hours suppress it", async ({ page, context })
       constructor(title: string, options?: { body?: string }) {
         shown.push(`${title}|${options?.body ?? ""}`);
       }
-      close() {}
+      close() {
+        /* no-op */
+      }
     }
     Object.defineProperty(window, "Notification", {
       value: RecordingNotification,

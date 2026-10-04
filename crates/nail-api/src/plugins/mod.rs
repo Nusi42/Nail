@@ -35,7 +35,7 @@
 //! component trees, dialog specs and results, command contexts, the mail
 //! view) is **camelCase** JSON, like the design's example and JavaScript
 //! code. The protocol around it (requests, responses, events, admin types)
-//! stays snake_case like the rest of the API. The SDK's types are generated
+//! stays `snake_case` like the rest of the API. The SDK's types are generated
 //! from these Rust types ([`crate::export_plugin_typescript`]).
 //!
 //! **Ids.** A plug-in id ([`is_plugin_id`]) and the names of its commands,

@@ -20,7 +20,7 @@ use nail_config::{AccountsDocument, ConfigError, ConfigErrorKind};
 use crate::error::Result;
 
 /// File name of the account configuration.
-pub const ACCOUNTS_FILE: &str = "accounts.kdl";
+pub(crate) const ACCOUNTS_FILE: &str = "accounts.kdl";
 
 #[derive(Debug)]
 struct State {
@@ -207,7 +207,7 @@ mod tests {
         assert!(manager.error().is_none());
         assert!(manager.all_errors().is_empty());
 
-        let (_, config) = manager
+        let ((), config) = manager
             .edit(|doc| {
                 let mut account = doc.config().accounts[0].clone();
                 account.name = "Work mail".into();
@@ -260,7 +260,7 @@ mod tests {
             "{WORK}// added by hand\naccount \"home\" email=\"ada@home.example\" {{\n    imap host=\"imap.home.example\"\n}}\n"
         );
         std::fs::write(&path, &hand).unwrap();
-        let (_, config) = manager
+        let ((), config) = manager
             .edit(|doc| {
                 let mut account = doc.config().account(&"work".into()).unwrap().clone();
                 account.name = "Work mail".into();

@@ -1,10 +1,10 @@
 {
   "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('ada%40contoso.example')/events/$entity",
-  "@odata.etag": "W/\"DwAAABYAAABGc9W4C8lmQ7f0ARzJcrPnAAAXuVyA\"",
+  "@odata.etag": "W/\"DwAAABYAAABGc9W4C8lmQ7f0ARzJcrQnAAAXuVyA\"",
   "id": "AAMkAGSeriesMaster1=",
   "createdDateTime": "2026-09-30T09:58:00.1234567Z",
   "lastModifiedDateTime": "2026-09-30T10:00:00.7654321Z",
-  "changeKey": "DwAAABYAAABGc9W4C8lmQ7f0ARzJcrPnAAAXuVyA",
+  "changeKey": "DwAAABYAAABGc9W4C8lmQ7f0ARzJcrQnAAAXuVyA",
   "categories": ["Work"],
   "originalStartTimeZone": "W. Europe Standard Time",
   "originalEndTimeZone": "W. Europe Standard Time",

@@ -25,6 +25,7 @@ import { SourcesDialog } from "./Sources";
 import { pimStoreFor } from "./store";
 import { TaskEditorDialog } from "./TaskEditor";
 import { localZone, makePimTime, todayIn } from "./time";
+import { stringMatching } from "../../test/matchers";
 
 /** The value, or a test failure when it is missing. */
 function must<T>(value: T | null | undefined): T {
@@ -34,17 +35,23 @@ function must<T>(value: T | null | undefined): T {
 
 const BERLIN = "Europe/Berlin";
 const START_LABEL = "Start";
-beforeAll(() => setLocalTimeZone(BERLIN));
-afterAll(() => resetLocalTimeZone());
+beforeAll(() => {
+  setLocalTimeZone(BERLIN);
+});
+afterAll(() => {
+  resetLocalTimeZone();
+});
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 const pimOf = (env: Env) => env.transport.data.features.pim;
 
 describe("date and time picker", () => {
-  function Picker({ onChange }: { onChange(day: string, time: string): void }) {
+  function Picker({ onChange }: { onChange: (day: string, time: string) => void }) {
     const [day, setDay] = useState(new CalendarDate(2026, 10, 1));
     const [time, setTime] = useState<{ hour: number; minute: number } | null>({
       hour: 14,
@@ -60,7 +67,7 @@ describe("date and time picker", () => {
         onChange={(d, t) => {
           setDay(d);
           setTime(t);
-          onChange(d.toString(), t ? `${t.hour}:${t.minute}` : "");
+          onChange(d.toString(), t ? `${String(t.hour)}:${String(t.minute)}` : "");
         }}
       />
     );
@@ -84,7 +91,7 @@ describe("date and time picker", () => {
       "minute",
     ]);
     expect(segments[3]).toHaveTextContent("14");
-    await user.click(segments[0] as HTMLElement);
+    await user.click(must(segments[0]));
     await user.keyboard("{ArrowUp}");
     expect(changes.at(-1)).toBe("2026-10-02 14:30");
     await user.click(screen.getByRole("button", { name: /Choose the date for Start/ }));
@@ -139,7 +146,9 @@ describe("event editor", () => {
     expect(screen.getAllByText(/^In America\/New York:/)).toHaveLength(2);
     await user.selectOptions(screen.getByLabelText("Time zone"), "Europe/London");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     const created = pimOf(env).events.find((e) => e.fields.title === "Yoga");
     expect(created).toMatchObject({
       calendar_id: "cal-personal",
@@ -188,7 +197,7 @@ describe("event editor", () => {
       )
     ).instances.filter((i) => i.event_id === "ev-standup");
     const occurrence = must(instances[3]);
-    const open = () =>
+    const open = () => {
       pimStoreFor(env.store).getState().editEvent({
         mode: "edit",
         eventId: "ev-standup",
@@ -196,6 +205,7 @@ describe("event editor", () => {
         start: occurrence.start,
         end: occurrence.end,
       });
+    };
 
     open();
     const close = vi.fn();
@@ -209,7 +219,9 @@ describe("event editor", () => {
     await user.clear(screen.getByLabelText("Title"));
     await user.type(screen.getByLabelText("Title"), "Retro");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).events.find((e) => e.id === "ev-standup")?.overrides).toHaveLength(1);
     unmount();
 
@@ -223,7 +235,9 @@ describe("event editor", () => {
     await user.clear(screen.getByLabelText("Location"));
     await user.type(screen.getByLabelText("Location"), "Room 9");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close2).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close2).toHaveBeenCalled();
+    });
     const split = pimOf(env).events.filter(
       (e) => e.id !== "ev-standup" && e.fields.location === "Room 9",
     );
@@ -246,7 +260,9 @@ describe("event editor", () => {
     renderWithProviders(<EventEditorDialog name="pim-event-editor" close={close3} />, env);
     await user.click(await screen.findByRole("radio", { name: "All occurrences" }));
     await user.click(screen.getByRole("button", { name: "Delete all occurrences" }));
-    await waitFor(() => expect(close3).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close3).toHaveBeenCalled();
+    });
     expect(pimOf(env).events.find((e) => e.id === "ev-standup")).toBeUndefined();
   });
 
@@ -300,11 +316,13 @@ describe("event editor", () => {
     expect(screen.getByText(/^Move “Stand-up” to/)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "This occurrence" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(
       pimOf(env).events.find((e) => e.id === "ev-standup")?.overrides[0]?.fields.start,
     ).toMatchObject({
-      local: expect.stringMatching(/T11:00:00$/),
+      local: stringMatching(/T11:00:00$/),
     });
     expect(pimStoreFor(env.store).getState().pendingChange).toBeNull();
   });
@@ -339,13 +357,13 @@ describe("contacts", () => {
     await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
     expect(pimStoreFor(env.store).getState().selectedContacts).toHaveLength(2);
     await user.type(screen.getByLabelText("Search contacts"), "navy");
-    await waitFor(() =>
-      expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(2),
-    );
+    await waitFor(() => {
+      expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(2);
+    });
     await user.selectOptions(screen.getByLabelText("Group"), "grp-team");
-    await waitFor(() =>
-      expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(1),
-    );
+    await waitFor(() => {
+      expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(1);
+    });
   });
 
   it("creates and edits a contact in the editor", async () => {
@@ -371,7 +389,9 @@ describe("contacts", () => {
     await user.type(screen.getByLabelText("Field 1: name"), "X-SHIP");
     await user.type(screen.getByLabelText("Field 1: value"), "Apollo");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     const created = pimOf(env).contacts.find((c) => c.fields.display_name === "Margaret Hamilton");
     expect(created).toMatchObject({
       address_book_id: "ab-personal",
@@ -395,7 +415,9 @@ describe("contacts", () => {
     await user.clear(screen.getByLabelText("Shown as"));
     await user.type(screen.getByLabelText("Shown as"), "Linus T.");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close2).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close2).toHaveBeenCalled();
+    });
     expect(pimOf(env).contacts.find((c) => c.id === "ct-linus")).toMatchObject({
       address_book_id: "ab-personal",
       fields: { display_name: "Linus T." },
@@ -427,7 +449,9 @@ describe("contacts", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("radio", { name: "Grace B. Hopper" }));
     await user.click(screen.getByRole("button", { name: "Merge 2 contacts" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     const grace = pimOf(env).contacts.find((c) => c.id === "ct-grace");
     expect(grace).toMatchObject({
       linked_ids: ["ct-grace-work"],
@@ -449,9 +473,11 @@ describe("contacts", () => {
       "ct-grace",
       "ct-ada",
     ]);
-    await user.type(screen.getAllByLabelText("Group name").at(-1) as HTMLElement, "Book club");
+    await user.type(must(screen.getAllByLabelText("Group name").at(-1)), "Book club");
     await user.click(screen.getByRole("button", { name: "Create group" }));
-    await waitFor(() => expect(pimOf(env).groups.some((g) => g.name === "Book club")).toBe(true));
+    await waitFor(() => {
+      expect(pimOf(env).groups.some((g) => g.name === "Book club")).toBe(true);
+    });
   });
 });
 
@@ -476,26 +502,30 @@ describe("tasks", () => {
       }),
     ).toBeInTheDocument();
     // Keyboard: Left collapses, Space completes.
-    act(() => report.focus());
+    act(() => {
+      report.focus();
+    });
     await user.keyboard("{ArrowLeft}");
     expect(screen.getByRole("treeitem", { name: /^Write the quarterly report/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
     await user.click(screen.getByRole("checkbox", { name: "Mark “Buy groceries” as done" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(pimOf(env).tasks.find((t) => t.id === "tk-groceries")?.fields.status).toBe(
         "completed",
-      ),
-    );
+      );
+    });
     await user.type(screen.getByLabelText(/^Add a task to/), "Call the bank");
     await user.click(screen.getByRole("button", { name: "Add" }));
-    await waitFor(() =>
-      expect(pimOf(env).tasks.some((t) => t.fields.title === "Call the bank")).toBe(true),
-    );
+    await waitFor(() => {
+      expect(pimOf(env).tasks.some((t) => t.fields.title === "Call the bank")).toBe(true);
+    });
     // Enter opens the editor.
     const item = await screen.findByRole("treeitem", { name: /^Call the bank/ });
-    act(() => item.focus());
+    act(() => {
+      item.focus();
+    });
     await user.keyboard("{Enter}");
     expect(env.store.getState().windows).toContain(TASK_DIALOG);
   });
@@ -509,16 +539,18 @@ describe("tasks", () => {
     await user.selectOptions(await screen.findByLabelText("Priority"), "high");
     await user.selectOptions(screen.getByLabelText("Repeats"), "weekly");
     await user.type(screen.getByLabelText("New subtask"), "Milk{Enter}");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         pimOf(env).tasks.some(
           (t) => t.fields.title === "Milk" && t.fields.parent_id === "tk-groceries",
         ),
-      ).toBe(true),
-    );
+      ).toBe(true);
+    });
     expect(await screen.findByRole("checkbox", { name: "Milk" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).tasks.find((t) => t.id === "tk-groceries")).toMatchObject({
       fields: { priority: 1, due: { type: "date" } },
       recurrence: { rules: [{ freq: "weekly" }] },
@@ -539,7 +571,9 @@ describe("tasks", () => {
     await user.click(screen.getByRole("checkbox", { name: "Due date set" }));
     await user.click(screen.getByRole("checkbox", { name: "At a time of day" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).tasks.find((t) => t.fields.title === "Check the figures")).toMatchObject({
       fields: { parent_id: "tk-report", due: { type: "zoned", tz: BERLIN } },
     });
@@ -552,9 +586,9 @@ describe("reminders", () => {
     const env = createEnv();
     renderWithProviders(<PimToasts />, env);
     // The app shell passes every core event to the feature's handlers.
-    const off = env.transport.onEvent((event) =>
-      handlePimEvent(event, { client: env.client, queryClient: env.queryClient, store: env.store }),
-    );
+    const off = env.transport.onEvent((event) => {
+      handlePimEvent(event, { client: env.client, queryClient: env.queryClient, store: env.store });
+    });
     act(() => {
       fireReminder(env.transport, "rem-review");
     });
@@ -562,13 +596,17 @@ describe("reminders", () => {
     expect(within(toast).getByRole("alert")).toHaveTextContent("Design review");
     await user.selectOptions(within(toast).getByLabelText("Remind me again in"), "30");
     await user.click(within(toast).getByRole("button", { name: "Snooze" }));
-    await waitFor(() => expect(pimOf(env).reminders[0]?.state).toBe("snoozed"));
+    await waitFor(() => {
+      expect(pimOf(env).reminders[0]?.state).toBe("snoozed");
+    });
     expect(screen.queryByRole("group", { name: "Reminder: Design review" })).toBeNull();
     act(() => {
       fireReminder(env.transport, "rem-review");
     });
     await user.click(await screen.findByRole("button", { name: "Dismiss" }));
-    await waitFor(() => expect(pimOf(env).reminders[0]?.state).toBe("dismissed"));
+    await waitFor(() => {
+      expect(pimOf(env).reminders[0]?.state).toBe("dismissed");
+    });
     off();
   });
 
@@ -660,7 +698,9 @@ describe("import and sources", () => {
     expect(await screen.findByLabelText("Address of the calendar feed")).toHaveValue(
       "webcal://example.org/holidays.ics",
     );
-    await waitFor(() => expect(pimStoreFor(env.store).getState().subscribeUrl).toBeNull());
+    await waitFor(() => {
+      expect(pimStoreFor(env.store).getState().subscribeUrl).toBeNull();
+    });
   });
 
   it("adds a calendar subscription after testing it, syncs and removes sources", async () => {
@@ -685,13 +725,15 @@ describe("import and sources", () => {
       "school-holidays",
     );
     await user.click(await screen.findByRole("button", { name: "Remove School holidays" }));
-    await waitFor(() =>
-      expect(pimOf(env).sources.some((s) => s.id === "school-holidays")).toBe(false),
-    );
+    await waitFor(() => {
+      expect(pimOf(env).sources.some((s) => s.id === "school-holidays")).toBe(false);
+    });
     await user.selectOptions(screen.getByLabelText("Kind"), "caldav");
     await user.selectOptions(screen.getByLabelText("Use the login of"), "");
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
     fireEvent.click(screen.getByRole("button", { name: "Sync everything" }));
-    await waitFor(() => expect(pimOf(env).sources.some((s) => s.state === "syncing")).toBe(true));
+    await waitFor(() => {
+      expect(pimOf(env).sources.some((s) => s.state === "syncing")).toBe(true);
+    });
   });
 });

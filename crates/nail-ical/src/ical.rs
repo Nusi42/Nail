@@ -15,6 +15,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Write as _;
 
 use base64::Engine as _;
 use chrono::{Datelike, Duration, NaiveTime};
@@ -147,7 +148,6 @@ pub struct ParsedTask {
 
 impl ParsedTask {
     /// The contract's task, with the store's ids and state.
-    #[allow(clippy::too_many_arguments)]
     pub fn into_task(
         self,
         id: TaskId,
@@ -208,7 +208,7 @@ pub(crate) struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
-    pub fn new(resolver: &'a ZoneResolver, floating_zone: Option<Tz>) -> Self {
+    pub(crate) fn new(resolver: &'a ZoneResolver, floating_zone: Option<Tz>) -> Self {
         Self {
             resolver,
             floating_zone,
@@ -226,7 +226,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// One `DATE` / `DATE-TIME` value of a property as a [`PimTime`].
-    pub fn time_value(&self, property: &Property, value: &str) -> Option<PimTime> {
+    pub(crate) fn time_value(&self, property: &Property, value: &str) -> Option<PimTime> {
         let Some(parsed) = time::parse_ical_value(value) else {
             self.issue(
                 IssueKind::InvalidTime {
@@ -277,14 +277,14 @@ impl<'a> Ctx<'a> {
     }
 
     /// The first value of a time property.
-    pub fn time(&self, property: &Property) -> Option<PimTime> {
+    pub(crate) fn time(&self, property: &Property) -> Option<PimTime> {
         let first = property.value.split(',').next()?;
         self.time_value(property, first)
     }
 
     /// Every value of a (multi-valued) time property (`RDATE`, `EXDATE`);
     /// periods give their start.
-    pub fn times(&self, property: &Property) -> Vec<PimTime> {
+    pub(crate) fn times(&self, property: &Property) -> Vec<PimTime> {
         property
             .value
             .split(',')
@@ -635,7 +635,7 @@ pub(crate) fn percent_encode(text: &str) -> String {
         if byte.is_ascii_alphanumeric() || b"-._~!$&'*+=^`{|}@".contains(&byte) {
             out.push(char::from(byte));
         } else {
-            out.push_str(&format!("%{byte:02X}"));
+            let _ = write!(out, "%{byte:02X}");
         }
     }
     out
@@ -1145,14 +1145,13 @@ fn read_one_calendar(
         if !(is_event || c.is("VTODO")) {
             continue;
         }
-        let uid = match read_text(c, "UID") {
-            Some(uid) => uid,
-            None => {
-                let uid = derived_uid(c);
-                out.issues
-                    .push(Issue::new(IssueKind::MissingUid, Some(c.line)).item(c.text("SUMMARY")));
-                uid
-            }
+        let uid = if let Some(uid) = read_text(c, "UID") {
+            uid
+        } else {
+            let uid = derived_uid(c);
+            out.issues
+                .push(Issue::new(IssueKind::MissingUid, Some(c.line)).item(c.text("SUMMARY")));
+            uid
         };
         let key = (usize::from(!is_event), uid.clone());
         if !groups.contains_key(&key) {
@@ -1647,7 +1646,7 @@ BEGIN:VTODO\r\nUID:t2\r\nSUMMARY:Sibling of\r\nRELATED-TO;RELTYPE=SIBLING:t1\r\n
             PimItemSync::Synced,
         );
         assert_eq!(
-            task.fields.parent_id.as_ref().map(|p| p.as_str()),
+            task.fields.parent_id.as_ref().map(TaskId::as_str),
             Some("p")
         );
     }
@@ -1724,17 +1723,20 @@ BEGIN:VTODO\r\nUID:t2\r\nSUMMARY:Sibling of\r\nRELATED-TO;RELTYPE=SIBLING:t1\r\n
     fn large_calendars_parse_in_linear_time() {
         let mut text = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n");
         for i in 0..30_000 {
-            text.push_str(&format!(
+            write!(
+                text,
                 "BEGIN:VEVENT\r\nUID:e{i}\r\nDTSTART:20261001T090000Z\r\nEND:VEVENT\r\n"
-            ));
+            )
+            .unwrap();
         }
         text.push_str("BEGIN:VEVENT\r\nUID:s\r\nDTSTART:20200101T090000Z\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\n");
         let day = chrono::NaiveDate::from_ymd_opt(2020, 1, 2).unwrap();
         for i in 0..30_000 {
             let d = (day + Duration::days(i)).format("%Y%m%d");
-            text.push_str(&format!(
+            write!(
+                text,
                 "BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID:{d}T090000Z\r\nDTSTART:{d}T100000Z\r\nEND:VEVENT\r\n"
-            ));
+            ).unwrap();
         }
         text.push_str("END:VCALENDAR\r\n");
         let begun = std::time::Instant::now();
@@ -1743,6 +1745,6 @@ BEGIN:VTODO\r\nUID:t2\r\nSUMMARY:Sibling of\r\nRELATED-TO;RELTYPE=SIBLING:t1\r\n
         assert_eq!(parsed.events.len(), 30_001);
         assert_eq!(parsed.events[30_000].overrides.len(), 30_000);
         // Generous for debug builds; quadratic scans took far longer.
-        assert!(took < std::time::Duration::from_secs(60), "{took:?}");
+        assert!(took < std::time::Duration::from_mins(1), "{took:?}");
     }
 }

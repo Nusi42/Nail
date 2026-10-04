@@ -41,8 +41,12 @@ export function completeEntry(value: string, address: Address): string {
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setDebounced(value);
+    }, ms);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [value, ms]);
   return debounced;
 }
@@ -50,7 +54,7 @@ function useDebounced<T>(value: T, ms: number): T {
 export interface AddressFieldProps {
   field: "to" | "cc" | "bcc";
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
 }
 
 export function AddressField({ field, value, onChange }: AddressFieldProps) {
@@ -125,9 +129,13 @@ export function AddressField({ field, value, onChange }: AddressFieldProps) {
           spellCheck={false}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
-          aria-activedescendant={open ? `${listId}-${current}` : undefined}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          aria-activedescendant={open ? `${listId}-${String(current)}` : undefined}
+          onFocus={() => {
+            setFocused(true);
+          }}
+          onBlur={() => {
+            setFocused(false);
+          }}
           onKeyDown={onKeyDown}
           onChange={(event) => {
             setClosed(false);
@@ -145,7 +153,7 @@ export function AddressField({ field, value, onChange }: AddressFieldProps) {
             {options.map((address, index) => (
               <li
                 key={address.email}
-                id={`${listId}-${index}`}
+                id={`${listId}-${String(index)}`}
                 data-part="composer.suggestion"
                 data-state={index === current ? "active" : undefined}
                 role="option"

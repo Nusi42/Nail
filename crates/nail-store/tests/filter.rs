@@ -1,4 +1,5 @@
 //! Store-side search filters.
+#![cfg(test)]
 
 mod common;
 

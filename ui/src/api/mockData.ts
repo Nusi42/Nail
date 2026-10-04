@@ -297,9 +297,9 @@ export function createMockData(inboxSize = 250): MockData {
         const subject = pick(SUBJECTS, seq + i);
         const seen = i % 3 !== 0;
         if (!seen) unread++;
-        const messageId = `${id}#${i + 1}`;
+        const messageId = `${id}#${String(i + 1)}`;
         const date = new Date(MOCK_NOW - i * 37 * 60_000).toISOString();
-        const text = `Hello Ada,\n\n${subject} (message ${i + 1} in ${spec.name}).\n\n> Earlier text\n>> Older text\n\nBest,\n${from.name ?? from.email}`;
+        const text = `Hello Ada,\n\n${subject} (message ${String(i + 1)} in ${spec.name}).\n\n> Earlier text\n>> Older text\n\nBest,\n${from.name ?? from.email}`;
         const summary: MessageSummary = {
           id: messageId,
           folder_id: id,
@@ -313,7 +313,7 @@ export function createMockData(inboxSize = 250): MockData {
           preview: text.replace(/\s+/g, " ").slice(0, 120),
           // Messages with the same subject close together form a conversation
           // (subjects repeat every four messages of a folder).
-          thread_id: `t-${id}-${(seq + i) % SUBJECTS.length}-${Math.floor(i / 12)}`,
+          thread_id: `t-${id}-${String((seq + i) % SUBJECTS.length)}-${String(Math.floor(i / 12))}`,
           tags: i % 9 === 0 ? ["work"] : [],
           duplicates: [],
         };

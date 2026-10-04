@@ -1,6 +1,8 @@
 //! Encryption-at-rest hooks of the store: sealed columns, conversion both
 //! ways, locked reads, and compaction that leaves no plaintext behind.
+#![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use std::sync::Arc;
@@ -39,8 +41,8 @@ impl DataCipher for TestCipher {
     }
 }
 
-fn cipher() -> Option<Arc<dyn DataCipher>> {
-    Some(Arc::new(TestCipher(0x77)))
+fn cipher() -> Arc<dyn DataCipher> {
+    Arc::new(TestCipher(0x77))
 }
 
 fn seed(store: &Store) {
@@ -75,7 +77,7 @@ fn sealed_columns_round_trip_and_hide_content_on_disk() {
     let dir = tempfile::tempdir().unwrap();
     let store = Store::open(dir.path().join("nail.sqlite3")).unwrap();
     seed(&store);
-    store.set_cipher(cipher(), SealMode::Seal).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Seal).unwrap();
     assert!(store.seals_writes());
 
     let mut m = message("m1", "a1", "inbox", "2026-09-01T10:00:00Z");
@@ -165,7 +167,7 @@ fn convert_fields_both_ways_in_batches_and_compact_removes_plaintext() {
     ));
 
     // Encrypting: new writes sealed, old ones converted in batches.
-    store.set_cipher(cipher(), SealMode::Seal).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Seal).unwrap();
     let mut batches = 0;
     while store.convert_fields(true, 10).unwrap() > 0 {
         batches += 1;
@@ -200,7 +202,7 @@ fn convert_fields_both_ways_in_batches_and_compact_removes_plaintext() {
 
     // Decrypting back.
     let store = Store::open(&path).unwrap();
-    store.set_cipher(cipher(), SealMode::Plain).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Plain).unwrap();
     assert!(!store.seals_writes());
     while store.convert_fields(false, 7).unwrap() > 0 {}
     let counts = store.sealed_field_counts().unwrap();
@@ -219,12 +221,12 @@ fn convert_fields_both_ways_in_batches_and_compact_removes_plaintext() {
 fn plain_mode_with_cipher_reads_sealed_and_writes_plain() {
     let store = Store::open_in_memory().unwrap();
     seed(&store);
-    store.set_cipher(cipher(), SealMode::Seal).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Seal).unwrap();
     let mut m = message("m1", "a1", "inbox", "2026-09-01T10:00:00Z");
     m.summary.preview = "sealed first".into();
     store.upsert_message(&m).unwrap();
     // Decrypting: reads work, a new write is plain.
-    store.set_cipher(cipher(), SealMode::Plain).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Plain).unwrap();
     assert_eq!(
         store.get_message(&"m1".into()).unwrap().summary.preview,
         "sealed first"
@@ -290,7 +292,7 @@ fn a_failure_inside_a_batch_rolls_the_whole_batch_back() {
     let counts = store.sealed_field_counts().unwrap();
     assert_eq!((counts.sealed, counts.plain), (0, 10), "nothing half-done");
     // Resuming with a working cipher completes.
-    store.set_cipher(cipher(), SealMode::Seal).unwrap();
+    store.set_cipher(Some(cipher()), SealMode::Seal).unwrap();
     while store.convert_fields(true, 4).unwrap() > 0 {}
     assert_eq!(store.sealed_field_counts().unwrap().sealed, 10);
 }

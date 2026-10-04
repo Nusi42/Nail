@@ -2,6 +2,12 @@
 //! `draft_reply`, `prepare_meeting` through an rmcp client — localized
 //! templates, data as untrusted embedded resources, grants and audit.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::{connect, create_client, grant, start};
@@ -80,7 +86,7 @@ async fn prompts_are_listed_with_localized_descriptions() {
             ("reply_all", Some(false))
         ]
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -144,7 +150,7 @@ async fn summarize_thread_shows_only_what_the_grant_allows() {
             .await
             .is_err()
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -211,7 +217,7 @@ async fn triage_draft_reply_and_meeting_prompts() {
             .is_err(),
         "another account's calendar"
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -241,5 +247,5 @@ async fn prompts_count_against_the_rate_limit() {
         .await
         .unwrap_err();
     assert!(err.to_string().contains("rate limited"), "{err}");
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }

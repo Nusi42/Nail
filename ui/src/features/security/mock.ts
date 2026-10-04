@@ -223,7 +223,7 @@ function findKey(s: SecurityMockState, id: string): MockKey | undefined {
 
 function nextKeyId(s: SecurityMockState): string {
   s.counter++;
-  return `key-${s.counter}`;
+  return `key-${String(s.counter)}`;
 }
 
 function keysChanged(core: MockCore): void {
@@ -311,11 +311,11 @@ function parseBlocks(text: string): { parsed: Parsed[]; issues: KeyImportIssue[]
     n++;
     const lines = comments(block);
     const fpLength = technology === "openpgp" ? 40 : 64;
-    const fp = lines.find((l) => new RegExp(`^[0-9A-F]{${fpLength}}$`).test(l));
+    const fp = lines.find((l) => new RegExp(`^[0-9A-F]{${String(fpLength)}}$`).test(l));
     const userIds = lines.filter((l) => l.includes("@"));
     if (userIds.length === 0) {
       issues.push({
-        item: `#${n}`,
+        item: `#${String(n)}`,
         code: "crypto",
         message: "the key has no user id with an e-mail address",
       });
@@ -553,7 +553,9 @@ function vaultStep(core: MockCore, target: "encrypted" | "plain"): void {
     }
   }
   core.emit({ type: "VaultProgress", status: clone(v) });
-  core.later(() => vaultStep(core, target));
+  core.later(() => {
+    vaultStep(core, target);
+  });
 }
 
 function setVault(core: MockCore, enabled: boolean): Response {
@@ -576,7 +578,9 @@ function setVault(core: MockCore, enabled: boolean): Response {
     error: null,
     message: null,
   };
-  core.later(() => vaultStep(core, target));
+  core.later(() => {
+    vaultStep(core, target);
+  });
   return { type: "VaultStatus", status: clone(s.vault) };
 }
 
@@ -703,9 +707,10 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
         return errorResponse("auth_failed", "wrong PKCS#12 passphrase");
       }
       const userIds = [...new Set(emailsOf([text]))];
-      if (userIds.length === 0) return errorResponse("crypto", "no certificate in the file");
+      const [firstId] = userIds;
+      if (firstId === undefined) return errorResponse("crypto", "no certificate in the file");
       const { storage, passphrase } = storageOf(request.protection);
-      const key = newOwnKey(s, "smime", [`CN=${userIds[0]}`, ...userIds], {
+      const key = newOwnKey(s, "smime", [`CN=${firstId}`, ...userIds], {
         source: "pkcs12",
         secret_storage: storage,
       });
@@ -744,7 +749,7 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
           ? null
           : new Date(now.getTime() + request.expires_days * 86_400_000).toISOString();
       const key = newOwnKey(s, "openpgp", [uid], {
-        fingerprint: mockFingerprint("openpgp", `${uid}|${now.toISOString()}|${s.counter}`),
+        fingerprint: mockFingerprint("openpgp", `${uid}|${now.toISOString()}|${String(s.counter)}`),
         algorithm: request.algorithm === "rsa4096" ? "RSA 4096" : "Ed25519",
         source: "generated",
         secret_storage: storage,
@@ -880,14 +885,14 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
       if (!ownKey(s, identity, "openpgp")) {
         return errorResponse("no_key", "the identity has no own OpenPGP key");
       }
-      const digits = mockHex(`setup:${identity.id}:${s.setupMessages.length}`, 48)
+      const digits = mockHex(`setup:${identity.id}:${String(s.setupMessages.length)}`, 48)
         .split("")
         .map((c) => (parseInt(c, 16) % 10).toString())
         .join("")
         .slice(0, 36);
       const passcode = (digits.match(/.{4}/g) ?? []).join("-");
       s.counter++;
-      const outboxId = `out-autocrypt-${s.counter}`;
+      const outboxId = `out-autocrypt-${String(s.counter)}`;
       s.setupMessages.push({ identityId: identity.id, outboxId, passcode });
       return { type: "AutocryptSetupSent", outbox_id: outboxId, passcode };
     }

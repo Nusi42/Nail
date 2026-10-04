@@ -12,7 +12,7 @@ const I18nContext = createContext<Localizer | null>(null);
 
 /** Requested locales: explicit override first, then the browser / OS. */
 export function requestedLocales(override: string | null | undefined): string[] {
-  const browser = typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])];
+  const browser = typeof navigator === "undefined" ? [] : [...navigator.languages];
   if (browser.length === 0 && typeof navigator !== "undefined" && navigator.language) {
     browser.push(navigator.language);
   }

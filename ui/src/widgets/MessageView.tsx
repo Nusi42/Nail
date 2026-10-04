@@ -136,7 +136,8 @@ export function MessageView({ node }: WidgetProps) {
     if (!markRead || loadedId === null) return;
     const summary = findSummary(ctx.queryClient, loadedId);
     if (summary && !summary.flags.seen) {
-      setFlags(ctx, [loadedId], { seen: true }, { quiet: true }).catch(() => {});
+      // Quiet: a failed mark-as-read is retried the next time the message is read.
+      setFlags(ctx, [loadedId], { seen: true }, { quiet: true }).catch(() => null);
     }
   }, [markRead, loadedId, ctx]);
 
@@ -148,7 +149,7 @@ export function MessageView({ node }: WidgetProps) {
   } else if (!message) {
     content = <div data-part="message-view.loading">{t("message-view-loading")}</div>;
   } else {
-    const previewId = (index: number) => `${ids}-preview-${index}`;
+    const previewId = (index: number) => `${ids}-preview-${String(index)}`;
     content = (
       // One centred column (M5a): header, attachments and body share their
       // left edge; text lines stay at a readable length.

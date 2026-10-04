@@ -396,7 +396,6 @@ as usual, and the rest is downloaded when you open a message (or choose
 bodies of mail older than `days` days are removed again from this device;
 their search entries stay. POP3 accounts always keep complete messages.
 
-
 ```kdl
 account "work" email="ada@work.example" {
     imap host="imap.work.example"

@@ -31,6 +31,19 @@ pub enum Password {
     },
 }
 
+/// Never prints a fixed password.
+impl fmt::Debug for Password {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fixed(_) => f.write_str("Fixed(<redacted>)"),
+            Self::Store { secret, .. } => f
+                .debug_struct("Store")
+                .field("secret", secret)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
 /// How the client signs in.
 #[derive(Clone)]
 pub enum EwsAuth {

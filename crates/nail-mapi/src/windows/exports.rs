@@ -14,8 +14,6 @@
 //! | `MAPIFreeBuffer` | frees what `MAPIResolveName` returned; refuses other pointers |
 //! | `MAPIFindNext`, `MAPIReadMail`, `MAPISaveMail`, `MAPIDeleteMail`, `MAPIAddress`, `MAPIDetails` | `MAPI_E_NOT_SUPPORTED` |
 
-#![allow(non_snake_case)]
-
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -206,7 +204,9 @@ unsafe impl Send for ResolvedRecipient {}
 static ALLOCATIONS: Mutex<Option<HashMap<usize, Box<ResolvedRecipient>>>> = Mutex::new(None);
 
 fn allocations<R>(f: impl FnOnce(&mut HashMap<usize, Box<ResolvedRecipient>>) -> R) -> R {
-    let mut guard = ALLOCATIONS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = ALLOCATIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     f(guard.get_or_insert_with(HashMap::new))
 }
 
@@ -254,7 +254,7 @@ pub unsafe extern "system" fn MAPIResolveName(
             _name: name,
             _address: address,
         });
-        let pointer: *mut MapiRecipDesc = &mut boxed.desc;
+        let pointer: *mut MapiRecipDesc = &raw mut boxed.desc;
         if lpprecip.is_null() || !write_struct(lpprecip, pointer) {
             return MAPI_E_FAILURE;
         }
@@ -384,7 +384,11 @@ pub unsafe extern "system" fn MAPIDetails(
 // The exact `MAPI.h` signatures: these coercions fail to build on any
 // difference in parameter types, count or calling convention.
 mod signatures {
-    use super::*;
+    use super::{
+        MAPIAddress, MAPIDeleteMail, MAPIDetails, MAPIFindNext, MAPIFreeBuffer, MAPILogoff,
+        MAPILogon, MAPIReadMail, MAPIResolveName, MAPISaveMail, MAPISendDocuments, MAPISendMail,
+        MAPISendMailW,
+    };
     use windows_sys::Win32::System::Mapi::{
         LPMAPIADDRESS, LPMAPIDELETEMAIL, LPMAPIDETAILS, LPMAPIFINDNEXT, LPMAPIFREEBUFFER,
         LPMAPILOGOFF, LPMAPILOGON, LPMAPIREADMAIL, LPMAPIRESOLVENAME, LPMAPISAVEMAIL,
@@ -427,7 +431,7 @@ mod tests {
         let mut session = 0usize;
         // SAFETY: valid arguments.
         assert_eq!(
-            unsafe { MAPILogon(0, null(), null(), 0, 0, &mut session) },
+            unsafe { MAPILogon(0, null(), null(), 0, 0, &raw mut session) },
             0
         );
         assert_eq!(session, SESSION_HANDLE);
@@ -452,7 +456,7 @@ mod tests {
         let name = to_ansi("ada@x.example");
         let mut out: *mut MapiRecipDesc = null_mut();
         // SAFETY: valid arguments.
-        let code = unsafe { MAPIResolveName(0, 0, name.as_ptr(), 0, 0, &mut out) };
+        let code = unsafe { MAPIResolveName(0, 0, name.as_ptr(), 0, 0, &raw mut out) };
         assert_eq!(code, SUCCESS_SUCCESS);
         assert!(!out.is_null());
         // SAFETY: the DLL's buffer.
@@ -476,11 +480,11 @@ mod tests {
         // SAFETY: valid arguments; bad name / out pointers.
         unsafe {
             assert_eq!(
-                MAPIResolveName(0, 0, unknown.as_ptr(), 0, 0, &mut out),
+                MAPIResolveName(0, 0, unknown.as_ptr(), 0, 0, &raw mut out),
                 MAPI_E_UNKNOWN_RECIPIENT
             );
             assert_eq!(
-                MAPIResolveName(0, 0, 0x10 as *const u8, 0, 0, &mut out),
+                MAPIResolveName(0, 0, 0x10 as *const u8, 0, 0, &raw mut out),
                 MAPI_E_UNKNOWN_RECIPIENT
             );
             assert_eq!(

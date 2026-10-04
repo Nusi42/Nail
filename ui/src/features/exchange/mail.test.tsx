@@ -33,6 +33,7 @@ import {
 } from "./names";
 import { exchangeStoreFor } from "./store";
 import { actionContext, cacheList, dialog, message, requests, setup } from "./testing";
+import { must } from "../../test/must";
 
 describe("categories", () => {
   it("renders nothing for accounts that are not Exchange accounts", async () => {
@@ -41,7 +42,7 @@ describe("categories", () => {
       <NodeView node={widget("exchange-categories")} path="t/0" />,
       env,
     );
-    await act(async () => {});
+    await act(() => Promise.resolve());
     expect(container.querySelector('[data-part="exchange-categories"]')).toBeNull();
   });
 
@@ -87,7 +88,9 @@ describe("categories", () => {
     await user.type(name, "Travel");
     await user.click(screen.getByRole("radio", { name: "Teal" }));
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "CreateExchangeCategory")[0]?.settings).toEqual({
       name: "Travel",
       color: "preset5",
@@ -109,7 +112,9 @@ describe("categories", () => {
     await user.type(name, "Important");
     expect(screen.getByText("The category is renamed on 2 messages too.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(requests(env, "UpdateExchangeCategory")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "UpdateExchangeCategory")).toHaveLength(1);
+    });
     expect(message(env, "Phoenix launch checklist").tags).toContain("Important");
   });
 
@@ -124,7 +129,9 @@ describe("categories", () => {
     renderWithProviders(<Delete name={CATEGORY_DELETE_DIALOG} close={close} />, env);
     expect(screen.getByText(/The 2 messages that have it keep it/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "DeleteExchangeCategory")[0]?.category_id).toBe("{0004-cat}");
     expect(message(env, "Phoenix launch checklist").tags).toContain("Urgent");
   });
@@ -148,7 +155,9 @@ describe("categories", () => {
     await user.click(urgent);
     await user.click(screen.getByRole("checkbox", { name: "Customers" }));
     await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "UpdateFlags")[0]?.change).toMatchObject({
       add_tags: ["Customers"],
       remove_tags: ["Urgent"],
@@ -162,13 +171,13 @@ describe("categories", () => {
       env,
     );
     const list = await screen.findByRole("list", { name: "Categories" });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         [...list.querySelectorAll('[data-part="exchange.chip"]')].map((c) =>
           c.getAttribute("data-color"),
         ),
-      ).toEqual(["preset7", "preset0"]),
-    );
+      ).toEqual(["preset7", "preset0"]);
+    });
     // A tag outside the master list: its own spelling, no colour.
     expect(within(list).getByText("Project Phoenix")).toBeInTheDocument();
     // The tag `customers` is shown with the category's spelling.
@@ -207,13 +216,13 @@ describe("other mailboxes", () => {
     const user = userEvent.setup();
     const close = vi.fn();
     // The app refetches on the core's events.
-    env.transport.onEvent((event) =>
+    env.transport.onEvent((event) => {
       handleExchangeEvent(event, {
         client: env.client,
         queryClient: env.queryClient,
         store: env.store,
-      }),
-    );
+      });
+    });
     renderWithProviders(<NodeView node={widget("exchange-mailboxes")} path="t/0" />, env);
     await user.click(await screen.findByRole("button", { name: "Add shared mailbox…" }));
     expect(env.store.getState().windows).toContain(MAILBOX_EDITOR_DIALOG);
@@ -227,7 +236,9 @@ describe("other mailboxes", () => {
     await user.type(address, ADDABLE_MAILBOX);
     await user.click(screen.getByRole("checkbox", { name: "Calendar" }));
     await user.click(screen.getByRole("button", { name: "Open mailbox" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "AddExchangeMailbox")[0]?.settings).toEqual({
       address: ADDABLE_MAILBOX,
       name: null,
@@ -255,10 +266,14 @@ describe("other mailboxes", () => {
     renderWithProviders(<Remove name={MAILBOX_REMOVE_DIALOG} close={close} />, env);
     expect(screen.getByText("Hide the mailbox “Support”?")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Hide" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "RemoveExchangeMailbox")[0]?.address).toBe(SHARED_MAILBOX);
     expect(env.store.getState().activeFolderId).toBeNull();
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Support" })).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Support" })).toBeNull();
+    });
   });
 
   it("badges another mailbox's root folder, not other folders", async () => {
@@ -274,16 +289,16 @@ describe("other mailboxes", () => {
       </>,
       env,
     );
-    await waitFor(() =>
-      expect(container.querySelectorAll('[data-part="exchange.mailbox-badge"]')).toHaveLength(2),
-    );
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-part="exchange.mailbox-badge"]')).toHaveLength(2);
+    });
     expect(screen.getByText("Shared mailbox")).toBeInTheDocument();
     expect(screen.getByText("Shared mailbox · No access to this mailbox")).toBeInTheDocument();
   });
 
   it("opens the editor from the action, only for Exchange accounts", async () => {
     const env = setup();
-    await env.queryClient.fetchQuery({
+    await env.queryClient.query({
       queryKey: ["accounts"],
       queryFn: async () =>
         (await env.client.request({ type: "ListAccounts" }, "Accounts")).accounts,
@@ -339,7 +354,7 @@ describe("Focused Inbox", () => {
       <NodeView node={widget("focused-tabs")} path="t/1" />,
       work,
     );
-    await act(async () => {});
+    await act(() => Promise.resolve());
     expect(container.querySelector('[data-part="focused-tabs"]')).toBeNull();
   });
 
@@ -358,10 +373,10 @@ describe("Focused Inbox", () => {
     await user.click(
       screen.getByRole("checkbox", { name: "Always move messages from grace@contoso.example" }),
     );
-    await user.click(
-      screen.getAllByRole("button", { name: "Move to Other" }).at(-1) as HTMLElement,
-    );
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await user.click(must(screen.getAllByRole("button", { name: "Move to Other" }).at(-1)));
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "ClassifyFocused")[0]).toEqual({
       type: "ClassifyFocused",
       message_ids: [digest.id],

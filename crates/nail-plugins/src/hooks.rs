@@ -17,7 +17,7 @@
 //!   message).
 //!
 //! **Budgets.** Every call has the wall-clock budget of its manifest entry
-//! ([`PluginHookDef::timeout_ms`]). A hook that throws, answers something
+//! (`PluginHookDef::timeout_ms`). A hook that throws, answers something
 //! invalid or runs out of time is skipped and counted
 //! ([`crate::PluginServices::record_hook_call`]); it never blocks delivery,
 //! sending or the reader. A hook that loops is also stopped by the per-turn
@@ -112,10 +112,10 @@ async fn call_hook(
     input: Value,
     origin: Origin,
 ) -> (HookRun, Option<Value>) {
-    let budget = running
-        .manifest
-        .hook(kind)
-        .map_or(kind.default_timeout_ms(), |d| d.timeout_ms());
+    let budget = running.manifest.hook(kind).map_or(
+        kind.default_timeout_ms(),
+        nail_api::plugins::PluginHookDef::timeout_ms,
+    );
     let budget = Duration::from_millis(u64::from(budget));
     let started = Instant::now();
     let mut call = Invoke::new(Registry::Hook, kind.as_str(), input);
@@ -168,7 +168,7 @@ impl Inner {
             error: run.error.clone(),
         };
         self.handle.spawn(async move {
-            let _ = services.record_hook_call(record).await;
+            drop(services.record_hook_call(record).await);
         });
         if !matches!(
             run.outcome,
@@ -181,7 +181,7 @@ impl Inner {
             let key = (run.plugin_id.clone(), kind);
             let due = logs
                 .get(&key)
-                .is_none_or(|t| t.elapsed() >= Duration::from_secs(60));
+                .is_none_or(|t| t.elapsed() >= Duration::from_mins(1));
             if due {
                 logs.insert(key, Instant::now());
             }
@@ -196,7 +196,11 @@ impl Inner {
             let ms = self
                 .running_info(&run.plugin_id)
                 .ok()
-                .and_then(|r| r.manifest.hook(kind).map(|d| d.timeout_ms()))
+                .and_then(|r| {
+                    r.manifest
+                        .hook(kind)
+                        .map(nail_api::plugins::PluginHookDef::timeout_ms)
+                })
                 .unwrap_or_else(|| kind.default_timeout_ms());
             LocalizedMessage::new(l10n::HOOK_TIMED_OUT)
                 .arg("plugin", run.plugin_name.as_str())

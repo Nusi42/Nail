@@ -10,6 +10,7 @@
  */
 import {
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -31,11 +32,11 @@ export interface ContextMenuProps {
   x: number;
   y: number;
   /** Focus the first item at once (opened with the keyboard). */
-  autoFocus: boolean;
+  focusOnOpen: boolean;
   /** Runs an action, then the host closes the menu. */
-  onRun(action: string, args: readonly JsonValue[]): void;
+  onRun: (action: string, args: readonly JsonValue[]) => void;
   /** Closes the menu; `restoreFocus` for keyboard closing. */
-  onClose(restoreFocus: boolean): void;
+  onClose: (restoreFocus: boolean) => void;
 }
 
 type Navigable = Exclude<ResolvedMenuEntry, { type: "separator" } | { type: "header" }>;
@@ -49,14 +50,14 @@ interface ListProps {
   items: readonly ResolvedMenuEntry[];
   label: string;
   level: number;
-  autoFocus: boolean;
-  onRun(action: string, args: readonly JsonValue[]): void;
-  onClose(restoreFocus: boolean): void;
+  focusOnOpen: boolean;
+  onRun: (action: string, args: readonly JsonValue[]) => void;
+  onClose: (restoreFocus: boolean) => void;
   /** Closes this submenu and focuses its parent item (level > 0). */
   onBack?: () => void;
 }
 
-function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack }: ListProps) {
+function MenuList({ items, label: name, level, focusOnOpen, onRun, onClose, onBack }: ListProps) {
   const t = useT();
   const label = useLabel();
   const { isEnabled } = useActions();
@@ -72,12 +73,14 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
         e.entry.type !== "separator" && e.entry.type !== "header",
     );
 
-  useEffect(() => {
-    if (!autoFocus) return;
+  // Only when the list appears (with the items and settings of then).
+  const focusFirst = useEffectEvent(() => {
+    if (!focusOnOpen) return;
     const first = navigable[0];
     if (first) refs.current[first.index]?.focus();
-    // Only when the list appears.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    focusFirst();
   }, []);
 
   const focusAt = (position: number) => {
@@ -193,21 +196,27 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
                 tabIndex={-1}
                 aria-haspopup="menu"
                 aria-expanded={expanded}
-                aria-controls={expanded ? `${ids}-sub-${index}` : undefined}
-                onClick={() => activate(entry, index, false)}
-                onPointerEnter={(event) => event.currentTarget.focus()}
-                onKeyDown={(event) => onKeyDown(event, entry, index)}
+                aria-controls={expanded ? `${ids}-sub-${String(index)}` : undefined}
+                onClick={() => {
+                  activate(entry, index, false);
+                }}
+                onPointerEnter={(event) => {
+                  event.currentTarget.focus();
+                }}
+                onKeyDown={(event) => {
+                  onKeyDown(event, entry, index);
+                }}
               >
                 <span data-part="context-menu.item.label">{text}</span>
                 <Icon name="chevron-right" part="context-menu.item.arrow" />
               </button>
               {expanded && (
-                <div id={`${ids}-sub-${index}`} data-part="context-menu.popup">
+                <div id={`${ids}-sub-${String(index)}`} data-part="context-menu.popup">
                   <MenuList
                     items={entry.items}
                     label={text}
                     level={level + 1}
-                    autoFocus={subFocus}
+                    focusOnOpen={subFocus}
                     onRun={onRun}
                     onClose={onClose}
                     onBack={() => {
@@ -236,12 +245,16 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
             tabIndex={-1}
             aria-disabled={enabled ? undefined : true}
             aria-keyshortcuts={shortcut ? ariaShortcut(shortcut) : undefined}
-            onClick={() => activate(entry, index, false)}
+            onClick={() => {
+              activate(entry, index, false);
+            }}
             onPointerEnter={(event) => {
               event.currentTarget.focus();
               setOpenSub(null);
             }}
-            onKeyDown={(event) => onKeyDown(event, entry, index)}
+            onKeyDown={(event) => {
+              onKeyDown(event, entry, index);
+            }}
           >
             <Icon name={entry.icon} part="context-menu.item.icon" />
             <span data-part="context-menu.item.label">{text}</span>
@@ -258,11 +271,11 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
 }
 
 /** The menu at a viewport position; closes on a click elsewhere. */
-export function ContextMenu({ items, label, x, y, autoFocus, onRun, onClose }: ContextMenuProps) {
+export function ContextMenu({ items, label, x, y, focusOnOpen, onRun, onClose }: ContextMenuProps) {
   const geom = useId();
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
-  useGeometry(geom, { left: `${position.x}px`, top: `${position.y}px` });
+  useGeometry(geom, { left: `${String(position.x)}px`, top: `${String(position.y)}px` });
 
   // Keep the menu inside the window.
   useLayoutEffect(() => {
@@ -280,7 +293,9 @@ export function ContextMenu({ items, label, x, y, autoFocus, onRun, onClose }: C
       if (event.target instanceof Node && ref.current?.contains(event.target)) return;
       onClose(false);
     };
-    const onBlur = () => onClose(false);
+    const onBlur = () => {
+      onClose(false);
+    };
     document.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("blur", onBlur);
     window.addEventListener("resize", onBlur);
@@ -298,13 +313,15 @@ export function ContextMenu({ items, label, x, y, autoFocus, onRun, onClose }: C
       data-geom={geom}
       data-key-context="menu"
       data-key-modal=""
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(event) => {
+        event.preventDefault();
+      }}
     >
       <MenuList
         items={items}
         label={label}
         level={0}
-        autoFocus={autoFocus}
+        focusOnOpen={focusOnOpen}
         onRun={onRun}
         onClose={onClose}
       />

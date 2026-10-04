@@ -64,7 +64,7 @@ export function WindowView({ layout, name = "main" }: WindowViewProps) {
   if (!breakpoint) {
     return <div data-part="layout.missing">{t("layout-missing-window", { name })}</div>;
   }
-  const path = `${name}/${index}`;
+  const path = `${name}/${String(index)}`;
   return <NodeView key={path} node={breakpoint.root} path={path} />;
 }
 
@@ -118,7 +118,12 @@ function StackView({ node, path }: { node: StackNode; path: string }) {
   // The rows go only to the children that rendered something (see
   // `renderedStackTracks`). Written straight to the stylesheet: widgets
   // appear and disappear without this stack re-rendering.
-  useLayoutEffect(() => () => manager.removeGeometry(geom), [manager, geom]);
+  useLayoutEffect(
+    () => () => {
+      manager.removeGeometry(geom);
+    },
+    [manager, geom],
+  );
   useLayoutEffect(() => {
     const el = element.current;
     if (!el) return;
@@ -135,7 +140,9 @@ function StackView({ node, path }: { node: StackNode; path: string }) {
     update();
     const observer = new MutationObserver(update);
     observer.observe(el, { childList: true });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [manager, geom, tracksKey]);
   return (
     <div
@@ -150,7 +157,7 @@ function StackView({ node, path }: { node: StackNode; path: string }) {
         <Fragment key={child.id ?? index}>
           {/* Not a grid item (hidden): marks where child `i` starts. */}
           <span data-part="stack.slot" data-slot={i} hidden />
-          <NodeView node={child} path={`${path}/${index}`} />
+          <NodeView node={child} path={`${path}/${String(index)}`} />
         </Fragment>
       ))}
     </div>
@@ -232,7 +239,7 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
   const onPointerDown = (visibleIndex: number) => (event: PointerEvent<HTMLDivElement>) => {
     if (!node.resizable || event.button !== 0) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       pointerId: event.pointerId,
       start: horizontal ? event.clientX : event.clientY,
@@ -244,7 +251,7 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const state = drag.current;
-    if (!state || state.pointerId !== event.pointerId) return;
+    if (state?.pointerId !== event.pointerId) return;
     const position = horizontal ? event.clientX : event.clientY;
     apply(state.index, position - state.start, state.sizes, state.measured);
   };
@@ -252,7 +259,7 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     if (drag.current?.pointerId === event.pointerId) {
       drag.current = null;
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
 
@@ -270,10 +277,12 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
     if (i > 0) {
       children.push(
         node.resizable ? (
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- a focusable separator is the window splitter widget (WAI-ARIA): pointer drag and arrow keys.
           <div
-            key={`divider-${index}`}
+            key={`divider-${String(index)}`}
             data-part="split.divider"
             role="separator"
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a focusable separator is the window splitter widget (WAI-ARIA), moved with the arrow keys.
             tabIndex={0}
             aria-orientation={horizontal ? "vertical" : "horizontal"}
             aria-valuenow={valueNow}
@@ -287,20 +296,20 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
             onKeyDown={onKeyDown(i - 1)}
           />
         ) : (
-          <div key={`divider-${index}`} data-part="split.divider" aria-hidden="true" />
+          <div key={`divider-${String(index)}`} data-part="split.divider" aria-hidden="true" />
         ),
       );
     }
     children.push(
       <Pane
-        key={child.id ?? `pane-${index}`}
-        geom={`${geom}-${index}`}
+        key={child.id ?? `pane-${String(index)}`}
+        geom={`${geom}-${String(index)}`}
         flex={flexForSize(visibleSizes[i])}
         min={node.min_sizes[index]}
         max={node.max_sizes[index]}
         horizontal={horizontal}
         child={child}
-        path={`${path}/${index}`}
+        path={`${path}/${String(index)}`}
         paneRef={(el) => {
           if (el) panes.current.set(index, el);
           else panes.current.delete(index);
@@ -351,6 +360,7 @@ function TabsView({ node, path }: { node: TabsNode; path: string }) {
 
   return (
     <div data-part="tabs" data-node-id={node.id ?? undefined}>
+      {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- the tabs take the focus (roving tabindex), not the tab list itself. */}
       <div
         data-part="tabs.tab-list"
         role="tablist"
@@ -364,9 +374,9 @@ function TabsView({ node, path }: { node: TabsNode; path: string }) {
               key={child.id ?? index}
               type="button"
               role="tab"
-              id={`${idPrefix}-tab-${index}`}
+              id={`${idPrefix}-tab-${String(index)}`}
               aria-selected={selected}
-              aria-controls={`${idPrefix}-panel-${index}`}
+              aria-controls={`${idPrefix}-panel-${String(index)}`}
               tabIndex={selected ? 0 : -1}
               data-part="tabs.tab"
               data-state={selected ? "selected" : undefined}
@@ -375,7 +385,9 @@ function TabsView({ node, path }: { node: TabsNode; path: string }) {
                 if (el) tabRefs.current.set(index, el);
                 else tabRefs.current.delete(index);
               }}
-              onClick={() => setActiveTab(key, index)}
+              onClick={() => {
+                setActiveTab(key, index);
+              }}
             >
               {tabLabel(child, index)}
             </button>
@@ -386,12 +398,12 @@ function TabsView({ node, path }: { node: TabsNode; path: string }) {
         <div
           key={child.id ?? index}
           role="tabpanel"
-          id={`${idPrefix}-panel-${index}`}
-          aria-labelledby={`${idPrefix}-tab-${index}`}
+          id={`${idPrefix}-panel-${String(index)}`}
+          aria-labelledby={`${idPrefix}-tab-${String(index)}`}
           data-part="tabs.panel"
           hidden={index !== activeIndex}
         >
-          <NodeView node={child} path={`${path}/${index}`} />
+          <NodeView node={child} path={`${path}/${String(index)}`} />
         </div>
       ))}
     </div>

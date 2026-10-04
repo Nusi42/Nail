@@ -17,11 +17,12 @@ ATTENDEE;PARTSTAT=ACCEPTED:mailto:carol@example.org\r\nEND:VEVENT\r\n";
 
 fn stored(text: &str) -> CalendarEvent {
     let object = parse_itip(text, None);
-    let mut event =
-        object
-            .event
-            .unwrap()
-            .into_event("ev".into(), "cal".into(), false, Default::default());
+    let mut event = object.event.unwrap().into_event(
+        "ev".into(),
+        "cal".into(),
+        false,
+        nail_api::pim::PimItemSync::default(),
+    );
     event.fields.alarms = vec![Alarm::minutes_before(15)];
     event.fields.color = Some("#ff0000".into());
     event

@@ -71,7 +71,6 @@ impl<'a> Source<'a> {
     /// `kdl` parser sees them: it recurses per child block (and per nested
     /// block comment), and a crafted file would overflow the stack, which
     /// aborts the process instead of returning an error.
-    #[allow(dead_code, reason = "kept for readers that stop at the first error")]
     pub(crate) fn parse(&self) -> Result<KdlDocument, ConfigError> {
         self.parse_all().map_err(|mut errors| errors.swap_remove(0))
     }
@@ -591,7 +590,10 @@ mod tests {
         let src = Source::new("t.kdl", &text);
         let err = src.parse().unwrap_err();
         assert_eq!(err.kind, ConfigErrorKind::Syntax);
-        assert_eq!((err.line, err.column), (MAX_NESTING as u32 + 1, 3));
+        assert_eq!(
+            (err.line, err.column),
+            (u32::try_from(MAX_NESTING).unwrap() + 1, 3)
+        );
         assert!(
             err.message.contains("nested more than 64"),
             "{}",

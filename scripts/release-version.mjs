@@ -8,16 +8,16 @@
  *                                                    names another version
  *   node scripts/release-version.mjs --channel       stable, or beta for a pre-release
  */
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { bumpPatch } from "./lib/build.mjs";
+import { readJson } from "./lib/json.mjs";
 import { parseVersion } from "./lib/update-manifest.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const conf = JSON.parse(
-  readFileSync(path.join(repoRoot, "app", "src-tauri", "tauri.conf.json"), "utf8"),
+const conf = /** @type {{ version: string }} */ (
+  readJson(path.join(repoRoot, "app", "src-tauri", "tauri.conf.json"))
 );
 const version = conf.version;
 const args = process.argv.slice(2);
@@ -27,7 +27,7 @@ if (args[0] === "--next") {
 } else if (args[0] === "--channel") {
   console.log(parseVersion(version).pre.length ? "beta" : "stable");
 } else if (args[0] === "--tag") {
-  const tag = String(args[1] ?? "").replace(/^refs\/tags\//, "");
+  const tag = (args[1] ?? "").replace(/^refs\/tags\//, "");
   if (tag.replace(/^v/, "") !== version) {
     console.error(`tag ${tag} does not match the app version ${version} (tauri.conf.json)`);
     process.exit(1);
@@ -36,6 +36,6 @@ if (args[0] === "--next") {
 } else if (args.length === 0) {
   console.log(version);
 } else {
-  console.error(`unknown option ${args[0]}`);
+  console.error(`unknown option ${args[0] ?? ""}`);
   process.exit(2);
 }

@@ -24,6 +24,16 @@ use crate::error::Result;
 use crate::index::SearchIndex;
 use crate::query::{FlagTerm, Query, SizeOp, Term, TermKind, parse_query};
 
+/// How one term of a query runs.
+enum TermPlan {
+    /// Through the full-text index.
+    Text(Box<dyn TantivyQuery>),
+    /// Full text without searchable tokens (`"!!!"`): matches everything.
+    NoTokens,
+    /// As a store filter (flags, dates, folders, ...).
+    Filter,
+}
+
 /// A virtual account the `account:` term can name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VirtualAccountScope {
@@ -95,10 +105,13 @@ impl Compiler<'_> {
         Ok(MessageFilter::Ids(ids))
     }
 
-    fn text_query(&self, term: &Term) -> Option<Option<Box<dyn TantivyQuery>>> {
+    fn text_query(&self, term: &Term) -> TermPlan {
         match &term.kind {
-            TermKind::Text { field, value, .. } => Some(self.index.text_query(*field, value)),
-            _ => None,
+            TermKind::Text { field, value, .. } => match self.index.text_query(*field, value) {
+                Some(query) => TermPlan::Text(query),
+                None => TermPlan::NoTokens,
+            },
+            _ => TermPlan::Filter,
         }
     }
 
@@ -107,9 +120,9 @@ impl Compiler<'_> {
             Query::All => MessageFilter::All,
             Query::Term(term) => match self.text_query(term) {
                 // Text without searchable tokens ("!!!") is ignored.
-                Some(None) => MessageFilter::All,
-                Some(Some(q)) => self.hits(q.as_ref(), positive)?,
-                None => self.term(term),
+                TermPlan::NoTokens => MessageFilter::All,
+                TermPlan::Text(q) => self.hits(q.as_ref(), positive)?,
+                TermPlan::Filter => self.term(term),
             },
             Query::Not(inner) => MessageFilter::Not(Box::new(self.node(inner, !positive)?)),
             Query::And(items) | Query::Or(items) => {
@@ -120,9 +133,9 @@ impl Compiler<'_> {
                 for item in items {
                     match item {
                         Query::Term(term) => match self.text_query(term) {
-                            Some(Some(q)) => text.push(q),
-                            Some(None) => rest.push(MessageFilter::All),
-                            None => rest.push(self.term(term)),
+                            TermPlan::Text(q) => text.push(q),
+                            TermPlan::NoTokens => rest.push(MessageFilter::All),
+                            TermPlan::Filter => rest.push(self.term(term)),
                         },
                         other => rest.push(self.node(other, positive)?),
                     }
@@ -230,24 +243,36 @@ fn scoped(filter: MessageFilter, scope: &SearchScope) -> MessageFilter {
     filter
 }
 
-/// Runs a parsed query and returns one page of hits, newest first or by
-/// relevance (ties newest first).
-#[allow(clippy::too_many_arguments)]
+/// The order and window of one page of hits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageRequest {
+    /// Newest first or by relevance (ties newest first).
+    pub sort: SearchSort,
+    /// Hits to skip.
+    pub offset: u32,
+    /// Hits to return at most.
+    pub limit: u32,
+}
+
+/// Runs a parsed query and returns one page of hits.
 pub fn search(
     index: &SearchIndex,
     store: &Store,
     query: &Query,
     scope: &SearchScope,
-    sort: SearchSort,
-    offset: u32,
-    limit: u32,
+    page: PageRequest,
     ctx: &SearchContext,
 ) -> Result<SearchResults> {
+    let PageRequest {
+        sort,
+        offset,
+        limit,
+    } = page;
     let compiled = compile(index, query, ctx)?;
     let mut ids = store.filter_message_ids(&scoped(compiled.filter, scope))?;
     if sort == SearchSort::Relevance {
-        let score = |id: &MessageId| compiled.scores.get(id).copied().unwrap_or(0.0);
-        ids.sort_by(|a, b| score(b).total_cmp(&score(a)));
+        let relevance = |id: &MessageId| compiled.scores.get(id).copied().unwrap_or(0.0);
+        ids.sort_by(|a, b| relevance(b).total_cmp(&relevance(a)));
     }
     let total = u32::try_from(ids.len()).unwrap_or(u32::MAX);
     let start = (offset as usize).min(ids.len());
@@ -257,10 +282,10 @@ pub fn search(
         .message_summaries(page)?
         .into_iter()
         .map(|message| {
-            let score = compiled.scores.get(&message.id).copied().unwrap_or(0.0);
+            let relevance = compiled.scores.get(&message.id).copied().unwrap_or(0.0);
             SearchHit {
                 message,
-                score,
+                score: relevance,
                 from_server: false,
             }
         })
@@ -286,9 +311,11 @@ pub fn run_request(
         store,
         &query,
         scope,
-        request.sort,
-        request.offset,
-        request.limit,
+        PageRequest {
+            sort: request.sort,
+            offset: request.offset,
+            limit: request.limit,
+        },
         ctx,
     )
     .map(Ok)

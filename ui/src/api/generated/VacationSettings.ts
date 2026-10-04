@@ -12,7 +12,7 @@ export type VacationSettings = {
 enabled: boolean, 
 /**
  * Subject of the reply; empty = the server's default (usually
- * "Auto: <original subject>").
+ * `Auto: <original subject>`).
  */
 subject: string, 
 /**

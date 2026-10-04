@@ -17,8 +17,10 @@ const out = at >= 0 ? process.argv[at + 1] : undefined;
 
 try {
   const result = packPlugin({ dir: root, out });
-  console.log(`${path.relative(process.cwd(), result.file) || result.file}`);
-  console.log(`  ${result.files.length} files, ${result.size} bytes, sha256 ${result.sha256}`);
+  console.log(path.relative(process.cwd(), result.file) || result.file);
+  console.log(
+    `  ${String(result.files.length)} files, ${String(result.size)} bytes, sha256 ${result.sha256}`,
+  );
 } catch (error) {
   if (!(error instanceof PackError)) throw error;
   console.error(error.message);

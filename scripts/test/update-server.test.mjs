@@ -15,16 +15,23 @@ import { buildManifest, collectPlatforms, manifestJson } from "../lib/update-man
 
 const key = testKey(generateKeyPairSync("ed25519"));
 const installer = Buffer.from("pretend this is Nail_0.2.0_x64-setup.exe");
-let root;
+let root = "";
+/** @type {import("node:http").Server | undefined} */
 let server;
-let base;
+let base = "";
+/** @type {import("../lib/update-server.mjs").LogEntry[]} */
 const requests = [];
 
 before(async () => {
   root = mkdtempSync(path.join(tmpdir(), "nail-update-server-"));
-  server = createUpdateServer({ root, log: (e) => requests.push(e) });
+  server = createUpdateServer({
+    root,
+    log: (e) => {
+      requests.push(e);
+    },
+  });
   const port = await listenLoopback(server, 0);
-  base = `http://127.0.0.1:${port}`;
+  base = `http://127.0.0.1:${String(port)}`;
   writeFileSync(path.join(root, "Nail_0.2.0_x64-setup.exe"), installer);
   writeFileSync(path.join(root, "Nail_0.2.0_x64_en-US.msi"), Buffer.from("msi"));
   const files = [
@@ -71,7 +78,7 @@ test("the server serves files, refuses the rest, and logs every request", async 
   const res = await fetch(`${base}/stable/latest.json`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "application/json");
-  assert.equal((await res.json()).version, "0.2.0");
+  assert.equal(/** @type {{ version?: string }} */ (await res.json()).version, "0.2.0");
   assert.equal((await fetch(`${base}/missing.json`)).status, 404);
   assert.equal((await fetch(`${base}/stable`)).status, 404);
   assert.equal((await fetch(`${base}/stable/latest.json`, { method: "POST" })).status, 405);

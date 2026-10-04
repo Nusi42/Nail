@@ -8,7 +8,7 @@
  * photo. Unknown vCard properties stay with the card (the core keeps them).
  */
 import { CalendarDate } from "@internationalized/date";
-import { useId, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
 import type {
   AddressBook,
   Contact,
@@ -29,6 +29,7 @@ import { emptyContactFields } from "./defaults";
 import { pimWrite, useAddressBooks, useContact } from "./queries";
 import { usePim, type ContactEditorTarget } from "./store";
 import { localZone, todayIn } from "./time";
+import { nonEmpty } from "../../text/empty";
 
 export const EMAIL_KINDS = ["home", "work", "other"] as const;
 export const PHONE_KINDS = ["cell", "home", "work", "fax", "other"] as const;
@@ -45,7 +46,12 @@ export function derivedDisplayName(fields: ContactFields): string {
     .filter(Boolean)
     .join(" ")
     .trim();
-  return fromName || fields.organization?.name?.trim() || fields.emails[0]?.value || "";
+  return (
+    nonEmpty(fromName) ??
+    nonEmpty(fields.organization?.name.trim()) ??
+    fields.emails[0]?.value ??
+    ""
+  );
 }
 
 /** The fields to save: trimmed, empty entries dropped, a display name set. */
@@ -68,10 +74,9 @@ export function cleanContact(fields: ContactFields): ContactFields {
     addresses,
     categories: fields.categories.map((c) => c.trim()).filter(Boolean),
     custom: fields.custom.filter((c) => c.name.trim() !== ""),
-    organization:
-      fields.organization && fields.organization.name.trim() ? fields.organization : null,
-    title: fields.title?.trim() || null,
-    role: fields.role?.trim() || null,
+    organization: fields.organization?.name.trim() ? fields.organization : null,
+    title: nonEmpty(fields.title?.trim()) ?? null,
+    role: nonEmpty(fields.role?.trim()) ?? null,
     notes: fields.notes?.trim() ? fields.notes : null,
   };
   return { ...cleaned, display_name: derivedDisplayName(cleaned) };
@@ -114,7 +119,7 @@ export function ContactEditorDialog({ close }: DialogProps) {
       key={target.mode === "edit" ? target.contactId : "new"}
       target={target}
       contact={contact.data ?? null}
-      books={books.data ?? []}
+      books={books.data}
       close={close}
     />
   );
@@ -124,7 +129,7 @@ interface EditorProps {
   target: ContactEditorTarget;
   contact: Contact | null;
   books: readonly AddressBook[];
-  close(): void;
+  close: () => void;
 }
 
 function emptyAddress(): PostalAddress {
@@ -164,14 +169,11 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
     photo: useId(),
   };
   const writable = books.filter((b) => !b.read_only);
-  const initial = useMemo<ContactFields>(
-    () =>
-      structuredClone(
-        contact?.fields ?? (target.mode === "new" ? target.fields : null) ?? emptyContactFields(),
-      ),
-    // Initialized once per editor (keyed by its target).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  // Initialized once per editor (the component is keyed by its target).
+  const [initial] = useState<ContactFields>(() =>
+    structuredClone(
+      contact?.fields ?? (target.mode === "new" ? target.fields : null) ?? emptyContactFields(),
+    ),
   );
   const [fields, setFields] = useState<ContactFields>(initial);
   const [bookId, setBookId] = useState<string>(
@@ -183,8 +185,10 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
   );
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  const update = (patch: Partial<ContactFields>) => setFields((f) => ({ ...f, ...patch }));
-  const setName = (key: keyof NonNullable<ContactFields["name"]>, value: string) =>
+  const update = (patch: Partial<ContactFields>) => {
+    setFields((f) => ({ ...f, ...patch }));
+  };
+  const setName = (key: keyof NonNullable<ContactFields["name"]>, value: string) => {
     setFields((f) => ({
       ...f,
       name: {
@@ -196,9 +200,10 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
         [key]: value === "" ? null : value,
       },
     }));
+  };
   const readOnly = contact?.read_only === true;
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const cleaned = cleanContact(fields);
     if (!cleaned.display_name) {
@@ -269,7 +274,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             id={ids.book}
             data-part="form.select"
             value={bookId}
-            onChange={(e) => setBookId(e.target.value)}
+            onChange={(e) => {
+              setBookId(e.target.value);
+            }}
           >
             {writable.map((b) => (
               <option key={b.id} value={b.id}>
@@ -286,7 +293,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             id={ids.kind}
             data-part="form.select"
             value={fields.kind}
-            onChange={(e) => update({ kind: e.target.value as ContactKind })}
+            onChange={(e) => {
+              update({ kind: e.target.value as ContactKind });
+            }}
           >
             {CONTACT_KINDS.map((k) => (
               <option key={k} value={k}>
@@ -315,7 +324,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
                 id={id}
                 data-part="form.input"
                 value={fields.name?.[key] ?? ""}
-                onChange={(e) => setName(key, e.target.value)}
+                onChange={(e) => {
+                  setName(key, e.target.value);
+                }}
               />
             </div>
           ))}
@@ -328,7 +339,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               data-part="form.input"
               value={fields.display_name}
               placeholder={derivedDisplayName({ ...fields, display_name: "" })}
-              onChange={(e) => update({ display_name: e.target.value })}
+              onChange={(e) => {
+                update({ display_name: e.target.value });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="nicknames">
@@ -339,7 +352,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               id={ids.nick}
               data-part="form.input"
               value={fields.nicknames.join(", ")}
-              onChange={(e) => update({ nicknames: e.target.value.split(",") })}
+              onChange={(e) => {
+                update({ nicknames: e.target.value.split(",") });
+              }}
             />
           </div>
         </fieldset>
@@ -354,11 +369,11 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               id={ids.org}
               data-part="form.input"
               value={fields.organization?.name ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
                 update({
                   organization: { name: e.target.value, units: fields.organization?.units ?? [] },
-                })
-              }
+                });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="unit">
@@ -369,7 +384,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               id={ids.unit}
               data-part="form.input"
               value={(fields.organization?.units ?? []).join(", ")}
-              onChange={(e) =>
+              onChange={(e) => {
                 update({
                   organization: {
                     name: fields.organization?.name ?? "",
@@ -378,8 +393,8 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
                       .map((u) => u.trim())
                       .filter(Boolean),
                   },
-                })
-              }
+                });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="title">
@@ -390,7 +405,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               id={ids.title}
               data-part="form.input"
               value={fields.title ?? ""}
-              onChange={(e) => update({ title: e.target.value })}
+              onChange={(e) => {
+                update({ title: e.target.value });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="role">
@@ -401,7 +418,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               id={ids.role}
               data-part="form.input"
               value={fields.role ?? ""}
-              onChange={(e) => update({ role: e.target.value })}
+              onChange={(e) => {
+                update({ role: e.target.value });
+              }}
             />
           </div>
         </fieldset>
@@ -412,7 +431,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
           values={fields.emails}
           kinds={EMAIL_KINDS}
           inputType="email"
-          onChange={(emails) => update({ emails })}
+          onChange={(emails) => {
+            update({ emails });
+          }}
         />
         <LabeledListEditor
           field="phones"
@@ -420,11 +441,15 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
           values={fields.phones}
           kinds={PHONE_KINDS}
           inputType="tel"
-          onChange={(phones) => update({ phones })}
+          onChange={(phones) => {
+            update({ phones });
+          }}
         />
         <AddressListEditor
           values={fields.addresses}
-          onChange={(addresses) => update({ addresses })}
+          onChange={(addresses) => {
+            update({ addresses });
+          }}
         />
         <LabeledListEditor
           field="urls"
@@ -432,7 +457,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
           values={fields.urls}
           kinds={URL_KINDS}
           inputType="url"
-          onChange={(urls) => update({ urls })}
+          onChange={(urls) => {
+            update({ urls });
+          }}
         />
         <LabeledListEditor
           field="impp"
@@ -440,20 +467,26 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
           values={fields.impp}
           kinds={["other"]}
           inputType="text"
-          onChange={(impp) => update({ impp })}
+          onChange={(impp) => {
+            update({ impp });
+          }}
         />
 
         <ContactDateEditor
           field="birthday"
           label={t("pim-contact-birthday")}
           value={fields.birthday}
-          onChange={(birthday) => update({ birthday })}
+          onChange={(birthday) => {
+            update({ birthday });
+          }}
         />
         <ContactDateEditor
           field="anniversary"
           label={t("pim-contact-anniversary")}
           value={fields.anniversary}
-          onChange={(anniversary) => update({ anniversary })}
+          onChange={(anniversary) => {
+            update({ anniversary });
+          }}
         />
 
         <div data-part="form.field" data-field="notes">
@@ -464,7 +497,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             id={ids.notes}
             data-part="form.textarea"
             value={fields.notes ?? ""}
-            onChange={(e) => update({ notes: e.target.value })}
+            onChange={(e) => {
+              update({ notes: e.target.value });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="categories">
@@ -475,10 +510,17 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             id={ids.categories}
             data-part="form.input"
             value={fields.categories.join(", ")}
-            onChange={(e) => update({ categories: e.target.value.split(",") })}
+            onChange={(e) => {
+              update({ categories: e.target.value.split(",") });
+            }}
           />
         </div>
-        <CustomFieldsEditor values={fields.custom} onChange={(custom) => update({ custom })} />
+        <CustomFieldsEditor
+          values={fields.custom}
+          onChange={(custom) => {
+            update({ custom });
+          }}
+        />
 
         <fieldset data-part="pim.editor.section" data-section="photo">
           <legend data-part="form.section.title">{t("pim-contact-photo")}</legend>
@@ -502,7 +544,13 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             />
           </div>
           {fields.photo && (
-            <button type="button" data-part="form.button" onClick={() => update({ photo: null })}>
+            <button
+              type="button"
+              data-part="form.button"
+              onClick={() => {
+                update({ photo: null });
+              }}
+            >
               {t("pim-contact-photo-remove")}
             </button>
           )}
@@ -549,12 +597,13 @@ function LabeledListEditor({
   values: LabeledValue[];
   kinds: readonly string[];
   inputType: "email" | "tel" | "url" | "text";
-  onChange(values: LabeledValue[]): void;
+  onChange: (values: LabeledValue[]) => void;
 }) {
   const t = useT();
   const id = useId();
-  const set = (index: number, patch: Partial<LabeledValue>) =>
+  const set = (index: number, patch: Partial<LabeledValue>) => {
     onChange(values.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+  };
   return (
     <fieldset data-part="pim.editor.section" data-section={field}>
       <legend data-part="form.section.title">{legend}</legend>
@@ -563,28 +612,30 @@ function LabeledListEditor({
         return (
           <div key={index} data-part="pim.editor.row" data-row={field}>
             <div data-part="form.field" data-field="value">
-              <label data-part="form.label" htmlFor={`${id}-v-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-v-${String(index)}`}>
                 {t("pim-entry-value", { field: legend, index: index + 1 })}
               </label>
               <input
-                id={`${id}-v-${index}`}
+                id={`${id}-v-${String(index)}`}
                 data-part="form.input"
                 type={inputType}
                 value={value.value}
-                onChange={(e) => set(index, { value: e.target.value })}
+                onChange={(e) => {
+                  set(index, { value: e.target.value });
+                }}
               />
             </div>
             <div data-part="form.field" data-field="kind">
-              <label data-part="form.label" htmlFor={`${id}-k-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-k-${String(index)}`}>
                 {t("pim-entry-kind")}
               </label>
               <select
-                id={`${id}-k-${index}`}
+                id={`${id}-k-${String(index)}`}
                 data-part="form.select"
                 value={kinds.includes(kind) ? kind : "other"}
-                onChange={(e) =>
-                  set(index, { kinds: e.target.value === "other" ? [] : [e.target.value] })
-                }
+                onChange={(e) => {
+                  set(index, { kinds: e.target.value === "other" ? [] : [e.target.value] });
+                }}
               >
                 {kinds.map((k) => (
                   <option key={k} value={k}>
@@ -597,15 +648,15 @@ function LabeledListEditor({
               <input
                 type="checkbox"
                 checked={value.preferred}
-                onChange={(e) =>
+                onChange={(e) => {
                   onChange(
                     values.map((v, i) => ({
                       ...v,
                       preferred:
                         i === index ? e.target.checked : e.target.checked ? false : v.preferred,
                     })),
-                  )
-                }
+                  );
+                }}
               />
               <span>{t("pim-entry-preferred")}</span>
             </label>
@@ -614,7 +665,9 @@ function LabeledListEditor({
               data-part="form.button"
               data-action="remove"
               aria-label={t("pim-entry-remove", { field: legend, index: index + 1 })}
-              onClick={() => onChange(values.filter((_, i) => i !== index))}
+              onClick={() => {
+                onChange(values.filter((_, i) => i !== index));
+              }}
             >
               {t("pim-remove")}
             </button>
@@ -625,7 +678,7 @@ function LabeledListEditor({
         type="button"
         data-part="form.button"
         data-action={`add-${field}`}
-        onClick={() =>
+        onClick={() => {
           onChange([
             ...values,
             {
@@ -634,8 +687,8 @@ function LabeledListEditor({
               label: null,
               preferred: values.length === 0,
             },
-          ])
-        }
+          ]);
+        }}
       >
         {t("pim-entry-add", { field: legend })}
       </button>
@@ -648,12 +701,13 @@ function AddressListEditor({
   onChange,
 }: {
   values: PostalAddress[];
-  onChange(values: PostalAddress[]): void;
+  onChange: (values: PostalAddress[]) => void;
 }) {
   const t = useT();
   const id = useId();
-  const set = (index: number, patch: Partial<PostalAddress>) =>
+  const set = (index: number, patch: Partial<PostalAddress>) => {
     onChange(values.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+  };
   const parts = [
     ["street", "pim-address-street"],
     ["extended", "pim-address-extended"],
@@ -670,16 +724,16 @@ function AddressListEditor({
         <fieldset key={index} data-part="pim.editor.address">
           <legend data-part="form.label">{t("pim-address-number", { index: index + 1 })}</legend>
           <div data-part="form.field" data-field="kind">
-            <label data-part="form.label" htmlFor={`${id}-kind-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-kind-${String(index)}`}>
               {t("pim-entry-kind")}
             </label>
             <select
-              id={`${id}-kind-${index}`}
+              id={`${id}-kind-${String(index)}`}
               data-part="form.select"
               value={address.kinds[0]?.toLowerCase() ?? "other"}
-              onChange={(e) =>
-                set(index, { kinds: e.target.value === "other" ? [] : [e.target.value] })
-              }
+              onChange={(e) => {
+                set(index, { kinds: e.target.value === "other" ? [] : [e.target.value] });
+              }}
             >
               {ADDRESS_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -690,16 +744,16 @@ function AddressListEditor({
           </div>
           {parts.map(([key, label]) => (
             <div key={key} data-part="form.field" data-field={key}>
-              <label data-part="form.label" htmlFor={`${id}-${key}-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-${key}-${String(index)}`}>
                 {t(label)}
               </label>
               <input
-                id={`${id}-${key}-${index}`}
+                id={`${id}-${key}-${String(index)}`}
                 data-part="form.input"
                 value={address[key] ?? ""}
-                onChange={(e) =>
-                  set(index, { [key]: e.target.value === "" ? null : e.target.value })
-                }
+                onChange={(e) => {
+                  set(index, { [key]: e.target.value === "" ? null : e.target.value });
+                }}
               />
             </div>
           ))}
@@ -708,7 +762,9 @@ function AddressListEditor({
             data-part="form.button"
             data-action="remove"
             aria-label={t("pim-address-remove", { index: index + 1 })}
-            onClick={() => onChange(values.filter((_, i) => i !== index))}
+            onClick={() => {
+              onChange(values.filter((_, i) => i !== index));
+            }}
           >
             {t("pim-remove")}
           </button>
@@ -718,7 +774,9 @@ function AddressListEditor({
         type="button"
         data-part="form.button"
         data-action="add-address"
-        onClick={() => onChange([...values, emptyAddress()])}
+        onClick={() => {
+          onChange([...values, emptyAddress()]);
+        }}
       >
         {t("pim-address-add")}
       </button>
@@ -735,7 +793,7 @@ function ContactDateEditor({
   field: string;
   label: string;
   value: ContactDate | null;
-  onChange(value: ContactDate | null): void;
+  onChange: (value: ContactDate | null) => void;
 }) {
   const t = useT();
   const tz = localZone();
@@ -765,19 +823,21 @@ function ContactDateEditor({
             day={day}
             time={null}
             tz={tz}
-            onChange={(next) =>
+            onChange={(next) => {
               onChange({
                 year: value.year === null ? null : next.year,
                 month: next.month,
                 day: next.day,
-              })
-            }
+              });
+            }}
           />
           <label data-part="form.check" data-field={`${field}-no-year`}>
             <input
               type="checkbox"
               checked={value.year === null}
-              onChange={(e) => onChange({ ...value, year: e.target.checked ? null : day.year })}
+              onChange={(e) => {
+                onChange({ ...value, year: e.target.checked ? null : day.year });
+              }}
             />
             <span>{t("pim-contact-date-no-year")}</span>
           </label>
@@ -800,37 +860,42 @@ function CustomFieldsEditor({
   onChange,
 }: {
   values: CustomField[];
-  onChange(values: CustomField[]): void;
+  onChange: (values: CustomField[]) => void;
 }) {
   const t = useT();
   const id = useId();
-  const set = (index: number, patch: Partial<CustomField>) =>
+  const set = (index: number, patch: Partial<CustomField>) => {
     onChange(values.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+  };
   return (
     <fieldset data-part="pim.editor.section" data-section="custom">
       <legend data-part="form.section.title">{t("pim-contact-custom")}</legend>
       {values.map((field, index) => (
         <div key={index} data-part="pim.editor.row" data-row="custom">
           <div data-part="form.field" data-field="custom-name">
-            <label data-part="form.label" htmlFor={`${id}-n-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-n-${String(index)}`}>
               {t("pim-custom-name", { index: index + 1 })}
             </label>
             <input
-              id={`${id}-n-${index}`}
+              id={`${id}-n-${String(index)}`}
               data-part="form.input"
               value={field.name}
-              onChange={(e) => set(index, { name: e.target.value })}
+              onChange={(e) => {
+                set(index, { name: e.target.value });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="custom-value">
-            <label data-part="form.label" htmlFor={`${id}-v-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-v-${String(index)}`}>
               {t("pim-custom-value", { index: index + 1 })}
             </label>
             <input
-              id={`${id}-v-${index}`}
+              id={`${id}-v-${String(index)}`}
               data-part="form.input"
               value={field.value}
-              onChange={(e) => set(index, { value: e.target.value })}
+              onChange={(e) => {
+                set(index, { value: e.target.value });
+              }}
             />
           </div>
           <button
@@ -838,7 +903,9 @@ function CustomFieldsEditor({
             data-part="form.button"
             data-action="remove"
             aria-label={t("pim-custom-remove", { index: index + 1 })}
-            onClick={() => onChange(values.filter((_, i) => i !== index))}
+            onClick={() => {
+              onChange(values.filter((_, i) => i !== index));
+            }}
           >
             {t("pim-remove")}
           </button>
@@ -848,7 +915,9 @@ function CustomFieldsEditor({
         type="button"
         data-part="form.button"
         data-action="add-custom"
-        onClick={() => onChange([...values, { name: "", value: "" }])}
+        onClick={() => {
+          onChange([...values, { name: "", value: "" }]);
+        }}
       >
         {t("pim-custom-add")}
       </button>

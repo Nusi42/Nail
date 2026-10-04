@@ -153,7 +153,7 @@ pub fn test_trust_anchors() -> Arc<dyn nail_smime::TrustAnchors> {
 /// no online key lookups.
 pub fn demo_options(mut options: crate::ServiceOptions) -> crate::ServiceOptions {
     if options.secrets.is_none() {
-        options.secrets = Some(Arc::new(MemorySecretStore::new()) as Arc<dyn SecretStore>);
+        options.secrets = Some(Arc::new(MemorySecretStore::new()));
     }
     options.trust_anchors = Some(test_trust_anchors());
     options.key_lookup = Some(Arc::new(OfflineKeyLookup));
@@ -493,15 +493,15 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     let work_store = MailStore::demo();
     work_store.add_mailbox("Drafts", FolderRole::Drafts);
     work_store.add_mailbox("Trash", FolderRole::Trash);
-    work_store.append("INBOX", MULTI_LIST_MESSAGE.as_bytes(), &[] as &[&str]);
+    work_store.append::<&str>("INBOX", MULTI_LIST_MESSAGE.as_bytes(), &[]);
     // M2c: a Junk folder, and a folder synced headers only (its bodies are
     // fetched on demand; the server search finds words of its bodies).
     work_store.add_mailbox("Junk", FolderRole::Junk);
     work_store.add_mailbox(MULTI_HEADERS_ONLY_FOLDER, FolderRole::Other);
-    work_store.append(
+    work_store.append::<&str>(
         MULTI_HEADERS_ONLY_FOLDER,
         crlf(MULTI_NEWSLETTER).as_bytes(),
-        &[] as &[&str],
+        &[],
     );
     let work = MockImapServer::start(
         MockImapConfig {
@@ -552,7 +552,7 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     let new_store = MailStore::new();
     new_store.add_mailbox("Sent", FolderRole::Sent);
     new_store.add_mailbox("Trash", FolderRole::Trash);
-    new_store.append(
+    new_store.append::<&str>(
         "INBOX",
         format!(
             "From: New Example <welcome@new.example>\r\nTo: {MULTI_NEW_EMAIL}\r\n\
@@ -560,7 +560,7 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
              Message-ID: <welcome@new.example>\r\n\r\nYour mailbox is ready.\r\n"
         )
         .as_bytes(),
-        &[] as &[&str],
+        &[],
     );
     let new_imap = MockImapServer::start(
         MockImapConfig {
@@ -977,16 +977,15 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                 }
                 store
             }
-            None => Arc::clone(&self.secrets) as Arc<dyn SecretStore>,
+            None => Arc::clone(&self.secrets),
         };
         options.secrets = Some(secrets);
         options.proxy_fetcher = self.proxy_fetcher();
         options.discoverer = Some(Arc::clone(&self.discoverer));
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
-        options.clock = Some(Arc::clone(&self.clock) as Arc<dyn nail_triage::Clock>);
-        options.system_appearance = Some(Arc::clone(&self.system_appearance)
-            as Arc<dyn nail_api::appearance::SystemAppearanceSource>);
+        options.clock = Some(self.clock.clone());
+        options.system_appearance = Some(self.system_appearance.clone());
         options.exchange = self.exchange_hooks();
         demo_options(options)
     }
@@ -996,11 +995,11 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
         let http = nail_auth::tls_config_with_roots(&[])
             .ok()
             .and_then(|tls| nail_auth::http_client_builder(tls).no_proxy().build().ok())
-            .map(|client| {
+            .map(|client| -> Arc<dyn nail_exchange::http::ExchangeHttp> {
                 Arc::new(
                     nail_exchange::http::ReqwestHttp::new(client)
                         .route_all_to(self.autodiscover.addr()),
-                ) as Arc<dyn nail_exchange::http::ExchangeHttp>
+                )
             });
         crate::ExchangeHooks {
             autodiscover_http: http,
@@ -1300,15 +1299,14 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
             }
             "gmail-deliver" => {
                 let raw = text("raw").ok_or("raw is required")?;
-                let labels: Vec<String> = args
-                    .get("labels")
-                    .and_then(Value::as_array)
-                    .map(|a| {
+                let labels: Vec<String> = args.get("labels").and_then(Value::as_array).map_or_else(
+                    || vec!["INBOX".to_owned(), "UNREAD".to_owned()],
+                    |a| {
                         a.iter()
                             .filter_map(|l| l.as_str().map(str::to_owned))
                             .collect()
-                    })
-                    .unwrap_or_else(|| vec!["INBOX".to_owned(), "UNREAD".to_owned()]);
+                    },
+                );
                 let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
                 Ok(json!({ "id": self.gmail.deliver(crlf(raw).as_bytes(), &labels) }))
             }

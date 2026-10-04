@@ -313,19 +313,16 @@ impl Connection {
                 }
                 continue;
             }
-            match literal_length(&self.partial[self.line_start..]) {
-                Some(len) => {
-                    if self.partial.len() + len > MAX_RESPONSE {
-                        return Err(ImapError::Protocol("response too large".to_owned()));
-                    }
-                    self.literal_left = len;
-                    self.line_start = self.partial.len();
+            if let Some(len) = literal_length(&self.partial[self.line_start..]) {
+                if self.partial.len() + len > MAX_RESPONSE {
+                    return Err(ImapError::Protocol("response too large".to_owned()));
                 }
-                None => {
-                    let bytes = std::mem::take(&mut self.partial);
-                    self.line_start = 0;
-                    return Ok(parse(&bytes));
-                }
+                self.literal_left = len;
+                self.line_start = self.partial.len();
+            } else {
+                let bytes = std::mem::take(&mut self.partial);
+                self.line_start = 0;
+                return Ok(parse(&bytes));
             }
         }
     }

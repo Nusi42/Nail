@@ -135,6 +135,9 @@ pub(crate) fn set_first_arg(node: &mut KdlNode, value: KdlValue) {
     }
 }
 
+// `kdl` has no `get_or_insert` for formats; `set_format` right before
+// makes the `expect` infallible.
+#[expect(clippy::expect_used, reason = "the format was set on the line before")]
 fn node_format(node: &mut KdlNode) -> &mut KdlNodeFormat {
     if node.format().is_none() {
         node.set_format(KdlNodeFormat::default());
@@ -142,6 +145,7 @@ fn node_format(node: &mut KdlNode) -> &mut KdlNodeFormat {
     node.format_mut().expect("format was just set")
 }
 
+#[expect(clippy::expect_used, reason = "the format was set on the line before")]
 fn doc_format(doc: &mut KdlDocument) -> &mut KdlDocumentFormat {
     if doc.format().is_none() {
         doc.set_format(KdlDocumentFormat::default());
@@ -177,7 +181,7 @@ pub(crate) fn ensure_multiline(block: &mut KdlDocument, depth: usize, style: &St
     if count == 0 {
         let fmt = doc_format(block);
         if !fmt.leading.contains('\n') && !fmt.trailing.contains('\n') {
-            fmt.leading = style.nl.to_owned();
+            style.nl.clone_into(&mut fmt.leading);
             fmt.trailing = parent_pad;
         }
         return;
@@ -271,7 +275,8 @@ pub(crate) fn remove_node(block: &mut KdlDocument, index: usize, style: &Style) 
     } else if block.nodes().is_empty() {
         let fmt = doc_format(block);
         if !fmt.leading.contains('\n') {
-            fmt.leading = keep.trim_end_matches([' ', '\t']).to_owned();
+            keep.trim_end_matches([' ', '\t'])
+                .clone_into(&mut fmt.leading);
         }
     } else {
         // The last node was removed: comments above it that stay move in

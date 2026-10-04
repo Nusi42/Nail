@@ -219,7 +219,7 @@ pub(crate) async fn establish(config: &ImapConfig) -> Result<(ImapStream, Capabi
             })
     })
     .await?;
-    let _ = tcp.set_nodelay(true);
+    drop(tcp.set_nodelay(true));
 
     match config.security {
         Security::ImplicitTls => {

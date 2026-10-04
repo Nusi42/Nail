@@ -31,22 +31,22 @@ macro_rules! labeled_enum {
 
         impl $name {
             /// Every variant, in declaration order.
-            pub const ALL: &'static [$name] = &[$($name::$variant),+];
+            $vis const ALL: &'static [$name] = &[$($name::$variant),+];
 
             /// The wire name (as serde writes it).
-            pub fn as_str(self) -> &'static str {
+            $vis fn as_str(self) -> &'static str {
                 match self {
                     $($name::$variant => $wire),+
                 }
             }
 
             /// The Fluent id of the user-facing label.
-            pub fn message_id(self) -> String {
+            $vis fn message_id(self) -> String {
                 format!("{}-{}", $prefix, self.as_str())
             }
 
             /// The variant with this wire name.
-            pub fn parse(text: &str) -> Option<Self> {
+            $vis fn parse(text: &str) -> Option<Self> {
                 Self::ALL.iter().copied().find(|v| v.as_str() == text)
             }
         }
@@ -79,7 +79,7 @@ where
 mod tests {
     labeled_enum! {
         /// A test enum.
-        pub enum Sample : "sample" {
+        pub(super) enum Sample : "sample" {
             /// One.
             One = "one",
             /// Two words.

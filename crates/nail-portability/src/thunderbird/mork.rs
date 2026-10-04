@@ -212,18 +212,15 @@ impl Parser<'_> {
                 }
                 b'$' => {
                     let hex = self.bytes.get(self.pos + 1..self.pos + 3);
-                    match hex
+                    if let Some(byte) = hex
                         .and_then(|h| std::str::from_utf8(h).ok())
                         .and_then(|h| u8::from_str_radix(h, 16).ok())
                     {
-                        Some(byte) => {
-                            out.push(byte);
-                            self.pos += 3;
-                        }
-                        None => {
-                            out.push(b'$');
-                            self.pos += 1;
-                        }
+                        out.push(byte);
+                        self.pos += 3;
+                    } else {
+                        out.push(b'$');
+                        self.pos += 1;
                     }
                 }
                 _ => {
@@ -543,6 +540,8 @@ pub fn read_address_book(path: &Path) -> Result<ParsedCards> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
 
     pub(crate) const MAB: &str = r"// <!-- <mdb:mork:z v=&quot;1.4&quot;/> -->
@@ -614,11 +613,12 @@ mod tests {
         let mut text = String::from(MAB);
         for n in 0..20_000u32 {
             let row = n + 0x100;
-            text.push_str(&format!(
+            write!(
+                text,
                 "@$${{{n:X}{{@\n[{row:X}:^80(^85=Person {n})(^86=p{n}@example.org)]\n@$$}}{n:X}}}@\n"
-            ));
+            ).unwrap();
             if n % 3 == 0 {
-                text.push_str(&format!("[-{row:X}:^80]\n"));
+                writeln!(text, "[-{row:X}:^80]").unwrap();
             }
         }
         let started = std::time::Instant::now();

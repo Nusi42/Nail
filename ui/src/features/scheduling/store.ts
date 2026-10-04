@@ -27,8 +27,8 @@ export interface FindTimeSeed {
 export interface SchedulingState {
   cancelTarget: CancelTarget | null;
   findTime: FindTimeSeed | null;
-  setCancelTarget(target: CancelTarget | null): void;
-  setFindTime(seed: FindTimeSeed | null): void;
+  setCancelTarget: (target: CancelTarget | null) => void;
+  setFindTime: (seed: FindTimeSeed | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<SchedulingState>>();
@@ -39,8 +39,12 @@ export function schedulingStoreFor(ui: UiStore): StoreApi<SchedulingState> {
   const store = createStore<SchedulingState>()((set) => ({
     cancelTarget: null,
     findTime: null,
-    setCancelTarget: (cancelTarget) => set({ cancelTarget }),
-    setFindTime: (findTime) => set({ findTime }),
+    setCancelTarget: (cancelTarget) => {
+      set({ cancelTarget });
+    },
+    setFindTime: (findTime) => {
+      set({ findTime });
+    },
   }));
   stores.set(ui, store);
   return store;

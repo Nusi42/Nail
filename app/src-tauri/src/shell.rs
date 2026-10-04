@@ -38,6 +38,14 @@ pub struct ShellState {
     pub mapi: Option<MapiServer>,
 }
 
+impl std::fmt::Debug for ShellState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShellState")
+            .field("quitting", &self.quitting)
+            .finish_non_exhaustive()
+    }
+}
+
 impl ShellState {
     /// Whether closing the main window should hide it instead.
     pub fn hides_on_close(&self) -> bool {
@@ -135,9 +143,9 @@ pub fn desktop_host<R: Runtime>(
 /// Shows, restores and focuses the main window.
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        drop(window.show());
+        drop(window.unminimize());
+        drop(window.set_focus());
     }
 }
 
@@ -145,9 +153,9 @@ pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
 /// whether to bring the window up (not for a second `--autostart` without
 /// targets, e.g. the Run key while Nail already runs).
 pub fn second_start(argv: &[String]) -> (Vec<LaunchRequest>, bool) {
-    let args = AppArgs::from_process_args(argv.iter().skip(1).cloned().collect());
-    let requests = args.launch_requests();
-    let show = !args.autostart || !requests.is_empty();
+    let app_args = AppArgs::from_process_args(argv.iter().skip(1).cloned().collect());
+    let requests = app_args.launch_requests();
+    let show = !app_args.autostart || !requests.is_empty();
     (requests, show)
 }
 

@@ -20,7 +20,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             Request::SetUiState { key, value } => match config.set_ui_state(&key, value.clone()) {
                 Ok((state, changed)) => {
                     if changed {
-                        let _ = events.send(Event::UiStateChanged { key, value });
+                        drop(events.send(Event::UiStateChanged { key, value }));
                     }
                     state
                 }

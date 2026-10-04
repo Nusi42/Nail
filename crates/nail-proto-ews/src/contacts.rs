@@ -7,6 +7,8 @@
 //! kinds map onto those keys; numbers beyond the free keys of a kind are
 //! dropped. One web page is kept (`BusinessHomePage`).
 
+use std::fmt::Write as _;
+
 use nail_api::exchange::pim::{
     ExchangeContact, ExchangeEmail, ExchangePhone, ExchangePostalAddress,
 };
@@ -213,42 +215,50 @@ pub fn contact_create_xml(contact: &ExchangeContact) -> String {
         categories_xml(&contact.categories)
     };
     if contact.is_group {
-        let members: String = contact
-            .members
-            .iter()
-            .map(|m| {
-                let name = m
-                    .name
-                    .as_deref()
-                    .map(|n| el("t:Name", n))
-                    .unwrap_or_default();
-                format!(
-                    "<t:Member><t:Mailbox>{name}{}</t:Mailbox></t:Member>",
-                    el("t:EmailAddress", &m.address)
-                )
-            })
-            .collect();
+        let members: String = contact.members.iter().fold(String::new(), |mut out, m| {
+            let name = m
+                .name
+                .as_deref()
+                .map(|n| el("t:Name", n))
+                .unwrap_or_default();
+            let _ = write!(
+                out,
+                "<t:Member><t:Mailbox>{name}{}</t:Mailbox></t:Member>",
+                el("t:EmailAddress", &m.address)
+            );
+            out
+        });
         return format!(
             "<t:DistributionList>{notes}{categories}{}{}<t:Members>{members}</t:Members></t:DistributionList>",
             el("t:FileAs", &contact.display_name),
             el("t:DisplayName", &contact.display_name)
         );
     }
-    let emails: String = contact
-        .emails
-        .iter()
-        .zip(EMAIL_KEYS)
-        .map(|(e, key)| format!(r#"<t:Entry Key="{key}">{}</t:Entry>"#, escape(&e.address)))
-        .collect();
+    let emails: String =
+        contact
+            .emails
+            .iter()
+            .zip(EMAIL_KEYS)
+            .fold(String::new(), |mut out, (e, key)| {
+                let _ = write!(
+                    out,
+                    r#"<t:Entry Key="{key}">{}</t:Entry>"#,
+                    escape(&e.address)
+                );
+                out
+            });
     let addresses: String = contact
         .addresses
         .iter()
         .filter_map(|a| address_key(&a.kind).map(|key| address_entry(a, key)))
         .collect();
-    let phones: String = phone_entries(contact)
-        .into_iter()
-        .map(|(key, number)| format!(r#"<t:Entry Key="{key}">{}</t:Entry>"#, escape(&number)))
-        .collect();
+    let phones: String =
+        phone_entries(contact)
+            .into_iter()
+            .fold(String::new(), |mut out, (key, number)| {
+                let _ = write!(out, r#"<t:Entry Key="{key}">{}</t:Entry>"#, escape(&number));
+                out
+            });
     let wrap = |tag: &str, inner: String| {
         if inner.is_empty() {
             String::new()
@@ -321,16 +331,14 @@ pub fn contact_updates(contact: &ExchangeContact) -> Vec<Update> {
         ),
     ];
     if contact.is_group {
-        let members: String = contact
-            .members
-            .iter()
-            .map(|m| {
-                format!(
-                    "<t:Member><t:Mailbox>{}</t:Mailbox></t:Member>",
-                    el("t:EmailAddress", &m.address)
-                )
-            })
-            .collect();
+        let members: String = contact.members.iter().fold(String::new(), |mut out, m| {
+            let _ = write!(
+                out,
+                "<t:Member><t:Mailbox>{}</t:Mailbox></t:Member>",
+                el("t:EmailAddress", &m.address)
+            );
+            out
+        });
         out.push(Update::Set(
             Field::Uri("distributionlist:Members"),
             format!("<t:Members>{members}</t:Members>"),

@@ -31,7 +31,7 @@
 //!   (`CategoryList` user configuration on the calendar).
 //! * [`directory`] — `GetRoomLists`, `GetRooms`, `GetUserAvailability`,
 //!   `ResolveNames`, `GetDelegate`.
-//! * `testing` (feature) — [`testing::MockEwsServer`] on 127.0.0.1.
+//! * `testing` (feature) — `testing::MockEwsServer` on 127.0.0.1.
 //!
 //! Every socket the tests open binds 127.0.0.1 (ADR 0057).
 

@@ -130,7 +130,7 @@ export function NumberField({
   value: number;
   min: number;
   max: number;
-  onChange(value: number): void;
+  onChange: (value: number) => void;
 }) {
   const [text, setText] = useState(String(value));
   const [last, setLast] = useState(value);
@@ -154,7 +154,9 @@ export function NumberField({
           onChange(Math.min(max, Math.max(min, parsed)));
         }
       }}
-      onBlur={() => setText(String(value))}
+      onBlur={() => {
+        setText(String(value));
+      }}
     />
   );
 }

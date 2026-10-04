@@ -40,11 +40,11 @@ export const MERGED_ROLES: readonly FolderRole[] = [
 /** What the mock core needs from its transport. */
 export interface MockCore {
   data: MockData;
-  emit(event: NailEvent): void;
+  emit: (event: NailEvent) => void;
   /** Runs `fn` after the configured work delay (asynchronous core work). */
-  later(fn: () => void, ms?: number): void;
+  later: (fn: () => void, ms?: number) => void;
   /** A fresh id with the given prefix. */
-  nextId(prefix: string): string;
+  nextId: (prefix: string) => string;
 }
 
 export function errorResponse(
@@ -150,7 +150,7 @@ export function virtualFolders(d: MockData, va: VirtualAccountConfig): VirtualFo
       .map((s) => memberFolders.find((f) => f.account_id === s.account_id && f.path === s.path))
       .filter((f): f is Folder => f !== undefined)
       .map((f) => f.id);
-    make(`${va.id}/map-${index}`, mapping.name, "other", null, sources);
+    make(`${va.id}/map-${String(index)}`, mapping.name, "other", null, sources);
   });
   // Everything else under a per-account subtree, so nothing is hidden.
   for (const accountId of va.members) {
@@ -230,7 +230,7 @@ export function folderMessages(d: MockData, folderId: FolderId): MessageSummary[
 
 export function findMessages(d: MockData, ids: readonly MessageId[]): MessageSummary[] | null {
   const found = ids.map((id) => d.messages.find((m) => m.id === id));
-  return found.every((m) => m !== undefined) ? (found as MessageSummary[]) : null;
+  return found.every((m) => m !== undefined) ? found : null;
 }
 
 /**
@@ -245,10 +245,10 @@ export function queue(
 ): Response {
   const folders = apply();
   const accounts = [...new Set(targets.map((m) => m.account_id))];
-  const opIds = accounts.map(() => core.nextId("op-"));
+  const ops = accounts.map((accountId) => ({ accountId, opId: core.nextId("op-") }));
   core.emit({ type: "MailChanged", folder_ids: folders });
-  accounts.forEach((accountId, index) => replay(core, opIds[index] as string, accountId));
-  return { type: "Queued", op_ids: opIds };
+  for (const { accountId, opId } of ops) replay(core, opId, accountId);
+  return { type: "Queued", op_ids: ops.map((op) => op.opId) };
 }
 
 /** `RetryOp`: a failed write is queued and replayed again. */
@@ -257,7 +257,9 @@ export function retryOp(core: MockCore, opId: string): Response {
   if (accountId === undefined) return errorResponse("conflict", `operation ${opId} has not failed`);
   core.data.failedOps.delete(opId);
   const base = { op_id: opId, account_id: accountId, error: null, message: null };
-  queueMicrotask(() => core.emit({ type: "OpStatus", status: { ...base, state: "pending" } }));
+  queueMicrotask(() => {
+    core.emit({ type: "OpStatus", status: { ...base, state: "pending" } });
+  });
   replay(core, opId, accountId);
   return { type: "Queued", op_ids: [opId] };
 }
@@ -315,19 +317,20 @@ export function moveMessages(core: MockCore, ids: MessageId[], target: MoveTarge
   const d = core.data;
   const targets = findMessages(d, ids);
   if (!targets) return errorResponse("not_found", "message not found");
-  const destinations = targets.map((m) => targetFolder(d, m, target));
-  if (destinations.some((f) => f === undefined)) {
-    return errorResponse("not_found", "target folder not found");
+  const moves: { message: MessageSummary; to: Folder }[] = [];
+  for (const message of targets) {
+    const to = targetFolder(d, message, target);
+    if (to === undefined) return errorResponse("not_found", "target folder not found");
+    moves.push({ message, to });
   }
   return queue(core, targets, () => {
     const changed = new Set<FolderId>();
-    targets.forEach((m, index) => {
-      const to = destinations[index] as Folder;
-      changed.add(m.folder_id);
+    for (const { message, to } of moves) {
+      changed.add(message.folder_id);
       changed.add(to.id);
-      m.folder_id = to.id;
-      m.account_id = to.account_id;
-    });
+      message.folder_id = to.id;
+      message.account_id = to.account_id;
+    }
     return [...changed];
   });
 }
@@ -361,7 +364,8 @@ const threadKey = (m: MessageSummary) => m.thread_id ?? `single-${m.id}`;
 
 function summarize(id: string, messages: MessageSummary[]): ThreadSummary {
   const sorted = [...messages].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
-  const latest = sorted[sorted.length - 1] as MessageSummary;
+  const latest = sorted.at(-1);
+  if (latest === undefined) throw new Error(`thread ${id} has no messages`);
   const participants = new Map<string, MessageSummary["from"]>();
   for (const m of sorted) if (m.from) participants.set(m.from.email, m.from);
   return {

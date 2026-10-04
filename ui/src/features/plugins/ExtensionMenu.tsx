@@ -18,7 +18,7 @@ interface Props {
   labelArgs?: Record<string, string | number>;
   items: readonly Offer[];
   disabled?: boolean;
-  onPick(item: Offer): void;
+  onPick: (item: Offer) => void;
 }
 
 /** A labelled menu of plug-in extensions. */
@@ -72,20 +72,33 @@ export function ExtensionMenu({ kind, labelId, labelArgs, items, disabled, onPic
       entries[(to + entries.length) % entries.length]?.focus();
     };
     switch (event.key) {
-      case "ArrowDown":
-        return move(index + 1);
-      case "ArrowUp":
-        return move(index - 1);
-      case "Home":
-        return move(0);
-      case "End":
-        return move(entries.length - 1);
+      case "ArrowDown": {
+        move(index + 1);
+        return;
+      }
+      case "ArrowUp": {
+        move(index - 1);
+        return;
+      }
+      case "Home": {
+        move(0);
+        return;
+      }
+      case "End": {
+        move(entries.length - 1);
+        return;
+      }
       case "Escape":
         event.preventDefault();
         event.stopPropagation();
-        return close(true);
-      case "Tab":
-        return close(false);
+        {
+          close(true);
+          return;
+        }
+      case "Tab": {
+        close(false);
+        return;
+      }
     }
   };
 
@@ -100,7 +113,10 @@ export function ExtensionMenu({ kind, labelId, labelArgs, items, disabled, onPic
         aria-expanded={open}
         aria-controls={open ? `${id}-menu` : undefined}
         disabled={disabled}
-        onClick={() => (open ? setOpen(false) : show("first"))}
+        onClick={() => {
+          if (open) setOpen(false);
+          else show("first");
+        }}
         onKeyDown={onButtonKey}
       >
         {t(labelId, labelArgs)}

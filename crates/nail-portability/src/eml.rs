@@ -44,9 +44,10 @@ pub(crate) fn sorted_entries(dir: &Path) -> Result<Vec<(PathBuf, fs::FileType)>>
 }
 
 fn display_name(path: &Path) -> String {
-    path.file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 /// The folders of an `.eml` folder tree: the root (named after its
@@ -74,10 +75,7 @@ fn scan_dir(
         .iter()
         .filter(|(path, t)| t.is_file() && is_eml(path))
         .fold((0u64, 0u64), |(n, size), (path, _)| {
-            (
-                n + 1,
-                size + fs::metadata(path).map(|m| m.len()).unwrap_or(0),
-            )
+            (n + 1, size + fs::metadata(path).map_or(0, |m| m.len()))
         });
     let (folder, renamed) = source_folder(segments);
     out.push(MailFolderSource {
@@ -122,7 +120,7 @@ pub fn read_dir(
             index: Some(index),
             ..ItemRef::default()
         };
-        let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let size = fs::metadata(&path).map_or(0, |m| m.len());
         if size > MAX_IMPORT_MESSAGE_BYTES {
             ctx.advance(0, size);
             visit(
@@ -150,6 +148,7 @@ pub fn read_dir(
 }
 
 /// Writes messages as `.eml` files into a directory: `00001 Subject.eml`.
+#[derive(Debug)]
 pub struct EmlWriter {
     dir: PathBuf,
     next: u64,

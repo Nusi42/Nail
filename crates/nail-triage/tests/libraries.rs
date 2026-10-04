@@ -1,4 +1,5 @@
 //! Smoke tests of the libraries WP52 builds on (WP50, ADR 0043).
+#![cfg(test)]
 
 use chrono::{Datelike, NaiveDate, NaiveTime, Timelike};
 use unicode_segmentation::UnicodeSegmentation;

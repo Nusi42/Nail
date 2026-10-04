@@ -39,7 +39,9 @@ beforeEach(() => {
   window.print = print as unknown as typeof window.print;
 });
 afterEach(() => {
-  act(() => closePrintView());
+  act(() => {
+    closePrintView();
+  });
   delete document.documentElement.dataset.nailMode;
 });
 
@@ -113,11 +115,15 @@ describe("printing", () => {
       target: { type: "message" },
       options: { page_size: "letter", headers: "full" },
     });
-    await waitFor(() => expect(print).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(print).toHaveBeenCalled();
+    });
     expect(env.transport.requests.some((r) => r.type === "PrintViewReady")).toBe(true);
     // The print dialog closed; afterprint closed the view again.
     expect(env.store.getState().windows).not.toContain(PRINT_DIALOG);
-    await waitFor(() => expect(jobIdOfHash(window.location.hash)).toBeNull());
+    await waitFor(() => {
+      expect(jobIdOfHash(window.location.hash)).toBeNull();
+    });
   });
 
   it("shows the print view with the print mode while it is open", async () => {
@@ -155,7 +161,9 @@ describe("printing", () => {
     });
     expect(result.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
     await userEvent.setup().click(within(view).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(screen.queryByRole("document")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("document")).toBeNull();
+    });
     expect(document.documentElement.dataset.nailMode).toBe(before);
     expect(container).toBeTruthy();
   });
@@ -170,7 +178,9 @@ describe("printing", () => {
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
     const view = await screen.findByRole("document", { name: "Print preview" });
     expect(view).toHaveAttribute("data-target", "thread");
-    await waitFor(() => expect(print).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(print).toHaveBeenCalled();
+    });
     expect(within(view).getAllByRole("article").length).toBeGreaterThan(0);
   });
 
@@ -239,7 +249,9 @@ describe("printing", () => {
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
     const view = await screen.findByRole("document", { name: "Print preview" });
     expect(view).toHaveAttribute("data-target", "agenda");
-    await waitFor(() => expect(print).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(print).toHaveBeenCalled();
+    });
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "ListEventInstances" }),
     );
@@ -250,7 +262,9 @@ describe("printing", () => {
     const env = createEnv();
     const user = userEvent.setup();
     render(env, [PRINT_MESSAGE_ACTION]);
-    act(() => env.store.getState().openWindow(PRINT_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(PRINT_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Print" });
     expect(within(dialog).getByText(/Select a message or an event first/)).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "Print an agenda instead" }));

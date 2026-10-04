@@ -1,6 +1,6 @@
 //! [`Discoverer`]: runs every source for an address and ranks the results.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use nail_api::accounts::{
@@ -17,6 +17,14 @@ use crate::system_dns::SystemDns;
 
 /// Mozilla's ISP database.
 pub const ISPDB_BASE: &str = "https://autoconfig.thunderbird.net/v1.1/";
+
+/// [`ISPDB_BASE`], parsed once.
+#[expect(
+    clippy::expect_used,
+    reason = "ISPDB_BASE is a constant, valid URL (checked by the `ispdb_base_is_a_url` test)"
+)]
+static ISPDB_URL: LazyLock<Url> =
+    LazyLock::new(|| Url::parse(ISPDB_BASE).expect("ISPDB_BASE is a valid URL"));
 
 /// Why discovery could not run.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -66,7 +74,7 @@ impl Discoverer {
             http,
             dns,
             probe,
-            ispdb_base: Url::parse(ISPDB_BASE).expect("constant URL"),
+            ispdb_base: ISPDB_URL.clone(),
             timeout: Duration::from_secs(10),
             guess: true,
         }
@@ -114,12 +122,11 @@ impl Discoverer {
         source: &str,
         fut: impl Future<Output = Vec<DiscoveredAccount>>,
     ) -> Vec<DiscoveredAccount> {
-        match tokio::time::timeout(self.timeout, fut).await {
-            Ok(found) => found,
-            Err(_) => {
-                tracing::debug!(source, "discovery source timed out");
-                Vec::new()
-            }
+        if let Ok(found) = tokio::time::timeout(self.timeout, fut).await {
+            found
+        } else {
+            tracing::debug!(source, "discovery source timed out");
+            Vec::new()
         }
     }
 
@@ -679,14 +686,14 @@ pub async fn discover(
 const GOOGLE_DOMAINS: [&str; 2] = ["gmail.com", "googlemail.com"];
 
 /// Whether `domain` is Gmail's own.
-pub fn is_google_domain(domain: &str) -> bool {
+pub(crate) fn is_google_domain(domain: &str) -> bool {
     let domain = domain.trim_end_matches('.').to_ascii_lowercase();
     GOOGLE_DOMAINS.contains(&domain.as_str())
 }
 
 /// Whether `host` is one of Google's mail hosts (`imap.gmail.com`,
 /// `aspmx.l.google.com`, …).
-pub fn is_google_host(host: &str) -> bool {
+pub(crate) fn is_google_host(host: &str) -> bool {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
     ["gmail.com", "googlemail.com", "google.com"]
         .iter()
@@ -695,7 +702,7 @@ pub fn is_google_host(host: &str) -> bool {
 
 /// The Gmail API proposal for `email` (OAuth2 with the built-in `google`
 /// provider; no SMTP: Gmail sends through the API).
-pub fn gmail_candidate(email: &str) -> DiscoveredAccount {
+pub(crate) fn gmail_candidate(email: &str) -> DiscoveredAccount {
     DiscoveredAccount {
         source: DiscoverySource::Provider,
         incoming: IncomingServer::Gmail {
@@ -746,6 +753,11 @@ mod tests {
             provider_name: None,
             warnings: Vec::new(),
         }
+    }
+
+    #[test]
+    fn ispdb_base_is_a_url() {
+        assert_eq!(ISPDB_URL.as_str(), ISPDB_BASE);
     }
 
     #[test]

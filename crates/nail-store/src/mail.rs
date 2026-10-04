@@ -524,7 +524,7 @@ pub(crate) fn upsert_message_in_tx(
 
     // One cached statement writes the row with its subject key and, with
     // `meta`, its threading headers: the sync stores every message through
-    // here, and separate UPDATEs (each preparing its SQL) were a measurable
+    // here, and separate UPDATE statements (each preparing its SQL) were a measurable
     // share of a sync (post-M4c).
     let subject = crate::thread::subject::normalize_subject(&s.subject);
     let subject_kind = subject.kind.to_sql();
@@ -567,13 +567,8 @@ pub(crate) fn upsert_message_in_tx(
             let message_id = meta.message_id.as_deref().and_then(normalize_msgid);
             let remote_thread = meta.remote_thread_id.as_deref().filter(|t| !t.is_empty());
             let mut all: Vec<&dyn rusqlite::ToSql> = base.to_vec();
-            all.extend([
-                &message_id as &dyn rusqlite::ToSql,
-                &in_reply_to,
-                &references,
-                &size,
-                &remote_thread,
-            ]);
+            let message_id: &dyn rusqlite::ToSql = &message_id;
+            all.extend([message_id, &in_reply_to, &references, &size, &remote_thread]);
             tx.prepare_cached(UPSERT_MESSAGE_WITH_META_SQL)?
                 .execute(all.as_slice())?
         }
@@ -776,7 +771,7 @@ impl Store {
                     Ok(FolderSyncState {
                         uidvalidity: row.get(0)?,
                         uidnext: row.get(1)?,
-                        highestmodseq: row.get::<_, Option<i64>>(2)?.map(|m| m.cast_unsigned()),
+                        highestmodseq: row.get::<_, Option<i64>>(2)?.map(i64::cast_unsigned),
                     })
                 },
             )
@@ -1259,10 +1254,10 @@ impl Store {
     /// their UID cleared: their UIDs are stale, and the next sync adopts
     /// them again by Message-ID.
     pub fn clear_folder(&self, folder: &FolderId) -> Result<usize> {
+        const WAITING: &str = "SELECT message_id FROM op_queue
+            WHERE message_id IS NOT NULL AND state IN ('pending', 'in_flight')";
         self.with_tx(|tx| {
             folder_account_in_tx(tx, folder)?;
-            const WAITING: &str = "SELECT message_id FROM op_queue
-                WHERE message_id IS NOT NULL AND state IN ('pending', 'in_flight')";
             tx.execute(
                 &format!("UPDATE messages SET uid = NULL WHERE folder_id = ?1 AND id IN ({WAITING})"),
                 [folder.as_str()],

@@ -33,6 +33,8 @@ import type {
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { normalizePairingCode, settingsIssues } from "./model";
+import { charCount } from "../../text/chars";
+import { nonEmpty } from "../../text/empty";
 
 /** The requests this feature answers. */
 export const REMOTE_REQUESTS = [
@@ -209,7 +211,7 @@ export function mockStatus(s: RemoteMockState): RemoteUiStatus {
       ? [s.settings.host_name ?? "nail-desktop.local", "192.168.1.20"]
       : [s.settings.host_name ?? s.settings.bind_address];
   const urls = [...new Set(hosts)].map(
-    (h) => `${scheme}://${h.includes(":") ? `[${h}]` : h}:${port}/`,
+    (h) => `${scheme}://${h.includes(":") ? `[${h}]` : h}:${String(port)}/`,
   );
   return {
     ...stoppedStatus(active),
@@ -406,7 +408,9 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
   if (s.unsupported.includes(request.type)) {
     return errorResponse("unsupported", `${request.type} is not available yet (remote UI, M2b)`);
   }
-  const changed = () => core.emit({ type: "RemoteAccessChanged" });
+  const changed = () => {
+    core.emit({ type: "RemoteAccessChanged" });
+  };
   const user = (id: string) => s.users.find((u) => u.id === id);
   const notFoundUser = (id: string) => errorResponse("not_found", `remote user ${id}`);
   switch (request.type) {
@@ -495,7 +499,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
         forget(s.secrets.passwords, found.id);
         found.has_password = false;
       } else {
-        if ([...request.password].length < MOCK_MIN_PASSWORD) {
+        if (charCount(request.password) < MOCK_MIN_PASSWORD) {
           return errorResponse("invalid_request", "password-too-short");
         }
         s.secrets.passwords[found.id] = request.password;
@@ -654,7 +658,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       const pairing: PairingCode = {
         id: core.nextId("pair-"),
         user_id: found.id,
-        device_name: request.device_name?.trim() || null,
+        device_name: nonEmpty(request.device_name?.trim()) ?? null,
         grant:
           request.grant === null
             ? structuredClone(found.grant)

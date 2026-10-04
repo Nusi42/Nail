@@ -137,7 +137,7 @@ test("the first run, About Nail and the desktop settings", async () => {
 });
 
 test("the MAPI test harness sends a file and the composer opens with it attached", async () => {
-  const pipe = `\\\\.\\pipe\\nail-mapi-e2e-${process.pid}-${Date.now()}`;
+  const pipe = `\\\\.\\pipe\\nail-mapi-e2e-${String(process.pid)}-${String(Date.now())}`;
   const { page } = await launch({
     args: ["--config-dir", configWithIdentity()],
     env: { NAIL_MAPI_PIPE: pipe },
@@ -253,7 +253,7 @@ test("the updater finds a newer version on a loopback server and installs it on 
 test("an MSI installation (DISABLEUPDATES=1) hides the updater", async () => {
   // The facts the MSI writes under HKLM\Software\Nail\Install, staged below
   // a throw-away HKCU key the shell reads instead of the real hives.
-  const root = `Software\\NailTests\\e2e-msi-${process.pid}-${Date.now()}`;
+  const root = `Software\\NailTests\\e2e-msi-${String(process.pid)}-${String(Date.now())}`;
   const install = `HKCU\\${root}\\HKLM\\Software\\Nail\\Install`;
   const reg = (args: string[]) => execFileSync("reg", args, { stdio: "ignore" });
   const exeDir = path.dirname(desktopBinary());
@@ -334,7 +334,7 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
     env: { ...process.env, NAIL_LOG: "error", NAIL_LOCALE: "en" },
   });
   const lines: string[] = [];
-  createInterface({ input: child.stdout! }).on("line", (line) => lines.push(line));
+  createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
   try {
     await expect
       .poll(() => lines.some((l) => l.includes("Loaded Desktop hello 1.0.0")), {

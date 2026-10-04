@@ -303,7 +303,7 @@ impl Service {
                     }
                 }
             }
-            let _ = client.logout().await;
+            drop(client.logout().await);
             if failed {
                 info.failed.push(account.clone());
             }

@@ -244,7 +244,7 @@ ${p("pim-settings")} { display: grid; gap: ${T.lg}; }`;
 
 const avatars = AVATAR_COLORS.map(
   (color, i) =>
-    `[data-color="${i}"]${p("contact-list.avatar")}, [data-color="${i}"]${p("contact-card.avatar")} { background-color: var(--nail-color-avatar-${i + 1}, ${color}); }`,
+    `[data-color="${String(i)}"]${p("contact-list.avatar")}, [data-color="${String(i)}"]${p("contact-card.avatar")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
 ).join("\n");
 
 const CONTACTS = `${ps("contact-list.avatar", "contact-card.avatar")} {

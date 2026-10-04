@@ -43,6 +43,7 @@ import { isMine, plausibleEmail, type Span } from "./model";
 import { useScheduling, useSchedulingStore } from "./store";
 import { useMyAddresses } from "./queries";
 import { fromAbsolute } from "@internationalized/date";
+import { nonEmpty } from "../../text/empty";
 
 /** Kinds the picker offers (`CUTYPE`). */
 export const PICKER_KINDS = [
@@ -53,11 +54,11 @@ export const PICKER_KINDS = [
 
 export interface AttendeePickerProps {
   value: Attendee[];
-  onChange(value: Attendee[]): void;
+  onChange: (value: Attendee[]) => void;
   start: PimTime;
   end: PimTime;
   /** The meeting moved to a suggested slot (omit to hide suggestions). */
-  onTimeChange?(start: PimTime, end: PimTime): void;
+  onTimeChange?: (start: PimTime, end: PimTime) => void;
   /** The organizer's address, shown first in the timeline. */
   organizer?: string | null;
   /** The event being edited (its own time is not busy). */
@@ -120,8 +121,12 @@ export function AttendeePicker({
     setDay(startDay);
   }
   useEffect(() => {
-    const timer = setTimeout(() => setQuery(email.trim().length >= 2 ? email.trim() : ""), 150);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setQuery(email.trim().length >= 2 ? email.trim() : "");
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [email]);
   const matches = useContactSearch(query, null);
 
@@ -133,7 +138,7 @@ export function AttendeePicker({
     }
     setInvalid(false);
     if (!value.some((a) => a.email.toLowerCase() === clean.toLowerCase())) {
-      onChange([...value, newAttendee(clean, display?.trim() || null, kind)]);
+      onChange([...value, newAttendee(clean, nonEmpty(display?.trim()) ?? null, kind)]);
     }
     setEmail("");
   };
@@ -186,20 +191,20 @@ export function AttendeePicker({
             <span data-part="scheduling.attendee.status">
               {t(`pim-partstat-${attendee.status}`)}
             </span>
-            <label data-part="form.label" htmlFor={`${id}-role-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-role-${String(index)}`}>
               {t("scheduling-attendee-role", { email: attendee.email })}
             </label>
             <select
-              id={`${id}-role-${index}`}
+              id={`${id}-role-${String(index)}`}
               data-part="form.select"
               value={attendee.role}
-              onChange={(e) =>
+              onChange={(e) => {
                 onChange(
                   value.map((a, i) =>
                     i === index ? { ...a, role: e.target.value as AttendeeRole } : a,
                   ),
-                )
-              }
+                );
+              }}
             >
               {ATTENDEE_ROLES.map((role) => (
                 <option key={role} value={role}>
@@ -212,7 +217,9 @@ export function AttendeePicker({
               data-part="form.button"
               data-action="remove"
               aria-label={t("scheduling-attendee-remove", { email: attendee.email })}
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
+              onClick={() => {
+                onChange(value.filter((_, i) => i !== index));
+              }}
             >
               {t("scheduling-remove")}
             </button>
@@ -252,7 +259,9 @@ export function AttendeePicker({
             id={`${id}-kind`}
             data-part="form.select"
             value={kind}
-            onChange={(e) => setKind(e.target.value as AttendeeKind)}
+            onChange={(e) => {
+              setKind(e.target.value as AttendeeKind);
+            }}
           >
             {PICKER_KINDS.map((k) => (
               <option key={k} value={k}>
@@ -265,7 +274,9 @@ export function AttendeePicker({
           type="button"
           data-part="form.button"
           data-action="add-attendee"
-          onClick={() => add(email, null)}
+          onClick={() => {
+            add(email, null);
+          }}
         >
           {t("scheduling-attendee-add")}
         </button>
@@ -279,7 +290,13 @@ export function AttendeePicker({
         <ul data-part="scheduling.suggestions" aria-label={t("scheduling-attendee-suggestions")}>
           {suggestions.map((s) => (
             <li key={`${s.id}-${s.address}`} data-part="scheduling.suggestion">
-              <button type="button" data-part="form.button" onClick={() => add(s.address, s.name)}>
+              <button
+                type="button"
+                data-part="form.button"
+                onClick={() => {
+                  add(s.address, s.name);
+                }}
+              >
                 {t("invitation-person", { name: s.name, email: s.address })}
               </button>
             </li>
@@ -300,11 +317,12 @@ export function AttendeePicker({
         ignoreEventId={eventId}
         {...(onTimeChange && !allDay
           ? {
-              onPick: (slot: Span) =>
+              onPick: (slot: Span) => {
                 onTimeChange(
                   sameKindAs(start, fromAbsolute(slot.start, tz)),
                   sameKindAs(end, fromAbsolute(slot.end, tz)),
-                ),
+                );
+              },
             }
           : {})}
       />
@@ -356,7 +374,7 @@ export function FindTime({
   hourEnd?: number | undefined;
   defaultDuration?: number;
   tz?: string;
-  onOpened?(): void;
+  onOpened?: () => void;
 }) {
   const t = useT();
   const id = useId();
@@ -397,7 +415,9 @@ export function FindTime({
           id={`${id}-duration`}
           data-part="form.select"
           value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
+          onChange={(e) => {
+            setDuration(Number(e.target.value));
+          }}
         >
           {DURATIONS.map((m) => (
             <option key={m} value={m}>
@@ -411,7 +431,9 @@ export function FindTime({
         onChange={setAttendees}
         start={start}
         end={end}
-        onTimeChange={(s) => setStart(s)}
+        onTimeChange={(s) => {
+          setStart(s);
+        }}
         organizer={me?.email ?? null}
         nodeKey={nodeKey}
         hourStart={hourStart}

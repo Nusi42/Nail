@@ -15,7 +15,16 @@ import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/** @type {unknown} */
 const manifest = JSON.parse(readFileSync(path.join(root, "manifest.json"), "utf8"));
+if (
+  typeof manifest !== "object" ||
+  manifest === null ||
+  !("main" in manifest) ||
+  typeof manifest.main !== "string"
+) {
+  throw new Error('manifest.json needs "main" (the bundle to build, e.g. dist/index.js)');
+}
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {

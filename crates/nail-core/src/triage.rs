@@ -100,7 +100,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             Response::Snoozed { messages: records }
         }
         Request::GetNotificationSettings => Response::NotificationSettings {
-            settings: service.store().call(|s| s.notification_settings()).await?,
+            settings: service
+                .store()
+                .call(nail_store::Store::notification_settings)
+                .await?,
         },
         Request::UpdateNotificationSettings { settings } => {
             if let Some(issue) = settings.issues().first() {

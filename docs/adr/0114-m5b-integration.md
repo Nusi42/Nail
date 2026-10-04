@@ -145,7 +145,7 @@ view, 0112 settings page, 0113 calendar view.
 ## Consequences
 
 - The app looks like the proposal; e2e suites address views as regions
-  ("<View> view"), Settings sections through the page navigation, account
+  ("`<View>` view"), Settings sections through the page navigation, account
   folders through their pane sections (`e2e/support/views.ts`).
 - Users who keep an old layout see the offer once and can apply the new
   default later through **Customize → Apply a theme or layout** with the same

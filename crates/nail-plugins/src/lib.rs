@@ -135,7 +135,7 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(5));
 
         // The runtime stays usable after an interrupt.
-        deadline.set(Instant::now() + Duration::from_secs(60));
+        deadline.set(Instant::now() + Duration::from_mins(1));
         let two: i32 = ctx.with(|ctx| ctx.eval("1 + 1").unwrap());
         assert_eq!(two, 2);
 

@@ -3,6 +3,7 @@
 //! guides) must be valid. Complete files are parsed as they are; fragments
 //! are wrapped in a file that extends the default.
 //! Examples containing `…` are outlines and are skipped.
+#![cfg(test)]
 
 use std::path::PathBuf;
 
@@ -49,8 +50,6 @@ fn theme_reference_examples_are_valid() {
 
 #[test]
 fn layout_reference_examples_are_valid() {
-    let blocks = kdl_blocks("layout-reference.md");
-    assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
     const SECTIONS: &[&str] = &[
         "breakpoint",
         "window",
@@ -63,6 +62,8 @@ fn layout_reference_examples_are_valid() {
         "rail",
         "settings-page",
     ];
+    let blocks = kdl_blocks("layout-reference.md");
+    assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
     for block in blocks {
         let first = block.split_whitespace().next().unwrap_or_default();
         let text = if first == "layout" {

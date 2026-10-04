@@ -26,7 +26,14 @@ pub struct PollTimer {
     continue_now: bool,
     round_changes: bool,
     round_more: bool,
-    round_error: Option<Option<u32>>,
+    round_error: Option<RoundFailure>,
+}
+
+/// A failed delta call in the current round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RoundFailure {
+    /// The longest `Retry-After` (seconds) any failure of the round asked for.
+    retry_after: Option<u32>,
 }
 
 impl PollTimer {
@@ -55,8 +62,10 @@ impl PollTimer {
                 }
             }
             Err(err) => {
-                let previous = self.round_error.flatten();
-                self.round_error = Some(previous.max(err.retry_after_secs));
+                let previous = self.round_error.and_then(|f| f.retry_after);
+                self.round_error = Some(RoundFailure {
+                    retry_after: previous.max(err.retry_after_secs),
+                });
             }
         }
     }
@@ -69,9 +78,9 @@ impl PollTimer {
     /// Ends the round: decides the next delay from what it saw.
     pub fn end_round(&mut self) {
         self.continue_now = self.round_more;
-        if let Some(retry_after) = self.round_error {
+        if let Some(failure) = self.round_error {
             let mut err = EngineError::temporary(nail_api::ErrorCode::Network, "poll failed");
-            err.retry_after_secs = retry_after;
+            err.retry_after_secs = failure.retry_after;
             self.poll.failed(&err);
         } else if self.round_changes {
             self.poll.activity();
@@ -182,27 +191,27 @@ mod tests {
     use nail_api::ErrorCode;
     use nail_api::engine::SyncDelta;
 
-    fn delta(changes: usize, more: bool) -> Result<DeltaOutcome, EngineError> {
-        Ok(DeltaOutcome::Delta(SyncDelta {
+    fn delta(changes: usize, more: bool) -> DeltaOutcome {
+        DeltaOutcome::Delta(SyncDelta {
             cursor: "c".into(),
             removed: (0..changes).map(|i| format!("m{i}")).collect(),
             more,
             ..SyncDelta::default()
-        }))
+        })
     }
 
     #[test]
     fn rounds_drive_the_interval() {
         let mut timer = PollTimer::new(&ExchangeOptions::default());
         assert_eq!(timer.next_delay(), Duration::from_secs(30));
-        timer.observe(&delta(0, false));
+        timer.observe(&Ok(delta(0, false)));
         timer.end_round();
-        assert_eq!(timer.next_delay(), Duration::from_secs(60));
-        timer.observe(&delta(0, false));
-        timer.observe(&delta(2, false));
+        assert_eq!(timer.next_delay(), Duration::from_mins(1));
+        timer.observe(&Ok(delta(0, false)));
+        timer.observe(&Ok(delta(2, false)));
         timer.end_round();
         assert_eq!(timer.next_delay(), Duration::from_secs(30));
-        timer.observe(&delta(0, true));
+        timer.observe(&Ok(delta(0, true)));
         timer.end_round();
         assert_eq!(timer.next_delay(), Duration::ZERO);
         timer.observe(&Ok(DeltaOutcome::CursorExpired));
@@ -211,11 +220,11 @@ mod tests {
         timer.observe(&Err(EngineError::rate_limited("slow", 120)));
         timer.observe(&Err(EngineError::temporary(ErrorCode::Network, "down")));
         timer.end_round();
-        assert_eq!(timer.next_delay(), Duration::from_secs(120));
+        assert_eq!(timer.next_delay(), Duration::from_mins(2));
         timer.end_round();
         assert_eq!(
             timer.next_delay(),
-            Duration::from_secs(120),
+            Duration::from_mins(2),
             "backed off further"
         );
         timer.observe_changes(true);
@@ -224,7 +233,7 @@ mod tests {
         for _ in 0..10 {
             timer.end_round();
         }
-        assert_eq!(timer.next_delay(), Duration::from_secs(300));
+        assert_eq!(timer.next_delay(), Duration::from_mins(5));
         timer.user_activity();
         assert_eq!(timer.poll().next_delay_secs(), 30);
         let custom = ExchangeOptions {

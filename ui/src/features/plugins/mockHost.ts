@@ -45,30 +45,30 @@ export interface MockCommandCall {
 /** The API a mock plug-in's behaviour calls (permission-gated). */
 export interface MockPluginApi {
   readonly pluginId: string;
-  showDialog(spec: PluginDialogSpec, clientId: string | null): Promise<PluginDialogResult>;
-  notify(spec: PluginNotificationSpec, clientId: string | null): void;
-  storageGet(key: string): JsonValue | undefined;
-  storageSet(key: string, value: JsonValue): void;
-  storageKeys(): string[];
-  storageDelete(key: string): void;
-  log(level: "debug" | "info" | "warn" | "error", message: string): void;
+  showDialog: (spec: PluginDialogSpec, clientId: string | null) => Promise<PluginDialogResult>;
+  notify: (spec: PluginNotificationSpec, clientId: string | null) => void;
+  storageGet: (key: string) => JsonValue | undefined;
+  storageSet: (key: string, value: JsonValue) => void;
+  storageKeys: () => string[];
+  storageDelete: (key: string) => void;
+  log: (level: "debug" | "info" | "warn" | "error", message: string) => void;
   /** Re-renders a panel (`PluginPanelChanged`). */
-  setPanel(panel: string, tree: PluginUiNode[]): void;
+  setPanel: (panel: string, tree: PluginUiNode[]) => void;
   /** A message as the plug-in sees it (`mail.read`). */
-  message(id: string): PluginMessage | null;
+  message: (id: string) => PluginMessage | null;
 }
 
 /** How a mock plug-in behaves. */
 export interface MockPluginBehaviour {
   commands?: Record<string, (api: MockPluginApi, call: MockCommandCall) => Promise<void> | void>;
   panels?: Record<string, (api: MockPluginApi, context: UiContext) => PluginUiNode[]>;
-  onAction?(
+  onAction?: (
     api: MockPluginApi,
     target: PluginUiTarget,
     componentId: string,
     values: Record<string, JsonValue>,
     clientId: string | null,
-  ): Promise<void> | void;
+  ) => Promise<void> | void;
 }
 
 /** A package the mock host can install. */
@@ -82,7 +82,7 @@ export interface MockPackage {
 
 interface PendingDialog {
   pluginId: string;
-  resolve(result: PluginDialogResult): void;
+  resolve: (result: PluginDialogResult) => void;
 }
 
 export interface MockHost {
@@ -95,7 +95,7 @@ export interface MockHost {
   /** Open dialogs by id. */
   dialogs: Map<string, PendingDialog>;
   /** Stops a plug-in's runtime: its dialogs close (`PluginDialogClosed`). */
-  stopped(core: MockCore, pluginId: string, reason: PluginStopReason): void;
+  stopped: (core: MockCore, pluginId: string, reason: PluginStopReason) => void;
 }
 
 /** The key of a package source. */
@@ -352,9 +352,13 @@ function runPluginCode(core: MockCore, pluginId: string, work: () => Promise<voi
   }, 0);
 }
 
-function installed(core: MockCore, pkg: MockPackage, source: PluginPackageSource): PluginInfo {
+function installed(
+  core: MockCore,
+  pkg: MockPackage,
+  manifest: PluginManifest,
+  source: PluginPackageSource,
+): PluginInfo {
   const state = core.data.features.plugins;
-  const manifest = pkg.manifest as PluginManifest;
   const now = new Date().toISOString();
   const existing = state.plugins.find((p) => p.id === manifest.id);
   const info: PluginInfo = {
@@ -411,13 +415,14 @@ export function answerHost(core: MockCore, host: MockHost, request: HostRequest)
       if (!pkg.manifest || pkg.issues.length > 0) {
         return errorResponse("invalid_request", "the package has problems");
       }
-      const draft = { ...installed(core, pkg, source) };
+      const draft = { ...installed(core, pkg, pkg.manifest, source) };
       const problem = checkGrants(draft, request.grants);
       if (problem) {
         state.plugins = state.plugins.filter((p) => p.id !== draft.id);
         return errorResponse("invalid_request", problem);
       }
-      const plugin = find(draft.id) as PluginInfo;
+      const plugin = find(draft.id);
+      if (!plugin) return errorResponse("not_found", `plug-in ${draft.id} not installed`);
       plugin.grants = structuredClone(request.grants);
       plugin.enabled = request.type === "LoadDevPlugin" ? true : request.enable;
       plugin.state = stateOf(state, plugin);

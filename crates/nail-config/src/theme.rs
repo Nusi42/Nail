@@ -22,7 +22,7 @@ use crate::selector::{Selector, parse_selector};
 
 /// The shipped base theme (`defaults/theme.kdl`); every layout and theme
 /// chain ends there. Theme files may also extend a theme id (M5a, ADR 0102).
-pub const DEFAULT_BASE: &str = "default";
+pub(crate) const DEFAULT_BASE: &str = "default";
 
 /// Density setting of the `appearance` node (`density="compact"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
@@ -252,6 +252,7 @@ impl ThemeFile {
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
+    #[must_use]
     pub fn merge(mut self, overlay: ThemeFile) -> ThemeFile {
         self.name = overlay.name;
         self.extends = None;
@@ -1018,7 +1019,7 @@ impl ThemeFile {
             }
             index.insert(key, parts.len());
             parts.push(PartRule {
-                selector: sel.selector,
+                selector: sel.part,
                 states: sel.states,
                 conditions: sel.conditions,
                 ancestors: sel.ancestors,
@@ -1156,7 +1157,7 @@ impl From<&Selector> for SelectorKey {
         // Debug output is a faithful, deterministic encoding of the selector.
         Self(format!(
             "{:?}|{:?}|{:?}|{:?}",
-            sel.selector, sel.states, sel.conditions, sel.ancestors
+            sel.part, sel.states, sel.conditions, sel.ancestors
         ))
     }
 }

@@ -31,6 +31,7 @@ import { PluginNotifications } from "./PluginNotifications";
 import { pluginsStoreFor } from "./store";
 import { tick, wireEvents } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
+import { must } from "../../test/must";
 
 function setup(): Env {
   const env = createEnv();
@@ -40,7 +41,9 @@ function setup(): Env {
 }
 
 async function settle(env: Env) {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(() => tick());
 }
 
@@ -259,39 +262,39 @@ describe("composer extensions", () => {
     const { container } = renderWithProviders(<TestComposer draftId="d1" />, env);
     await settle(env);
     expect(screen.queryByRole("button", { name: "Plug-in actions" })).toBeNull();
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "ComposerEditRequested",
         draft_id: "other",
         client_id: null,
         by: { actor: { kind: "mcp-client", client_id: "mcp-1" }, name: "Claude Desktop" },
         edit: { op: "replace-all", text: "x" },
-      }),
-    );
+      });
+    });
     expect(pluginsStoreFor(env.store).getState().edits).toHaveLength(1);
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "ComposerEditRequested",
         draft_id: "d1",
         client_id: null,
         by: { actor: { kind: "mcp-client", client_id: "mcp-1" }, name: "Claude Desktop" },
         edit: { op: "replace-all", text: "Rewritten" },
-      }),
-    );
+      });
+    });
     await waitFor(() => expect(screen.getByTestId("text")).toHaveTextContent("Rewritten"));
     expect(within(container).getByRole("status")).toHaveTextContent(
       "AI agent “Claude Desktop” (MCP client) replaced the whole text.",
     );
     // Edits for another UI are not applied here.
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "ComposerEditRequested",
         draft_id: "d1",
         client_id: "another-ui",
         by: { actor: { kind: "plugin", plugin_id: "snippets" }, name: "Snippets" },
         edit: { op: "replace-all", text: "nope" },
-      }),
-    );
+      });
+    });
     await act(() => tick());
     expect(screen.getByTestId("text")).toHaveTextContent("Rewritten");
     stop();
@@ -463,7 +466,7 @@ describe("plug-in manager additions", () => {
     expect(within(morning).getByText("14, 1 failed")).toBeInTheDocument();
     const count = digest.querySelector<HTMLElement>('[data-job="count"]');
     expect(count).toHaveAttribute("data-state", "timeout");
-    expect(within(count as HTMLElement).getByText("message.received")).toBeInTheDocument();
+    expect(within(must(count)).getByText("message.received")).toBeInTheDocument();
     await user.click(within(morning).getByRole("button", { name: "Run “Morning digest” now" }));
     await settle(env);
     await waitFor(() => expect(within(morning).getByText("15, 1 failed")).toBeInTheDocument());

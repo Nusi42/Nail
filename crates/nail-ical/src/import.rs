@@ -172,12 +172,12 @@ BEGIN:VTODO\r\nUID:2\r\nSUMMARY:Two\r\nEND:VTODO\r\nBEGIN:VEVENT\r\nUID:3\r\nSUM
         let bad = read("hello", Some("x.vcf"));
         assert!(is_empty(&bad));
         assert_eq!(
-            fatal_issue(&bad).map(|i| i.message_id()),
+            fatal_issue(&bad).map(Issue::message_id),
             Some("vcard-not-vcard")
         );
         let bad = read("hello", None);
         assert_eq!(
-            fatal_issue(&bad).map(|i| i.message_id()),
+            fatal_issue(&bad).map(Issue::message_id),
             Some("ical-not-icalendar")
         );
     }

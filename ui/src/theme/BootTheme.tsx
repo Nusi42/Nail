@@ -5,25 +5,23 @@
  *
  * They use the shipped default theme, bundled at build time (the
  * `nail-api` reference fixture, which a `nail-config` test keeps equal to
- * `defaults/theme.kdl`) and compiled like any theme. It is a separate chunk
- * loaded right away; until it is there (a few milliseconds) the screen
- * stays empty rather than flashing unstyled content.
+ * `defaults/theme.kdl`) and compiled like any theme. It is imported
+ * statically, so the first screen is styled at once; the build puts it in
+ * its own `default-theme` chunk (vite.config.ts) that loads in parallel
+ * with the app and stays cached across app updates.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import defaultThemeJson from "../../../crates/nail-api/fixtures/default-theme.json";
 import type { ResolvedTheme, ThemeMode } from "../api/generated";
 import { normalizeTheme } from "../api/normalize";
 import { ThemeProvider } from "./ThemeProvider";
 
-let loaded: ResolvedTheme | null = null;
-let loading: Promise<ResolvedTheme> | null = null;
+let normalized: ResolvedTheme | null = null;
 
-/** Loads (once) and normalizes the bundled default theme. */
-export function loadBootTheme(): Promise<ResolvedTheme> {
-  loading ??= import("../../../crates/nail-api/fixtures/default-theme.json").then((m) => {
-    loaded = normalizeTheme(m.default);
-    return loaded;
-  });
-  return loading;
+/** The bundled default theme, normalized once. */
+export function bootTheme(): ResolvedTheme {
+  normalized ??= normalizeTheme(defaultThemeJson);
+  return normalized;
 }
 
 export interface BootThemeProps {
@@ -33,28 +31,8 @@ export interface BootThemeProps {
 }
 
 export function BootTheme({ modeOverride = null, children }: BootThemeProps) {
-  const [theme, setTheme] = useState<ResolvedTheme | null | "failed">(loaded);
-  useEffect(() => {
-    if (theme !== null) return;
-    let live = true;
-    loadBootTheme().then(
-      (t) => {
-        if (live) setTheme(t);
-      },
-      (error: unknown) => {
-        console.error("nail: cannot load the default theme", error);
-        if (live) setTheme("failed");
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [theme]);
-  if (theme === null) return null;
-  // Without a theme the page still works, just unstyled.
-  if (theme === "failed") return <>{children}</>;
   return (
-    <ThemeProvider theme={theme} modeOverride={modeOverride}>
+    <ThemeProvider theme={bootTheme()} modeOverride={modeOverride}>
       {children}
     </ThemeProvider>
   );

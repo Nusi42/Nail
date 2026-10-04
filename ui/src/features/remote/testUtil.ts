@@ -83,7 +83,7 @@ export async function pairedBrowser(
 
 /** A fake WebAuthn: answers with `credentialId`, or throws `error`. */
 export function fakePasskeys(
-  options: { supported?: boolean; credentialId?: string; error?: unknown } = {},
+  options: { supported?: boolean; credentialId?: string; error?: Error } = {},
 ): PasskeyApi & { calls: unknown[] } {
   const calls: unknown[] = [];
   const answer = (opts: unknown) => {

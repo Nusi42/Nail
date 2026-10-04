@@ -68,12 +68,12 @@ export const VETO_TTL_MS = 10 * 60_000;
 /** What a simulated plug-in does at each extension point. */
 export interface ExtensionBehaviour {
   /** Open hook: banners and badges for a message. */
-  open?(message: { id: MessageId; subject: string; from: string | null }): {
+  open?: (message: { id: MessageId; subject: string; from: string | null }) => {
     banners?: PluginBannerSpec[];
     badges?: PluginBadgeSpec[];
   };
   /** Before-send hook: a veto with the plug-in's reason, or nothing. */
-  beforeSend?(draft: Draft): { veto?: { reason: string } } | undefined;
+  beforeSend?: (draft: Draft) => { veto?: { reason: string } } | undefined;
   /** Preview renderers by name. */
   previews?: Record<string, (attachment: AttachmentInfo, messageId: MessageId) => PluginPreview>;
   /** Composer / attachment / link actions by name. */
@@ -263,7 +263,7 @@ export function checkSendVeto(
   }
   if (vetoes.length === 0) return null;
   const state = core.data.features.plugins.extensions;
-  const vetoId = `veto-${state.nextVeto++}`;
+  const vetoId = `veto-${String(state.nextVeto++)}`;
   state.vetoes.set(vetoId, {
     draftId: request.draft_id,
     delaySecs: request.delay_secs,
@@ -359,7 +359,7 @@ function preview(
   if (!plugin || !parsed || !def)
     return errorResponse("not_found", `no renderer ${request.renderer}`);
   const attachment = core.data.bodies.get(request.message_id)?.attachments[request.index];
-  if (!attachment) return errorResponse("not_found", `no attachment ${request.index}`);
+  if (!attachment) return errorResponse("not_found", `no attachment ${String(request.index)}`);
   if (!running(core, plugin)) return errorResponse("unavailable", `${plugin.id} is not running`);
   if (!granted(plugin, "attachments", accountOfMessage(core, request.message_id))) {
     return errorResponse("forbidden", `${plugin.id} may not read attachments of this account`);
@@ -421,7 +421,9 @@ function runAction(
     const api = pluginApi(core, state.host, plugin);
     const target = structuredClone(request.target);
     // The plug-in takes the action; what it does arrives as events.
-    core.later(() => handler(api, target, request.client_id, core), 0);
+    core.later(() => {
+      handler(api, target, request.client_id, core);
+    }, 0);
   }
   activityOf(core, plugin.id).cpuMs += 10;
   return { type: "Done" };

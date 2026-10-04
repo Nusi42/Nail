@@ -18,6 +18,7 @@ import {
   composerSendBlock,
   loadComposerCrypto,
 } from "./composerStore";
+import { must } from "../../test/must";
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
@@ -47,7 +48,9 @@ function Harness({
       <input
         data-testid="recipients"
         value={recipients.join(",")}
-        onChange={(e) => setRecipients(e.target.value.split(",").filter(Boolean))}
+        onChange={(e) => {
+          setRecipients(e.target.value.split(",").filter(Boolean));
+        }}
       />
       <ComposerSecurity
         identityId={identityId}
@@ -79,10 +82,8 @@ describe("composer security", () => {
     const list = await within(section).findByRole("list", { name: "Recipient keys" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((r) => r.getAttribute("data-state"))).toEqual(["usable", "expired"]);
-    expect(
-      within(rows[0] as HTMLElement).getByText("Key available (Verified by you)"),
-    ).toBeInTheDocument();
-    expect(within(rows[1] as HTMLElement).getByText("Key expired")).toBeInTheDocument();
+    expect(within(must(rows[0])).getByText("Key available (Verified by you)")).toBeInTheDocument();
+    expect(within(must(rows[1])).getByText("Key expired")).toBeInTheDocument();
     expect(within(section).queryByRole("alert")).not.toBeInTheDocument();
 
     await user.click(within(section).getByRole("checkbox", { name: "Encrypt" }));
@@ -115,7 +116,9 @@ describe("composer security", () => {
     const user = userEvent.setup();
     const env = createEnv();
     renderWithProviders(<Harness initial={[]} />, env);
-    await waitFor(() => expect(requestsOf(env, "CheckRecipientKeys")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requestsOf(env, "CheckRecipientKeys")).toHaveLength(1);
+    });
     await user.type(screen.getByTestId("recipients"), "alan@bletchley.example");
     await screen.findByText("alan@bletchley.example");
     const checks = requestsOf(env, "CheckRecipientKeys");
@@ -203,7 +206,9 @@ describe("composer security", () => {
     const off = createEnv();
     off.transport.data.features.security.settings.key_lookup = "off";
     const { unmount } = renderWithProviders(<Harness initial={["liskov@mit.example"]} />, off);
-    await waitFor(() => expect(requestsOf(off, "CheckRecipientKeys").length).toBeGreaterThan(0));
+    await waitFor(() => {
+      expect(requestsOf(off, "CheckRecipientKeys").length).toBeGreaterThan(0);
+    });
     expect(requestsOf(off, "CheckRecipientKeys").every((r) => !r.lookup)).toBe(true);
     unmount();
   });
@@ -214,7 +219,9 @@ describe("composer security", () => {
       <Harness initial={["grace@navy.example"]} reports={reports} />,
       createEnv(),
     );
-    await waitFor(() => expect(reports.some((r) => r !== null)).toBe(true));
+    await waitFor(() => {
+      expect(reports.some((r) => r !== null)).toBe(true);
+    });
   });
 });
 
@@ -224,14 +231,14 @@ describe("security-composer widget", () => {
     const env = createEnv();
     const { container } = renderNode(widget("security-composer"), env);
     expect(container.querySelector('[data-part="security-compose"]')).toBeNull();
-    act(() =>
+    act(() => {
       env.store.getState().setComposer({
         ...emptyComposer(),
         identityId: "ada@example.org",
         to: "Grace <grace@navy.example>",
         cc: "ewd@tue.example",
-      }),
-    );
+      });
+    });
     await screen.findByRole("list", { name: "Recipient keys" });
     expect(composerCrypto()).toBeUndefined();
     await user.click(screen.getByRole("checkbox", { name: "Encrypt" }));
@@ -241,27 +248,35 @@ describe("security-composer widget", () => {
       technology: null,
       protect_headers: null,
     });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(composerSendBlock()).toEqual({
         id: "security-compose-block-missing",
         recipients: ["ewd@tue.example"],
-      }),
-    );
-    act(() => env.store.getState().updateComposer({ cc: "" }));
-    await waitFor(() => expect(composerSendBlock()).toBeNull());
+      });
+    });
+    act(() => {
+      env.store.getState().updateComposer({ cc: "" });
+    });
+    await waitFor(() => {
+      expect(composerSendBlock()).toBeNull();
+    });
 
     // Closing the composer forgets the choice.
-    act(() => env.store.getState().setComposer(null));
-    await waitFor(() => expect(composerCrypto()).toBeUndefined());
+    act(() => {
+      env.store.getState().setComposer(null);
+    });
+    await waitFor(() => {
+      expect(composerCrypto()).toBeUndefined();
+    });
   });
 
   it("restores a draft's saved choice", async () => {
     const env = createEnv();
-    act(() =>
+    act(() => {
       env.store
         .getState()
-        .setComposer({ ...emptyComposer(), identityId: "ada@example.org", to: "" }),
-    );
+        .setComposer({ ...emptyComposer(), identityId: "ada@example.org", to: "" });
+    });
     loadComposerCrypto({
       sign: true,
       encrypt: false,
@@ -273,7 +288,9 @@ describe("security-composer widget", () => {
     expect(screen.getByRole("combobox", { name: "Technology" })).toHaveValue("openpgp");
     // The recipient-key report arrives after the toggles show.
     await settleQueries(env);
-    act(() => loadComposerCrypto(undefined));
+    act(() => {
+      loadComposerCrypto(undefined);
+    });
     expect(composerCrypto()).toBeUndefined();
   });
 

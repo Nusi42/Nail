@@ -4,6 +4,7 @@
 //!
 //! To regenerate: `npm run gen:api`, or
 //! `NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings`.
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -147,7 +148,7 @@ fn plugin_bindings_hold_the_plugin_surface_only() {
 }
 
 /// A doc comment containing `*/` (a cron step like `*/15`, a MIME pattern
-/// `type/*/`) would end the generated TSDoc comment early and break the
+/// `type/*/`) would end the generated `TSDoc` comment early and break the
 /// TypeScript build (M4a).
 #[test]
 fn doc_comments_never_close_the_tsdoc_comment_early() {

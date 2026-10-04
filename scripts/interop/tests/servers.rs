@@ -4,6 +4,10 @@
 //! `NAIL_INTEROP=1` (see `src/lib.rs` for the variables); the ManageSieve
 //! tests run on servers with the `sieve` feature.
 
+// Test code only: helpers outside `#[test]` functions get clippy's
+// test exemptions (`allow-unwrap-in-tests`) too.
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::ErrorCode;

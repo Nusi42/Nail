@@ -33,7 +33,7 @@ integrated by ADR 0055:
   and the text spoke of invalid OpenPGP data for a mistyped address.
   `LookupKeys` in the core had a plain English error without a
   `localized` text.
-- Smaller: OS notifications of plug-ins put the "from <plug-in>"
+- Smaller: OS notifications of plug-ins put the "from `<plug-in>`"
   attribution after up to 2,000 characters of plug-in text (with line
   breaks), so a toast could look like Nail's own; the M2 gate was recorded
   as passed before M2d's reviews and verify; `nail plugin dev` printed

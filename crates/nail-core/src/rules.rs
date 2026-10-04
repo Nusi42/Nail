@@ -316,16 +316,14 @@ pub(crate) fn message_view(
         .as_ref()
         .and_then(|x| x.inference)
         .map(|i| i.as_str().to_owned());
-    data.date = chrono::DateTime::parse_from_rfc3339(&summary.date)
-        .map(|d| d.timestamp())
-        .unwrap_or(0);
+    data.date = chrono::DateTime::parse_from_rfc3339(&summary.date).map_or(0, |d| d.timestamp());
     if let Some(raw) = stored.blob_hash.as_ref().and_then(|h| blobs.get(h).ok()) {
         let parsed = nail_mime::parse_message(&raw);
         data.headers = nail_mime::header_fields(&raw);
-        data.from = parsed.headers.from.clone();
-        data.to = parsed.headers.to.clone();
-        data.cc = parsed.headers.cc.clone();
-        data.reply_to = parsed.headers.reply_to.clone();
+        data.from.clone_from(&parsed.headers.from);
+        data.to.clone_from(&parsed.headers.to);
+        data.cc.clone_from(&parsed.headers.cc);
+        data.reply_to.clone_from(&parsed.headers.reply_to);
         data.sender = data
             .headers
             .iter()
@@ -617,7 +615,7 @@ impl Service {
         let limit = limit.clamp(1, SCAN_LIMIT) as usize;
         let report = nail_rules::test_rule(
             &compiled,
-            views.iter().map(|(d, _)| d as &dyn nail_rules::MessageView),
+            views.iter().map(|(d, _)| as_view(d)),
             &env,
             limit,
         );
@@ -690,12 +688,7 @@ impl Service {
                 utc_offset_secs: utc_offset_secs(),
                 mailbox: &mailbox,
             };
-            nail_rules::run_rule(
-                compiled,
-                cause,
-                views.iter().map(|(d, _)| d as &dyn nail_rules::MessageView),
-                &env,
-            )
+            nail_rules::run_rule(compiled, cause, views.iter().map(|(d, _)| as_view(d)), &env)
         };
         let rule = compiled.rule();
         let (id, name) = (rule.id.clone(), rule.name.clone());
@@ -935,7 +928,7 @@ impl Service {
         self.hooks_ran(plugins.iter());
         host.deliver_event(
             nail_api::plugins::jobs::PluginEventName::MessageReceived,
-            arrived,
+            &arrived,
         );
     }
 
@@ -1097,6 +1090,11 @@ pub(crate) async fn run_rules(service: Service) {
 /// before they announce `NewMail`).
 pub(crate) fn queue_for_rules(store: &Store, ids: &[MessageId]) -> nail_store::Result<()> {
     store.queue_for_rules(ids, unix_now())
+}
+
+/// A message's rule view as the trait object the rule engine takes.
+fn as_view(data: &MessageData) -> &dyn nail_rules::MessageView {
+    data
 }
 
 #[cfg(test)]

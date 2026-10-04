@@ -260,12 +260,12 @@ pub fn build_card(input: CardInput<'_>) -> Invitation {
             InvitationRole::Attendee | InvitationRole::Observer,
             ItipMethod::Request | ItipMethod::Add | ItipMethod::Publish,
         )
-        | (InvitationRole::Organizer, ItipMethod::Counter) => input.conflicts.clone(),
+        | (InvitationRole::Organizer, ItipMethod::Counter) => input.conflicts,
         _ => Vec::new(),
     };
 
     Invitation {
-        message_id: input.message_id.clone(),
+        message_id: input.message_id,
         method,
         uid: object.uid.clone().unwrap_or_default(),
         recurrence_id,

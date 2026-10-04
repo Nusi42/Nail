@@ -19,6 +19,7 @@ import {
   type Env,
 } from "../test/harness";
 import { PROPOSAL_CONTEXT_MENUS, PROPOSAL_READER } from "./proposalToolbars";
+import { must } from "../test/must";
 
 const INBOX = "acc-personal/Inbox";
 const FIRST = `${INBOX}#1`;
@@ -92,14 +93,15 @@ function fakeResizeObserver() {
     disconnect() {
       callbacks.delete(this.cb);
     }
-    unobserve() {}
+    unobserve = vi.fn();
   }
   vi.stubGlobal("ResizeObserver", Fake);
   return {
-    resize: () =>
+    resize: () => {
       act(() => {
         for (const cb of callbacks) cb();
-      }),
+      });
+    },
   };
 }
 
@@ -115,7 +117,7 @@ function bar(): HTMLElement {
 function names(): string[] {
   return within(bar())
     .getAllByRole("button")
-    .map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
+    .map((b) => b.getAttribute("aria-label") ?? b.textContent);
 }
 
 describe("reader action bar (M5b)", () => {
@@ -181,17 +183,17 @@ describe("reader action bar (M5b)", () => {
     // a rule needs the message's summary (the list is not loaded here).
     expect(within(menu).queryByRole("menuitem", { name: /Labels/ })).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: /rule/ })).toBeNull();
-    const toggle = items[0] as HTMLElement;
+    const toggle = must(items[0]);
     expect(toggle.querySelector('[data-part="context-menu.item.shortcut"]')).toHaveTextContent("U");
     expect(toggle.querySelector('[data-part="context-menu.item.icon"]')).not.toBeNull();
     // The reader's key context names Print's Ctrl+P like the right-click menu.
     expect(
-      (items[2] as HTMLElement).querySelector('[data-part="context-menu.item.shortcut"]'),
+      must(items[2]).querySelector('[data-part="context-menu.item.shortcut"]'),
     ).toHaveTextContent("Ctrl+P");
     fireEvent.click(toggle);
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(true),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(true);
+    });
     expect(screen.queryByRole("menu")).toBeNull();
     expect(more).toHaveFocus();
   });
@@ -212,7 +214,7 @@ describe("reader action bar (M5b)", () => {
     const menu = await screen.findByRole("menu", { name: "More" });
     const print = within(menu)
       .getAllByRole("menuitem")
-      .find((i) => i.textContent?.includes("Print the message"));
+      .find((i) => i.textContent.includes("Print the message"));
     expect(print?.querySelector('[data-part="context-menu.item.shortcut"]')).toHaveTextContent(
       "Ctrl+P",
     );
@@ -224,17 +226,19 @@ describe("reader action bar (M5b)", () => {
       layout: readerLayout(env),
     });
     const more = screen.getByRole("button", { name: "More" });
-    act(() => more.focus());
+    act(() => {
+      more.focus();
+    });
     fireEvent.keyDown(more, { key: "ArrowDown" });
     const menu = await screen.findByRole("menu");
     await waitFor(() => expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus());
-    fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+    fireEvent.keyDown(must(document.activeElement), { key: "Escape" });
     expect(screen.queryByRole("menu")).toBeNull();
     expect(more).toHaveFocus();
     // The arrow keys move between the bar's buttons, More included.
     fireEvent.keyDown(more, { key: "Home" });
     expect(screen.getByRole("button", { name: "Reply" })).toHaveFocus();
-    fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+    fireEvent.keyDown(must(document.activeElement), { key: "End" });
     expect(more).toHaveFocus();
   });
 
@@ -256,7 +260,7 @@ describe("reader action bar (M5b)", () => {
       layout: readerLayout(other, { hide_disabled: false, overflow: "more" }),
     });
     const bars = screen.getAllByRole("toolbar");
-    const reply = within(bars[1] as HTMLElement).getByRole("button", { name: "Reply" });
+    const reply = within(must(bars[1])).getByRole("button", { name: "Reply" });
     expect(reply).toBeDisabled();
   });
 
@@ -399,7 +403,7 @@ describe("the matching right-click menus (M5b)", () => {
         env,
         { layout },
       );
-      const row = (await screen.findAllByRole("option"))[0] as HTMLElement;
+      const row = must((await screen.findAllByRole("option"))[0]);
       fireEvent.contextMenu(row, { clientX: 5, clientY: 5, button: 2 });
       const menu = await screen.findByRole("menu");
       const headings = [...menu.querySelectorAll('[data-part="context-menu.header"]')];

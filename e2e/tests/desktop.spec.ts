@@ -9,6 +9,7 @@ import {
   showView,
   viewRegion,
 } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Smoke test of the desktop app (Tauri 2 + WebView2): the real
@@ -38,14 +39,15 @@ test.beforeAll(async () => {
   await expect
     .poll(() => browser.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
     .toBeGreaterThan(0);
-  page = browser.contexts().flatMap((c) => c.pages())[0]!;
+  page = defined(browser.contexts().flatMap((c) => c.pages())[0], "the app's page");
   // M4b: a fresh profile gets the first-run screen once.
   await skipFirstRun(page);
 });
 
 test.afterAll(async () => {
-  await browser?.close().catch(() => undefined);
-  await app?.stop();
+  // `beforeAll` may have failed before assigning them.
+  await (browser as Browser | undefined)?.close().catch(() => undefined);
+  await (app as DesktopApp | undefined)?.stop();
 });
 
 test("the desktop app shows the demo mail through Tauri IPC", async () => {
@@ -115,7 +117,7 @@ test("a mailto: link the app is started with opens the composer", async () => {
     await expect
       .poll(() => cdp.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
       .toBeGreaterThan(0);
-    const window = cdp.contexts().flatMap((c) => c.pages())[0]!;
+    const window = defined(cdp.contexts().flatMap((c) => c.pages())[0], "the app's page");
     // The composer opened by the link comes first (no first-run screen over it).
     const dialog = composerWindow(window);
     await expect(dialog).toBeVisible({ timeout: 60_000 });

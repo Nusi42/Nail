@@ -59,7 +59,7 @@ export function pluginDialogWindow(dialog: Pick<PluginDialog, "spec" | "dialog_i
 export const pluginWindows: Readonly<Record<string, WindowRegistration>> = {
   ...Object.fromEntries(
     (Object.entries(SIZES) as [PluginDialogSize, { width: number; height: number }][]).flatMap(
-      ([size, box]) => {
+      ([size, box]): [string, WindowRegistration][] => {
         const min = { width: Math.min(360, box.width), height: Math.min(240, box.height) };
         return [
           [

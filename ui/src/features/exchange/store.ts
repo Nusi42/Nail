@@ -44,13 +44,13 @@ export interface ExchangeUiState {
   classify: ClassifyTarget | null;
   /** Accounts whose Focused Inbox tabs are switched off. */
   focusedOff: AccountId[];
-  editMailbox(target: MailboxTarget | null): void;
-  removeMailbox(mailbox: ExchangeMailbox | null): void;
-  editCategory(target: CategoryTarget | null): void;
-  deleteCategory(category: ExchangeCategory | null): void;
-  editReplies(accountId: AccountId | null): void;
-  classifyMessages(target: ClassifyTarget | null): void;
-  setFocused(accountId: AccountId, on: boolean): void;
+  editMailbox: (target: MailboxTarget | null) => void;
+  removeMailbox: (mailbox: ExchangeMailbox | null) => void;
+  editCategory: (target: CategoryTarget | null) => void;
+  deleteCategory: (category: ExchangeCategory | null) => void;
+  editReplies: (accountId: AccountId | null) => void;
+  classifyMessages: (target: ClassifyTarget | null) => void;
+  setFocused: (accountId: AccountId, on: boolean) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<ExchangeUiState>>();
@@ -66,18 +66,31 @@ export function exchangeStoreFor(ui: UiStore): StoreApi<ExchangeUiState> {
     repliesAccount: null,
     classify: null,
     focusedOff: [],
-    editMailbox: (mailboxEditor) => set({ mailboxEditor }),
-    removeMailbox: (removing) => set({ removing }),
-    editCategory: (categoryEditor) => set({ categoryEditor }),
-    deleteCategory: (deleting) => set({ deleting }),
-    editReplies: (repliesAccount) => set({ repliesAccount }),
-    classifyMessages: (classify) => set({ classify }),
-    setFocused: (accountId, on) =>
+    editMailbox: (mailboxEditor) => {
+      set({ mailboxEditor });
+    },
+    removeMailbox: (removing) => {
+      set({ removing });
+    },
+    editCategory: (categoryEditor) => {
+      set({ categoryEditor });
+    },
+    deleteCategory: (deleting) => {
+      set({ deleting });
+    },
+    editReplies: (repliesAccount) => {
+      set({ repliesAccount });
+    },
+    classifyMessages: (classify) => {
+      set({ classify });
+    },
+    setFocused: (accountId, on) => {
       set((s) => ({
         focusedOff: on
           ? s.focusedOff.filter((id) => id !== accountId)
           : [...s.focusedOff.filter((id) => id !== accountId), accountId],
-      })),
+      }));
+    },
   }));
   stores.set(ui, store);
   return store;

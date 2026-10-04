@@ -59,7 +59,12 @@ pub fn invited_spans(
             .collect();
     };
     let this_and_future = parsed.this_and_future.clone();
-    let event = parsed.into_event("itip".into(), "itip".into(), true, Default::default());
+    let event = parsed.into_event(
+        "itip".into(),
+        "itip".into(),
+        true,
+        nail_api::pim::PimItemSync::default(),
+    );
     event_spans(&event, from, to, viewer, &this_and_future)
 }
 

@@ -9,13 +9,7 @@
  * `seedGmailDemo(data)` is called once on fresh `MockData` (the integrator
  * calls it from `createMockData`; tests call it themselves).
  */
-import type {
-  FolderRole,
-  GmailCategory,
-  GmailLabel,
-  Identity,
-  MessageSummary,
-} from "../../api/generated";
+import type { GmailCategory, GmailLabel, Identity, MessageSummary } from "../../api/generated";
 import type { MockData } from "../../api/mockData";
 import { categoryLabel, CATEGORIES } from "./model";
 
@@ -217,7 +211,7 @@ export function seedGmailDemo(data: MockData, options: { now?: number } = {}): v
       parent_id: null,
       name,
       path: name,
-      role: role as FolderRole,
+      role: role,
       unread: 0,
       total: 0,
     });
@@ -225,7 +219,7 @@ export function seedGmailDemo(data: MockData, options: { now?: number } = {}): v
 
   MAILS.forEach((mail, index) => {
     const folderId = GMAIL_FOLDERS[mail.folder];
-    const id = `${folderId}#${index + 1}`;
+    const id = `${folderId}#${String(index + 1)}`;
     const gmailId = `18f${(0x1000 + index).toString(16)}`;
     const system = FOLDER_NAMES.find(([role]) => role === mail.folder)?.[2];
     const summary: MessageSummary = {

@@ -49,11 +49,11 @@ use crate::serve::{Dirs, resolve_dirs};
 /// How long probing a running instance's endpoint may take.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// How long `nail mcp` waits for a starting instance's endpoint.
-pub const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
+pub(crate) const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 
 /// Where the bridge connects.
 #[derive(Debug)]
-pub enum Target {
+pub(crate) enum Target {
     /// A running server.
     Url(String),
     /// Nobody runs: start the core headless (holding its lock).
@@ -61,7 +61,7 @@ pub enum Target {
 }
 
 /// The client token from `$NAIL_MCP_TOKEN` (trimmed; required).
-pub fn token(value: Option<String>) -> Result<String, BridgeError> {
+pub(crate) fn token(value: Option<String>) -> Result<String, BridgeError> {
     value
         .map(|t| t.trim().to_owned())
         .filter(|t| !t.is_empty())
@@ -71,7 +71,7 @@ pub fn token(value: Option<String>) -> Result<String, BridgeError> {
 /// Whether a loopback MCP URL (`http://127.0.0.1:<port>/mcp`) accepts
 /// connections. Other hosts count as unreachable: the endpoint file only
 /// ever names loopback, and `nail mcp` connects nowhere else on its own.
-pub fn loopback_reachable(url: &str) -> bool {
+pub(crate) fn loopback_reachable(url: &str) -> bool {
     let Some(rest) = url.strip_prefix("http://") else {
         return false;
     };
@@ -86,7 +86,7 @@ pub fn loopback_reachable(url: &str) -> bool {
 
 /// Decides where to connect (see the module docs). `reachable` probes an
 /// endpoint URL; `wait` is how long a held lock's endpoint is waited for.
-pub fn choose_target(
+pub(crate) fn choose_target(
     url: Option<&str>,
     data_dir: &Path,
     no_start: bool,
@@ -101,7 +101,7 @@ pub fn choose_target(
         Ok(lock) => {
             // Nobody runs: an endpoint file is a crashed instance's.
             if endpoint_file.exists() {
-                let _ = std::fs::remove_file(&endpoint_file);
+                drop(std::fs::remove_file(&endpoint_file));
             }
             if no_start {
                 drop(lock);
@@ -148,7 +148,7 @@ pub fn choose_target(
 }
 
 /// The stderr notice of a confirmation a headless `nail mcp` waits for.
-pub fn confirmation_notice(catalog: &Catalog, confirmation: &Confirmation) -> String {
+pub(crate) fn confirmation_notice(catalog: &Catalog, confirmation: &Confirmation) -> String {
     catalog.render(
         &LocalizedMessage::new("mcp-tool-bridge-confirmation-pending")
             .arg("actor", confirmation.requested_by.name.as_str())
@@ -182,7 +182,7 @@ fn bridge_options(url: String, token: String, args: &McpArgs) -> BridgeOptions {
 }
 
 /// Runs the bridge on stdin/stdout until the MCP client closes stdin.
-pub async fn run(args: McpArgs) -> anyhow::Result<()> {
+pub(crate) async fn run(args: McpArgs) -> anyhow::Result<()> {
     let token = token(std::env::var(TOKEN_ENV).ok())?;
     let dirs = if args.url.is_some() {
         None
@@ -229,7 +229,10 @@ async fn run_headless(
         LocalizedMessage::new("cli-cannot-open-data-dir")
             .arg("dir", dirs.data.display().to_string())
     })?;
-    let settings = service.store().call(|s| s.mcp_settings()).await?;
+    let settings = service
+        .store()
+        .call(nail_store::Store::mcp_settings)
+        .await?;
     let port = nail_mcp::configured_port(&settings, args.mcp_port);
     let running = match service
         .start_mcp_server(port, Some(endpoint_path(&dirs.data)))

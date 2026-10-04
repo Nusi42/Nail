@@ -15,12 +15,15 @@ import {
   type Env,
 } from "../../test/harness";
 import { hostLayout } from "./testing";
+import { must } from "../../test/must";
 
 let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 function renderShell(env: Env, layout: ResolvedLayout = hostLayout()) {
   return renderWithProviders(<WindowView layout={layout} name="main" />, env, { layout });
@@ -110,7 +113,9 @@ describe("view-host", () => {
     expect(await storedView(env)).toBe("tasks");
     // A remote browser (sharing the UI state) switches to Calendar.
     await env.client.call({ type: "SetUiState", key: UI_STATE_VIEW, value: "calendar" });
-    act(() => applyUiStateChange(env.queryClient, UI_STATE_VIEW, "calendar"));
+    act(() => {
+      applyUiStateChange(env.queryClient, UI_STATE_VIEW, "calendar");
+    });
     await settleQueries(env);
     expect(await storedView(env)).toBe("calendar");
     // This window keeps its own view.
@@ -145,12 +150,16 @@ describe("view-host", () => {
     fireEvent.keyDown(document.body, { key: "2", ctrlKey: true });
     await settleQueries(env);
     expect(env.store.getState().activeView).toBe("calendar");
-    await waitFor(() => expect(document.activeElement).toBe(region("Calendar view")));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(region("Calendar view"));
+    });
     expect(env.store.getState().keyContext).toBe("calendar");
 
-    fireEvent.keyDown(document.activeElement as Element, { key: "1", ctrlKey: true });
+    fireEvent.keyDown(must(document.activeElement), { key: "1", ctrlKey: true });
     await settleQueries(env);
-    await waitFor(() => expect(document.activeElement).toBe(region("Mail view")));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(region("Mail view"));
+    });
     expect(env.store.getState().keyContext).toBe("global");
   });
 
@@ -159,7 +168,9 @@ describe("view-host", () => {
     renderShell(env);
     await settleQueries(env);
     const tasks = railButton(/^Tasks/);
-    act(() => tasks.focus());
+    act(() => {
+      tasks.focus();
+    });
     fireEvent.click(tasks);
     await settleQueries(env);
     expect(region("Tasks view")).toBeVisible();
@@ -178,7 +189,9 @@ describe("view-host", () => {
     const env = createEnv();
     renderShell(env);
     await settleQueries(env);
-    act(() => env.store.getState().openWindow("calendar"));
+    act(() => {
+      env.store.getState().openWindow("calendar");
+    });
     expect(env.store.getState().windows).toEqual(["calendar"]);
     // The rail is covered by the window; the palette / an action shows the view.
     fireEvent.click(railButton(/^Calendar/));
@@ -195,7 +208,9 @@ describe("view-host", () => {
     };
     renderShell(env, layout);
     await settleQueries(env);
-    act(() => env.store.getState().setActiveView("tasks"));
+    act(() => {
+      env.store.getState().setActiveView("tasks");
+    });
     await settleQueries(env);
     expect(within(region("Tasks view")).getByRole("status")).toHaveTextContent(
       /Tasks cannot be shown/,

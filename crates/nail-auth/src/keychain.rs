@@ -38,10 +38,10 @@ pub trait KeychainBackend: Send + Sync + fmt::Debug {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct OsKeychain;
 
-fn keyring_error(err: keyring::Error) -> EngineError {
+fn keyring_error(err: &keyring::Error) -> EngineError {
     use keyring::Error as E;
     // Never include secret bytes: BadEncoding / BadDataFormat carry them.
-    let message = match &err {
+    let message = match err {
         E::BadEncoding(_) => "keychain entry is not valid UTF-8".to_owned(),
         E::BadDataFormat(_, _) => "keychain entry has an unexpected format".to_owned(),
         other => other.to_string(),
@@ -61,25 +61,25 @@ fn keyring_error(err: keyring::Error) -> EngineError {
 
 impl KeychainBackend for OsKeychain {
     fn get(&self, service: &str, user: &str) -> Result<Option<Vec<u8>>, EngineError> {
-        let entry = keyring::Entry::new(service, user).map_err(keyring_error)?;
+        let entry = keyring::Entry::new(service, user).map_err(|err| keyring_error(&err))?;
         match entry.get_secret() {
             Ok(bytes) => Ok(Some(bytes)),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(err) => Err(keyring_error(err)),
+            Err(err) => Err(keyring_error(&err)),
         }
     }
 
     fn set(&self, service: &str, user: &str, value: &[u8]) -> Result<(), EngineError> {
-        let entry = keyring::Entry::new(service, user).map_err(keyring_error)?;
-        entry.set_secret(value).map_err(keyring_error)
+        let entry = keyring::Entry::new(service, user).map_err(|err| keyring_error(&err))?;
+        entry.set_secret(value).map_err(|err| keyring_error(&err))
     }
 
     fn delete(&self, service: &str, user: &str) -> Result<bool, EngineError> {
-        let entry = keyring::Entry::new(service, user).map_err(keyring_error)?;
+        let entry = keyring::Entry::new(service, user).map_err(|err| keyring_error(&err))?;
         match entry.delete_credential() {
             Ok(()) => Ok(true),
             Err(keyring::Error::NoEntry) => Ok(false),
-            Err(err) => Err(keyring_error(err)),
+            Err(err) => Err(keyring_error(&err)),
         }
     }
 }

@@ -250,7 +250,7 @@ impl MockGraphServer {
             .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
             .with_state(state.clone());
         let task = tokio::spawn(async move {
-            let _ = axum::serve(listener, app).await;
+            drop(axum::serve(listener, app).await);
         });
         Ok(Self { addr, state, task })
     }
@@ -310,6 +310,10 @@ impl MockGraphServer {
     }
 
     /// Runs `f` on a mailbox (`None` = the user's) with the id generator.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn with_mailbox<T>(
         &self,
         mailbox: Option<&str>,
@@ -327,12 +331,20 @@ impl MockGraphServer {
     }
 
     /// The id of a folder (well-known name or id) of a mailbox.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn folder_id(&self, mailbox: Option<&str>, folder: &str) -> String {
         self.with_mailbox(mailbox, |mb, _| mb.folder_id(folder))
             .unwrap_or_else(|| panic!("no folder {folder}"))
     }
 
     /// Delivers a new message into a folder; returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn deliver(&self, mailbox: Option<&str>, folder: &str, raw: &[u8]) -> String {
         self.with_mailbox(mailbox, |mb, ids| {
             mb.add_message(ids, folder, raw.to_vec(), false, false)
@@ -341,6 +353,10 @@ impl MockGraphServer {
     }
 
     /// Changes a message on the server.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn change_message(
         &self,
         mailbox: Option<&str>,
@@ -352,18 +368,30 @@ impl MockGraphServer {
     }
 
     /// Moves a message on the server; returns the new id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn move_message(&self, mailbox: Option<&str>, id: &str, folder: &str) -> String {
         self.with_mailbox(mailbox, |mb, ids| mb.move_message(ids, id, folder, false))
             .unwrap_or_else(|e| panic!("move_message: {e:?}"))
     }
 
     /// Deletes a message on the server.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn delete_message(&self, mailbox: Option<&str>, id: &str) {
         self.with_mailbox(mailbox, |mb, _| mb.remove_message(id))
             .unwrap_or_else(|e| panic!("delete_message: {e:?}"));
     }
 
     /// Adds a folder on the server; returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn add_folder(&self, mailbox: Option<&str>, parent: Option<&str>, name: &str) -> String {
         self.with_mailbox(mailbox, |mb, ids| mb.add_folder(ids, parent, name))
             .unwrap_or_else(|e| panic!("add_folder: {e:?}"))
@@ -414,12 +442,20 @@ impl MockGraphServer {
 
     /// Adds an event to a calendar of the user's mailbox (`None` = the
     /// default calendar); returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn add_event(&self, calendar: Option<&str>, event: Value) -> String {
         self.with_mailbox(None, |mb, ids| mb.add_event(ids, calendar, event))
             .unwrap_or_else(|e| panic!("add_event: {e:?}"))
     }
 
     /// Changes an event on the server (a `PATCH`).
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn update_event(&self, id: &str, patch: &Value) {
         self.with_mailbox(None, |mb, _| {
             let event = mb
@@ -457,6 +493,10 @@ impl MockGraphServer {
     }
 
     /// Adds a contact (`None` = the default folder); returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn add_contact(&self, folder: Option<&str>, contact: Value) -> String {
         self.with_mailbox(None, |mb, ids| mb.add_contact(ids, folder, contact))
             .unwrap_or_else(|e| panic!("add_contact: {e:?}"))
@@ -468,6 +508,10 @@ impl MockGraphServer {
     }
 
     /// Adds a To Do task (`None` = the default list); returns its id.
+    ///
+    /// # Panics
+    ///
+    /// When the mailbox or item does not exist, or the mock rejects the change.
     pub fn add_task(&self, list: Option<&str>, task: Value) -> String {
         self.with_mailbox(None, |mb, ids| mb.add_task(ids, list, task, Vec::new()))
             .unwrap_or_else(|e| panic!("add_task: {e:?}"))

@@ -5,7 +5,10 @@
 //! the Autocrypt setup flow. Rendered by `ui/src/features/security/`.
 
 use super::WidgetSpec;
-#[allow(unused_imports)]
+#[expect(
+    unused_imports,
+    reason = "the table's helpers stay imported for the package that adds widgets (ADR 0022)"
+)]
 use super::{OptionType, widget};
 
 /// Widgets of this feature (none takes options).
@@ -47,7 +50,7 @@ mod tests {
     fn security_widgets_are_registered() {
         let kinds = super::WIDGETS
             .iter()
-            .map(|w| format!("            {}\n", w.kind))
+            .map(|w| ["            ", w.kind, "\n"].concat())
             .collect::<String>();
         let text = format!(
             "layout \"x\" extends=\"default\" {{\n    window \"main\" {{\n        stack {{\n{kinds}        }}\n    }}\n}}\n"

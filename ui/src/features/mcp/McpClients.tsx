@@ -4,7 +4,7 @@
  * limits and the confirmation policy (M4a), revoke, read the audit log.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { McpClient, McpClientId } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
@@ -39,7 +39,7 @@ function TokenPanel({ name, token, onDone }: { name: string; token: string; onDo
     }
   };
   return (
-    <section data-part="mcp-token" role="region" aria-label={t("mcp-token-title", { name })}>
+    <section data-part="mcp-token" aria-label={t("mcp-token-title", { name })}>
       <h3 data-part="mcp-token.title">{t("mcp-token-title", { name })}</h3>
       <p data-part="mcp-token.warning" role="alert">
         {t("mcp-token-once")}
@@ -83,7 +83,7 @@ function CreateForm({ onCreated }: { onCreated: (client: McpClient, token: strin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const create = async (event: FormEvent) => {
+  const create = async (event: SubmitEvent) => {
     event.preventDefault();
     if (name.trim() === "" || busy) return;
     setBusy(true);
@@ -140,7 +140,9 @@ function PendingNote({ client }: { client: McpClient }) {
         type="button"
         data-part="form.button"
         data-action="review-confirmations"
-        onClick={() => openWindow(CENTER_DIALOG)}
+        onClick={() => {
+          openWindow(CENTER_DIALOG);
+        }}
       >
         {t("mcp-client-pending-review")}
       </button>
@@ -185,7 +187,9 @@ function ClientDetail({ client }: { client: McpClient }) {
               data-part="form.button"
               data-action="revoke"
               data-variant="danger"
-              onClick={() => setConfirm(true)}
+              onClick={() => {
+                setConfirm(true);
+              }}
             >
               {t("mcp-client-revoke")}
             </button>
@@ -207,7 +211,9 @@ function ClientDetail({ client }: { client: McpClient }) {
                 type="button"
                 data-part="form.button"
                 data-action="cancel"
-                onClick={() => setConfirm(false)}
+                onClick={() => {
+                  setConfirm(false);
+                }}
               >
                 {t("mcp-client-cancel")}
               </button>
@@ -261,7 +267,13 @@ export function McpClients({ node }: WidgetProps) {
         }}
       />
       {created && (
-        <TokenPanel name={created.name} token={created.token} onDone={() => setCreated(null)} />
+        <TokenPanel
+          name={created.name}
+          token={created.token}
+          onDone={() => {
+            setCreated(null);
+          }}
+        />
       )}
       {clients.isError && (
         <div data-part="mcp-clients.error" role="alert">
@@ -283,7 +295,9 @@ export function McpClients({ node }: WidgetProps) {
                   data-state={active ? "selected" : undefined}
                   data-access={clientState(client)}
                   aria-pressed={active}
-                  onClick={() => setSelected(client.id)}
+                  onClick={() => {
+                    setSelected(client.id);
+                  }}
                 >
                   <span data-part="mcp-clients.client.name">{client.name}</span>
                   <span data-part="mcp-clients.client.status" data-access={clientState(client)}>

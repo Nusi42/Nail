@@ -47,7 +47,7 @@ async function main() {
   console.log(`nail dev server: ${devUrl(port)}/ (${how})`);
 
   if (!tauri) {
-    vite.bindCLIShortcuts?.({ print: true });
+    vite.bindCLIShortcuts({ print: true });
     return;
   }
 
@@ -57,6 +57,7 @@ async function main() {
     cwd: root,
     stdio: "inherit",
   });
+  /** @param {number} code */
   const stop = async (code) => {
     try {
       fs.rmSync(config, { force: true });
@@ -66,14 +67,21 @@ async function main() {
     await vite.close();
     process.exit(code);
   };
-  child.on("exit", (code, signal) => stop(code ?? (signal ? 1 : 0)));
+  /** @param {unknown} err */
+  const fail = (err) => {
+    console.error(err);
+    process.exit(1);
+  };
+  child.on("exit", (code, signal) => {
+    stop(code ?? (signal ? 1 : 0)).catch(fail);
+  });
   child.on("error", (err) => {
     console.error(err);
-    stop(1);
+    stop(1).catch(fail);
   });
 }
 
-main().catch((err) => {
+main().catch((/** @type {unknown} */ err) => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

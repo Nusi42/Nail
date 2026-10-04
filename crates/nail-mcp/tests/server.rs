@@ -1,6 +1,12 @@
 //! The MCP server end to end: an rmcp client over Streamable HTTP against
 //! [`nail_mcp::McpServer`] with a fake data source and an in-memory store.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::time::Duration;
@@ -167,7 +173,7 @@ async fn a_new_client_sees_nothing_until_granted() {
         json!("m3")
     );
 
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -175,11 +181,11 @@ async fn every_call_is_audited() {
     let env = start().await;
     let (id, token) = create_client(&env.store, "auditor").await;
     let (client, _) = connect(env.server.url(), &token).await;
-    let _ = read(&client, "nail://messages/m1").await;
+    drop(read(&client, "nail://messages/m1").await);
     grant(&env.store, &id, &[McpScope::Read], &["work"]).await;
     read(&client, "nail://messages/m1").await.unwrap();
     tool(&client, "search_messages", json!({"query": "plan"})).await;
-    let _ = read(&client, "nail://nothing").await;
+    drop(read(&client, "nail://nothing").await);
     // Malformed arguments and unknown tools leave a trace too.
     let bad_args = CallToolRequestParams::new("get_message")
         .with_arguments(json!({"id": 1}).as_object().unwrap().clone());
@@ -237,7 +243,7 @@ async fn every_call_is_audited() {
             .is_some(),
         "use is recorded"
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -267,7 +273,7 @@ async fn bad_and_revoked_tokens_are_refused() {
     // The very next request of the open session is refused.
     assert!(read(&client, "nail://accounts").await.is_err());
     assert!(connect_fails(env.server.url(), &token).await);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -375,7 +381,7 @@ async fn tools_filter_by_grant_and_mark_content() {
         .await
         .unwrap_err();
     assert!(matches!(err, ServiceError::McpError(_)));
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -477,7 +483,7 @@ async fn ui_context_needs_its_own_grant_and_shows_the_indicator() {
         value["data"]["message"],
         json!({"id": "m2", "hidden": true})
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 async fn next_update(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> Option<String> {
@@ -488,7 +494,10 @@ async fn next_update(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> O
 }
 
 #[tokio::test]
-#[allow(deprecated)]
+#[expect(
+    deprecated,
+    reason = "rmcp 3.5 deprecates resource subscriptions (SEP-2577); Nail still serves them"
+)]
 async fn subscriptions_notify_new_mail_and_ui_context() {
     let env = start().await;
     let (id, token) = create_client(&env.store, "watcher").await;
@@ -590,7 +599,7 @@ async fn subscriptions_notify_new_mail_and_ui_context() {
             .count(),
         3
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -608,7 +617,7 @@ async fn rules_need_a_grant_for_all_accounts() {
     }
     let accounts = text(&read(&client, "nail://accounts").await.unwrap());
     assert_eq!(accounts["accounts"].as_array().unwrap().len(), 3);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -711,7 +720,7 @@ async fn listen_streams_of_protocol_2026_07_28_get_updates() {
         "{subscribe:?}"
     );
     drop(subscription);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 /// The data of a user with more mail than the client may see: `m4` in the
@@ -755,7 +764,7 @@ async fn searches_leave_out_encrypted_mail_without_the_encrypted_grant() {
     };
     let result = tool(&client, "search_messages", json!({"query": "plan"})).await;
     assert_eq!(ids(&result.structured_content.unwrap()), ["m1", "m2"]);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 
     grant(
         &env.store,
@@ -767,7 +776,7 @@ async fn searches_leave_out_encrypted_mail_without_the_encrypted_grant() {
     let (client, _) = connect(env.server.url(), &token).await;
     let result = tool(&client, "search_messages", json!({"query": "plan"})).await;
     assert_eq!(ids(&result.structured_content.unwrap()), ["m1", "m2", "m3"]);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -804,7 +813,7 @@ async fn restricted_searches_reveal_nothing_about_hidden_mail() {
             let result = tool(&client, "search_messages", args).await;
             pages.push(result.structured_content.unwrap()["data"].clone());
         }
-        let _ = client.cancel().await;
+        drop(client.cancel().await);
         answers.push(pages);
     }
     assert_eq!(answers[0], answers[1], "hidden mail changes nothing");

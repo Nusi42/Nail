@@ -5,7 +5,7 @@
  * denied.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, McpClient, McpRateLimits } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
@@ -36,7 +36,7 @@ function LimitField({
   name: Key;
   value: number | null;
   disabled: boolean;
-  onChange(value: number | null): void;
+  onChange: (value: number | null) => void;
 }) {
   const unlimited = value === null;
   return (
@@ -53,7 +53,9 @@ function LimitField({
           value={value}
           min={1}
           max={10_000}
-          onChange={(n) => onChange(n ?? 0)}
+          onChange={(n) => {
+            onChange(n ?? 0);
+          }}
         />
       )}
       <CheckField
@@ -81,7 +83,7 @@ export function RateLimitsEditor({ client }: { client: McpClient }) {
   const issues = rateLimitIssues(limits);
   const dirty = JSON.stringify(limits) !== JSON.stringify(client.rate_limits);
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (disabled || issues.length > 0) return;
     setBusy(true);
@@ -143,7 +145,9 @@ export function RateLimitsEditor({ client }: { client: McpClient }) {
           data-part="form.button"
           data-action="reset-rate-limits"
           disabled={disabled || JSON.stringify(limits) === JSON.stringify(DEFAULT_RATE_LIMITS)}
-          onClick={() => setLimits({ ...DEFAULT_RATE_LIMITS })}
+          onClick={() => {
+            setLimits({ ...DEFAULT_RATE_LIMITS });
+          }}
         >
           {t("mcp-rate-defaults")}
         </button>

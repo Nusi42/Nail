@@ -2,6 +2,7 @@
 //! per EWS operation, answering SOAP documents shaped like Exchange's.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -310,10 +311,9 @@ fn resolve_folder(state: &State, reference: &Element) -> Result<(usize, usize), 
             let address = reference
                 .path(&["Mailbox", "EmailAddress"])
                 .map(|e| e.text.trim());
-            let m = match state.mailbox_index(address) {
-                Some(m) => m,
-                None => return Err("ErrorNonExistentMailbox"),
-            };
+            let m = state
+                .mailbox_index(address)
+                .ok_or("ErrorNonExistentMailbox")?;
             let name = reference.attr("Id").unwrap_or_default();
             (
                 m,
@@ -372,6 +372,10 @@ fn folder_xml(state: &State, m: usize, f: usize) -> String {
     )
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_folder(state: &State, op: &Element) -> OpResult {
     let mut out = Vec::new();
     for reference in op
@@ -390,6 +394,10 @@ fn get_folder(state: &State, op: &Element) -> OpResult {
     Ok(messages("GetFolder", &out))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
     const OP: &str = "SyncFolderHierarchy";
     let target = op
@@ -457,9 +465,11 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
         let folder = &state.mailboxes[m].folders[f];
         now.insert(id.clone(), folder.change_key.clone());
         match known.get(id) {
-            None => changes.push_str(&format!("<t:Create>{}</t:Create>", folder_xml(state, m, f))),
+            None => {
+                let _ = write!(changes, "<t:Create>{}</t:Create>", folder_xml(state, m, f));
+            }
             Some(key) if *key != folder.change_key => {
-                changes.push_str(&format!("<t:Update>{}</t:Update>", folder_xml(state, m, f)));
+                let _ = write!(changes, "<t:Update>{}</t:Update>", folder_xml(state, m, f));
             }
             Some(_) => {}
         }
@@ -467,7 +477,7 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
     let mut gone: Vec<&String> = known.keys().filter(|id| !now.contains_key(*id)).collect();
     gone.sort();
     for id in gone {
-        changes.push_str(&format!(r#"<t:Delete><t:FolderId Id="{id}"/></t:Delete>"#));
+        let _ = write!(changes, r#"<t:Delete><t:FolderId Id="{id}"/></t:Delete>"#);
     }
     let token = state.new_id("H4sIHierarchy");
     state.hierarchy_states.insert(token.clone(), (root_id, now));
@@ -482,6 +492,10 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
     const OP: &str = "SyncFolderItems";
     let Some(target) = op.child("SyncFolderId").and_then(|s| s.children.first()) else {
@@ -541,12 +555,12 @@ fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
         let entry = Some((item.change_key.clone(), read));
         match snapshot.items.get(&item.id) {
             None => pending.push((
-                format!("<t:Create>{}</t:Create>", state.render_item(item, false)),
+                format!("<t:Create>{}</t:Create>", State::render_item(item, false)),
                 item.id.clone(),
                 entry,
             )),
             Some((key, _)) if *key != item.change_key => pending.push((
-                format!("<t:Update>{}</t:Update>", state.render_item(item, false)),
+                format!("<t:Update>{}</t:Update>", State::render_item(item, false)),
                 item.id.clone(),
                 entry,
             )),
@@ -611,12 +625,12 @@ fn render_any(state: &State, id: &str, mime: bool) -> Result<String, &'static st
         if !mailbox_allows(state, m, &item.folder) {
             return Err("ErrorAccessDenied");
         }
-        return Ok(state.render_item(item, mime));
+        return Ok(State::render_item(item, mime));
     }
     let (master, index) = split_occurrence(id).ok_or("ErrorItemNotFound")?;
     let (m, i) = state.item_location(master).ok_or("ErrorItemNotFound")?;
     let item = occurrence_item(&state.mailboxes[m].items[i], index).ok_or("ErrorItemNotFound")?;
-    Ok(state.render_item(&item, false))
+    Ok(State::render_item(&item, false))
 }
 
 /// The occurrence `index` of a series as an item of its own.
@@ -640,8 +654,8 @@ fn occurrence_item(master: &MockItem, index: u32) -> Option<MockItem> {
         tag: "CalendarItem".into(),
         props: Element::new("CalendarItem"),
         mime: None,
-        exceptions: Default::default(),
-        deleted: Default::default(),
+        exceptions: std::collections::BTreeMap::default(),
+        deleted: std::collections::BTreeSet::default(),
     };
     std::mem::swap(&mut item.props, &mut props);
     let exception = master.exceptions.contains_key(&index);
@@ -657,6 +671,10 @@ fn occurrence_item(master: &MockItem, index: u32) -> Option<MockItem> {
     Some(item)
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_item(state: &State, op: &Element) -> OpResult {
     let mime = op
         .path(&["ItemShape", "IncludeMimeContent"])
@@ -805,7 +823,7 @@ fn send_meeting(state: &mut State, m: usize, i: usize, kind: &str) {
         }
         // The room accepts.
         if let Some(resources) = state.mailboxes[m].items[i].props.child_mut("Resources") {
-            for attendee in resources.children.iter_mut() {
+            for attendee in &mut resources.children {
                 let matches = attendee
                     .path(&["Mailbox", "EmailAddress"])
                     .is_some_and(|e| e.text.trim().eq_ignore_ascii_case(room));
@@ -820,6 +838,10 @@ fn send_meeting(state: &mut State, m: usize, i: usize, kind: &str) {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn create_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
     const OP: &str = "CreateItem";
     let disposition = op.attr("MessageDisposition").unwrap_or("SaveOnly");
@@ -1003,7 +1025,7 @@ fn create_pim(
             ("EmailAddress", owner.address.as_str()),
         ] {
             let mut e = Element::new(name);
-            e.text = value.to_owned();
+            value.clone_into(&mut e.text);
             mailbox.children.push(e);
         }
         organizer.children.push(mailbox);
@@ -1015,7 +1037,7 @@ fn create_pim(
             ("IsCancelled", "false"),
         ] {
             let mut e = Element::new(name);
-            e.text = value.to_owned();
+            value.clone_into(&mut e.text);
             props.children.push(e);
         }
     }
@@ -1061,7 +1083,7 @@ fn respond(state: &mut State, item: &Element, disposition: &str) -> Result<Strin
     if response == "Decline"
         && let Some(trash) = default_folder(state, m, "deleteditems")
     {
-        let _ = move_item(state, id, &trash, false);
+        drop(move_item(state, id, &trash, false));
     }
     if disposition == "SaveOnly" {
         let drafts = default_folder(state, m, "drafts").ok_or("ErrorFolderNotFound")?;
@@ -1193,6 +1215,10 @@ fn apply_update(props: &mut Element, update: &Element) {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn update_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
     const OP: &str = "UpdateItem";
     let conflict = op.attr("ConflictResolution").unwrap_or("AutoResolve");
@@ -1275,7 +1301,7 @@ fn apply_item_change(
                 );
             }
         }
-        item.change_key = key.clone();
+        item.change_key.clone_from(&key);
         let tag = item.tag.clone();
         let folder = item.folder.clone();
         state.item_event("ModifiedEvent", id, &folder, None);
@@ -1299,7 +1325,7 @@ fn apply_item_change(
         return Err("ErrorIrresolvableConflict");
     }
     series.exceptions.insert(index, props);
-    series.change_key = key.clone();
+    series.change_key.clone_from(&key);
     let folder = series.folder.clone();
     state.item_event("ModifiedEvent", master, &folder, None);
     Ok(("CalendarItem".to_owned(), id.to_owned(), key))
@@ -1325,9 +1351,9 @@ pub(crate) fn move_item(
         state.mailboxes[m].items.remove(i)
     };
     let old_folder = item.folder.clone();
-    item.id = new_id.clone();
+    item.id.clone_from(&new_id);
     item.change_key = key;
-    item.folder = folder.to_owned();
+    folder.clone_into(&mut item.folder);
     state.mailboxes[target_m].items.push(item);
     if copy {
         state.item_event("CopiedEvent", &new_id, folder, Some(&old_folder));
@@ -1337,6 +1363,10 @@ pub(crate) fn move_item(
     Ok(new_id)
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> OpResult {
     let name = if copy { "CopyItem" } else { "MoveItem" };
     let target = op.child("ToFolderId").and_then(|t| t.children.first());
@@ -1381,6 +1411,10 @@ fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> OpResult {
     Ok(messages(name, &out))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn delete_item(state: &mut State, op: &Element) -> OpResult {
     const OP: &str = "DeleteItem";
     let delete_type = op.attr("DeleteType").unwrap_or("HardDelete").to_owned();
@@ -1436,6 +1470,10 @@ fn delete_item(state: &mut State, op: &Element) -> OpResult {
     Ok(messages(OP, &out))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn find_item(state: &State, op: &Element) -> OpResult {
     const OP: &str = "FindItem";
     let Some(reference) = op.child("ParentFolderIds").and_then(|p| p.children.first()) else {
@@ -1474,7 +1512,7 @@ fn find_item(state: &State, op: &Element) -> OpResult {
                     item.text("End").unwrap_or(""),
                 );
                 if s < to.as_str() && e > from.as_str() {
-                    found.push(state.render_item(&item, false));
+                    found.push(State::render_item(&item, false));
                 }
                 continue;
             }
@@ -1485,7 +1523,7 @@ fn find_item(state: &State, op: &Element) -> OpResult {
                         occurrence.text("End").unwrap_or("").to_owned(),
                     );
                     if s.as_str() < to.as_str() && e.as_str() > from.as_str() {
-                        found.push(state.render_item(&occurrence, false));
+                        found.push(State::render_item(&occurrence, false));
                     }
                 }
             }
@@ -1537,6 +1575,10 @@ fn find_item(state: &State, op: &Element) -> OpResult {
 // ---------------------------------------------------------------------------
 // Notifications
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn subscribe(state: &mut State, op: &Element) -> OpResult {
     const OP: &str = "Subscribe";
     let Some(request) = op.child("StreamingSubscriptionRequest") else {
@@ -1580,6 +1622,10 @@ fn subscribe(state: &mut State, op: &Element) -> OpResult {
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn unsubscribe(state: &mut State, op: &Element) -> OpResult {
     const OP: &str = "Unsubscribe";
     let id = op.child_text("SubscriptionId").unwrap_or_default();
@@ -1690,10 +1736,11 @@ pub(crate) fn stream(shared: Arc<Shared>, ids: Vec<String>) -> Response<Body> {
                             && !subscription.pending.is_empty()
                         {
                             let events: String = subscription.pending.drain(..).collect();
-                            notifications.push_str(&format!(
+                            let _ = write!(
+                                notifications,
                                 "<m:Notification>{}{events}</m:Notification>",
                                 el("t:SubscriptionId", id)
-                            ));
+                            );
                         }
                     }
                     if notifications.is_empty() {
@@ -1713,9 +1760,10 @@ pub(crate) fn stream(shared: Arc<Shared>, ids: Vec<String>) -> Response<Body> {
                 }
             };
             if broken {
-                let _ = tx
-                    .send(Err(std::io::Error::other("the mock cut the connection")))
-                    .await;
+                drop(
+                    tx.send(Err(std::io::Error::other("the mock cut the connection")))
+                        .await,
+                );
                 return;
             }
             if let Some(document) = document
@@ -1753,6 +1801,10 @@ fn availability_response(op: &str, class_ok: bool, code: &str, inner: &str) -> S
     )
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_oof(state: &State, op: &Element) -> OpResult {
     let address = op
         .path(&["Mailbox", "Address"])
@@ -1792,6 +1844,10 @@ fn get_oof(state: &State, op: &Element) -> OpResult {
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn set_oof(state: &mut State, op: &Element) -> OpResult {
     let address = op
         .path(&["Mailbox", "Address"])
@@ -1853,6 +1909,10 @@ fn set_oof(state: &mut State, op: &Element) -> OpResult {
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_inbox_rules(state: &State) -> OpResult {
     let rules: String = state.rules.iter().map(|r| r.to_xml(Some("t"))).collect();
     Ok(format!(
@@ -1869,6 +1929,10 @@ fn rules_error(code: &str, index: usize, message: &str) -> String {
     )
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
     let remove_blob = op.child_bool("RemoveOutlookRuleBlob").unwrap_or(false);
     if state.outlook_rule_blob && !remove_blob {
@@ -1955,6 +2019,10 @@ fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
     Ok(r#"<m:UpdateInboxRulesResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode></m:UpdateInboxRulesResponse>"#.to_owned())
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_user_configuration(state: &State, op: &Element) -> OpResult {
     const OP: &str = "GetUserConfiguration";
     let name = op
@@ -1984,6 +2052,10 @@ fn get_user_configuration(state: &State, op: &Element) -> OpResult {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpResult {
     let name = if create {
         "CreateUserConfiguration"
@@ -2039,6 +2111,10 @@ fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpRe
 // ---------------------------------------------------------------------------
 // Directory
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_room_lists(state: &State) -> OpResult {
     if state.rooms_denied {
         return Ok(r#"<m:GetRoomListsResponse ResponseClass="Error"><m:MessageText>Access is denied.</m:MessageText><m:ResponseCode>ErrorAccessDenied</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomListsResponse>"#.to_owned());
@@ -2046,19 +2122,24 @@ fn get_room_lists(state: &State) -> OpResult {
     let lists: String = state
         .room_lists
         .iter()
-        .map(|(address, name, _)| {
-            format!(
+        .fold(String::new(), |mut out, (address, name, _)| {
+            let _ = write!(
+                out,
                 "<t:Address>{}{}<t:RoutingType>SMTP</t:RoutingType><t:MailboxType>PublicDL</t:MailboxType></t:Address>",
                 el("t:Name", name),
                 el("t:EmailAddress", address)
-            )
-        })
-        .collect();
+            );
+            out
+        });
     Ok(format!(
         r#"<m:GetRoomListsResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:RoomLists>{lists}</m:RoomLists></m:GetRoomListsResponse>"#
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_rooms(state: &State, op: &Element) -> OpResult {
     let list = op
         .path(&["RoomList", "EmailAddress"])
@@ -2072,14 +2153,15 @@ fn get_rooms(state: &State, op: &Element) -> OpResult {
     };
     let rooms: String = rooms
         .iter()
-        .map(|(address, name)| {
-            format!(
+        .fold(String::new(), |mut out, (address, name)| {
+            let _ = write!(
+                out,
                 "<t:Room><t:Id>{}{}<t:RoutingType>SMTP</t:RoutingType><t:MailboxType>Mailbox</t:MailboxType></t:Id></t:Room>",
                 el("t:Name", name),
                 el("t:EmailAddress", address)
-            )
-        })
-        .collect();
+            );
+            out
+        });
     Ok(format!(
         r#"<m:GetRoomsResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:Rooms>{rooms}</m:Rooms></m:GetRoomsResponse>"#
     ))
@@ -2095,6 +2177,10 @@ fn known_address(state: &State, address: &str) -> bool {
             .any(|(_, _, rooms)| rooms.iter().any(|(a, _)| a == address))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_user_availability(state: &State, op: &Element) -> OpResult {
     let window = op.path(&["FreeBusyViewOptions", "TimeWindow"]);
     let from = window
@@ -2148,26 +2234,30 @@ fn get_user_availability(state: &State, op: &Element) -> OpResult {
             }
         }
         periods.sort();
-        let events: String = periods
-            .iter()
-            .map(|(s, e, k)| {
-                format!(
-                    "<CalendarEvent>{}{}{}</CalendarEvent>",
-                    el("StartTime", s.trim_end_matches('Z')),
-                    el("EndTime", e.trim_end_matches('Z')),
-                    el("BusyType", k)
-                )
-            })
-            .collect();
-        responses.push_str(&format!(
+        let events: String = periods.iter().fold(String::new(), |mut out, (s, e, k)| {
+            let _ = write!(
+                out,
+                "<CalendarEvent>{}{}{}</CalendarEvent>",
+                el("StartTime", s.trim_end_matches('Z')),
+                el("EndTime", e.trim_end_matches('Z')),
+                el("BusyType", k)
+            );
+            out
+        });
+        let _ = write!(
+            responses,
             r#"<FreeBusyResponse><ResponseMessage ResponseClass="Success"><ResponseCode>NoError</ResponseCode></ResponseMessage><FreeBusyView><FreeBusyViewType xmlns="{TYPES_NS}">FreeBusy</FreeBusyViewType><CalendarEventArray xmlns="{TYPES_NS}">{events}</CalendarEventArray></FreeBusyView></FreeBusyResponse>"#
-        ));
+        );
     }
     Ok(format!(
         r#"<GetUserAvailabilityResponse xmlns="{MESSAGES_NS}"><FreeBusyResponseArray>{responses}</FreeBusyResponseArray></GetUserAvailabilityResponse>"#
     ))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn resolve_names(state: &State, op: &Element) -> OpResult {
     const OP: &str = "ResolveNames";
     let entry = op
@@ -2200,14 +2290,15 @@ fn resolve_names(state: &State, op: &Element) -> OpResult {
     }
     let resolutions: String = people
         .iter()
-        .map(|(address, name)| {
-            format!(
+        .fold(String::new(), |mut out, (address, name)| {
+            let _ = write!(
+                out,
                 "<t:Resolution><t:Mailbox>{}{}<t:RoutingType>SMTP</t:RoutingType><t:MailboxType>Mailbox</t:MailboxType></t:Mailbox></t:Resolution>",
                 el("t:Name", name),
                 el("t:EmailAddress", address)
-            )
-        })
-        .collect();
+            );
+            out
+        });
     let message = if people.len() > 1 {
         format!(
             r#"<m:{OP}ResponseMessage ResponseClass="Warning"><m:MessageText>Multiple results were found.</m:MessageText><m:ResponseCode>ErrorNameResolutionMultipleResults</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey><m:ResolutionSet TotalItemsInView="{n}" IncludesLastItemInRange="true">{resolutions}</m:ResolutionSet></m:{OP}ResponseMessage>"#,
@@ -2224,19 +2315,24 @@ fn resolve_names(state: &State, op: &Element) -> OpResult {
     Ok(messages(OP, &[message]))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
+)]
 fn get_delegate(state: &State) -> OpResult {
     let users: String = state
         .delegates
         .iter()
-        .map(|(address, name, level)| {
-            format!(
+        .fold(String::new(), |mut out, (address, name, level)| {
+            let _ = write!(
+                out,
                 r#"<m:DelegateUserResponseMessageType ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:DelegateUser><t:UserId>{}{}</t:UserId><t:DelegatePermissions><t:CalendarFolderPermissionLevel>{}</t:CalendarFolderPermissionLevel><t:InboxFolderPermissionLevel>None</t:InboxFolderPermissionLevel></t:DelegatePermissions><t:ReceiveCopiesOfMeetingMessages>true</t:ReceiveCopiesOfMeetingMessages><t:ViewPrivateItems>false</t:ViewPrivateItems></m:DelegateUser></m:DelegateUserResponseMessageType>"#,
                 el("t:PrimarySmtpAddress", address),
                 el("t:DisplayName", name),
                 escape(level)
-            )
-        })
-        .collect();
+            );
+            out
+        });
     Ok(format!(
         r#"<m:GetDelegateResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:ResponseMessages>{users}</m:ResponseMessages><m:DeliverMeetingRequests>DelegatesAndMe</m:DeliverMeetingRequests></m:GetDelegateResponse>"#
     ))

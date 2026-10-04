@@ -302,21 +302,18 @@ pub fn instances(event: &CalendarEvent, options: &ExpandOptions<'_>) -> Vec<Even
             continue;
         }
         let ruling = future.iter().rev().find(|(rid, _)| *rid <= occurrence);
-        let (fields, istart, iend, overridden) = match ruling {
-            Some((rid, o)) => {
-                let shift = frame(&o.fields.start).map_or_else(Duration::zero, |s| s - *rid);
-                let istart = time::like(occurrence + shift, start);
-                let ospan = Span::between(&o.fields.start, &o.fields.end, viewer);
-                let iend = ospan.end(&istart, &o.fields.end, viewer);
-                (&o.fields, istart, iend, true)
+        let (fields, istart, iend, overridden) = if let Some((rid, o)) = ruling {
+            let shift = frame(&o.fields.start).map_or_else(Duration::zero, |s| s - *rid);
+            let istart = time::like(occurrence + shift, start);
+            let ospan = Span::between(&o.fields.start, &o.fields.end, viewer);
+            let iend = ospan.end(&istart, &o.fields.end, viewer);
+            (&o.fields, istart, iend, true)
+        } else {
+            if at < earliest_start {
+                continue;
             }
-            None => {
-                if at < earliest_start {
-                    continue;
-                }
-                let iend = span.end(&occurrence_start, &master.end, viewer);
-                (master, occurrence_start.clone(), iend, false)
-            }
+            let iend = span.end(&occurrence_start, &master.end, viewer);
+            (master, occurrence_start.clone(), iend, false)
         };
         if fields.status == EventStatus::Cancelled {
             continue;
@@ -731,7 +728,7 @@ mod tests {
 
     /// A `SECONDLY` series from 1970 costs next to nothing in a 2026 view
     /// (it ended long ago: MINUTELY / SECONDLY are capped), and an
-    /// `HOURLY` series older than MAX_SCANNED hours still shows.
+    /// `HOURLY` series older than `MAX_SCANNED` hours still shows.
     #[test]
     fn old_fine_grained_series_are_cheap_and_correct() {
         let range = ExpandOptions::range(
@@ -810,9 +807,9 @@ mod tests {
         );
         assert_eq!(instances(&daily, &options).len(), 31);
         assert!(!budget.exhausted());
-        let _ = instances(&costly, &options);
+        drop(instances(&costly, &options));
         for _ in 0..2_000 {
-            let _ = instances(&daily, &options);
+            drop(instances(&daily, &options));
         }
         assert!(budget.exhausted());
         assert!(instances(&daily, &options).is_empty());

@@ -6,6 +6,8 @@
 //! a program's message becomes a saved draft with its files that the UI
 //! opens; nothing is sent; errors map to MAPI codes.
 
+#![cfg(test)]
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -168,7 +170,7 @@ fn open(host: Option<Arc<FakeHost>>) -> (Service, tempfile::TempDir, tempfile::T
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
     options.start_engines = false;
-    options.desktop = host.map(|h| h as Arc<dyn DesktopHost>);
+    options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     (service, data, config)
 }

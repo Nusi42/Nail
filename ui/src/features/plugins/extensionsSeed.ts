@@ -64,7 +64,7 @@ export function attachmentCheckManifest(): PluginManifest {
 /** Whether a draft mentions an attachment it does not have. */
 export function forgotAttachment(draft: Draft): boolean {
   const text = [draft.subject, draft.text, draft.markdown ?? "", draft.html ?? ""].join("\n");
-  return /\battach(ed|ment|ments)?\b/i.test(text) && draft.attachments.length === 0;
+  return /\battach(?:ed|ments?)?\b/i.test(text) && draft.attachments.length === 0;
 }
 
 const attachmentCheck: ExtensionBehaviour = {
@@ -309,7 +309,7 @@ export function installDemoExtensions(core: MockCore): PluginInfo[] {
   for (let i = 0; i < 25; i++) recordHookCall(core, "link-guard", "open", "ok", 2 + (i % 3));
   const pdf = core.data.messages.find((m) => core.data.bodies.get(m.id)?.attachments.length);
   const body = pdf ? core.data.bodies.get(pdf.id) : undefined;
-  if (body && body.attachments.length === 1) {
+  if (body?.attachments.length === 1) {
     body.attachments.push({
       index: 1,
       filename: "q3-figures.csv",

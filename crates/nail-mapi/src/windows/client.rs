@@ -90,6 +90,7 @@ fn last_error() -> u32 {
 }
 
 /// A SID copied out of a token (DWORD-aligned storage).
+#[derive(Debug)]
 pub struct Sid(Vec<u32>);
 
 impl Sid {
@@ -101,7 +102,7 @@ impl Sid {
     pub fn to_string_sid(&self) -> Option<String> {
         let mut out: *mut u16 = std::ptr::null_mut();
         // SAFETY: `self` holds a valid SID; Windows allocates `out`.
-        if unsafe { ConvertSidToStringSidW(self.as_psid(), &mut out) } == 0 || out.is_null() {
+        if unsafe { ConvertSidToStringSidW(self.as_psid(), &raw mut out) } == 0 || out.is_null() {
             return None;
         }
         let mut len = 0;
@@ -121,7 +122,7 @@ impl Sid {
         let wide = to_wide(text);
         let mut sid = std::ptr::null_mut();
         // SAFETY: zero-terminated input; Windows allocates `sid`.
-        if unsafe { ConvertStringSidToSidW(wide.as_ptr(), &mut sid) } == 0 || sid.is_null() {
+        if unsafe { ConvertStringSidToSidW(wide.as_ptr(), &raw mut sid) } == 0 || sid.is_null() {
             return None;
         }
         // SAFETY: `sid` is a valid SID from Windows.
@@ -152,7 +153,7 @@ fn token_user(token: &OwnedHandle) -> Option<Sid> {
             TokenUser,
             std::ptr::null_mut(),
             0,
-            &mut needed,
+            &raw mut needed,
         )
     };
     if needed == 0 {
@@ -167,7 +168,7 @@ fn token_user(token: &OwnedHandle) -> Option<Sid> {
             TokenUser,
             buffer.as_mut_ptr().cast(),
             needed,
-            &mut needed,
+            &raw mut needed,
         )
     };
     if ok == 0 {
@@ -187,7 +188,7 @@ fn token_user(token: &OwnedHandle) -> Option<Sid> {
 fn process_user(process: HANDLE) -> Option<Sid> {
     let mut token = std::ptr::null_mut();
     // SAFETY: `process` is a process handle with query rights.
-    if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) } == 0 {
+    if unsafe { OpenProcessToken(process, TOKEN_QUERY, &raw mut token) } == 0 {
         return None;
     }
     token_user(&owned(token)?)
@@ -203,7 +204,7 @@ fn current_token() -> Option<OwnedHandle> {
     let mut token = std::ptr::null_mut();
     // SAFETY: the pseudo handle of the current process; the token handle is
     // owned below.
-    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) } == 0 {
         return None;
     }
     owned(token)
@@ -221,7 +222,7 @@ pub fn integrity_rid() -> Option<u32> {
             TokenIntegrityLevel,
             std::ptr::null_mut(),
             0,
-            &mut needed,
+            &raw mut needed,
         )
     };
     if needed == 0 {
@@ -235,7 +236,7 @@ pub fn integrity_rid() -> Option<u32> {
             TokenIntegrityLevel,
             buffer.as_mut_ptr().cast(),
             needed,
-            &mut needed,
+            &raw mut needed,
         )
     };
     if ok == 0 {
@@ -265,8 +266,8 @@ fn token_elevated() -> Option<bool> {
             token.as_raw_handle(),
             TokenElevation,
             (&raw mut elevation).cast(),
-            size_of::<TOKEN_ELEVATION>() as u32,
-            &mut needed,
+            super::size_u32::<TOKEN_ELEVATION>(),
+            &raw mut needed,
         )
     };
     (ok != 0).then_some(elevation.TokenIsElevated != 0)
@@ -310,14 +311,14 @@ pub fn pipe_name() -> Option<String> {
 /// The path of the module (DLL or test executable) containing this code.
 pub fn own_module_path() -> Option<PathBuf> {
     let mut module = std::ptr::null_mut();
-    let address = own_module_path as *const () as *const u16;
+    let address = (own_module_path as *const ()).cast::<u16>();
     // SAFETY: looks up the module containing a function of this module
     // without changing its reference count.
     let ok = unsafe {
         GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             address,
-            &mut module,
+            &raw mut module,
         )
     };
     if ok == 0 {
@@ -325,7 +326,8 @@ pub fn own_module_path() -> Option<PathBuf> {
     }
     let mut buffer = vec![0u16; 32 * 1024];
     // SAFETY: `buffer` has room for the given number of units.
-    let len = unsafe { GetModuleFileNameW(module, buffer.as_mut_ptr(), buffer.len() as u32) };
+    let len =
+        unsafe { GetModuleFileNameW(module, buffer.as_mut_ptr(), super::count_u32(buffer.len())) };
     if len == 0 || len as usize >= buffer.len() {
         return None;
     }
@@ -385,7 +387,7 @@ fn launch(exe: &Path) -> bool {
     let mut command_line = to_wide(&format!("\"{}\"", exe.to_string_lossy()));
     let directory = exe.parent().map(|d| to_wide(&d.to_string_lossy()));
     let startup = STARTUPINFOW {
-        cb: size_of::<STARTUPINFOW>() as u32,
+        cb: super::size_u32::<STARTUPINFOW>(),
         ..Default::default()
     };
     let mut info = PROCESS_INFORMATION::default();
@@ -400,9 +402,9 @@ fn launch(exe: &Path) -> bool {
             0,
             CREATE_NEW_PROCESS_GROUP,
             std::ptr::null(),
-            directory.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
-            &startup,
-            &mut info,
+            directory.as_ref().map_or(std::ptr::null(), Vec::as_ptr),
+            &raw const startup,
+            &raw mut info,
         )
     };
     if ok == 0 {
@@ -414,6 +416,7 @@ fn launch(exe: &Path) -> bool {
 }
 
 /// The named-pipe transport.
+#[derive(Debug)]
 pub struct PipeTransport {
     /// The pipe's name.
     pub pipe: String,
@@ -445,7 +448,7 @@ impl PipeTransport {
         })
     }
 
-    fn open(&self, name: &[u16]) -> Result<OwnedHandle, u32> {
+    fn open(name: &[u16]) -> Result<OwnedHandle, u32> {
         // SAFETY: `name` is zero-terminated; no security attributes.
         let handle = unsafe {
             CreateFileW(
@@ -467,7 +470,7 @@ impl PipeTransport {
         let mut launched = false;
         let mut deadline = Instant::now() + self.connect_timeout;
         loop {
-            let error = match self.open(&name) {
+            let error = match Self::open(&name) {
                 Ok(handle) => return Ok(handle),
                 Err(error) => error,
             };
@@ -514,7 +517,7 @@ fn launch_allowed(elevated: bool, test_override: bool) -> bool {
 pub fn verify_server(pipe: &OwnedHandle, user: &Sid) -> Result<u32, MapiResult> {
     let mut pid = 0u32;
     // SAFETY: `pipe` is an open client end.
-    if unsafe { GetNamedPipeServerProcessId(pipe.as_raw_handle(), &mut pid) } == 0 {
+    if unsafe { GetNamedPipeServerProcessId(pipe.as_raw_handle(), &raw mut pid) } == 0 {
         return Err(MapiResult::Failure);
     }
     // SAFETY: plain query; the handle is owned below.
@@ -552,7 +555,7 @@ fn transfer(
                 buffer.as_ptr(),
                 len,
                 std::ptr::null_mut(),
-                &mut overlapped,
+                &raw mut overlapped,
             )
         } else {
             ReadFile(
@@ -560,7 +563,7 @@ fn transfer(
                 buffer.as_mut_ptr(),
                 len,
                 std::ptr::null_mut(),
-                &mut overlapped,
+                &raw mut overlapped,
             )
         }
     };
@@ -571,7 +574,7 @@ fn transfer(
         }
     }
     let remaining = deadline.saturating_duration_since(Instant::now());
-    let wait = remaining.as_millis().min(u128::from(u32::MAX - 1)) as u32;
+    let wait = u32::try_from(remaining.as_millis()).map_or(u32::MAX - 1, |ms| ms.min(u32::MAX - 1));
     // SAFETY: waits on the event owned above.
     let signalled = unsafe { WaitForSingleObject(event.as_raw_handle(), wait) } == WAIT_OBJECT_0;
     let mut done = 0u32;
@@ -579,13 +582,13 @@ fn transfer(
         // SAFETY: cancels this operation and waits until Windows no longer
         // touches `buffer` / `overlapped`.
         unsafe {
-            CancelIoEx(handle, &overlapped);
-            GetOverlappedResult(handle, &overlapped, &mut done, 1);
+            CancelIoEx(handle, &raw const overlapped);
+            GetOverlappedResult(handle, &raw const overlapped, &raw mut done, 1);
         }
         return None;
     }
     // SAFETY: the operation completed (event signalled).
-    if unsafe { GetOverlappedResult(handle, &overlapped, &mut done, 0) } == 0
+    if unsafe { GetOverlappedResult(handle, &raw const overlapped, &raw mut done, 0) } == 0
         && last_error() != ERROR_MORE_DATA
     {
         return None;
@@ -803,7 +806,7 @@ mod tests {
         let result = transport(&name, None, 300).send(&request("x"));
         assert_eq!(result.unwrap_err(), MapiResult::Failure);
         assert!(started.elapsed() < Duration::from_millis(1400));
-        let _ = thread.join();
+        drop(thread.join());
     }
 
     #[test]

@@ -59,7 +59,8 @@ export const MAX_HOOK_TIMEOUT_MS = 10_000;
 /** Wall-clock limit of one background job run (ms). */
 export const JOB_WALL_CLOCK_MS = 60_000;
 
-const chars = (text: string) => [...text].length;
+/** Length in Unicode scalar values, as Nail's Rust side counts (`chars().count()`). */
+const chars = (text: string) => Array.from(text).length;
 const utf8Length = (text: string) => {
   let n = 0;
   for (const ch of text) {
@@ -167,19 +168,24 @@ export function openProblems(result: PluginOpenResult | null | undefined): strin
 /** Problems with a preview renderer's answer (empty = valid). */
 export function previewProblems(preview: PluginPreview | null | undefined): string[] {
   if (!preview || typeof preview !== "object") return ["not a preview"];
-  if (preview.kind === "tree") {
-    if (!Array.isArray(preview.tree)) return ["not a preview"];
-    return checkTree(preview.tree, "tree").map((i) => `${i.path}: ${i.message}`);
-  }
-  if (preview.kind === "image") {
-    const out: string[] = [];
-    if (!(PREVIEW_IMAGE_TYPES as readonly string[]).includes(preview.mimeType)) {
-      out.push("image type not allowed");
+  // A plug-in's answer: the kind can be anything at run time.
+  switch (preview.kind) {
+    case "tree":
+      if (!Array.isArray(preview.tree)) return ["not a preview"];
+      return checkTree(preview.tree, "tree").map((i) => `${i.path}: ${i.message}`);
+    case "image": {
+      const out: string[] = [];
+      if (!(PREVIEW_IMAGE_TYPES as readonly string[]).includes(preview.mimeType)) {
+        out.push("image type not allowed");
+      }
+      if (Math.floor(preview.data.length / 4) * 3 > MAX_PREVIEW_IMAGE) {
+        out.push("image too large");
+      }
+      return out;
     }
-    if (Math.floor(preview.data.length / 4) * 3 > MAX_PREVIEW_IMAGE) out.push("image too large");
-    return out;
+    default:
+      return ["not a preview"];
   }
-  return ["not a preview"];
 }
 
 /** Problems with a Markdown block renderer's answer (empty = valid). */

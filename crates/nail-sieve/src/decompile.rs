@@ -563,7 +563,9 @@ fn vacation(command: &Command, lit: &impl Fn(&str) -> String) -> Result<Vacation
         }
     }
     let body = body.ok_or("vacation without reason")?;
-    settings.body = body.strip_suffix('\n').unwrap_or(&body).to_owned();
+    body.strip_suffix('\n')
+        .unwrap_or(&body)
+        .clone_into(&mut settings.body);
     Ok(settings)
 }
 
@@ -585,7 +587,10 @@ pub fn normalize_rule(rule: &Rule, options: &CompileOptions<'_>) -> (Condition, 
 fn normalize_match(m: &TextMatch) -> TextMatch {
     let mut m = m.clone();
     match m.op {
-        TextOp::Equals => m.value = m.value.trim().to_owned(),
+        TextOp::Equals => {
+            let trimmed = m.value.trim().to_owned();
+            m.value = trimmed;
+        }
         TextOp::StartsWith | TextOp::EndsWith if m.value.is_empty() => m.op = TextOp::Contains,
         TextOp::Regex => m.value = to_posix_ere(&m.value).unwrap_or(m.value),
         _ => {}

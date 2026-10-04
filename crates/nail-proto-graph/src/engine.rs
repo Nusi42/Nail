@@ -68,7 +68,7 @@ pub(crate) struct WellKnown {
 }
 
 impl WellKnown {
-    pub fn id_of(&self, folder: ExchangeWellKnownFolder) -> Option<&str> {
+    pub(crate) fn id_of(&self, folder: ExchangeWellKnownFolder) -> Option<&str> {
         self.by_id
             .iter()
             .find(|(_, f)| **f == folder)

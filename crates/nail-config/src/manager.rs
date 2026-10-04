@@ -160,13 +160,35 @@ pub(crate) struct Inner {
     pub(crate) plugins: Mutex<crate::plugins::InstalledPlugins>,
 }
 
+/// What [`ConfigManager`] last read from a configuration file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Seen {
+    /// Not read yet, or the last read failed.
+    Unknown,
+    /// The file did not exist.
+    Absent,
+    /// The file's text.
+    Text(String),
+}
+
+impl Seen {
+    /// Whether `text` (`None` = file absent) is what was seen.
+    fn is(&self, text: Option<&str>) -> bool {
+        match (self, text) {
+            (Self::Absent, None) => true,
+            (Self::Text(seen), Some(text)) => seen == text,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct State {
     theme: Arc<ResolvedTheme>,
     layout: Arc<ResolvedLayout>,
-    /// Last content seen per file (`None` = file absent), to ignore
-    /// notifications that did not change anything.
-    seen: [Option<Option<String>>; 2],
+    /// Last content seen per file, to ignore notifications that did not
+    /// change anything.
+    seen: [Seen; 2],
     /// Every error per file (empty = valid).
     errors: [Vec<ConfigError>; 2],
     /// M5a: the built-in and user themes.
@@ -211,6 +233,11 @@ impl ConfigManager {
     /// from `dir`. Never fails: missing files use the defaults, invalid
     /// files are recorded in [`Self::errors`] /
     /// [`Self::theme_file_errors`] and replaced by the defaults.
+    ///
+    /// # Panics
+    ///
+    /// When the built-in themes do not resolve (a build defect the crate's
+    /// tests catch).
     pub fn load(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
         let catalog = ThemeCatalog::builtin();
@@ -222,7 +249,7 @@ impl ConfigManager {
                 state: Mutex::new(State {
                     theme: Arc::new(selected.theme.clone()),
                     layout: Arc::new(default_layout()),
-                    seen: [None, None],
+                    seen: [Seen::Unknown, Seen::Unknown],
                     errors: [Vec::new(), Vec::new()],
                     appearance: appearance_of(&catalog, &selected, None),
                     catalog: Arc::new(catalog),
@@ -651,14 +678,14 @@ impl ConfigManager {
             Err(e) => {
                 let errors = vec![ConfigError::io(kind.file_name(), &e)];
                 let mut state = self.state();
-                state.seen[kind.index()] = None;
+                state.seen[kind.index()] = Seen::Unknown;
                 state.errors[kind.index()].clone_from(&errors);
                 return Outcome::Failed(errors);
             }
         };
 
         let mut state = self.state();
-        if state.seen[kind.index()].as_ref() == Some(&text) {
+        if state.seen[kind.index()].is(text.as_deref()) {
             return Outcome::Unchanged;
         }
         let file = kind.file_name();
@@ -682,7 +709,7 @@ impl ConfigManager {
                 parse_layout_all(t, file).map(|l| Resolved::Layout(Box::new(l)))
             }
         };
-        state.seen[kind.index()] = Some(text);
+        state.seen[kind.index()] = text.map_or(Seen::Absent, Seen::Text);
         match result {
             Ok(resolved) => {
                 let was_invalid = !std::mem::take(&mut state.errors[kind.index()]).is_empty();

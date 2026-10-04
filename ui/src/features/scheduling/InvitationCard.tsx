@@ -53,6 +53,7 @@ import {
   useSchedulingSettings,
   type SchedulingWrite,
 } from "./queries";
+import { nonEmpty } from "../../text/empty";
 
 /** Issues that warn about a forged sender or a hijacked event (shown first, as alerts). */
 const SPOOFING = new Set([
@@ -94,7 +95,7 @@ export function InvitationCard({
   if (!invitation) return null;
   return (
     <InvitationView
-      key={`${invitation.message_id}-${invitation.sequence}`}
+      key={`${invitation.message_id}-${String(invitation.sequence)}`}
       invitation={invitation}
       attendeesOpen={attendeesOpen}
       showConflicts={showConflicts}
@@ -131,7 +132,7 @@ function InvitationView({
   const [day, setDay] = useState(() => (seriesStart ? splitPimTime(seriesStart).day : todayIn(tz)));
   const canPickOccurrence = recurring && invitation.event_id !== null && seriesStart !== null;
 
-  const title = fields?.title || t("invitation-untitled");
+  const title = nonEmpty(fields?.title) ?? t("invitation-untitled");
   const has = (action: InvitationAction) => invitation.actions.includes(action);
 
   const run = async (request: SchedulingWrite, success: LocalizedMessage | null) => {
@@ -151,12 +152,7 @@ function InvitationView({
 
   /** The target of attendee-side requests: the card, or one occurrence of the event. */
   const target = (): InvitationTarget => {
-    if (
-      canPickOccurrence &&
-      scope === "occurrence" &&
-      invitation.event_id !== null &&
-      seriesStart
-    ) {
+    if (canPickOccurrence && scope === "occurrence" && invitation.event_id !== null) {
       return {
         type: "event",
         event_id: invitation.event_id,
@@ -472,7 +468,9 @@ function InvitationView({
           tz={tz}
           busy={busy}
           problem={problem}
-          onCancel={() => setMode("idle")}
+          onCancel={() => {
+            setMode("idle");
+          }}
           onSubmit={(start: PimTime, end: PimTime, comment) =>
             void run(
               { type: "ProposeNewTime", target: target(), start, end, comment },
@@ -486,7 +484,9 @@ function InvitationView({
         <ForwardForm
           busy={busy}
           problem={problem}
-          onCancel={() => setMode("idle")}
+          onCancel={() => {
+            setMode("idle");
+          }}
           onSubmit={(to, comment) =>
             void run(
               {
@@ -509,7 +509,9 @@ function InvitationView({
               data-part="form.button"
               data-action="propose-new-time"
               disabled={busy}
-              onClick={() => setMode("propose")}
+              onClick={() => {
+                setMode("propose");
+              }}
             >
               {t("invitation-action-propose-new-time")}
             </button>

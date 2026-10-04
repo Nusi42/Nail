@@ -125,7 +125,7 @@ fn header<'a>(raw: &'a str, name: &str) -> Option<&'a str> {
 
 fn child(name: &str, text: &str) -> Element {
     let mut e = Element::new(name);
-    e.text = text.to_owned();
+    text.clone_into(&mut e.text);
     e
 }
 
@@ -198,9 +198,10 @@ impl Builder {
     ) -> String {
         let id = self.state.new_id("AQMkFolder");
         let key = self.state.new_key();
-        let parent = parent
-            .map(str::to_owned)
-            .unwrap_or_else(|| self.state.mailboxes[m].folders[0].id.clone());
+        let parent = parent.map_or_else(
+            || self.state.mailboxes[m].folders[0].id.clone(),
+            str::to_owned,
+        );
         self.state.mailboxes[m].folders.push(MockFolder {
             id: id.clone(),
             change_key: key,

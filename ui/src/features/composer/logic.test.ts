@@ -38,6 +38,7 @@ import {
 import { mentionsAttachment, needsReminder, ownText, parseKeywords } from "./reminder";
 import { activeComposer } from "./sessions";
 import { emptyRich, instanceRichStore, primeRich, richStoreFor } from "./store";
+import { must } from "../../test/must";
 
 /** The rich store of the focused composer window. */
 const activeRich = (ctx: ComposeContext) =>
@@ -398,7 +399,8 @@ describe("composer flows", () => {
   it("reports conversion failures", async () => {
     const ctx = context();
     ctx.store.getState().setComposer({ ...emptyComposer(), identityId: "ada@example.org" });
-    ctx.transport.send = async () => ({ type: "Error", code: "unsupported", message: "no" });
+    ctx.transport.send = () =>
+      Promise.resolve({ type: "Error", code: "unsupported", message: "no" });
     await switchMode(ctx, "html");
     expect(ctx.store.getState().composer?.error).toEqual({ id: "error-unsupported" });
     expect(richStoreFor(ctx.store).getState()).toMatchObject({ mode: "plain", switching: false });
@@ -502,8 +504,8 @@ describe("composer flows", () => {
   it("swaps the signature when the identity changes", () => {
     const ctx = context();
     const ids = ctx.transport.data.accountsConfig.accounts.flatMap((a) => a.identities);
-    const personal = ids.find((i) => i.id === "ada@example.org") as Identity;
-    const work = ids.find((i) => i.id === "ada@work.example") as Identity;
+    const personal = must(ids.find((i) => i.id === "ada@example.org"));
+    const work = must(ids.find((i) => i.id === "ada@work.example"));
     ctx.store.getState().setComposer({ ...emptyComposer(), text: "Hi\n\n-- \nAda" });
     swapSignature(ctx, personal, work);
     expect(ctx.store.getState().composer?.text).toBe("Hi\n\n-- \nAda Lovelace\nAnalyst");

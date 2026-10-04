@@ -1,6 +1,12 @@
 //! The sandbox: CPU and memory limits, crash isolation, no host access,
 //! module loading, API versions and packages.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::time::{Duration, Instant};
@@ -217,7 +223,7 @@ async fn throwing_handlers_stop_the_plugin() {
         .await
         .unwrap();
     // The synchronous part succeeded; the rejection stops it afterwards.
-    let _ = run(&host, "rejecter").await;
+    drop(run(&host, "rejecter").await);
     wait_for("crash", || {
         (host.state(&plugin_id("rejecter")) == Some(PluginRunState::Crashed)).then_some(())
     })

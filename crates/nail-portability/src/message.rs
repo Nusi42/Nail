@@ -134,10 +134,10 @@ pub struct HeaderFlags {
 
 /// Thunderbird's `X-Mozilla-Status` bits.
 mod mozilla {
-    pub const READ: u32 = 0x0001;
-    pub const REPLIED: u32 = 0x0002;
-    pub const MARKED: u32 = 0x0004;
-    pub const EXPUNGED: u32 = 0x0008;
+    pub(super) const READ: u32 = 0x0001;
+    pub(super) const REPLIED: u32 = 0x0002;
+    pub(super) const MARKED: u32 = 0x0004;
+    pub(super) const EXPUNGED: u32 = 0x0008;
 }
 
 /// Reads `Status` (`R` read), `X-Status` (`A` answered, `F` flagged, `T`

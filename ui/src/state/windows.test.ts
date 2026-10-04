@@ -144,7 +144,7 @@ describe("window model (M5c)", () => {
       "invalid-geometry",
     );
     const full = Object.fromEntries(
-      Array.from({ length: MAX_WINDOW_STATES }, (_v, i) => [`w${i}`, ok]),
+      Array.from({ length: MAX_WINDOW_STATES }, (_v, i) => [`w${String(i)}`, ok]),
     );
     expect(checkWindowStateWrite(full, "new-window", ok)).toBe("too-many-windows");
     expect(checkWindowStateWrite(full, "w0", ok)).toBeNull();

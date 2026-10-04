@@ -62,7 +62,7 @@ function Check({
   disabled?: boolean;
   label: string;
   hint: string;
-  onChange(checked: boolean): void;
+  onChange: (checked: boolean) => void;
 }) {
   const hintId = useId();
   return (
@@ -74,7 +74,9 @@ function Check({
           checked={checked}
           disabled={disabled}
           aria-describedby={hintId}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={(e) => {
+            onChange(e.target.checked);
+          }}
         />
         <span data-part="form.check.label">{label}</span>
       </label>
@@ -124,7 +126,9 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
               checked={data.settings.close_to_tray}
               label={t("system-desktop-close-to-tray")}
               hint={t("system-desktop-close-to-tray-hint")}
-              onChange={(close_to_tray) => change({ close_to_tray })}
+              onChange={(close_to_tray) => {
+                change({ close_to_tray });
+              }}
             />
           </fieldset>
           <fieldset data-part="form.section" data-section="startup" disabled={busy}>
@@ -139,7 +143,9 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
                   ? "system-desktop-start-with-windows-managed"
                   : "system-desktop-start-with-windows-hint",
               )}
-              onChange={(start_with_windows) => change({ start_with_windows })}
+              onChange={(start_with_windows) => {
+                change({ start_with_windows });
+              }}
             />
             <Check
               field="start-hidden"
@@ -147,7 +153,9 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
               disabled={!data.settings.start_with_windows}
               label={t("system-desktop-start-hidden")}
               hint={t("system-desktop-start-hidden-hint")}
-              onChange={(start_hidden) => change({ start_hidden })}
+              onChange={(start_hidden) => {
+                change({ start_hidden });
+              }}
             />
           </fieldset>
           {showDev && (
@@ -158,7 +166,9 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
                 checked={data.settings.plugin_dev_endpoint}
                 label={t("system-desktop-dev-endpoint")}
                 hint={t("system-desktop-dev-endpoint-hint")}
-                onChange={(plugin_dev_endpoint) => change({ plugin_dev_endpoint })}
+                onChange={(plugin_dev_endpoint) => {
+                  change({ plugin_dev_endpoint });
+                }}
               />
               {data.devEndpointUrl !== null && (
                 <p data-part="desktop-settings.endpoint" role="status">

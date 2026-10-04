@@ -78,7 +78,7 @@ export const actions: Feature["actions"] = {
       if (id === null) return false;
       const message = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
       const view = message === undefined ? null : remoteContentView(message);
-      if (view === null || !view.blocked) return false;
+      if (!view?.blocked) return false;
       const scope = scopeArg(args);
       return scope === "message" || (scope === "sender" ? view.sender : view.domain) !== null;
     },
@@ -163,8 +163,6 @@ export const effects: Feature["effects"] = [RemoteAlerts];
 export { AUTH_PATH, CSRF_HEADER, HttpAuthTransport, type AuthTransport } from "./authClient";
 export { configureRemoteAuth, remoteAuth } from "./authConfig";
 export { RemoteLogin, RemoteReauth, reauthSecondsLeft } from "./Login";
-export { decorateRemoteContent } from "./mock";
-export { MockAuthServer } from "./mockAuth";
 export { browserPasskeys, type PasskeyApi } from "./passkeys";
 export { RemoteContentBar, remoteContentView } from "./RemoteContent";
 export { remoteStore, useRemoteState } from "./state";

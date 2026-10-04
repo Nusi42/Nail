@@ -18,6 +18,7 @@
 //! [`MockSieveServer::reject_scripts_containing`].
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -480,9 +481,11 @@ fn log_line(tokens: &[Tok]) -> String {
         match t {
             Tok::Atom(a) => out.push_str(a),
             Tok::Str(s) if s.contains(&b'\n') || s.len() > 200 => {
-                out.push_str(&format!("{{{}}}", s.len()));
+                let _ = write!(out, "{{{}}}", s.len());
             }
-            Tok::Str(s) => out.push_str(&format!("\"{}\"", String::from_utf8_lossy(s))),
+            Tok::Str(s) => {
+                let _ = write!(out, "\"{}\"", String::from_utf8_lossy(s));
+            }
         }
     }
     out
@@ -494,7 +497,7 @@ async fn session(
     config: &MockSieveConfig,
     acceptor: Option<&TlsAcceptor>,
 ) -> std::io::Result<()> {
-    let _ = tcp.set_nodelay(true);
+    drop(tcp.set_nodelay(true));
     let mut conn = match (config.tls, acceptor) {
         (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
         _ => Connection::new(MockStream::Plain(tcp)),
@@ -583,14 +586,13 @@ async fn sasl_auth(
         conn.line("NO \"Unsupported mechanism\"").await?;
         return Ok(false);
     }
-    let payload = match args.get(1) {
-        Some(initial) => initial.clone(),
-        None => {
-            conn.line("\"\"").await?;
-            match read_command(conn).await? {
-                Some(Ok(t)) => t.first().map(Tok::text).unwrap_or_default(),
-                _ => String::new(),
-            }
+    let payload = if let Some(initial) = args.get(1) {
+        initial.clone()
+    } else {
+        conn.line("\"\"").await?;
+        match read_command(conn).await? {
+            Some(Ok(t)) => t.first().map(Tok::text).unwrap_or_default(),
+            _ => String::new(),
         }
     };
     if payload.trim() == "*" {
@@ -601,23 +603,22 @@ async fn sasl_auth(
         conn.line("NO \"Invalid base64\"").await?;
         return Ok(false);
     };
-    let ok = match mechanism.as_str() {
-        "PLAIN" => sasl::parse_plain(&decoded)
-            .is_some_and(|(u, p)| u == config.username && p == config.password),
-        _ => {
-            let parsed = if mechanism == "XOAUTH2" {
-                sasl::parse_xoauth2(&decoded)
-            } else {
-                sasl::parse_oauthbearer(&decoded)
-            };
-            let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
-            if !ok {
-                conn.line(&format!("\"{}\"", sasl::oauth_error_challenge()))
-                    .await?;
-                let _ = read_command(conn).await?;
-            }
-            ok
+    let ok = if mechanism.as_str() == "PLAIN" {
+        sasl::parse_plain(&decoded)
+            .is_some_and(|(u, p)| u == config.username && p == config.password)
+    } else {
+        let parsed = if mechanism == "XOAUTH2" {
+            sasl::parse_xoauth2(&decoded)
+        } else {
+            sasl::parse_oauthbearer(&decoded)
+        };
+        let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
+        if !ok {
+            conn.line(&format!("\"{}\"", sasl::oauth_error_challenge()))
+                .await?;
+            drop(read_command(conn).await?);
         }
+        ok
     };
     if !ok {
         conn.line("NO \"Authentication failed\"").await?;
@@ -994,7 +995,6 @@ pub fn validate_script(script: &str, extensions: &[String]) -> Result<(), String
                 }
                 required.insert(ext);
             }
-            Lex::Str(_) | Lex::Number => {}
             Lex::Punct(p @ ('[' | '(' | '{')) => {
                 stack.push((line, *p));
                 if *p == '{' {
@@ -1022,7 +1022,7 @@ pub fn validate_script(script: &str, extensions: &[String]) -> Result<(), String
                 at_command_start = true;
                 in_require = false;
             }
-            Lex::Punct(_) => {}
+            Lex::Str(_) | Lex::Number | Lex::Punct(_) => {}
         }
         if index + 1 == tokens.len() && !matches!(token, Lex::Punct(';' | '}')) {
             return err("missing \";\" at the end of the script".to_owned());

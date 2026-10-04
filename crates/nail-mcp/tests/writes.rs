@@ -4,6 +4,12 @@
 //! in a session and as MRTR rounds, idempotency keys, rate limits and the
 //! audit log.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::sync::{Arc, Mutex};
@@ -256,7 +262,7 @@ async fn drafts_run_without_asking_and_retries_do_not_double_act() {
         entries[1].detail.as_deref(),
         Some(nail_mcp::messages::DETAIL_REPLAYED)
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -352,7 +358,7 @@ async fn every_write_checks_the_grant() {
         .with_arguments(json!({"message_ids": "m1"}).as_object().unwrap().clone());
     assert!(client.call_tool(bad).await.is_err());
     assert_eq!(env.data.write_names(), ["UpdateFlags"]);
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -697,7 +703,7 @@ async fn rate_limits_trip_per_client() {
             .as_deref(),
         Some("mcp-tool-audit-rate-limited")
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -781,7 +787,7 @@ async fn declining_the_form_denies_even_a_delete() {
     .unwrap();
     assert_eq!(value(&result)["status"], "denied");
     assert!(env.data.written().is_empty());
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -814,7 +820,7 @@ async fn stateless_clients_answer_through_mrtr_rounds() {
         .with_arguments(json!({"draft_id": "d1"}).as_object().unwrap().clone());
     forged.request_state = Some("not-a-state".into());
     assert!(client.call_tool_once(forged).await.is_err());
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -840,7 +846,7 @@ async fn a_vetoed_send_reports_the_reasons() {
     );
     let empty = call(&client, "send_message", json!({"draft_id": "draft-empty"})).await;
     assert_eq!(value(&empty)["error"], "invalid_request");
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -919,7 +925,7 @@ async fn mail_organizing_validates_and_queues() {
             "SnoozeMessages"
         ]
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]
@@ -1040,7 +1046,7 @@ async fn drafts_reply_update_and_edit_the_open_one() {
             .iter()
             .any(|e| matches!(e, Event::McpContextAccess { edit: true, .. }))
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
 }
 
 #[tokio::test]

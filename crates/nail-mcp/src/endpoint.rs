@@ -46,7 +46,7 @@ pub fn read_endpoint(path: &Path) -> std::io::Result<Endpoint> {
 /// have replaced it).
 pub fn remove_endpoint(path: &Path, url: &str) {
     if read_endpoint(path).is_ok_and(|e| e.url == url) {
-        let _ = std::fs::remove_file(path);
+        drop(std::fs::remove_file(path));
     }
 }
 

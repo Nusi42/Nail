@@ -1,6 +1,8 @@
 //! The server over real sockets (WebSocket round trips) and through the
 //! router (static files, blobs, headers).
 
+#![cfg(test)]
+
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;

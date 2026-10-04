@@ -6,6 +6,8 @@
 //! sends `REQUEST`s, records `REPLY`s and answers `COUNTER`s; free/busy
 //! comes from the user's calendars and the mock CalDAV server's outbox.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -179,19 +181,32 @@ fn smtp(f: &Fixture) -> Vec<String> {
         .collect()
 }
 
-/// An iMIP mail.
-#[allow(clippy::too_many_arguments)]
-fn imip(
-    from: &str,
-    to: &str,
-    subject: &str,
-    message_id: &str,
-    method: &str,
-    uid: &str,
+/// The parts of an iMIP mail ([`imip`]).
+struct Imip<'a> {
+    from: &'a str,
+    to: &'a str,
+    subject: &'a str,
+    message_id: &'a str,
+    method: &'a str,
+    uid: &'a str,
     sequence: u32,
-    stamp: &str,
-    body: &str,
-) -> String {
+    stamp: &'a str,
+    body: &'a str,
+}
+
+/// An iMIP mail.
+fn imip(mail: &Imip<'_>) -> String {
+    let Imip {
+        from,
+        to,
+        subject,
+        message_id,
+        method,
+        uid,
+        sequence,
+        stamp,
+        body,
+    } = mail;
     format!(
         "From: {from}\r\nTo: {to}\r\nSubject: {subject}\r\nDate: Thu, 01 Oct 2026 08:00:00 +0000\r\n\
          Message-ID: <{message_id}>\r\nMIME-Version: 1.0\r\n\
@@ -204,23 +219,23 @@ fn imip(
 const GRACE: &str = "Grace Hopper <grace@example.org>";
 
 fn invitation(uid: &str, sequence: u32, title: &str, start: &str, stamp: &str) -> String {
-    imip(
-        GRACE,
-        MULTI_WORK_EMAIL,
-        title,
-        &format!("{uid}-{sequence}"),
-        "REQUEST",
+    imip(&Imip {
+        from: GRACE,
+        to: MULTI_WORK_EMAIL,
+        subject: title,
+        message_id: &format!("{uid}-{sequence}"),
+        method: "REQUEST",
         uid,
         sequence,
         stamp,
-        &format!(
+        body: &format!(
             "DTSTART:{start}\r\nDTEND:{}\r\nSUMMARY:{title}\r\nLOCATION:Room 1\r\n\
              ORGANIZER;CN=Grace Hopper:mailto:grace@example.org\r\n\
              ATTENDEE;CN=Ada;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n\
              ATTENDEE;CN=Grace Hopper;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n",
             start.replace("T09", "T10")
         ),
-    )
+    })
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -327,19 +342,9 @@ async fn invitations_are_added_answered_updated_and_cancelled() {
     // apply cancellations on their own).
     let cancel = deliver(
         &f,
-        &imip(
-            GRACE,
-            MULTI_WORK_EMAIL,
-            "Cancelled: Planning",
-            "planning-cancel",
-            "CANCEL",
-            uid,
-            2,
-            "20261003T080000Z",
-            &format!(
+        &imip(&Imip { from: GRACE, to: MULTI_WORK_EMAIL, subject: "Cancelled: Planning", message_id: "planning-cancel", method: "CANCEL", uid, sequence: 2, stamp: "20261003T080000Z", body: &format!(
                 "ORGANIZER:mailto:grace@example.org\r\nATTENDEE:mailto:{MULTI_WORK_EMAIL}\r\nSTATUS:CANCELLED\r\n"
-            ),
-        ),
+            ) }),
         "Cancelled: Planning",
     )
     .await;
@@ -368,20 +373,10 @@ async fn spoofed_invitations_are_never_applied() {
     let f = setup().await;
     let message = deliver(
         &f,
-        &imip(
-            "Mallory <mallory@evil.example>",
-            MULTI_WORK_EMAIL,
-            "Urgent meeting",
-            "spoof-1",
-            "REQUEST",
-            "spoof-1@example.org",
-            0,
-            "20261001T080000Z",
-            &format!(
+        &imip(&Imip { from: "Mallory <mallory@evil.example>", to: MULTI_WORK_EMAIL, subject: "Urgent meeting", message_id: "spoof-1", method: "REQUEST", uid: "spoof-1@example.org", sequence: 0, stamp: "20261001T080000Z", body: &format!(
                 "DTSTART:20261007T090000Z\r\nDTEND:20261007T100000Z\r\nSUMMARY:Urgent meeting\r\n\
                  ORGANIZER:mailto:ceo@work.example\r\nATTENDEE;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n"
-            ),
-        ),
+            ) }),
         "Urgent meeting",
     )
     .await;
@@ -456,19 +451,9 @@ async fn organizers_invite_record_replies_and_answer_counters() {
     // Grace accepts: recorded in the organizer's copy on arrival.
     let reply = deliver(
         &f,
-        &imip(
-            GRACE,
-            MULTI_WORK_EMAIL,
-            "Accepted: Design review",
-            "reply-1",
-            "REPLY",
-            &event.uid,
-            0,
-            "20261001T090000Z",
-            &format!(
+        &imip(&Imip { from: GRACE, to: MULTI_WORK_EMAIL, subject: "Accepted: Design review", message_id: "reply-1", method: "REPLY", uid: &event.uid, sequence: 0, stamp: "20261001T090000Z", body: &format!(
                 "ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n"
-            ),
-        ),
+            ) }),
         "Accepted: Design review",
     )
     .await;
@@ -490,21 +475,11 @@ async fn organizers_invite_record_replies_and_answer_counters() {
     // Grace proposes another time; the organizer accepts it.
     let counter = deliver(
         &f,
-        &imip(
-            GRACE,
-            MULTI_WORK_EMAIL,
-            "New time proposed: Design review",
-            "counter-1",
-            "COUNTER",
-            &event.uid,
-            0,
-            "20261001T100000Z",
-            &format!(
+        &imip(&Imip { from: GRACE, to: MULTI_WORK_EMAIL, subject: "New time proposed: Design review", message_id: "counter-1", method: "COUNTER", uid: &event.uid, sequence: 0, stamp: "20261001T100000Z", body: &format!(
                 "DTSTART:20261008T150000Z\r\nDTEND:20261008T160000Z\r\nSUMMARY:Design review\r\n\
                  ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n\
                  COMMENT:Afternoon is better\r\n"
-            ),
-        ),
+            ) }),
         "New time proposed: Design review",
     )
     .await;
@@ -798,39 +773,39 @@ async fn hijacks_by_uid_are_never_applied() {
     // A: a REQUEST naming Mallory as the organizer, from Mallory.
     let hijack = deliver(
         &f,
-        &imip(
-            MALLORY,
-            MULTI_WORK_EMAIL,
-            "Hijacked",
-            "hijack-a",
-            "REQUEST",
+        &imip(&Imip {
+            from: MALLORY,
+            to: MULTI_WORK_EMAIL,
+            subject: "Hijacked",
+            message_id: "hijack-a",
+            method: "REQUEST",
             uid,
-            1,
-            "20261002T080000Z",
-            &format!(
+            sequence: 1,
+            stamp: "20261002T080000Z",
+            body: &format!(
                 "DTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:Hijacked\r\n\
                  LOCATION:https://evil.example/join\r\nORGANIZER:mailto:mallory@evil.example\r\n\
                  ATTENDEE;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n"
             ),
-        ),
+        }),
         "Hijacked",
     )
     .await;
     // B: a PUBLISH over the event (no attendees, another organizer).
     let publish = deliver(
         &f,
-        &imip(
-            MALLORY,
-            MULTI_WORK_EMAIL,
-            "Published over",
-            "hijack-b",
-            "PUBLISH",
+        &imip(&Imip {
+            from: MALLORY,
+            to: MULTI_WORK_EMAIL,
+            subject: "Published over",
+            message_id: "hijack-b",
+            method: "PUBLISH",
             uid,
-            0,
-            "20261003T080000Z",
-            "DTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:Published over\r\n\
+            sequence: 0,
+            stamp: "20261003T080000Z",
+            body: "DTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:Published over\r\n\
              ORGANIZER:mailto:someone@evil.example\r\n",
-        ),
+        }),
         "Published over",
     )
     .await;
@@ -838,21 +813,21 @@ async fn hijacks_by_uid_are_never_applied() {
     // naming herself.
     let sent_by = deliver(
         &f,
-        &imip(
-            MALLORY,
-            MULTI_WORK_EMAIL,
-            "Board meeting",
-            "hijack-c",
-            "REQUEST",
-            "board-1@work.example",
-            0,
-            "20261001T080000Z",
-            &format!(
+        &imip(&Imip {
+            from: MALLORY,
+            to: MULTI_WORK_EMAIL,
+            subject: "Board meeting",
+            message_id: "hijack-c",
+            method: "REQUEST",
+            uid: "board-1@work.example",
+            sequence: 0,
+            stamp: "20261001T080000Z",
+            body: &format!(
                 "DTSTART:20261007T090000Z\r\nDTEND:20261007T100000Z\r\nSUMMARY:Board meeting\r\n\
                  ORGANIZER;SENT-BY=\"mailto:mallory@evil.example\":mailto:ceo@work.example\r\n\
                  ATTENDEE;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n"
             ),
-        ),
+        }),
         "Board meeting",
     )
     .await;
@@ -920,19 +895,9 @@ async fn replies_from_uninvited_people_are_not_recorded() {
     let event = organized(&f, "Closed meeting").await;
     let crasher = deliver(
         &f,
-        &imip(
-            MALLORY,
-            MULTI_WORK_EMAIL,
-            "Accepted: Closed meeting",
-            "crasher-1",
-            "REPLY",
-            &event.uid,
-            0,
-            "20261001T090000Z",
-            &format!(
+        &imip(&Imip { from: MALLORY, to: MULTI_WORK_EMAIL, subject: "Accepted: Closed meeting", message_id: "crasher-1", method: "REPLY", uid: &event.uid, sequence: 0, stamp: "20261001T090000Z", body: &format!(
                 "ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:mallory@evil.example\r\n"
-            ),
-        ),
+            ) }),
         "Accepted: Closed meeting",
     )
     .await;
@@ -940,19 +905,9 @@ async fn replies_from_uninvited_people_are_not_recorded() {
     // first) has been processed by then.
     deliver(
         &f,
-        &imip(
-            GRACE,
-            MULTI_WORK_EMAIL,
-            "Accepted: Closed meeting (Grace)",
-            "crasher-2",
-            "REPLY",
-            &event.uid,
-            0,
-            "20261001T100000Z",
-            &format!(
+        &imip(&Imip { from: GRACE, to: MULTI_WORK_EMAIL, subject: "Accepted: Closed meeting (Grace)", message_id: "crasher-2", method: "REPLY", uid: &event.uid, sequence: 0, stamp: "20261001T100000Z", body: &format!(
                 "ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n"
-            ),
-        ),
+            ) }),
         "Accepted: Closed meeting (Grace)",
     )
     .await;
@@ -1096,20 +1051,10 @@ async fn declined_counters_tell_the_attendee_and_keep_the_time() {
     let event = organized(&f, "Fixed time review").await;
     let counter = deliver(
         &f,
-        &imip(
-            GRACE,
-            MULTI_WORK_EMAIL,
-            "New time proposed: Fixed time review",
-            "decline-counter-1",
-            "COUNTER",
-            &event.uid,
-            0,
-            "20261001T100000Z",
-            &format!(
+        &imip(&Imip { from: GRACE, to: MULTI_WORK_EMAIL, subject: "New time proposed: Fixed time review", message_id: "decline-counter-1", method: "COUNTER", uid: &event.uid, sequence: 0, stamp: "20261001T100000Z", body: &format!(
                 "DTSTART:20261008T150000Z\r\nDTEND:20261008T160000Z\r\nSUMMARY:Fixed time review\r\n\
                  ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n"
-            ),
-        ),
+            ) }),
         "New time proposed: Fixed time review",
     )
     .await;

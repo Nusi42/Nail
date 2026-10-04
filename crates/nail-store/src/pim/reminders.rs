@@ -331,9 +331,8 @@ impl Store {
                         .recurrence_id
                         .as_ref()
                         .and_then(|rid| event.overrides.iter().find(|o| &o.recurrence_id == rid))
-                        .map(|o| &o.fields)
-                        .unwrap_or(&event.fields);
-                    let overridden = !std::ptr::eq(fields, &event.fields);
+                        .map_or(&event.fields, |o| &o.fields);
+                    let overridden = !std::ptr::eq(fields, &raw const event.fields);
                     let start = if overridden {
                         Some(&fields.start)
                     } else {
@@ -399,7 +398,7 @@ mod tests {
     #[test]
     fn replanning_keeps_states_unless_the_time_moved() {
         let store = testing::store();
-        let event = testing::Fixtures::new().event("e", "ue", "Meeting");
+        let event = testing::event("e", "uid-e", "Meeting");
         store
             .save_pim_item(&PimItem::Event(event), &raw("e"), 1)
             .unwrap();
@@ -489,7 +488,7 @@ mod tests {
     #[test]
     fn views_carry_the_occurrence() {
         let store = testing::store();
-        let mut event = testing::Fixtures::new().event("e", "ue", "Weekly");
+        let mut event = testing::event("e", "uid-e", "Weekly");
         event.fields.location = Some("Room 1".into());
         event.recurrence = Some(testing::daily(nail_api::pim::RecurrenceEnd::Never));
         let rid = PimTime::zoned("2026-10-02T09:00:00", "Europe/Berlin");

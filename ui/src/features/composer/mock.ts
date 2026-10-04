@@ -121,7 +121,7 @@ export function renderMarkdown(markdown: string): string {
     if (heading) {
       flush();
       const level = (heading[1] ?? "#").length;
-      out.push(`<h${level}>${inline(heading[2] ?? "")}</h${level}>`);
+      out.push(`<h${String(level)}>${inline(heading[2] ?? "")}</h${String(level)}>`);
       continue;
     }
     if (/^[-*]\s+/.test(line)) {
@@ -348,7 +348,8 @@ function upload(
     return errorResponse("invalid_request", "attachment data is not base64");
   }
   const size = base64Size(data);
-  if (size > MOCK_MAX_ATTACHMENT) return errorResponse("too_large", `${filename}: ${size} bytes`);
+  if (size > MOCK_MAX_ATTACHMENT)
+    return errorResponse("too_large", `${filename}: ${String(size)} bytes`);
   const blob = core.nextId("blob-");
   core.data.features.composer.blobs.set(blob, { filename, mime, data });
   return {

@@ -5,6 +5,8 @@
 //! replay, sending through the API, server-side changes picked up by
 //! history polling, history expiry, the label queue, `TestAccount`.
 
+#![cfg(test)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -64,7 +66,7 @@ account "{ACCOUNT}" email="ada@gmail.example" name="Gmail" {{
         .unwrap();
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
-    options.secrets = Some(secrets as Arc<dyn SecretStore>);
+    options.secrets = Some(secrets);
     options.timing = EngineTiming::fast();
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     Env {
@@ -219,7 +221,7 @@ async fn gmail_syncs_folders_labels_and_categories() {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         },
     )

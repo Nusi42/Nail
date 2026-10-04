@@ -232,7 +232,7 @@ fn write_draft_details(tx: &Transaction<'_>, n: i64, draft: &Draft) -> Result<()
         let hash = BlobHash::parse(&a.blob)?;
         stmt.execute(params![
             n,
-            position as i64,
+            i64::try_from(position).unwrap_or(i64::MAX),
             a.filename,
             a.mime,
             i64::try_from(a.size).unwrap_or(i64::MAX),

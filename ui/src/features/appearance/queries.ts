@@ -24,8 +24,7 @@ export function applyAppearance(queryClient: QueryClient, appearance: Appearance
   const before = queryClient.getQueryData<Appearance>(appearanceKeys.themes);
   queryClient.setQueryData(appearanceKeys.themes, appearance);
   const switched =
-    before === undefined ||
-    before.active !== appearance.active ||
+    before?.active !== appearance.active ||
     before.settings.density !== appearance.settings.density ||
     JSON.stringify(before.settings.overrides) !== JSON.stringify(appearance.settings.overrides);
   if (switched) void queryClient.invalidateQueries({ queryKey: queryKeys.config });

@@ -74,9 +74,9 @@ function PanelTree({
         values={values}
         issues={{}}
         busy={busy}
-        onChange={(id: string, value: JsonValue) =>
-          setValues((previous) => ({ ...previous, [id]: value }))
-        }
+        onChange={(id: string, value: JsonValue) => {
+          setValues((previous) => ({ ...previous, [id]: value }));
+        }}
         onAction={(id) => void action(id)}
       />
     </>

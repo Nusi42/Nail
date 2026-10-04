@@ -20,9 +20,9 @@ export interface Localizer {
   /** The selected locale (e.g. `"de"`). */
   readonly locale: string;
   /** Formats message `id`; falls back to English per key. */
-  t(id: string, args?: MessageArgs): string;
+  t: (id: string, args?: MessageArgs) => string;
   /** Whether `id` exists in the selected language or English. */
-  has(id: string): boolean;
+  has: (id: string) => boolean;
 }
 
 function buildBundle(locale: string, sources: readonly string[]): FluentBundle {

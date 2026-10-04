@@ -1,6 +1,7 @@
 //! Schema v6 (ADR 0036): remote-UI users and credentials, passkeys,
 //! devices, sessions, pairing codes, login throttling, the remote audit
 //! log and the remote-content allow-lists.
+#![cfg(test)]
 
 use nail_api::mcp::McpScope;
 use nail_api::remote::{

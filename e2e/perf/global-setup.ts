@@ -20,7 +20,7 @@ export default function globalSetup(): void {
   const wanted = corpusMessages[corpus];
   if (wanted === undefined) throw new Error(`unknown NAIL_PERF_CORPUS ${corpus}`);
   const fresh = process.env.NAIL_PERF_FRESH === "1";
-  if (!fresh && report && report.corpus.messages === wanted) return;
+  if (!fresh && report?.corpus.messages === wanted) return;
   execFileSync(
     releaseBinary("nail-bench"),
     ["run", "--corpus", corpus, "--work-dir", workDir(), "--budgets", budgetsPath, "--no-check"],

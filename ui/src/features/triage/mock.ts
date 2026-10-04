@@ -172,7 +172,7 @@ export function answerTriage(core: MockCore, request: TriageRequest): Response {
     }
     case "TestNotification": {
       const sound = s.notifications.sound;
-      queueMicrotask(() =>
+      queueMicrotask(() => {
         core.emit({
           type: "NotificationRequested",
           notification: {
@@ -186,8 +186,8 @@ export function answerTriage(core: MockCore, request: TriageRequest): Response {
             body: { id: "notification-test-body" },
             sound,
           },
-        }),
-      );
+        });
+      });
       return { type: "Done" };
     }
   }
@@ -240,8 +240,7 @@ function snooze(core: MockCore, ids: string[], until: string, wake: FolderId | n
     const changed = new Set<FolderId>();
     for (const m of targets) {
       changed.add(m.folder_id);
-      const back =
-        wakeFolder && wakeFolder.account_id === m.account_id ? wakeFolder.id : m.folder_id;
+      const back = wakeFolder?.account_id === m.account_id ? wakeFolder.id : m.folder_id;
       s.snoozed = s.snoozed.filter((e) => e.message.id !== m.id);
       m.tags = withTags(m, [SNOOZED_KEYWORD], []);
       m.folder_id = snoozedFolderId(m.account_id);

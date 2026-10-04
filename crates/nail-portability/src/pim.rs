@@ -207,6 +207,7 @@ pub(crate) fn write_failed(
 /// Builds one iCalendar file from items that are each a whole `VCALENDAR`:
 /// their `VEVENT` / `VTODO` / `VJOURNAL` components go in, `VTIMEZONE`s
 /// once per `TZID`.
+#[derive(Debug)]
 pub struct IcsBuilder {
     calendar: Component,
     zones: Vec<String>,

@@ -128,7 +128,9 @@ function OrganizerPanel({
               type="radio"
               name={ids.who}
               checked={who === value}
-              onChange={() => setWho(value)}
+              onChange={() => {
+                setWho(value);
+              }}
             />
             <span>{t(`scheduling-send-to-${value}`)}</span>
           </label>
@@ -141,11 +143,11 @@ function OrganizerPanel({
                   <input
                     type="checkbox"
                     checked={chosen.includes(a.email)}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setChosen((c) =>
                         e.target.checked ? [...c, a.email] : c.filter((x) => x !== a.email),
-                      )
-                    }
+                      );
+                    }}
                   />
                   <span>
                     {a.name ? t("invitation-person", { name: a.name, email: a.email }) : a.email}
@@ -164,7 +166,9 @@ function OrganizerPanel({
           id={ids.comment}
           data-part="form.textarea"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={(e) => {
+            setComment(e.target.value);
+          }}
         />
       </div>
       <div data-part="scheduling.meeting.actions">
@@ -257,7 +261,9 @@ function AttendeePanel({
           <input
             type="checkbox"
             checked={onlyThis}
-            onChange={(e) => setOnlyThis(e.target.checked)}
+            onChange={(e) => {
+              setOnlyThis(e.target.checked);
+            }}
           />
           <span>{t("scheduling-answer-only-this")}</span>
         </label>
@@ -269,12 +275,16 @@ function AttendeePanel({
           tz={localZone()}
           busy={busy}
           problem={problem}
-          onCancel={() => setProposing(false)}
+          onCancel={() => {
+            setProposing(false);
+          }}
           onSubmit={(start, end, comment) =>
             void run(
               { type: "ProposeNewTime", target, start, end, comment },
               { id: "invitation-applied-propose" },
-            ).then((ok) => ok && setProposing(false))
+            ).then((ok) => {
+              if (ok) setProposing(false);
+            })
           }
         />
       ) : (
@@ -304,7 +314,9 @@ function AttendeePanel({
             data-part="form.button"
             data-action="propose-new-time"
             disabled={busy}
-            onClick={() => setProposing(true)}
+            onClick={() => {
+              setProposing(true);
+            }}
           >
             {t("invitation-action-propose-new-time")}
           </button>
@@ -365,7 +377,9 @@ export function CancelMeetingDialog({ close }: DialogProps) {
             comment: comment.trim() || null,
           },
           { id: "scheduling-cancelled" },
-        ).then((ok) => ok && finish());
+        ).then((ok) => {
+          if (ok) finish();
+        });
       }}
     >
       <p data-part="scheduling.dialog.intro">
@@ -379,7 +393,9 @@ export function CancelMeetingDialog({ close }: DialogProps) {
               type="radio"
               name={ids.scope}
               checked={scope === value}
-              onChange={() => setScope(value)}
+              onChange={() => {
+                setScope(value);
+              }}
             />
             <span>
               {t(`scheduling-cancel-scope-${value}`, {
@@ -399,11 +415,11 @@ export function CancelMeetingDialog({ close }: DialogProps) {
                 <input
                   type="checkbox"
                   checked={chosen.includes(a.email)}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setChosen((c) =>
                       e.target.checked ? [...c, a.email] : c.filter((x) => x !== a.email),
-                    )
-                  }
+                    );
+                  }}
                 />
                 <span>
                   {a.name ? t("invitation-person", { name: a.name, email: a.email }) : a.email}
@@ -421,7 +437,9 @@ export function CancelMeetingDialog({ close }: DialogProps) {
           id={ids.note}
           data-part="form.textarea"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={(e) => {
+            setComment(e.target.value);
+          }}
         />
       </div>
       <Problem message={problem} part="scheduling.problem" />
@@ -518,7 +536,9 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
                 type="checkbox"
                 checked={current[field] === true}
                 aria-describedby={`${ids.calendar}-${key}`}
-                onChange={(e) => setDraft({ ...current, [field]: e.target.checked })}
+                onChange={(e) => {
+                  setDraft({ ...current, [field]: e.target.checked });
+                }}
               />
               <span>{t(`scheduling-setting-${key}`)}</span>
               <span id={`${ids.calendar}-${key}`} data-part="form.hint">
@@ -536,7 +556,9 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
           id={ids.calendar}
           data-part="form.select"
           value={current.calendar_id ?? ""}
-          onChange={(e) => setDraft({ ...current, calendar_id: e.target.value || null })}
+          onChange={(e) => {
+            setDraft({ ...current, calendar_id: e.target.value || null });
+          }}
         >
           <option value="">{t("scheduling-setting-calendar-default")}</option>
           {writable.map((c) => (

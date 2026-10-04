@@ -27,7 +27,7 @@ export function CheckGroup<T extends string>({
   field: string;
   choices: readonly Choice<T>[];
   selected: readonly T[];
-  onChange(next: T[]): void;
+  onChange: (next: T[]) => void;
 }) {
   const id = useId();
   return (
@@ -35,7 +35,7 @@ export function CheckGroup<T extends string>({
       <legend data-part="form.section.title">{legend}</legend>
       <ul data-part="portability.choices">
         {choices.map((choice, index) => {
-          const hintId = choice.hint ? `${id}-${index}-hint` : undefined;
+          const hintId = choice.hint ? `${id}-${String(index)}-hint` : undefined;
           return (
             <li key={choice.value} data-part="portability.choice">
               <label data-part="form.check" data-value={choice.value}>
@@ -45,13 +45,13 @@ export function CheckGroup<T extends string>({
                   checked={selected.includes(choice.value)}
                   disabled={choice.disabled}
                   aria-describedby={hintId}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     onChange(
                       e.target.checked
                         ? [...selected, choice.value]
                         : selected.filter((v) => v !== choice.value),
-                    )
-                  }
+                    );
+                  }}
                 />
                 <span data-part="form.check.label">{choice.label}</span>
               </label>
@@ -80,7 +80,7 @@ export function RadioGroup<T extends string>({
   field: string;
   choices: readonly Choice<T>[];
   value: T;
-  onChange(next: T): void;
+  onChange: (next: T) => void;
 }) {
   const name = useId();
   return (
@@ -88,7 +88,7 @@ export function RadioGroup<T extends string>({
       <legend data-part="form.section.title">{legend}</legend>
       <ul data-part="portability.choices">
         {choices.map((choice, index) => {
-          const hintId = choice.hint ? `${name}-${index}-hint` : undefined;
+          const hintId = choice.hint ? `${name}-${String(index)}-hint` : undefined;
           return (
             <li key={choice.value} data-part="portability.choice">
               <label data-part="form.check" data-value={choice.value}>
@@ -99,7 +99,9 @@ export function RadioGroup<T extends string>({
                   checked={value === choice.value}
                   disabled={choice.disabled}
                   aria-describedby={hintId}
-                  onChange={() => onChange(choice.value)}
+                  onChange={() => {
+                    onChange(choice.value);
+                  }}
                 />
                 <span data-part="form.check.label">{choice.label}</span>
               </label>
@@ -128,7 +130,7 @@ export function Check({
   label: string;
   field: string;
   checked: boolean;
-  onChange(checked: boolean): void;
+  onChange: (checked: boolean) => void;
   hint?: string;
   disabled?: boolean;
 }) {
@@ -142,7 +144,9 @@ export function Check({
           checked={checked}
           disabled={disabled}
           aria-describedby={hint ? id : undefined}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={(e) => {
+            onChange(e.target.checked);
+          }}
         />
         <span data-part="form.check.label">{label}</span>
       </label>
@@ -167,7 +171,7 @@ export function SelectField({
   label: string;
   field: string;
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   children: ReactNode;
   disabled?: boolean;
 }) {
@@ -183,7 +187,9 @@ export function SelectField({
         data-field={field}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
       >
         {children}
       </select>
@@ -205,7 +211,7 @@ export function TextField({
   label: string;
   field: string;
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   type?: "text" | "password";
   autoComplete?: string;
   hint?: string;
@@ -225,9 +231,11 @@ export function TextField({
         autoComplete={autoComplete}
         spellCheck={false}
         value={value}
-        aria-invalid={invalid || undefined}
+        aria-invalid={invalid ? true : undefined}
         aria-describedby={hint ? `${id}-hint` : undefined}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
       />
       {hint && (
         <p data-part="form.hint" id={`${id}-hint`} data-tone={invalid ? "danger" : undefined}>

@@ -4,6 +4,7 @@
  * limit, a typed PIN's plausibility.
  */
 import type { PinPromptCloseReason, PinPurpose, SmartcardSettings } from "../../api/generated";
+import { charCount } from "../../text/chars";
 
 /** `MAX_PIN_CACHE_MINUTES`. */
 export const MAX_PIN_CACHE_MINUTES = 480;
@@ -37,6 +38,6 @@ export function smartcardSettingsIssue(settings: SmartcardSettings): string | nu
 
 /** `pin_is_plausible`: 4–64 characters, no control characters. */
 export function pinIsPlausible(pin: string): boolean {
-  const chars = [...pin].length;
+  const chars = charCount(pin);
   return chars >= MIN_PIN_CHARS && chars <= MAX_PIN_CHARS && !/\p{Cc}/u.test(pin);
 }

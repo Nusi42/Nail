@@ -38,6 +38,7 @@ import { AGENDA_LAYOUTS, HEADER_DETAILS, ORIENTATIONS, PAGE_SIZES } from "./mess
 import { defaultAgenda, defaultPrintOptions, targetIssue } from "./model";
 import { openPrintView } from "./PrintView";
 import { printStoreFor, usePrintState } from "./store";
+import { nonEmpty } from "../../text/empty";
 
 const PDF_FILTERS = [{ label_id: "print-filter-pdf", extensions: ["pdf"] }];
 
@@ -70,11 +71,11 @@ function useTargetTitle(target: PrintTarget | null): string {
   });
   switch (target?.type) {
     case "message":
-      return message.data?.headers.subject || t("print-no-subject");
+      return nonEmpty(message.data?.headers.subject) ?? t("print-no-subject");
     case "thread":
-      return thread.data?.thread.subject || t("print-no-subject");
+      return nonEmpty(thread.data?.thread.subject) ?? t("print-no-subject");
     case "event":
-      return event.data?.fields.title || t("print-no-title");
+      return nonEmpty(event.data?.fields.title) ?? t("print-no-title");
     case "agenda":
       return t("print-agenda-name", { start: target.start, end: target.end });
     default:
@@ -87,7 +88,7 @@ function AgendaFields({
   onChange,
 }: {
   target: Extract<PrintTarget, { type: "agenda" }>;
-  onChange(target: Extract<PrintTarget, { type: "agenda" }>): void;
+  onChange: (target: Extract<PrintTarget, { type: "agenda" }>) => void;
 }) {
   const t = useT();
   const id = useId();
@@ -105,7 +106,9 @@ function AgendaFields({
           data-part="form.input"
           type="date"
           value={target.start}
-          onChange={(e) => onChange({ ...target, start: e.target.value })}
+          onChange={(e) => {
+            onChange({ ...target, start: e.target.value });
+          }}
         />
       </div>
       <div data-part="form.field" data-field="agenda-end">
@@ -119,7 +122,9 @@ function AgendaFields({
           value={target.end}
           aria-invalid={issue !== null || undefined}
           aria-describedby={issue ? `${id}-issue` : undefined}
-          onChange={(e) => onChange({ ...target, end: e.target.value })}
+          onChange={(e) => {
+            onChange({ ...target, end: e.target.value });
+          }}
         />
       </div>
       {issue && (
@@ -131,7 +136,9 @@ function AgendaFields({
         label={t("print-agenda-layout")}
         field="agenda-layout"
         value={target.layout}
-        onChange={(v) => onChange({ ...target, layout: v as AgendaLayout })}
+        onChange={(v) => {
+          onChange({ ...target, layout: v as AgendaLayout });
+        }}
       >
         {AGENDA_LAYOUTS.map((l) => (
           <option key={l} value={l}>
@@ -144,7 +151,9 @@ function AgendaFields({
           legend={t("print-agenda-calendars")}
           field="agenda-calendars"
           selected={target.calendar_ids}
-          onChange={(calendar_ids) => onChange({ ...target, calendar_ids })}
+          onChange={(calendar_ids) => {
+            onChange({ ...target, calendar_ids });
+          }}
           choices={(calendars.data ?? []).map((c) => ({ value: c.id, label: c.settings.name }))}
         />
       )}
@@ -159,12 +168,13 @@ function OptionFields({
   mail,
 }: {
   options: PrintOptions;
-  onChange(options: PrintOptions): void;
+  onChange: (options: PrintOptions) => void;
   mail: boolean;
 }) {
   const t = useT();
-  const set = <K extends keyof PrintOptions>(key: K, value: PrintOptions[K]) =>
+  const set = <K extends keyof PrintOptions>(key: K, value: PrintOptions[K]) => {
     onChange({ ...options, [key]: value });
+  };
   return (
     <fieldset data-part="form.section" data-field="options">
       <legend data-part="form.section.title">{t("print-options")}</legend>
@@ -172,7 +182,9 @@ function OptionFields({
         label={t("print-page-size")}
         field="page-size"
         value={options.page_size}
-        onChange={(v) => set("page_size", v as PageSize)}
+        onChange={(v) => {
+          set("page_size", v as PageSize);
+        }}
       >
         {PAGE_SIZES.map((s) => (
           <option key={s} value={s}>
@@ -184,7 +196,9 @@ function OptionFields({
         label={t("print-orientation")}
         field="orientation"
         value={options.orientation}
-        onChange={(v) => set("orientation", v as PageOrientation)}
+        onChange={(v) => {
+          set("orientation", v as PageOrientation);
+        }}
       >
         {ORIENTATIONS.map((o) => (
           <option key={o} value={o}>
@@ -198,7 +212,9 @@ function OptionFields({
             label={t("print-headers")}
             field="headers"
             value={options.headers}
-            onChange={(v) => set("headers", v as HeaderDetail)}
+            onChange={(v) => {
+              set("headers", v as HeaderDetail);
+            }}
           >
             {HEADER_DETAILS.map((h) => (
               <option key={h} value={h}>
@@ -210,19 +226,25 @@ function OptionFields({
             label={t("print-quoted-text")}
             field="quoted-text"
             checked={options.quoted_text}
-            onChange={(v) => set("quoted_text", v)}
+            onChange={(v) => {
+              set("quoted_text", v);
+            }}
           />
           <Check
             label={t("print-attachment-list")}
             field="attachment-list"
             checked={options.attachment_list}
-            onChange={(v) => set("attachment_list", v)}
+            onChange={(v) => {
+              set("attachment_list", v);
+            }}
           />
           <Check
             label={t("print-remote-images")}
             field="remote-images"
             checked={options.remote_images}
-            onChange={(v) => set("remote_images", v)}
+            onChange={(v) => {
+              set("remote_images", v);
+            }}
             hint={t("print-remote-images-hint")}
           />
         </>
@@ -231,14 +253,16 @@ function OptionFields({
         label={t("print-backgrounds")}
         field="backgrounds"
         checked={options.backgrounds}
-        onChange={(v) => set("backgrounds", v)}
+        onChange={(v) => {
+          set("backgrounds", v);
+        }}
       />
     </fieldset>
   );
 }
 
 /** The print dialog's content. */
-export function PrintSetup({ close }: { close(): void }) {
+export function PrintSetup({ close }: { close: () => void }) {
   const t = useT();
   const locale = useLocale();
   const client = useClient();
@@ -305,7 +329,9 @@ export function PrintSetup({ close }: { close(): void }) {
             type="button"
             data-part="form.button"
             data-action="agenda"
-            onClick={() => setTarget(defaultAgenda())}
+            onClick={() => {
+              setTarget(defaultAgenda());
+            }}
           >
             {t("print-choose-agenda")}
           </button>
@@ -380,7 +406,9 @@ export function PrintSetup({ close }: { close(): void }) {
                       data-part="form.button"
                       data-action="pdf"
                       disabled={busy}
-                      onClick={() => setPdfStep(true)}
+                      onClick={() => {
+                        setPdfStep(true);
+                      }}
                     >
                       {t("print-pdf")}
                     </button>

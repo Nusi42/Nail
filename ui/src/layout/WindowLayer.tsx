@@ -54,6 +54,7 @@ import { WindowView } from "./LayoutRenderer";
 import { WindowFrame, tabbables, trapTab, type WindowFrameHandle } from "./WindowFrame";
 import { useDialogRegistry } from "./dialogRegistry";
 import { useWindowSpecs, useWindowTitles } from "./windowSpecs";
+import { nonEmpty } from "../text/empty";
 
 export { tabbables, trapTab };
 
@@ -291,7 +292,9 @@ export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: s
       }
     };
     document.addEventListener("focusin", onFocusIn);
-    return () => document.removeEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+    };
   }, []);
 
   const focusMain = useCallback(() => {
@@ -344,13 +347,15 @@ export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: s
         if (!mainBlocked) focusMain();
       }
       // The bottom window comes up: every window comes round in turn.
-      else raiseAndFocus(usable[0] as string);
+      else raiseAndFocus(usable[0] ?? usableTop);
     },
     [focusMain, raiseAndFocus],
   );
   useEffect(() => {
     setWindowCommandHandler(store, run);
-    return () => setWindowCommandHandler(store, null);
+    return () => {
+      setWindowCommandHandler(store, null);
+    };
   }, [store, run]);
 
   useEffect(() => {
@@ -361,7 +366,9 @@ export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: s
       run({ type: event.shiftKey ? "main" : "cycle" });
     };
     document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [run]);
 
   if (shown.length === 0) return null;
@@ -404,10 +411,14 @@ export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: s
             anchor={spec.modal ? (anchors.get(id) ?? null) : null}
             remembered={remembered}
             loaded={loaded}
-            title={customTitles[index] || t(windowTitleId(kind))}
+            title={nonEmpty(customTitles[index]) ?? t(windowTitleId(kind))}
             onRemember={remember}
-            onClose={() => closeWindow(id)}
-            onRaise={() => focusWindow(id)}
+            onClose={() => {
+              closeWindow(id);
+            }}
+            onRaise={() => {
+              focusWindow(id);
+            }}
             handle={(frame: WindowFrameHandle | null) => {
               if (frame === null) frames.current.delete(id);
               else frames.current.set(id, frame);
@@ -415,7 +426,12 @@ export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: s
           >
             <WindowInstanceContext.Provider value={id}>
               {Dialog ? (
-                <Dialog name={id} close={() => closeWindow(id)} />
+                <Dialog
+                  name={id}
+                  close={() => {
+                    closeWindow(id);
+                  }}
+                />
               ) : (
                 <WindowView layout={layout} name={kind} />
               )}

@@ -4,6 +4,7 @@
 //! the change log behind delta queries; fixture loading.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
 use base64::Engine as _;
 use serde_json::{Value, json};
@@ -507,7 +508,7 @@ impl Mailbox {
     pub fn rename_folder(&mut self, id: &str, name: &str) -> MockResult<()> {
         let id = self.folder_id(id).ok_or_else(|| MockError::not_found(id))?;
         if let Some(folder) = self.folders.get_mut(&id) {
-            folder.name = name.to_owned();
+            name.clone_into(&mut folder.name);
         }
         self.touch("folders", &id);
         Ok(())
@@ -574,15 +575,16 @@ impl Mailbox {
                         .to_string()
                 },
             );
-        let conversation_id = mime::header(&raw, "subject")
-            .map(|s| {
+        let conversation_id = mime::header(&raw, "subject").map_or_else(
+            || id.clone(),
+            |s| {
                 let s = s
                     .trim_start_matches("Re: ")
                     .trim_start_matches("RE: ")
                     .to_owned();
                 format!("AAQk-conv-{}", s.len())
-            })
-            .unwrap_or_else(|| id.clone());
+            },
+        );
         self.messages.insert(
             id.clone(),
             MockMessage {
@@ -689,7 +691,10 @@ impl Mailbox {
         object.entry("iCalUId").or_insert_with(|| {
             // Unique per event, shaped like Exchange's (a fixed prefix
             // and the item's bytes in hex).
-            let hex: String = id.bytes().map(|b| format!("{b:02X}")).collect();
+            let hex: String = id.bytes().fold(String::new(), |mut out, b| {
+                let _ = write!(out, "{b:02X}");
+                out
+            });
             json!(format!("040000008200E00074C5B7101A82E008{hex}"))
         });
         let kind = if object.get("recurrence").is_some_and(|r| !r.is_null()) {
@@ -958,7 +963,7 @@ fn load_mailbox(tenant: &mut Tenant, mb: &Value) -> Result<(), String> {
     );
     let ids = &mut tenant.ids;
     if let Some(zone) = mb["timeZone"].as_str() {
-        mailbox.time_zone = zone.to_owned();
+        zone.clone_into(&mut mailbox.time_zone);
     }
     if mb["noArchive"].as_bool() == Some(true)
         && let Some(archive) = mailbox.folder_id("archive")
@@ -1005,10 +1010,10 @@ fn load_mailbox(tenant: &mut Tenant, mb: &Value) -> Result<(), String> {
             .map_err(|e| format!("{e:?}"))?;
         let message = mailbox.messages.get_mut(&id).ok_or("message vanished")?;
         if let Some(flag) = m["flag"].as_str() {
-            message.flag = flag.to_owned();
+            flag.clone_into(&mut message.flag);
         }
         if let Some(inference) = m["inference"].as_str() {
-            message.inference = inference.to_owned();
+            inference.clone_into(&mut message.inference);
         }
         message.categories = m["categories"]
             .as_array()
@@ -1117,7 +1122,7 @@ fn load_mailbox(tenant: &mut Tenant, mb: &Value) -> Result<(), String> {
 
 /// Merges `patch` into `target` (top-level keys replaced, `null` kept as
 /// `null`, like Graph's `PATCH`).
-pub fn merge(target: &mut Value, patch: &Value) {
+pub(super) fn merge(target: &mut Value, patch: &Value) {
     if let (Some(t), Some(p)) = (target.as_object_mut(), patch.as_object()) {
         for (k, v) in p {
             t.insert(k.clone(), v.clone());

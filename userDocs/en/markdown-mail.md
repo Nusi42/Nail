@@ -19,7 +19,7 @@ Nail understands CommonMark with the GitHub additions:
 | `- [ ] open`, `- [x] done` | A task list with check boxes |
 | `> quoted` | A quote block |
 | `[text](https://example.org)`, `https://example.org` | Links (plain addresses become links by themselves) |
-| `` `code` `` and fenced blocks with <code>```rust</code> | Code, with syntax colours for the named language |
+| `` `code` `` and fenced blocks with ```` ```rust ```` | Code, with syntax colours for the named language |
 | `\| a \| b \|` rows under a `\|---\|---\|` line | A table |
 | `text[^1]` and `[^1]: note` | A footnote at the end |
 | a line ending in `\` | A line break |
@@ -28,7 +28,7 @@ Raw HTML is allowed, but everything that could run code or load something
 on the recipient's side is removed before sending (the same cleaning as in
 HTML mode).
 
-The signature after the `-- ` line keeps its line breaks.
+The signature after the "-- " line keeps its line breaks.
 
 ## What is sent
 

@@ -44,17 +44,28 @@ test("probe arguments", () => {
 
 test("the probe's request fails cleanly when nothing answers on the socket", async () => {
   // A loopback HTTP server on a free port that refuses the WebSocket upgrade.
-  const server = createServer((_req, res) => res.writeHead(404).end());
-  server.on("upgrade", (_req, socket) => socket.destroy());
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const server = createServer((_req, res) => {
+    res.writeHead(404).end();
+  });
+  server.on("upgrade", (_req, socket) => {
+    socket.destroy();
+  });
+  await new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      resolve(undefined);
+    });
+  });
   try {
-    const { port } = server.address();
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
     await assert.rejects(
-      rpc(`http://127.0.0.1:${port}/`, { type: "ListThemes" }, 5_000),
+      rpc(`http://127.0.0.1:${String(port)}/`, { type: "ListThemes" }, 5_000),
       /WebSocket error/,
     );
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
   }
 });
 

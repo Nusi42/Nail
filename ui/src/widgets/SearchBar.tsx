@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import type { SearchError } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegistry";
@@ -67,8 +67,12 @@ export const CHECK_DELAY_MS = 250;
 function useDebounced(value: string, ms: number): string {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setDebounced(value);
+    }, ms);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [value, ms]);
   return debounced;
 }
@@ -174,7 +178,7 @@ export function SearchForm({
 
   const hints = showHints && focused ? hintsFor(text) : [];
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     const query = text.trim();
     if (query === "") {
@@ -202,7 +206,9 @@ export function SearchForm({
       onSubmit={submit}
       // Hints hide only when focus leaves the whole form, so Tab reaches them
       // (M5b review: hiding on the input's blur dropped focus to <body>).
-      onFocus={() => setFocused(true)}
+      onFocus={() => {
+        setFocused(true);
+      }}
       onBlur={(event) => {
         const next = event.relatedTarget;
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) setFocused(false);
@@ -224,7 +230,9 @@ export function SearchForm({
           aria-keyshortcuts={keyShortcuts}
           autoComplete="off"
           spellCheck={false}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
         />
         {shortcut !== null && text === "" && !search && (
           <kbd data-part="search-bar.shortcut" aria-hidden="true">
@@ -255,7 +263,9 @@ export function SearchForm({
                 type="button"
                 data-part="search-bar.hint.button"
                 // Keep the focus in the input while picking a hint.
-                onMouseDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
                 onClick={() => {
                   setText(applyHint(text, hint));
                   inputRef.current?.focus();

@@ -71,7 +71,7 @@ function PolicyForm({
   policy: FolderSyncPolicy;
   /** Kept by the editor: a save re-creates the form. */
   saved: boolean;
-  setSaved(saved: boolean): void;
+  setSaved: (saved: boolean) => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -117,7 +117,9 @@ function PolicyForm({
     }
   };
 
-  const changed = () => setSaved(false);
+  const changed = () => {
+    setSaved(false);
+  };
   return (
     <div data-part="sync-policy.form">
       <p data-part="sync-policy.current" role="status">
@@ -313,8 +315,7 @@ export function MessageBodyBar({ node }: WidgetProps) {
   const failed = useSync((s) => s.failed.includes(selectedId ?? ""));
   const summary = selectedId === null ? undefined : findSummary(queryClient, selectedId);
   if (selectedId === null || !summary?.headers_only) return null;
-  const empty =
-    message.data !== undefined && message.data.text === "" && !message.data.sanitized_html;
+  const empty = message.data?.text === "" && !message.data.sanitized_html;
   return (
     <div
       data-part="sync-message-body"

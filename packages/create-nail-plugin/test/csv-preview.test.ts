@@ -16,8 +16,9 @@ import {
   type LoadedPlugin,
   type PreparedExample,
 } from "./helpers";
+import type * as CsvModule from "../../../examples/csv-preview/src/csv";
 
-type Csv = typeof import("../../../examples/csv-preview/src/csv");
+type Csv = typeof CsvModule;
 
 let example: PreparedExample;
 let csv: Csv;
@@ -25,7 +26,9 @@ beforeAll(async () => {
   example = prepareExample("csv-preview");
   csv = (await import(pathToFileURL(path.join(example.source, "src", "csv.ts")).href)) as Csv;
 });
-afterAll(() => example.cleanup());
+afterAll(() => {
+  example.cleanup();
+});
 
 describe("CSV parsing", () => {
   it("handles quotes, doubled quotes, line breaks in quotes and CRLF", () => {
@@ -59,7 +62,7 @@ describe("CSV parsing", () => {
   });
 
   it("shapes tables: header, padding, column and cell limits", () => {
-    const label = (n: number) => `Column ${n}`;
+    const label = (n: number) => `Column ${String(n)}`;
     const parsed = { rows: [["id", ""], ["1", "a", "extra"], ["2"]], total: 3 };
     expect(csv.toTable(parsed, true, 10, label)).toEqual({
       columns: ["id", "Column 2", "Column 3"],
@@ -70,7 +73,7 @@ describe("CSV parsing", () => {
       total: 2,
     });
     expect(csv.toTable(parsed, false, 1, label).rows).toEqual([["id", ""]]);
-    const wide = { rows: [Array.from({ length: 60 }, (_, i) => `c${i}`)], total: 1 };
+    const wide = { rows: [Array.from({ length: 60 }, (_, i) => `c${String(i)}`)], total: 1 };
     expect(csv.toTable(wide, false, 10, label).columns).toHaveLength(csv.MAX_COLUMNS);
     const long = { rows: [["x".repeat(600)]], total: 1 };
     const cell = csv.toTable(long, false, 10, label).rows[0]?.[0] ?? "";
@@ -152,7 +155,7 @@ describe("the preview renderer", () => {
   });
 
   it("follows the settings and says when rows are left out", async () => {
-    const lines = Array.from({ length: 30 }, (_, i) => `${i},v${i}`).join("\n");
+    const lines = Array.from({ length: 30 }, (_, i) => `${String(i)},v${String(i)}`).join("\n");
     const host = await load({ settings: { "header-row": false, "max-rows": 10 } });
     const parts = children(await host.renderPreview("table", { name: "n.csv" }, lines));
     expect(parts[0]).toEqual({ type: "text", style: "muted", value: "30 rows, 2 columns" });
@@ -166,7 +169,7 @@ describe("the preview renderer", () => {
   });
 
   it("keeps within the table component's limits", async () => {
-    const lines = Array.from({ length: 2000 }, (_, i) => `${i}`).join("\n");
+    const lines = Array.from({ length: 2000 }, (_, i) => String(i)).join("\n");
     const host = await load({ settings: { "max-rows": 100_000 } });
     const parts = children(await host.renderPreview("table", { name: "big.csv" }, `n\n${lines}`));
     expect((parts[1] as Extract<PluginUiNode, { type: "table" }>).rows).toHaveLength(499);

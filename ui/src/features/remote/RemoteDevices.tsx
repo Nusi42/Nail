@@ -6,7 +6,7 @@
  * pairing codes still waiting to be used.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { PairingCode, RemoteDevice, RemoteSession, RemoteUser } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
@@ -66,7 +66,7 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
   const revoked = device.revoked_at !== null;
   const preset = presetOf(device.grant);
 
-  const rename = async (event: FormEvent) => {
+  const rename = async (event: SubmitEvent) => {
     event.preventDefault();
     if (name === null || name.trim() === "") return;
     const ok = await run(() =>
@@ -94,7 +94,7 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
             name="device-name"
             value={name}
             onChange={setName}
-            autoFocus
+            focusOnMount
           />
           <button
             type="submit"
@@ -108,7 +108,9 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
             type="button"
             data-part="form.button"
             data-action="cancel"
-            onClick={() => setName(null)}
+            onClick={() => {
+              setName(null);
+            }}
           >
             {t("remote-cancel")}
           </button>
@@ -146,7 +148,9 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
               data-part="form.button"
               data-action="rename-device"
               aria-label={t("remote-device-rename-label", { name: device.name })}
-              onClick={() => setName(device.name)}
+              onClick={() => {
+                setName(device.name);
+              }}
             >
               {t("remote-rename")}
             </button>

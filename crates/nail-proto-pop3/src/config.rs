@@ -45,7 +45,7 @@ pub struct Pop3Config {
 
 impl Pop3Config {
     /// Default timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
 
     /// Implicit TLS on port 995 with platform trust: the recommended setup.
     pub fn new(host: impl Into<String>) -> Self {

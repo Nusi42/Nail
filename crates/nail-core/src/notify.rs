@@ -29,7 +29,7 @@ pub(crate) struct NotifyCtl {
 impl NotifyCtl {
     pub(crate) fn new(timing: &crate::EngineTiming) -> Self {
         let to_chrono =
-            |d: std::time::Duration| chrono::Duration::milliseconds(d.as_millis() as i64);
+            |d: std::time::Duration| chrono::Duration::from_std(d).unwrap_or(chrono::Duration::MAX);
         Self {
             batcher: Mutex::new(NotificationBatcher::new(
                 to_chrono(timing.notification_quiet),
@@ -183,7 +183,11 @@ impl Service {
 
     /// The notification `TestNotification` pushes.
     pub(crate) async fn test_notification(&self) -> crate::Result<()> {
-        let settings = self.inner.store.call(|s| s.notification_settings()).await?;
+        let settings = self
+            .inner
+            .store
+            .call(nail_store::Store::notification_settings)
+            .await?;
         let sequence = self.inner.notify.next_sequence();
         self.request_notification(notify::test_notification(&settings, sequence));
         Ok(())
@@ -211,7 +215,7 @@ impl Service {
 
 /// The flush task: waits for the next batch to be due.
 pub(crate) async fn run_notifications(service: Service) {
-    let idle = std::time::Duration::from_secs(60);
+    let idle = std::time::Duration::from_mins(1);
     loop {
         let next = service.flush_notifications();
         let wait = next.map_or(idle, |at| {

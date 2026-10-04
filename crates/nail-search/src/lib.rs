@@ -40,7 +40,7 @@ pub mod query;
 pub use document::IndexDocument;
 pub use error::{Error, Result};
 pub use exec::{
-    Compiled, SearchContext, SearchResults, SearchScope, VirtualAccountScope, compile,
+    Compiled, PageRequest, SearchContext, SearchResults, SearchScope, VirtualAccountScope, compile,
     matching_ids, run_request, search,
 };
 pub use index::{CommitPolicy, DirectoryWrapper, INDEX_DIR_NAME, SearchIndex, VERSION_FILE_NAME};

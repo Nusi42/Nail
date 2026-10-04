@@ -7,7 +7,7 @@
  * occurrence" choice for recurring invitations.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import type {
   InvitationResponse,
   LocalizedMessage,
@@ -30,7 +30,7 @@ export interface AnswerFormProps {
   /** Ask before sending (`SchedulingSettings.confirm_replies`). */
   confirm: boolean;
   busy: boolean;
-  onAnswer(response: InvitationResponse, comment: string | null, send: boolean): void;
+  onAnswer: (response: InvitationResponse, comment: string | null, send: boolean) => void;
 }
 
 /** Accept / Maybe / Decline with a comment and the "send a response" switch. */
@@ -86,7 +86,13 @@ export function AnswerForm({
           >
             {t("scheduling-answer-confirm-no-send")}
           </button>
-          <button type="button" data-part="form.button" onClick={() => setPending(null)}>
+          <button
+            type="button"
+            data-part="form.button"
+            onClick={() => {
+              setPending(null);
+            }}
+          >
             {t("scheduling-back")}
           </button>
         </div>
@@ -105,11 +111,19 @@ export function AnswerForm({
           data-part="form.textarea"
           value={comment}
           disabled={!send}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={(e) => {
+            setComment(e.target.value);
+          }}
         />
       </div>
       <label data-part="form.check" data-field="send">
-        <input type="checkbox" checked={send} onChange={(e) => setSend(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={send}
+          onChange={(e) => {
+            setSend(e.target.checked);
+          }}
+        />
         <span>{t("scheduling-answer-send")}</span>
       </label>
       <div
@@ -126,7 +140,9 @@ export function AnswerForm({
             data-variant={pressed === response ? "primary" : undefined}
             aria-pressed={pressed === response}
             disabled={busy}
-            onClick={() => answer(response)}
+            onClick={() => {
+              answer(response);
+            }}
           >
             {t(`scheduling-answer-${response}`)}
           </button>
@@ -163,8 +179,8 @@ export interface ProposeTimeFormProps {
   tz: string;
   busy: boolean;
   problem: LocalizedMessage | null;
-  onSubmit(start: PimTime, end: PimTime, comment: string | null): void;
-  onCancel(): void;
+  onSubmit: (start: PimTime, end: PimTime, comment: string | null) => void;
+  onCancel: () => void;
 }
 
 /** "Propose a new time": start, end (PIM pickers in the UI locale) and a comment. */
@@ -188,7 +204,7 @@ export function ProposeTimeForm({
   const invalid =
     pimTimeIn(endTime, tz).toDate().getTime() <= pimTimeIn(startTime, tz).toDate().getTime();
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (!invalid) onSubmit(startTime, endTime, comment.trim() || null);
   };
@@ -222,7 +238,9 @@ export function ProposeTimeForm({
         tz={tz}
         invalid={invalid}
         describedBy={invalid ? ids.problem : undefined}
-        onChange={(day, time) => setTo({ day, time })}
+        onChange={(day, time) => {
+          setTo({ day, time });
+        }}
       />
       {invalid && (
         <p id={ids.problem} data-part="scheduling.problem" role="alert">
@@ -237,7 +255,9 @@ export function ProposeTimeForm({
           id={ids.comment}
           data-part="form.textarea"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={(e) => {
+            setComment(e.target.value);
+          }}
         />
       </div>
       <Problem message={problem} part="scheduling.problem" />
@@ -261,8 +281,8 @@ export function ProposeTimeForm({
 export interface ForwardFormProps {
   busy: boolean;
   problem: LocalizedMessage | null;
-  onSubmit(to: string[], comment: string | null): void;
-  onCancel(): void;
+  onSubmit: (to: string[], comment: string | null) => void;
+  onCancel: () => void;
 }
 
 /** "Forward the invitation" to other people (RFC 5546 §2.1.5). */
@@ -298,7 +318,9 @@ export function ForwardForm({ busy, problem, onSubmit, onCancel }: ForwardFormPr
           value={to}
           aria-invalid={touched && invalid}
           aria-describedby={touched && invalid ? ids.problem : undefined}
-          onChange={(e) => setTo(e.target.value)}
+          onChange={(e) => {
+            setTo(e.target.value);
+          }}
         />
       </div>
       {touched && invalid && (
@@ -314,7 +336,9 @@ export function ForwardForm({ busy, problem, onSubmit, onCancel }: ForwardFormPr
           id={ids.comment}
           data-part="form.textarea"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={(e) => {
+            setComment(e.target.value);
+          }}
         />
       </div>
       <Problem message={problem} part="scheduling.problem" />
@@ -335,10 +359,10 @@ export type AnswerScope = "series" | "occurrence";
 
 export interface ScopeChoiceProps {
   scope: AnswerScope;
-  onScope(scope: AnswerScope): void;
+  onScope: (scope: AnswerScope) => void;
   /** The occurrence's day. */
   day: CalendarDate;
-  onDay(day: CalendarDate): void;
+  onDay: (day: CalendarDate) => void;
   tz: string;
 }
 
@@ -356,7 +380,9 @@ export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps
             name={name}
             value={value}
             checked={scope === value}
-            onChange={() => onScope(value)}
+            onChange={() => {
+              onScope(value);
+            }}
           />
           <span>{t(`scheduling-scope-${value}`)}</span>
         </label>
@@ -368,7 +394,9 @@ export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps
           day={day}
           time={null}
           tz={tz}
-          onChange={(picked) => onDay(picked)}
+          onChange={(picked) => {
+            onDay(picked);
+          }}
         />
       )}
     </fieldset>

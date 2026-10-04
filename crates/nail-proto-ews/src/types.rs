@@ -82,8 +82,8 @@ impl<'a> FolderRef<'a> {
     pub fn named(mailbox: Option<&'a str>, folder: &'a str) -> Self {
         let distinguished = ExchangeWellKnownFolder::parse(folder)
             .and_then(ExchangeWellKnownFolder::ews_name)
-            .filter(|n| n.eq_ignore_ascii_case(folder))
-            .is_some()
+            .as_ref()
+            .is_some_and(|n| n.eq_ignore_ascii_case(folder))
             || matches!(
                 folder,
                 "root" | "publicfoldersroot" | "archivemsgfolderroot" | "searchfolders"

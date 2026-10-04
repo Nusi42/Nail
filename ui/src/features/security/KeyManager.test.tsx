@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { Request } from "../../api/generated";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { armorKey } from "./mock";
+import { must } from "../../test/must";
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
@@ -26,7 +27,7 @@ describe("security-keys", () => {
     expect(items[0]).toHaveAttribute("data-own");
     expect(items[1]).toHaveAttribute("data-own");
     expect(items[0]).toHaveAttribute("aria-pressed", "true");
-    expect(within(items[0] as HTMLElement).getByText("Yours")).toBeInTheDocument();
+    expect(within(must(items[0])).getByText("Yours")).toBeInTheDocument();
 
     await user.click(keyButton(list, /Katherine Johnson/));
     const detail = screen.getByRole("region", { name: /^Key CN=Katherine Johnson/ });
@@ -47,27 +48,27 @@ describe("security-keys", () => {
   it("filters by text, type and own keys", async () => {
     const { user, env } = await open();
     await user.type(screen.getByRole("textbox", { name: "Search" }), "navy");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         within(screen.getByRole("list", { name: "Keys" })).getAllByRole("button"),
-      ).toHaveLength(1),
-    );
+      ).toHaveLength(1);
+    });
     expect(requestsOf(env, "ListKeys").at(-1)?.filter.text).toBe("navy");
     await user.clear(screen.getByRole("textbox", { name: "Search" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Type" }), "S/MIME");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         within(screen.getByRole("list", { name: "Keys" }))
           .getAllByRole("button")
           .every((b) => b.getAttribute("data-technology") === "smime"),
-      ).toBe(true),
-    );
+      ).toBe(true);
+    });
     await user.click(screen.getByRole("checkbox", { name: "Only my own keys" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         within(screen.getByRole("list", { name: "Keys" })).getAllByRole("button"),
-      ).toHaveLength(1),
-    );
+      ).toHaveLength(1);
+    });
     await user.type(screen.getByRole("textbox", { name: "Search" }), "zzz");
     expect(await screen.findByText("No keys match.")).toBeInTheDocument();
   });
@@ -201,7 +202,9 @@ describe("security-keys tools", () => {
     await user.upload(input, new File([armored], "dan.asc", { type: "text/plain" }));
     expect(await within(tool).findByRole("status")).toHaveTextContent("1 new");
     await user.upload(input, new File([new Uint8Array([0x99, 0x01, 0x02])], "x.gpg"));
-    await waitFor(() => expect(requestsOf(env, "ImportKeys")).toHaveLength(2));
+    await waitFor(() => {
+      expect(requestsOf(env, "ImportKeys")).toHaveLength(2);
+    });
     expect(requestsOf(env, "ImportKeys")[1]).toMatchObject({ encoding: "base64", data: "mQEC" });
   });
 
@@ -248,7 +251,9 @@ describe("security-keys tools", () => {
     await user.click(screen.getByRole("button", { name: "Create key" }));
     const tool = screen.getByRole("region", { name: "Create key" });
     const identity = await within(tool).findByRole("combobox", { name: "For" });
-    await waitFor(() => expect(within(identity).getAllByRole("option").length).toBeGreaterThan(1));
+    await waitFor(() => {
+      expect(within(identity).getAllByRole("option").length).toBeGreaterThan(1);
+    });
     await user.selectOptions(identity, "ada@work.example");
     await user.selectOptions(within(tool).getByRole("combobox", { name: "Expires" }), "Never");
     await user.click(within(tool).getByRole("button", { name: "Create key" }));
@@ -318,10 +323,8 @@ describe("security-keys tools", () => {
     const personal = await within(tool).findByRole("list", { name: "My certificates" });
     const items = within(personal).getAllByRole("listitem");
     expect(items).toHaveLength(2);
-    expect(
-      within(items[1] as HTMLElement).getByText("Cannot be used for e-mail"),
-    ).toBeInTheDocument();
-    await user.click(within(items[0] as HTMLElement).getByRole("button", { name: "Use in Nail" }));
+    expect(within(must(items[1])).getByText("Cannot be used for e-mail")).toBeInTheDocument();
+    await user.click(within(must(items[0])).getByRole("button", { name: "Use in Nail" }));
     expect(await within(tool).findByText("Already imported")).toBeInTheDocument();
     expect(requestsOf(env, "ImportWindowsCertificate")).toHaveLength(1);
 

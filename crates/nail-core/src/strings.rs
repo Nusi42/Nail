@@ -8,22 +8,22 @@
 
 /// The text of `key` in `locale` (a BCP 47 tag such as `de-AT`), falling
 /// back to English, and to the key itself when even English lacks it.
-pub fn message(locale: Option<&str>, key: &str) -> String {
+pub(crate) fn message(locale: Option<&str>, key: &str) -> String {
     message_with(locale, key, &[])
 }
 
 /// Like [`message`], with `{ $name }` placeables filled from `args`.
-pub fn message_with(locale: Option<&str>, key: &str, args: &[(&str, &str)]) -> String {
+pub(crate) fn message_with(locale: Option<&str>, key: &str, args: &[(&str, &str)]) -> String {
     nail_config::l10n::Catalog::for_locale(locale).text(key, args)
 }
 
 /// A [`LocalizedMessage`](nail_api::LocalizedMessage) rendered in `locale`.
-pub fn render(locale: Option<&str>, message: &nail_api::LocalizedMessage) -> String {
+pub(crate) fn render(locale: Option<&str>, message: &nail_api::LocalizedMessage) -> String {
     nail_config::l10n::Catalog::for_locale(locale).render(message)
 }
 
 /// Escapes text for HTML element content.
-pub fn html_escape(text: &str) -> String {
+pub(crate) fn html_escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
@@ -39,7 +39,7 @@ pub fn html_escape(text: &str) -> String {
 }
 
 /// The browser pages shown after an OAuth2 redirect, localized.
-pub fn oauth_callback_pages(locale: Option<&str>) -> nail_auth::CallbackPages {
+pub(crate) fn oauth_callback_pages(locale: Option<&str>) -> nail_auth::CallbackPages {
     let page = |key: &str| {
         let title = html_escape(&message(locale, "oauth-callback-title"));
         let text = html_escape(&message(locale, key));

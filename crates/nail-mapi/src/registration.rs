@@ -19,6 +19,7 @@
 
 use nail_api::desktop::WindowsArch;
 use nail_api::mapi::{mapi_dll_relative_path, registry};
+use std::fmt::Write as _;
 
 /// The registry root of an entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,7 +165,8 @@ pub fn to_reg_file(entries: &[RegistryEntry]) -> String {
     for entry in entries {
         let key = format!(r"{}\{}", entry.hive.reg_name(), entry.view_key());
         if current.as_deref() != Some(key.as_str()) {
-            out.push_str(&format!("\r\n[{key}]\r\n"));
+            // Writing to a String cannot fail.
+            let _ = write!(out, "\r\n[{key}]\r\n");
             current = Some(key);
         }
         let name = entry
@@ -172,7 +174,7 @@ pub fn to_reg_file(entries: &[RegistryEntry]) -> String {
             .as_deref()
             .map_or_else(|| "@".to_owned(), |n| format!("\"{}\"", reg_escape(n)));
         let RegistryData::String(data) = &entry.data;
-        out.push_str(&format!("{name}=\"{}\"\r\n", reg_escape(data)));
+        let _ = write!(out, "{name}=\"{}\"\r\n", reg_escape(data));
     }
     out
 }

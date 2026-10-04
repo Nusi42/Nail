@@ -68,12 +68,14 @@ impl FixedTrustAnchors {
 
     /// Adds untrusted intermediates the "system" knows (like the Windows
     /// "CA" store).
+    #[must_use]
     pub fn with_intermediates(mut self, intermediates: Vec<Cert>) -> Self {
         self.intermediates = intermediates;
         self
     }
 
     /// Explicitly distrusts these certificates.
+    #[must_use]
     pub fn with_distrusted(mut self, distrusted: Vec<Cert>) -> Self {
         self.distrusted = distrusted;
         self

@@ -1,7 +1,7 @@
 //! Encryption at rest for Nail (M2a WP33; design and evaluation in
 //! `docs/adr/0032-m2a-data-protection.md`).
 //!
-//! * **Format** ([`format`]): one sealed-data format for everything —
+//! * **Format** ([`format`](mod@format)): one sealed-data format for everything —
 //!   chunked XChaCha20-Poly1305 with a random per-item nonce prefix, bound
 //!   to where the data belongs (associated data), truncation-safe, random
 //!   access by chunk.

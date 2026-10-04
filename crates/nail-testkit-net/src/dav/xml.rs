@@ -14,14 +14,14 @@ use quick_xml::name::ResolveResult;
 use quick_xml::reader::NsReader;
 
 /// Deepest element nesting accepted.
-pub const MAX_DEPTH: usize = 64;
+pub(super) const MAX_DEPTH: usize = 64;
 /// Most elements accepted in one document.
-pub const MAX_ELEMENTS: usize = 2_000_000;
+pub(super) const MAX_ELEMENTS: usize = 2_000_000;
 
 /// An element: namespace, local name, child elements and its own text
 /// (character data and CDATA of the element itself, entities resolved).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Element {
+pub(super) struct Element {
     /// Namespace URI (`""` when unbound).
     pub ns: String,
     /// Local name.
@@ -38,11 +38,11 @@ pub struct Element {
 /// A document that is not well-formed XML (or breaks the limits).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("malformed XML: {0}")]
-pub struct XmlError(pub String);
+pub(super) struct XmlError(pub String);
 
 impl Element {
     /// The value of attribute `name` (local name, any prefix).
-    pub fn attr(&self, name: &str) -> Option<&str> {
+    pub(super) fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()
             .find(|(n, _)| n == name)
@@ -50,17 +50,17 @@ impl Element {
     }
 
     /// Whether the element is `{ns}name`.
-    pub fn is(&self, ns: &str, name: &str) -> bool {
+    pub(super) fn is(&self, ns: &str, name: &str) -> bool {
         self.ns == ns && self.name == name
     }
 
     /// The first child `{ns}name`.
-    pub fn child(&self, ns: &str, name: &str) -> Option<&Element> {
+    pub(super) fn child(&self, ns: &str, name: &str) -> Option<&Element> {
         self.children.iter().find(|c| c.is(ns, name))
     }
 
     /// Every child `{ns}name`.
-    pub fn children_named<'a>(
+    pub(super) fn children_named<'a>(
         &'a self,
         ns: &'a str,
         name: &'a str,
@@ -69,12 +69,12 @@ impl Element {
     }
 
     /// The trimmed text of the first child `{ns}name`.
-    pub fn child_text(&self, ns: &str, name: &str) -> Option<&str> {
+    pub(super) fn child_text(&self, ns: &str, name: &str) -> Option<&str> {
         self.child(ns, name).map(|c| c.text.trim())
     }
 
     /// Follows a path of `(ns, name)` steps through first matches.
-    pub fn path(&self, steps: &[(&str, &str)]) -> Option<&Element> {
+    pub(super) fn path(&self, steps: &[(&str, &str)]) -> Option<&Element> {
         let mut at = self;
         for (ns, name) in steps {
             at = at.child(ns, name)?;
@@ -110,7 +110,7 @@ fn namespace(resolved: &ResolveResult<'_>) -> String {
 }
 
 /// Parses a document into its root element.
-pub fn parse(document: &str) -> Result<Element, XmlError> {
+pub(super) fn parse(document: &str) -> Result<Element, XmlError> {
     let mut reader = NsReader::from_str(document);
     reader.config_mut().expand_empty_elements = true;
     let mut stack: Vec<Element> = Vec::new();

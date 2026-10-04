@@ -21,7 +21,7 @@ export interface TaskListChooserProps {
   lists: readonly Calendar[];
   /** The chosen list id, `""` = all lists. */
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   /** Offer "All lists" (`""`). */
   allowAll?: boolean;
 }
@@ -49,7 +49,9 @@ export function TaskListChooser({ lists, value, onChange, allowAll = true }: Tas
         id={id}
         data-part="form.select"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
       >
         {allowAll && <option value="">{t("exchange-tasks-all")}</option>}
         {groups.map((g) =>

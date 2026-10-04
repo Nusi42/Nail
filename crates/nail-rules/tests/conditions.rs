@@ -1,4 +1,5 @@
 //! Every condition kind, nesting, scope and explanations.
+#![cfg(test)]
 
 mod common;
 
@@ -10,7 +11,9 @@ use pretty_assertions::assert_eq;
 /// Whether a `when { … }` body matches a message.
 fn when(body: &str, message: &MessageData) -> bool {
     let m = mailbox();
-    let rule = CompiledRule::new(arrival(body, "stop")).unwrap();
+    let Ok(rule) = CompiledRule::new(arrival(body, "stop")) else {
+        panic!("the rule does not compile: {body}");
+    };
     rule.matches(message, &env(&m), Some(RuleRunCause::Arrival))
 }
 
@@ -65,7 +68,7 @@ fn subject_and_body() {
     let n = newsletter();
     yes(r#"subject starts-with="[rust weekly]""#, &n);
     // A raw KDL string keeps backslashes as they are.
-    yes(r###"subject regex=#"issue #\d+"#"###, &n);
+    yes(r##"subject regex=#"issue #\d+"#"##, &n);
     no(r#"subject regex="^issue""#, &n);
     yes(r#"body contains="async closures""#, &n);
     no(r#"body contains="python""#, &n);

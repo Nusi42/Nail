@@ -17,42 +17,89 @@ import { parseVersion } from "./update-manifest.mjs";
 
 export const MANIFEST_VERSION = "1.10.0";
 
-/** Single-quoted YAML scalar (no escapes needed except doubled quotes). */
-export function yamlString(value) {
-  const text = String(value);
+/**
+ * The package description: packaging/winget/nail.winget.json plus the
+ * release facts.
+ *
+ * @typedef {object} WingetPackage
+ * @property {string} identifier
+ * @property {string} version
+ * @property {string} publisher
+ * @property {string} name
+ * @property {string} license
+ * @property {string} shortDescription
+ * @property {string} [description]
+ * @property {string} [publisherUrl]
+ * @property {string} [packageUrl]
+ * @property {string} [licenseUrl]
+ * @property {string} [releaseNotesUrl]
+ * @property {string} [moniker]
+ * @property {string[]} [tags]
+ * @property {string} [releaseDate]
+ * @property {{ arch: string, url: string, sha256: string }[]} installers
+ */
+
+/**
+ * A package description before {@link checkPackage}: untrusted JSON, any
+ * field may be missing.
+ *
+ * @typedef {Partial<Omit<WingetPackage, "installers">> &
+ *   { installers?: Partial<WingetPackage["installers"][number]>[] }} WingetInput
+ */
+
+/**
+ * Single-quoted YAML scalar (no escapes needed except doubled quotes).
+ *
+ * @param {string} text
+ */
+export function yamlString(text) {
   if (/[\r\n]/.test(text)) throw new Error("multi-line values are not supported here");
   return `'${text.replaceAll("'", "''")}'`;
 }
 
+/** @param {string} kind */
 function header(kind) {
   return `# yaml-language-server: $schema=https://aka.ms/winget-manifest.${kind}.${MANIFEST_VERSION}.schema.json\n`;
 }
 
+/**
+ * @param {string} key
+ * @param {string[] | undefined} values
+ * @param {string} [indent]
+ */
 function list(key, values, indent = "") {
   if (!values?.length) return "";
   return `${indent}${key}:\n${values.map((v) => `${indent}- ${yamlString(v)}\n`).join("")}`;
 }
 
-/** Checks the package description (packaging/winget/package.json + release facts). */
+/**
+ * Checks the package description (packaging/winget/package.json + release
+ * facts). Takes untrusted JSON, so every field may be missing.
+ *
+ * @param {WingetInput} pkg
+ * @returns {asserts pkg is WingetPackage}
+ */
 export function checkPackage(pkg) {
   const id = pkg.identifier;
   if (!/^[A-Za-z0-9-]+\.[A-Za-z0-9.-]+$/.test(id ?? "")) {
-    throw new Error(`invalid PackageIdentifier ${id}`);
+    throw new Error(`invalid PackageIdentifier ${id ?? "(missing)"}`);
   }
-  parseVersion(pkg.version);
-  for (const key of ["publisher", "name", "license", "shortDescription"]) {
+  parseVersion(pkg.version ?? "");
+  for (const key of /** @type {const} */ (["publisher", "name", "license", "shortDescription"])) {
     if (!pkg[key]) throw new Error(`winget: ${key} is required`);
   }
   if (!pkg.installers?.length) throw new Error("winget: no installers");
+  /** @type {Set<string>} */
   const archs = new Set();
   for (const i of pkg.installers) {
-    if (!["x64", "arm64"].includes(i.arch)) throw new Error(`winget: unsupported arch ${i.arch}`);
-    if (archs.has(i.arch)) throw new Error(`winget: two installers for ${i.arch}`);
-    archs.add(i.arch);
-    if (!/^https:\/\//.test(i.url ?? ""))
-      throw new Error(`winget: installer URL must be https: ${i.url}`);
+    const arch = i.arch ?? "";
+    if (arch !== "x64" && arch !== "arm64") throw new Error(`winget: unsupported arch ${arch}`);
+    if (archs.has(arch)) throw new Error(`winget: two installers for ${arch}`);
+    archs.add(arch);
+    if (!(i.url ?? "").startsWith("https://"))
+      throw new Error(`winget: installer URL must be https: ${i.url ?? "(missing)"}`);
     if (!/^[0-9A-Fa-f]{64}$/.test(i.sha256 ?? ""))
-      throw new Error(`winget: bad SHA-256 for ${i.arch}`);
+      throw new Error(`winget: bad SHA-256 for ${arch}`);
   }
   if (pkg.releaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(pkg.releaseDate)) {
     throw new Error(`winget: releaseDate must be YYYY-MM-DD: ${pkg.releaseDate}`);
@@ -64,12 +111,16 @@ export function checkPackage(pkg) {
  * `pkg` = { identifier, version, publisher, name, license, shortDescription,
  * description?, publisherUrl?, packageUrl?, licenseUrl?, releaseNotesUrl?,
  * moniker?, tags?, releaseDate?, installers: [{ arch, url, sha256 }] }.
+ *
+ * @param {WingetInput} pkg
+ * @returns {Record<string, string>}
  */
 export function wingetManifests(pkg) {
   checkPackage(pkg);
   const id = pkg.identifier;
-  const version = String(pkg.version).replace(/^v/, "");
+  const version = pkg.version.replace(/^v/, "");
   const common = `PackageIdentifier: ${yamlString(id)}\nPackageVersion: ${yamlString(version)}\n`;
+  /** @param {string} type */
   const footer = (type) => `ManifestType: ${type}\nManifestVersion: ${MANIFEST_VERSION}\n`;
 
   const versionYaml = header("version") + common + "DefaultLocale: en-US\n" + footer("version");
@@ -103,6 +154,10 @@ export function wingetManifests(pkg) {
     installers +
     footer("installer");
 
+  /**
+   * @param {string} key
+   * @param {string | undefined} value
+   */
   const optional = (key, value) => (value ? `${key}: ${yamlString(value)}\n` : "");
   const localeYaml =
     header("defaultLocale") +
@@ -121,10 +176,10 @@ export function wingetManifests(pkg) {
     optional("ReleaseNotesUrl", pkg.releaseNotesUrl) +
     footer("defaultLocale");
 
-  const [publisherPart, ...rest] = id.split(".");
+  const [publisherPart = "", ...rest] = id.split(".");
   const dir = path.posix.join(
     "manifests",
-    publisherPart[0].toLowerCase(),
+    publisherPart.charAt(0).toLowerCase(),
     publisherPart,
     rest.join("."),
     version,
@@ -136,10 +191,23 @@ export function wingetManifests(pkg) {
   };
 }
 
-/** `{{version}}` / `{{file}}` placeholders of a URL template. */
+/**
+ * `{{version}}` / `{{file}}` placeholders of a URL template.
+ *
+ * @param {string} template
+ * @param {Partial<Record<string, string>>} values
+ */
 export function expandUrl(template, values) {
-  return template.replace(/\{\{(\w+)\}\}/g, (all, key) => {
-    if (!(key in values)) throw new Error(`unknown placeholder ${all} in ${template}`);
-    return encodeURIComponent(values[key]);
-  });
+  return template.replace(
+    /\{\{(\w+)\}\}/g,
+    /**
+     * @param {string} all
+     * @param {string} key
+     */
+    (all, key) => {
+      const value = values[key];
+      if (value === undefined) throw new Error(`unknown placeholder ${all} in ${template}`);
+      return encodeURIComponent(value);
+    },
+  );
 }

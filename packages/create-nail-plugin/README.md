@@ -4,7 +4,7 @@ Starter templates for Nail plug-ins (the `npm create nail-plugin`
 equivalent inside this repository; WP63 ADR `docs/adr/0053-plugin-sdk.md`,
 M4a templates `docs/adr/0082-plugin-sdk-m4a.md`).
 
-```
+```text
 node packages/create-nail-plugin/index.mjs <dir> [--template NAME] [--id ID] [--name NAME] [--sdk SPEC] [--force]
 ```
 

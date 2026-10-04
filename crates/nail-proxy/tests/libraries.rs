@@ -1,5 +1,7 @@
 //! Smoke tests of the libraries WP42 builds on (WP40, ADR 0036).
 
+#![cfg(test)]
+
 use std::net::IpAddr;
 
 use hmac::{Hmac, KeyInit, Mac};
@@ -44,7 +46,7 @@ fn private_ranges_are_recognised() {
         // IPv4-mapped IPv6 addresses are checked as IPv4.
         let ip = match ip {
             IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
-            v4 => v4,
+            v4 @ IpAddr::V4(_) => v4,
         };
         blocked.iter().any(|net| net.contains(&ip))
     };

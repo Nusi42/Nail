@@ -1,7 +1,9 @@
 //! Full-file database encryption (M4c WP122, ADR 0095): keyed
 //! opens, wrong / missing keys, nothing readable on disk (file and WAL),
 //! crash-safe rewrites plain <-> encrypted <-> another key.
+#![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use std::path::Path;

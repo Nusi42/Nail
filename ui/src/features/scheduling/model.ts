@@ -92,7 +92,7 @@ export function mergeBusy(periods: readonly BusyPeriod[]): BusyPeriod[] {
   const out: BusyPeriod[] = [];
   for (const period of valid) {
     const last = out[out.length - 1];
-    if (last && last.kind === period.kind && ms(period.start) <= ms(last.end)) {
+    if (last?.kind === period.kind && ms(period.start) <= ms(last.end)) {
       if (ms(period.end) > ms(last.end)) last.end = period.end;
     } else {
       out.push(period);

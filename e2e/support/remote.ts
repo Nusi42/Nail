@@ -22,7 +22,9 @@ export async function rpc(server: NailServer, request: object): Promise<CoreResp
       socket.close();
       reject(new Error(`no answer to ${JSON.stringify(request)}`));
     }, 30_000);
-    socket.addEventListener("open", () => socket.send(JSON.stringify({ id: 1, request })));
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ id: 1, request }));
+    });
     socket.addEventListener("message", (message) => {
       const frame = JSON.parse(String(message.data)) as {
         kind: string;
@@ -125,7 +127,8 @@ export async function enableRemoteUi(server: NailServer): Promise<RemoteUi> {
     const answer = await rpcOk(server, { type: "GetRemoteUiSettings" }, "RemoteUi");
     const status = answer.status as { state: string; urls: string[]; message: string | null };
     if (status.state === "running") return { url: status.urls[0] ?? "", port };
-    if (status.state === "failed") throw new Error(`remote UI failed: ${status.message}`);
+    if (status.state === "failed")
+      throw new Error(`remote UI failed: ${status.message ?? "(no message)"}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("the remote UI did not start");

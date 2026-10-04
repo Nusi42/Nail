@@ -22,7 +22,7 @@ fn all_documents(store: &Store) -> nail_store::Result<Vec<PimDocument>> {
     let calendars: Vec<_> = store
         .calendars(None)?
         .into_iter()
-        .filter(|c| c.has_tasks())
+        .filter(nail_api::Calendar::has_tasks)
         .map(|c| c.id)
         .collect();
     docs.extend(
@@ -73,7 +73,7 @@ impl Service {
     }
 
     /// Drops the index (rebuilt on next use).
-    pub(crate) async fn reindex_pim(&self) {
+    pub(crate) fn reindex_pim(&self) {
         *lock(&self.inner.pim.index) = None;
     }
 
@@ -113,7 +113,7 @@ impl Service {
     }
 
     /// Drops a deleted collection's items.
-    pub(crate) async fn pim_index_remove_collection(&self, collection: &str) {
+    pub(crate) fn pim_index_remove_collection(&self, collection: &str) {
         if let Some(index) = lock(&self.inner.pim.index).clone()
             && let Err(err) = index.remove_collection(collection)
         {

@@ -90,7 +90,6 @@ use crate::stream::MockStream;
 
 mod ical;
 mod schedule;
-#[allow(dead_code)]
 mod xml;
 
 use xml::{Element, escape};
@@ -114,7 +113,10 @@ const MAX_BODY: usize = 16 * 1024 * 1024;
 
 /// Configuration of a [`MockDavServer`].
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent feature switches of a mock server; each test turns single ones on or off"
+)]
 pub struct MockDavConfig {
     /// The user name (also the last segment of the principal and homes).
     pub username: String,
@@ -610,16 +612,20 @@ impl MockDavServer {
                 acceptor: material.acceptor.clone(),
             };
             let task = tokio::spawn(async move {
-                let _ = axum::serve(listener, app)
-                    .with_graceful_shutdown(stopped)
-                    .await;
+                drop(
+                    axum::serve(listener, app)
+                        .with_graceful_shutdown(stopped)
+                        .await,
+                );
             });
             (task, Some(material.ca_der))
         } else {
             let task = tokio::spawn(async move {
-                let _ = axum::serve(listener, app)
-                    .with_graceful_shutdown(stopped)
-                    .await;
+                drop(
+                    axum::serve(listener, app)
+                        .with_graceful_shutdown(stopped)
+                        .await,
+                );
             });
             (task, None)
         };
@@ -715,7 +721,7 @@ impl MockDavServer {
         let mut data = lock(&self.inner.data);
         let seq = data.next();
         if let Some(coll) = data.collections.get_mut(path) {
-            coll.display_name = display_name.to_owned();
+            display_name.clone_into(&mut coll.display_name);
             coll.changed = seq;
         }
     }
@@ -1225,41 +1231,36 @@ fn prop_value(
             }
             _ => None,
         },
-        (NS_DAV, "supported-report-set") => {
-            match resource {
-                Resource::Collection(_) => {
-                    let coll =
-                        collection.filter(|c| c.kind != MockCollectionKind::ScheduleOutbox)?;
-                    let mut reports = Vec::new();
-                    if coll.is_calendar() {
-                        reports.extend(["<c:calendar-query/>", "<c:calendar-multiget/>"]);
-                    } else {
-                        reports
-                            .extend(["<card:addressbook-query/>", "<card:addressbook-multiget/>"]);
-                    }
-                    if config.sync_collection {
-                        reports.push("<d:sync-collection/>");
-                    }
-                    Some(
-                    reports
-                        .iter()
-                        .map(|r| format!("<d:supported-report><d:report>{r}</d:report></d:supported-report>"))
-                        .collect(),
-                )
+        (NS_DAV, "supported-report-set") => match resource {
+            Resource::Collection(_) => {
+                let coll = collection.filter(|c| c.kind != MockCollectionKind::ScheduleOutbox)?;
+                let mut reports = Vec::new();
+                if coll.is_calendar() {
+                    reports.extend(["<c:calendar-query/>", "<c:calendar-multiget/>"]);
+                } else {
+                    reports.extend(["<card:addressbook-query/>", "<card:addressbook-multiget/>"]);
                 }
-                _ => None,
+                if config.sync_collection {
+                    reports.push("<d:sync-collection/>");
+                }
+                Some(reports.iter().fold(String::new(), |mut out, r| {
+                    let _ = write!(
+                        out,
+                        "<d:supported-report><d:report>{r}</d:report></d:supported-report>"
+                    );
+                    out
+                }))
             }
-        }
+            _ => None,
+        },
         (NS_CALDAV, "supported-calendar-component-set") => match &collection?.kind {
             MockCollectionKind::Calendar(components)
                 if matches!(resource, Resource::Collection(_)) =>
             {
-                Some(
-                    components
-                        .iter()
-                        .map(|c| format!("<c:comp name=\"{}\"/>", escape(c)))
-                        .collect(),
-                )
+                Some(components.iter().fold(String::new(), |mut out, c| {
+                    let _ = write!(out, "<c:comp name=\"{}\"/>", escape(c));
+                    out
+                }))
             }
             _ => None,
         },
@@ -1884,7 +1885,7 @@ fn mkcol(inner: &Inner, request: &DavRequest, calendar: bool, me: &str) -> Respo
     let mut color = None;
     for prop in &props {
         if prop.is(NS_DAV, "displayname") {
-            name = prop.text.trim().to_owned();
+            prop.text.trim().clone_into(&mut name);
         } else if prop.is(NS_APPLE, "calendar-color") {
             color = Some(prop.text.trim().to_owned());
         } else if prop.is(NS_CALDAV, "supported-calendar-component-set") {
@@ -1931,7 +1932,7 @@ fn proppatch(inner: &Inner, request: &DavRequest) -> Response {
     let mut forbidden = String::new();
     for prop in set_props(Some(&root)) {
         if prop.is(NS_DAV, "displayname") {
-            coll.display_name = prop.text.trim().to_owned();
+            prop.text.trim().clone_into(&mut coll.display_name);
             ok.push_str(&element(&prop.ns, &prop.name, ""));
         } else if prop.is(NS_APPLE, "calendar-color") {
             coll.color = Some(prop.text.trim().to_owned());
@@ -2203,7 +2204,7 @@ mod tests {
              DTSTART:20261005T000000Z\r\nDTEND:20261006T000000Z\r\nORGANIZER:mailto:{organizer}\r\n"
         );
         for a in attendees {
-            out.push_str(&format!("ATTENDEE:mailto:{a}\r\n"));
+            write!(out, "ATTENDEE:mailto:{a}\r\n").unwrap();
         }
         out + "END:VFREEBUSY\r\nEND:VCALENDAR\r\n"
     }

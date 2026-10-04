@@ -73,16 +73,16 @@ fn address_kind(kinds: &[String]) -> &'static str {
     }
 }
 
-fn some(text: &Option<String>) -> Option<String> {
-    text.as_deref()
-        .map(str::trim)
+fn some(text: Option<&str>) -> Option<String> {
+    text.map(str::trim)
         .filter(|t| !t.is_empty())
         .map(str::to_owned)
 }
 
 fn birthday(text: &str) -> Option<ContactDate> {
-    let date = chrono::NaiveDate::parse_from_str(text.get(..10)?, "%Y-%m-%d").ok()?;
     use chrono::Datelike;
+
+    let date = chrono::NaiveDate::parse_from_str(text.get(..10)?, "%Y-%m-%d").ok()?;
     Some(ContactDate {
         // Outlook writes 1604 for "no year".
         year: (date.year() > 1604).then_some(date.year()),
@@ -127,21 +127,21 @@ pub fn contact_from_exchange(c: &ExchangeContact) -> MappedContact {
     }
     let name = ContactName {
         prefix: None,
-        given: some(&c.given_name),
-        additional: some(&c.middle_name),
-        family: some(&c.surname),
+        given: some(c.given_name.as_deref()),
+        additional: some(c.middle_name.as_deref()),
+        family: some(c.surname.as_deref()),
         suffix: None,
     };
     let display = [c.display_name.trim().to_owned()]
         .into_iter()
         .chain(nail_ical::vcard::display_name_from(&name))
-        .chain(some(&c.company))
+        .chain(some(c.company.as_deref()))
         .chain(c.emails.first().map(|e| e.address.clone()))
         .find(|n| !n.trim().is_empty())
         .unwrap_or_default();
     let mut fields = ContactFields::named(display);
     fields.name = (!name.is_empty()).then_some(name);
-    fields.nicknames = some(&c.nickname).into_iter().collect();
+    fields.nicknames = some(c.nickname.as_deref()).into_iter().collect();
     fields.emails = c
         .emails
         .iter()
@@ -174,28 +174,28 @@ pub fn contact_from_exchange(c: &ExchangeContact) -> MappedContact {
                 "business" | "work" => vec!["work".into()],
                 _ => Vec::new(),
             },
-            street: some(&a.street),
-            locality: some(&a.city),
-            region: some(&a.state),
-            postal_code: some(&a.postal_code),
-            country: some(&a.country),
+            street: some(a.street.as_deref()),
+            locality: some(a.city.as_deref()),
+            region: some(a.state.as_deref()),
+            postal_code: some(a.postal_code.as_deref()),
+            country: some(a.country.as_deref()),
             ..PostalAddress::default()
         })
         .collect();
-    fields.organization = some(&c.company).map(|name| ContactOrg {
+    fields.organization = some(c.company.as_deref()).map(|name| ContactOrg {
         name,
-        units: some(&c.department).into_iter().collect(),
+        units: some(c.department.as_deref()).into_iter().collect(),
     });
-    fields.title = some(&c.job_title);
+    fields.title = some(c.job_title.as_deref());
     fields.birthday = c.birthday.as_deref().and_then(birthday);
-    fields.notes = some(&c.notes);
+    fields.notes = some(c.notes.as_deref());
     fields.urls = c
         .urls
         .iter()
         .filter(|u| !u.trim().is_empty())
         .map(|u| LabeledValue::new(u.trim()))
         .collect();
-    fields.categories = c.categories.clone();
+    fields.categories.clone_from(&c.categories);
     fields.photo = c.photo.as_deref().and_then(photo_of);
     MappedContact::Contact {
         uid,

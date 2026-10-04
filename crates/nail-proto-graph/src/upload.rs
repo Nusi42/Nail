@@ -162,7 +162,7 @@ impl DraftParts {
             Some(content) => json!({ "contentType": "html", "content": content }),
             None => json!({
                 "contentType": "text",
-                "content": parsed.body_text(0).map(|t| t.into_owned()).unwrap_or_default(),
+                "content": parsed.body_text(0).map(std::borrow::Cow::into_owned).unwrap_or_default(),
             }),
         };
         let from = recipients(parsed.from());
@@ -255,8 +255,10 @@ impl DraftParts {
                 .content_id()
                 .map(|c| c.trim().trim_matches(['<', '>']).to_owned())
                 .filter(|c| !c.is_empty());
-            let inline =
-                part.content_disposition().is_some_and(|d| d.is_inline()) && content_id.is_some();
+            let inline = part
+                .content_disposition()
+                .is_some_and(mail_parser::ContentType::is_inline)
+                && content_id.is_some();
             attachments.push(AttachmentPart {
                 name,
                 content_type,
@@ -717,16 +719,15 @@ pub fn header_section(raw: &[u8]) -> Vec<u8> {
         .position(|w| w == b"\r\n\r\n")
         .map(|i| i + 4)
         .or_else(|| raw.windows(2).position(|w| w == b"\n\n").map(|i| i + 2));
-    match end {
-        Some(end) => raw[..end].to_vec(),
-        None => {
-            let mut out = raw.to_vec();
-            if !out.ends_with(b"\r\n") {
-                out.extend_from_slice(b"\r\n");
-            }
+    if let Some(end) = end {
+        raw[..end].to_vec()
+    } else {
+        let mut out = raw.to_vec();
+        if !out.ends_with(b"\r\n") {
             out.extend_from_slice(b"\r\n");
-            out
         }
+        out.extend_from_slice(b"\r\n");
+        out
     }
 }
 

@@ -215,11 +215,11 @@ impl Capabilities {
         let mut manage_sieve = false;
         for line in lines {
             let (name, value) = match line.as_slice() {
-                [Token::Str(name)] => (name.to_ascii_uppercase(), None),
                 [Token::Str(name), Token::Str(value), ..] => {
                     (name.to_ascii_uppercase(), Some(value.clone()))
                 }
-                // A capability of a later extension with another shape.
+                // A capability without a value, or one of a later extension
+                // with another shape.
                 [Token::Str(name), ..] => (name.to_ascii_uppercase(), None),
                 _ => {
                     return Err(SieveError::NotManageSieve(format!(
@@ -438,14 +438,18 @@ impl SieveSession {
                 access_token,
                 mechanism,
             } => {
-                let choice = match mechanism {
-                    Some(SaslMechanism::Xoauth2) if has("XOAUTH2") => "XOAUTH2",
-                    Some(SaslMechanism::Oauthbearer) if has("OAUTHBEARER") => "OAUTHBEARER",
-                    Some(_) => return Err(unsupported()),
-                    None if has("XOAUTH2") => "XOAUTH2",
-                    None if has("OAUTHBEARER") => "OAUTHBEARER",
-                    None => return Err(unsupported()),
+                let wanted: &[&str] = match mechanism {
+                    Some(SaslMechanism::Xoauth2) => &["XOAUTH2"],
+                    Some(SaslMechanism::Oauthbearer) => &["OAUTHBEARER"],
+                    Some(_) => &[],
+                    // Without a preference: XOAUTH2 first.
+                    None => &["XOAUTH2", "OAUTHBEARER"],
                 };
+                let choice = wanted
+                    .iter()
+                    .copied()
+                    .find(|m| has(m))
+                    .ok_or_else(unsupported)?;
                 let payload = if choice == "XOAUTH2" {
                     format!("user={username}\x01auth=Bearer {access_token}\x01\x01")
                 } else {

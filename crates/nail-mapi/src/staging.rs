@@ -29,7 +29,7 @@ use nail_api::mapi::{MapiMessage, MapiResult};
 pub const MAX_STAGED_FILE_BYTES: u64 = nail_api::compose::MAX_ATTACHMENT_BYTES;
 
 /// Staging folders older than this are removed by later calls.
-pub const STALE_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
+pub const STALE_AFTER: Duration = Duration::from_hours(24);
 
 /// The folder all staging folders live in: `%TEMP%\nail-mapi`.
 pub fn default_staging_root() -> PathBuf {
@@ -56,7 +56,7 @@ impl Drop for StagedFiles {
     fn drop(&mut self) {
         if let Some(dir) = self.dir.take() {
             // Best effort: a file the app still holds open is swept later.
-            let _ = fs::remove_dir_all(dir);
+            drop(fs::remove_dir_all(dir));
         }
     }
 }
@@ -110,7 +110,10 @@ pub fn stage_attachments(
         fs::create_dir(&folder).map_err(|_| MapiResult::Failure)?;
         let target = folder.join(safe_file_name(&name));
         fs::copy(&attachment.path, &target).map_err(|e| io_result(&e))?;
-        attachment.path = target.to_str().ok_or(MapiResult::Failure)?.to_owned();
+        target
+            .to_str()
+            .ok_or(MapiResult::Failure)?
+            .clone_into(&mut attachment.path);
         attachment.file_name = Some(name);
     }
     Ok(staged)
@@ -135,7 +138,7 @@ fn create_unique_dir(root: &Path) -> io::Result<PathBuf> {
 }
 
 /// Whether `name` is one of this DLL's staging folders
-/// (`<pid>-<hex nanos>-<n>`, [`create_unique_dir`]).
+/// (`<pid>-<hex nanos>-<n>`, `create_unique_dir`).
 pub fn is_staging_dir_name(name: &str) -> bool {
     let mut parts = name.split('-');
     let (Some(pid), Some(nanos), Some(n), None) =
@@ -196,7 +199,7 @@ pub fn sweep_stale(root: &Path, age: Duration) {
             continue;
         };
         if meta.is_dir() && meta.modified().is_ok_and(|m| m < cutoff) {
-            let _ = fs::remove_dir_all(entry.path());
+            drop(fs::remove_dir_all(entry.path()));
         }
     }
 }
@@ -206,7 +209,8 @@ pub fn sweep_stale(root: &Path, age: Duration) {
 /// (`CON`, `COM1`, …) get a `_` prefix, at most 200 characters (keeping a
 /// short extension), never empty.
 pub fn safe_file_name(name: &str) -> String {
-    let mut out: String = name
+    const MAX_CHARS: usize = 200;
+    let replaced: String = name
         .chars()
         .map(|c| {
             if c < ' ' || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
@@ -216,7 +220,10 @@ pub fn safe_file_name(name: &str) -> String {
             }
         })
         .collect();
-    out = out.trim_start().trim_end_matches(['.', ' ']).to_owned();
+    let mut out = replaced
+        .trim_start()
+        .trim_end_matches(['.', ' '])
+        .to_owned();
     if out.is_empty() {
         return "attachment".to_owned();
     }
@@ -231,7 +238,6 @@ pub fn safe_file_name(name: &str) -> String {
     if reserved {
         out.insert(0, '_');
     }
-    const MAX_CHARS: usize = 200;
     if out.chars().count() > MAX_CHARS {
         let ext = out
             .rfind('.')
@@ -345,7 +351,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let old = create_unique_dir(root.path()).unwrap();
         fs::write(old.join("f"), b"x").unwrap();
-        sweep_stale(root.path(), Duration::from_secs(3600));
+        sweep_stale(root.path(), Duration::from_hours(1));
         assert!(old.exists());
         sweep_stale(root.path(), Duration::ZERO);
         assert!(!old.exists());
@@ -436,7 +442,7 @@ mod tests {
         let long = format!("{}.pdf", "x".repeat(300));
         let safe = safe_file_name(&long);
         assert_eq!(safe.chars().count(), 200);
-        assert!(safe.ends_with(".pdf"));
+        assert!(Path::new(&safe).extension().is_some_and(|e| e == "pdf"));
         let umlauts = "ä".repeat(250);
         assert_eq!(safe_file_name(&umlauts).chars().count(), 200);
     }

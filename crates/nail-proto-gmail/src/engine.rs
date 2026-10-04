@@ -428,8 +428,7 @@ impl GmailEngine {
             pages += 1;
             match page.next_page_token {
                 None => break (page.history_id, false),
-                Some(next) if pages >= self.options.history_pages_per_call.max(1) => {
-                    let _ = next;
+                Some(_) if pages >= self.options.history_pages_per_call.max(1) => {
                     let last = records
                         .last()
                         .map_or_else(|| cursor.to_owned(), |r| r.id.clone());

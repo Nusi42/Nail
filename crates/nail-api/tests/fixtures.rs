@@ -4,6 +4,7 @@
 //! (WP1) and the input of the renderer's tests (WP4), so beyond deserializing
 //! they must be internally consistent: every token, action, icon, toolbar and
 //! message id they reference must exist.
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -75,7 +76,7 @@ fn ftl_file_names(locale: &str) -> BTreeSet<String> {
     std::fs::read_dir(repo_root().join("locales").join(locale))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.ends_with(".ftl"))
+        .filter(|n| Path::new(n).extension().is_some_and(|e| e == "ftl"))
         .collect()
 }
 
@@ -208,16 +209,16 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
     assert_eq!(layout.views["mail"].window, "mail");
 
     // The mail view's window: three panes, tabs when narrow.
-    let mail = &layout.windows["mail"];
+    let mail_window = &layout.windows["mail"];
     for width in [0, 320, 899, 900, 1280, 3840] {
         assert_eq!(
-            mail.iter().filter(|bp| bp.matches(width)).count(),
+            mail_window.iter().filter(|bp| bp.matches(width)).count(),
             1,
             "exactly one breakpoint must match width {width}"
         );
     }
 
-    let wide = mail.iter().find(|bp| bp.matches(1280)).unwrap();
+    let wide = mail_window.iter().find(|bp| bp.matches(1280)).unwrap();
     let LayoutNode::Split {
         sizes, children, ..
     } = &wide.root
@@ -243,10 +244,10 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
     assert!(pane_kinds[2].contains(&"message-view".to_owned()));
     assert!(pane_kinds[2].contains(&"toolbar".to_owned()));
 
-    let narrow = mail.iter().find(|bp| bp.matches(600)).unwrap();
+    let narrow = mail_window.iter().find(|bp| bp.matches(600)).unwrap();
     assert!(matches!(narrow.root, LayoutNode::Tabs { .. }));
 
-    for bp in main.iter().chain(mail) {
+    for bp in main.iter().chain(mail_window) {
         bp.root.walk(&mut |n| match n {
             LayoutNode::Split {
                 sizes, children, ..
@@ -263,6 +264,15 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
 
 #[test]
 fn layout_references_resolve() {
+    fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
+        for item in items {
+            match item {
+                MenuItem::Action { action, .. } => out.push(action),
+                MenuItem::Submenu { items, .. } => menu_actions(items, out),
+                MenuItem::Separator | MenuItem::Header { .. } => {}
+            }
+        }
+    }
     let layout = layout();
 
     // j/k navigate the list.
@@ -277,15 +287,6 @@ fn layout_references_resolve() {
     }
 
     let mut used_actions: Vec<&str> = layout.keys.iter().map(|k| k.action.as_str()).collect();
-    fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
-        for item in items {
-            match item {
-                MenuItem::Action { action, .. } => out.push(action),
-                MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                MenuItem::Separator | MenuItem::Header { .. } => {}
-            }
-        }
-    }
     for items in layout.toolbars.values() {
         for item in items {
             match item {

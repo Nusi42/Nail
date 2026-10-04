@@ -50,7 +50,8 @@ for (const variant of variants) {
   const reason = variant.skip;
   if (reason) {
     // No fixtures: a skipped variant starts no server.
-    test(title, async ({}, testInfo) => {
+    // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
+    test(title, ({}, testInfo) => {
       recordSkip(variant, reason);
       testInfo.annotations.push({ type: "skip-reason", description: reason });
       test.skip(true, reason);
@@ -70,7 +71,7 @@ for (const variant of variants) {
           const shot = await openAndShoot(page, nail, screen);
           await expectDensity(page, variant.density);
           const entry = compareWithBaseline(test.info(), variant, screen, shot);
-          if (entry.status === "error") failures.push(`${screen.id}: ${entry.message}`);
+          if (entry.status === "error") failures.push(`${screen.id}: ${entry.message ?? "error"}`);
         } catch (error) {
           // Recorded, and the remaining screens are still captured.
           failures.push(`${screen.id}: ${await recordError(page, variant, screen, error)}`);

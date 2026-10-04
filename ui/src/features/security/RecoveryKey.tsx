@@ -84,7 +84,7 @@ export function RecoveryKeyInput({
   label,
 }: {
   value: string;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   label: string;
 }) {
   const t = useT();
@@ -114,7 +114,9 @@ export function RecoveryKeyInput({
         value={value}
         aria-invalid={issue !== null || undefined}
         aria-describedby={`${id}-hint`}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
       />
       <p data-part="form.hint" id={`${id}-hint`} data-tone={issue ? "danger" : undefined}>
         {t(issue ? recoveryIssueId(issue) : "security-recovery-input-hint")}
@@ -135,7 +137,7 @@ function ProblemText({ problem }: { problem: LocalizedMessage }) {
 type CreateStep = "intro" | "show" | "verify" | "done";
 
 /** The create flow's content. */
-export function RecoveryKeyCreate({ close }: { close(): void }) {
+export function RecoveryKeyCreate({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const ui = useUiStoreApi();
@@ -227,7 +229,9 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
               data-part="form.checkbox"
               type="checkbox"
               checked={saveKit}
-              onChange={(e) => setSaveKit(e.target.checked)}
+              onChange={(e) => {
+                setSaveKit(e.target.checked);
+              }}
             />
             <span data-part="form.check.label">{t("security-recovery-save-kit")}</span>
           </label>
@@ -282,12 +286,12 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
               type="button"
               data-part="form.button"
               data-action="print"
-              onClick={() =>
+              onClick={() => {
                 printSheet(
                   ui,
                   <RecoveryKit value={key} created={createdAt ? format.dateTime(createdAt) : ""} />,
-                )
-              }
+                );
+              }}
             >
               {t("security-recovery-print")}
             </button>
@@ -297,7 +301,9 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
               data-part="form.checkbox"
               type="checkbox"
               checked={stored}
-              onChange={(e) => setStored(e.target.checked)}
+              onChange={(e) => {
+                setStored(e.target.checked);
+              }}
             />
             <span data-part="form.check.label">{t("security-recovery-stored")}</span>
           </label>
@@ -370,7 +376,7 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
 }
 
 /** Checks a stored recovery key. */
-export function RecoveryKeyVerify({ close }: { close(): void }) {
+export function RecoveryKeyVerify({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const updateRecovery = useUpdateRecovery();
@@ -433,7 +439,7 @@ export function RecoveryKeyVerify({ close }: { close(): void }) {
 }
 
 /** Puts the data key back with the recovery key. */
-export function RecoveryKeyRestore({ close }: { close(): void }) {
+export function RecoveryKeyRestore({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -570,7 +576,9 @@ export function RecoveryKeyWidget() {
             data-part="form.button"
             data-variant="primary"
             data-action="restore"
-            onClick={() => ui.getState().openWindow(RECOVERY_RESTORE_DIALOG)}
+            onClick={() => {
+              ui.getState().openWindow(RECOVERY_RESTORE_DIALOG);
+            }}
           >
             {t("security-recovery-restore")}
           </button>
@@ -582,7 +590,9 @@ export function RecoveryKeyWidget() {
                 data-part="form.button"
                 data-variant={recovery.configured ? undefined : "primary"}
                 data-action="create"
-                onClick={() => ui.getState().openWindow(RECOVERY_CREATE_DIALOG)}
+                onClick={() => {
+                  ui.getState().openWindow(RECOVERY_CREATE_DIALOG);
+                }}
               >
                 {t(recovery.configured ? "security-recovery-replace" : "security-recovery-create")}
               </button>
@@ -591,7 +601,9 @@ export function RecoveryKeyWidget() {
                   type="button"
                   data-part="form.button"
                   data-action="check"
-                  onClick={() => ui.getState().openWindow(RECOVERY_VERIFY_DIALOG)}
+                  onClick={() => {
+                    ui.getState().openWindow(RECOVERY_VERIFY_DIALOG);
+                  }}
                 >
                   {t("security-recovery-check")}
                 </button>
@@ -602,7 +614,9 @@ export function RecoveryKeyWidget() {
                   data-part="form.button"
                   data-variant="danger"
                   data-action="remove"
-                  onClick={() => setConfirmRemove(true)}
+                  onClick={() => {
+                    setConfirmRemove(true);
+                  }}
                 >
                   {t("security-recovery-remove")}
                 </button>
@@ -634,7 +648,9 @@ export function RecoveryKeyWidget() {
               type="button"
               data-part="form.button"
               data-action="keep"
-              onClick={() => setConfirmRemove(false)}
+              onClick={() => {
+                setConfirmRemove(false);
+              }}
             >
               {t("security-recovery-keep")}
             </button>

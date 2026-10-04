@@ -29,8 +29,6 @@ url.workspace = true
 # SOAP bodies (the same XML library as Autodiscover and DAV; MIT).
 quick-xml.workspace = true
 # Fixtures and the JSON parts of Autodiscover answers in tests.
-serde.workspace = true
-serde_json.workspace = true
 # MimeContent is base64; Negotiate tokens are base64 in headers.
 base64.workspace = true
 # Times (EWS dateTime, time zones are mapped by nail-exchange).

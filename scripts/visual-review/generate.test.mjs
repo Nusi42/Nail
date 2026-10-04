@@ -16,11 +16,16 @@ import {
   STATUSES,
   summarize,
 } from "./generate.mjs";
+import { readJson } from "../lib/json.mjs";
 
 function tempDir() {
   return mkdtempSync(path.join(tmpdir(), "nail-visual-review-test-"));
 }
 
+/**
+ * @param {Partial<import("./generate.mjs").Entry> & Record<string, unknown>} overrides
+ * @returns {import("./generate.mjs").Entry}
+ */
 function entry(overrides) {
   return {
     variant: "frost-comfortable",
@@ -36,9 +41,15 @@ function entry(overrides) {
   };
 }
 
+/**
+ * @param {string} dir
+ * @param {unknown[]} entries
+ */
 function writeEntries(dir, entries) {
   mkdirSync(dir, { recursive: true });
-  entries.forEach((e, i) => writeFileSync(path.join(dir, `${i}.json`), JSON.stringify(e)));
+  entries.forEach((e, i) => {
+    writeFileSync(path.join(dir, `${String(i)}.json`), JSON.stringify(e));
+  });
 }
 
 test("arguments default to the build directory, never the repository", () => {
@@ -79,7 +90,7 @@ test("the manifest is validated and ordered: current, gallery order, densities, 
       entry({ screen: "main", extra: "ignored" }),
       entry({ variant: "sage-comfortable", theme: "sage", screen: null, status: "skipped" }),
     ]);
-    const ids = readManifest(dir).map((e) => `${e.variant}/${e.screen}`);
+    const ids = readManifest(dir).map((e) => `${e.variant}/${String(e.screen)}`);
     assert.deepEqual(ids, [
       "current/zeta",
       "frost-comfortable/main",
@@ -90,7 +101,7 @@ test("the manifest is validated and ordered: current, gallery order, densities, 
       "graphite-compact/dialog",
       "ocean-comfortable/main",
     ]);
-    assert.equal("extra" in readManifest(dir)[1], false);
+    assert.equal("extra" in (readManifest(dir)[1] ?? {}), false);
     writeFileSync(path.join(dir, "z.json"), JSON.stringify(entry({ status: "fine" })));
     assert.throws(() => readManifest(dir), /unknown status fine/);
     writeFileSync(path.join(dir, "z.json"), JSON.stringify({ variant: "x" }));
@@ -201,7 +212,7 @@ test("the page shows baseline, actual and difference side by side, skips, and co
       ["actual", "a.png"],
       ["diff", "d.png"],
     ]) {
-      const copied = path.join(out, "images", "frost-comfortable", `main-${kind}.png`);
+      const copied = path.join(out, "images", "frost-comfortable", `main-${kind ?? ""}.png`);
       assert.equal(readFileSync(copied, "utf8"), content);
     }
     const html = readFileSync(file, "utf8");
@@ -219,7 +230,9 @@ test("the page shows baseline, actual and difference side by side, skips, and co
     assert.ok(html.includes('data-filter="changed"'));
     // Self-contained: no external resources.
     assert.equal(/(src|href)="https?:/.test(html), false);
-    const saved = JSON.parse(readFileSync(path.join(out, "summary.json"), "utf8"));
+    const saved = /** @type {{ summary: Record<string, number>, entries: unknown[] }} */ (
+      readJson(path.join(out, "summary.json"))
+    );
     assert.equal(saved.summary.changed, 1);
     assert.equal(saved.entries.length, 4);
   } finally {

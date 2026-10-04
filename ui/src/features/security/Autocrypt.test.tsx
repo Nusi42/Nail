@@ -26,7 +26,9 @@ describe("security-autocrypt", () => {
     renderNode(widget("security-autocrypt"), env);
     const send = screen.getByRole("region", { name: "Use your key on another device" });
     const identity = within(send).getByRole("combobox", { name: "Key of" });
-    await waitFor(() => expect(within(identity).getAllByRole("option").length).toBe(3));
+    await waitFor(() => {
+      expect(within(identity).getAllByRole("option").length).toBe(3);
+    });
     await user.click(within(send).getByRole("button", { name: "Send setup message" }));
     const code = await within(send).findByRole("region", { name: "Setup code" });
     expect(within(code).getByRole("alert")).toHaveTextContent("cannot show it again");
@@ -35,7 +37,7 @@ describe("security-autocrypt", () => {
       { type: "SendAutocryptSetup", identity_id: "ada@example.org" },
     ]);
     await user.click(within(code).getByRole("button", { name: "Done" }));
-    expect(screen.queryByText(value.textContent ?? "")).not.toBeInTheDocument();
+    expect(screen.queryByText(value.textContent)).not.toBeInTheDocument();
   });
 
   it("explains a missing OpenPGP key", async () => {
@@ -44,7 +46,9 @@ describe("security-autocrypt", () => {
     renderNode(widget("security-autocrypt"), env);
     const send = screen.getByRole("region", { name: "Use your key on another device" });
     const identity = within(send).getByRole("combobox", { name: "Key of" });
-    await waitFor(() => expect(within(identity).getAllByRole("option").length).toBe(3));
+    await waitFor(() => {
+      expect(within(identity).getAllByRole("option").length).toBe(3);
+    });
     await user.selectOptions(identity, "ada@work.example");
     await user.click(within(send).getByRole("button", { name: "Send setup message" }));
     expect(await within(send).findByRole("alert")).toHaveTextContent(
@@ -60,7 +64,9 @@ describe("security-autocrypt", () => {
     renderNode(widget("security-autocrypt"), env);
     const receive = screen.getByRole("region", { name: "Import a key from another device" });
     expect(within(receive).getByText(/Select the setup message/)).toBeInTheDocument();
-    act(() => env.store.getState().selectMessage(id));
+    act(() => {
+      env.store.getState().selectMessage(id);
+    });
     const form = await within(receive).findByRole("form", {
       name: "Import a key from another device",
     });
@@ -87,7 +93,9 @@ describe("security-autocrypt", () => {
   it("says when the message is not a setup message", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    act(() => env.store.getState().selectMessage(firstMessage(env)));
+    act(() => {
+      env.store.getState().selectMessage(firstMessage(env));
+    });
     renderNode(widget("security-autocrypt"), env);
     const form = await screen.findByRole("form", { name: "Import a key from another device" });
     await user.type(within(form).getByRole("textbox", { name: "Setup code" }), "1".repeat(36));
@@ -115,7 +123,9 @@ describe("autocrypt import dialog and action", () => {
     const action = actions["security.autocrypt.import"];
     expect(action?.enabled?.(ctx(env), [])).toBe(false);
     const id = firstMessage(env);
-    act(() => env.store.getState().selectMessage(id));
+    act(() => {
+      env.store.getState().selectMessage(id);
+    });
     // Not loaded yet, then an ordinary message: hidden (M5b review).
     expect(action?.enabled?.(ctx(env), [])).toBe(false);
     const body = (attachments: MessageBody["attachments"], text = "Hello") =>
@@ -151,7 +161,9 @@ describe("autocrypt import dialog and action", () => {
       env,
     );
     expect(screen.getByText(/Select the setup message/)).toBeInTheDocument();
-    act(() => env.store.getState().selectMessage(id));
+    act(() => {
+      env.store.getState().selectMessage(id);
+    });
     await user.type(await screen.findByRole("textbox", { name: "Setup code" }), CODE);
     await user.click(screen.getByRole("button", { name: "Import key" }));
     expect(await screen.findByRole("status")).toHaveTextContent("1 new");

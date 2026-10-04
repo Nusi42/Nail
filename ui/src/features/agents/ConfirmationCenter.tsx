@@ -39,7 +39,9 @@ function Pending() {
               <ConfirmationCard
                 confirmation={confirmation}
                 focused={confirmation.id === focus}
-                onDecided={(decided) => dismiss(decided.id)}
+                onDecided={(decided) => {
+                  dismiss(decided.id);
+                }}
               />
             </li>
           ))}
@@ -109,7 +111,9 @@ export function CenterContent({ showHistory = true }: { showHistory?: boolean })
             data-view="pending"
             data-state={current === "pending" ? "selected" : undefined}
             aria-pressed={current === "pending"}
-            onClick={() => setView("pending")}
+            onClick={() => {
+              setView("pending");
+            }}
           >
             {t("agents-center-show-pending", { count })}
           </button>
@@ -119,7 +123,9 @@ export function CenterContent({ showHistory = true }: { showHistory?: boolean })
             data-view="history"
             data-state={current === "history" ? "selected" : undefined}
             aria-pressed={current === "history"}
-            onClick={() => setView("history")}
+            onClick={() => {
+              setView("history");
+            }}
           >
             {t("agents-center-show-history")}
           </button>

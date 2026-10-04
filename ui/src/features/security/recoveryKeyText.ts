@@ -47,12 +47,12 @@ export function formatRecoveryKey(key: Uint8Array): string {
     bits += 8;
     while (bits >= 5 && plain.length < DATA_CHARS) {
       bits -= 5;
-      plain += ALPHABET[(acc >>> bits) & 31];
+      plain += ALPHABET.charAt((acc >>> bits) & 31);
     }
   }
-  if (bits > 0 && plain.length < DATA_CHARS) plain += ALPHABET[(acc << (5 - bits)) & 31];
+  if (bits > 0 && plain.length < DATA_CHARS) plain += ALPHABET.charAt((acc << (5 - bits)) & 31);
   const check = crc32(key) >>> 12;
-  for (const shift of [15, 10, 5, 0]) plain += ALPHABET[(check >>> shift) & 31];
+  for (const shift of [15, 10, 5, 0]) plain += ALPHABET.charAt((check >>> shift) & 31);
   return (plain.match(/.{1,4}/g) ?? []).join("-");
 }
 

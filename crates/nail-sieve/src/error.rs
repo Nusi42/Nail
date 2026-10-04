@@ -103,9 +103,8 @@ impl SieveError {
             Self::AuthUnsupported(_) | Self::StartTlsUnavailable | Self::NotManageSieve(_) => {
                 ErrorCode::Unsupported
             }
-            Self::EncryptionNeeded(_) => ErrorCode::Tls,
+            Self::EncryptionNeeded(_) | Self::Tls { .. } => ErrorCode::Tls,
             Self::InvalidServerName(_) => ErrorCode::Config,
-            Self::Tls { .. } => ErrorCode::Tls,
             Self::ScriptRejected(_) | Self::Refused { .. } => ErrorCode::Rejected,
             Self::Quota(_) => ErrorCode::TooLarge,
             Self::NotManaged(_) => ErrorCode::Conflict,

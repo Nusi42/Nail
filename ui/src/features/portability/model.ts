@@ -29,6 +29,7 @@ import type {
   Redaction,
   RestoreEffect,
 } from "../../api/generated";
+import { charCount } from "../../text/chars";
 
 export const IMPORT_FORMATS: readonly ImportFormat[] = [
   "mbox",
@@ -256,7 +257,7 @@ export function backupContentsIssues(contents: BackupContents): BackupIssue[] {
 
 /** `backup::passphrase_issues` (new backups only). */
 export function passphraseIssues(passphrase: string): BackupIssue[] {
-  const chars = [...passphrase].length;
+  const chars = charCount(passphrase);
   if (chars < MIN_BACKUP_PASSPHRASE_CHARS) return ["passphrase-too-short"];
   if (chars > MAX_BACKUP_PASSPHRASE_CHARS) return ["passphrase-too-long"];
   return [];

@@ -36,7 +36,7 @@ export interface FreeBusyTimelineProps {
   /** People to show (the organizer first, then the attendees). */
   people: readonly Person[];
   day: CalendarDate;
-  onDay(day: CalendarDate): void;
+  onDay: (day: CalendarDate) => void;
   /** The planned meeting; `null` = none yet. */
   meeting: Span | null;
   /** Length of suggested slots in minutes. */
@@ -51,7 +51,7 @@ export interface FreeBusyTimelineProps {
   ignoreEventId?: EventId | null;
   maxSuggestions?: number;
   /** A suggested slot was chosen. */
-  onPick?(slot: Span): void;
+  onPick?: (slot: Span) => void;
   /** "Now", for leaving out past slots (tests pass a fixed value). */
   now?: number | undefined;
 }
@@ -76,8 +76,8 @@ function Block({
   children?: ReactNode;
 }) {
   useGeometry(id, {
-    left: `${Math.round(left * 10000) / 100}%`,
-    width: `${Math.max(0.5, Math.round(width * 10000) / 100)}%`,
+    left: `${String(Math.round(left * 10000) / 100)}%`,
+    width: `${String(Math.max(0.5, Math.round(width * 10000) / 100))}%`,
   });
   return (
     <span data-part={part} data-geom={id} data-kind={kind} aria-hidden="true">
@@ -156,7 +156,9 @@ export function FreeBusyTimeline({
           data-part="freebusy.previous"
           aria-label={t("freebusy-previous-day")}
           title={t("freebusy-previous-day")}
-          onClick={() => onDay(day.add({ days: -1 }))}
+          onClick={() => {
+            onDay(day.add({ days: -1 }));
+          }}
         >
           <Icon name="chevron-left" part="freebusy.nav.icon" />
           <span data-part="freebusy.nav.text">{t("freebusy-previous-short")}</span>
@@ -167,13 +169,21 @@ export function FreeBusyTimeline({
           data-part="freebusy.next"
           aria-label={t("freebusy-next-day")}
           title={t("freebusy-next-day")}
-          onClick={() => onDay(day.add({ days: 1 }))}
+          onClick={() => {
+            onDay(day.add({ days: 1 }));
+          }}
         >
           <Icon name="chevron-right" part="freebusy.nav.icon" />
           <span data-part="freebusy.nav.text">{t("freebusy-next-short")}</span>
         </button>
         {day.compare(today) !== 0 && (
-          <button type="button" data-part="freebusy.today" onClick={() => onDay(today)}>
+          <button
+            type="button"
+            data-part="freebusy.today"
+            onClick={() => {
+              onDay(today);
+            }}
+          >
             {t("freebusy-today")}
           </button>
         )}
@@ -304,7 +314,9 @@ export function FreeBusyTimeline({
                           type="button"
                           data-part="form.button"
                           aria-label={t("freebusy-suggestion-pick", { time: text, day: dayLabel })}
-                          onClick={() => onPick(slot)}
+                          onClick={() => {
+                            onPick(slot);
+                          }}
                         >
                           {text}
                         </button>

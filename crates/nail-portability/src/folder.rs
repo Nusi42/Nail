@@ -2,7 +2,7 @@
 //! (Maildir++ folder names), and safe file names for exports.
 
 use base64::Engine;
-use base64::alphabet::Alphabet;
+use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use nail_api::domain::FolderRole;
 
@@ -88,11 +88,8 @@ pub fn folder_selected(selection: Option<&[String]>, path: &str) -> bool {
 // Modified UTF-7 (RFC 3501 §5.1.3)
 
 fn mutf7_engine() -> GeneralPurpose {
-    let alphabet =
-        Alphabet::new("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,")
-            .expect("valid alphabet");
     GeneralPurpose::new(
-        &alphabet,
+        &alphabet::IMAP_MUTF7,
         GeneralPurposeConfig::new()
             .with_encode_padding(false)
             .with_decode_padding_mode(DecodePaddingMode::RequireNone)
@@ -127,13 +124,12 @@ pub fn decode_mutf7(name: &str) -> String {
                     .collect();
                 String::from_utf16(&units).ok()
             });
-            match decoded {
-                Some(text) => out.push_str(&text),
-                None => {
-                    out.push('&');
-                    out.push_str(encoded);
-                    out.push('-');
-                }
+            if let Some(text) = decoded {
+                out.push_str(&text);
+            } else {
+                out.push('&');
+                out.push_str(encoded);
+                out.push('-');
             }
         }
         rest = &after[dash + 1..];

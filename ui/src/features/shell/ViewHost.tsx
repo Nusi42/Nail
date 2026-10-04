@@ -19,7 +19,7 @@
  *   a menu), focus moves to the new view's region, so it never stays in a
  *   hidden view; a click on the rail keeps focus on the rail button.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { WindowView } from "../../layout/LayoutRenderer";
@@ -59,14 +59,16 @@ export function ViewHost({ node }: WidgetProps) {
   // view, writing ours back would make the two answer each other forever.
   const { mutate } = setUiState;
   const lastSaved = useRef<string | null>(null);
+  // `storedValue` is read, not watched (see above).
+  const remember = useEffectEvent((view: string) => {
+    if (storedValue !== view) mutate({ key: UI_STATE_VIEW, value: view });
+  });
   useEffect(() => {
     if (!ready || activeView === null || viewDef(layout, activeView) === null) return;
     if (lastSaved.current === activeView) return;
     lastSaved.current = activeView;
-    if (storedValue !== activeView) mutate({ key: UI_STATE_VIEW, value: activeView });
-    // `storedValue` is read, not watched (see above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, activeView, layout, mutate]);
+    remember(activeView);
+  }, [ready, activeView, layout]);
 
   // Views shown so far stay mounted (hidden).
   const [visited, setVisited] = useState<readonly string[]>([]);

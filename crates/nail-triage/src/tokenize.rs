@@ -263,6 +263,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
+    use std::fmt::Write as _;
 
     fn headers(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         pairs
@@ -367,7 +368,10 @@ mod tests {
 
     #[test]
     fn limits_hold() {
-        let text: String = (0..10_000).map(|i| format!("word{i} ")).collect();
+        let text: String = (0..10_000).fold(String::new(), |mut s, i| {
+            write!(s, "word{i} ").unwrap();
+            s
+        });
         let tok = Tokenizer {
             max_tokens: 100,
             ..Tokenizer::default()

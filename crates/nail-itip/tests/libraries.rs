@@ -2,6 +2,7 @@
 //! mail built with mail-builder, read back with mail-parser (the
 //! `method` parameter of the `text/calendar` part), and its calendar data
 //! read by nail-ical (`METHOD`, `UID`, `SEQUENCE`, attendees).
+#![cfg(test)]
 
 use mail_builder::MessageBuilder;
 use mail_builder::headers::content_type::ContentType;

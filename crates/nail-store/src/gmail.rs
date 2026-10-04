@@ -376,9 +376,13 @@ impl Store {
                     [account.as_str()],
                     |r| {
                         Ok(GmailSyncRecord {
-                            history_id: r.get::<_, Option<i64>>(0)?.map(|h| h as u64),
+                            history_id: r
+                                .get::<_, Option<i64>>(0)?
+                                .and_then(|h| u64::try_from(h).ok()),
                             full_sync_page: r.get(1)?,
-                            full_sync_history_id: r.get::<_, Option<i64>>(2)?.map(|h| h as u64),
+                            full_sync_history_id: r
+                                .get::<_, Option<i64>>(2)?
+                                .and_then(|h| u64::try_from(h).ok()),
                             last_sync_at: r.get(3)?,
                         })
                     },
@@ -557,7 +561,7 @@ impl Store {
         op: GmailLabelOp,
     ) -> Result<(GmailLabelId, OpId)> {
         self.with_tx(|tx| {
-            let (label_id, payload, kind) = match &op {
+            let (label_id, payload, kind) = match op {
                 GmailLabelOp::Create(settings) => {
                     let n: i64 = tx.query_row(
                         "SELECT COALESCE(MAX(id), 0) + 1 FROM gmail_label_ops",
@@ -565,10 +569,10 @@ impl Store {
                         |r| r.get(0),
                     )?;
                     let id = GmailLabelId::new(format!("{LOCAL_LABEL_PREFIX}{n}"));
-                    let mut record = GmailLabelRecord::user(id.as_str(), settings);
+                    let mut record = GmailLabelRecord::user(id.as_str(), &settings);
                     record.sync = GmailLabelSync::Pending;
                     upsert_label_in_tx(tx, account, &record)?;
-                    (id, Some(serde_json::to_string(settings)?), "create")
+                    (id, Some(serde_json::to_string(&settings)?), "create")
                 }
                 GmailLabelOp::Update(settings) => {
                     let old = label_in_tx(tx, account, label_id)?;
@@ -577,7 +581,7 @@ impl Store {
                             "system label {label_id} cannot be changed"
                         )));
                     }
-                    let mut record = GmailLabelRecord::user(label_id.as_str(), settings);
+                    let mut record = GmailLabelRecord::user(label_id.as_str(), &settings);
                     record.sync = GmailLabelSync::Pending;
                     if let Some(from) = &old.tag
                         && from != &settings.name
@@ -587,7 +591,7 @@ impl Store {
                     upsert_label_in_tx(tx, account, &record)?;
                     (
                         label_id.clone(),
-                        Some(serde_json::to_string(settings)?),
+                        Some(serde_json::to_string(&settings)?),
                         "update",
                     )
                 }
@@ -689,7 +693,7 @@ impl Store {
                              WHERE account_id = ?1 AND label_id = ?2 AND state = 'pending'",
                             params![account, label_id, server_id],
                         )?;
-                        label = server_id.clone();
+                        label.clone_from(server_id);
                     }
                     let still_queued: bool = tx.query_row(
                         "SELECT EXISTS (SELECT 1 FROM gmail_label_ops

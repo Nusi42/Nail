@@ -281,11 +281,13 @@ impl MockEwsServer {
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024))
             .with_state(shared.clone());
         let task = tokio::spawn(async move {
-            let _ = axum::serve(
-                listener,
-                app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .await;
+            drop(
+                axum::serve(
+                    listener,
+                    app.into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .await,
+            );
         });
         Ok(Self { addr, shared, task })
     }
@@ -430,10 +432,16 @@ impl MockEwsServer {
 
     /// Delivers a message into a folder (a server-side change); answers
     /// its id.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn deliver(&self, folder: &str, raw: &[u8], read: bool) -> String {
         let id = {
             let mut state = self.state();
-            let (m, _) = state.folder_location(folder).expect("folder exists");
+            let (m, _) = state
+                .folder_location(folder)
+                .unwrap_or_else(|| panic!("no folder {folder}"));
             let props = fixtures::message_props(raw, read, &[]);
             state.add_item(m, folder, "Message", props, Some(raw.to_vec()))
         };
@@ -443,14 +451,22 @@ impl MockEwsServer {
 
     /// Adds a calendar item from its properties (`t:CalendarItem`
     /// children, UTC times); answers its id.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn add_calendar_item(&self, mailbox: Option<&str>, props_xml: &str) -> String {
         let id = {
             let mut state = self.state();
-            let m = state.mailbox_index(mailbox).expect("mailbox exists");
-            let folder = state.distinguished(m, "calendar").expect("calendar");
+            let m = state
+                .mailbox_index(mailbox)
+                .unwrap_or_else(|| panic!("no mailbox {mailbox:?}"));
+            let folder = state
+                .distinguished(m, "calendar")
+                .unwrap_or_else(|| panic!("no calendar folder"));
             let folder_id = state.mailboxes[m].folders[folder].id.clone();
             let props = xml::parse(&format!("<CalendarItem>{props_xml}</CalendarItem>"))
-                .expect("calendar item XML");
+                .unwrap_or_else(|e| panic!("calendar item XML: {e:?}"));
             state.add_item(m, &folder_id, "CalendarItem", props, None)
         };
         self.changed();
@@ -460,7 +476,9 @@ impl MockEwsServer {
     fn change_item(&self, id: &str, change: impl FnOnce(&mut MockItem), read_only: bool) {
         {
             let mut state = self.state();
-            let (m, i) = state.item_location(id).expect("item exists");
+            let (m, i) = state
+                .item_location(id)
+                .unwrap_or_else(|| panic!("no item {id}"));
             let key = state.new_key();
             let item = &mut state.mailboxes[m].items[i];
             change(item);
@@ -492,7 +510,7 @@ impl MockEwsServer {
                     let mut list = Element::new("Categories");
                     for c in categories {
                         let mut s = Element::new("String");
-                        s.text = (*c).to_owned();
+                        (*c).clone_into(&mut s.text);
                         list.children.push(s);
                     }
                     item.props.children.push(list);
@@ -509,10 +527,15 @@ impl MockEwsServer {
     }
 
     /// Moves an item on the server; answers its new id.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn move_item(&self, id: &str, folder: &str) -> String {
         let new = {
             let mut state = self.state();
-            ops::move_item(&mut state, id, folder, false).expect("item and folder exist")
+            ops::move_item(&mut state, id, folder, false)
+                .unwrap_or_else(|e| panic!("move {id} to {folder}: {e:?}"))
         };
         self.changed();
         new
@@ -531,9 +554,15 @@ impl MockEwsServer {
     }
 
     /// Adds a folder below `parent`; answers its id.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn add_folder(&self, parent: &str, name: &str, class: &str) -> String {
         let mut state = self.state();
-        let (m, _) = state.folder_location(parent).expect("parent exists");
+        let (m, _) = state
+            .folder_location(parent)
+            .unwrap_or_else(|| panic!("no folder {parent}"));
         let id = state.new_id("AQMkFolder");
         let key = state.new_key();
         state.mailboxes[m].folders.push(MockFolder {
@@ -548,12 +577,18 @@ impl MockEwsServer {
     }
 
     /// Renames a folder.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn rename_folder(&self, id: &str, name: &str) {
         let mut state = self.state();
-        let (m, f) = state.folder_location(id).expect("folder exists");
+        let (m, f) = state
+            .folder_location(id)
+            .unwrap_or_else(|| panic!("no folder {id}"));
         let key = state.new_key();
         let folder = &mut state.mailboxes[m].folders[f];
-        folder.name = name.to_owned();
+        name.clone_into(&mut folder.name);
         folder.change_key = key;
     }
 
@@ -653,13 +688,17 @@ impl MockEwsServer {
 
     /// Adds an inbox rule (a `t:Rule` element without namespace
     /// prefixes); answers its id.
+    ///
+    /// # Panics
+    ///
+    /// When the named mailbox, folder or item does not exist, or the XML is malformed.
     pub fn add_rule(&self, rule_xml: &str) -> String {
         let mut state = self.state();
-        let mut rule = xml::parse(rule_xml).expect("rule XML");
+        let mut rule = xml::parse(rule_xml).unwrap_or_else(|e| panic!("rule XML: {e:?}"));
         let id = state.new_id("R");
         rule.children.retain(|c| c.name != "RuleId");
         let mut rule_id = Element::new("RuleId");
-        rule_id.text = id.clone();
+        rule_id.text.clone_from(&id);
         rule.children.insert(0, rule_id);
         state.rules.push(rule);
         id

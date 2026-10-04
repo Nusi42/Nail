@@ -85,7 +85,7 @@ fn stored_password(
 }
 
 /// The engine of a configured account (stored secrets).
-pub(crate) async fn engine_for(
+pub(crate) fn engine_for(
     service: &Service,
     account: &AccountConfig,
 ) -> Result<Arc<dyn ExchangeEngine>> {
@@ -96,8 +96,7 @@ pub(crate) async fn engine_for(
         ))
         .into());
     };
-    let tokens =
-        Arc::clone(&service.inner.tokens) as Arc<dyn nail_api::engine::AccessTokenProvider>;
+    let tokens = Arc::clone(&service.inner.tokens);
     match options.engine {
         EngineKind::Graph => Ok(Arc::new(
             GraphEngine::for_account(account, tokens).map_err(engine_error)?,
@@ -138,9 +137,7 @@ pub(crate) async fn test_exchange(
         ));
     };
     let engine: Arc<dyn ExchangeEngine> = match source {
-        SecretSource::Stored { .. } => engine_for(service, config)
-            .await
-            .map_err(EngineError::from)?,
+        SecretSource::Stored { .. } => engine_for(service, config).map_err(EngineError::from)?,
         SecretSource::AccessToken(token) => match options.engine {
             EngineKind::Graph => Arc::new(GraphEngine::new(
                 GraphClient::new(&options.graph_url(server), GraphAuth::Bearer(token))
@@ -254,7 +251,7 @@ pub(crate) async fn autodiscover(
         Some(dns) => Some(Arc::clone(dns)),
         None => nail_discovery::SystemDns::new()
             .ok()
-            .map(|dns| Arc::new(dns) as Arc<dyn nail_discovery::DnsLookup>),
+            .map(|dns| -> Arc<dyn nail_discovery::DnsLookup> { Arc::new(dns) }),
     };
     // Microsoft's global endpoint learns the address: only for domains
     // whose mail Microsoft hosts already (their MX), never otherwise.
@@ -262,8 +259,7 @@ pub(crate) async fn autodiscover(
         (Some(dns), Some((_, domain))) => dns
             .mx(domain.trim())
             .await
-            .map(|records| records.iter().any(|r| is_microsoft_mx(&r.exchange)))
-            .unwrap_or(false),
+            .is_ok_and(|records| records.iter().any(|r| is_microsoft_mx(&r.exchange))),
         _ => false,
     };
     if hooks.no_microsoft_lookup || !microsoft_hosted {

@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn call_runs_on_blocking_pool() {
         let store = Store::open_in_memory().unwrap();
-        let version = store.call(|s| s.schema_version()).await.unwrap();
+        let version = store.call(Store::schema_version).await.unwrap();
         assert_eq!(version, schema::SCHEMA_VERSION);
     }
 }

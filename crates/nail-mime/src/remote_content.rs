@@ -1,6 +1,6 @@
 //! Remote content in sanitized HTML → proxy URLs (M2b; ADRs 0036, 0038).
 //!
-//! The sanitizer ([`crate::sanitize`]) finds every remote reference —
+//! The sanitizer ([`crate::sanitize_html`]) finds every remote reference —
 //! `src` / `background` attributes and CSS `url(...)` in `style` — and
 //! counts it ([`crate::SanitizedHtml::remote_resources`],
 //! [`crate::ParsedMessage::remote_resources`]). By default it removes

@@ -21,7 +21,7 @@ import { isUnsupported } from "../../state/queries";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { Segmented, Switch } from "../../widgets/primitives";
-import { FONT_SIZE_RANGE, RADIUS_RANGE, isHexColor, overrideIssues } from "./mock";
+import { FONT_SIZE_RANGE, RADIUS_RANGE, isHexColor, overrideIssues } from "./model";
 import { preferencesOf, useAppearance, useSetTheme, useSetThemePreferences } from "./queries";
 import { previewColors } from "./themes";
 
@@ -51,7 +51,7 @@ function ThemeCard({
   themes: readonly ThemeInfo[];
   selected: boolean;
   active: boolean;
-  onPick(): void;
+  onPick: () => void;
 }) {
   const t = useT();
   const name = useThemeName()(theme);
@@ -108,7 +108,7 @@ function PairSelect({
   themes: readonly ThemeInfo[];
   kind: ThemeKind;
   name: string;
-  onChange(id: string): void;
+  onChange: (id: string) => void;
 }) {
   const id = useId();
   const nameOf = useThemeName();
@@ -122,7 +122,9 @@ function PairSelect({
         id={id}
         data-part="form.select"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       >
         {options.map((th) => (
           <option key={th.id} value={th.id}>
@@ -169,7 +171,7 @@ function OverridesForm({
 }: {
   appearance: Appearance;
   busy: boolean;
-  onApply(overrides: ThemeOverrides): void;
+  onApply: (overrides: ThemeOverrides) => void;
 }) {
   const t = useT();
   const id = useId();
@@ -193,8 +195,9 @@ function OverridesForm({
     setProblem(null);
     onApply(overrides);
   };
-  const field = (key: keyof OverrideDraft) => (value: string) =>
+  const field = (key: keyof OverrideDraft) => (value: string) => {
     setDraft((d) => ({ ...d, [key]: value }));
+  };
   return (
     <form
       data-part="appearance.overrides"
@@ -222,7 +225,9 @@ function OverridesForm({
           max={FONT_SIZE_RANGE[1]}
           placeholder={t("appearance-override-default")}
           value={draft.fontSize}
-          onChange={(event) => field("fontSize")(event.target.value)}
+          onChange={(event) => {
+            field("fontSize")(event.target.value);
+          }}
         />
       </div>
       <div data-part="form.field" data-field="radius">
@@ -237,7 +242,9 @@ function OverridesForm({
           max={RADIUS_RANGE[1]}
           placeholder={t("appearance-override-default")}
           value={draft.radius}
-          onChange={(event) => field("radius")(event.target.value)}
+          onChange={(event) => {
+            field("radius")(event.target.value);
+          }}
         />
       </div>
       <div data-part="form.field" data-field="accent">
@@ -253,14 +260,18 @@ function OverridesForm({
             spellCheck={false}
             placeholder={t("appearance-override-default")}
             value={draft.accent}
-            onChange={(event) => field("accent")(event.target.value)}
+            onChange={(event) => {
+              field("accent")(event.target.value);
+            }}
           />
           <input
             data-part="appearance.accent-picker"
             type="color"
             aria-label={t("appearance-accent-pick")}
             value={isHexColor(draft.accent) && draft.accent.length === 7 ? draft.accent : "#3b5bdb"}
-            onChange={(event) => field("accent")(event.target.value)}
+            onChange={(event) => {
+              field("accent")(event.target.value);
+            }}
           />
         </span>
       </div>
@@ -317,8 +328,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
     const a = appearance.data;
     const s = a.settings;
     const prefs = preferencesOf(a);
-    const update = (change: Partial<typeof prefs>) =>
+    const update = (change: Partial<typeof prefs>) => {
       setPreferences.mutate({ ...prefs, ...change });
+    };
     const selected = (theme: ThemeInfo) =>
       s.follow_system ? theme.id === a.active : theme.id === s.theme;
     content = (
@@ -333,7 +345,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
             label={t("appearance-follow-system")}
             hint={t("appearance-follow-system-hint")}
             disabled={busy}
-            onChange={(on) => update({ follow_system: on })}
+            onChange={(on) => {
+              update({ follow_system: on });
+            }}
           />
           {s.follow_system && (
             <div data-part="appearance.pair">
@@ -343,7 +357,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
                 value={s.light}
                 themes={a.themes}
                 kind="light"
-                onChange={(light) => update({ light })}
+                onChange={(light) => {
+                  update({ light });
+                }}
               />
               <PairSelect
                 name="dark"
@@ -351,7 +367,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
                 value={s.dark}
                 themes={a.themes}
                 kind="dark"
-                onChange={(dark) => update({ dark })}
+                onChange={(dark) => {
+                  update({ dark });
+                }}
               />
             </div>
           )}
@@ -367,7 +385,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
                 themes={a.themes}
                 selected={selected(theme)}
                 active={theme.id === a.active}
-                onPick={() => setTheme.mutate(theme.id)}
+                onPick={() => {
+                  setTheme.mutate(theme.id);
+                }}
               />
             ))}
           </div>
@@ -385,9 +405,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
             options={(["comfortable", "compact"] as const satisfies readonly Density[]).map(
               (d) => ({ value: d, label: t(`density-${d}`) }),
             )}
-            onChange={(value) =>
-              update({ density: value === "compact" ? "compact" : "comfortable" })
-            }
+            onChange={(value) => {
+              update({ density: value === "compact" ? "compact" : "comfortable" });
+            }}
           />
           <p data-part="form.hint">{t("appearance-density-hint")}</p>
         </section>
@@ -396,7 +416,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
             key={JSON.stringify(s.overrides)}
             appearance={a}
             busy={busy}
-            onApply={(overrides) => update({ overrides })}
+            onApply={(overrides) => {
+              update({ overrides });
+            }}
           />
         </section>
         {failure && (

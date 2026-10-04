@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ActionContext } from "../../actions/registry";
-import type { MessageSummary, Rule } from "../../api/generated";
+import type { Rule } from "../../api/generated";
 import { queryKeys } from "../../state/queries";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { appRegistry } from "../registry";
@@ -9,12 +9,15 @@ import { onRulesEvent } from "./api";
 import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
+import { must } from "../../test/must";
 
 function setup(): Env {
   const env = createEnv();
   env.transport.data.behaviour.workMs = 0;
   // As the app shell does with the feature's event handlers.
-  env.transport.onEvent((event) => onRulesEvent(event, env.queryClient));
+  env.transport.onEvent((event) => {
+    onRulesEvent(event, env.queryClient);
+  });
   return env;
 }
 
@@ -78,20 +81,14 @@ describe("rule manager", () => {
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Invoices");
     // A subject condition …
     await user.selectOptions(field(container, "add-"), "subject");
-    await user.click(
-      within(editor).getAllByRole("button", { name: "Add condition" })[0] as HTMLElement,
-    );
+    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
     await user.selectOptions(field(container, "c-0-op"), "regex");
     await user.type(field(container, "c-0-value"), "invoice #\\d+");
     // … and a nested "any" group with an attachment condition.
     await user.selectOptions(field(container, "add-"), "any");
-    await user.click(
-      within(editor).getAllByRole("button", { name: "Add condition" })[0] as HTMLElement,
-    );
+    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
     await user.selectOptions(field(container, "add-1"), "attachment");
-    await user.click(
-      within(editor).getAllByRole("button", { name: "Add condition" })[0] as HTMLElement,
-    );
+    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
     expect(container.querySelectorAll('[data-part="rules.group"]')).toHaveLength(2);
     // Actions: add a tag, then move it below an archive.
     await user.selectOptions(field(container, "add-action"), "tag");
@@ -99,7 +96,7 @@ describe("rule manager", () => {
     await user.type(field(container, "a-0-tag"), "invoice");
     await user.selectOptions(field(container, "add-action"), "archive");
     await user.click(within(editor).getByRole("button", { name: "Add action" }));
-    await user.click(within(editor).getAllByRole("button", { name: "Up" })[1] as HTMLElement);
+    await user.click(must(within(editor).getAllByRole("button", { name: "Up" })[1]));
 
     expect(save).toBeEnabled();
     await user.click(save);
@@ -138,7 +135,7 @@ describe("rule manager", () => {
     const { user, view, editor } = await openSample(env);
     await user.selectOptions(field(view.container, "c-mode"), "all");
     expect(editor.querySelector('[data-part="rules.group"]')).toHaveAttribute("data-mode", "all");
-    await user.click(within(editor).getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
+    await user.click(must(within(editor).getAllByRole("button", { name: "Remove" })[0]));
     expect(editor.querySelectorAll('[data-part="rules.condition"]')).toHaveLength(1);
     expect(field(view.container, "c-0-kind")).toHaveValue("query");
   });
@@ -147,9 +144,9 @@ describe("rule manager", () => {
     const env = setup();
     const { user, view, editor } = await openSample(env);
     await user.click(within(editor).getByRole("button", { name: "Text" }));
-    const source = (await within(editor).findByRole("textbox", {
+    const source = await within(editor).findByRole<HTMLTextAreaElement>("textbox", {
       name: "The rule in rules.kdl syntax",
-    })) as HTMLTextAreaElement;
+    });
     expect(source.value).toContain('rule "Rust announcements" trigger="arrival" {');
     expect(source.value).toContain('tag "rust"');
 
@@ -230,27 +227,27 @@ describe("rule manager", () => {
     const user = userEvent.setup();
     renderWithProviders(<RuleManagerView />, env);
     await user.click(await screen.findByRole("button", { name: "Move “Second” up" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
         "second",
         "rust-announcements",
-      ]),
-    );
+      ]);
+    });
     expect(await screen.findByRole("button", { name: "Move “Second” up" })).toBeDisabled();
 
     await user.click(screen.getByRole("checkbox", { name: "Rule “Second” is on" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.rules.rules[0]).toMatchObject({ enabled: false }),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.rules.rules[0]).toMatchObject({ enabled: false });
+    });
 
     await user.click(screen.getByRole("button", { name: "Second" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     await user.click(within(editor).getByRole("button", { name: "Delete rule" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
         "rust-announcements",
-      ]),
-    );
+      ]);
+    });
     expect(
       await screen.findByText("Choose a rule to edit it, or create a new one."),
     ).toBeInTheDocument();
@@ -285,9 +282,9 @@ describe("create rule from message", () => {
     const handler = actions["rules.create-from-message"];
     expect(handler?.enabled?.(ctx, [])).toBe(false);
 
-    const message = env.transport.data.messages.find((m) =>
-      m.subject.startsWith("[rust-announce]"),
-    ) as MessageSummary;
+    const message = must(
+      env.transport.data.messages.find((m) => m.subject.startsWith("[rust-announce]")),
+    );
     env.queryClient.setQueryData(queryKeys.messages(message.folder_id, 50), {
       pages: [{ offset: 0, total: 1, messages: [message] }],
       pageParams: [0],

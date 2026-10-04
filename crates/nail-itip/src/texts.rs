@@ -5,6 +5,8 @@
 //! numerically (`2026-10-05 09:00 (Europe/Berlin)`) and wrapped by Fluent
 //! patterns, so translations decide the surrounding words.
 
+use std::fmt::Write as _;
+
 use nail_api::localized::LocalizedMessage;
 use nail_api::pim::PimTime;
 use nail_api::pim::calendar::ParticipationStatus;
@@ -394,18 +396,20 @@ pub fn compose(summary: &Summary<'_>, loc: &dyn Localizer) -> MailText {
 
     let mut html =
         String::from("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"></head><body>\n");
-    html.push_str(&format!("<p>{}</p>\n<table>\n", html_text(&intro)));
+    let _ = writeln!(html, "<p>{}</p>\n<table>", html_text(&intro));
     for (label, value) in &rows {
-        html.push_str(&format!(
-            "<tr><th align=\"left\" valign=\"top\">{}</th><td>{}</td></tr>\n",
+        let _ = writeln!(
+            html,
+            "<tr><th align=\"left\" valign=\"top\">{}</th><td>{}</td></tr>",
             html_escape(label),
             html_text(value)
-        ));
+        );
     }
-    html.push_str(&format!(
-        "</table>\n<p><small>{}</small></p>\n</body></html>\n",
+    let _ = writeln!(
+        html,
+        "</table>\n<p><small>{}</small></p>\n</body></html>",
         html_text(&footer)
-    ));
+    );
     MailText {
         subject,
         text,

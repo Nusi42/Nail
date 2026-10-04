@@ -104,7 +104,9 @@ function OpenButton({
       type="button"
       data-part="form.button"
       data-action={action}
-      onClick={() => ui.getState().openWindow(dialog)}
+      onClick={() => {
+        ui.getState().openWindow(dialog);
+      }}
     >
       {t(labelId)}
     </button>

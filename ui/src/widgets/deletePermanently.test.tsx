@@ -32,13 +32,13 @@ describe("Delete permanently? (M5c)", () => {
     // A selection change behind the window does not change what is deleted.
     env.store.getState().selectMessage(`${INBOX}#7`);
     await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "DeleteMessages",
         message_ids: [`${INBOX}#1`, `${INBOX}#2`],
         permanent: true,
-      }),
-    );
+      });
+    });
     expect(env.store.getState().windows).toEqual([]);
   });
 

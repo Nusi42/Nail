@@ -8,9 +8,21 @@
 import path from "node:path";
 
 /**
+ * A Tauri config overlay (JSON object; `null` values remove keys).
+ *
+ * @typedef {{ [key: string]: unknown }} Overlay
+ */
+
+/** @typedef {Partial<Record<string, string>>} Env */
+
+/**
  * Base directory for build output, never inside the repository (it lives in
  * OneDrive): `NAIL_BUILD_DIR`, else `%LOCALAPPDATA%\nail-build`, else
  * `<tmp>/nail-build`. Same rule as e2e/support/nail.ts.
+ *
+ * @param {Env} env
+ * @param {string} tmp
+ * @returns {string}
  */
 export function buildBase(env, tmp) {
   if (env.NAIL_BUILD_DIR) return env.NAIL_BUILD_DIR;
@@ -18,13 +30,18 @@ export function buildBase(env, tmp) {
   return path.join(tmp, "nail-build");
 }
 
-/** Refuses output locations inside the repository. */
+/**
+ * Refuses output locations inside the repository.
+ *
+ * @param {string} dir
+ * @param {string} repoRoot
+ */
 export function assertOutsideRepo(dir, repoRoot) {
   const rel = path.relative(path.resolve(repoRoot), path.resolve(dir));
   const inside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
   // `.nail-build/` in the checkout is the one exception: CI runners have no
   // OneDrive, and the directory is gitignored.
-  if (inside && !rel.split(/[\\/]/)[0].startsWith(".nail-build")) {
+  if (inside && !rel.split(/[\\/]/)[0]?.startsWith(".nail-build")) {
     throw new Error(`build output must stay outside the repository: ${dir}`);
   }
 }
@@ -53,8 +70,17 @@ export const ARCHS = ["x64", "arm64"];
  *   (the loopback smoke test only; refused for any other host).
  * - `--dev-updater-key`: sign updates with the local development key
  *   (scripts/updater-key.mjs; never for releases).
+ *
+ * @param {string[]} argv
+ * @param {{ arch?: string }} [defaults]
  */
 export function parseArgs(argv, defaults = {}) {
+  /**
+   * @type {{ skipUi: boolean, targetDir: string | null, outDir: string | null, cli: boolean,
+   *   arch: string, bundles: string[], offlineWebview: boolean, mapi: boolean,
+   *   portable: boolean, version: string | null, updateBase: string | null,
+   *   insecureLoopbackUpdates: boolean, devUpdaterKey: boolean }}
+   */
   const options = {
     skipUi: false,
     targetDir: null,
@@ -71,7 +97,7 @@ export function parseArgs(argv, defaults = {}) {
     devUpdaterKey: false,
   };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     const value = () => {
       const next = argv[++i];
       if (next === undefined || next.startsWith("--")) {
@@ -107,28 +133,42 @@ export function parseArgs(argv, defaults = {}) {
   return options;
 }
 
-/** Rust target triple of an architecture. */
+/** @type {Partial<Record<string, string>>} */
+const TARGET_TRIPLES = {
+  x64: "x86_64-pc-windows-msvc",
+  arm64: "aarch64-pc-windows-msvc",
+  x86: "i686-pc-windows-msvc",
+};
+
+/**
+ * Rust target triple of an architecture.
+ *
+ * @param {string} arch
+ * @returns {string}
+ */
 export function targetTriple(arch) {
-  const map = {
-    x64: "x86_64-pc-windows-msvc",
-    arm64: "aarch64-pc-windows-msvc",
-    x86: "i686-pc-windows-msvc",
-  };
-  if (!map[arch]) throw new Error(`unsupported architecture ${arch}`);
-  return map[arch];
+  const triple = TARGET_TRIPLES[arch];
+  if (!triple) throw new Error(`unsupported architecture ${arch}`);
+  return triple;
 }
 
 /**
  * Which NailMapi.dll builds an installer carries (design: x64, x86 for
  * 32-bit Office, ARM64): its own architecture plus x86 for the 32-bit
  * registry view.
+ *
+ * @param {string} arch
  */
 export function mapiArchs(arch) {
   if (!ARCHS.includes(arch)) throw new Error(`unsupported architecture ${arch}`);
   return [arch, "x86"];
 }
 
-/** `mapi/<arch>/NailMapi.dll` (nail_api::mapi::mapi_dll_relative_path). */
+/**
+ * `mapi/<arch>/NailMapi.dll` (nail_api::mapi::mapi_dll_relative_path).
+ *
+ * @param {string} arch
+ */
 export function mapiResourcePath(arch) {
   return `mapi/${arch}/NailMapi.dll`;
 }
@@ -137,30 +177,40 @@ export function mapiResourcePath(arch) {
  * MSI ProductVersion for a semantic version: `major.minor.patch`, plus a
  * fourth field from a numeric last pre-release part (`1.2.0-beta.3` →
  * `1.2.0.3`). MSI fields are limited to 255.255.65535.65535.
+ *
+ * @param {string} version
  */
 export function msiVersion(version) {
-  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/.exec(String(version));
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/.exec(version);
   if (!m) throw new Error(`not a semantic version: ${version}`);
   const [major, minor, patch] = [Number(m[1]), Number(m[2]), Number(m[3])];
   if (major > 255 || minor > 255 || patch > 65535) {
     throw new Error(`version ${version} does not fit an MSI ProductVersion`);
   }
-  let out = `${major}.${minor}.${patch}`;
+  let out = `${String(major)}.${String(minor)}.${String(patch)}`;
   if (m[4]) {
-    const last = m[4].split(".").pop();
-    if (/^\d+$/.test(last) && Number(last) <= 65535) out += `.${Number(last)}`;
+    const last = m[4].split(".").pop() ?? "";
+    if (/^\d+$/.test(last) && Number(last) <= 65535) out += `.${String(Number(last))}`;
   }
   return out;
 }
 
-/** The next patch version (`0.1.0` → `0.1.1`; smoke tests' "newer build"). */
+/**
+ * The next patch version (`0.1.0` → `0.1.1`; smoke tests' "newer build").
+ *
+ * @param {string} version
+ */
 export function bumpPatch(version) {
-  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version));
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
   if (!m) throw new Error(`not a semantic version: ${version}`);
-  return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
+  return `${m[1] ?? ""}.${m[2] ?? ""}.${String(Number(m[3]) + 1)}`;
 }
 
-/** `http(s)://127.0.0.1`, `[::1]` or `localhost`. */
+/**
+ * `http(s)://127.0.0.1`, `[::1]` or `localhost`.
+ *
+ * @param {string} text
+ */
 export function isLoopbackUrl(text) {
   let url;
   try {
@@ -180,9 +230,16 @@ export function isLoopbackUrl(text) {
  * release's installer). Without a base URL there is no endpoint: the app
  * reports updates as not configured. Plain http is allowed only for a
  * loopback base with `insecureLoopback` (the smoke test's server).
+ *
+ * @param {{ pubkey: string | null | undefined, updateBase?: string | null,
+ *   insecureLoopback?: boolean }} options
  */
 export function updaterPluginConfig({ pubkey, updateBase = null, insecureLoopback = false }) {
   if (!pubkey) throw new Error("the updater needs a public key");
+  /**
+   * @type {{ pubkey: string, endpoints: string[], requireSignedVersion: boolean,
+   *   windows: { installMode: string }, dangerousInsecureTransportProtocol?: boolean }}
+   */
   const config = {
     pubkey: pubkey.trim(),
     endpoints: [],
@@ -212,15 +269,41 @@ export function updaterPluginConfig({ pubkey, updateBase = null, insecureLoopbac
  * replaces — including `null`, which must reach Tauri: it merges `--config`
  * files over tauri.conf.json as a JSON merge patch (RFC 7386), where `null`
  * removes the key.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {unknown}
  */
 export function combineOverlays(a, b) {
-  const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-  if (!isObject(a) || !isObject(b)) return b;
+  if (!isOverlay(a) || !isOverlay(b)) return b;
+  /** @type {Overlay} */
   const out = { ...a };
   for (const [key, value] of Object.entries(b)) {
     out[key] = key in out ? combineOverlays(out[key], value) : value;
   }
   return out;
+}
+
+/**
+ * Whether `value` is a JSON object (not `null`, not an array).
+ *
+ * @param {unknown} value
+ * @returns {value is Overlay}
+ */
+export function isOverlay(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * {@link combineOverlays} with an object on the right, typed as an object.
+ *
+ * @param {unknown} a
+ * @param {Overlay} b
+ * @returns {Overlay}
+ */
+function mergeOverlay(a, b) {
+  const merged = combineOverlays(a, b);
+  return isOverlay(merged) ? merged : b;
 }
 
 /**
@@ -237,6 +320,11 @@ export function combineOverlays(a, b) {
  *   the bundler (app, installers, uninstaller);
  * - `updater` (`updaterPluginConfig`): the plug-in config and signed update
  *   artifacts (`.sig` next to each installer).
+ *
+ * @param {{ cliPath?: string | null, mapiDlls?: Partial<Record<string, string>>,
+ *   version?: string | null, webview?: string, signing?: Overlay | null,
+ *   updater?: Overlay | null, staticOverlay?: Overlay }} [options]
+ * @returns {Overlay}
  */
 export function installerConfigOverlay({
   cliPath = null,
@@ -248,45 +336,58 @@ export function installerConfigOverlay({
   staticOverlay = {},
 } = {}) {
   // `null` removes the key (JSON merge patch): no before-build command.
-  let overlay = combineOverlays(staticOverlay, { build: { beforeBuildCommand: null } });
+  const overlay = mergeOverlay(staticOverlay, { build: { beforeBuildCommand: null } });
+  /** @type {Record<string, string>} */
   const resources = {};
   if (cliPath) resources[cliPath] = "bin/nail.exe";
   for (const [arch, dll] of Object.entries(mapiDlls).sort(([a], [b]) => a.localeCompare(b))) {
-    resources[dll] = mapiResourcePath(arch);
+    if (dll !== undefined) resources[dll] = mapiResourcePath(arch);
   }
+  /** @type {{ bundle?: Overlay, version?: string, plugins?: Overlay }} */
   const patch = {};
   if (Object.keys(resources).length) patch.bundle = { resources };
   if (version) {
     patch.version = version;
-    patch.bundle = combineOverlays(patch.bundle, {
+    patch.bundle = mergeOverlay(patch.bundle, {
       windows: { wix: { version: msiVersion(version) } },
     });
   }
   if (webview === "offline") {
-    patch.bundle = combineOverlays(patch.bundle, {
+    patch.bundle = mergeOverlay(patch.bundle, {
       windows: { webviewInstallMode: { type: "offlineInstaller", silent: true } },
     });
   } else if (webview !== "bootstrapper") {
     throw new Error(`unknown WebView2 mode ${webview}`);
   }
-  if (signing) patch.bundle = combineOverlays(patch.bundle, signing);
+  if (signing) patch.bundle = mergeOverlay(patch.bundle, signing);
   if (updater) {
-    patch.bundle = combineOverlays(patch.bundle, { createUpdaterArtifacts: true });
+    patch.bundle = mergeOverlay(patch.bundle, { createUpdaterArtifacts: true });
     patch.plugins = { updater };
   }
-  overlay = combineOverlays(overlay, patch);
-  return overlay;
+  return mergeOverlay(overlay, patch);
 }
 
-/** Tauri's architecture name for a Node `process.arch`. */
+/** @type {Partial<Record<string, string>>} */
+const TAURI_ARCHS = { x64: "x64", arm64: "arm64", ia32: "x86" };
+
+/**
+ * Tauri's architecture name for a Node `process.arch`.
+ *
+ * @param {string} arch
+ * @returns {string}
+ */
 export function tauriArch(arch) {
-  const map = { x64: "x64", arm64: "arm64", ia32: "x86" };
-  const tauri = map[arch];
+  const tauri = TAURI_ARCHS[arch];
   if (!tauri) throw new Error(`unsupported architecture ${arch}`);
   return tauri;
 }
 
-/** File names of the release artifacts. */
+/**
+ * File names of the release artifacts.
+ *
+ * @param {string} version
+ * @param {string} arch
+ */
 export function artifactNames(version, arch) {
   const a = tauriArch(arch);
   return {
@@ -311,11 +412,16 @@ export function artifactNames(version, arch) {
  * (app/src-tauri/src/portable.rs). `uiFiles` are paths relative to `uiDir`
  * (see `listFiles`); they must include `index.html`. No MAPI DLLs: a
  * portable copy registers nothing.
+ *
+ * @param {{ appExe: string, cliExe?: string | null, uiDir: string,
+ *   uiFiles: string[] | null | undefined }} options
+ * @returns {PortableFile[]}
  */
 export function portableLayout({ appExe, cliExe, uiDir, uiFiles }) {
   if (!uiFiles?.some((f) => f.split(/[\\/]/).join("/") === "index.html")) {
     throw new Error(`the UI build is missing (no index.html in ${uiDir})`);
   }
+  /** @type {PortableFile[]} */
   const files = [{ from: appExe, to: "Nail.exe" }];
   if (cliExe) files.push({ from: cliExe, to: "bin/nail.exe" });
   for (const file of [...uiFiles].sort()) {
@@ -325,9 +431,24 @@ export function portableLayout({ appExe, cliExe, uiDir, uiFiles }) {
   return files;
 }
 
-/** Every file below `dir`, relative to it, sorted (`readdir` = fs.readdirSync). */
+/**
+ * A file of the portable zip: copied from disk, or with literal content.
+ *
+ * @typedef {{ from: string, to: string } | { content: string, to: string }} PortableFile
+ */
+
+/**
+ * Every file below `dir`, relative to it, sorted (`readdir` = fs.readdirSync).
+ *
+ * @param {string} dir
+ * @param {(dir: string, options: { withFileTypes: true }) =>
+ *   { name: string, isDirectory(): boolean, isFile(): boolean }[]} readdir
+ * @returns {string[]}
+ */
 export function listFiles(dir, readdir) {
+  /** @type {string[]} */
   const out = [];
+  /** @param {string} rel */
   const walk = (rel) => {
     for (const entry of readdir(path.join(dir, rel), { withFileTypes: true })) {
       const child = rel ? path.join(rel, entry.name) : entry.name;
@@ -339,7 +460,11 @@ export function listFiles(dir, readdir) {
   return out.sort();
 }
 
-/** `sha256sum`-style lines ("<hex>  <name>"), sorted by name. */
+/**
+ * `sha256sum`-style lines ("<hex>  <name>"), sorted by name.
+ *
+ * @param {{ name: string, sha256: string }[]} entries
+ */
 export function checksumLines(entries) {
   return [...entries]
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -355,12 +480,19 @@ export function checksumLines(entries) {
  * `NAIL_UPDATER_PUBKEY_FILE` (path, read with `readFile`). Neither → `null`
  * (no update artifacts; the app reports updates as not configured). Only
  * one half → an error: a build must never embed a key it cannot sign for.
+ *
+ * @param {Env} env
+ * @param {(file: string) => string} readFile
+ * @returns {{ pubkey: string } | null}
  */
 export function updaterKeyFromEnv(env, readFile) {
-  const hasPrivate = Boolean(env.TAURI_SIGNING_PRIVATE_KEY || env.TAURI_SIGNING_PRIVATE_KEY_PATH);
-  let pubkey = env.NAIL_UPDATER_PUBKEY || null;
+  // An empty variable counts as unset (hence truthiness, not `??`).
+  const hasPrivate = [env.TAURI_SIGNING_PRIVATE_KEY, env.TAURI_SIGNING_PRIVATE_KEY_PATH].some(
+    Boolean,
+  );
+  let pubkey = nonEmpty(env.NAIL_UPDATER_PUBKEY);
   if (!pubkey && env.NAIL_UPDATER_PUBKEY_FILE) pubkey = readFile(env.NAIL_UPDATER_PUBKEY_FILE);
-  pubkey = pubkey?.trim() || null;
+  pubkey = nonEmpty(pubkey?.trim());
   if (!hasPrivate && !pubkey) return null;
   if (!hasPrivate) {
     throw new Error("NAIL_UPDATER_PUBKEY is set but TAURI_SIGNING_PRIVATE_KEY is not");
@@ -371,6 +503,17 @@ export function updaterKeyFromEnv(env, readFile) {
     );
   }
   return { pubkey };
+}
+
+/**
+ * `text`, or `null` when it is missing or empty.
+ *
+ * @param {string | null | undefined} text
+ * @returns {string | null}
+ */
+function nonEmpty(text) {
+  if (!text) return null;
+  return text;
 }
 
 /**
@@ -385,13 +528,16 @@ export const UPDATER_SECRET_VARS = [
   "TAURI_SIGNING_PRIVATE_KEY_PATH",
 ];
 
-/** A copy of `env` without the update key ({@link UPDATER_SECRET_VARS}). */
+/**
+ * A copy of `env` without the update key ({@link UPDATER_SECRET_VARS}).
+ *
+ * @param {Env} env
+ * @returns {Env}
+ */
 export function withoutUpdaterSecrets(env) {
-  const out = { ...env };
-  for (const name of Object.keys(out)) {
-    if (UPDATER_SECRET_VARS.includes(name.toUpperCase())) delete out[name];
-  }
-  return out;
+  return Object.fromEntries(
+    Object.entries(env).filter(([name]) => !UPDATER_SECRET_VARS.includes(name.toUpperCase())),
+  );
 }
 
 /**

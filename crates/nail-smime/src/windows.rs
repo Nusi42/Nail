@@ -6,8 +6,8 @@
 //! `Disallowed`).
 //!
 //! Nothing here writes to a system store. Every `unsafe` block of the crate
-//! is in this module, each with its safety argument.
-#![allow(unsafe_code)]
+//! is in this module, each with its safety argument; each item that needs
+//! one carries its own `#[expect(unsafe_code)]`.
 
 use der::Encode;
 use nail_api::security::{WindowsCertStore, WindowsCertificate};
@@ -42,7 +42,7 @@ use crate::keys::{HashAlg, PrivateKeyOps, RsaPadding, SignScheme};
 const ENCODING: CERT_QUERY_ENCODING_TYPE =
     CERT_QUERY_ENCODING_TYPE(X509_ASN_ENCODING.0 | PKCS_7_ASN_ENCODING.0);
 
-fn win_err(what: &str, err: windows::core::Error) -> Error {
+fn win_err(what: &str, err: &windows::core::Error) -> Error {
     Error::Windows(format!("{what}: {err}"))
 }
 
@@ -56,17 +56,26 @@ pub(crate) struct StoreHandle(HCERTSTORE);
 // SAFETY: CryptoAPI certificate store handles may be used from any thread
 // (the store serializes access internally); the handle is only closed in
 // `Drop`, once.
+#[expect(
+    unsafe_code,
+    reason = "store handles are thread-safe; see the SAFETY note"
+)]
 unsafe impl Send for StoreHandle {}
 // SAFETY: see `Send`; every method takes `&self` and calls thread-safe
 // CryptoAPI functions.
+#[expect(
+    unsafe_code,
+    reason = "store handles are thread-safe; see the SAFETY note"
+)]
 unsafe impl Sync for StoreHandle {}
 
 impl Drop for StoreHandle {
+    #[expect(unsafe_code, reason = "closes the CryptoAPI store")]
     fn drop(&mut self) {
         // SAFETY: the handle came from CertOpenStore / PFXImportCertStore
         // and is closed exactly once here.
         unsafe {
-            let _ = CertCloseStore(Some(self.0), 0);
+            drop(CertCloseStore(Some(self.0), 0));
         }
     }
 }
@@ -75,6 +84,7 @@ impl Drop for StoreHandle {
 pub(crate) struct Context(*const CERT_CONTEXT);
 
 impl Drop for Context {
+    #[expect(unsafe_code, reason = "frees the certificate context")]
     fn drop(&mut self) {
         // SAFETY: the context was duplicated or returned by a find call and
         // is owned by this value; it is freed exactly once.
@@ -85,6 +95,10 @@ impl Drop for Context {
 }
 
 impl Context {
+    #[expect(
+        unsafe_code,
+        reason = "reads the encoded certificate of a live context"
+    )]
     fn der(&self) -> &[u8] {
         // SAFETY: a live CERT_CONTEXT (owned by self) points to
         // `cbCertEncoded` bytes of DER that live as long as the context.
@@ -94,10 +108,11 @@ impl Context {
         }
     }
 
+    #[expect(unsafe_code, reason = "queries a property of a live context")]
     fn has_property(&self, id: u32) -> bool {
         let mut size = 0u32;
         // SAFETY: a size query (no output buffer) on a live context.
-        unsafe { CertGetCertificateContextProperty(self.0, id, None, &mut size).is_ok() }
+        unsafe { CertGetCertificateContextProperty(self.0, id, None, &raw mut size).is_ok() }
     }
 
     /// Whether a private key is associated (persisted CSP / KSP key, or an
@@ -116,7 +131,8 @@ impl Context {
 impl StoreHandle {
     /// A current-user system store, read-only. `None` when it does not
     /// exist.
-    fn system(name: &str) -> Result<Option<Self>> {
+    #[expect(unsafe_code, reason = "CertOpenStore")]
+    fn system(name: &str) -> Option<Self> {
         let name = wide(name);
         let flags = CERT_OPEN_STORE_FLAGS(
             CERT_SYSTEM_STORE_CURRENT_USER
@@ -134,11 +150,12 @@ impl StoreHandle {
                 Some(name.as_ptr().cast()),
             )
         };
-        Ok(store.ok().map(Self))
+        store.ok().map(Self)
     }
 
     /// An empty in-memory store.
     #[cfg(test)]
+    #[expect(unsafe_code, reason = "CertOpenStore")]
     fn memory() -> Result<Self> {
         use windows::Win32::Security::Cryptography::CERT_STORE_PROV_MEMORY;
         // SAFETY: the memory provider takes no parameter; the handle is
@@ -152,7 +169,7 @@ impl StoreHandle {
                 None,
             )
         }
-        .map_err(|e| win_err("open memory store", e))?;
+        .map_err(|e| win_err("open memory store", &e))?;
         Ok(Self(store))
     }
 
@@ -160,6 +177,7 @@ impl StoreHandle {
     /// is persisted): lets tests use real CNG keys without touching the
     /// user's stores.
     #[cfg(test)]
+    #[expect(unsafe_code, reason = "PFXImportCertStore")]
     fn from_pfx(data: &[u8], password: &str) -> Result<Self> {
         use windows::Win32::Security::Cryptography::{
             CRYPT_KEY_FLAGS, PFXImportCertStore, PKCS12_ALWAYS_CNG_KSP, PKCS12_NO_PERSIST_KEY,
@@ -173,17 +191,18 @@ impl StoreHandle {
         // only read; `password` is NUL-terminated UTF-16.
         let store = unsafe {
             PFXImportCertStore(
-                &blob,
+                &raw const blob,
                 PCWSTR(password.as_ptr()),
                 CRYPT_KEY_FLAGS(PKCS12_NO_PERSIST_KEY.0 | PKCS12_ALWAYS_CNG_KSP.0),
             )
         }
-        .map_err(|e| win_err("import PFX", e))?;
+        .map_err(|e| win_err("import PFX", &e))?;
         Ok(Self(store))
     }
 
     /// Adds a DER certificate (tests).
     #[cfg(test)]
+    #[expect(unsafe_code, reason = "CertAddEncodedCertificateToStore")]
     fn add(&self, der: &[u8]) -> Result<()> {
         use windows::Win32::Security::Cryptography::{
             CERT_STORE_ADD_REPLACE_EXISTING, CertAddEncodedCertificateToStore,
@@ -199,10 +218,11 @@ impl StoreHandle {
                 None,
             )
         }
-        .map_err(|e| win_err("add certificate", e))
+        .map_err(|e| win_err("add certificate", &e))
     }
 
     /// Every certificate in the store.
+    #[expect(unsafe_code, reason = "CertEnumCertificatesInStore")]
     fn contexts(&self) -> Vec<Context> {
         let mut out = Vec::new();
         // SAFETY: enumeration hands back contexts owned by the enumeration;
@@ -219,9 +239,10 @@ impl StoreHandle {
     }
 
     /// The certificate with this SHA-1 thumbprint.
+    #[expect(unsafe_code, reason = "CertFindCertificateInStore")]
     fn find_sha1(&self, thumbprint: &[u8]) -> Option<Context> {
         let blob = CRYPT_INTEGER_BLOB {
-            cbData: thumbprint.len() as u32,
+            cbData: u32::try_from(thumbprint.len()).ok()?,
             pbData: thumbprint.as_ptr().cast_mut(),
         };
         // SAFETY: `blob` points to `thumbprint`, read during the call; the
@@ -240,12 +261,16 @@ impl StoreHandle {
     }
 
     /// Certificates whose subject is exactly `name`.
+    #[expect(unsafe_code, reason = "CertFindCertificateInStore")]
     fn find_subject(&self, name: &Name) -> Vec<Context> {
         let Ok(der) = name.to_der() else {
             return Vec::new();
         };
+        let Ok(len) = u32::try_from(der.len()) else {
+            return Vec::new();
+        };
         let blob = CRYPT_INTEGER_BLOB {
-            cbData: der.len() as u32,
+            cbData: len,
             pbData: der.as_ptr().cast_mut(),
         };
         let mut out = Vec::new();
@@ -321,7 +346,7 @@ fn list_in(handle: &StoreHandle, store: WindowsCertStore) -> Vec<WindowsCertific
 /// The certificates of a current-user store (mail certificates first);
 /// empty when the store does not exist.
 pub fn list_certificates(store: WindowsCertStore) -> Result<Vec<WindowsCertificate>> {
-    Ok(match StoreHandle::system(store_name(store))? {
+    Ok(match StoreHandle::system(store_name(store)) {
         Some(handle) => list_in(&handle, store),
         None => Vec::new(),
     })
@@ -352,7 +377,7 @@ fn find_in(handle: &StoreHandle, thumbprint: &str) -> Result<FoundCertificate> {
 
 /// Finds a certificate by its SHA-1 thumbprint.
 pub fn find_certificate(store: WindowsCertStore, thumbprint: &str) -> Result<FoundCertificate> {
-    let handle = StoreHandle::system(store_name(store))?.ok_or_else(|| {
+    let handle = StoreHandle::system(store_name(store)).ok_or_else(|| {
         Error::Store(nail_store::Error::NotFound {
             kind: "Windows certificate store",
             id: store_name(store).to_owned(),
@@ -389,12 +414,13 @@ impl std::fmt::Debug for WindowsKey {
 struct NcryptObject(usize);
 
 impl Drop for NcryptObject {
+    #[expect(unsafe_code, reason = "frees the NCrypt object")]
     fn drop(&mut self) {
         if self.0 != 0 {
             // SAFETY: the handle was created by NCrypt for this value and is
             // freed exactly once.
             unsafe {
-                let _ = NCryptFreeObject(NCRYPT_HANDLE(self.0));
+                drop(NCryptFreeObject(NCRYPT_HANDLE(self.0)));
             }
         }
     }
@@ -420,11 +446,12 @@ impl WindowsKey {
         })
     }
 
+    #[expect(unsafe_code, reason = "CryptAcquireCertificatePrivateKey")]
     fn with_key<T>(&self, f: impl FnOnce(NCRYPT_KEY_HANDLE) -> Result<T>) -> Result<T> {
         let opened;
         let handle: &StoreHandle = match &self.location {
             KeyLocation::System(store) => {
-                opened = StoreHandle::system(store_name(*store))?
+                opened = StoreHandle::system(store_name(*store))
                     .ok_or_else(|| Error::NoKey("the Windows store is missing".into()))?;
                 &opened
             }
@@ -451,9 +478,9 @@ impl WindowsKey {
                 context.0,
                 CRYPT_ACQUIRE_FLAGS(flags),
                 None,
-                &mut key,
-                Some(&mut spec),
-                Some(&mut must_free),
+                &raw mut key,
+                Some(&raw mut spec),
+                Some(&raw mut must_free),
             )
         }
         .map_err(|e| Error::NoKey(format!("Windows private key: {e}")))?;
@@ -480,14 +507,15 @@ fn two_call(
     mut call: impl FnMut(Option<&mut [u8]>, &mut u32) -> windows::core::Result<()>,
 ) -> Result<Vec<u8>> {
     let mut size = 0u32;
-    call(None, &mut size).map_err(|e| win_err(what, e))?;
+    call(None, &mut size).map_err(|e| win_err(what, &e))?;
     let mut out = vec![0u8; size as usize];
-    call(Some(&mut out), &mut size).map_err(|e| win_err(what, e))?;
+    call(Some(&mut out), &mut size).map_err(|e| win_err(what, &e))?;
     out.truncate(size as usize);
     Ok(out)
 }
 
 impl PrivateKeyOps for WindowsKey {
+    #[expect(unsafe_code, reason = "NCryptSignHash")]
     fn sign_digest(&self, scheme: SignScheme, digest: &[u8]) -> Result<Vec<u8>> {
         self.with_key(|key| match scheme {
             SignScheme::RsaPkcs1(hash) => {
@@ -533,6 +561,7 @@ impl PrivateKeyOps for WindowsKey {
         })
     }
 
+    #[expect(unsafe_code, reason = "NCryptDecrypt")]
     fn decrypt_rsa(&self, padding: RsaPadding, ciphertext: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
         self.with_key(|key| {
             let plain = match padding {
@@ -577,19 +606,24 @@ impl PrivateKeyOps for WindowsKey {
         })
     }
 
+    #[expect(
+        unsafe_code,
+        reason = "NCryptImportKey / NCryptSecretAgreement / NCryptDeriveKey"
+    )]
     fn ecdh(&self, peer_point: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
         let (magic, coord) = match peer_point.len() {
-            65 => (BCRYPT_ECDH_PUBLIC_P256_MAGIC, 32),
-            97 => (BCRYPT_ECDH_PUBLIC_P384_MAGIC, 48),
+            65 => (BCRYPT_ECDH_PUBLIC_P256_MAGIC, 32u32),
+            97 => (BCRYPT_ECDH_PUBLIC_P384_MAGIC, 48u32),
             _ => return Err(Error::Unsupported("ECDH curve".into())),
         };
         if peer_point[0] != 4 {
             return Err(Error::malformed("compressed originator point"));
         }
-        let mut blob = Vec::with_capacity(8 + 2 * coord);
+        // The 8-byte header, then X and Y (the point without its 0x04).
+        let mut blob = Vec::with_capacity(8 + peer_point.len() - 1);
         let header = BCRYPT_ECCKEY_BLOB {
             dwMagic: magic,
-            cbKey: coord as u32,
+            cbKey: coord,
         };
         blob.extend_from_slice(&header.dwMagic.to_le_bytes());
         blob.extend_from_slice(&header.cbKey.to_le_bytes());
@@ -623,17 +657,17 @@ impl PrivateKeyOps for WindowsKey {
                     None,
                     BCRYPT_ECCPUBLIC_BLOB,
                     None,
-                    &mut public,
+                    &raw mut public,
                     &blob,
                     NCRYPT_FLAGS(0),
                 )
             }
-            .map_err(|e| win_err("import originator key", e))?;
+            .map_err(|e| win_err("import originator key", &e))?;
             let _public = NcryptObject(public.0);
             let mut secret = NCRYPT_SECRET_HANDLE::default();
             // SAFETY: both key handles are live; the secret handle is freed
             // by the guard.
-            unsafe { NCryptSecretAgreement(key, public, &mut secret, NCRYPT_FLAGS(0)) }
+            unsafe { NCryptSecretAgreement(key, public, &raw mut secret, NCRYPT_FLAGS(0)) }
                 .map_err(|e| Error::Unsupported(format!("ECDH with this Windows key: {e}")))?;
             let _secret = NcryptObject(secret.0);
             let mut raw = two_call("derive", |out, size| {
@@ -656,12 +690,12 @@ pub struct WindowsTrustAnchors;
 
 fn certs_by_subject(store: &str, subject: &Name) -> Vec<Cert> {
     match StoreHandle::system(store) {
-        Ok(Some(handle)) => handle
+        Some(handle) => handle
             .find_subject(subject)
             .iter()
             .filter_map(|c| Cert::from_der(c.der()).ok())
             .collect(),
-        _ => Vec::new(),
+        None => Vec::new(),
     }
 }
 
@@ -678,7 +712,7 @@ impl TrustAnchors for WindowsTrustAnchors {
         let Ok(hash) = parse_thumbprint(&cert.thumbprint()) else {
             return false;
         };
-        matches!(StoreHandle::system("Disallowed"), Ok(Some(h)) if h.find_sha1(&hash).is_some())
+        StoreHandle::system("Disallowed").is_some_and(|h| h.find_sha1(&hash).is_some())
     }
 }
 
@@ -719,7 +753,7 @@ mod tests {
         assert!(list[0].usable_for_email);
         assert_eq!(list[0].emails, ["alice@example.org"]);
         assert!(!list[0].has_private_key);
-        assert!(list.iter().filter(|c| !c.usable_for_email).count() == 2);
+        assert_eq!(list.iter().filter(|c| !c.usable_for_email).count(), 2);
         let alice = fixture_cert("alice.crt");
         let found = find_in(&store, &alice.thumbprint().to_lowercase()).unwrap();
         assert_eq!(found.cert, alice);
@@ -862,14 +896,13 @@ mod tests {
 
     #[test]
     fn system_trust_anchors_find_installed_roots() {
-        let Some(root_store) = StoreHandle::system("Root").unwrap() else {
+        let Some(root_store) = StoreHandle::system("Root") else {
             panic!("every Windows installation has a Root store");
         };
         let roots = root_store.contexts();
         let root = roots
             .iter()
-            .filter_map(|c| Cert::from_der(c.der()).ok())
-            .next()
+            .find_map(|c| Cert::from_der(c.der()).ok())
             .expect("at least one trusted root");
         let anchors = WindowsTrustAnchors;
         let subject = root.inner().tbs_certificate.subject.clone();

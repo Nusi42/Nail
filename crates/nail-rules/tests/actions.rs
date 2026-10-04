@@ -1,5 +1,6 @@
 //! Every action kind with its queued operation and undo, rule ordering and
 //! stop semantics, triggers, schedules, dry runs and runs.
+#![cfg(test)]
 
 mod common;
 
@@ -558,7 +559,7 @@ fn dry_runs_explain_and_change_nothing() {
     ))
     .unwrap();
     let messages = [newsletter(), from_boss(), at_home()];
-    let views: Vec<&dyn MessageView> = messages.iter().map(|m| m as &dyn MessageView).collect();
+    let views: Vec<&dyn MessageView> = messages.iter().map(|m| -> &dyn MessageView { m }).collect();
     let report = test_rule(&rule, views.iter().copied(), &env(&m), 10);
     assert_eq!(report.scanned, 3);
     assert_eq!(report.matches.len(), 1);
@@ -604,7 +605,7 @@ fn a_manual_run_returns_what_to_queue_and_undo() {
     let outcomes = run_rule(
         &rule,
         RuleRunCause::Manual,
-        messages.iter().map(|m| m as &dyn MessageView),
+        messages.iter().map(|m| -> &dyn MessageView { m }),
         &env(&m),
     );
     assert_eq!(outcomes.len(), 1);
@@ -655,7 +656,7 @@ fn validation_lists_every_problem() {
         },
         RuleAction::Move {
             folder: nail_api::rules::FolderRef::Path {
-                path: "".into(),
+                path: String::new(),
                 account_id: None,
             },
         },

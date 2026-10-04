@@ -1,5 +1,6 @@
 //! Incremental threading in the store: JWZ links, the classic edge cases,
 //! the subject fallback, cross-account threads and thread listings.
+#![cfg(test)]
 
 mod common;
 

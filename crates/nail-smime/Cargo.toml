@@ -23,7 +23,6 @@ rsa.workspace = true
 # `ecdh`: ECDH key agreement recipients (RFC 5753).
 p256 = { workspace = true, features = ["ecdh"] }
 p384 = { workspace = true, features = ["ecdh"] }
-ecdsa.workspace = true
 aes.workspace = true
 cbc = { workspace = true, features = ["alloc", "block-padding"] }
 aes-gcm.workspace = true

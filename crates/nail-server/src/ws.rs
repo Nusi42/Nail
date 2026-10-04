@@ -21,7 +21,7 @@ use tokio::sync::{broadcast, mpsc, watch};
 
 /// How often an idle remote session's socket re-checks its session (each
 /// request re-checks it too). An open socket counts as activity.
-const REFRESH_EVERY: Duration = Duration::from_secs(60);
+const REFRESH_EVERY: Duration = Duration::from_mins(1);
 
 /// Largest accepted request frame. Requests are small JSON objects.
 const MAX_FRAME: usize = 1 << 20;
@@ -71,12 +71,12 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                 break;
             }
         }
-        let _ = sink.close().await;
+        drop(sink.close().await);
     });
 
     // Errors found before this client connected (e.g. at start-up).
     for event in service.config_error_events() {
-        let _ = tx.send(event.into()).await;
+        drop(tx.send(event.into()).await);
     }
 
     // Events: forward what the core broadcasts; a remote session only what
@@ -137,16 +137,13 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
             loop {
                 every.tick().await;
                 let ctx = current(&session);
-                match service.remote_auth().refresh(&ctx) {
-                    Some(fresh) => {
-                        *session
-                            .write()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner) = fresh;
-                    }
-                    None => {
-                        let _ = end_tx.send(true);
-                        return;
-                    }
+                if let Some(fresh) = service.remote_auth().refresh(&ctx) {
+                    *session
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = fresh;
+                } else {
+                    let _ = end_tx.send(true);
+                    return;
                 }
             }
         })
@@ -176,23 +173,22 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                 // or a narrowed grant applies at once, an ended session
                 // closes the socket.
                 let ctx = match &session {
-                    Some(session) => match service.remote_auth().refresh(&current(session)) {
-                        Some(fresh) => {
+                    Some(session) => {
+                        if let Some(fresh) = service.remote_auth().refresh(&current(session)) {
                             *session
                                 .write()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner) = fresh.clone();
                             Some(fresh)
-                        }
-                        None => {
+                        } else {
                             let response = ApiError::new(
                                 nail_api::ErrorCode::AuthFailed,
                                 "the remote session has ended",
                             )
                             .into();
-                            let _ = tx.send(ServerMessage::Response { id, response }).await;
+                            drop(tx.send(ServerMessage::Response { id, response }).await);
                             break;
                         }
-                    },
+                    }
                     None => None,
                 };
                 tokio::spawn(async move {
@@ -200,7 +196,7 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                         Some(ctx) => service.handle_remote(&ctx, request).await,
                         None => service.handle(request).await,
                     };
-                    let _ = tx.send(ServerMessage::Response { id, response }).await;
+                    drop(tx.send(ServerMessage::Response { id, response }).await);
                 });
             }
             Err(err) => {
@@ -212,7 +208,7 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                 tracing::debug!(%err, ?id, "malformed request frame");
                 if let Some(id) = id {
                     let response = ApiError::invalid_request(err.to_string()).into();
-                    let _ = tx.send(ServerMessage::Response { id, response }).await;
+                    drop(tx.send(ServerMessage::Response { id, response }).await);
                 }
             }
         }
@@ -224,5 +220,5 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
     }
     drop(tx);
     // In-flight handlers hold senders; the writer ends once they are done.
-    let _ = writer.await;
+    drop(writer.await);
 }

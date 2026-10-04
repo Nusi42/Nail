@@ -5,6 +5,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
+use std::fmt::Write as _;
 
 use imap_proto::types::{
     Address as ImapAddress, AttributeValue, Capability, Envelope as ImapEnvelope, MailboxDatum,
@@ -652,10 +653,11 @@ impl ImapClient {
         let mut command = format!("{verb} {}", quote(path)?);
         match &qresync {
             Some(params) if self.enabled.qresync => {
-                command.push_str(&format!(
+                let _ = write!(
+                    command,
                     " (QRESYNC ({} {}",
                     params.uid_validity, params.modseq
-                ));
+                );
                 if let Some(known) = &params.known_uids {
                     command.push(' ');
                     command.push_str(known);
@@ -1042,11 +1044,12 @@ impl ImapClient {
                 Part::Literal(bytes) => {
                     let non_sync =
                         literal_plus || (literal_minus && bytes.len() <= LITERAL_MINUS_MAX);
-                    line.push_str(&format!(
+                    let _ = write!(
+                        line,
                         "{{{}{}}}\r\n",
                         bytes.len(),
                         if non_sync { "+" } else { "" }
-                    ));
+                    );
                     self.conn.write(line.as_bytes()).await?;
                     line.clear();
                     if !non_sync {
@@ -1226,7 +1229,7 @@ pub(crate) fn uid_set(uids: &[u32]) -> String {
         if start == end {
             out.push_str(&start.to_string());
         } else {
-            out.push_str(&format!("{start}:{end}"));
+            let _ = write!(out, "{start}:{end}");
         }
     }
     out
@@ -1466,7 +1469,10 @@ mod tests {
             expand_uid_set(&[UidSetMember::Uid(4), UidSetMember::UidRange(7..=9)]),
             [4, 7, 8, 9]
         );
-        #[allow(clippy::reversed_empty_ranges)] // servers may send ranges high:low
+        #[expect(
+            clippy::reversed_empty_ranges,
+            reason = "servers may send ranges high:low"
+        )]
         let reversed = UidSetMember::UidRange(9..=7);
         assert_eq!(expand_uid_set(&[reversed]), [9, 8, 7]);
     }

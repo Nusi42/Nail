@@ -646,7 +646,7 @@ mod tests {
             id: None,
             label: None,
             kind: "spacer".into(),
-            options: Default::default(),
+            options: serde_json::Map::new(),
             rows: vec![],
             source: None,
         };

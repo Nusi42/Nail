@@ -8,14 +8,17 @@ import type { Viewport } from "./geometry";
 
 function subscribe(notify: () => void): () => void {
   window.addEventListener("resize", notify);
-  return () => window.removeEventListener("resize", notify);
+  return () => {
+    window.removeEventListener("resize", notify);
+  };
 }
 
 /** Used where there is no window (server rendering). */
 export const FALLBACK_VIEWPORT: Viewport = { width: 1280, height: 800 };
 
-const snapshot = () => `${window.innerWidth}x${window.innerHeight}`;
-const serverSnapshot = () => `${FALLBACK_VIEWPORT.width}x${FALLBACK_VIEWPORT.height}`;
+const snapshot = () => `${String(window.innerWidth)}x${String(window.innerHeight)}`;
+const serverSnapshot = () =>
+  `${String(FALLBACK_VIEWPORT.width)}x${String(FALLBACK_VIEWPORT.height)}`;
 
 /** The current page size (a stable object while the size stays the same). */
 export function useViewport(): Viewport {

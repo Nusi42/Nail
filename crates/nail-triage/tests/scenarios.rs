@@ -1,5 +1,6 @@
 //! End-to-end scenarios over the public API, the way the core (WP55) will
 //! drive the crate: the M2c Playwright scenarios in miniature.
+#![cfg(test)]
 
 use std::sync::Arc;
 

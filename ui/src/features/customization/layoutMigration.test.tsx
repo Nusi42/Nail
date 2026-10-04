@@ -74,7 +74,9 @@ describe("layout migration", () => {
     });
     expect(region).toHaveTextContent("Your own layout keeps working");
     await user.click(screen.getByRole("button", { name: "Not now" }));
-    await waitFor(() => expect(offer()).toBeNull());
+    await waitFor(() => {
+      expect(offer()).toBeNull();
+    });
     await settleQueries(env);
     const state = await env.client.request({ type: "GetUiState" }, "UiState");
     expect(state.state[UI_STATE_LAYOUT_OFFER]).toBe("dismissed");
@@ -101,18 +103,20 @@ describe("layout migration", () => {
       file: "layout",
       incoming: DEFAULT_LAYOUT_TEXT,
     });
-    await waitFor(() => expect(offer()).toBeNull());
+    await waitFor(() => {
+      expect(offer()).toBeNull();
+    });
 
     // The dialog takes the prefill and compares it without a click.
-    renderWithProviders(<MergeDialog name={DIALOGS.merge} close={() => {}} />, env, {
+    renderWithProviders(<MergeDialog name={DIALOGS.merge} close={vi.fn()} />, env, {
       layout: oldLayout(),
     });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(request).toHaveBeenCalledWith(
         { type: "PreviewConfigMerge", file: "layout", incoming: DEFAULT_LAYOUT_TEXT },
         "ConfigMergePreview",
-      ),
-    );
+      );
+    });
     expect(customizationStore.getState().mergePrefill).toBeNull();
     await act(async () => {
       await settleQueries(env);

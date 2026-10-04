@@ -202,6 +202,7 @@ export function NavRail({ node }: WidgetProps) {
   const counts = useBadgeCounts(badgeSources(entries));
   const showLabels = optionBool(node, "show-labels", false);
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- arrow keys move between the rail's buttons (roving focus).
     <nav
       data-part="nav-rail"
       data-node-id={node.id ?? undefined}
@@ -230,7 +231,7 @@ export function NavRail({ node }: WidgetProps) {
           case "action":
             return (
               <ActionItem
-                key={`action:${i}`}
+                key={`action:${String(i)}`}
                 action={entry.action}
                 args={entry.args}
                 labelOverride={entry.label}
@@ -240,9 +241,17 @@ export function NavRail({ node }: WidgetProps) {
               />
             );
           case "spacer":
-            return <span key={`spacer:${i}`} data-part="nav-rail.spacer" aria-hidden="true" />;
+            return (
+              <span key={`spacer:${String(i)}`} data-part="nav-rail.spacer" aria-hidden="true" />
+            );
           case "separator":
-            return <span key={`separator:${i}`} data-part="nav-rail.separator" role="separator" />;
+            return (
+              <span
+                key={`separator:${String(i)}`}
+                data-part="nav-rail.separator"
+                role="separator"
+              />
+            );
         }
       })}
       <RailAccount />

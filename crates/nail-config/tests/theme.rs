@@ -1,4 +1,5 @@
 //! Theme parsing, merging and error reporting.
+#![cfg(test)]
 
 use nail_api::{HtmlDarkMode, PartCondition, ResolvedTheme, ThemeMode};
 use nail_config::{ConfigError, ConfigErrorKind, parse_theme};
@@ -238,7 +239,7 @@ fn modes_only_list_values_that_differ() {
 #[test]
 fn tokens_can_reference_tokens_defined_later() {
     let t = theme(
-        r##"theme "x" extends="default" { tokens { color "a" "$color.b"; color "b" "red"; }; }"##,
+        r#"theme "x" extends="default" { tokens { color "a" "$color.b"; color "b" "red"; }; }"#,
     );
     assert_eq!(t.tokens.get("color", "a"), Some("var(--nail-color-b)"));
 }
@@ -394,7 +395,7 @@ fn token_reference_errors_point_at_the_value() {
 fn icon_message_sound_and_raw_css_errors() {
     let base = "theme \"x\" extends=\"default\" {\n  ";
     let check = |body: &str, column: u32, needle: &str| {
-        assert_error(&format!("{base}{body}\n}}"), 2, column, needle)
+        assert_error(&format!("{base}{body}\n}}"), 2, column, needle);
     };
     check("icon \"a\"", 3, "needs svg=");
     check(
@@ -466,11 +467,11 @@ fn file_names_appear_in_errors_and_sources() {
 #[test]
 fn a_rule_with_a_default_selector_merges_into_the_default_rule() {
     let t = theme(
-        r##"
+        r#"
 theme "Mine" extends="default" {
     part "app" { letter-spacing "0.01em" }
 }
-"##,
+"#,
     );
     let apps: Vec<_> = t
         .parts

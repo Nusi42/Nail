@@ -4,6 +4,8 @@
 //! bearer tokens like Outlook's upload service), sending a draft, and the
 //! 4 MB request limit Graph enforces.
 
+use std::fmt::Write as _;
+
 use base64::Engine as _;
 use serde_json::{Value, json};
 
@@ -100,19 +102,21 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
         ("Reply-To", "replyTo"),
     ] {
         if let Some(list) = address_list(&m[field]) {
-            out.push_str(&format!("{header}: {list}\r\n"));
+            let _ = write!(out, "{header}: {list}\r\n");
         }
     }
-    out.push_str(&format!(
+    let _ = write!(
+        out,
         "Subject: {}\r\n",
         m["subject"].as_str().unwrap_or_default()
-    ));
-    out.push_str(&format!(
+    );
+    let _ = write!(
+        out,
         "Message-ID: {}\r\n",
         m["internetMessageId"]
             .as_str()
             .map_or_else(|| format!("<{id}@mock.graph.example>"), str::to_owned)
-    ));
+    );
     out.push_str("Date: Thu, 01 Oct 2026 08:00:00 +0000\r\n");
     for prop in m["singleValueExtendedProperties"]
         .as_array()
@@ -121,8 +125,12 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
     {
         let value = prop["value"].as_str().unwrap_or_default();
         match prop["id"].as_str() {
-            Some("String 0x1042") => out.push_str(&format!("In-Reply-To: {value}\r\n")),
-            Some("String 0x1039") => out.push_str(&format!("References: {value}\r\n")),
+            Some("String 0x1042") => {
+                let _ = write!(out, "In-Reply-To: {value}\r\n");
+            }
+            Some("String 0x1039") => {
+                let _ = write!(out, "References: {value}\r\n");
+            }
             _ => {}
         }
     }
@@ -131,11 +139,12 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
         .cloned()
         .unwrap_or_default()
     {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "{}: {}\r\n",
             h["name"].as_str().unwrap_or_default(),
             h["value"].as_str().unwrap_or_default()
-        ));
+        );
     }
     if m["importance"] == "high" {
         out.push_str("Importance: high\r\n");
@@ -148,15 +157,17 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
     };
     let body = m["body"]["content"].as_str().unwrap_or_default();
     if draft.attachments.is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "Content-Type: {body_type}; charset=utf-8\r\n\r\n{body}\r\n"
-        ));
+        );
         return out.into_bytes();
     }
     let boundary = "mock-graph-draft";
-    out.push_str(&format!(
+    let _ = write!(
+        out,
         "Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\r\n--{boundary}\r\nContent-Type: {body_type}; charset=utf-8\r\n\r\n{body}\r\n"
-    ));
+    );
     for (meta, bytes) in &draft.attachments {
         let name = meta["name"].as_str().unwrap_or("attachment");
         let content_type = meta["contentType"]
@@ -167,11 +178,12 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
         } else {
             "attachment"
         };
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "--{boundary}\r\nContent-Type: {content_type}; name=\"{name}\"\r\nContent-Disposition: {disposition}; filename=\"{name}\"\r\n"
-        ));
+        );
         if let Some(cid) = meta["contentId"].as_str() {
-            out.push_str(&format!("Content-ID: <{cid}>\r\n"));
+            let _ = write!(out, "Content-ID: <{cid}>\r\n");
         }
         out.push_str("Content-Transfer-Encoding: base64\r\n\r\n");
         let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
@@ -180,7 +192,7 @@ pub(crate) fn render(draft: &JsonDraft, id: &str) -> Vec<u8> {
             out.push_str("\r\n");
         }
     }
-    out.push_str(&format!("--{boundary}--\r\n"));
+    let _ = write!(out, "--{boundary}--\r\n");
     out.into_bytes()
 }
 
@@ -289,7 +301,10 @@ pub(crate) fn create_upload_session(
             "AttachmentItem.attachmentType must be file.",
         ));
     }
-    let size = item["size"].as_u64().unwrap_or(0) as usize;
+    let size = item["size"]
+        .as_u64()
+        .and_then(|s| usize::try_from(s).ok())
+        .unwrap_or(0);
     if size == 0 || size > 150 * 1024 * 1024 {
         return Err(MockError::bad(
             "ErrorAttachmentSizeLimitExceeded",
@@ -364,7 +379,11 @@ fn put_range_inner(state: &mut State, req: &Req) -> MockResult<Reply> {
         .and_then(parse_range)
         .ok_or_else(|| MockError::bad("InvalidContentRange", "A Content-Range is required."))?;
     let len = req.body.len() as u64;
-    if total as usize != upload.size || end < start || end - start + 1 != len || end >= total {
+    if usize::try_from(total).ok() != Some(upload.size)
+        || end < start
+        || end - start + 1 != len
+        || end >= total
+    {
         return Err(MockError::bad(
             "InvalidContentRange",
             "The Content-Range does not match the body or the session.",
@@ -375,7 +394,7 @@ fn put_range_inner(state: &mut State, req: &Req) -> MockResult<Reply> {
         return Err(MockError::new(416, "InvalidRange", "A range is missing."));
     }
     let last = end + 1 == total;
-    if !last && !(len as usize).is_multiple_of(UPLOAD_UNIT) {
+    if !last && !req.body.len().is_multiple_of(UPLOAD_UNIT) {
         return Err(MockError::bad(
             "InvalidChunkSize",
             "Ranges must be multiples of 320 KiB.",
@@ -383,7 +402,8 @@ fn put_range_inner(state: &mut State, req: &Req) -> MockResult<Reply> {
     }
     upload.ranges.push((start, end));
     if end + 1 > have {
-        let skip = (have - start) as usize;
+        // `have - start` < `len` (checked above), so it fits.
+        let skip = usize::try_from(have - start).unwrap_or(req.body.len());
         upload.received.extend_from_slice(&req.body[skip..]);
     }
     if (upload.received.len() as u64) < total {

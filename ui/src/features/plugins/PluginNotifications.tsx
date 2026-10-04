@@ -33,8 +33,12 @@ function ToastView({ toast }: { toast: Toast }) {
 
   useEffect(() => {
     if (level === "error") return;
-    const timer = setTimeout(() => dismiss(toast.id), TOAST_MS);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      dismiss(toast.id);
+    }, TOAST_MS);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [dismiss, level, toast.id]);
 
   return (
@@ -66,7 +70,9 @@ function ToastView({ toast }: { toast: Toast }) {
         {...partAttrs("plugin.notification.dismiss", plugin)}
         aria-label={t("plugin-notification-dismiss")}
         title={t("plugin-notification-dismiss")}
-        onClick={() => dismiss(toast.id)}
+        onClick={() => {
+          dismiss(toast.id);
+        }}
       >
         <Icon name="x" part="plugin.notification.dismiss.icon" />
       </button>

@@ -1,6 +1,12 @@
 //! The axum pieces: the login route (content type, origin, CSRF, cookies)
 //! and the session middleware / extractor, driven through `tower`.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::net::SocketAddr;
@@ -59,7 +65,10 @@ impl Client {
         for header in response.headers().get_all(SET_COOKIE) {
             let cookie = cookie::Cookie::parse(header.to_str().unwrap().to_owned()).unwrap();
             self.cookies.retain(|(n, _)| n != cookie.name());
-            if !cookie.max_age().is_some_and(|a| a.is_zero()) {
+            if !cookie
+                .max_age()
+                .is_some_and(cookie::time::SignedDuration::is_zero)
+            {
                 self.cookies
                     .push((cookie.name().to_owned(), cookie.value().to_owned()));
             }
@@ -155,7 +164,7 @@ async fn pairing_over_http_sets_hardened_cookies() {
     // The session records the peer address from ConnectInfo.
     let sessions = h
         .store
-        .list_remote_sessions(&Default::default(), h.now())
+        .list_remote_sessions(&nail_api::remote::RemoteSessionFilter::default(), h.now())
         .unwrap();
     assert_eq!(sessions[0].ip.as_deref(), Some("192.0.2.10"));
 
@@ -321,7 +330,7 @@ async fn protected_routes_need_a_session_and_csrf_for_writes() {
         .1
         .clone();
     assert_ne!(before, after);
-    let _ = browser.resolve(&h);
+    drop(browser.resolve(&h));
 }
 
 #[tokio::test]

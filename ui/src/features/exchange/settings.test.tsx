@@ -96,22 +96,22 @@ describe("automatic replies", () => {
     const replies = env.transport.data.features.exchange.automaticReplies[EXCHANGE_ACCOUNT];
     if (!replies) throw new Error("demo replies missing");
     replies.settings.status = "always-enabled";
-    env.transport.onEvent((event) =>
+    env.transport.onEvent((event) => {
       handleExchangeEvent(event, {
         client: env.client,
         queryClient: env.queryClient,
         store: env.store,
-      }),
-    );
+      });
+    });
     renderWithProviders(<NodeView node={widget("automatic-replies-banner")} path="t/0" />, env);
     expect(await screen.findByText("Automatic replies are on for Contoso.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Edit…" }));
     expect(env.store.getState().windows).toContain(AUTOMATIC_REPLIES_DIALOG);
     expect(exchangeStoreFor(env.store).getState().repliesAccount).toBe(EXCHANGE_ACCOUNT);
     await user.click(screen.getByRole("button", { name: "Turn off" }));
-    await waitFor(() =>
-      expect(screen.queryByText("Automatic replies are on for Contoso.")).toBeNull(),
-    );
+    await waitFor(() => {
+      expect(screen.queryByText("Automatic replies are on for Contoso.")).toBeNull();
+    });
     expect(requests(env, "SetAutomaticReplies")[0]?.settings.status).toBe("disabled");
   });
 
@@ -123,7 +123,9 @@ describe("automatic replies", () => {
       <NodeView node={widget("automatic-replies-banner")} path="t/0" />,
       env,
     );
-    await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+    await waitFor(() => {
+      expect(env.queryClient.isFetching()).toBe(0);
+    });
     expect(container.querySelector('[data-part="automatic-replies-banner.item"]')).toBeNull();
     const env2 = setup();
     const r2 = env2.transport.data.features.exchange.automaticReplies[EXCHANGE_ACCOUNT];
@@ -143,7 +145,7 @@ describe("automatic replies", () => {
     const ctx = actionContext(env);
     const handler = actions["exchange.automatic-replies"];
     expect(handler?.enabled?.(ctx, [])).toBe(false);
-    await env.queryClient.fetchQuery({
+    await env.queryClient.query({
       queryKey: ["accounts"],
       queryFn: async () =>
         (await env.client.request({ type: "ListAccounts" }, "Accounts")).accounts,
@@ -183,7 +185,9 @@ describe("rules", () => {
     expect(outlook).not.toBeChecked();
     expect(screen.getByText(/Nail cannot show all of this rule/)).toBeInTheDocument();
     await user.click(outlook);
-    await waitFor(() => expect(requests(env, "SetExchangeInboxRuleEnabled")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "SetExchangeInboxRuleEnabled")).toHaveLength(1);
+    });
     expect(requests(env, "SetExchangeInboxRuleEnabled")[0]).toMatchObject({
       server_rule_id: "inbox-rule-3",
       enabled: true,
@@ -195,9 +199,13 @@ describe("rules", () => {
       screen.getByText("Delete the inbox rule “Invoices to accounting” from the server?"),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(requests(env, "DeleteExchangeInboxRule")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "DeleteExchangeInboxRule")).toHaveLength(1);
+    });
     await user.click(screen.getByRole("button", { name: "Sync now" }));
-    await waitFor(() => expect(requests(env, "SyncExchangeRules")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "SyncExchangeRules")).toHaveLength(1);
+    });
   });
 
   it("switches running rules on the server through the account settings", async () => {
@@ -209,7 +217,9 @@ describe("rules", () => {
     });
     expect(toggle).toBeChecked();
     await user.click(toggle);
-    await waitFor(() => expect(requests(env, "UpdateAccount")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requests(env, "UpdateAccount")).toHaveLength(1);
+    });
     const config = requests(env, "UpdateAccount")[0]?.config;
     expect(config?.incoming).toMatchObject({
       protocol: "exchange",
@@ -418,6 +428,6 @@ describe("account setup and settings", () => {
     const status = await screen.findByRole("region", { name: "Exchange status" });
     await waitFor(() => expect(status).toHaveTextContent("by checking regularly"));
     expect(status).toHaveTextContent("8 of 8");
-    await act(async () => {});
+    await act(() => Promise.resolve());
   });
 });

@@ -6,7 +6,7 @@
  * `DeleteSavedSearch`) and announces changes with `SavedSearchesChanged`.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { SavedSearch } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
@@ -66,10 +66,11 @@ export function SmartFolders({ node }: WidgetProps) {
     }
   };
 
-  const open = (s: SavedSearch) =>
+  const open = (s: SavedSearch) => {
     setSearch({ text: s.query, accountId: s.account_id, folderId: s.folder_id, error: null });
+  };
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!search || name.trim() === "") return;
     const ok = await run(() =>
@@ -95,10 +96,12 @@ export function SmartFolders({ node }: WidgetProps) {
     }
   };
 
-  const remove = (s: SavedSearch) =>
-    s.id === null
+  const remove = (s: SavedSearch) => {
+    const id = s.id;
+    return id === null
       ? Promise.resolve(false)
-      : run(() => client.request({ type: "DeleteSavedSearch", search_id: s.id as string }, "Done"));
+      : run(() => client.request({ type: "DeleteSavedSearch", search_id: id }, "Done"));
+  };
 
   const list = saved.data ?? [];
   return (
@@ -132,7 +135,9 @@ export function SmartFolders({ node }: WidgetProps) {
                 data-state={active ? "selected" : undefined}
                 aria-current={active ? "true" : undefined}
                 title={s.query}
-                onClick={() => open(s)}
+                onClick={() => {
+                  open(s);
+                }}
               >
                 <Icon name="search" part="smart-folders.item.icon" />
                 <span data-part="smart-folders.item.name">{s.name}</span>
@@ -160,7 +165,10 @@ export function SmartFolders({ node }: WidgetProps) {
               value={name}
               aria-label={t("saved-search-name")}
               placeholder={t("saved-search-name")}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+              }}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the name field opens on request (Save search) and takes the focus.
               autoFocus
             />
             <button
@@ -189,7 +197,9 @@ export function SmartFolders({ node }: WidgetProps) {
             data-part="smart-folders.add"
             disabled={search === null}
             title={search === null ? t("saved-search-add-hint") : undefined}
-            onClick={() => setNaming(true)}
+            onClick={() => {
+              setNaming(true);
+            }}
           >
             {t("saved-search-add")}
           </button>

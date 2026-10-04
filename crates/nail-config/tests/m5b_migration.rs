@@ -1,6 +1,7 @@
 //! M5b WP165: layouts written before the navigation rail keep working, and
 //! the new default can be taken over through the merge dialog (the UI sends
 //! the shipped `defaults/layout.kdl` as the incoming file).
+#![cfg(test)]
 
 use nail_api::customize::{ConfigFile, MergeChoice, MergeTake};
 use nail_api::{LayoutNode, ResolvedLayout};

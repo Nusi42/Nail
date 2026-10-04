@@ -236,7 +236,7 @@ pub struct StreamingWatcher {
 /// (the caller backs off) instead of "everything may have changed" once
 /// more: a subscription that keeps disappearing (a load balancer without
 /// server affinity) must not wake every folder in a loop.
-pub const RENEW_QUIET: Duration = Duration::from_secs(120);
+pub const RENEW_QUIET: Duration = Duration::from_mins(2);
 
 /// How often a broken stream is reopened within one wait before the error
 /// is passed on.
@@ -294,7 +294,7 @@ impl StreamingWatcher {
             return Ok((active.clone(), false));
         }
         if let Some(old) = previous {
-            let _ = client.unsubscribe(mailbox, &old.id).await;
+            drop(client.unsubscribe(mailbox, &old.id).await);
         }
         // Distinguished names (`inbox`) are resolved to ids: events name
         // folders by id.
@@ -369,7 +369,7 @@ impl StreamingWatcher {
                     mailbox,
                     std::slice::from_ref(&active.id),
                     minutes,
-                    remaining + Duration::from_secs(60),
+                    remaining + Duration::from_mins(1),
                 )
                 .await;
             let mut stream = match opened {
@@ -390,9 +390,8 @@ impl StreamingWatcher {
                 Err(e) => return Err(e),
             };
             loop {
-                let next = match tokio::time::timeout_at(deadline, stream.next()).await {
-                    Err(_) => return Ok(Vec::new()),
-                    Ok(next) => next,
+                let Ok(next) = tokio::time::timeout_at(deadline, stream.next()).await else {
+                    return Ok(Vec::new());
                 };
                 let answer = match next {
                     Ok(Some(answer)) => answer,

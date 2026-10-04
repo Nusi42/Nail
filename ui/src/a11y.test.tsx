@@ -23,6 +23,7 @@ import { NodeView, WindowView } from "./layout/LayoutRenderer";
 import { WindowLayer, tabbables } from "./layout/WindowLayer";
 import { compileTheme } from "./theme/compile";
 import { createEnv, renderWithProviders, stubElementSizes, widget, type Env } from "./test/harness";
+import { must } from "./test/must";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -31,11 +32,15 @@ beforeAll(() => Promise.all([loadHtmlEditor(), loadMarkdownEditor()]));
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 /** Waits until queries settled (nothing busy) and effects ran. */
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
@@ -60,7 +65,7 @@ function mailEnv(): Env {
 function tabsOf(node: LayoutNode, path: string, out: { key: string; count: number }[]) {
   if (node.type === "widget") return out;
   if (node.type === "tabs") out.push({ key: node.id ?? path, count: node.children.length });
-  node.children.forEach((child, index) => tabsOf(child, `${path}/${index}`, out));
+  node.children.forEach((child, index) => tabsOf(child, `${path}/${String(index)}`, out));
   return out;
 }
 
@@ -123,7 +128,9 @@ describe("axe: dialogs", () => {
       ...base,
       windows: Object.fromEntries(Object.entries(base.windows).filter(([n]) => n !== name)),
     };
-    act(() => env.store.getState().openWindow(name));
+    act(() => {
+      env.store.getState().openWindow(name);
+    });
     const { container } = renderWithProviders(<WindowLayer layout={layout} />, env, { layout });
     await settle(env);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -194,14 +201,17 @@ describe("axe: context menu, composer modes and login", () => {
       </>,
       env,
     );
-    await waitFor(() =>
-      expect(container.querySelector('[data-part="message-list.row"]')).not.toBeNull(),
-    );
-    fireEvent.contextMenu(container.querySelector('[data-part="message-list.row"]') as Element, {
-      clientX: 10,
-      clientY: 10,
-      button: 2,
+    await waitFor(() => {
+      expect(container.querySelector('[data-part="message-list.row"]')).not.toBeNull();
     });
+    fireEvent.contextMenu(
+      must(container.querySelector<HTMLElement>('[data-part="message-list.row"]')),
+      {
+        clientX: 10,
+        clientY: 10,
+        button: 2,
+      },
+    );
     await screen.findByRole("menu");
     expect(await violations(container)).toEqual([]);
   });
@@ -218,7 +228,7 @@ describe("axe: context menu, composer modes and login", () => {
     const env = createEnv();
     const browser = new MockAuthServer(env.transport);
     const { container } = renderWithProviders(
-      <RemoteLogin auth={browser} passkeys={fakePasskeys()} onLoggedIn={() => {}} />,
+      <RemoteLogin auth={browser} passkeys={fakePasskeys()} onLoggedIn={vi.fn()} />,
       env,
     );
     await screen.findByRole("form", { name: "Pair this browser" });
@@ -234,20 +244,24 @@ describe("keyboard and motion", () => {
     const opener = document.createElement("button");
     document.body.append(opener);
     opener.focus();
-    act(() => env.store.getState().openWindow("outbox"));
+    act(() => {
+      env.store.getState().openWindow("outbox");
+    });
     renderWithProviders(<WindowLayer layout={layout} />, env);
     const dialog = await screen.findByRole("dialog");
     await settle(env);
     const items = tabbables(dialog);
     expect(items.length).toBeGreaterThan(0);
-    const first = items[0] as HTMLElement;
-    const last = items[items.length - 1] as HTMLElement;
+    const first = must(items[0]);
+    const last = must(items[items.length - 1]);
     last.focus();
     await user.tab();
     expect(first).toHaveFocus();
     await user.tab({ shift: true });
     expect(last).toHaveFocus();
-    act(() => env.store.getState().closeWindow("outbox"));
+    act(() => {
+      env.store.getState().closeWindow("outbox");
+    });
     expect(opener).toHaveFocus();
     opener.remove();
   });

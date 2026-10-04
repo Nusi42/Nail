@@ -121,11 +121,10 @@ pub fn forward_body(
         ComposerMode::Html => {
             let mut head = escape_html(intro);
             for (label, value) in fields {
-                head.push_str(&format!(
-                    "<br>{}: {}",
-                    escape_html(label),
-                    escape_html(value)
-                ));
+                head.push_str("<br>");
+                head.push_str(&escape_html(label));
+                head.push_str(": ");
+                head.push_str(&escape_html(value));
             }
             let original = match html.filter(|h| !h.trim().is_empty()) {
                 Some(html) => sanitize_outgoing(html),
@@ -143,7 +142,9 @@ pub fn forward_body(
             let mut head = intro.to_owned();
             for (label, value) in fields {
                 head.push_str(break_);
-                head.push_str(&format!("{label}: {value}"));
+                head.push_str(label);
+                head.push_str(": ");
+                head.push_str(value);
             }
             let original = match (markdown, html.filter(|h| !h.trim().is_empty())) {
                 (true, Some(html)) => html_to_markdown(html).markdown,

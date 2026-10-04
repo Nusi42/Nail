@@ -32,13 +32,13 @@ function must<T>(value: T | null | undefined): T {
 }
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleCustomizationEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
@@ -67,7 +67,9 @@ const THEME = `theme "Nord" extends="default" {
 }
 `;
 
-beforeEach(() => customizationStore.getState().reset());
+beforeEach(() => {
+  customizationStore.getState().reset();
+});
 afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = "";
@@ -292,11 +294,11 @@ describe("config-errors", () => {
     expect(within(theme).getByText("theme.kdl:7:9")).toBeInTheDocument();
 
     await user.click(must(within(theme).getAllByRole("button", { name: "Open in editor" })[1]));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.customization.opened).toEqual([
         { file: "theme", line: 7, column: 9 },
-      ]),
-    );
+      ]);
+    });
 
     env.transport.data.features.customization.openUnsupported = true;
     await user.click(must(within(theme).getAllByRole("button", { name: "Open in editor" })[0]));
@@ -326,14 +328,14 @@ describe("smart-folders", () => {
     const add = screen.getByRole("button", { name: "Save current search" });
     expect(add).toBeDisabled();
 
-    act(() =>
+    act(() => {
       env.store.getState().setSearch({
         text: "is:unread",
         accountId: null,
         folderId: null,
         error: null,
-      }),
-    );
+      });
+    });
     await user.click(add);
     await user.type(screen.getByRole("textbox", { name: "Name of the smart folder" }), "Unread");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -346,13 +348,17 @@ describe("smart-folders", () => {
     });
     expect(item).toHaveAttribute("data-state", "selected");
 
-    act(() => env.store.getState().setSearch(null));
+    act(() => {
+      env.store.getState().setSearch(null);
+    });
     expect(item).not.toHaveAttribute("data-state");
     await user.click(item);
     expect(env.store.getState().search?.text).toBe("is:unread");
 
     await user.click(screen.getByRole("button", { name: "Remove “Unread”" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Unread" })).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Unread" })).toBeNull();
+    });
     expect(requestsOf(env, "DeleteSavedSearch")).toHaveLength(1);
   });
 
@@ -360,11 +366,11 @@ describe("smart-folders", () => {
     const user = userEvent.setup();
     const env = createEnv();
     renderNode(widget("smart-folders"), env);
-    act(() =>
+    act(() => {
       env.store
         .getState()
-        .setSearch({ text: "from:(", accountId: null, folderId: null, error: null }),
-    );
+        .setSearch({ text: "from:(", accountId: null, folderId: null, error: null });
+    });
     await user.click(await screen.findByRole("button", { name: "Save current search" }));
     await user.type(screen.getByRole("textbox", { name: "Name of the smart folder" }), "Broken");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -392,21 +398,24 @@ describe("merge dialog", () => {
     await user.click(screen.getByRole("button", { name: "Compare with mine" }));
 
     const tokens = await screen.findByRole("heading", { name: "Tokens" });
-    const section = tokens.closest('[data-part="merge-dialog.section"]') as HTMLElement;
+    const section = must(tokens.closest<HTMLElement>('[data-part="merge-dialog.section"]'));
     expect(within(section).getByText("color.accent")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("3 differences, 0 taken, no conflicts");
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
 
     // Take the accent colour only: the live preview shows it.
-    const accent = within(section)
-      .getByText("color.accent")
-      .closest('[data-part="merge-dialog.item"]') as HTMLElement;
+    const accent = must(
+      within(section)
+        .getByText("color.accent")
+        .closest<HTMLElement>('[data-part="merge-dialog.item"]'),
+    );
     await user.click(within(accent).getByRole("radio", { name: "Take theirs" }));
     await waitFor(
-      () =>
+      () => {
         expect(
           env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.tokens.color?.accent,
-        ).toBe("#88c0d0"),
+        ).toBe("#88c0d0");
+      },
       { timeout: PREVIEW_DELAY_MS * 20 },
     );
     expect(env.transport.data.theme.tokens.color?.accent).toBe(config.theme.tokens.color?.accent);
@@ -437,25 +446,25 @@ describe("merge dialog", () => {
     const user = userEvent.setup();
     const env = createEnv();
     const config = seedConfig(env);
-    const view = renderWithProviders(<MergeDialog name="config-merge" close={() => {}} />, env);
+    const view = renderWithProviders(<MergeDialog name="config-merge" close={vi.fn()} />, env);
     await user.click(screen.getByRole("textbox"));
     await user.paste(THEME);
     await user.click(screen.getByRole("button", { name: "Compare with mine" }));
     await user.click(await screen.findByRole("button", { name: "Take all theirs" }));
-    await waitFor(() =>
-      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord"),
-    );
+    await waitFor(() => {
+      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord");
+    });
     // Turning the live preview off restores the real configuration, too.
     await user.click(screen.getByRole("checkbox", { name: "Live preview" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe(
         config.theme.name,
-      ),
-    );
+      );
+    });
     await user.click(screen.getByRole("checkbox", { name: "Live preview" }));
-    await waitFor(() =>
-      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord"),
-    );
+    await waitFor(() => {
+      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord");
+    });
     view.unmount();
     expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe(
       config.theme.name,
@@ -467,7 +476,7 @@ describe("merge dialog", () => {
     const user = userEvent.setup();
     const env = createEnv();
     seedConfig(env);
-    renderWithProviders(<MergeDialog name="config-merge" close={() => {}} />, env);
+    renderWithProviders(<MergeDialog name="config-merge" close={vi.fn()} />, env);
     await user.click(screen.getByRole("radio", { name: "Layout (layout.kdl)" }));
     await user.click(screen.getByRole("textbox"));
     await user.paste('theme "x" {}');
@@ -493,10 +502,10 @@ describe("merge dialog", () => {
       default: "theirs",
     });
     expect(env.transport.data.layout.name).toBe("Shared");
-    renderWithProviders(<MergeDialog name="config-merge" close={() => {}} />, env);
-    const upload = document.querySelector(
-      '[data-part="merge-dialog.upload.input"]',
-    ) as HTMLInputElement;
+    renderWithProviders(<MergeDialog name="config-merge" close={vi.fn()} />, env);
+    const upload = must(
+      document.querySelector<HTMLElement>('[data-part="merge-dialog.upload.input"]'),
+    );
     await user.upload(upload, new File([THEME.replace("Nord", "Mine")], "my-layout.kdl"));
     await waitFor(() =>
       expect(screen.getByRole("textbox")).toHaveValue(THEME.replace("Nord", "Mine")),
@@ -504,7 +513,7 @@ describe("merge dialog", () => {
     expect(screen.getByRole("radio", { name: "Layout (layout.kdl)" })).toBeChecked();
 
     const backups = await screen.findByRole("heading", { name: "Earlier versions" });
-    const list = backups.closest("section") as HTMLElement;
+    const list = must(backups.closest<HTMLElement>("section"));
     await user.click(await within(list).findByRole("button", { name: "Revert" }));
     expect(await within(list).findByText("The previous version is back.")).toBeInTheDocument();
     expect(env.transport.data.layout.name).not.toBe("Shared");
@@ -542,7 +551,9 @@ describe("inspector", () => {
     const clicked = renderInspected(env);
     expect(document.querySelector('[data-part="inspector"]')).toBeNull();
 
-    act(() => customizationStore.getState().setInspecting(true));
+    act(() => {
+      customizationStore.getState().setInspecting(true);
+    });
     const panel = screen.getByRole("complementary", { name: "Inspector" });
     expect(within(panel).getByText("Nothing picked yet.")).toBeInTheDocument();
 
@@ -562,7 +573,7 @@ describe("inspector", () => {
     expect(within(panel).getByText("Showing the element you clicked.")).toBeInTheDocument();
     expect(within(panel).getByText(":selected")).toBeInTheDocument();
     // Hovering elsewhere does not move a pinned panel.
-    fireEvent.mouseOver(must(document.querySelector('[data-part="message-list"]')));
+    fireEvent.mouseOver(must(document.querySelector<HTMLElement>('[data-part="message-list"]')));
     expect(within(panel).getByText(":selected")).toBeInTheDocument();
 
     await user.click(within(panel).getByRole("button", { name: "Pick another element" }));
@@ -629,8 +640,12 @@ describe("split write-back", () => {
       },
     ]);
     // Unchanged sizes are not written again.
-    act(() => env.store.getState().setActiveTab("x", 1));
-    act(() => env.store.getState().setSplitSizes("panes", ["260px", "1fr", "1fr"]));
+    act(() => {
+      env.store.getState().setActiveTab("x", 1);
+    });
+    act(() => {
+      env.store.getState().setSplitSizes("panes", ["260px", "1fr", "1fr"]);
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(WRITE_DELAY_MS + 10);
     });

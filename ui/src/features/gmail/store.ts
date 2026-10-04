@@ -19,8 +19,8 @@ export interface LabelEditorTarget {
 export interface GmailState {
   editor: LabelEditorTarget | null;
   deleting: GmailLabel | null;
-  editLabel(target: LabelEditorTarget | null): void;
-  deleteLabel(label: GmailLabel | null): void;
+  editLabel: (target: LabelEditorTarget | null) => void;
+  deleteLabel: (label: GmailLabel | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<GmailState>>();
@@ -31,8 +31,12 @@ export function gmailStoreFor(ui: UiStore): StoreApi<GmailState> {
   const store = createStore<GmailState>()((set) => ({
     editor: null,
     deleting: null,
-    editLabel: (editor) => set({ editor }),
-    deleteLabel: (deleting) => set({ deleting }),
+    editLabel: (editor) => {
+      set({ editor });
+    },
+    deleteLabel: (deleting) => {
+      set({ deleting });
+    },
   }));
   stores.set(ui, store);
   return store;

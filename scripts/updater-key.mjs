@@ -25,6 +25,12 @@ import { devKeyPaths } from "./lib/updater-key.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * Runs `npx` with `args`; returns its standard output.
+ *
+ * @param {string[]} args
+ * @param {NodeJS.ProcessEnv} [env]
+ */
 function npx(args, env = process.env) {
   // npx is a .cmd file on Windows: run it through the shell, one string.
   const quoted = args.map((a) =>
@@ -61,7 +67,7 @@ function main() {
   }
   // Sign a probe and check it against the committed public key.
   const probe = path.join(base, "keys", "probe.txt");
-  writeFileSync(probe, `nail updater key probe ${Date.now()}\n`);
+  writeFileSync(probe, `nail updater key probe ${String(Date.now())}\n`);
   try {
     npx([
       "tauri",

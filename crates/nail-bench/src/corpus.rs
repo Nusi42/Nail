@@ -32,6 +32,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use crate::CorpusSpec;
+use crate::num::{f64_of, f64_of_len, i64_of, usize_of};
 
 /// The newest generated message is from this moment (Unix seconds,
 /// 2026-09-30T18:00:00Z); the corpus spans the three years before.
@@ -158,7 +159,7 @@ const LAST_NAMES: [&str; 40] = [
     "Wilson",
     "Backus",
     "Keller",
-    "Wirth",
+    "Wirth", // spellchecker:disable-line
     "Jones",
     "Stroustrup",
     "Conway",
@@ -609,7 +610,7 @@ fn folder_layout(count: usize) -> Vec<CorpusFolder> {
     let zipf: Vec<f64> = (0..rest)
         .map(|k| {
             let name = &names[FIXED_FOLDERS.len() + k].0;
-            let base = 1.0 / (k as f64 + 2.0);
+            let base = 1.0 / (f64_of_len(k) + 2.0);
             if PARENTS.contains(&name.as_str()) {
                 base * 0.1
             } else {
@@ -740,7 +741,7 @@ impl<'a> MessageStream<'a> {
         let n = self.corpus.people.len();
         let u: f64 = self.rng.r#gen();
         // Inverse of a power law: index ~ n * u^3.
-        ((u * u * u) * n as f64) as usize % n
+        usize_of((u * u * u) * f64_of_len(n)) % n
     }
 
     fn words(&mut self, target: usize, out: &mut String) {
@@ -796,13 +797,17 @@ impl<'a> MessageStream<'a> {
     fn generate(&mut self, index: u64) -> GeneratedMessage {
         let folder = self.pick_folder();
         let role = self.corpus.folders[folder].role;
-        let position = (index - self.first_index.min(index)) as f64;
+        let position = f64_of(index - self.first_index.min(index));
         // Dates: spread over the span, newest last; arrivals come after.
         let date = if self.fixed_folder.is_some() {
-            CORPUS_END + 60 + (index - self.corpus.spec.messages) as i64 * 30
+            CORPUS_END
+                + 60
+                + i64::try_from(index - self.corpus.spec.messages)
+                    .unwrap_or(i64::MAX)
+                    .saturating_mul(30)
         } else {
             let base = CORPUS_END - CORPUS_SPAN
-                + (CORPUS_SPAN as f64 * (position / self.total as f64)) as i64;
+                + i64_of(f64_of(CORPUS_SPAN.unsigned_abs()) * (position / f64_of(self.total)));
             base + self.rng.gen_range(0..3600)
         };
         let person = self.pick_person();
@@ -816,18 +821,17 @@ impl<'a> MessageStream<'a> {
             None
         };
         let message_id = format!("<bench-{}-{index}@nail.example>", self.corpus.spec.seed);
-        let subject = match &reply_to {
-            Some(root) => format!("Re: {}", root.subject.trim_start_matches("Re: ")),
-            None => {
-                let topic = TOPICS[self.rng.gen_range(0..TOPICS.len())];
-                let other = TOPICS[self.rng.gen_range(0..TOPICS.len())];
-                let project = PROJECTS[self.rng.gen_range(0..PROJECTS.len())];
-                match self.rng.gen_range(0..4) {
-                    0 => format!("{project} {topic} for week {}", index % 52 + 1),
-                    1 => format!("Question about the {topic}"),
-                    2 => format!("{topic} and {other} update"),
-                    _ => format!("[{project}] {topic} {other}"),
-                }
+        let subject = if let Some(root) = &reply_to {
+            format!("Re: {}", root.subject.trim_start_matches("Re: "))
+        } else {
+            let topic = TOPICS[self.rng.gen_range(0..TOPICS.len())];
+            let other = TOPICS[self.rng.gen_range(0..TOPICS.len())];
+            let project = PROJECTS[self.rng.gen_range(0..PROJECTS.len())];
+            match self.rng.gen_range(0..4) {
+                0 => format!("{project} {topic} for week {}", index % 52 + 1),
+                1 => format!("Question about the {topic}"),
+                2 => format!("{topic} and {other} update"),
+                _ => format!("[{project}] {topic} {other}"),
             }
         };
         let sender = &self.corpus.people[reply_to.as_ref().map_or(person, |r| {
@@ -851,7 +855,7 @@ impl<'a> MessageStream<'a> {
         // Body size: exponential around the mean, clamped.
         let mean = f64::from(self.corpus.spec.mean_body_bytes.max(100));
         let u: f64 = self.rng.gen_range(0.0001..1.0);
-        let size = ((-u.ln()) * mean).clamp(mean * 0.1, mean * 12.0) as usize;
+        let size = usize_of((-u.ln() * mean).clamp(mean * 0.1, mean * 12.0));
         let mut extra: Vec<&str> = Vec::new();
         if index == self.rare_at {
             extra.push(RARE_WORD);
@@ -875,7 +879,7 @@ impl<'a> MessageStream<'a> {
                 let amean = f64::from(self.corpus.spec.mean_attachment_bytes.max(1_000));
                 let u: f64 = self.rng.gen_range(0.0001..1.0);
                 // Log-normal-ish: most attachments are small, a few large.
-                let len = ((-u.ln()).powf(1.6) * amean * 0.7).clamp(800.0, amean * 25.0) as usize;
+                let len = usize_of(((-u.ln()).powf(1.6) * amean * 0.7).clamp(800.0, amean * 25.0));
                 let mut bytes = vec![0u8; len];
                 self.rng.fill(&mut bytes[..]);
                 attachments.push((format!("{stem}-{}-{n}.{ext}", index % 10_000), mime, bytes));
@@ -1003,7 +1007,7 @@ impl<'a> MessageStream<'a> {
         }
 
         // Flags: older mail is mostly read; Sent is read.
-        let age = 1.0 - position / self.total as f64;
+        let age = 1.0 - position / f64_of(self.total);
         let mut flags = Vec::new();
         let read = role == Role::Sent
             || (self.fixed_folder.is_none() && self.rng.gen_bool((0.6 + age * 0.39).min(0.995)));
@@ -1132,7 +1136,7 @@ mod tests {
         });
         let stats = corpus.stats();
         assert_eq!(stats.messages, 3_000);
-        let ratio = |n: u64| n as f64 / 3_000.0;
+        let ratio = |n: u64| f64_of(n) / 3_000.0;
         assert!(
             (ratio(stats.with_attachment) - 0.1).abs() < 0.03,
             "{stats:?}"

@@ -24,6 +24,7 @@ export const TEMPLATES = ["command", "hook", "composer", "attachment"];
 export const SDK_DIR = path.resolve(here, "..", "plugin-api");
 
 /** Template files whose names npm would drop or mangle when publishing. */
+/** @type {Partial<Record<string, string>>} */
 const RENAMES = { gitignore: ".gitignore" };
 /** Files whose placeholders are JSON / JavaScript string literals. */
 const CODE = /\.(json|mjs|js|ts|tsx)$/;
@@ -80,13 +81,24 @@ function walk(dir, rel = "") {
 }
 
 /**
+ * Whether `value` is a JSON object.
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * The version spec of a dev dependency of the SDK (esbuild, typescript).
  * @param {string} name
  * @returns {string}
  */
 function sdkDevDependency(name) {
+  /** @type {unknown} */
   const pkg = JSON.parse(readFileSync(path.join(SDK_DIR, "package.json"), "utf8"));
-  const spec = pkg.devDependencies?.[name];
+  const devDependencies = isRecord(pkg) ? pkg.devDependencies : undefined;
+  const spec = isRecord(devDependencies) ? devDependencies[name] : undefined;
   if (typeof spec !== "string") throw new Error(`the SDK has no dev dependency ${name}`);
   return spec;
 }
@@ -159,10 +171,7 @@ export function scaffold(options) {
   const files = [];
   for (const [rel, source] of [...sources].sort(([a], [b]) => a.localeCompare(b))) {
     const base = path.posix.basename(rel);
-    const target = path.posix.join(
-      path.posix.dirname(rel),
-      RENAMES[/** @type {keyof typeof RENAMES} */ (base)] ?? base,
-    );
+    const target = path.posix.join(path.posix.dirname(rel), RENAMES[base] ?? base);
     const text = fill(rel, readFileSync(path.join(source, rel), "utf8"), values);
     const out = path.join(dir, ...target.split("/"));
     mkdirSync(path.dirname(out), { recursive: true });

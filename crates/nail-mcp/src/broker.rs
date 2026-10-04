@@ -315,7 +315,13 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         // Confirmations name their MCP client.
         store
-            .create_mcp_client("Claude", "hash", "hint", &Default::default(), 0)
+            .create_mcp_client(
+                "Claude",
+                "hash",
+                "hint",
+                &nail_api::mcp::McpGrant::default(),
+                0,
+            )
             .unwrap();
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink = events.clone();
@@ -420,7 +426,12 @@ mod tests {
 
         let c = broker
             .store
-            .list_confirmations(Default::default(), None, None, 1)
+            .list_confirmations(
+                nail_api::agents::ConfirmationFilter::default(),
+                None,
+                None,
+                1,
+            )
             .unwrap()
             .remove(0);
         let approved = broker
@@ -439,7 +450,12 @@ mod tests {
         assert_eq!(failed.state, ConfirmationState::Failed);
         let other = broker
             .store
-            .list_confirmations(Default::default(), None, None, 1)
+            .list_confirmations(
+                nail_api::agents::ConfirmationFilter::default(),
+                None,
+                None,
+                1,
+            )
             .unwrap()
             .remove(0);
         assert!(broker.cancel(&other.id).await.unwrap().is_some());

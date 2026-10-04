@@ -11,7 +11,7 @@
 //!   part, `BYSETPOS`, `BYWEEKNO` / `WKST`, `COUNT` / `UNTIL`, `RDATE`,
 //!   `EXDATE`).
 //! * [`ical`] — iCalendar → events (series + overrides) and tasks.
-//! * [`write`] — events and tasks → iCalendar, patching the original text.
+//! * [`write`](mod@write) — events and tasks → iCalendar, patching the original text.
 //! * [`expand`] — series → [`nail_api::pim::EventInstance`]s in a range
 //!   (overrides, `THISANDFUTURE`, floating and all-day placement).
 //! * [`edit`] — edit scopes: overrides, exceptions, splitting a series.

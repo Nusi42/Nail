@@ -74,15 +74,12 @@ fn decode_entities(text: &str) -> String {
                 .or_else(|| entity.strip_prefix('#').and_then(|d| d.parse().ok()))
                 .and_then(char::from_u32),
         };
-        match decoded {
-            Some(c) => {
-                out.push(c);
-                rest = &rest[end + 1..];
-            }
-            None => {
-                out.push('&');
-                rest = &rest[1..];
-            }
+        if let Some(c) = decoded {
+            out.push(c);
+            rest = &rest[end + 1..];
+        } else {
+            out.push('&');
+            rest = &rest[1..];
         }
     }
     out.push_str(rest);

@@ -63,7 +63,9 @@ export function ConfirmationNotices() {
                 data-part="confirmation-notice.dismiss"
                 aria-label={t("agents-notice-dismiss")}
                 title={t("agents-notice-dismiss")}
-                onClick={() => dismiss(confirmation.id)}
+                onClick={() => {
+                  dismiss(confirmation.id);
+                }}
               >
                 <Icon name="x" part="confirmation-notice.dismiss.icon" />
               </button>

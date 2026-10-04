@@ -50,7 +50,9 @@ export function CategoryTabs({ node }: WidgetProps) {
               data-category="all"
               data-state={allActive ? "selected" : undefined}
               aria-pressed={allActive}
-              onClick={() => showCategory(store, account.id, inbox.id, null)}
+              onClick={() => {
+                showCategory(store, account.id, inbox.id, null);
+              }}
             >
               {t("gmail-category-all")}
             </button>
@@ -70,7 +72,9 @@ export function CategoryTabs({ node }: WidgetProps) {
                   name: t(`gmail-category-${c}`),
                   unread: count,
                 })}
-                onClick={() => showCategory(store, account.id, inbox.id, c)}
+                onClick={() => {
+                  showCategory(store, account.id, inbox.id, c);
+                }}
               >
                 <span data-part="category-tabs.name">{t(`gmail-category-${c}`)}</span>
                 {count > 0 && (

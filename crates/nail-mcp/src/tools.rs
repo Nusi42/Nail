@@ -1,7 +1,7 @@
 //! The tools (design.md, "MCP server", Tools): the read tools
 //! `search_messages`, `get_message`, `get_thread`, `list_folders`,
 //! `get_ui_context`, the PIM reads (M3a) and `test_rule`, and the write
-//! tools of M4a ([`crate::writes`]), in the order of
+//! tools of M4a (`crate::writes`), in the order of
 //! [`nail_api::mcp::tools::MCP_TOOLS`].
 //!
 //! Tools wrap the resources for clients without resource support. Results

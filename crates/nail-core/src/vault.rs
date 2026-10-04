@@ -136,7 +136,7 @@ impl VaultCtl {
                 return in_ram();
             }
         };
-        match SearchIndex::open_with(dir, CommitPolicy::default(), wrapper) {
+        match SearchIndex::open_with(dir, CommitPolicy::default(), wrapper.as_ref()) {
             Ok(index) => Ok(index),
             Err(err) => {
                 tracing::error!(%err, "cannot open the search index; searching in memory only");
@@ -406,10 +406,9 @@ impl Service {
                     None => Ok(()),
                 }
             })?;
-            let saved_to = path.map(|path| path.display().to_string());
             Ok(nail_api::Response::RecoveryKeyCreated {
                 key: key.as_str().to_owned(),
-                saved_to,
+                saved_to: path.map(|path| path.display().to_string()),
                 status,
             })
         })

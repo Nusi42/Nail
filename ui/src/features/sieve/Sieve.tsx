@@ -54,7 +54,7 @@ function Messages({ items, part }: { items: readonly LocalizedMessage[]; part: s
   return (
     <ul data-part={part} role="alert">
       {items.map((m, index) => (
-        <li key={`${m.id}-${index}`} data-part={`${part}.item`}>
+        <li key={`${m.id}-${String(index)}`} data-part={`${part}.item`}>
           {t(m.id, m.args)}
         </li>
       ))}
@@ -125,7 +125,9 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
             hintId="sieve-host-hint"
             name="sieve-host"
             value={draft.host ?? ""}
-            onChange={(host) => change({ host: host === "" ? null : host })}
+            onChange={(host) => {
+              change({ host: host === "" ? null : host });
+            }}
           />
           <NumberField
             labelId="sieve-port"
@@ -134,14 +136,18 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
             min={1}
             max={65535}
             value={draft.port}
-            onChange={(port) => change({ port })}
+            onChange={(port) => {
+              change({ port });
+            }}
           />
           <TextField
             labelId="sieve-script-name"
             hintId="sieve-script-name-hint"
             name="sieve-script-name"
             value={draft.script_name ?? ""}
-            onChange={(name) => change({ script_name: name === "" ? null : name })}
+            onChange={(name) => {
+              change({ script_name: name === "" ? null : name });
+            }}
           />
         </>
       )}
@@ -302,6 +308,7 @@ function AccountStatus({ status }: { status: SieveAccountStatus }) {
         <pre
           id={scriptId}
           data-part="sieve-status.script"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the script scrolls: keyboard users must be able to reach it (axe scrollable-region-focusable).
           tabIndex={0}
           aria-label={t("sieve-script-label")}
         >
@@ -404,9 +411,9 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
         data-part="form.input"
         type="date"
         value={draft[key] ?? ""}
-        onChange={(event) =>
-          change({ [key]: event.target.value === "" ? null : event.target.value })
-        }
+        onChange={(event) => {
+          change({ [key]: event.target.value === "" ? null : event.target.value });
+        }}
       />
     </div>
   );
@@ -417,20 +424,26 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
         labelId="vacation-enabled"
         name="vacation-enabled"
         checked={draft.enabled}
-        onChange={(enabled) => change({ enabled })}
+        onChange={(enabled) => {
+          change({ enabled });
+        }}
       />
       <TextField
         labelId="vacation-subject"
         hintId="vacation-subject-hint"
         name="vacation-subject"
         value={draft.subject}
-        onChange={(subject) => change({ subject })}
+        onChange={(subject) => {
+          change({ subject });
+        }}
       />
       <TextAreaField
         labelId="vacation-body"
         name="vacation-body"
         value={draft.body}
-        onChange={(body) => change({ body })}
+        onChange={(body) => {
+          change({ body });
+        }}
       />
       <div data-part="vacation-editor.dates">
         {dateField("start_date", "vacation-start")}
@@ -443,7 +456,9 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
         min={1}
         max={365}
         value={draft.days}
-        onChange={(days) => change({ days: days ?? 0 })}
+        onChange={(days) => {
+          change({ days: days ?? 0 });
+        }}
       />
       <TextField
         labelId="vacation-addresses"
@@ -461,13 +476,17 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
         name="vacation-from"
         type="email"
         value={draft.from ?? ""}
-        onChange={(from) => change({ from: from === "" ? null : from })}
+        onChange={(from) => {
+          change({ from: from === "" ? null : from });
+        }}
       />
       <CheckField
         labelId="vacation-skip-lists"
         name="vacation-skip-lists"
         checked={draft.skip_lists}
-        onChange={(skip_lists) => change({ skip_lists })}
+        onChange={(skip_lists) => {
+          change({ skip_lists });
+        }}
       />
       <Messages items={problems} part="vacation-editor.issues" />
       {notice && (

@@ -1,6 +1,7 @@
 //! Schema v7 (ADR 0043): body state, snooze, junk classifier data,
 //! notification settings and the Sieve state; v8 (ADR 0049): Sieve
 //! location and server rules, folder marks, atomic snooze wake.
+#![cfg(test)]
 
 mod common;
 
@@ -156,7 +157,13 @@ fn junk_training_storage_is_bounded() {
     for i in 0..limit + 5 {
         let tokens = vec![format!("word{i}"), "shared".to_owned()];
         store
-            .train_junk(&account, &format!("k{i:05}"), true, &tokens, T0 + i as i64)
+            .train_junk(
+                &account,
+                &format!("k{i:05}"),
+                true,
+                &tokens,
+                T0 + i64::try_from(i).unwrap(),
+            )
             .unwrap();
     }
     let stats = store.junk_stats(&account).unwrap();

@@ -5,6 +5,8 @@
 //! (layout write-back, merge + backups + revert, every config error), and
 //! the MCP server started with the core as its data provider.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -136,12 +138,12 @@ async fn find(service: &Service, role: FolderRole, subject: &str) -> MessageSumm
         .unwrap_or_else(|| panic!("no message {subject:?}"))
 }
 
-fn control(f: &Fixture, command: &str, args: serde_json::Value) -> serde_json::Value {
-    f.demo.control(command, &args).unwrap()
+fn control(f: &Fixture, command: &str, args: &serde_json::Value) -> serde_json::Value {
+    f.demo.control(command, args).unwrap()
 }
 
 fn smtp_data(f: &Fixture) -> Vec<String> {
-    control(f, "smtp-messages", json!({}))
+    control(f, "smtp-messages", &json!({}))
         .as_array()
         .unwrap()
         .iter()
@@ -150,7 +152,7 @@ fn smtp_data(f: &Fixture) -> Vec<String> {
 }
 
 fn server_subjects(f: &Fixture, mailbox: &str) -> Vec<String> {
-    control(f, "imap-messages", json!({ "mailbox": mailbox }))
+    control(f, "imap-messages", &json!({ "mailbox": mailbox }))
         .as_array()
         .unwrap()
         .iter()
@@ -574,7 +576,7 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
     control(
         &f,
         "imap-deliver",
-        json!({"raw": "From: Shop <shop@example.org>\r\nSubject: Old invoice 1\r\nMessage-ID: <old1@example.org>\r\n\r\nPay.\r\n"}),
+        &json!({"raw": "From: Shop <shop@example.org>\r\nSubject: Old invoice 1\r\nMessage-ID: <old1@example.org>\r\n\r\nPay.\r\n"}),
     );
     eventually("new mail arrived", || async {
         subjects(&f.service, MULTI_WORK_ID, FolderRole::Archive)
@@ -1160,7 +1162,7 @@ async fn rules_forward_redirect_reply_and_copy() {
         "{replied}"
     );
     eventually("the redirect", || async {
-        control(&f, "smtp-messages", json!({}))
+        control(&f, "smtp-messages", &json!({}))
             .as_array()
             .unwrap()
             .iter()
@@ -1291,17 +1293,17 @@ async fn arrival_rules_leave_rule_mail_alone_and_redirects_survive_a_delete() {
     control(
         &f,
         "imap-deliver",
-        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming loop\r\nX-Nail-Loop: bob@example.org\r\nMessage-ID: <loop1@example.org>\r\n\r\nHi.\r\n"}),
+        &json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming loop\r\nX-Nail-Loop: bob@example.org\r\nMessage-ID: <loop1@example.org>\r\n\r\nHi.\r\n"}),
     );
     // … ordinary mail is redirected (through the outbox, after the
     // message was already deleted by the next action) and answered.
     control(
         &f,
         "imap-deliver",
-        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming plain [Verify](https://evil.example) <img src=https://evil.example/t.png>\r\nMessage-ID: <plain1@example.org>\r\n\r\nHi.\r\n"}),
+        &json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming plain [Verify](https://evil.example) <img src=https://evil.example/t.png>\r\nMessage-ID: <plain1@example.org>\r\n\r\nHi.\r\n"}),
     );
     eventually("the plain message redirected", || async {
-        control(&f, "smtp-messages", json!({}))
+        control(&f, "smtp-messages", &json!({}))
             .as_array()
             .unwrap()
             .iter()
@@ -1335,7 +1337,7 @@ async fn arrival_rules_leave_rule_mail_alone_and_redirects_survive_a_delete() {
         !inbox.iter().any(|s| s.starts_with("incoming"))
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(1000)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
     let subjects = smtp_subjects(&f);
     assert!(
         !subjects.iter().any(|s| s.contains("incoming loop")),
@@ -1418,7 +1420,7 @@ async fn undo_restores_what_it_can_when_a_message_was_moved_back_by_hand() {
         control(
             &f,
             "imap-deliver",
-            json!({"raw": format!("From: Shop <shop@example.org>\r\nSubject: Old invoice {n}\r\nMessage-ID: <inv{n}@example.org>\r\n\r\nPay.\r\n")}),
+            &json!({"raw": format!("From: Shop <shop@example.org>\r\nSubject: Old invoice {n}\r\nMessage-ID: <inv{n}@example.org>\r\n\r\nPay.\r\n")}),
         );
     }
     eventually("both invoices arrived", || async {
@@ -1505,7 +1507,7 @@ impl rmcp::ClientHandler for UpdateRecorder {
         params: rmcp::model::ResourceUpdatedNotificationParam,
         _context: rmcp::service::NotificationContext<rmcp::RoleClient>,
     ) {
-        let _ = self.0.send(params.uri);
+        drop(self.0.send(params.uri));
     }
 
     fn get_info(&self) -> rmcp::model::ClientConfig {
@@ -1527,7 +1529,10 @@ async fn wait_for_update(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>, 
 }
 
 #[tokio::test]
-#[allow(deprecated)]
+#[expect(
+    deprecated,
+    reason = "rmcp 3.5 deprecates resource subscriptions (SEP-2577); Nail still serves them"
+)]
 async fn the_core_feeds_new_mail_and_ui_reports_to_mcp_subscriptions() {
     use rmcp::ServiceExt as _;
 
@@ -1574,7 +1579,7 @@ async fn the_core_feeds_new_mail_and_ui_reports_to_mcp_subscriptions() {
     control(
         &f,
         "imap-deliver",
-        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: For the agent\r\nMessage-ID: <agent1@example.org>\r\n\r\nHi.\r\n"}),
+        &json!({"raw": "From: Bob <bob@example.org>\r\nSubject: For the agent\r\nMessage-ID: <agent1@example.org>\r\n\r\nHi.\r\n"}),
     );
     wait_for_update(&mut updates, &messages_uri).await;
 
@@ -1594,14 +1599,14 @@ async fn the_core_feeds_new_mail_and_ui_reports_to_mcp_subscriptions() {
     ));
     wait_for_update(&mut updates, "nail://ui/context").await;
 
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
     running.shutdown().await;
     f.service.shutdown().await;
 }
 
 /// Recipients of sent mail that are in no address book land in the
 /// Collected book: contact search (the in-memory PIM index, also behind
-/// MCP) finds them at once, and open contact views hear ContactsChanged.
+/// MCP) finds them at once, and open contact views hear `ContactsChanged`.
 #[tokio::test]
 async fn sent_mail_fills_the_collected_book_and_contact_search() {
     let f = setup().await;

@@ -48,7 +48,7 @@ export default defineConfig({
     ? [["github"], ["html", { open: "never", outputFolder: path.join(outputRoot, "report") }]]
     : "list",
   use: {
-    baseURL: `http://127.0.0.1:${port}`,
+    baseURL: `http://127.0.0.1:${String(port)}`,
     trace: "retain-on-failure",
   },
   // M5b: a taller window than Playwright's 720 px, so the message list
@@ -64,7 +64,7 @@ export default defineConfig({
       quote(process.env.NAIL_BIN),
       "serve",
       "--seed demo",
-      `--port ${port}`,
+      `--port ${String(port)}`,
       `--data-dir ${quote(process.env.NAIL_E2E_DATA)}`,
       `--config-dir ${quote(process.env.NAIL_E2E_CONFIG)}`,
       // Always the freshly built bundle (a `ui` folder beside the binary,
@@ -72,7 +72,7 @@ export default defineConfig({
       `--ui-dir ${quote(path.join(repoRoot, "ui", "dist"))}`,
     ].join(" "),
     cwd: repoRoot,
-    url: `http://127.0.0.1:${port}/`,
+    url: `http://127.0.0.1:${String(port)}/`,
     reuseExistingServer: false,
     env: { NAIL_LOG: process.env.NAIL_LOG ?? "warn" },
     stdout: "ignore",

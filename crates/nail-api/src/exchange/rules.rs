@@ -94,6 +94,10 @@ impl ExchangeRuleConditions {
 /// What an inbox rule does.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors the independent boolean actions of an Exchange inbox rule"
+)]
 pub struct ExchangeRuleActions {
     /// Move to this folder (a folder of the account). At the engine seam
     /// (`ExchangeSettingsEngine`) this carries the folder's **remote id**

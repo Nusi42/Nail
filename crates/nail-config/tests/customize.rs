@@ -1,5 +1,6 @@
-//! ConfigManager, M1b WP24: every error per file, write-back, merge with
+//! `ConfigManager`, M1b WP24: every error per file, write-back, merge with
 //! backup and revert, "open file at line".
+#![cfg(test)]
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -126,7 +127,7 @@ fn the_watcher_sends_all_errors_after_the_first() {
     let (tx, rx) = mpsc::channel();
     let _watcher = manager
         .watch(Duration::from_millis(50), move |update| {
-            let _ = tx.send(update);
+            tx.send(update).ok();
         })
         .unwrap();
     write(dir.path(), "theme.kdl", TWO_ERRORS);

@@ -11,7 +11,7 @@
  *   books linked to it.
  */
 import { useQueries } from "@tanstack/react-query";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import type {
   AddressBook,
   Contact,
@@ -47,6 +47,7 @@ import {
   useDuplicates,
 } from "./queries";
 import { usePim } from "./store";
+import { nonEmpty } from "../../text/empty";
 
 function bookLabel(
   t: (id: string) => string,
@@ -71,10 +72,10 @@ export function GroupsDialog({ close }: DialogProps) {
   const [newName, setNewName] = useState("");
   const writable = (books.data ?? []).filter((b) => !b.read_only && b.role === null);
   const [chosenBook, setNewBook] = useState<string>("");
-  const newBook = chosenBook || writable[0]?.id || "";
+  const newBook = nonEmpty(chosenBook) ?? writable[0]?.id ?? "";
   const group = groups.data?.find((g) => g.id === selected) ?? null;
 
-  const create = async (event: FormEvent) => {
+  const create = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!newName.trim()) {
       setProblem({ id: "pim-issue-missing-name" });
@@ -122,7 +123,9 @@ export function GroupsDialog({ close }: DialogProps) {
                       data-group={g.id}
                       aria-pressed={g.id === selected}
                       data-state={g.id === selected ? "selected" : undefined}
-                      onClick={() => setSelected(g.id)}
+                      onClick={() => {
+                        setSelected(g.id);
+                      }}
                     >
                       {t("pim-group-entry", {
                         name: g.name,
@@ -139,7 +142,15 @@ export function GroupsDialog({ close }: DialogProps) {
           <p data-part="pim.groups.empty">{t("pim-groups-empty")}</p>
         )}
       </div>
-      {group && <GroupEditor key={group.id} group={group} onDeleted={() => setSelected(null)} />}
+      {group && (
+        <GroupEditor
+          key={group.id}
+          group={group}
+          onDeleted={() => {
+            setSelected(null);
+          }}
+        />
+      )}
       <form data-part="pim.groups.new" onSubmit={(e) => void create(e)}>
         <h3 data-part="form.section.title">{t("pim-group-new")}</h3>
         <div data-part="form.field" data-field="book">
@@ -150,7 +161,9 @@ export function GroupsDialog({ close }: DialogProps) {
             id={ids.book}
             data-part="form.select"
             value={newBook}
-            onChange={(e) => setNewBook(e.target.value)}
+            onChange={(e) => {
+              setNewBook(e.target.value);
+            }}
           >
             {writable.map((b) => (
               <option key={b.id} value={b.id}>
@@ -167,7 +180,9 @@ export function GroupsDialog({ close }: DialogProps) {
             id={ids.newName}
             data-part="form.input"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
+            onChange={(e) => {
+              setNewName(e.target.value);
+            }}
           />
         </div>
         <button type="submit" data-part="form.button" disabled={!newBook}>
@@ -184,7 +199,7 @@ export function GroupsDialog({ close }: DialogProps) {
   );
 }
 
-function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted(): void }) {
+function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () => void }) {
   const t = useT();
   const ctx = useChangeContext();
   const ids = { name: useId(), emails: useId() };
@@ -195,7 +210,7 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted(): v
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     setProblem(null);
     setSaved(false);
@@ -245,7 +260,9 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted(): v
             id={ids.name}
             data-part="form.input"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+            }}
           />
         </div>
         <fieldset data-part="pim.groups.members">
@@ -255,13 +272,13 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted(): v
               <input
                 type="checkbox"
                 checked={memberIds.includes(c.id)}
-                onChange={(e) =>
+                onChange={(e) => {
                   setMemberIds((ids) =>
                     e.target.checked ? [...ids, c.id] : ids.filter((id) => id !== c.id),
-                  )
-                }
+                  );
+                }}
               />
-              <span>{c.display_name || c.email || c.id}</span>
+              <span>{nonEmpty(c.display_name) ?? nonEmpty(c.email) ?? c.id}</span>
             </label>
           ))}
         </fieldset>
@@ -273,7 +290,9 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted(): v
             id={ids.emails}
             data-part="form.textarea"
             value={emails}
-            onChange={(e) => setEmails(e.target.value)}
+            onChange={(e) => {
+              setEmails(e.target.value);
+            }}
           />
         </div>
       </fieldset>
@@ -331,7 +350,13 @@ export function MergeDialog({ close }: DialogProps) {
       <MergeForm
         ids={chosen}
         close={close}
-        onBack={preset.length >= 2 ? null : () => setChosen([])}
+        onBack={
+          preset.length >= 2
+            ? null
+            : () => {
+                setChosen([]);
+              }
+        }
       />
     );
   }
@@ -340,7 +365,7 @@ export function MergeDialog({ close }: DialogProps) {
       <p data-part="pim.merge.intro">{t("pim-merge-duplicates-intro")}</p>
       {duplicates.isPending && <p data-part="pim.merge.loading">{t("pim-loading")}</p>}
       {duplicates.isError && <Problem message={problemOf(duplicates.error)} />}
-      {duplicates.data && duplicates.data.length === 0 && (
+      {duplicates.data?.length === 0 && (
         <p data-part="pim.merge.none">{t("pim-merge-no-duplicates")}</p>
       )}
       {duplicates.data && duplicates.data.length > 0 && (
@@ -360,7 +385,7 @@ function DuplicateList({
   onChoose,
 }: {
   groups: DuplicateGroup[];
-  onChoose(ids: string[]): void;
+  onChoose: (ids: string[]) => void;
 }) {
   const t = useT();
   const all = useMemo(() => [...new Set(groups.flatMap((g) => g.contact_ids))], [groups]);
@@ -376,7 +401,13 @@ function DuplicateList({
               list: g.reasons.map((r) => t(`pim-duplicate-${r}`)).join(", "),
             })}
           </span>
-          <button type="button" data-part="form.button" onClick={() => onChoose(g.contact_ids)}>
+          <button
+            type="button"
+            data-part="form.button"
+            onClick={() => {
+              onChoose(g.contact_ids);
+            }}
+          >
             {t("pim-merge-choose")}
           </button>
         </li>
@@ -391,7 +422,7 @@ function MergeForm({
   onBack,
 }: {
   ids: string[];
-  close(): void;
+  close: () => void;
   onBack: (() => void) | null;
 }) {
   const t = useT();
@@ -416,7 +447,7 @@ function MergeChoices({
   onBack,
 }: {
   contacts: Contact[];
-  close(): void;
+  close: () => void;
   onBack: (() => void) | null;
 }) {
   const t = useT();
@@ -455,11 +486,11 @@ function MergeChoices({
       case "photo":
         return t("pim-merge-photo");
       default:
-        return String(value);
+        return typeof value === "string" ? value : JSON.stringify(value);
     }
   };
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!primary) return;
     setBusy(true);
@@ -487,13 +518,14 @@ function MergeChoices({
     }
   };
 
-  const toggle = (field: ListField | "addresses", key: string, keep: boolean) =>
+  const toggle = (field: ListField | "addresses", key: string, keep: boolean) => {
     setChoice((c) => {
       const excluded = new Set(c.excluded[field] ?? []);
       if (keep) excluded.delete(key);
       else excluded.add(key);
       return { ...c, excluded: { ...c.excluded, [field]: [...excluded] } };
     });
+  };
 
   return (
     <form data-part="pim.merge" onSubmit={(e) => void submit(e)} aria-busy={busy}>
@@ -505,9 +537,12 @@ function MergeChoices({
               type="radio"
               name={`${name}-primary`}
               checked={c.id === primary?.id}
-              onChange={() =>
-                setChoice((prev) => ({ ...defaultChoice(contacts, c.id), excluded: prev.excluded }))
-              }
+              onChange={() => {
+                setChoice((prev) => ({
+                  ...defaultChoice(contacts, c.id),
+                  excluded: prev.excluded,
+                }));
+              }}
             />
             <span>
               {t("pim-merge-contact", {
@@ -534,9 +569,9 @@ function MergeChoices({
                   type="radio"
                   name={`${name}-${field}`}
                   checked={choice.single[field] === option.key}
-                  onChange={() =>
-                    setChoice((c) => ({ ...c, single: { ...c.single, [field]: option.key } }))
-                  }
+                  onChange={() => {
+                    setChoice((c) => ({ ...c, single: { ...c.single, [field]: option.key } }));
+                  }}
                 />
                 <span>{show(field, option.value)}</span>
               </label>
@@ -558,7 +593,9 @@ function MergeChoices({
                   <input
                     type="checkbox"
                     checked={!(choice.excluded[field] ?? []).includes(key)}
-                    onChange={(e) => toggle(field, key, e.target.checked)}
+                    onChange={(e) => {
+                      toggle(field, key, e.target.checked);
+                    }}
                   />
                   <span>{entry.value}</span>
                 </label>
@@ -577,7 +614,9 @@ function MergeChoices({
                 <input
                   type="checkbox"
                   checked={!(choice.excluded.addresses ?? []).includes(key)}
-                  onChange={(e) => toggle("addresses", key, e.target.checked)}
+                  onChange={(e) => {
+                    toggle("addresses", key, e.target.checked);
+                  }}
                 />
                 <span>{addressLines(address).join(", ")}</span>
               </label>

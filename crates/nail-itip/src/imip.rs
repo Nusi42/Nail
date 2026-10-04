@@ -99,7 +99,7 @@ pub fn find_itip(raw: &[u8]) -> Option<ReceivedImip> {
         let subtype = ct.subtype().map(str::to_ascii_lowercase);
         let attached = part
             .content_disposition()
-            .is_some_and(|d| d.is_attachment());
+            .is_some_and(mail_parser::ContentType::is_attachment);
         let score = match (ctype.as_str(), subtype.as_deref()) {
             ("text", Some("calendar")) => {
                 let method = ct.attribute("method").is_some();

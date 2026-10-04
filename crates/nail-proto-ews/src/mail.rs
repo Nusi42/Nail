@@ -438,11 +438,11 @@ impl EwsClient {
         {
             return Err(EwsError::Conflict("UpdateItem reported conflicts".into()));
         }
-        let updated = message
+        let new_ref = message
             .child("Items")
             .and_then(|items| items.children.first())
             .and_then(|i| element_id(i, "ItemId"));
-        Ok(updated.unwrap_or_else(|| item.clone()))
+        Ok(new_ref.unwrap_or_else(|| item.clone()))
     }
 
     /// Applies a flag / tag change to a message (tags are categories),

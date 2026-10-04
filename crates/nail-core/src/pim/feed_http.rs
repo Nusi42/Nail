@@ -32,7 +32,7 @@ use crate::plugin_http::{RefuseResolver, canonical};
 pub(crate) const MAX_REDIRECTS: u8 = 5;
 
 /// The longest a fetch may take, redirects included.
-pub(crate) const FEED_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const FEED_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// One feed fetch.
 pub(crate) struct FeedRequest {

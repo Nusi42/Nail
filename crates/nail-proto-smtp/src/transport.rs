@@ -255,7 +255,7 @@ pub async fn test_login(config: &SmtpConfig, auth: &SmtpAuth) -> EndpointTestRes
         let mut session = SmtpSession::connect(config).await?;
         capabilities.clone_from(&session.capabilities().extensions);
         session.authenticate(&credentials).await?;
-        let _ = session.quit().await;
+        drop(session.quit().await);
         Ok(())
     }
     .await;

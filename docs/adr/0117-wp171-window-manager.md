@@ -74,7 +74,7 @@ non-modal by default). WP171 owns `ui/src/layout/` and
   (`data-snap`, `data-state~="snapped"`) and keeps the pre-drag rectangle
   for restoring. Only resizable windows maximize or snap.
 - Keyboard: the title bar is focusable (`role="group"`, named "Title bar of
-  <title>", described by a hidden hint). Arrow keys move, Shift+arrow keys
+  `<title>`", described by a hidden hint). Arrow keys move, Shift+arrow keys
   resize. Alt+F7 / Alt+F8 anywhere in the window start move / size mode
   (`data-mode`): arrow keys without Shift, Enter keeps, Escape goes back
   (and does not close the window), Tab / leaving keeps. A live region

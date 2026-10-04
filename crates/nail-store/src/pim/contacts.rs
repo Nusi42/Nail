@@ -112,9 +112,9 @@ pub fn merge_contact_fields(primary: &ContactFields, others: &[&ContactFields]) 
             }
         }
     }
-    fn fill<T: Clone>(into: &mut Option<T>, from: &Option<T>) {
+    fn fill<T: Clone>(into: &mut Option<T>, from: Option<&T>) {
         if into.is_none() {
-            into.clone_from(from);
+            *into = from.cloned();
         }
     }
     let mut out = primary.clone();
@@ -130,14 +130,14 @@ pub fn merge_contact_fields(primary: &ContactFields, others: &[&ContactFields]) 
         join(&mut out.nicknames, &other.nicknames);
         join(&mut out.categories, &other.categories);
         join(&mut out.custom, &other.custom);
-        fill(&mut out.name, &other.name);
-        fill(&mut out.organization, &other.organization);
-        fill(&mut out.title, &other.title);
-        fill(&mut out.role, &other.role);
-        fill(&mut out.birthday, &other.birthday);
-        fill(&mut out.anniversary, &other.anniversary);
-        fill(&mut out.notes, &other.notes);
-        fill(&mut out.photo, &other.photo);
+        fill(&mut out.name, other.name.as_ref());
+        fill(&mut out.organization, other.organization.as_ref());
+        fill(&mut out.title, other.title.as_ref());
+        fill(&mut out.role, other.role.as_ref());
+        fill(&mut out.birthday, other.birthday.as_ref());
+        fill(&mut out.anniversary, other.anniversary.as_ref());
+        fill(&mut out.notes, other.notes.as_ref());
+        fill(&mut out.photo, other.photo.as_ref());
         if out.display_name.trim().is_empty() {
             out.display_name.clone_from(&other.display_name);
         }
@@ -435,7 +435,10 @@ impl Store {
             if members.len() < 2 {
                 continue;
             }
-            let root = person_sets.find(*members.iter().next().expect("non-empty"));
+            let Some(&first) = members.iter().next() else {
+                continue;
+            };
+            let root = person_sets.find(first);
             let entry = groups.entry(root).or_default();
             entry.0.extend(members.iter().copied());
             entry.1.insert(match reason {
@@ -652,39 +655,36 @@ impl Store {
                 continue;
             }
             let existing = known.into_iter().next();
-            let contact = match existing {
-                Some(c) => {
-                    let Some(name) = name else { continue };
-                    if c.fields.display_name == name {
-                        continue;
-                    }
-                    let mut c = c;
-                    c.fields.display_name = name.to_owned();
-                    c
+            let contact = if let Some(c) = existing {
+                let Some(name) = name else { continue };
+                if c.fields.display_name == name {
+                    continue;
                 }
-                None => {
-                    let hash = hash_hex(&email);
-                    let mut fields = ContactFields::named(name.unwrap_or(&email));
-                    fields.emails = vec![LabeledValue::new(email.clone())];
-                    Contact {
-                        id: ContactId::new(format!("collected-{}", &hash[..20])),
-                        address_book_id: AddressBookId::new(COLLECTED_BOOK_ID),
-                        uid: format!(
-                            "urn:uuid:{}-{}-{}-{}-{}",
-                            &hash[..8],
-                            &hash[8..12],
-                            &hash[12..16],
-                            &hash[16..20],
-                            &hash[20..32]
-                        ),
-                        fields,
-                        version: VCardVersion::V4,
-                        group_ids: Vec::new(),
-                        linked_ids: Vec::new(),
-                        updated_at: None,
-                        read_only: false,
-                        sync: PimItemSync::Synced,
-                    }
+                let mut c = c;
+                name.clone_into(&mut c.fields.display_name);
+                c
+            } else {
+                let hash = hash_hex(&email);
+                let mut fields = ContactFields::named(name.unwrap_or(&email));
+                fields.emails = vec![LabeledValue::new(email.clone())];
+                Contact {
+                    id: ContactId::new(format!("collected-{}", &hash[..20])),
+                    address_book_id: AddressBookId::new(COLLECTED_BOOK_ID),
+                    uid: format!(
+                        "urn:uuid:{}-{}-{}-{}-{}",
+                        &hash[..8],
+                        &hash[8..12],
+                        &hash[12..16],
+                        &hash[16..20],
+                        &hash[20..32]
+                    ),
+                    fields,
+                    version: VCardVersion::V4,
+                    group_ids: Vec::new(),
+                    linked_ids: Vec::new(),
+                    updated_at: None,
+                    read_only: false,
+                    sync: PimItemSync::Synced,
                 }
             };
             let raw = collected_vcard(&contact.uid, &contact.fields.display_name, &email);
@@ -788,6 +788,10 @@ impl Store {
                 Ok(())
             })?;
         }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a ranking heuristic; counts and ages in seconds stay far below 2^52"
+        )]
         let usage_score = |email: &str| -> f64 {
             let Some(&(count, last)) = usage.get(email) else {
                 return 0.0;

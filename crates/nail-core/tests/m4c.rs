@@ -4,6 +4,8 @@
 //! desktop file dialog, smartcard settings (validated, stored); since WP125
 //! also smartcards (soft token) and the rest of the M4c requests.
 
+#![cfg(test)]
+
 use std::sync::{Arc, Mutex};
 
 use nail_api::backup::BackupContents;
@@ -106,7 +108,7 @@ fn open(host: Option<Arc<FakeHost>>) -> (Service, tempfile::TempDir, tempfile::T
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
     options.start_engines = false;
-    options.desktop = host.map(|h| h as Arc<dyn DesktopHost>);
+    options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     (service, data, config)
 }
@@ -407,7 +409,7 @@ async fn smartcard_settings_are_validated_and_stored() {
 }
 
 /// WP125: what the contract stage answered `m4c-not-ready` is served
-/// now (the details are in m4c_portability.rs / m4c_vault.rs).
+/// now (the details are in `m4c_portability.rs` / `m4c_vault.rs`).
 #[tokio::test(flavor = "multi_thread")]
 async fn the_m4c_requests_are_served() {
     let (service, _d, _c) = open(None);
@@ -446,7 +448,7 @@ async fn the_m4c_requests_are_served() {
     );
     let Response::DiagnosticsPreview { .. } = service
         .handle(Request::PreviewDiagnostics {
-            options: Default::default(),
+            options: nail_api::diagnostics::DiagnosticsOptions::default(),
         })
         .await
     else {
@@ -518,7 +520,7 @@ async fn smartcard_keys_are_listed_and_used_for_smime() {
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
     options.start_engines = false;
-    options.smartcard_modules = Some(vec![token as Arc<dyn nail_pkcs11::Module>]);
+    options.smartcard_modules = Some(vec![token]);
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
 
     let Response::Smartcards { tokens, .. } = service.handle(Request::ListSmartcards).await else {

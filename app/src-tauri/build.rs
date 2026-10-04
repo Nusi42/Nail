@@ -1,4 +1,4 @@
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // tauri-build links the VC runtime statically by default by writing an
     // empty `msvcrt.lib` into its OUT_DIR and adding that directory to the
     // native link search path. In `cargo test --workspace` that search path
@@ -8,8 +8,7 @@ fn main() {
     // runtime for debug builds and tests.
     let release = std::env::var("PROFILE").is_ok_and(|p| p == "release");
     let windows = tauri_build::WindowsAttributes::new().static_vc_runtime(release);
-    tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
-        .expect("failed to run tauri-build");
+    tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))?;
     // Delay-load comctl32: Nail.exe's manifest (from tauri-build) selects
     // Common Controls 6, test executables have no manifest and get v5, which
     // lacks TaskDialogIndirect. Imported eagerly, that made the shell's test
@@ -20,4 +19,5 @@ fn main() {
         println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
         println!("cargo:rustc-link-lib=delayimp");
     }
+    Ok(())
 }

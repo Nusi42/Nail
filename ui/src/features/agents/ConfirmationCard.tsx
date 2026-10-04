@@ -29,7 +29,7 @@ interface Props {
   /** Bring it into view and focus its heading (opened from a notice). */
   focused?: boolean;
   /** Called after the user decided it. */
-  onDecided?(confirmation: Confirmation): void;
+  onDecided?: (confirmation: Confirmation) => void;
 }
 
 /** `data-risk` of a kind: what the theme highlights. */
@@ -255,7 +255,9 @@ export function ConfirmationCard({ confirmation, focused = false, onDecided }: P
                 data-part="confirmation.always-allow.input"
                 checked={alwaysAllow}
                 disabled={busy}
-                onChange={(event) => setAlwaysAllow(event.target.checked)}
+                onChange={(event) => {
+                  setAlwaysAllow(event.target.checked);
+                }}
               />
               <span data-part="confirmation.always-allow.label">
                 {t("agents-always-allow", { actor: confirmation.requested_by.name, kind })}

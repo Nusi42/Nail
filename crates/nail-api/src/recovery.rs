@@ -122,7 +122,7 @@ fn value_of(c: char) -> Option<u8> {
     ALPHABET
         .iter()
         .position(|&a| a as char == c)
-        .map(|p| p as u8)
+        .and_then(|p| u8::try_from(p).ok())
 }
 
 /// Reads a typed recovery key back into its bytes.
@@ -175,7 +175,7 @@ mod tests {
     fn sample() -> [u8; RECOVERY_KEY_BYTES] {
         let mut key = [0u8; RECOVERY_KEY_BYTES];
         for (i, b) in key.iter_mut().enumerate() {
-            *b = (i as u8).wrapping_mul(37).wrapping_add(11);
+            *b = u8::try_from(i).unwrap().wrapping_mul(37).wrapping_add(11);
         }
         key
     }

@@ -98,6 +98,12 @@ pub struct ActorWrites<D> {
     shared: Arc<Shared<D>>,
 }
 
+impl<D> std::fmt::Debug for ActorWrites<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActorWrites").finish_non_exhaustive()
+    }
+}
+
 impl<D> Clone for ActorWrites<D> {
     fn clone(&self) -> Self {
         Self {

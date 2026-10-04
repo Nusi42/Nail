@@ -273,14 +273,15 @@ impl Service {
         work: impl FnOnce(&mut Scheduler) -> Result<T>,
     ) -> Result<T> {
         let mut guard = lock(&self.inner.pim.reminders);
-        if guard.is_none() {
-            *guard = Some(ReminderScheduler::load(
+        let scheduler = match guard.take() {
+            Some(scheduler) => scheduler,
+            None => ReminderScheduler::load(
                 StoreReminders(self.inner.store.clone()),
                 Arc::clone(&self.inner.clock),
                 ReminderPolicy::default(),
-            )?);
-        }
-        work(guard.as_mut().expect("loaded above"))
+            )?,
+        };
+        work(guard.insert(scheduler))
     }
 
     /// Plans one item's reminders again (after it changed).
@@ -296,7 +297,13 @@ impl Service {
                     PimItemRef::Event { event_id } => {
                         let plan = match store.event(event_id)? {
                             Some(e) if reminders_on(store, &e.calendar_id) => limit_plan(
-                                plan_event(&e, local, from, until, &Default::default()),
+                                plan_event(
+                                    &e,
+                                    local,
+                                    from,
+                                    until,
+                                    &nail_ical::expand::ScanBudget::default(),
+                                ),
                                 now,
                             ),
                             Some(_) => Vec::new(),
@@ -487,10 +494,7 @@ impl Service {
         if !views.is_empty()
             && let Some(host) = self.inner.plugins.existing_host()
         {
-            host.deliver_event(
-                nail_api::plugins::jobs::PluginEventName::EventReminder,
-                Vec::new(),
-            );
+            host.deliver_event(nail_api::plugins::jobs::PluginEventName::EventReminder, &[]);
         }
         Ok(views.len())
     }
@@ -635,7 +639,7 @@ mod tests {
             Tz::Europe__Berlin,
             at("2026-10-24T00:00:00Z"),
             at("2026-10-27T00:00:00Z"),
-            &Default::default(),
+            &nail_ical::expand::ScanBudget::default(),
         );
         let fires: Vec<String> = plan
             .iter()

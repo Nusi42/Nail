@@ -82,7 +82,11 @@ export const actions: Feature["actions"] = {
     enabled: hasTarget,
   },
   /** Opens the list of snoozed messages. */
-  "snooze.list": { run: (ctx) => ctx.store.getState().openWindow(SNOOZED_WINDOW) },
+  "snooze.list": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(SNOOZED_WINDOW);
+    },
+  },
 };
 
 /** Dialog names → components (the layout's `snoozed` window wins when it has one). */

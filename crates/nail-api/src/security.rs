@@ -22,7 +22,7 @@
 //!   encryption at rest of the database, blobs and search index, and the
 //!   global security settings.
 //!
-//! Wire conventions (ADR 0002 / 0012): kebab-case enums, snake_case fields,
+//! Wire conventions (ADR 0002 / 0012): kebab-case enums, `snake_case` fields,
 //! `null` for absent values, opaque ids ([`crate::KeyId`]). Times are RFC
 //! 3339 strings. Fingerprints are uppercase hexadecimal without spaces.
 
@@ -615,6 +615,10 @@ pub enum SecretProtection {
 
 /// An OpenPGP key or S/MIME certificate in the keyring.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent properties of a key, shown in the keyring"
+)]
 pub struct CryptoKey {
     /// Opaque id.
     pub id: KeyId,
@@ -841,6 +845,10 @@ pub enum AutocryptPreference {
 /// defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent per-identity defaults (one checkbox each)"
+)]
 pub struct IdentityCrypto {
     /// Preferred technology.
     pub technology: CryptoPreference,

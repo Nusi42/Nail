@@ -39,13 +39,13 @@ export async function installFollowUp(
 
 /** Routes core events to the feature, like the app shell. */
 export function wireEvents(env: Env): () => void {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handlePluginsEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 /** The mock layout with the plug-in command in the reader toolbar and on a key. */

@@ -26,7 +26,9 @@ import { tick } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(() => tick());
 }
 
@@ -82,7 +84,7 @@ describe("axe: plug-in extensions", () => {
     await settle(env);
     await user.click(screen.getByRole("button", { name: "Insert block" }));
     expect(await violations(container)).toEqual([]);
-    act(() =>
+    act(() => {
       pluginsStoreFor(env.store)
         .getState()
         .showVeto({
@@ -97,8 +99,8 @@ describe("axe: plug-in extensions", () => {
             { plugin_id: "policy", plugin_name: "Policy", reason: "External recipient." },
           ],
           settle: () => undefined,
-        }),
-    );
+        });
+    });
     expect(
       await screen.findByRole("dialog", { name: "2 plug-ins stopped this message" }),
     ).toBeInTheDocument();

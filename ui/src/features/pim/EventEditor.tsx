@@ -12,7 +12,7 @@
  * amount). Deleting uses the same choice.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import type {
   Alarm,
   AlarmAction,
@@ -102,6 +102,54 @@ export interface EventForm {
   alarms: Alarm[];
   recurrence: RecurrenceChoice;
   scope: EditScope;
+}
+
+/** The form an editor opens with: a new event, a series or one occurrence. */
+function initialForm(
+  target: EventEditorTarget,
+  event: CalendarEvent | null,
+  writable: readonly Calendar[],
+  occurrence: PimTime | null,
+  viewerTz: string,
+): EventForm {
+  if (target.mode === "new") {
+    const calendar =
+      writable.find((c) => c.id === target.calendarId) ??
+      writable.find((c) => c.source_id === "local") ??
+      writable[0];
+    const base = target.fields ?? emptyEventFields(target.start, target.end);
+    const fields: EventFields = {
+      ...base,
+      alarms: target.fields ? base.alarms : (calendar?.settings.default_alarms ?? []),
+    };
+    return formOf(fields, calendar?.id ?? "", null, fields.start, viewerTz, "all");
+  }
+  // The editor of an existing event opens once the event is loaded.
+  if (event === null) throw new Error(`event ${target.eventId} is not loaded`);
+  if (occurrence !== null) {
+    const override = event.overrides.find((o) => sameTime(o.recurrence_id, occurrence));
+    const fields = override?.fields ?? {
+      ...event.fields,
+      start: target.start ?? event.fields.start,
+      end: target.end ?? event.fields.end,
+    };
+    return formOf(
+      fields,
+      event.calendar_id,
+      event.recurrence,
+      event.fields.start,
+      viewerTz,
+      "this",
+    );
+  }
+  return formOf(
+    event.fields,
+    event.calendar_id,
+    event.recurrence,
+    event.fields.start,
+    viewerTz,
+    "all",
+  );
 }
 
 /** The form for fields (and the series' recurrence). */
@@ -197,8 +245,7 @@ export function alarmParts(offsetSecs: number): {
   const before = offsetSecs <= 0;
   const secs = Math.abs(offsetSecs);
   const unit =
-    ([...ALARM_UNITS].reverse().find((u) => secs > 0 && secs % UNIT_SECONDS[u] === 0) as
-      AlarmUnit | undefined) ?? "minutes";
+    [...ALARM_UNITS].reverse().find((u) => secs > 0 && secs % UNIT_SECONDS[u] === 0) ?? "minutes";
   return { amount: Math.round(secs / UNIT_SECONDS[unit]), unit, before };
 }
 
@@ -228,7 +275,7 @@ export function EventEditorDialog({ close }: DialogProps) {
   return <EventEditorLoader target={target} close={close} />;
 }
 
-function EventEditorLoader({ target, close }: { target: EventEditorTarget; close(): void }) {
+function EventEditorLoader({ target, close }: { target: EventEditorTarget; close: () => void }) {
   const t = useT();
   const event = useEvent(target.mode === "edit" ? target.eventId : null);
   const calendars = useCalendars();
@@ -256,7 +303,7 @@ function EventEditorLoader({ target, close }: { target: EventEditorTarget; close
       }
       target={target}
       event={target.mode === "edit" ? (event.data ?? null) : null}
-      calendars={calendars.data ?? []}
+      calendars={calendars.data}
       close={close}
     />
   );
@@ -266,7 +313,7 @@ interface EditorProps {
   target: EventEditorTarget;
   event: CalendarEvent | null;
   calendars: readonly Calendar[];
-  close(): void;
+  close: () => void;
 }
 
 export function EventEditor({ target, event, calendars, close }: EditorProps) {
@@ -298,40 +345,17 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     event?.read_only === true ||
     (event !== null && calendars.find((c) => c.id === event.calendar_id)?.read_only === true);
 
-  const initial = useMemo<EventForm>(() => {
-    if (target.mode === "new") {
-      const calendar =
-        writable.find((c) => c.id === target.calendarId) ??
-        writable.find((c) => c.source_id === "local") ??
-        writable[0];
-      const base = target.fields ?? emptyEventFields(target.start, target.end);
-      const fields: EventFields = {
-        ...base,
-        alarms: target.fields ? base.alarms : (calendar?.settings.default_alarms ?? []),
-      };
-      return formOf(fields, calendar?.id ?? "", null, fields.start, viewerTz, "all");
-    }
-    const ev = event as CalendarEvent;
-    if (occurrence !== null) {
-      const override = ev.overrides.find((o) => sameTime(o.recurrence_id, occurrence));
-      const fields = override?.fields ?? {
-        ...ev.fields,
-        start: target.start ?? ev.fields.start,
-        end: target.end ?? ev.fields.end,
-      };
-      return formOf(fields, ev.calendar_id, ev.recurrence, ev.fields.start, viewerTz, "this");
-    }
-    return formOf(ev.fields, ev.calendar_id, ev.recurrence, ev.fields.start, viewerTz, "all");
-    // The form is initialized once per editor (the component is keyed by its target).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const [form, setForm] = useState<EventForm>(initial);
+  // The form is initialized once per editor (the component is keyed by its target).
+  const [form, setForm] = useState<EventForm>(() =>
+    initialForm(target, event, writable, occurrence, viewerTz),
+  );
   const [secondary, setSecondary] = useState<string>("");
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const zones = useMemo(() => timeZoneNames(), []);
-  const update = (patch: Partial<EventForm>) => setForm((f) => ({ ...f, ...patch }));
+  const update = (patch: Partial<EventForm>) => {
+    setForm((f) => ({ ...f, ...patch }));
+  };
 
   const base = event
     ? event.fields
@@ -349,7 +373,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
   const scopeEditable = occurrence !== null;
   const recurrenceLocked = scopeEditable && form.scope === "this";
 
-  const submit = async (e: FormEvent) => {
+  const submit = async (e: SubmitEvent) => {
     e.preventDefault();
     const issue = formIssue(form);
     if (issue) {
@@ -402,9 +426,8 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           );
         } else {
           // All occurrences: move the series by what this occurrence moved.
-          const shownStart =
-            target.mode === "edit" && target.start ? target.start : event.fields.start;
-          const shownEnd = target.mode === "edit" && target.end ? target.end : event.fields.end;
+          const shownStart = target.start ?? event.fields.start;
+          const shownEnd = target.end ?? event.fields.end;
           const sameKind = shownStart.type === fields.start.type;
           const startDelta = wallDelta(shownStart, fields.start);
           const endDelta = wallDelta(shownEnd, fields.end);
@@ -494,7 +517,10 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             id={ids.title}
             data-part="form.input"
             value={form.title}
-            onChange={(e) => update({ title: e.target.value })}
+            onChange={(e) => {
+              update({ title: e.target.value });
+            }}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- the editor dialog opens on request; its title field takes the focus (dialog pattern).
             autoFocus
           />
         </div>
@@ -506,7 +532,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             id={ids.calendar}
             data-part="form.select"
             value={form.calendarId}
-            onChange={(e) => update({ calendarId: e.target.value })}
+            onChange={(e) => {
+              update({ calendarId: e.target.value });
+            }}
           >
             {(readOnly ? calendars.filter((c) => c.id === form.calendarId) : writable).map((c) => (
               <option key={c.id} value={c.id}>
@@ -526,7 +554,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                   name={`${ids.title}-scope`}
                   value={scope}
                   checked={form.scope === scope}
-                  onChange={() => update({ scope })}
+                  onChange={() => {
+                    update({ scope });
+                  }}
                 />
                 <span>{t(`pim-scope-${scope}`)}</span>
               </label>
@@ -540,7 +570,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             <input
               type="checkbox"
               checked={form.allDay}
-              onChange={(e) => update({ allDay: e.target.checked })}
+              onChange={(e) => {
+                update({ allDay: e.target.checked });
+              }}
             />
             <span>{t("pim-all-day")}</span>
           </label>
@@ -584,7 +616,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             tz={form.endTz ?? form.tz ?? viewerTz}
             invalid={problem?.id === "pim-issue-end-before-start"}
             describedBy={problem ? ids.problem : undefined}
-            onChange={(day, time) => update({ endDay: day, endTime: time ?? form.endTime })}
+            onChange={(day, time) => {
+              update({ endDay: day, endTime: time ?? form.endTime });
+            }}
           />
           {secondaryLine(preview.end) && (
             <p data-part="pim.editor.secondary" data-field="end">
@@ -604,12 +638,12 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                   id={ids.tz}
                   data-part="form.select"
                   value={form.tz ?? ""}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     update({
                       tz: e.target.value === "" ? null : e.target.value,
                       endTz: e.target.value === "" ? null : form.endTz,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <option value="">{t("pim-time-zone-floating")}</option>
                   {tzOptions}
@@ -620,7 +654,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                   <input
                     type="checkbox"
                     checked={form.endTz !== null}
-                    onChange={(e) => update({ endTz: e.target.checked ? form.tz : null })}
+                    onChange={(e) => {
+                      update({ endTz: e.target.checked ? form.tz : null });
+                    }}
                   />
                   <span>{t("pim-event-end-zone-toggle")}</span>
                 </label>
@@ -634,7 +670,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                     id={ids.endTz}
                     data-part="form.select"
                     value={form.endTz}
-                    onChange={(e) => update({ endTz: e.target.value })}
+                    onChange={(e) => {
+                      update({ endTz: e.target.value });
+                    }}
                   >
                     {tzOptions}
                   </select>
@@ -648,7 +686,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                   id={ids.secondary}
                   data-part="form.select"
                   value={secondary}
-                  onChange={(e) => setSecondary(e.target.value)}
+                  onChange={(e) => {
+                    setSecondary(e.target.value);
+                  }}
                 >
                   <option value="">{t("pim-secondary-zone-none")}</option>
                   {tzOptions}
@@ -660,7 +700,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
 
         <RecurrenceEditor
           value={form.recurrence}
-          onChange={(recurrence) => update({ recurrence })}
+          onChange={(recurrence) => {
+            update({ recurrence });
+          }}
           start={preview.start}
           disabled={recurrenceLocked}
           tz={form.tz ?? viewerTz}
@@ -675,13 +717,17 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             id={ids.location}
             data-part="form.input"
             value={form.location}
-            onChange={(e) => update({ location: e.target.value })}
+            onChange={(e) => {
+              update({ location: e.target.value });
+            }}
           />
         </div>
 
         <ConferenceEditor
           value={form.conferences}
-          onChange={(conferences) => update({ conferences })}
+          onChange={(conferences) => {
+            update({ conferences });
+          }}
         />
 
         <div data-part="form.field" data-field="description">
@@ -692,7 +738,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             id={ids.description}
             data-part="form.textarea"
             value={form.description}
-            onChange={(e) => update({ description: e.target.value })}
+            onChange={(e) => {
+              update({ description: e.target.value });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="url">
@@ -704,13 +752,17 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             data-part="form.input"
             type="url"
             value={form.url}
-            onChange={(e) => update({ url: e.target.value })}
+            onChange={(e) => {
+              update({ url: e.target.value });
+            }}
           />
         </div>
 
         <AttendeePicker
           value={form.attendees}
-          onChange={(attendees) => update({ attendees })}
+          onChange={(attendees) => {
+            update({ attendees });
+          }}
           start={preview.start}
           end={preview.end}
           onTimeChange={(start, end) => {
@@ -732,15 +784,25 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           start={preview.start}
           end={preview.end}
           attendees={form.attendees}
-          onAttendeesChange={(attendees) => update({ attendees })}
+          onAttendeesChange={(attendees) => {
+            update({ attendees });
+          }}
           location={form.location}
-          onLocationChange={(location) => update({ location })}
+          onLocationChange={(location) => {
+            update({ location });
+          }}
           tz={viewerTz}
         />
         {target.mode === "edit" && event !== null && event.fields.attendees.length > 0 && (
           <MeetingPanel event={event} recurrenceId={occurrence} />
         )}
-        <AlarmEditor value={form.alarms} onChange={(alarms) => update({ alarms })} tz={viewerTz} />
+        <AlarmEditor
+          value={form.alarms}
+          onChange={(alarms) => {
+            update({ alarms });
+          }}
+          tz={viewerTz}
+        />
 
         <fieldset data-part="pim.editor.flags">
           <legend data-part="form.section.title">{t("pim-event-flags")}</legend>
@@ -752,7 +814,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
               id={ids.status}
               data-part="form.select"
               value={form.status}
-              onChange={(e) => update({ status: e.target.value as EventStatus })}
+              onChange={(e) => {
+                update({ status: e.target.value as EventStatus });
+              }}
             >
               {EVENT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -769,7 +833,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
               id={ids.transparency}
               data-part="form.select"
               value={form.transparency}
-              onChange={(e) => update({ transparency: e.target.value as Transparency })}
+              onChange={(e) => {
+                update({ transparency: e.target.value as Transparency });
+              }}
             >
               {TRANSPARENCIES.map((s) => (
                 <option key={s} value={s}>
@@ -786,7 +852,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
               id={ids.visibility}
               data-part="form.select"
               value={form.visibility}
-              onChange={(e) => update({ visibility: e.target.value as Visibility })}
+              onChange={(e) => {
+                update({ visibility: e.target.value as Visibility });
+              }}
             >
               {VISIBILITIES.map((s) => (
                 <option key={s} value={s}>
@@ -852,38 +920,43 @@ function ConferenceEditor({
   onChange,
 }: {
   value: ConferenceLink[];
-  onChange(value: ConferenceLink[]): void;
+  onChange: (value: ConferenceLink[]) => void;
 }) {
   const t = useT();
   const id = useId();
-  const set = (index: number, patch: Partial<ConferenceLink>) =>
+  const set = (index: number, patch: Partial<ConferenceLink>) => {
     onChange(value.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  };
   return (
     <fieldset data-part="pim.editor.conferences">
       <legend data-part="form.section.title">{t("pim-conference-legend")}</legend>
       {value.map((conference, index) => (
         <div key={index} data-part="pim.editor.row" data-row="conference">
           <div data-part="form.field" data-field="conference-uri">
-            <label data-part="form.label" htmlFor={`${id}-uri-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-uri-${String(index)}`}>
               {t("pim-conference-uri")}
             </label>
             <input
-              id={`${id}-uri-${index}`}
+              id={`${id}-uri-${String(index)}`}
               data-part="form.input"
               type="url"
               value={conference.uri}
-              onChange={(e) => set(index, { uri: e.target.value })}
+              onChange={(e) => {
+                set(index, { uri: e.target.value });
+              }}
             />
           </div>
           <div data-part="form.field" data-field="conference-label">
-            <label data-part="form.label" htmlFor={`${id}-label-${index}`}>
+            <label data-part="form.label" htmlFor={`${id}-label-${String(index)}`}>
               {t("pim-conference-label")}
             </label>
             <input
-              id={`${id}-label-${index}`}
+              id={`${id}-label-${String(index)}`}
               data-part="form.input"
               value={conference.label ?? ""}
-              onChange={(e) => set(index, { label: e.target.value === "" ? null : e.target.value })}
+              onChange={(e) => {
+                set(index, { label: e.target.value === "" ? null : e.target.value });
+              }}
             />
           </div>
           {/^https:\/\//i.test(conference.uri) && (
@@ -901,7 +974,9 @@ function ConferenceEditor({
             data-part="form.button"
             data-action="remove"
             aria-label={t("pim-conference-remove", { uri: conference.uri })}
-            onClick={() => onChange(value.filter((_, i) => i !== index))}
+            onClick={() => {
+              onChange(value.filter((_, i) => i !== index));
+            }}
           >
             {t("pim-remove")}
           </button>
@@ -911,7 +986,9 @@ function ConferenceEditor({
         type="button"
         data-part="form.button"
         data-action="add-conference"
-        onClick={() => onChange([...value, { uri: "", label: null, features: ["video"] }])}
+        onClick={() => {
+          onChange([...value, { uri: "", label: null, features: ["video"] }]);
+        }}
       >
         {t("pim-conference-add")}
       </button>
@@ -929,15 +1006,16 @@ export function AlarmEditor({
   related = "start",
 }: {
   value: Alarm[];
-  onChange(value: Alarm[]): void;
+  onChange: (value: Alarm[]) => void;
   tz: string;
   related?: "start" | "end";
 }) {
   const t = useT();
   const format = useDateFormat();
   const id = useId();
-  const set = (index: number, alarm: Alarm) =>
+  const set = (index: number, alarm: Alarm) => {
     onChange(value.map((a, i) => (i === index ? alarm : a)));
+  };
   return (
     <fieldset data-part="pim.editor.alarms">
       <legend data-part="form.section.title">{t("pim-alarms-legend")}</legend>
@@ -959,7 +1037,9 @@ export function AlarmEditor({
                 data-part="form.button"
                 data-action="remove"
                 aria-label={t("pim-alarm-remove", { index: index + 1 })}
-                onClick={() => onChange(value.filter((_, i) => i !== index))}
+                onClick={() => {
+                  onChange(value.filter((_, i) => i !== index));
+                }}
               >
                 {t("pim-remove")}
               </button>
@@ -978,26 +1058,30 @@ export function AlarmEditor({
         return (
           <div key={index} data-part="pim.editor.row" data-row="alarm">
             <div data-part="form.field" data-field="alarm-amount">
-              <label data-part="form.label" htmlFor={`${id}-amount-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-amount-${String(index)}`}>
                 {t("pim-alarm-amount", { index: index + 1 })}
               </label>
               <NumberField
-                id={`${id}-amount-${index}`}
+                id={`${id}-amount-${String(index)}`}
                 value={parts.amount}
                 min={0}
                 max={9999}
-                onChange={(amount) => setParts({ amount })}
+                onChange={(amount) => {
+                  setParts({ amount });
+                }}
               />
             </div>
             <div data-part="form.field" data-field="alarm-unit">
-              <label data-part="form.label" htmlFor={`${id}-unit-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-unit-${String(index)}`}>
                 {t("pim-alarm-unit")}
               </label>
               <select
-                id={`${id}-unit-${index}`}
+                id={`${id}-unit-${String(index)}`}
                 data-part="form.select"
                 value={parts.unit}
-                onChange={(e) => setParts({ unit: e.target.value as AlarmUnit })}
+                onChange={(e) => {
+                  setParts({ unit: e.target.value as AlarmUnit });
+                }}
               >
                 {ALARM_UNITS.map((unit) => (
                   <option key={unit} value={unit}>
@@ -1007,11 +1091,11 @@ export function AlarmEditor({
               </select>
             </div>
             <div data-part="form.field" data-field="alarm-when">
-              <label data-part="form.label" htmlFor={`${id}-when-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-when-${String(index)}`}>
                 {t("pim-alarm-when")}
               </label>
               <select
-                id={`${id}-when-${index}`}
+                id={`${id}-when-${String(index)}`}
                 data-part="form.select"
                 value={`${parts.before ? "before" : "after"}-${trigger.related}`}
                 onChange={(e) => {
@@ -1037,14 +1121,16 @@ export function AlarmEditor({
               </select>
             </div>
             <div data-part="form.field" data-field="alarm-action">
-              <label data-part="form.label" htmlFor={`${id}-action-${index}`}>
+              <label data-part="form.label" htmlFor={`${id}-action-${String(index)}`}>
                 {t("pim-alarm-action")}
               </label>
               <select
-                id={`${id}-action-${index}`}
+                id={`${id}-action-${String(index)}`}
                 data-part="form.select"
                 value={alarm.action}
-                onChange={(e) => set(index, { ...alarm, action: e.target.value as AlarmAction })}
+                onChange={(e) => {
+                  set(index, { ...alarm, action: e.target.value as AlarmAction });
+                }}
               >
                 {ALARM_ACTIONS.map((action) => (
                   <option key={action} value={action}>
@@ -1058,7 +1144,9 @@ export function AlarmEditor({
               data-part="form.button"
               data-action="remove"
               aria-label={t("pim-alarm-remove", { index: index + 1 })}
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
+              onClick={() => {
+                onChange(value.filter((_, i) => i !== index));
+              }}
             >
               {t("pim-remove")}
             </button>
@@ -1069,7 +1157,7 @@ export function AlarmEditor({
         type="button"
         data-part="form.button"
         data-action="add-alarm"
-        onClick={() =>
+        onClick={() => {
           onChange([
             ...value,
             {
@@ -1080,8 +1168,8 @@ export function AlarmEditor({
               repeat: null,
               acknowledged: null,
             },
-          ])
-        }
+          ]);
+        }}
       >
         {t("pim-alarm-add")}
       </button>

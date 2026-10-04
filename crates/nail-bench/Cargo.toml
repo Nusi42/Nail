@@ -18,7 +18,6 @@ path = "src/bin/nail-bench.rs"
 nail-api.workspace = true
 nail-core = { workspace = true, features = ["demo"] }
 nail-store.workspace = true
-nail-search.workspace = true
 nail-testkit.workspace = true
 # The IMAP settings of the synced account (ImapConfig / Credentials).
 nail-proto-imap.workspace = true

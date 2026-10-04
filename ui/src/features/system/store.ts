@@ -13,10 +13,10 @@ export interface SystemUiState {
   programDrafts: Record<DraftId, string | null>;
   /** The first-run screen was opened once in this session. */
   firstRunOffered: boolean;
-  noteProgramDraft(draftId: DraftId, program: string | null): void;
+  noteProgramDraft: (draftId: DraftId, program: string | null) => void;
   /** The user dismissed the notice (or the draft was sent / discarded). */
-  forgetProgramDraft(draftId: DraftId): void;
-  setFirstRunOffered(): void;
+  forgetProgramDraft: (draftId: DraftId) => void;
+  setFirstRunOffered: () => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<SystemUiState>>();
@@ -25,15 +25,19 @@ export function createSystemStore(): StoreApi<SystemUiState> {
   return createStore<SystemUiState>()((set) => ({
     programDrafts: {},
     firstRunOffered: false,
-    noteProgramDraft: (draftId, program) =>
-      set((s) => ({ programDrafts: { ...s.programDrafts, [draftId]: program } })),
-    forgetProgramDraft: (draftId) =>
+    noteProgramDraft: (draftId, program) => {
+      set((s) => ({ programDrafts: { ...s.programDrafts, [draftId]: program } }));
+    },
+    forgetProgramDraft: (draftId) => {
       set((s) => ({
         programDrafts: Object.fromEntries(
           Object.entries(s.programDrafts).filter(([id]) => id !== draftId),
         ),
-      })),
-    setFirstRunOffered: () => set({ firstRunOffered: true }),
+      }));
+    },
+    setFirstRunOffered: () => {
+      set({ firstRunOffered: true });
+    },
   }));
 }
 

@@ -3,6 +3,7 @@
 //! envelope to the loopback mock server, quick-xml reads the answer,
 //! `MimeContent` is base64, and the contract maps EWS colour indexes and
 //! distinguished folders.
+#![cfg(test)]
 
 use base64::Engine as _;
 use nail_api::exchange::{CategoryColor, ExchangeWellKnownFolder};

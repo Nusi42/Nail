@@ -80,7 +80,7 @@
 //!   per-item reports; [`backup`] — encrypted backup archives, verification
 //!   and dry-run restores; [`recovery`] — the vault recovery key;
 //!   [`smartcard`] — PKCS#11 tokens and PIN prompts; [`palette`] — recent
-//!   command-palette actions; [`print`] — print jobs and PDF files;
+//!   command-palette actions; [`print`](mod@print) — print jobs and PDF files;
 //!   [`diagnostics`] — the user-made diagnostics bundle; send-as /
 //!   on-behalf identities ([`accounts::SendAs`]) and upload progress
 //!   ([`engine::OutgoingTransport::send_with_progress`]).
@@ -473,7 +473,9 @@ fn write_index(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     );
     for file in &files {
         let module = file.trim_end_matches(".ts");
-        index.push_str(&format!("export type * from \"./{module}\";\n"));
+        index.push_str("export type * from \"./");
+        index.push_str(module);
+        index.push_str("\";\n");
     }
     std::fs::write(out_dir.join(TS_INDEX_FILE), index)?;
 

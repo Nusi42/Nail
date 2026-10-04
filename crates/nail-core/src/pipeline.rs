@@ -181,8 +181,8 @@ mod tests {
         }
     }
 
-    fn prepare(batch: usize) -> Result<String> {
-        Ok(format!("p{batch}"))
+    fn label(batch: usize) -> String {
+        format!("p{batch}")
     }
 
     async fn run<K: BatchSink<String> + Send>(
@@ -208,13 +208,15 @@ mod tests {
         };
         // Storing batch 0 waits for the fetch of batch 1: without the
         // overlap this would never finish.
-        run(6, &mut source, prepare, &mut sink).await.unwrap();
+        run(6, &mut source, |b| Ok(label(b)), &mut sink)
+            .await
+            .unwrap();
         let expected: Vec<(usize, String)> = (0..6).map(|i| (i, format!("p{}", i * 10))).collect();
         assert_eq!(sink.stored, expected);
         assert_eq!(*source.fetched.lock().unwrap(), (0..6).collect::<Vec<_>>());
         // Nothing to do.
         let mut empty = Sink::default();
-        run(0, &mut Source::new(Some(0)), prepare, &mut empty)
+        run(0, &mut Source::new(Some(0)), |b| Ok(label(b)), &mut empty)
             .await
             .unwrap();
         assert!(empty.stored.is_empty());
@@ -224,7 +226,9 @@ mod tests {
     async fn batches_fetched_before_a_fetch_error_are_stored() {
         let mut source = Source::new(Some(3));
         let mut sink = Sink::default();
-        let err = run(6, &mut source, prepare, &mut sink).await.unwrap_err();
+        let err = run(6, &mut source, |b| Ok(label(b)), &mut sink)
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), ErrorCode::Network);
         assert_eq!(
             sink.stored.iter().map(|(i, _)| *i).collect::<Vec<_>>(),
@@ -239,7 +243,9 @@ mod tests {
             fail_at: Some(1),
             ..Sink::default()
         };
-        let err = run(50, &mut source, prepare, &mut sink).await.unwrap_err();
+        let err = run(50, &mut source, |b| Ok(label(b)), &mut sink)
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), ErrorCode::Internal);
         assert_eq!(sink.stored.len(), 1);
         // Fetching stopped soon after (the steps hold at most a few

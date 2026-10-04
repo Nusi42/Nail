@@ -17,7 +17,7 @@ use crate::flow::{FlowOptions, PendingFlow, start_flow};
 use crate::providers::ProviderRegistry;
 
 /// An access token is refreshed when it expires within this margin.
-pub const EXPIRY_MARGIN: Duration = Duration::from_secs(60);
+pub const EXPIRY_MARGIN: Duration = Duration::from_mins(1);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)

@@ -440,9 +440,9 @@ export function MessageList({ node }: WidgetProps) {
   const items = virtualizer.getVirtualItems();
   const first = items[0];
   const last = items[items.length - 1];
-  useGeometry(`${geom}-before`, { height: `${first?.start ?? 0}px` });
+  useGeometry(`${geom}-before`, { height: `${String(first?.start ?? 0)}px` });
   useGeometry(`${geom}-after`, {
-    height: `${Math.max(0, virtualizer.getTotalSize() - (last?.end ?? 0))}px`,
+    height: `${String(Math.max(0, virtualizer.getTotalSize() - (last?.end ?? 0)))}px`,
   });
 
   // Load the next page one rendered window before the end comes into view
@@ -473,7 +473,7 @@ export function MessageList({ node }: WidgetProps) {
     if (selectedThread !== undefined) selectThread(selectedThread);
   }, [selectedThread, selectThread]);
 
-  const rowId = (index: number) => `${geom}-row-${index}`;
+  const rowId = (index: number) => `${geom}-row-${String(index)}`;
   let status: ReactNode = null;
   if (activeSearch && searchError) {
     status = <div data-part="message-list.empty">{t("message-list-search-invalid")}</div>;
@@ -535,6 +535,7 @@ export function MessageList({ node }: WidgetProps) {
         const selected = row.messageId === selectedId;
         const ctx = { locale, now, unread: row.unread };
         return (
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
           <div
             key={item.key}
             id={rowId(item.index)}

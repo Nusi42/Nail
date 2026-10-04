@@ -58,6 +58,12 @@ pub const DEFAULT_REMOTE_UI_PORT: u16 = 4780;
 /// [`AuthResponse`].
 pub const AUTH_PATH: &str = "/api/auth";
 
+/// The answer to `POST` [`AUTH_PATH`] from a server without a login (the
+/// desktop's loopback `nail serve`): `204 No Content`, so the UI opens the
+/// app at once instead of showing a login (`ui/src/features/remote/authClient.ts`
+/// `NO_LOGIN_STATUS`).
+pub const NO_LOGIN_STATUS: u16 = 204;
+
 /// Session cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`). The
 /// `__Host-` prefix pins it to the exact origin.
 pub const SESSION_COOKIE: &str = "__Host-nail-session";
@@ -244,7 +250,7 @@ impl RemoteUiSettings {
         match self.bind_ip() {
             None => issues.push(I::InvalidBindAddress),
             Some(ip) if !ip.is_loopback() && self.tls == RemoteTlsMode::Off => {
-                issues.push(I::TlsRequired)
+                issues.push(I::TlsRequired);
             }
             Some(_) => {}
         }
@@ -298,7 +304,7 @@ fn is_cidr(text: &str) -> bool {
 }
 
 /// Local address ranges: loopback, RFC 1918, link-local, CGNAT
-/// (RFC 6598), IPv6 unique local (fc00::/7) and link-local (fe80::/10).
+/// (RFC 6598), IPv6 unique local (`fc00::/7`) and link-local (`fe80::/10`).
 /// Outside internet mode only peers from these ranges may connect.
 const LOCAL_V4: [([u8; 4], u8); 6] = [
     ([127, 0, 0, 0], 8),
@@ -557,6 +563,7 @@ impl RemoteAccessPreset {
 impl RemoteGrant {
     /// What both grants allow: common scopes; accounts both reach; the
     /// folder exclusions of either; `admin` only when both have it.
+    #[must_use]
     pub fn intersect(&self, other: &RemoteGrant) -> RemoteGrant {
         let (a, b) = (&self.mail, &other.mail);
         let scopes = a

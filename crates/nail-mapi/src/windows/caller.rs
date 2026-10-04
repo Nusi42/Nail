@@ -32,10 +32,8 @@ pub struct CallerMessage {
     pub files: Vec<(String, Option<String>)>,
 }
 
-fn opt<T>(buffer: &Option<Vec<T>>) -> *mut T {
-    buffer
-        .as_ref()
-        .map_or(null_mut(), |b| b.as_ptr().cast_mut())
+fn opt<T>(buffer: Option<&Vec<T>>) -> *mut T {
+    buffer.map_or(null_mut(), |b| b.as_ptr().cast_mut())
 }
 
 impl CallerMessage {
@@ -51,8 +49,8 @@ impl CallerMessage {
             .zip(&names)
             .map(|(r, (name, address))| MapiRecipDescW {
                 ulRecipClass: r.0,
-                lpszName: opt(name),
-                lpszAddress: opt(address),
+                lpszName: opt(name.as_ref()),
+                lpszAddress: opt(address.as_ref()),
                 ..Default::default()
             })
             .collect();
@@ -62,20 +60,20 @@ impl CallerMessage {
             .map(|(path, name)| MapiFileDescW {
                 nPosition: u32::MAX,
                 lpszPathName: path.as_ptr().cast_mut(),
-                lpszFileName: opt(name),
+                lpszFileName: opt(name.as_ref()),
                 ..Default::default()
             })
             .collect();
         let message = MapiMessageW {
-            lpszSubject: opt(&subject),
-            lpszNoteText: opt(&body),
-            nRecipCount: recips.len() as u32,
+            lpszSubject: opt(subject.as_ref()),
+            lpszNoteText: opt(body.as_ref()),
+            nRecipCount: super::count_u32(recips.len()),
             lpRecips: if recips.is_empty() {
                 null_mut()
             } else {
                 recips.as_mut_ptr()
             },
-            nFileCount: files.len() as u32,
+            nFileCount: super::count_u32(files.len()),
             lpFiles: if files.is_empty() {
                 null_mut()
             } else {
@@ -83,7 +81,7 @@ impl CallerMessage {
             },
             ..Default::default()
         };
-        f(&message)
+        f(&raw const message)
     }
 
     /// Calls `f` with an ANSI `MapiMessage`.
@@ -98,8 +96,8 @@ impl CallerMessage {
             .zip(&names)
             .map(|(r, (name, address))| MapiRecipDesc {
                 ulRecipClass: r.0,
-                lpszName: opt(name),
-                lpszAddress: opt(address),
+                lpszName: opt(name.as_ref()),
+                lpszAddress: opt(address.as_ref()),
                 ..Default::default()
             })
             .collect();
@@ -109,20 +107,20 @@ impl CallerMessage {
             .map(|(path, name)| MapiFileDesc {
                 nPosition: u32::MAX,
                 lpszPathName: path.as_ptr().cast_mut(),
-                lpszFileName: opt(name),
+                lpszFileName: opt(name.as_ref()),
                 ..Default::default()
             })
             .collect();
         let mut message = MapiMessage {
-            lpszSubject: opt(&subject),
-            lpszNoteText: opt(&body),
-            nRecipCount: recips.len() as u32,
+            lpszSubject: opt(subject.as_ref()),
+            lpszNoteText: opt(body.as_ref()),
+            nRecipCount: super::count_u32(recips.len()),
             lpRecips: if recips.is_empty() {
                 null_mut()
             } else {
                 recips.as_mut_ptr()
             },
-            nFileCount: files.len() as u32,
+            nFileCount: super::count_u32(files.len()),
             lpFiles: if files.is_empty() {
                 null_mut()
             } else {
@@ -130,11 +128,12 @@ impl CallerMessage {
             },
             ..Default::default()
         };
-        f(&mut message)
+        f(&raw mut message)
     }
 }
 
 /// A loaded NailMapi.dll.
+#[derive(Debug)]
 pub struct MapiDll {
     module: HMODULE,
 }
@@ -202,7 +201,7 @@ impl MapiDll {
         let delimiter = to_ansi(delimiter);
         let paths = to_ansi(paths);
         let names = names.map(to_ansi);
-        let names_ptr = names.as_ref().map_or(std::ptr::null(), |n| n.as_ptr());
+        let names_ptr = names.as_ref().map_or(std::ptr::null(), Vec::as_ptr);
         // SAFETY: zero-terminated strings alive for the call.
         Some(unsafe { f(0, delimiter.as_ptr(), paths.as_ptr(), names_ptr, 0) })
     }
@@ -212,7 +211,16 @@ impl MapiDll {
         let f = self.typed::<LPMAPILOGON>("MAPILogon")??;
         let mut session = 0usize;
         // SAFETY: valid out pointer.
-        let code = unsafe { f(0, std::ptr::null(), std::ptr::null(), 0, 0, &mut session) };
+        let code = unsafe {
+            f(
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                0,
+                &raw mut session,
+            )
+        };
         Some((code, session))
     }
 
@@ -231,7 +239,7 @@ impl MapiDll {
         let name = to_ansi(name);
         let mut out: *mut MapiRecipDesc = null_mut();
         // SAFETY: valid strings and out pointer.
-        let code = unsafe { resolve(0, 0, name.as_ptr(), 0, 0, &mut out) };
+        let code = unsafe { resolve(0, 0, name.as_ptr(), 0, 0, &raw mut out) };
         if out.is_null() {
             return Some((code, None, None, 0));
         }

@@ -1,5 +1,7 @@
 //! Encoding of server response data: strings and the `ENVELOPE` structure.
 
+use std::fmt::Write as _;
+
 use mail_parser::{Address, HeaderName, Message, MessageParser};
 
 /// Appends an IMAP `nstring`: `NIL`, a quoted string, or a literal for
@@ -49,7 +51,7 @@ pub(crate) fn number_set(numbers: &[u32]) -> String {
         if start == end {
             out.push_str(&start.to_string());
         } else {
-            out.push_str(&format!("{start}:{end}"));
+            let _ = write!(out, "{start}:{end}");
         }
     }
     out

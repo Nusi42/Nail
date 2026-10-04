@@ -15,8 +15,9 @@ import {
   stubElementSizes,
 } from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
-import { BUILTIN_THEMES, resolveMockTheme } from "../appearance";
-import { seedAgentsDemo } from "../agents";
+import { BUILTIN_THEMES } from "../appearance";
+import { resolveMockTheme } from "../appearance/themes";
+import { seedAgentsDemo } from "../agents/mockSeed";
 import { SHELL_SKIN_CSS } from "./skin";
 import { hostLayout } from "./testing";
 
@@ -24,7 +25,9 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 const DENSITIES: readonly Density[] = ["comfortable", "compact"];
 /** Every theme and density, each with one of the views (every view twice). */

@@ -206,7 +206,7 @@ impl IncomingMessage {
                 .headers
                 .iter()
                 .filter(|h| h.is("Autocrypt"))
-                .map(|h| h.value())
+                .map(mime::HeaderField::value)
                 .collect(),
             is_report: entity.content_type().is("multipart/report"),
         }
@@ -439,7 +439,7 @@ pub fn recipient_status(
         openpgp,
         smime: None,
         autocrypt,
-        lookup: Default::default(),
+        lookup: nail_api::security::KeyLookupState::default(),
     })
 }
 
@@ -461,7 +461,7 @@ pub fn new_passcode() -> String {
 /// `1234-…-1234` form; `None` when it is not 36 digits.
 fn normalize_passcode(input: &str) -> Option<String> {
     let digits: String = input.chars().filter(char::is_ascii_digit).collect();
-    if digits.len() != 36 || input.chars().any(|c| c.is_alphabetic()) {
+    if digits.len() != 36 || input.chars().any(char::is_alphabetic) {
         return None;
     }
     Some(

@@ -7,6 +7,8 @@
 //! exercised by `scripts/build-installer.mjs`, `scripts/installer-smoke.ps1`
 //! and `scripts/msi-smoke.ps1`.
 
+#![cfg(test)]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 

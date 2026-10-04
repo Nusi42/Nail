@@ -3,6 +3,7 @@ import type { MessageBody } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget } from "../../test/harness";
 import { securityDemoBySender } from "./mockSeed";
 import { AttachmentWarningMark, MessageWarnings } from "./Warnings";
+import { must } from "../../test/must";
 
 const warnings = securityDemoBySender()["noreply@shop.example"]?.warnings ?? [];
 
@@ -27,20 +28,18 @@ describe("reader warnings", () => {
       "dangerous-attachment",
     ]);
     expect(
-      within(items[0] as HTMLElement).getByText(
-        "A link shows shop.example but goes to login.evil.example.",
-      ),
+      within(must(items[0])).getByText("A link shows shop.example but goes to login.evil.example."),
     ).toBeInTheDocument();
     expect(
-      within(items[0] as HTMLElement).getByText("Real target: https://login.evil.example/track"),
+      within(must(items[0])).getByText("Real target: https://login.evil.example/track"),
     ).toBeInTheDocument();
     expect(
-      within(items[1] as HTMLElement).getByText(
+      within(must(items[1])).getByText(
         "A link goes to shоp.example (xn--shp-5cd.example), which imitates shop.example.",
       ),
     ).toBeInTheDocument();
     expect(
-      within(items[2] as HTMLElement).getByText("“invoice.pdf.exe” hides its real file type."),
+      within(must(items[2])).getByText("“invoice.pdf.exe” hides its real file type."),
     ).toBeInTheDocument();
     expect(items[2]).toHaveAttribute("data-risk", "disguised-name");
     expect(within(region).getByText(/Hover over a link/)).toBeInTheDocument();
@@ -98,7 +97,9 @@ describe("reader warnings", () => {
     if (!first) throw new Error("no body");
     first.warnings = warnings;
     renderNode(widget("security-warnings"), env);
-    act(() => env.store.getState().selectMessage(first.id));
+    act(() => {
+      env.store.getState().selectMessage(first.id);
+    });
     expect(await screen.findByRole("region", { name: "Warnings" })).toBeInTheDocument();
   });
 });

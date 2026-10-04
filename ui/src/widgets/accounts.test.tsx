@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AccountConfig, DiscoveredAccount } from "../api/generated";
+import type { DiscoveredAccount } from "../api/generated";
 import { securityDemoBySender } from "../features/security/mock";
 import { createEnv, renderNode, widget, type Env } from "../test/harness";
 import { accountProblems, newIdentity, parseAuthservIds } from "./AccountSettings";
@@ -14,6 +14,7 @@ import {
 } from "./AccountSetup";
 import { defaultPort, protocolChoices, withProtocol, withTls } from "./forms";
 import { pruneToMembers, virtualProblems, newVirtualAccount } from "./VirtualAccountEditor";
+import { must } from "../test/must";
 
 /** Forwards OAuth results to the UI state, as the app's event handler does. */
 function forwardOAuth(env: Env) {
@@ -234,11 +235,8 @@ describe("account-settings", () => {
       "Every identity needs a valid email address.",
     );
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    await user.type(addresses[1] as HTMLElement, "sales@work.example");
-    await user.type(
-      screen.getAllByRole("textbox", { name: "Signature" })[1] as HTMLElement,
-      "Sales",
-    );
+    await user.type(must(addresses[1]), "sales@work.example");
+    await user.type(must(screen.getAllByRole("textbox", { name: "Signature" })[1]), "Sales");
     await user.type(screen.getByLabelText("New password"), "new-secret");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
@@ -327,7 +325,7 @@ describe("account-settings", () => {
 
   it("shows POP3 options for POP3 accounts", async () => {
     const env = createEnv();
-    const personal = env.transport.data.accountsConfig.accounts[0] as AccountConfig;
+    const personal = must(env.transport.data.accountsConfig.accounts[0]);
     personal.incoming = withProtocol(personal.incoming, "pop3");
     renderNode(widget("account-settings"), env);
     expect(
@@ -341,7 +339,7 @@ describe("account-settings", () => {
     // turned it into an IMAP account when touched.
     const user = userEvent.setup();
     const env = createEnv();
-    const personal = env.transport.data.accountsConfig.accounts[0] as AccountConfig;
+    const personal = must(env.transport.data.accountsConfig.accounts[0]);
     personal.incoming = {
       protocol: "gmail",
       server: { ...personal.incoming.server, host: "gmail.googleapis.com", port: 443 },
@@ -381,7 +379,7 @@ describe("account-settings", () => {
 
   it("lists problems", () => {
     const env = createEnv();
-    const config = structuredClone(env.transport.data.accountsConfig.accounts[0] as AccountConfig);
+    const config = structuredClone(must(env.transport.data.accountsConfig.accounts[0]));
     expect(accountProblems(config)).toEqual([]);
     config.email = "x";
     config.incoming.server.host = "";
@@ -463,7 +461,9 @@ describe("virtual-account-editor", () => {
       default_identity: null,
     });
     await user.click(screen.getByRole("button", { name: "Delete virtual account" }));
-    await waitFor(() => expect(env.transport.data.accountsConfig.virtual_accounts).toEqual([]));
+    await waitFor(() => {
+      expect(env.transport.data.accountsConfig.virtual_accounts).toEqual([]);
+    });
   });
 
   it("validates and prunes", () => {

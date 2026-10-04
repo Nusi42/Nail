@@ -2,6 +2,7 @@
 //! formatting preserved. Each case compares against a golden file in
 //! `tests/golden/write_back/`; run with `NAIL_UPDATE_GOLDEN=1` to rewrite
 //! them after an intended change (and review the diff).
+#![cfg(test)]
 
 use std::path::PathBuf;
 

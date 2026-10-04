@@ -427,11 +427,12 @@ pub struct MapiPipeResponse {
 /// A frame: 4-byte little-endian length, then that many bytes of JSON.
 pub fn encode_frame<T: Serialize>(value: &T) -> Result<Vec<u8>, MapiFrameError> {
     let json = serde_json::to_vec(value).map_err(|e| MapiFrameError::Json(e.to_string()))?;
-    if json.len() > MAX_MAPI_FRAME_BYTES {
-        return Err(MapiFrameError::TooLarge(json.len()));
-    }
+    let len = u32::try_from(json.len())
+        .ok()
+        .filter(|_| json.len() <= MAX_MAPI_FRAME_BYTES)
+        .ok_or(MapiFrameError::TooLarge(json.len()))?;
     let mut frame = Vec::with_capacity(4 + json.len());
-    frame.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    frame.extend_from_slice(&len.to_le_bytes());
     frame.extend_from_slice(&json);
     Ok(frame)
 }
@@ -643,7 +644,9 @@ mod tests {
             .unwrap(),
             json!({"result": "attachment-too-large"})
         );
-        let huge = ((MAX_MAPI_FRAME_BYTES + 1) as u32).to_le_bytes();
+        let huge = u32::try_from(MAX_MAPI_FRAME_BYTES + 1)
+            .unwrap()
+            .to_le_bytes();
         assert!(matches!(frame_len(huge), Err(MapiFrameError::TooLarge(_))));
         let truncated = &buffer[..buffer.len() - 1];
         assert!(matches!(

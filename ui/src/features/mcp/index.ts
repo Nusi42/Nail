@@ -23,7 +23,9 @@ export const widgets: Feature["widgets"] = {
 export const actions: Feature["actions"] = {
   /** Hides the context indicator. */
   "mcp.indicator.dismiss": {
-    run: () => mcpStore.getState().clear(),
+    run: () => {
+      mcpStore.getState().clear();
+    },
     enabled: () => mcpStore.getState().access !== null,
   },
 };

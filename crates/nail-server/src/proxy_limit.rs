@@ -22,7 +22,7 @@ pub struct RateLimiter {
 
 impl Default for RateLimiter {
     fn default() -> Self {
-        Self::new(PROXY_REQUESTS_PER_MINUTE, Duration::from_secs(60))
+        Self::new(PROXY_REQUESTS_PER_MINUTE, Duration::from_mins(1))
     }
 }
 
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn counts_per_key_and_window() {
-        let limiter = RateLimiter::new(2, Duration::from_secs(60));
+        let limiter = RateLimiter::new(2, Duration::from_mins(1));
         let t0 = Instant::now();
         assert!(limiter.allow_at("session:a", t0));
         assert!(limiter.allow_at("session:a", t0));

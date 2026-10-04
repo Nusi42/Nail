@@ -204,17 +204,18 @@ pub fn from_env() -> Option<Interop> {
         return None;
     }
     let var = |name: &str| std::env::var(name).unwrap_or_else(|_| panic!("{name} is not set"));
-    let servers = parse_servers(&var("NAIL_INTEROP_SERVERS")).unwrap();
+    let servers = parse_servers(&var("NAIL_INTEROP_SERVERS"))
+        .unwrap_or_else(|e| panic!("NAIL_INTEROP_SERVERS: {e}"));
     let ca_path = var("NAIL_INTEROP_CA");
     let pem = std::fs::read_to_string(&ca_path).unwrap_or_else(|e| panic!("{ca_path}: {e}"));
     let dav = match std::env::var("NAIL_INTEROP_DAV") {
-        Ok(spec) => parse_dav_servers(&spec).unwrap(),
+        Ok(spec) => parse_dav_servers(&spec).unwrap_or_else(|e| panic!("NAIL_INTEROP_DAV: {e}")),
         Err(_) => Vec::new(),
     };
     Some(Interop {
         servers,
         dav,
-        roots: pem_certificates(&pem).unwrap(),
+        roots: pem_certificates(&pem).unwrap_or_else(|e| panic!("{ca_path}: {e}")),
         user: var("NAIL_INTEROP_USER"),
         password: var("NAIL_INTEROP_PASSWORD"),
     })

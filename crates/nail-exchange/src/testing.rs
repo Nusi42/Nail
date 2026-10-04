@@ -21,6 +21,7 @@
 //! `Authorization` header, so tests can prove where credentials went.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -151,36 +152,41 @@ fn escape(text: &str) -> String {
 pub fn pox_settings_xml(settings: &MockPoxSettings) -> String {
     let mut account = String::from("<AccountType>email</AccountType><Action>settings</Action>");
     if let Some(url) = &settings.internal_ews_url {
-        account.push_str(&format!(
+        let _ = write!(
+            account,
             "<Protocol><Type>EXCH</Type><EwsUrl>{}</EwsUrl></Protocol>",
             escape(url)
-        ));
+        );
     }
     if let Some(url) = &settings.external_ews_url {
-        account.push_str(&format!(
+        let _ = write!(
+            account,
             "<Protocol><Type>EXPR</Type><EwsUrl>{}</EwsUrl></Protocol>",
             escape(url)
-        ));
+        );
     }
     if let Some((host, port)) = &settings.imap {
-        account.push_str(&format!(
+        let _ = write!(
+            account,
             "<Protocol><Type>IMAP</Type><Server>{}</Server><Port>{port}</Port><SSL>on</SSL></Protocol>",
             escape(host)
-        ));
+        );
     }
     if let Some((host, port)) = &settings.smtp {
-        account.push_str(&format!(
+        let _ = write!(
+            account,
             "<Protocol><Type>SMTP</Type><Server>{}</Server><Port>{port}</Port><Encryption>TLS</Encryption></Protocol>",
             escape(host)
-        ));
+        );
     }
     for (kind, name, address) in &settings.alternative_mailboxes {
-        account.push_str(&format!(
+        let _ = write!(
+            account,
             "<AlternativeMailbox><Type>{}</Type><DisplayName>{}</DisplayName><SmtpAddress>{}</SmtpAddress></AlternativeMailbox>",
             escape(kind),
             escape(name),
             escape(address)
-        ));
+        );
     }
     let user = settings
         .display_name
@@ -253,13 +259,12 @@ fn check_login(login: &MockLogin, authorization: Option<&str>) -> Option<Reply> 
                 reply.header("WWW-Authenticate", "NTLM")
             };
             match token(authorization, scheme).as_deref() {
-                None => Some(offer(Reply::new(401, ""))),
                 Some(t) if t == NEGOTIATE_TOKEN => Some(Reply::new(401, "").header(
                     "WWW-Authenticate",
                     format!("{scheme} {}", BASE64.encode(CHALLENGE_TOKEN)),
                 )),
                 Some(t) if t == AUTHENTICATE_TOKEN => None,
-                Some(_) => Some(offer(Reply::new(401, ""))),
+                None | Some(_) => Some(offer(Reply::new(401, ""))),
             }
         }
     }
@@ -403,7 +408,7 @@ impl MockAutodiscoverServer {
         }));
         let app = Router::new().fallback(handle).with_state(state.clone());
         let task = tokio::spawn(async move {
-            let _ = axum::serve(listener, app).await;
+            drop(axum::serve(listener, app).await);
         });
         Ok(Self { addr, state, task })
     }

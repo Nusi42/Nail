@@ -5,6 +5,8 @@
 //! spring-forward night becomes 03:30), and a time that occurs twice
 //! means the first (earlier) one.
 
+use std::fmt::Write as _;
+
 use chrono::{
     DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset,
     TimeZone, Timelike, Utc,
@@ -258,19 +260,19 @@ pub fn format_duration(seconds: i64) -> String {
     rest %= 86_400;
     let mut out = format!("{sign}P");
     if days > 0 {
-        out.push_str(&format!("{days}D"));
+        let _ = write!(out, "{days}D");
     }
     if rest > 0 {
         out.push('T');
         let (h, m, s) = (rest / 3600, rest % 3600 / 60, rest % 60);
         if h > 0 {
-            out.push_str(&format!("{h}H"));
+            let _ = write!(out, "{h}H");
         }
         if m > 0 {
-            out.push_str(&format!("{m}M"));
+            let _ = write!(out, "{m}M");
         }
         if s > 0 {
-            out.push_str(&format!("{s}S"));
+            let _ = write!(out, "{s}S");
         }
     }
     out

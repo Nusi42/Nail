@@ -182,7 +182,9 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
         legend={t("portability-diagnostics-items")}
         field="items"
         selected={options.items}
-        onChange={(items) => change({ ...options, items })}
+        onChange={(items) => {
+          change({ ...options, items });
+        }}
         choices={DIAGNOSTICS_ITEMS.map((item) => ({
           value: item,
           label: t(diagnosticsItemId(item)),
@@ -206,14 +208,14 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
                       data-part="form.checkbox"
                       type="checkbox"
                       checked={options.message_ids.includes(id)}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         change({
                           ...options,
                           message_ids: e.target.checked
                             ? [...options.message_ids, id]
                             : options.message_ids.filter((m) => m !== id),
-                        })
-                      }
+                        });
+                      }}
                     />
                     <MessageLabel id={id} />
                   </label>
@@ -227,7 +229,9 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
         label={t("portability-diagnostics-redact")}
         field="redact-addresses"
         checked={options.redact_addresses}
-        onChange={(redact_addresses) => change({ ...options, redact_addresses })}
+        onChange={(redact_addresses) => {
+          change({ ...options, redact_addresses });
+        }}
         hint={t("portability-diagnostics-redact-hint")}
       />
       <p data-part="form.hint" data-field="secrets">
@@ -323,7 +327,9 @@ export function DiagnosticsWidget() {
         type="button"
         data-part="form.button"
         data-action="open-diagnostics"
-        onClick={() => ui.getState().openWindow(DIAGNOSTICS_DIALOG)}
+        onClick={() => {
+          ui.getState().openWindow(DIAGNOSTICS_DIALOG);
+        }}
       >
         {t("portability-diagnostics-open")}
       </button>

@@ -15,6 +15,7 @@ import {
   formatShortDate,
   useDateFormat,
 } from "./format";
+import { must } from "../test/must";
 
 const catalogs = { en: ["hello = Hello"], de: ["hello = Hallo"] };
 const WHEN = new Date(2031, 2, 5, 14, 30); // 5 March 2031, 14:30 local time
@@ -42,7 +43,7 @@ async function settleUntil<T>(query: () => T | null, what: string, turns = 100):
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
-  throw new Error(`${what} did not appear within ${turns} event-loop turns`);
+  throw new Error(`${what} did not appear within ${String(turns)} event-loop turns`);
 }
 
 function Probe() {
@@ -211,10 +212,12 @@ describe("widgets show dates in the UI locale", () => {
       );
       expect(dates.length).toBeGreaterThan(0);
       for (const text of dates) {
+        // German relative dates. spellchecker:off
         expect(text).toMatch(/^(vor |gestern|vorgestern|jetzt|heute|in |morgen|übermorgen)/);
+        // spellchecker:on
         expect(text).not.toMatch(/ago|yesterday|now|tomorrow/);
       }
-      expect(within(rows[0] as HTMLElement).getByText(dates[0] as string)).toBeInTheDocument();
+      expect(within(must(rows[0])).getByText(must(dates[0]))).toBeInTheDocument();
     } finally {
       restore();
     }

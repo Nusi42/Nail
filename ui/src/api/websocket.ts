@@ -10,8 +10,8 @@ import type { Event as NailEvent, Request, Response, RpcRequest, ServerMessage }
 /** The subset of the DOM `WebSocket` the transport uses (fakeable in tests). */
 export interface WebSocketLike {
   readonly readyState: number;
-  send(data: string): void;
-  close(code?: number, reason?: string): void;
+  send: (data: string) => void;
+  close: (code?: number, reason?: string) => void;
   onopen: ((event: unknown) => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
   onclose: ((event: unknown) => void) | null;
@@ -43,8 +43,8 @@ export function backoffDelay(attempt: number, initialMs: number, maxMs: number):
 }
 
 interface Pending {
-  resolve(response: Response): void;
-  reject(error: Error): void;
+  resolve: (response: Response) => void;
+  reject: (error: Error) => void;
 }
 
 export class WebSocketTransport implements Transport {
@@ -80,7 +80,7 @@ export class WebSocketTransport implements Transport {
     return new Promise<Response>((resolve, reject) => {
       const frame: RpcRequest = { id: this.allocateId(), request };
       const pending = { resolve, reject };
-      if (this.socket && this.socket.readyState === OPEN) {
+      if (this.socket?.readyState === OPEN) {
         this.transmit(frame, pending);
       } else {
         this.outbox.push({ frame, pending });
@@ -140,9 +140,15 @@ export class WebSocketTransport implements Transport {
       return;
     }
     this.socket = socket;
-    socket.onopen = () => this.handleOpen();
-    socket.onmessage = (event) => this.handleMessage(event.data);
-    socket.onclose = () => this.handleClose(socket);
+    socket.onopen = () => {
+      this.handleOpen();
+    };
+    socket.onmessage = (event) => {
+      this.handleMessage(event.data);
+    };
+    socket.onclose = () => {
+      this.handleClose(socket);
+    };
     socket.onerror = () => {
       // A close event always follows; reconnecting is handled there.
     };
@@ -186,7 +192,7 @@ export class WebSocketTransport implements Transport {
         this.inFlight.delete(message.id);
         pending.resolve(message.response);
       }
-    } else if (message.kind === "event") {
+    } else {
       this.events.emit(message.event);
     }
   }
@@ -207,7 +213,9 @@ export class WebSocketTransport implements Transport {
     }
     const delay = backoffDelay(this.attempt, this.initialBackoffMs, this.maxBackoffMs);
     this.attempt += 1;
-    this.reconnectTimer = setTimeout(() => this.connect(), delay);
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, delay);
   }
 
   private failInFlight(error: Error): void {

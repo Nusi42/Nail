@@ -41,11 +41,11 @@ export function decodePng(png: Uint8Array): Image {
       width = body.readUInt32BE(0);
       height = body.readUInt32BE(4);
       const depth = body[8];
-      colorType = body[9]!;
+      colorType = body[9] ?? -1;
       const interlace = body[12];
       if (depth !== 8 || (colorType !== 2 && colorType !== 6) || interlace !== 0) {
         throw new Error(
-          `unsupported PNG (depth ${depth}, colour type ${colorType}, interlace ${interlace})`,
+          `unsupported PNG (depth ${String(depth)}, colour type ${String(colorType)}, interlace ${String(interlace)})`,
         );
       }
     } else if (type === "IDAT") {
@@ -62,14 +62,14 @@ export function decodePng(png: Uint8Array): Image {
   if (raw.length < height * (stride + 1)) throw new Error("truncated PNG data");
   const pixels = new Uint8Array(height * stride);
   for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)]!;
+    const filter = raw[y * (stride + 1)];
     const src = y * (stride + 1) + 1;
     const row = y * stride;
     for (let x = 0; x < stride; x++) {
-      const value = raw[src + x]!;
-      const left = x >= channels ? pixels[row + x - channels]! : 0;
-      const up = y > 0 ? pixels[row - stride + x]! : 0;
-      const upLeft = y > 0 && x >= channels ? pixels[row - stride + x - channels]! : 0;
+      const value = raw[src + x] ?? 0;
+      const left = x >= channels ? (pixels[row + x - channels] ?? 0) : 0;
+      const up = y > 0 ? (pixels[row - stride + x] ?? 0) : 0;
+      const upLeft = y > 0 && x >= channels ? (pixels[row - stride + x - channels] ?? 0) : 0;
       let out: number;
       switch (filter) {
         case 0:
@@ -88,7 +88,7 @@ export function decodePng(png: Uint8Array): Image {
           out = value + paeth(left, up, upLeft);
           break;
         default:
-          throw new Error(`unknown PNG filter ${filter}`);
+          throw new Error(`unknown PNG filter ${String(filter)}`);
       }
       pixels[row + x] = out & 0xff;
     }
@@ -96,9 +96,9 @@ export function decodePng(png: Uint8Array): Image {
   if (channels === 4) return { width, height, data: pixels };
   const data = new Uint8Array(width * height * 4);
   for (let p = 0, q = 0; p < pixels.length; p += 3, q += 4) {
-    data[q] = pixels[p]!;
-    data[q + 1] = pixels[p + 1]!;
-    data[q + 2] = pixels[p + 2]!;
+    data[q] = pixels[p] ?? 0;
+    data[q + 1] = pixels[p + 1] ?? 0;
+    data[q + 2] = pixels[p + 2] ?? 0;
     data[q + 3] = 255;
   }
   return { width, height, data };

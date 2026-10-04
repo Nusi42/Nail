@@ -27,11 +27,11 @@ export interface SettingsUiState {
   /** Grows with every `settings.search`; the page focuses its search box. */
   focusSearch: number;
   reveal: RevealRequest | null;
-  setQuery(query: string): void;
-  requestSearchFocus(): void;
-  requestReveal(request: Omit<RevealRequest, "seq">): void;
+  setQuery: (query: string) => void;
+  requestSearchFocus: () => void;
+  requestReveal: (request: Omit<RevealRequest, "seq">) => void;
   /** Forgets a handled request (only the one with `seq`). */
-  revealed(seq: number): void;
+  revealed: (seq: number) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<SettingsUiState>>();
@@ -41,11 +41,18 @@ export function createSettingsStore(): StoreApi<SettingsUiState> {
     query: "",
     focusSearch: 0,
     reveal: null,
-    setQuery: (query) => set({ query }),
-    requestSearchFocus: () => set((s) => ({ focusSearch: s.focusSearch + 1 })),
-    requestReveal: (request) =>
-      set((s) => ({ reveal: { ...request, seq: (s.reveal?.seq ?? 0) + 1 } })),
-    revealed: (seq) => set((s) => (s.reveal?.seq === seq ? { reveal: null } : {})),
+    setQuery: (query) => {
+      set({ query });
+    },
+    requestSearchFocus: () => {
+      set((s) => ({ focusSearch: s.focusSearch + 1 }));
+    },
+    requestReveal: (request) => {
+      set((s) => ({ reveal: { ...request, seq: (s.reveal?.seq ?? 0) + 1 } }));
+    },
+    revealed: (seq) => {
+      set((s) => (s.reveal?.seq === seq ? { reveal: null } : {}));
+    },
   }));
 }
 

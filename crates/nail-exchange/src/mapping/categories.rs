@@ -231,7 +231,7 @@ mod tests {
             color: CategoryColor::None,
             total: 0,
             unread: 0,
-            sync: Default::default(),
+            sync: nail_api::exchange::ExchangeSync::default(),
         }];
         let settings = ExchangeCategorySettings::named("work");
         assert_eq!(

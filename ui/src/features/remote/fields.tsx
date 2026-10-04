@@ -19,7 +19,7 @@ export function InputField({
   type = "text",
   autoComplete = "off",
   inputMode,
-  autoFocus = false,
+  focusOnMount = false,
   disabled = false,
   readOnly = false,
   invalid = false,
@@ -36,7 +36,7 @@ export function InputField({
   type?: "text" | "password";
   autoComplete?: string;
   inputMode?: "text" | "numeric";
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   disabled?: boolean;
   readOnly?: boolean;
   invalid?: boolean;
@@ -58,15 +58,17 @@ export function InputField({
         value={value}
         autoComplete={autoComplete}
         inputMode={inputMode}
-        // Each login step moves the focus to its first field.
-        autoFocus={autoFocus}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- each login step moves the focus to its first field (the step replaced the previous one).
+        autoFocus={focusOnMount}
         disabled={disabled}
         readOnly={readOnly}
         maxLength={maxLength}
         spellCheck={false}
         aria-invalid={invalid || undefined}
         aria-describedby={hintText ? `${id}-hint` : undefined}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
       {hintText && (
         <span data-part="form.hint" id={`${id}-hint`}>
@@ -106,7 +108,9 @@ export function Toggle({
           checked={checked}
           disabled={locked}
           aria-describedby={locked ? `${id}-reason` : undefined}
-          onChange={(event) => onChange(event.target.checked)}
+          onChange={(event) => {
+            onChange(event.target.checked);
+          }}
         />
         <span data-part="form.check.label">{t(labelId, args)}</span>
       </label>
@@ -154,13 +158,16 @@ export function ConfirmButton({
         data-action={action}
         data-variant={variant}
         disabled={disabled}
-        onClick={() => setAsking(true)}
+        onClick={() => {
+          setAsking(true);
+        }}
       >
         {t(labelId, labelArgs)}
       </button>
     );
   }
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape from the question's buttons takes the question back.
     <span
       data-part="remote-confirm"
       role="group"
@@ -178,7 +185,7 @@ export function ConfirmButton({
         data-part="form.button"
         data-action={action}
         data-variant={variant}
-        // The question replaced the button: keep the keyboard focus here.
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- the question replaced the button: keep the keyboard focus here.
         autoFocus
         onClick={() => {
           setAsking(false);
@@ -191,7 +198,9 @@ export function ConfirmButton({
         type="button"
         data-part="form.button"
         data-action="cancel"
-        onClick={() => setAsking(false)}
+        onClick={() => {
+          setAsking(false);
+        }}
       >
         {t("remote-cancel")}
       </button>

@@ -13,7 +13,7 @@ pub(crate) struct Email {
 
 impl Email {
     /// Parses `user@domain`. `None` when it is not a plausible address.
-    pub fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         let address = text.trim();
         let (local, domain) = address.rsplit_once('@')?;
         if local.is_empty()

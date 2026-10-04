@@ -151,11 +151,13 @@ impl MockOAuthServer {
             .with_state(Arc::clone(&inner));
         let (shutdown, mut stop) = watch::channel(false);
         let task = tokio::spawn(async move {
-            let _ = axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    let _ = stop.changed().await;
-                })
-                .await;
+            drop(
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = stop.changed().await;
+                    })
+                    .await,
+            );
         });
         Ok(Self {
             addr,
@@ -297,8 +299,10 @@ fn oauth_error(status: StatusCode, error: &str, description: &str) -> Response {
         .into_response()
 }
 
-fn is_loopback_redirect(uri: &str) -> bool {
-    url::Url::parse(uri).is_ok_and(|u| {
+/// `uri` parsed, if it is a loopback redirect URI (`http`, loopback host,
+/// explicit port).
+fn loopback_redirect(uri: &str) -> Option<url::Url> {
+    url::Url::parse(uri).ok().filter(|u| {
         u.scheme() == "http"
             && matches!(u.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"))
             && u.port().is_some()
@@ -313,11 +317,12 @@ async fn authorize(
     let config = lock(&inner.config).clone();
     let get = |k: &str| params.get(k).cloned().unwrap_or_default();
     let redirect_uri = get("redirect_uri");
-    if get("client_id") != config.client_id || !is_loopback_redirect(&redirect_uri) {
+    let Some(mut target) =
+        loopback_redirect(&redirect_uri).filter(|_| get("client_id") == config.client_id)
+    else {
         // Never redirect to an unverified URI (RFC 6749 4.1.2.1).
         return (StatusCode::BAD_REQUEST, "invalid client or redirect_uri").into_response();
-    }
-    let mut target = url::Url::parse(&redirect_uri).expect("checked above");
+    };
     {
         let mut query = target.query_pairs_mut();
         if get("response_type") != "code" {
@@ -509,10 +514,10 @@ mod tests {
 
     #[test]
     fn loopback_redirects_only() {
-        assert!(is_loopback_redirect("http://127.0.0.1:4000/cb"));
-        assert!(is_loopback_redirect("http://localhost:4000/"));
-        assert!(!is_loopback_redirect("http://127.0.0.1/cb"));
-        assert!(!is_loopback_redirect("https://evil.example:4000/"));
+        assert!(loopback_redirect("http://127.0.0.1:4000/cb").is_some());
+        assert!(loopback_redirect("http://localhost:4000/").is_some());
+        assert!(loopback_redirect("http://127.0.0.1/cb").is_none());
+        assert!(loopback_redirect("https://evil.example:4000/").is_none());
     }
 
     #[tokio::test]

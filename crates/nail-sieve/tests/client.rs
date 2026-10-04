@@ -1,8 +1,9 @@
 //! The ManageSieve client and the managed-script upload against the mock
 //! server (`nail_testkit_net::MockSieveServer`).
+#![cfg(test)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use nail_api::ErrorCode;
@@ -308,7 +309,10 @@ impl AccessTokenProvider for Tokens {
         Box::pin(async move {
             assert_eq!(provider, "google");
             self.calls.fetch_add(1, Ordering::SeqCst);
-            let mut refreshed = self.refreshed.lock().unwrap();
+            let mut refreshed = self
+                .refreshed
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
             *refreshed |= force_refresh;
             Ok(if *refreshed { "tok" } else { "stale" }.to_owned())
         })

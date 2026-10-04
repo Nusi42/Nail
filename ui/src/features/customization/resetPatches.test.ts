@@ -31,8 +31,8 @@ describe("reset patches", () => {
     expect(layout.toolbars[name]).toEqual(defaults.toolbars[name]);
     expect(layout.keys).toContainEqual(binding);
 
-    layout.toolbars["mine"] = [];
+    layout.toolbars.mine = [];
     expect(applyPatch(layout, { op: "reset-toolbar", toolbar: "mine" })).toBeNull();
-    expect(layout.toolbars["mine"]).toBeUndefined();
+    expect(layout.toolbars.mine).toBeUndefined();
   });
 });

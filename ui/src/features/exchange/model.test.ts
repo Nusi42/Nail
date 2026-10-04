@@ -350,7 +350,7 @@ describe("task lists", () => {
     account: string | null = "acc",
   ): Calendar => ({
     id,
-    source_id: exchange ? `exchange:${account}` : "local",
+    source_id: exchange ? `exchange:${String(account)}` : "local",
     account_id: exchange ? account : null,
     settings: {
       name: id,

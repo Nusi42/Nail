@@ -28,7 +28,9 @@ describe("launch requests", () => {
       },
     });
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => expect(env.store.getState().composer).not.toBeNull());
+    await waitFor(() => {
+      expect(env.store.getState().composer).not.toBeNull();
+    });
     const composer = env.store.getState().composer;
     expect(composer?.to).toContain("ada@example.org");
     expect(composer?.cc).toContain("bob@example.org");
@@ -63,7 +65,9 @@ describe("launch requests", () => {
       program: "EXCEL.EXE",
     });
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Quarterly report"));
+    await waitFor(() => {
+      expect(env.store.getState().composer?.subject).toBe("Quarterly report");
+    });
     expect(env.store.getState().composer?.to).toContain("ada@example.org");
     expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
     // The program is noted for the composer's notice (WP114 / WP115).
@@ -91,7 +95,9 @@ describe("launch requests", () => {
       },
     });
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Plain"));
+    await waitFor(() => {
+      expect(env.store.getState().composer?.subject).toBe("Plain");
+    });
     const composer = env.store.getState().composer;
     expect(composer?.to).toBe("ada@example.org");
     expect(composer?.bcc).toBe("dan@example.org");
@@ -105,13 +111,15 @@ describe("launch requests", () => {
     if (message === undefined) throw new Error("no message");
     env.transport.data.messageFiles.set("C:\\Downloads\\offer.eml", message.id);
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true),
-    );
-    act(() =>
-      env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\Downloads\\offer.eml" }]),
-    );
-    await waitFor(() => expect(env.store.getState().selectedMessageId).toBe(message.id));
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true);
+    });
+    act(() => {
+      env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\Downloads\\offer.eml" }]);
+    });
+    await waitFor(() => {
+      expect(env.store.getState().selectedMessageId).toBe(message.id);
+    });
     expect(env.store.getState().activeFolderId).toBe(message.folder_id);
   });
 
@@ -119,28 +127,34 @@ describe("launch requests", () => {
     const env = createEnv();
     env.transport.data.launches.push({ type: "ImportCalendarFile", path: "C:\\cal\\team.ics" });
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => expect(env.store.getState().windows).toContain(IMPORT_DIALOG));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain(IMPORT_DIALOG);
+    });
     expect(pimStoreFor(env.store).getState().importPath).toBe("C:\\cal\\team.ics");
-    act(() =>
+    act(() => {
       env.transport.pushLaunch([
         {
           type: "SubscribeCalendar",
           url: "webcal://example.org/h.ics",
           https_url: "https://example.org/h.ics",
         },
-      ]),
-    );
-    await waitFor(() => expect(env.store.getState().windows).toContain(SOURCES_DIALOG));
+      ]);
+    });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain(SOURCES_DIALOG);
+    });
     expect(pimStoreFor(env.store).getState().subscribeUrl).toBe("webcal://example.org/h.ics");
   });
 
   it("says when a file cannot be opened and can be dismissed with the keyboard", async () => {
     const env = createEnv();
     renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true),
-    );
-    act(() => env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\missing.eml" }]));
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true);
+    });
+    act(() => {
+      env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\missing.eml" }]);
+    });
     const notice = await screen.findByRole("status", { name: "Opening links and files" });
     await waitFor(() => expect(notice).toHaveTextContent("The file could not be opened"));
     // The core's localized reason, not its English diagnostic.

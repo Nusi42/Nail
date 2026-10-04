@@ -13,13 +13,21 @@ import { EVENT_DIALOG, SCOPE_DIALOG } from "./names";
 import { PIM_SKIN_CSS } from "./skin";
 import { pimStoreFor } from "./store";
 import { dateString, localZone, todayIn } from "./time";
+import { must } from "../../test/must";
+import { stringMatching } from "../../test/matchers";
 
 const BERLIN = "Europe/Berlin";
-beforeAll(() => setLocalTimeZone(BERLIN));
-afterAll(() => resetLocalTimeZone());
+beforeAll(() => {
+  setLocalTimeZone(BERLIN);
+});
+afterAll(() => {
+  resetLocalTimeZone();
+});
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 function geometryText(): string {
@@ -108,7 +116,7 @@ describe("calendar widget", () => {
     const editor = pimStoreFor(env.store).getState().eventEditor;
     expect(editor).toMatchObject({
       mode: "new",
-      start: { type: "zoned", local: expect.stringMatching(/T11:00:00$/), tz: BERLIN },
+      start: { type: "zoned", local: stringMatching(/T11:00:00$/), tz: BERLIN },
     });
   });
 
@@ -131,24 +139,26 @@ describe("calendar widget", () => {
     renderNode(widget("calendar", { options: { view: "week" } }), env);
     const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
     const start = eventOf(env, "ev-lunch")?.fields.start;
-    act(() => lunch.focus());
+    act(() => {
+      lunch.focus();
+    });
     fireEvent.keyDown(lunch, { key: "ArrowDown", altKey: true });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(eventOf(env, "ev-lunch")?.fields.start).toEqual({
         type: "floating",
         local: start?.type === "floating" ? start.local.replace("12:30", "12:45") : "",
-      }),
-    );
+      });
+    });
     fireEvent.keyDown(await screen.findByRole("button", { name: /Lunch with Grace/ }), {
       key: "ArrowDown",
       altKey: true,
       shiftKey: true,
     });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(eventOf(env, "ev-lunch")?.fields.end).toMatchObject({
-        local: expect.stringMatching(/T14:00:00$/),
-      }),
-    );
+        local: stringMatching(/T14:00:00$/),
+      });
+    });
   });
 
   it("asks this / this and following / all before moving a recurring event", async () => {
@@ -157,22 +167,22 @@ describe("calendar widget", () => {
     await settle(env);
     const standups = await screen.findAllByRole("button", { name: /Stand-up/ });
     expect(standups).toHaveLength(5);
-    fireEvent.keyDown(standups[0] as HTMLElement, { key: "ArrowRight", altKey: true });
-    await waitFor(() => expect(env.store.getState().windows).toContain(SCOPE_DIALOG));
+    fireEvent.keyDown(must(standups[0]), { key: "ArrowRight", altKey: true });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain(SCOPE_DIALOG);
+    });
     expect(pimStoreFor(env.store).getState().pendingChange).toMatchObject({ kind: "move" });
-    fireEvent.keyDown(standups[0] as HTMLElement, { key: "Delete" });
-    await waitFor(() =>
-      expect(pimStoreFor(env.store).getState().pendingChange).toMatchObject({ kind: "delete" }),
-    );
+    fireEvent.keyDown(must(standups[0]), { key: "Delete" });
+    await waitFor(() => {
+      expect(pimStoreFor(env.store).getState().pendingChange).toMatchObject({ kind: "delete" });
+    });
   });
 
   it("drags an event to another time and resizes it with the pointer", async () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week" } }), env);
     const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
-    const columns = document.querySelector<HTMLElement>(
-      '[data-part="calendar.columns"]',
-    ) as HTMLElement;
+    const columns = must(document.querySelector<HTMLElement>('[data-part="calendar.columns"]'));
     // 24 hours over 2400 px: 100 px per hour; 7 columns over 700 px.
     columns.getBoundingClientRect = () => ({
       x: 0,
@@ -189,24 +199,24 @@ describe("calendar widget", () => {
     fireEvent.pointerMove(lunch, { clientX: 50, clientY: 1350, pointerId: 1 });
     expect(document.querySelector('[data-part="calendar.ghost"]')).not.toBeNull();
     fireEvent.pointerUp(lunch, { clientX: 50, clientY: 1350, pointerId: 1 });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(eventOf(env, "ev-lunch")?.fields.start).toMatchObject({
-        local: expect.stringMatching(/T13:30:00$/),
-      }),
-    );
+        local: stringMatching(/T13:30:00$/),
+      });
+    });
     // The click that ends a drag does not open the editor.
     fireEvent.click(lunch);
     expect(env.store.getState().windows).not.toContain(EVENT_DIALOG);
     const moved = await screen.findByRole("button", { name: /Lunch with Grace/ });
-    const handle = moved.querySelector('[data-part="calendar.event.resize"]') as HTMLElement;
+    const handle = must(moved.querySelector<HTMLElement>('[data-part="calendar.event.resize"]'));
     fireEvent.pointerDown(handle, { button: 0, clientX: 50, clientY: 1450, pointerId: 2 });
     fireEvent.pointerMove(moved, { clientX: 50, clientY: 1500, pointerId: 2 });
     fireEvent.pointerUp(moved, { clientX: 50, clientY: 1500, pointerId: 2 });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(eventOf(env, "ev-lunch")?.fields.end).toMatchObject({
-        local: expect.stringMatching(/T15:00:00$/),
-      }),
-    );
+        local: stringMatching(/T15:00:00$/),
+      });
+    });
   });
 
   it("opens the editor on an event and moves events between days in the month view", async () => {
@@ -222,14 +232,18 @@ describe("calendar widget", () => {
     });
     const before = eventOf(env, "ev-planning")?.fields.start;
     fireEvent.keyDown(planning, { key: "ArrowRight", altKey: true });
-    await waitFor(() => expect(eventOf(env, "ev-planning")?.fields.start).not.toEqual(before));
+    await waitFor(() => {
+      expect(eventOf(env, "ev-planning")?.fields.start).not.toEqual(before);
+    });
     // Days with more events than fit offer "n more".
     expect(screen.getAllByRole("button", { name: /more\)/ }).length).toBeGreaterThan(0);
     // Arrow keys move between days; Enter shows the day.
-    const cell = document.querySelector<HTMLElement>(
-      '[data-part="calendar.month.day"][tabindex="0"]',
-    ) as HTMLElement;
-    act(() => cell.focus());
+    const cell = must(
+      document.querySelector<HTMLElement>('[data-part="calendar.month.day"][tabindex="0"]'),
+    );
+    act(() => {
+      cell.focus();
+    });
     await user.keyboard("{ArrowRight}");
     const next = document.activeElement as HTMLElement;
     expect(next.getAttribute("data-day")).not.toBe(cell.getAttribute("data-day"));
@@ -258,21 +272,23 @@ describe("calendar widget", () => {
         .getAllByRole("gridcell")
         .some((c) => c.getAttribute("data-state")?.includes("busy")),
     ).toBe(true);
-    const agenda = document.querySelector('[data-part="agenda"]') as HTMLElement;
+    const agenda = must(document.querySelector<HTMLElement>('[data-part="agenda"]'));
     expect(within(agenda).getAllByRole("button", { name: /Lunch with Grace/ })).toHaveLength(1);
     const tomorrow = dateString(todayIn(localZone()).add({ days: 1 }));
     const cell = grid.querySelector<HTMLElement>(`[data-day="${tomorrow}"]`);
     if (cell) {
       await user.click(cell);
       expect(pimStoreFor(env.store).getState().anchor).toBe(tomorrow);
-      const calendar = document.querySelector('[data-part="calendar"]') as HTMLElement;
+      const calendar = must(document.querySelector<HTMLElement>('[data-part="calendar"]'));
       expect(
         await within(calendar).findByRole("button", { name: /Design review/ }),
       ).toBeInTheDocument();
     }
     // Keyboard: Page Down shows the next month.
-    const focusable = grid.querySelector<HTMLElement>('[tabindex="0"]') as HTMLElement;
-    act(() => focusable.focus());
+    const focusable = must(grid.querySelector<HTMLElement>('[tabindex="0"]'));
+    act(() => {
+      focusable.focus();
+    });
     const month = document.querySelector('[data-part="mini-month.title"]')?.textContent;
     await user.keyboard("{PageDown}");
     expect(document.querySelector('[data-part="mini-month.title"]')?.textContent).not.toBe(month);
@@ -290,7 +306,7 @@ describe("calendar toolbar and event cards (M5b)", () => {
       env,
     );
     await settle(env);
-    const toolbar = document.querySelector('[data-part="calendar.toolbar"]') as HTMLElement;
+    const toolbar = must(document.querySelector<HTMLElement>('[data-part="calendar.toolbar"]'));
     const order = [...toolbar.children]
       .flatMap((el) =>
         el.getAttribute("data-part") === "calendar.nav" ? [el, ...el.children] : [el],
@@ -449,7 +465,7 @@ describe("calendar views after the M5b review", () => {
         disconnect() {
           callbacks.delete(this.cb);
         }
-        unobserve() {}
+        unobserve = vi.fn();
       },
     );
     const size = { bar: 700 };
@@ -490,11 +506,19 @@ describe("calendar views after the M5b review", () => {
       );
       // Still too narrow: stays.
       size.bar = 900;
-      act(() => callbacks.forEach((cb) => cb()));
+      act(() => {
+        callbacks.forEach((cb) => {
+          cb();
+        });
+      });
       expect(screen.getByRole("combobox", { name: "View" })).toBeInTheDocument();
       // As wide as the segmented row needed: back.
       size.bar = 1000;
-      act(() => callbacks.forEach((cb) => cb()));
+      act(() => {
+        callbacks.forEach((cb) => {
+          cb();
+        });
+      });
       const group = screen.getByRole("group", { name: "View" });
       expect(within(group).getAllByRole("button")).toHaveLength(4);
     } finally {

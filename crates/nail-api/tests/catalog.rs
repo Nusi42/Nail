@@ -2,6 +2,7 @@
 //! notification texts of the core) exists in the English catalogs
 //! (`locales/en/*.ftl`), and the German catalogs are the same files
 //! (ADR 0043: localized core messages).
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -67,7 +68,11 @@ fn files(locale: &str) -> BTreeSet<String> {
     std::fs::read_dir(locales().join(locale))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.ends_with(".ftl"))
+        .filter(|n| {
+            std::path::Path::new(n)
+                .extension()
+                .is_some_and(|e| e == "ftl")
+        })
         .collect()
 }
 

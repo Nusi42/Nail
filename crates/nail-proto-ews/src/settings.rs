@@ -10,6 +10,7 @@
 //! own XML back with only `IsEnabled` replaced.
 
 use std::collections::hash_map::RandomState;
+use std::fmt::Write as _;
 use std::hash::{BuildHasher, Hasher};
 
 use base64::Engine as _;
@@ -138,10 +139,10 @@ fn addresses_xml(tag: &str, values: &[String]) -> String {
     if values.is_empty() {
         return String::new();
     }
-    let inner: String = values
-        .iter()
-        .map(|v| format!("<t:Address>{}</t:Address>", el("t:EmailAddress", v)))
-        .collect();
+    let inner: String = values.iter().fold(String::new(), |mut out, v| {
+        let _ = write!(out, "<t:Address>{}</t:Address>", el("t:EmailAddress", v));
+        out
+    });
     format!("<t:{tag}>{inner}</t:{tag}>")
 }
 
@@ -458,7 +459,10 @@ pub fn new_guid() -> String {
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    let hex: String = bytes.iter().fold(String::new(), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    });
     format!(
         "{{{}-{}-{}-{}-{}}}",
         &hex[0..8],
@@ -492,7 +496,7 @@ fn ids_match(a: &str, b: &str) -> bool {
 /// An empty category list document.
 pub fn empty_category_list() -> Element {
     let mut root = Element::new("categories");
-    root.ns = CATEGORY_LIST_NS.to_owned();
+    CATEGORY_LIST_NS.clone_into(&mut root.ns);
     root.set_attr("default", "");
     root.set_attr("lastSavedSession", "0");
     root
@@ -525,7 +529,7 @@ pub fn edit_category_list(root: &mut Element, edit: &CategoryEdit<'_>) -> Result
                 return Err(EwsError::Conflict(format!("category {}", settings.name)));
             }
             let mut category = Element::new("category");
-            category.ns = root.ns.clone();
+            category.ns.clone_from(&root.ns);
             category.set_attr("name", settings.name.clone());
             category.set_attr("color", settings.color.ews_index().to_string());
             category.set_attr("keyboardShortcut", "0");
@@ -880,7 +884,7 @@ mod tests {
         let list = parse_category_list(&reparsed);
         assert_eq!(list[2].name, "Trips");
         assert_eq!(list[2].color, CategoryColor::None);
-        assert!(reparsed.children[0].attr("usageCount") == Some("3"));
+        assert_eq!(reparsed.children[0].attr("usageCount"), Some("3"));
         assert!(edit_category_list(&mut root, &CategoryEdit::Delete(&guid)).unwrap());
         assert!(!edit_category_list(&mut root, &CategoryEdit::Delete(&guid)).unwrap());
         assert_eq!(

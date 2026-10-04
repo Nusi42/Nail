@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { App, overridesFromUrl } from "./App";
 import { defaultTheme } from "./api/mockData";
 import { createEnv, setWindowWidth, stubElementSizes } from "./test/harness";
+import { must } from "./test/must";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -47,8 +48,8 @@ describe("App", () => {
   it("opens a message on click and shows it in the sandboxed reader", async () => {
     const { container } = renderApp();
     const rows = await screen.findAllByRole("option");
-    fireEvent.click(rows[0] as HTMLElement);
-    const view = container.querySelector('[data-part="message-view"]') as HTMLElement;
+    fireEvent.click(must(rows[0]));
+    const view = must(container.querySelector<HTMLElement>('[data-part="message-view"]'));
     expect(
       await within(view).findByRole("heading", { name: "Compiler notes for Monday" }),
     ).toBeInTheDocument();
@@ -71,10 +72,14 @@ describe("App", () => {
     expect(env.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
 
     // j/k are list/reader bindings: inside the folder tree they do nothing.
-    const inbox = container.querySelector<HTMLElement>(
-      `[data-part="folder-tree.item"][data-folder="${INBOX}"]`,
-    ) as HTMLElement;
-    act(() => inbox.focus());
+    const inbox = must(
+      container.querySelector<HTMLElement>(
+        `[data-part="folder-tree.item"][data-folder="${INBOX}"]`,
+      ),
+    );
+    act(() => {
+      inbox.focus();
+    });
     fireEvent.keyDown(inbox, { key: "j" });
     expect(env.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
 
@@ -117,7 +122,7 @@ describe("App", () => {
         ],
       },
     };
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "ConfigChanged",
         theme: {
@@ -125,11 +130,11 @@ describe("App", () => {
           tokens: { ...theme.tokens, color: { ...theme.tokens.color, accent: "#123456" } },
         },
         layout: narrowOnly as typeof layout,
-      }),
-    );
-    await waitFor(() =>
-      expect(themeStyle()?.textContent).toContain("--nail-color-accent: #123456;"),
-    );
+      });
+    });
+    await waitFor(() => {
+      expect(themeStyle()?.textContent).toContain("--nail-color-accent: #123456;");
+    });
     expect(document.head.querySelectorAll("style[data-nail-theme]")).toHaveLength(1);
     expect(container.querySelector('[data-part="app"]')).toHaveAttribute("data-layout", "custom");
     expect(container.querySelector('[data-part="tabs"]')).toBeInTheDocument();
@@ -137,45 +142,45 @@ describe("App", () => {
 
   it("reports config errors and sync progress in the status bar", async () => {
     const { env } = renderApp();
-    const status = (await screen.findByText("Up to date")).closest(
-      '[data-part="status-bar"]',
-    ) as HTMLElement;
-    act(() =>
+    const status = must(
+      (await screen.findByText("Up to date")).closest<HTMLElement>('[data-part="status-bar"]'),
+    );
+    act(() => {
       env.transport.emit({
         type: "ConfigError",
         file: "layout.kdl",
         line: 4,
         column: 2,
         message: "bad",
-      }),
-    );
+      });
+    });
     expect(status).toHaveTextContent("layout.kdl, line 4, column 2");
-    act(() =>
-      env.transport.emit({ type: "SyncProgress", account_id: "acc-personal", done: 1, total: 4 }),
-    );
+    act(() => {
+      env.transport.emit({ type: "SyncProgress", account_id: "acc-personal", done: 1, total: 4 });
+    });
     expect(env.store.getState().sync).toEqual({ accountId: "acc-personal", done: 1, total: 4 });
   });
 
   it("reports a failed synchronization until the next one makes progress", async () => {
     const { env } = renderApp();
-    const status = (await screen.findByText("Up to date")).closest(
-      '[data-part="status-bar"]',
-    ) as HTMLElement;
-    act(() =>
+    const status = must(
+      (await screen.findByText("Up to date")).closest<HTMLElement>('[data-part="status-bar"]'),
+    );
+    act(() => {
       env.transport.emit({
         type: "SyncFailed",
         account_id: "acc-personal",
         code: "auth_failed",
         message: "LOGIN rejected",
-      }),
-    );
+      });
+    });
     expect(status).toHaveTextContent("Synchronization failed: The server rejected the login.");
     expect(status.querySelector('[data-item="sync-progress"]')?.getAttribute("data-state")).toBe(
       "error",
     );
-    act(() =>
-      env.transport.emit({ type: "SyncProgress", account_id: "acc-personal", done: 4, total: 4 }),
-    );
+    act(() => {
+      env.transport.emit({ type: "SyncProgress", account_id: "acc-personal", done: 4, total: 4 });
+    });
     expect(status).toHaveTextContent("Up to date");
     expect(env.store.getState().syncError).toBeNull();
   });
@@ -184,12 +189,14 @@ describe("App", () => {
     const { env } = renderApp();
     await screen.findAllByRole("option");
     const before = env.transport.requests.filter((r) => r.type === "ListMessages").length;
-    act(() => env.transport.emit({ type: "MailChanged", folder_ids: [INBOX] }));
-    await waitFor(() =>
+    act(() => {
+      env.transport.emit({ type: "MailChanged", folder_ids: [INBOX] });
+    });
+    await waitFor(() => {
       expect(
         env.transport.requests.filter((r) => r.type === "ListMessages").length,
-      ).toBeGreaterThan(before),
-    );
+      ).toBeGreaterThan(before);
+    });
   });
 
   it("uses the German locale with English fallback", async () => {

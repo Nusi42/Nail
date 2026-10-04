@@ -6,7 +6,7 @@
  * uses it (`RemoteAccessChanged` refreshes the list).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type {
   PairingCode,
@@ -167,7 +167,7 @@ function CreateForm({
     );
   }
 
-  const create = async (event: FormEvent) => {
+  const create = async (event: SubmitEvent) => {
     event.preventDefault();
     if (busy || user === undefined) return;
     setBusy(true);
@@ -223,7 +223,9 @@ function CreateForm({
         labelId="remote-access"
         name="pair-access"
         value={preset}
-        onChange={(v) => setPreset(v as RemoteAccessPreset)}
+        onChange={(v) => {
+          setPreset(v as RemoteAccessPreset);
+        }}
         choices={PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` }))}
       />
       <p data-part="form.hint">{t(`remote-preset-${preset}-hint`)}</p>
@@ -238,7 +240,9 @@ function CreateForm({
         labelId="remote-pair-ttl"
         name="pair-ttl"
         value={String(ttl)}
-        onChange={(v) => setTtl(Number(v))}
+        onChange={(v) => {
+          setTtl(Number(v));
+        }}
         choices={PAIRING_TTLS.map((m) => ({
           value: String(m),
           label: t("remote-pair-ttl-minutes", { minutes: m }),

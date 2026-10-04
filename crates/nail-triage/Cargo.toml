@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 nail-api.workspace = true
 thiserror.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 # Local time for quiet hours and wake times (clock + the OS time zone).
 chrono.workspace = true

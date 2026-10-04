@@ -25,6 +25,7 @@ import {
   parseWindowId,
   windowKind,
 } from "../state/windows";
+import { charCount } from "../text/chars";
 
 /** The requests answered here. */
 export const WINDOW_STATE_REQUESTS = [
@@ -81,7 +82,7 @@ export function checkPopOut(
 ): PopOutIssue | null {
   if (parseWindowId(window) === null) return "invalid-window";
   if (
-    (title !== null && [...title].length > MAX_POP_OUT_TITLE_CHARS) ||
+    (title !== null && charCount(title) > MAX_POP_OUT_TITLE_CHARS) ||
     (context !== null &&
       new TextEncoder().encode(JSON.stringify(context)).length > MAX_POP_OUT_CONTEXT_BYTES)
   ) {

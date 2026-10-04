@@ -248,30 +248,27 @@ impl GraphEngine {
         let mut link = cursor.map(str::to_owned);
         let headers = [self.page_header()];
         for page_no in 0..self.options.pages_per_call.max(1) {
-            let page: Result<Page<Message>, GraphError> = match &link {
-                Some(l) => {
-                    self.client
-                        .get_link_json(l, &headers, "messages/delta")
-                        .await
+            let page: Result<Page<Message>, GraphError> = if let Some(l) = &link {
+                self.client
+                    .get_link_json(l, &headers, "messages/delta")
+                    .await
+            } else {
+                let mut query = vec![("$select", MESSAGE_SELECT.to_owned())];
+                if let Some(utc) = since.and_then(text::unix_to_utc) {
+                    query.push(("$filter", format!("receivedDateTime ge {utc}")));
                 }
-                None => {
-                    let mut query = vec![("$select", MESSAGE_SELECT.to_owned())];
-                    if let Some(utc) = since.and_then(text::unix_to_utc) {
-                        query.push(("$filter", format!("receivedDateTime ge {utc}")));
-                    }
-                    self.client
-                        .get_json(
-                            &format!(
-                                "{}/mailFolders/{}/messages/delta",
-                                mailbox_path(mailbox),
-                                path_segment(folder)
-                            ),
-                            &query,
-                            &headers,
-                            "messages/delta",
-                        )
-                        .await
-                }
+                self.client
+                    .get_json(
+                        &format!(
+                            "{}/mailFolders/{}/messages/delta",
+                            mailbox_path(mailbox),
+                            path_segment(folder)
+                        ),
+                        &query,
+                        &headers,
+                        "messages/delta",
+                    )
+                    .await
             };
             let page = match page {
                 Ok(p) => p,
@@ -281,7 +278,7 @@ impl GraphEngine {
                 Err(e) => return Err(e),
             };
             for message in page.value {
-                self.fold_message(mailbox, folder, inbox, message, &mut delta);
+                Self::fold_message(mailbox, folder, inbox, message, &mut delta);
             }
             match (page.next_link, page.delta_link) {
                 (Some(next), _) => link = Some(next),
@@ -302,7 +299,6 @@ impl GraphEngine {
     }
 
     fn fold_message(
-        &self,
         mailbox: Option<&str>,
         folder: &str,
         inbox: bool,

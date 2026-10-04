@@ -140,7 +140,7 @@ export function previewColors(
   if (!own) return base;
   const merged: Record<string, string> = { ...base };
   for (const [token, value] of Object.entries(own)) {
-    if (value !== undefined) merged[token] = value;
+    merged[token] = value;
   }
   return merged;
 }
@@ -198,8 +198,8 @@ export function resolveMockTheme(
     }
   }
   const o = settings.overrides;
-  if (o.font_size !== undefined) replace("font-size", "body", `${o.font_size}px`);
-  if (o.radius !== undefined) replace("radius", "md", `${o.radius}px`);
+  if (o.font_size !== undefined) replace("font-size", "body", `${String(o.font_size)}px`);
+  if (o.radius !== undefined) replace("radius", "md", `${String(o.radius)}px`);
   if (o.accent !== undefined) replace("color", "accent", o.accent);
   const density: Density = settings.density;
   theme.density = density;

@@ -6,7 +6,7 @@
  * Data`); a file Nail was opened with (a launch argument, desktop only) is
  * read by the core (`PimImportSource::File`) and previewed the same way.
  */
-import { useEffect, useId, useState, type ChangeEvent } from "react";
+import { useEffect, useEffectEvent, useId, useState, type ChangeEvent } from "react";
 import type {
   LocalizedMessage,
   PimImportPreview,
@@ -18,13 +18,17 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { pimWrite, useAddressBooks, useCalendars } from "./queries";
 import { usePim, usePimStore } from "./store";
+import { nonEmpty } from "../../text/empty";
 
 /** What the dialog imports: uploaded text or a desktop file. */
-type ImportFile = { name: string; source: PimImportSource };
+interface ImportFile {
+  name: string;
+  source: PimImportSource;
+}
 
 /** The file name of a path (`C:\x\a.ics` → `a.ics`). */
 function baseName(path: string): string {
-  return path.split(/[\\/]/).pop() || path;
+  return nonEmpty(path.split(/[\\/]/).pop()) ?? path;
 }
 
 /** Largest file the dialog reads (bytes). */
@@ -90,15 +94,15 @@ export function ImportDialog({ close }: DialogProps) {
   // at once.
   const takeLaunchPath = usePim((s) => s.setImportPath);
   const [launchPath] = useState(() => pim.getState().importPath);
-  useEffect(() => {
-    if (launchPath === null) return;
+  const previewLaunchPath = useEffectEvent((path: string) => {
     takeLaunchPath(null);
     void Promise.resolve().then(() =>
-      load({ name: baseName(launchPath), source: { type: "file", path: launchPath } }),
+      load({ name: baseName(path), source: { type: "file", path } }),
     );
-    // Once, when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  useEffect(() => {
+    if (launchPath !== null) previewLaunchPath(launchPath);
+  }, [launchPath]);
 
   const run = async () => {
     if (!file || !preview) return;
@@ -142,7 +146,7 @@ export function ImportDialog({ close }: DialogProps) {
         <section data-part="pim.import.preview" aria-label={t("pim-import-preview")}>
           <p data-part="pim.import.summary">
             {t("pim-import-summary", {
-              name: preview.name || file?.name || "none",
+              name: nonEmpty(preview.name) ?? nonEmpty(file?.name) ?? "none",
               events: preview.events,
               tasks: preview.tasks,
               contacts: preview.contacts,
@@ -181,7 +185,9 @@ export function ImportDialog({ close }: DialogProps) {
                 id={ids.calendar}
                 data-part="form.select"
                 value={calendarId}
-                onChange={(e) => setCalendarId(e.target.value)}
+                onChange={(e) => {
+                  setCalendarId(e.target.value);
+                }}
               >
                 {writableCalendars.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -200,7 +206,9 @@ export function ImportDialog({ close }: DialogProps) {
                 id={ids.book}
                 data-part="form.select"
                 value={bookId}
-                onChange={(e) => setBookId(e.target.value)}
+                onChange={(e) => {
+                  setBookId(e.target.value);
+                }}
               >
                 {writableBooks.map((b) => (
                   <option key={b.id} value={b.id}>

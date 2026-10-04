@@ -3,6 +3,12 @@
 //! every log line a plug-in causes counts against the per-call cap and
 //! the per-minute rate (refused calls included).
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::time::{Duration, Instant};
@@ -97,20 +103,22 @@ export default {
 async fn stopping_interrupts_a_running_turn_at_once() {
     let fake = Fake::new();
     let mut limits = limits();
-    limits.call_budget = Duration::from_secs(60);
+    limits.call_budget = Duration::from_mins(1);
     limits.reply_timeout = Duration::from_millis(200);
     let host = host_with(&fake, limits);
     host.start(spec("busy", &[], BUSY)).await.unwrap();
     let runner = host.clone();
     let command = tokio::spawn(async move {
-        let _ = runner
-            .run_command(
-                "plugin.busy.run",
-                PluginCommandSurface::Global,
-                &UiContext::default(),
-                None,
-            )
-            .await;
+        drop(
+            runner
+                .run_command(
+                    "plugin.busy.run",
+                    PluginCommandSurface::Global,
+                    &UiContext::default(),
+                    None,
+                )
+                .await,
+        );
     });
     wait_for("the busy turn", || {
         fake.results("busy", "BUSY").first().cloned()
@@ -206,7 +214,7 @@ async fn log_lines_are_limited_per_minute_across_turns() {
     .await;
     // The burst plus what refilled meanwhile (one line a second), minus
     // the dropped-lines notices.
-    let refilled = started.elapsed().as_secs() as usize + 1;
+    let refilled = usize::try_from(started.elapsed().as_secs()).unwrap() + 1;
     assert!(kept <= 60 + refilled, "{kept} lines kept");
     assert!(dropped >= 200 - 60 - refilled, "{dropped} lines dropped");
 }

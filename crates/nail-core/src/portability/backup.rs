@@ -405,17 +405,17 @@ impl CoreRestoreTarget {
     }
 
     fn mail(&mut self) -> Result<&mut ImportTarget, SinkError> {
-        if self.mail.is_none() {
+        let target = match self.mail.take() {
+            Some(target) => target,
             // Mail before `begin_mail_account`: Local Folders.
-            let target = ImportTarget::local_account(
+            None => ImportTarget::local_account(
                 &self.service,
                 &AccountId::new(LOCAL_FOLDERS_ACCOUNT_ID),
                 self.dry_run,
             )
-            .map_err(fatal)?;
-            self.mail = Some(target);
-        }
-        Ok(self.mail.as_mut().expect("set above"))
+            .map_err(fatal)?,
+        };
+        Ok(self.mail.insert(target))
     }
 
     /// Writes what is pending and collects the mail targets.
@@ -557,7 +557,7 @@ impl CoreRestoreTarget {
                 })
                 .await
         });
-        let _ = std::fs::remove_file(&path);
+        drop(std::fs::remove_file(&path));
         if let nail_api::Response::Error { message, .. } = answer {
             return Err(SinkError::Item(message));
         }
@@ -732,13 +732,13 @@ mod tests {
         (service, data, config)
     }
 
-    fn restore_settings(service: &Service, settings: serde_json::Value) -> Result<(), SinkError> {
+    fn restore_settings(service: &Service, settings: &serde_json::Value) -> Result<(), SinkError> {
         let mut target = CoreRestoreTarget::new(service, false);
         target
             .replace_file(
                 BackupItem::Settings,
                 SETTINGS_FILE,
-                &serde_json::to_vec(&settings).unwrap(),
+                &serde_json::to_vec(settings).unwrap(),
             )
             .map(drop)
     }
@@ -752,7 +752,7 @@ mod tests {
         let store = service.store();
         let result = restore_settings(
             &service,
-            serde_json::json!({
+            &(serde_json::json!({
                 crate::smartcard::SMARTCARD_SETTINGS_KEY: {
                     "modules": [{ "path": "evil.dll", "enabled": true }],
                     "pin_cache_minutes": 5
@@ -766,7 +766,7 @@ mod tests {
                 },
                 nail_store::SECURITY_SETTINGS_KEY: "not settings",
                 "some.unknown.key": 42
-            }),
+            })),
         );
         let Err(SinkError::Item(detail)) = result else {
             panic!("an issue for the refused settings expected, got {result:?}");
@@ -793,10 +793,10 @@ mod tests {
         // Valid settings alone restore without an issue.
         restore_settings(
             &service,
-            serde_json::json!({ nail_store::NOTIFICATION_SETTINGS_KEY: {
+            &(serde_json::json!({ nail_store::NOTIFICATION_SETTINGS_KEY: {
                 "enabled": true, "show_preview": true, "sound": false,
                 "folders": "inbox", "quiet_hours": null
-            } }),
+            } })),
         )
         .unwrap();
         assert!(!store.notification_settings().unwrap().sound);
@@ -852,11 +852,11 @@ mod tests {
 
     fn merge(
         service: &Service,
-        keys: serde_json::Value,
+        keys: &serde_json::Value,
         dry_run: bool,
     ) -> Result<MergeOutcome, SinkError> {
         let target = CoreRestoreTarget::new(service, false);
-        target.merge_keys(&serde_json::to_vec(&keys).unwrap(), dry_run)
+        target.merge_keys(&serde_json::to_vec(keys).unwrap(), dry_run)
     }
 
     /// A restored key may only write its own wrapping entry: references to
@@ -882,7 +882,7 @@ mod tests {
             for dry_run in [true, false] {
                 let result = merge(
                     &service,
-                    serde_json::json!([key_with_secret(reference, storage)]),
+                    &(serde_json::json!([key_with_secret(reference, storage)])),
                     dry_run,
                 );
                 assert!(
@@ -900,7 +900,7 @@ mod tests {
         let own = nail_pgp::keyring::keychain_ref("ABCDEF0123456789");
         let outcome = merge(
             &service,
-            serde_json::json!([key_with_secret(&own.0, SecretStorage::Keychain)]),
+            &(serde_json::json!([key_with_secret(&own.0, SecretStorage::Keychain)])),
             false,
         )
         .unwrap();

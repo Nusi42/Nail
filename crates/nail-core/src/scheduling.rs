@@ -74,60 +74,64 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             comment,
             send,
             calendar_id,
-        } => scheduled(
+        } => Ok(scheduled(
             service
                 .respond(target, response, comment, send, calendar_id)
                 .await?,
-        ),
+        )),
         Request::ProposeNewTime {
             target,
             start,
             end,
             comment,
-        } => scheduled(service.propose(target, start, end, comment).await?),
-        Request::RefreshInvitation { target } => scheduled(service.refresh(target).await?),
+        } => Ok(scheduled(
+            service.propose(target, start, end, comment).await?,
+        )),
+        Request::RefreshInvitation { target } => Ok(scheduled(service.refresh(target).await?)),
         Request::ForwardInvitation {
             target,
             to,
             comment,
-        } => scheduled(service.forward(target, to, comment).await?),
+        } => Ok(scheduled(service.forward(target, to, comment).await?)),
         Request::ApplyInvitation {
             message_id,
             calendar_id,
         } => {
             let loaded = service.loaded(&message_id).await?;
-            scheduled(service.apply_message(&loaded, calendar_id).await?)
+            Ok(scheduled(
+                service.apply_message(&loaded, calendar_id).await?,
+            ))
         }
         Request::SendInvitations {
             event_id,
             recurrence_id,
             attendees,
             comment,
-        } => scheduled(
+        } => Ok(scheduled(
             service
                 .send_invitations(&event_id, recurrence_id.as_ref(), &attendees, comment)
                 .await?,
-        ),
+        )),
         Request::CancelMeeting {
             event_id,
             scope,
             recurrence_id,
             attendees,
             comment,
-        } => scheduled(
+        } => Ok(scheduled(
             service
                 .cancel_meeting(&event_id, scope, recurrence_id, &attendees, comment)
                 .await?,
-        ),
+        )),
         Request::RespondToCounter {
             message_id,
             accept,
             comment,
-        } => scheduled(
+        } => Ok(scheduled(
             service
                 .respond_to_counter(&message_id, accept, comment)
                 .await?,
-        ),
+        )),
         Request::QueryFreeBusy {
             attendees,
             from,
@@ -170,10 +174,31 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
     }
 }
 
-fn scheduled(result: SchedulingResult) -> Result<Response> {
-    Ok(Response::Scheduled {
+fn scheduled(result: SchedulingResult) -> Response {
+    Response::Scheduled {
         result: Box::new(result),
-    })
+    }
+}
+
+/// An iMIP mail to queue ([`Service::send_imip`]).
+struct ImipMail<'a> {
+    /// The identity it is sent from.
+    identity_id: &'a IdentityId,
+    method: ItipMethod,
+    /// Recipients: address and display name.
+    to: &'a [(String, Option<String>)],
+    /// The iCalendar text.
+    calendar: String,
+    summary: &'a nail_itip::Summary<'a>,
+    /// The `Message-ID` it answers.
+    in_reply_to: Option<&'a str>,
+    /// What is recorded as sent: UID, recurrence id, sequence, answer.
+    record: (
+        &'a str,
+        Option<&'a PimTime>,
+        u32,
+        Option<ParticipationStatus>,
+    ),
 }
 
 /// `invalid_request` with an `itip-issue-*` text.
@@ -365,7 +390,10 @@ impl Service {
     }
 
     pub(crate) async fn scheduling_settings(&self) -> Result<SchedulingSettings> {
-        Ok(self.store().call(|s| s.scheduling_settings()).await?)
+        Ok(self
+            .store()
+            .call(nail_store::Store::scheduling_settings)
+            .await?)
     }
 
     /// `GetInvitation` / `MessageBody.invitation`.
@@ -655,17 +683,16 @@ impl Service {
 
     /// Queues an iMIP mail in the outbox of `identity` (undo send applies)
     /// and records it.
-    #[allow(clippy::too_many_arguments)]
-    async fn send_imip(
-        &self,
-        identity_id: &IdentityId,
-        method: ItipMethod,
-        to: &[(String, Option<String>)],
-        calendar: String,
-        summary: &nail_itip::Summary<'_>,
-        in_reply_to: Option<&str>,
-        record: (&str, Option<&PimTime>, u32, Option<ParticipationStatus>),
-    ) -> Result<SentItip> {
+    async fn send_imip(&self, mail: ImipMail<'_>) -> Result<SentItip> {
+        let ImipMail {
+            identity_id,
+            method,
+            to,
+            calendar,
+            summary,
+            in_reply_to,
+            record,
+        } = mail;
         let (account, identity) = self.identity(identity_id)?;
         let to: Vec<(String, Option<String>)> = to
             .iter()
@@ -775,7 +802,7 @@ impl Service {
                 outbox_id: None,
                 created_at: self.pim_now(),
             };
-            let _ = self.store().call(move |s| s.record_sent_itip(&sent)).await;
+            drop(self.store().call(move |s| s.record_sent_itip(&sent)).await);
         }
         SentItip {
             method,
@@ -965,10 +992,11 @@ impl Service {
             Ok(written) => written,
             Err(err) => {
                 if let Some((k, uid)) = exchange_answer {
-                    let _ = self
-                        .store()
-                        .call(move |s| s.drop_exchange_meeting_answer(&k, &uid))
-                        .await;
+                    drop(
+                        self.store()
+                            .call(move |s| s.drop_exchange_meeting_answer(&k, &uid))
+                            .await,
+                    );
                 }
                 return Err(err);
             }
@@ -993,7 +1021,7 @@ impl Service {
             ctx.loaded.as_ref().map(|l| &l.message_id),
         )
         .await;
-        let mut sent = Vec::new();
+        let mut sent_mail = Vec::new();
         if send && let Some(organizer) = ctx.organizer.as_ref() {
             match transport {
                 SchedulingTransport::Imip => {
@@ -1019,28 +1047,29 @@ impl Service {
                         comment: comment.as_deref(),
                         ..Default::default()
                     };
-                    sent.push(
-                        self.send_imip(
-                            &ctx.identity,
-                            ItipMethod::Reply,
-                            &[(organizer.email.clone(), organizer.name.clone())],
-                            reply,
-                            &summary,
-                            ctx.loaded
+                    sent_mail.push(
+                        self.send_imip(ImipMail {
+                            identity_id: &ctx.identity,
+                            method: ItipMethod::Reply,
+                            to: &[(organizer.email.clone(), organizer.name.clone())],
+                            calendar: reply,
+                            summary: &summary,
+                            in_reply_to: ctx
+                                .loaded
                                 .as_ref()
                                 .and_then(|l| l.imip.message_id.as_deref()),
-                            (
+                            record: (
                                 &ctx.uid,
                                 ctx.recurrence_id.as_ref(),
                                 version.sequence,
                                 Some(status),
                             ),
-                        )
+                        })
                         .await?,
                     );
                 }
                 SchedulingTransport::Server => {
-                    sent.push(
+                    sent_mail.push(
                         self.record_server_delivery(
                             Some(&ctx.identity),
                             ItipMethod::Reply,
@@ -1063,7 +1092,7 @@ impl Service {
             ctx.loaded.as_ref(),
             Some(&event_id),
             op_ids,
-            sent,
+            sent_mail,
             Some(event),
         )
         .await
@@ -1185,17 +1214,18 @@ impl Service {
             .as_ref()
             .map_or(0, |l| l.object.version().sequence);
         let sent = self
-            .send_imip(
-                &ctx.identity,
-                ItipMethod::Counter,
-                &[(organizer.email.clone(), organizer.name.clone())],
-                text,
-                &summary,
-                ctx.loaded
+            .send_imip(ImipMail {
+                identity_id: &ctx.identity,
+                method: ItipMethod::Counter,
+                to: &[(organizer.email.clone(), organizer.name.clone())],
+                calendar: text,
+                summary: &summary,
+                in_reply_to: ctx
+                    .loaded
                     .as_ref()
                     .and_then(|l| l.imip.message_id.as_deref()),
-                (&ctx.uid, ctx.recurrence_id.as_ref(), sequence, None),
-            )
+                record: (&ctx.uid, ctx.recurrence_id.as_ref(), sequence, None),
+            })
             .await?;
         let invitation = match &ctx.loaded {
             Some(l) => Some(Box::new(self.card(l).await?)),
@@ -1240,17 +1270,18 @@ impl Service {
             ..Default::default()
         };
         let sent = self
-            .send_imip(
-                &ctx.identity,
-                ItipMethod::Refresh,
-                &[(organizer.email.clone(), organizer.name.clone())],
-                text,
-                &summary,
-                ctx.loaded
+            .send_imip(ImipMail {
+                identity_id: &ctx.identity,
+                method: ItipMethod::Refresh,
+                to: &[(organizer.email.clone(), organizer.name.clone())],
+                calendar: text,
+                summary: &summary,
+                in_reply_to: ctx
+                    .loaded
                     .as_ref()
                     .and_then(|l| l.imip.message_id.as_deref()),
-                (&ctx.uid, ctx.recurrence_id.as_ref(), 0, None),
-            )
+                record: (&ctx.uid, ctx.recurrence_id.as_ref(), 0, None),
+            })
             .await?;
         Ok(SchedulingResult {
             event: ctx.copy.map(|c| Box::new(c.event)),
@@ -1302,15 +1333,15 @@ impl Service {
             .map(|a| (a.email.clone(), a.name.clone()))
             .collect();
         let sent = self
-            .send_imip(
-                &ctx.identity,
-                ItipMethod::Request,
-                &recipients,
-                text,
-                &summary,
-                None,
-                (&ctx.uid, None, 0, None),
-            )
+            .send_imip(ImipMail {
+                identity_id: &ctx.identity,
+                method: ItipMethod::Request,
+                to: &recipients,
+                calendar: text,
+                summary: &summary,
+                in_reply_to: None,
+                record: (&ctx.uid, None, 0, None),
+            })
             .await?;
         Ok(SchedulingResult {
             event: ctx.copy.map(|c| Box::new(c.event)),
@@ -1521,7 +1552,7 @@ impl Service {
             if automatic {
                 match self.apply_message(&loaded, None).await {
                     Ok(_) => {
-                        tracing::info!(message = %id, method = ?card.method, "invitation applied")
+                        tracing::info!(message = %id, method = ?card.method, "invitation applied");
                     }
                     Err(err) => {
                         tracing::info!(message = %id, %err, "invitation not applied");
@@ -1591,15 +1622,15 @@ impl Service {
             };
             let to = names_of(&copy.event.fields.attendees, &plan.imip);
             sent.push(
-                self.send_imip(
-                    identity,
-                    ItipMethod::Request,
-                    &to,
-                    text,
-                    &summary,
-                    None,
-                    (&copy.event.uid, recurrence_id, sequence, None),
-                )
+                self.send_imip(ImipMail {
+                    identity_id: identity,
+                    method: ItipMethod::Request,
+                    to: &to,
+                    calendar: text,
+                    summary: &summary,
+                    in_reply_to: None,
+                    record: (&copy.event.uid, recurrence_id, sequence, None),
+                })
                 .await?,
             );
         }
@@ -1759,15 +1790,15 @@ impl Service {
             };
             let to = names_of(&copy.event.fields.attendees, &plan.imip);
             sent.push(
-                self.send_imip(
-                    &identity,
-                    ItipMethod::Cancel,
-                    &to,
-                    text,
-                    &summary,
-                    None,
-                    (&copy.event.uid, recurrence_id.as_ref(), sequence, None),
-                )
+                self.send_imip(ImipMail {
+                    identity_id: &identity,
+                    method: ItipMethod::Cancel,
+                    to: &to,
+                    calendar: text,
+                    summary: &summary,
+                    in_reply_to: None,
+                    record: (&copy.event.uid, recurrence_id.as_ref(), sequence, None),
+                })
                 .await?,
             );
         }
@@ -1922,15 +1953,15 @@ impl Service {
                 ..Default::default()
             };
             sent.push(
-                self.send_imip(
-                    &identity,
-                    ItipMethod::DeclineCounter,
-                    &[(proposer.email.clone(), proposer.name.clone())],
-                    text,
-                    &summary,
-                    loaded.imip.message_id.as_deref(),
-                    (&uid, rid.as_ref(), copy.event.sequence, None),
-                )
+                self.send_imip(ImipMail {
+                    identity_id: &identity,
+                    method: ItipMethod::DeclineCounter,
+                    to: &[(proposer.email.clone(), proposer.name.clone())],
+                    calendar: text,
+                    summary: &summary,
+                    in_reply_to: loaded.imip.message_id.as_deref(),
+                    record: (&uid, rid.as_ref(), copy.event.sequence, None),
+                })
                 .await?,
             );
         }

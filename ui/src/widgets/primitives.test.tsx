@@ -4,6 +4,7 @@ import { defaultTheme } from "../api/mockData";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { colorSlot } from "../theme/skin";
 import { Avatar, Segmented, Switch, Tag, initialsOf } from "./primitives";
+import { must } from "../test/must";
 
 function withTheme(ui: React.ReactElement) {
   return render(<ThemeProvider theme={defaultTheme()}>{ui}</ThemeProvider>);
@@ -57,13 +58,13 @@ describe("Segmented", () => {
     expect(a).toHaveAttribute("aria-checked", "true");
     expect(a).toHaveAttribute("tabindex", "0");
     expect(b).toHaveAttribute("tabindex", "-1");
-    fireEvent.keyDown(a as HTMLElement, { key: "ArrowRight" });
+    fireEvent.keyDown(must(a), { key: "ArrowRight" });
     expect(b).toHaveAttribute("aria-checked", "true");
     expect(b).toHaveFocus();
-    fireEvent.keyDown(b as HTMLElement, { key: "ArrowLeft" });
-    fireEvent.keyDown(a as HTMLElement, { key: "ArrowLeft" });
+    fireEvent.keyDown(must(b), { key: "ArrowLeft" });
+    fireEvent.keyDown(must(a), { key: "ArrowLeft" });
     expect(c).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(a as HTMLElement);
+    fireEvent.click(must(a));
     expect(a).toHaveAttribute("aria-checked", "true");
   });
 });

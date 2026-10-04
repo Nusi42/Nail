@@ -1,3 +1,4 @@
+import { defined } from "./defined";
 /**
  * A minimal MCP client over Streamable HTTP (JSON-RPC over POST; answers
  * come as JSON or as a server-sent event stream), enough for the e2e
@@ -39,7 +40,7 @@ export class McpSession {
       body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
     });
     if (!response.ok)
-      throw new Error(`${method}: HTTP ${response.status} ${await response.text()}`);
+      throw new Error(`${method}: HTTP ${String(response.status)} ${await response.text()}`);
     this.session = response.headers.get("mcp-session-id") ?? this.session;
     if ((response.headers.get("content-type") ?? "").includes("text/event-stream")) {
       return readEvent(response, id);
@@ -71,7 +72,7 @@ export class McpSession {
 
 /** Reads server-sent events until the JSON-RPC response with `id`. */
 async function readEvent(response: Response, id: number): Promise<JsonRpcResponse> {
-  const reader = response.body!.getReader();
+  const reader = defined(response.body, "the response body").getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   try {
@@ -96,5 +97,5 @@ async function readEvent(response: Response, id: number): Promise<JsonRpcRespons
   } finally {
     await reader.cancel().catch(() => undefined);
   }
-  throw new Error(`no response for request ${id}`);
+  throw new Error(`no response for request ${String(id)}`);
 }

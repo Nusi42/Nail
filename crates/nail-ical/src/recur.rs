@@ -130,7 +130,7 @@ pub fn parse_rrule(text: &str, start: &PimTime) -> Option<RecurrenceRule> {
                     "MONTHLY" => Frequency::Monthly,
                     "YEARLY" => Frequency::Yearly,
                     _ => return None,
-                })
+                });
             }
             "INTERVAL" => rule.interval = value.parse().ok().filter(|i| *i >= 1)?,
             "COUNT" => {
@@ -167,7 +167,7 @@ pub fn parse_rrule(text: &str, start: &PimTime) -> Option<RecurrenceRule> {
                         };
                         Some(WeekdayNum { day, ordinal })
                     })
-                    .collect::<Option<_>>()?
+                    .collect::<Option<_>>()?;
             }
             _ => {} // RSCALE, SKIP (RFC 7529) and X- parts are ignored.
         }
@@ -364,8 +364,8 @@ fn days_in_year(year: i32) -> i32 {
 /// in the year, weeks starting on `week_start`).
 fn week_one_start(year: i32, week_start: chrono::Weekday) -> Option<NaiveDate> {
     let jan1 = NaiveDate::from_ymd_opt(year, 1, 1)?;
-    let offset = (7 + jan1.weekday().num_days_from_monday() as i64
-        - week_start.num_days_from_monday() as i64)
+    let offset = (7 + i64::from(jan1.weekday().num_days_from_monday())
+        - i64::from(week_start.num_days_from_monday()))
         % 7;
     let week_of_jan1 = jan1 - Duration::days(offset);
     Some(if 7 - offset >= 4 {
@@ -531,8 +531,8 @@ impl RuleIter {
             }
             Frequency::Weekly => {
                 let start_day = self.start.date();
-                let back = (7 + start_day.weekday().num_days_from_monday() as i64
-                    - self.week_start.num_days_from_monday() as i64)
+                let back = (7 + i64::from(start_day.weekday().num_days_from_monday())
+                    - i64::from(self.week_start.num_days_from_monday()))
                     % 7;
                 let week = start_day.checked_sub_signed(Duration::days(back))?;
                 (target.date() - week).num_days().div_euclid(7)
@@ -572,12 +572,11 @@ impl RuleIter {
         }
         if self.count.is_some() {
             // One occurrence per period; the start is the one of period 0.
-            match u32::try_from(k) {
-                Ok(emitted) => self.emitted = emitted,
-                Err(_) => {
-                    self.finished = true;
-                    return true;
-                }
+            if let Ok(emitted) = u32::try_from(k) {
+                self.emitted = emitted;
+            } else {
+                self.finished = true;
+                return true;
             }
         } else if self.last.is_none() {
             self.emitted = 1;
@@ -746,8 +745,8 @@ impl RuleIter {
             }
             Frequency::Weekly => {
                 let start_day = self.start.date();
-                let back = (7 + start_day.weekday().num_days_from_monday() as i64
-                    - self.week_start.num_days_from_monday() as i64)
+                let back = (7 + i64::from(start_day.weekday().num_days_from_monday())
+                    - i64::from(self.week_start.num_days_from_monday()))
                     % 7;
                 let week = start_day
                     .checked_sub_signed(Duration::days(back))?
@@ -1724,7 +1723,7 @@ mod tests {
         assert!(begun.elapsed() < std::time::Duration::from_secs(1));
     }
 
-    /// MINUTELY / SECONDLY rules end after MAX_SUB_HOURLY_OCCURRENCES
+    /// MINUTELY / SECONDLY rules end after `MAX_SUB_HOURLY_OCCURRENCES`
     /// whatever their COUNT or UNTIL say; smaller counts stay.
     #[test]
     fn sub_hourly_rules_are_capped() {

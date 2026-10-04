@@ -68,7 +68,9 @@ export function RemoteAuditWidget({ node }: WidgetProps) {
           labelId="remote-audit-filter-user"
           name="audit-user"
           value={userId ?? ""}
-          onChange={(v) => setUserId(v === "" ? null : v)}
+          onChange={(v) => {
+            setUserId(v === "" ? null : v);
+          }}
           choices={[
             { value: "", label: "remote-audit-all-users" },
             ...users.map((u) => ({ value: u.id, label: u.name, literal: true })),

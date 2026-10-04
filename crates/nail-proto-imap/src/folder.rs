@@ -115,10 +115,10 @@ pub fn encode_modified_utf7(input: &str) -> String {
 }
 
 fn flush_utf16(out: &mut String, pending: &mut Vec<u16>) {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
     if pending.is_empty() {
         return;
     }
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
     let bytes: Vec<u8> = pending.drain(..).flat_map(u16::to_be_bytes).collect();
     out.push('&');
     for chunk in bytes.chunks(3) {
@@ -184,7 +184,7 @@ pub fn decode_modified_utf7(input: &str) -> String {
         } else {
             match decode_base64_utf16(encoded) {
                 Some(decoded) => out.push_str(&decoded),
-                None => out.push_str(&rest[amp..amp + 1 + end + 1]),
+                None => out.push_str(&rest[amp..=(amp + 1 + end)]),
             }
         }
         rest = &after[end + 1..];

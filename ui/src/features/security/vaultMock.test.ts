@@ -49,7 +49,7 @@ describe("recovery key text form (nail_api::recovery)", () => {
     expect(parseRecoveryKey("  ")).toEqual({ ok: false, issue: "empty" });
     expect(parseRecoveryKey("ABCD-U000")).toEqual({ ok: false, issue: "invalid-character" });
     expect(parseRecoveryKey(text.slice(0, 20))).toEqual({ ok: false, issue: "wrong-length" });
-    const typo = (text[0] === "A" ? "B" : "A") + text.slice(1);
+    const typo = (text.startsWith("A") ? "B" : "A") + text.slice(1);
     expect(parseRecoveryKey(typo)).toEqual({ ok: false, issue: "checksum-mismatch" });
   });
 });

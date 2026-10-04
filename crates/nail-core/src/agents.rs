@@ -47,7 +47,7 @@ use crate::mcp::McpCore;
 use crate::service::{Service, lock};
 
 /// How long "Send anyway" stays possible after a veto (ADR 0079).
-const VETO_TTL: Duration = Duration::from_secs(10 * 60);
+const VETO_TTL: Duration = Duration::from_mins(10);
 
 /// Most vetoes kept at once (the oldest go first).
 const MAX_VETOES: usize = 200;
@@ -458,11 +458,11 @@ impl Service {
             let message = self.outgoing_message(&draft_id, &draft, crypto.as_ref())?;
             let report = host.before_send_hooks(&message).await;
             self.hooks_ran(report.runs.iter().map(|r| &r.plugin_id));
-            let vetoed = report.vetoed();
+            let any_veto = report.vetoed();
             let headers: Vec<PluginHeader> = report.headers.into_iter().map(|(_, h)| h).collect();
             let additions: Vec<PluginContentAddition> =
                 report.additions.into_iter().map(|(_, a)| a).collect();
-            if vetoed {
+            if any_veto {
                 let veto_id = format!("{:016x}", rand::random::<u64>());
                 let mut vetoes = lock(&self.inner.agents.vetoes);
                 vetoes.retain(|_, v| v.at.elapsed() < VETO_TTL);
@@ -602,13 +602,12 @@ impl Service {
             crate::crypto::effective_crypto(crypto.cloned(), draft.crypto.as_ref(), &identity)
                 .is_active();
         let text = match draft.mode {
-            ComposerMode::Plain => draft.text.clone(),
             ComposerMode::Html if draft.text.trim().is_empty() => draft
                 .html
                 .as_deref()
                 .map(nail_compose::html_to_text)
                 .unwrap_or_default(),
-            ComposerMode::Html => draft.text.clone(),
+            ComposerMode::Plain | ComposerMode::Html => draft.text.clone(),
             ComposerMode::Markdown => draft.markdown.clone().unwrap_or_else(|| draft.text.clone()),
         };
         Ok(PluginOutgoingMessage {

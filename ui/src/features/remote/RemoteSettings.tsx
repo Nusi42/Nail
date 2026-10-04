@@ -9,7 +9,7 @@
  * problem before saving; the core's answer wins.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { NailError, errorMessageId, errorMessageIdOf } from "../../api/client";
 import type {
   RemoteTlsMode,
@@ -214,7 +214,7 @@ function SettingsForm({
       change({ bind_address: draft.bind_address === ALL_INTERFACES ? "" : draft.bind_address });
   };
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (busy || issues.length > 0) return;
     setBusy(true);
@@ -253,7 +253,9 @@ function SettingsForm({
         labelId="remote-settings-enabled"
         name="enabled"
         checked={draft.enabled}
-        onChange={(enabled) => change({ enabled })}
+        onChange={(enabled) => {
+          change({ enabled });
+        }}
       />
       <fieldset data-part="form.section">
         <legend data-part="form.section.title">{t("remote-settings-network")}</legend>
@@ -261,7 +263,9 @@ function SettingsForm({
           labelId="remote-settings-bind"
           name="bind"
           value={bind}
-          onChange={(v) => chooseBind(v as BindChoice)}
+          onChange={(v) => {
+            chooseBind(v as BindChoice);
+          }}
           choices={BIND_CHOICES.map((c) => ({ value: c, label: `remote-bind-${c}` }))}
         />
         {bind === "custom" && (
@@ -270,7 +274,9 @@ function SettingsForm({
             hintId="remote-settings-bind-address-hint"
             name="bind-address"
             value={draft.bind_address}
-            onChange={(bind_address) => change({ bind_address: bind_address.trim() })}
+            onChange={(bind_address) => {
+              change({ bind_address: bind_address.trim() });
+            }}
             invalid={issues.includes("invalid-bind-address")}
           />
         )}
@@ -285,21 +291,27 @@ function SettingsForm({
           value={draft.port}
           min={1}
           max={65535}
-          onChange={(port) => change({ port: port ?? 0 })}
+          onChange={(port) => {
+            change({ port: port ?? 0 });
+          }}
         />
         <InputField
           labelId="remote-settings-host-name"
           hintId="remote-settings-host-name-hint"
           name="host-name"
           value={draft.host_name ?? ""}
-          onChange={(h) => change({ host_name: h.trim() === "" ? null : h.trim() })}
+          onChange={(h) => {
+            change({ host_name: h.trim() === "" ? null : h.trim() });
+          }}
           invalid={issues.includes("invalid-host-name")}
         />
         <SelectField
           labelId="remote-settings-tls"
           name="tls"
           value={draft.tls}
-          onChange={(tls) => change({ tls: tls as RemoteTlsMode })}
+          onChange={(tls) => {
+            change({ tls: tls as RemoteTlsMode });
+          }}
           choices={TLS_CHOICES.map((m) => ({ value: m, label: `remote-tls-${m}` }))}
         />
         <p data-part="form.hint">{t(`remote-tls-${draft.tls}-hint`)}</p>
@@ -321,28 +333,36 @@ function SettingsForm({
           name="session-idle"
           value={draft.session_idle_minutes}
           min={1}
-          onChange={(v) => change({ session_idle_minutes: v ?? 0 })}
+          onChange={(v) => {
+            change({ session_idle_minutes: v ?? 0 });
+          }}
         />
         <NumberField
           labelId="remote-settings-max-hours"
           name="session-max"
           value={draft.session_max_hours}
           min={1}
-          onChange={(v) => change({ session_max_hours: v ?? 0 })}
+          onChange={(v) => {
+            change({ session_max_hours: v ?? 0 });
+          }}
         />
         <NumberField
           labelId="remote-settings-reauth"
           name="reauth"
           value={draft.reauth_minutes}
           min={1}
-          onChange={(v) => change({ reauth_minutes: v ?? 0 })}
+          onChange={(v) => {
+            change({ reauth_minutes: v ?? 0 });
+          }}
         />
         <NumberField
           labelId="remote-settings-audit-retention"
           name="audit-retention"
           value={draft.audit_retention_days}
           min={1}
-          onChange={(v) => change({ audit_retention_days: v ?? 0 })}
+          onChange={(v) => {
+            change({ audit_retention_days: v ?? 0 });
+          }}
         />
       </fieldset>
       {shown.length > 0 && (
@@ -419,7 +439,9 @@ export function RemoteSettingsWidget({ node }: WidgetProps) {
           <SettingsForm
             key={key}
             justSaved={savedKey === key}
-            onSaved={(settings) => setSavedKey(JSON.stringify(settings))}
+            onSaved={(settings) => {
+              setSavedKey(JSON.stringify(settings));
+            }}
             saved={ui.data.settings}
             status={ui.data.status}
           />

@@ -18,7 +18,7 @@ use windows_sys::Win32::System::Memory::{
 
 /// Why a string could not be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StrError {
+pub(crate) enum StrError {
     /// The pointer leads into memory that is not readable.
     Unreadable,
     /// No terminator within the limit.
@@ -82,18 +82,18 @@ fn accessible(ptr: *const u8, len: usize, wanted: u32) -> bool {
 }
 
 /// Whether `len` bytes at `ptr` can be read (`false` for null).
-pub fn readable(ptr: *const u8, len: usize) -> bool {
+pub(crate) fn readable(ptr: *const u8, len: usize) -> bool {
     accessible(ptr, len, READABLE)
 }
 
 /// Whether `len` bytes at `ptr` can be written (`false` for null).
-pub fn writable(ptr: *const u8, len: usize) -> bool {
+pub(crate) fn writable(ptr: *const u8, len: usize) -> bool {
     accessible(ptr, len, WRITABLE)
 }
 
 /// Copies a `T` from caller memory: `None` for null or unreadable
 /// pointers. Unaligned pointers are fine.
-pub fn read_struct<T: Copy>(ptr: *const T) -> Option<T> {
+pub(crate) fn read_struct<T: Copy>(ptr: *const T) -> Option<T> {
     if !readable(ptr.cast(), size_of::<T>()) {
         return None;
     }
@@ -104,7 +104,7 @@ pub fn read_struct<T: Copy>(ptr: *const T) -> Option<T> {
 }
 
 /// Writes a `T` to caller memory when it is writable.
-pub fn write_struct<T: Copy>(ptr: *mut T, value: T) -> bool {
+pub(crate) fn write_struct<T: Copy>(ptr: *mut T, value: T) -> bool {
     if !writable(ptr.cast_const().cast(), size_of::<T>()) {
         return false;
     }
@@ -115,7 +115,7 @@ pub fn write_struct<T: Copy>(ptr: *mut T, value: T) -> bool {
 
 /// Reads a zero-terminated string of `T` units (bytes or UTF-16 units)
 /// from caller memory, at most `max_units` long. `Ok(None)` for null.
-pub fn read_units<T: Copy + Default + PartialEq>(
+pub(crate) fn read_units<T: Copy + Default + PartialEq>(
     ptr: *const T,
     max_units: usize,
 ) -> Result<Option<Vec<T>>, StrError> {
@@ -179,7 +179,7 @@ pub(crate) mod tests {
             let mut old = 0;
             // SAFETY: the second page belongs to this allocation.
             let ok =
-                unsafe { VirtualProtect(base.add(page).cast(), page, PAGE_NOACCESS, &mut old) };
+                unsafe { VirtualProtect(base.add(page).cast(), page, PAGE_NOACCESS, &raw mut old) };
             assert_ne!(ok, 0);
             Self { base, page }
         }
@@ -206,6 +206,8 @@ pub(crate) mod tests {
 
     #[test]
     fn probes_and_reads() {
+        // Static read-only data is readable but not writable.
+        static TEXT: [u8; 4] = *b"abc\0";
         let value: u64 = 0x1122_3344_5566_7788;
         assert!(readable((&raw const value).cast(), 8));
         assert_eq!(read_struct(&raw const value), Some(value));
@@ -213,8 +215,6 @@ pub(crate) mod tests {
         assert!(!readable(0x10 as *const u8, 1));
         assert!(!readable(usize::MAX as *const u8, 2));
         assert_eq!(read_struct(0x10 as *const u64), None);
-        // Static read-only data is readable but not writable.
-        static TEXT: [u8; 4] = *b"abc\0";
         assert!(readable(TEXT.as_ptr(), 4));
         assert!(!writable(TEXT.as_ptr(), 4));
         let mut slot = 0usize;
@@ -240,6 +240,10 @@ pub(crate) mod tests {
         );
     }
 
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "deliberately misaligned and guard-page pointers: the readers must cope with both"
+    )]
     #[test]
     fn unterminated_strings_at_the_end_of_memory() {
         let pages = GuardedPages::new();

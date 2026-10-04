@@ -32,7 +32,9 @@ const pimOf = (env: Env) => env.transport.data.features.pim;
 const windows = (env: Env) => env.store.getState().windows;
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 function calendar(id: string, source: string, order: number, extra: Partial<Calendar> = {}) {
@@ -147,7 +149,7 @@ describe("calendar list widget", () => {
     const groups = [...document.querySelectorAll('[data-part="calendar-list.source"]')];
     expect(
       groups.map(
-        (g) => g.textContent?.match(/^(On this computer|Work calendars|Subscriptions)/)?.[1],
+        (g) => /^(On this computer|Work calendars|Subscriptions)/.exec(g.textContent)?.[1],
       ),
     ).toEqual(["On this computer", "Work calendars", "Subscriptions"]);
     // No inline form and no text buttons: menus only.
@@ -162,9 +164,9 @@ describe("calendar list widget", () => {
       screen.getByText("Tasks", { selector: '[data-part="calendar-list.kind"]' }),
     ).toBeVisible();
     await user.click(work);
-    await waitFor(() =>
-      expect(pimOf(env).calendars.find((c) => c.id === "cal-work")?.settings.visible).toBe(false),
-    );
+    await waitFor(() => {
+      expect(pimOf(env).calendars.find((c) => c.id === "cal-work")?.settings.visible).toBe(false);
+    });
     await waitFor(() =>
       expect(work.closest('[data-part="calendar-list.item"]')).toHaveAttribute(
         "data-state",
@@ -208,22 +210,22 @@ describe("calendar list widget", () => {
       "Slate",
     ]);
     await user.click(screen.getByRole("menuitemradio", { name: "Purple" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(pimOf(env).calendars.find((c) => c.id === "cal-personal")?.settings.color).toBe(
         "#9333ea",
-      ),
-    );
+      );
+    });
     await user.click(screen.getByRole("button", { name: "Actions for Personal" }));
     expect(screen.getByRole("menuitemradio", { name: "Purple" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
     await user.click(screen.getByRole("menuitem", { name: "Show in the calendar" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(pimOf(env).calendars.find((c) => c.id === "cal-personal")?.settings.visible).toBe(
         true,
-      ),
-    );
+      );
+    });
   });
 
   it("closes a menu on a click elsewhere and offers unsubscribing for a subscription", async () => {
@@ -269,7 +271,9 @@ describe("calendar list widget", () => {
     await user.click(screen.getByRole("radio", { name: "Green" }));
     expect(screen.getByLabelText("Other colour (for example #3b82f6)")).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).calendars.find((c) => c.settings.name === "Errands")).toMatchObject({
       source_id: "work-calendars",
       components: ["task"],
@@ -300,7 +304,9 @@ describe("calendar list widget", () => {
     await user.type(name, "Office");
     await user.click(within(form).getByRole("checkbox", { name: "Show reminders" }));
     await user.click(within(form).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).calendars.find((c) => c.id === "cal-work")?.settings).toMatchObject({
       name: "Office",
       color: "#ef4444",
@@ -324,15 +330,21 @@ describe("calendar list widget", () => {
       await screen.findByText(/Remove the calendar “Personal” with all its events\?/),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(pimOf(env).calendars.some((c) => c.id === "cal-personal")).toBe(false);
     unmount();
 
-    act(() => pimStoreFor(env.store).getState().setRemoveCalendar("cal-holidays"));
+    act(() => {
+      pimStoreFor(env.store).getState().setRemoveCalendar("cal-holidays");
+    });
     renderWithProviders(<RemoveCalendarDialog name={REMOVE_CALENDAR_DIALOG} close={close} />, env);
     expect(await screen.findByText(/Unsubscribe from “Public holidays”\?/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Unsubscribe" }));
-    await waitFor(() => expect(pimOf(env).sources.some((s) => s.id === "holidays")).toBe(false));
+    await waitFor(() => {
+      expect(pimOf(env).sources.some((s) => s.id === "holidays")).toBe(false);
+    });
   });
 
   it("says when the calendar to remove is gone", async () => {
@@ -370,7 +382,7 @@ describe("calendar list widget", () => {
 describe("calendar & contacts settings section", () => {
   it("registers the section widget with labels that all exist", async () => {
     expect(widgets["pim-settings"]).toBeDefined();
-    expect(Object.keys(settings ?? {}).sort()).toEqual(["calendar-list", "pim-settings"]);
+    expect(Object.keys(settings).sort()).toEqual(["calendar-list", "pim-settings"]);
     const env = createEnv();
     renderNode(widget("pim-settings"), env);
     await settle(env);

@@ -43,7 +43,7 @@ The build scripts write into the example's own folder (`dist/index.js`,
 output must not go, so **copy the example out of the repository first**
 and build the copy:
 
-```
+```sh
 cp -r examples/<name> <dir>/<name>     # any folder outside the repository
 cd <dir>/<name>
 npm run package      # type-check, bundle, pack → dist/<name>.nailplugin

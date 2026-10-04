@@ -3,6 +3,12 @@
 //! actions, link actions, Markdown blocks, MCP tools, `nail.l10n`, binary
 //! fetch bodies and panel actions checked against the rendered tree.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::collections::BTreeMap;
@@ -229,7 +235,7 @@ async fn attachment_previews_render_trees_and_images_only() {
         tree[0],
         PluginUiNode::Text {
             value: "data.csv 12".into(),
-            style: Default::default()
+            style: nail_api::plugins::ui::PluginTextStyle::default()
         }
     );
     let PluginUiNode::Table { rows, .. } = &tree[1] else {

@@ -119,7 +119,7 @@ pub(crate) async fn run(
     };
     let options = options.clone();
     service.set_status(&account.id, AccountState::Connecting, None);
-    let engine = match super::setup::engine_for(&service, &account).await {
+    let engine = match super::setup::engine_for(&service, &account) {
         Ok(engine) => engine,
         Err(err) => {
             service.set_status(
@@ -338,16 +338,18 @@ fn stream_retry_delay(
 async fn record_throttle(service: &Service, account: &AccountId, secs: u32) {
     let id = account.clone();
     let until = unix_now() + i64::from(secs);
-    let _ = service
-        .store()
-        .call(move |s| {
-            if let Some(mut record) = s.exchange_sync(&id)? {
-                record.throttled_until = Some(until);
-                s.set_exchange_sync(&id, &record)?;
-            }
-            Ok(())
-        })
-        .await;
+    drop(
+        service
+            .store()
+            .call(move |s| {
+                if let Some(mut record) = s.exchange_sync(&id)? {
+                    record.throttled_until = Some(until);
+                    s.set_exchange_sync(&id, &record)?;
+                }
+                Ok(())
+            })
+            .await,
+    );
     changed(service, account, &[ExchangeArea::Status]);
 }
 
@@ -568,8 +570,8 @@ async fn sync_mailbox(
                     .collect())
             })
             .await?;
-        let stale = since_removal.stale(current);
-        if stale.is_empty() {
+        let gone = since_removal.stale(current);
+        if gone.is_empty() {
             break;
         }
         if rounds == MAX_REMOVAL_ROUNDS {
@@ -577,7 +579,7 @@ async fn sync_mailbox(
             return Ok(());
         }
         rounds += 1;
-        for folder in &stale {
+        for folder in &gone {
             let removed = sync_one(service, account, engine, mailbox, folder, state).await?;
             since_removal.synced(&folder.folder_id, removed);
         }
@@ -1032,7 +1034,7 @@ impl Listing {
         }))
     }
 
-    /// Whether new messages of this listing are arrivals (rules, NewMail).
+    /// Whether new messages of this listing are arrivals (rules, `NewMail`).
     pub(crate) fn arrivals(&self) -> bool {
         self.kind == ListingKind::Full
     }
@@ -1564,23 +1566,22 @@ async fn store_messages(
             let headers_only = m.raw.is_none()
                 && nail_exchange::policy::body_fetch(policy.bodies, m.internal_date, now)
                     == nail_exchange::policy::BodyFetch::HeadersOnly;
-            let raw = match &m.raw {
-                Some(raw) => raw.clone(),
-                None => {
-                    let fetched = if headers_only {
-                        engine
-                            .fetch_headers(folder.mailbox.as_deref(), &m.remote_id)
-                            .await
-                    } else {
-                        engine
-                            .fetch_mime(folder.mailbox.as_deref(), &m.remote_id)
-                            .await
-                    };
-                    match fetched {
-                        Ok(raw) => raw,
-                        Err(err) if err.code == ErrorCode::NotFound => continue,
-                        Err(err) => return Err(err.into()),
-                    }
+            let raw = if let Some(raw) = &m.raw {
+                raw.clone()
+            } else {
+                let fetched = if headers_only {
+                    engine
+                        .fetch_headers(folder.mailbox.as_deref(), &m.remote_id)
+                        .await
+                } else {
+                    engine
+                        .fetch_mime(folder.mailbox.as_deref(), &m.remote_id)
+                        .await
+                };
+                match fetched {
+                    Ok(raw) => raw,
+                    Err(err) if err.code == ErrorCode::NotFound => continue,
+                    Err(err) => return Err(err.into()),
                 }
             };
             if let Some(moved) =
@@ -1883,35 +1884,36 @@ impl ExchangeExecutor<'_> {
         folder: Option<&ExchangeFolderRecord>,
     ) {
         let (id, remote, folder) = (message.clone(), remote.to_owned(), folder.cloned());
-        let _ = self
-            .service
-            .store()
-            .call(move |s| {
-                s.set_message_remote_id(&id, Some(&remote))?;
-                // A listing of the target in progress must not take the
-                // moved message for one the server no longer has.
-                if let Some(folder) = &folder
-                    && folder.full_sync_page.is_some()
-                {
-                    let account = s.get_message(&id)?.summary.account_id;
-                    s.add_exchange_listed(
-                        &account,
-                        folder.folder_id.as_str(),
-                        std::slice::from_ref(&remote),
-                    )?;
-                }
-                if let Some(folder) = folder
-                    && let Some(mut item) = s.exchange_item(&id)?
-                {
-                    item.mailbox = folder.mailbox;
-                    if folder.well_known != Some(ExchangeWellKnownFolder::Inbox) {
-                        item.inference = None;
+        drop(
+            self.service
+                .store()
+                .call(move |s| {
+                    s.set_message_remote_id(&id, Some(&remote))?;
+                    // A listing of the target in progress must not take the
+                    // moved message for one the server no longer has.
+                    if let Some(folder) = &folder
+                        && folder.full_sync_page.is_some()
+                    {
+                        let account = s.get_message(&id)?.summary.account_id;
+                        s.add_exchange_listed(
+                            &account,
+                            folder.folder_id.as_str(),
+                            std::slice::from_ref(&remote),
+                        )?;
                     }
-                    s.set_exchange_item(&id, &item)?;
-                }
-                Ok(())
-            })
-            .await;
+                    if let Some(folder) = folder
+                        && let Some(mut item) = s.exchange_item(&id)?
+                    {
+                        item.mailbox = folder.mailbox;
+                        if folder.well_known != Some(ExchangeWellKnownFolder::Inbox) {
+                            item.inference = None;
+                        }
+                        s.set_exchange_item(&id, &item)?;
+                    }
+                    Ok(())
+                })
+                .await,
+        );
     }
 
     async fn run(&self, op: &QueuedOp) -> Result<(), EngineError> {
@@ -1979,8 +1981,7 @@ impl ExchangeExecutor<'_> {
                         return Err(crate::api_moves::unsupported_target());
                     };
                     let source = nail_exchange::transfer::ApiMailbox::Exchange {
-                        engine: self.engine.as_ref()
-                            as &dyn nail_api::exchange::engine::ExchangeMailEngine,
+                        engine: self.engine.as_ref(),
                         mailbox: from.mailbox.as_deref(),
                     };
                     return crate::api_moves::move_out(
@@ -2111,14 +2112,15 @@ impl ExchangeExecutor<'_> {
                 {
                     let (id, f) = (message_id.clone(), folder.clone());
                     let record = item_record(&f, None, None);
-                    let _ = self
-                        .service
-                        .store()
-                        .call(move |s| {
-                            s.set_message_remote_id(&id, Some(&remote))?;
-                            s.set_exchange_item(&id, &record)
-                        })
-                        .await;
+                    drop(
+                        self.service
+                            .store()
+                            .call(move |s| {
+                                s.set_message_remote_id(&id, Some(&remote))?;
+                                s.set_exchange_item(&id, &record)
+                            })
+                            .await,
+                    );
                 }
                 Ok(())
             }

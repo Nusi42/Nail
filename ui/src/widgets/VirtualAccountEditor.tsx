@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type {
   AccountConfig,
@@ -96,14 +96,18 @@ function SourceRow({
         name={`source-${index}-account`}
         value={source.account_id}
         choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
-        onChange={(account_id) => onChange({ account_id, path: "" })}
+        onChange={(account_id) => {
+          onChange({ account_id, path: "" });
+        }}
       />
       <SelectField
         labelId="virtual-source-folder"
         name={`source-${index}-folder`}
         value={source.path}
         choices={[{ value: "", label: "virtual-source-choose" }, ...folderChoices]}
-        onChange={(path) => onChange({ ...source, path })}
+        onChange={(path) => {
+          onChange({ ...source, path });
+        }}
       />
       <button type="button" data-part="form.button" data-action="remove-source" onClick={onRemove}>
         {t("virtual-remove-source")}
@@ -131,26 +135,28 @@ function MappingEditor({
     <li data-part="virtual-editor.mapping" data-index={index}>
       <TextField
         labelId="virtual-mapping-name"
-        name={`mapping-${index}-name`}
+        name={`mapping-${String(index)}-name`}
         value={mapping.name}
-        onChange={(name) => onChange({ ...mapping, name })}
+        onChange={(name) => {
+          onChange({ ...mapping, name });
+        }}
       />
       <ul data-part="virtual-editor.sources">
         {mapping.sources.map((source, i) => (
           <SourceRow
             key={i}
-            index={`${index}-${i}`}
+            index={`${String(index)}-${String(i)}`}
             source={source}
             accounts={accounts}
-            onChange={(next) =>
+            onChange={(next) => {
               onChange({
                 ...mapping,
                 sources: mapping.sources.map((old, j) => (j === i ? next : old)),
-              })
-            }
-            onRemove={() =>
-              onChange({ ...mapping, sources: mapping.sources.filter((_, j) => j !== i) })
-            }
+              });
+            }}
+            onRemove={() => {
+              onChange({ ...mapping, sources: mapping.sources.filter((_, j) => j !== i) });
+            }}
           />
         ))}
       </ul>
@@ -159,12 +165,12 @@ function MappingEditor({
         data-part="form.button"
         data-action="add-source"
         disabled={!first}
-        onClick={() =>
+        onClick={() => {
           onChange({
             ...mapping,
             sources: [...mapping.sources, { account_id: first?.id ?? "", path: "" }],
-          })
-        }
+          });
+        }}
       >
         {t("virtual-add-source")}
       </button>
@@ -232,7 +238,7 @@ function VirtualForm({
       queryClient.invalidateQueries({ queryKey: queryKeys.allFolders }),
     ]);
 
-  const save = (event: FormEvent) => {
+  const save = (event: SubmitEvent) => {
     event.preventDefault();
     if (problems.length > 0) return;
     void run(async () => {
@@ -257,19 +263,21 @@ function VirtualForm({
       return "virtual-removed";
     });
 
-  const toggleMember = (id: string, on: boolean) =>
+  const toggleMember = (id: string, on: boolean) => {
     setConfig({
       ...config,
       members: on
         ? accounts.map((a) => a.id).filter((a) => a === id || config.members.includes(a))
         : config.members.filter((m) => m !== id),
     });
+  };
 
-  const setRule = (index: number, rule: IdentityRule) =>
+  const setRule = (index: number, rule: IdentityRule) => {
     setConfig({
       ...config,
       identity_rules: config.identity_rules.map((old, i) => (i === index ? rule : old)),
     });
+  };
 
   return (
     <form
@@ -282,7 +290,9 @@ function VirtualForm({
         labelId="virtual-name"
         name="name"
         value={config.name}
-        onChange={(name) => setConfig({ ...config, name })}
+        onChange={(name) => {
+          setConfig({ ...config, name });
+        }}
       />
       <Section titleId="virtual-members">
         {accounts.map((account) => (
@@ -292,7 +302,9 @@ function VirtualForm({
             args={{ name: account.name }}
             name={`member-${account.id}`}
             checked={config.members.includes(account.id)}
-            onChange={(on) => toggleMember(account.id, on)}
+            onChange={(on) => {
+              toggleMember(account.id, on);
+            }}
           />
         ))}
       </Section>
@@ -301,7 +313,9 @@ function VirtualForm({
           labelId="virtual-merge-roles"
           name="merge-roles"
           checked={config.merge_roles}
-          onChange={(merge_roles) => setConfig({ ...config, merge_roles })}
+          onChange={(merge_roles) => {
+            setConfig({ ...config, merge_roles });
+          }}
         />
         <ul data-part="virtual-editor.mappings">
           {config.folder_mappings.map((mapping, index) => (
@@ -310,20 +324,20 @@ function VirtualForm({
               index={index}
               mapping={mapping}
               accounts={memberAccounts}
-              onChange={(next) =>
+              onChange={(next) => {
                 setConfig({
                   ...config,
                   folder_mappings: config.folder_mappings.map((old, i) =>
                     i === index ? next : old,
                   ),
-                })
-              }
-              onRemove={() =>
+                });
+              }}
+              onRemove={() => {
                 setConfig({
                   ...config,
                   folder_mappings: config.folder_mappings.filter((_, i) => i !== index),
-                })
-              }
+                });
+              }}
             />
           ))}
         </ul>
@@ -331,12 +345,12 @@ function VirtualForm({
           type="button"
           data-part="form.button"
           data-action="add-mapping"
-          onClick={() =>
+          onClick={() => {
             setConfig({
               ...config,
               folder_mappings: [...config.folder_mappings, { name: "", sources: [] }],
-            })
-          }
+            });
+          }}
         >
           {t("virtual-add-mapping")}
         </button>
@@ -347,35 +361,41 @@ function VirtualForm({
           name="default-identity"
           value={config.default_identity ?? ""}
           choices={[{ value: "", label: "virtual-default-identity-auto" }, ...identityChoices]}
-          onChange={(v) => setConfig({ ...config, default_identity: v === "" ? null : v })}
+          onChange={(v) => {
+            setConfig({ ...config, default_identity: v === "" ? null : v });
+          }}
         />
         <ul data-part="virtual-editor.rules">
           {config.identity_rules.map((rule, index) => (
             <li key={index} data-part="virtual-editor.rule">
               <TextField
                 labelId="virtual-rule-pattern"
-                name={`rule-${index}-pattern`}
+                name={`rule-${String(index)}-pattern`}
                 hintId="virtual-rule-pattern-hint"
                 value={rule.pattern}
-                onChange={(pattern) => setRule(index, { ...rule, pattern: pattern.trim() })}
+                onChange={(pattern) => {
+                  setRule(index, { ...rule, pattern: pattern.trim() });
+                }}
               />
               <SelectField
                 labelId="virtual-rule-identity"
-                name={`rule-${index}-identity`}
+                name={`rule-${String(index)}-identity`}
                 value={rule.identity}
                 choices={[{ value: "", label: "virtual-source-choose" }, ...identityChoices]}
-                onChange={(identity) => setRule(index, { ...rule, identity })}
+                onChange={(identity) => {
+                  setRule(index, { ...rule, identity });
+                }}
               />
               <button
                 type="button"
                 data-part="form.button"
                 data-action="remove-rule"
-                onClick={() =>
+                onClick={() => {
                   setConfig({
                     ...config,
                     identity_rules: config.identity_rules.filter((_, i) => i !== index),
-                  })
-                }
+                  });
+                }}
               >
                 {t("virtual-remove-rule")}
               </button>
@@ -387,15 +407,15 @@ function VirtualForm({
           data-part="form.button"
           data-action="add-rule"
           disabled={memberIdentities.length === 0}
-          onClick={() =>
+          onClick={() => {
             setConfig({
               ...config,
               identity_rules: [
                 ...config.identity_rules,
                 { pattern: "", identity: memberIdentities[0]?.id ?? "" },
               ],
-            })
-          }
+            });
+          }}
         >
           {t("virtual-add-rule")}
         </button>

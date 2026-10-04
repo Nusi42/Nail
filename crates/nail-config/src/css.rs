@@ -7,7 +7,7 @@ use nail_api::config::theme::css_var_name;
 use crate::l10n::msg;
 
 /// Token categories (see `nail_api::TokenSet`).
-pub const TOKEN_CATEGORIES: &[&str] = &[
+pub(crate) const TOKEN_CATEGORIES: &[&str] = &[
     "color",
     "font",
     "font-size",
@@ -24,14 +24,14 @@ pub const TOKEN_CATEGORIES: &[&str] = &[
 ];
 
 /// Token categories whose unitless numbers are pixel lengths.
-pub const PX_TOKEN_CATEGORIES: &[&str] = &["font-size", "space", "size", "radius"];
+pub(crate) const PX_TOKEN_CATEGORIES: &[&str] = &["font-size", "space", "size", "radius"];
 
 /// Colour modes that may override tokens, plus the density variant
 /// `compact` (M5a, ADR 0102: `space "row" 12 compact=8`).
-pub const MODES: &[&str] = &["light", "dark", "high-contrast", "print", "compact"];
+pub(crate) const MODES: &[&str] = &["light", "dark", "high-contrast", "print", "compact"];
 
 /// The CSS properties a part rule may set.
-pub const PROPERTIES: &[&str] = &[
+pub(crate) const PROPERTIES: &[&str] = &[
     // Box and layout
     "display",
     "position",
@@ -208,12 +208,12 @@ const LENGTH_PROPERTIES: &[&str] = &[
 ];
 
 /// Whether unitless numbers for this property get `px`.
-pub fn is_length_property(property: &str) -> bool {
+pub(crate) fn is_length_property(property: &str) -> bool {
     LENGTH_PROPERTIES.contains(&property)
 }
 
 /// Adds `px` to a unitless number, except for zero.
-pub fn px(number: &str) -> String {
+pub(crate) fn px(number: &str) -> String {
     if number.parse::<f64>().is_ok_and(|n| n == 0.0) {
         number.to_owned()
     } else {
@@ -223,7 +223,7 @@ pub fn px(number: &str) -> String {
 
 /// Rejects values that could load remote content or break out of a
 /// declaration. Returns a readable reason.
-pub fn check_value_safety(value: &str) -> Result<(), LocalizedMessage> {
+pub(crate) fn check_value_safety(value: &str) -> Result<(), LocalizedMessage> {
     if let Some(c) = value
         .chars()
         .find(|c| matches!(c, ';' | '{' | '}' | '<' | '>' | '\\'))
@@ -234,7 +234,7 @@ pub fn check_value_safety(value: &str) -> Result<(), LocalizedMessage> {
 }
 
 /// Rejects constructs that load remote content (also used for `raw-css`).
-pub fn check_no_remote(css: &str) -> Result<(), LocalizedMessage> {
+pub(crate) fn check_no_remote(css: &str) -> Result<(), LocalizedMessage> {
     let lower = css.to_ascii_lowercase();
     for banned in [
         "url(",
@@ -253,7 +253,7 @@ pub fn check_no_remote(css: &str) -> Result<(), LocalizedMessage> {
 
 /// A token reference found in a value.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TokenRef {
+pub(crate) struct TokenRef {
     /// Token category, e.g. `"color"`.
     pub category: String,
     /// Token name, e.g. `"accent"`.
@@ -263,7 +263,7 @@ pub struct TokenRef {
 /// Rewrites every `$category.name` in `value` to `var(--nail-category-name)`.
 /// `$$` stands for a literal `$`. `exists` decides whether a token is
 /// defined. Returns the rewritten value and the references found.
-pub fn resolve_token_refs(
+pub(crate) fn resolve_token_refs(
     value: &str,
     exists: impl Fn(&str, &str) -> bool,
 ) -> Result<(String, Vec<TokenRef>), LocalizedMessage> {

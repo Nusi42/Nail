@@ -8,9 +8,7 @@
 import type { InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { violations } from "../../test/axe";
-import type { ComponentType } from "react";
 import type { Response } from "../../api/generated";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { queryKeys } from "../../state/queries";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -18,9 +16,12 @@ import { dialogs, MessageLabels } from ".";
 import { GMAIL_ACCOUNT, GMAIL_FOLDERS, seedGmailDemo } from "./mockSeed";
 import { APPLY_LABELS_DIALOG, DIALOGS, LABEL_DELETE_DIALOG, LABEL_EDITOR_DIALOG } from "./names";
 import { gmailStoreFor } from "./store";
+import { must } from "../../test/must";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
@@ -113,7 +114,7 @@ describe("axe: Gmail dialogs", () => {
     async (name, existing) => {
       const env = setup();
       prepare(env, name, existing);
-      const Dialog = dialogs[name] as ComponentType<DialogProps>;
+      const Dialog = must(dialogs[name]);
       const { container } = renderWithProviders(
         <div role="dialog" aria-label={name}>
           <Dialog name={name} close={() => undefined} />

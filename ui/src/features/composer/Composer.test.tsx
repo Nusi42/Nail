@@ -14,6 +14,7 @@ import { loadHtmlEditor, loadMarkdownEditor } from "./lazyEditors";
 import { openRichDraft } from "./flows";
 import { activeComposer } from "./sessions";
 import { loadInlinePreviews, missingInlineImages } from "./inlineImages";
+import { must } from "../../test/must";
 
 // The editors are lazy chunks: load them once so they render at once.
 beforeAll(() => Promise.all([loadHtmlEditor(), loadMarkdownEditor()]));
@@ -27,7 +28,6 @@ beforeAll(() => {
   };
   Range.prototype.getBoundingClientRect = rect;
   Range.prototype.getClientRects = rects;
-  if (!document.elementFromPoint) document.elementFromPoint = () => null;
 });
 
 function composerEnv(patch = {}, rich: Partial<RichState> = {}): Env {
@@ -53,7 +53,9 @@ describe("rich composer", () => {
     const modes = screen.getByRole("radiogroup", { name: "Format" });
     expect(within(modes).getByRole("radio", { name: "Plain text" })).toBeChecked();
     await user.click(within(modes).getByRole("radio", { name: "Markdown" }));
-    await waitFor(() => expect(rich(env).mode).toBe("markdown"));
+    await waitFor(() => {
+      expect(rich(env).mode).toBe("markdown");
+    });
     expect(screen.queryByRole("textbox", { name: "Message" })).toHaveAttribute(
       "data-part",
       "composer.markdown.content",
@@ -61,14 +63,16 @@ describe("rich composer", () => {
     const view = markdownViewIn(container);
     expect(view?.state.doc.toString()).toBe("Hello *there*");
     const frame = await screen.findByTitle("Preview of the message");
-    await waitFor(() =>
-      expect(frame.getAttribute("srcdoc")).toContain("<p>Hello <em>there</em></p>"),
-    );
+    await waitFor(() => {
+      expect(frame.getAttribute("srcdoc")).toContain("<p>Hello <em>there</em></p>");
+    });
     expect(frame).toHaveAttribute("sandbox", "");
 
     act(() => view?.dispatch({ changes: { from: 0, insert: "# Title\n\n" } }));
     expect(rich(env).markdown).toBe("# Title\n\nHello *there*");
-    await waitFor(() => expect(frame.getAttribute("srcdoc")).toContain("<h1>Title</h1>"));
+    await waitFor(() => {
+      expect(frame.getAttribute("srcdoc")).toContain("<h1>Title</h1>");
+    });
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "RenderPreview", identity_id: "ada@example.org" }),
     );
@@ -131,7 +135,9 @@ describe("rich composer", () => {
     fireEvent.change(source, { target: { value: "<p>From <em>source</em></p>" } });
     expect(rich(env).html).toBe("<p>From <em>source</em></p>");
     await user.click(within(toolbar).getByRole("button", { name: "HTML source" }));
-    await waitFor(() => expect(editor?.getHTML()).toBe("<p>From <em>source</em></p>"));
+    await waitFor(() => {
+      expect(editor?.getHTML()).toBe("<p>From <em>source</em></p>");
+    });
   });
 
   it("adds links in the HTML editor", async () => {
@@ -158,10 +164,14 @@ describe("rich composer", () => {
     const input = container.querySelector('[data-part="composer.html"] input[type="file"]');
     const image = new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { type: "image/png" });
     fireEvent.change(input as HTMLInputElement, { target: { files: [image] } });
-    await waitFor(() => expect(rich(env).attachments).toHaveLength(1));
+    await waitFor(() => {
+      expect(rich(env).attachments).toHaveLength(1);
+    });
     const cid = rich(env).attachments[0]?.content_id;
     expect(cid).toMatch(/@nail$/);
-    await waitFor(() => expect(rich(env).html).toContain(`src="cid:${cid}"`));
+    await waitFor(() => {
+      expect(rich(env).html).toContain(`src="cid:${must(cid)}"`);
+    });
     expect(htmlEditorIn(container)?.getHTML()).toContain('src="data:image/png;base64,');
     expect(screen.getByText("in text")).toBeInTheDocument();
   });
@@ -192,7 +202,9 @@ describe("rich composer", () => {
     const alert = await screen.findByRole("alert");
     expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(false);
     await user.click(within(alert).getByRole("button", { name: "Send anyway" }));
-    await waitFor(() => expect(env.store.getState().composer).toBeNull());
+    await waitFor(() => {
+      expect(env.store.getState().composer).toBeNull();
+    });
     expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(true);
   });
 
@@ -202,7 +214,7 @@ describe("rich composer", () => {
     renderNode(widget("composer"), env);
     const choice = { sign: true, encrypt: true, technology: null, protect_headers: null };
     // A report that leaves bob without a key blocks sending; nothing is sent.
-    act(() =>
+    act(() => {
       composerCryptoStore.setState({
         choice,
         preference: "auto",
@@ -221,14 +233,14 @@ describe("rich composer", () => {
           autocrypt: "disable",
           suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
         },
-      }),
-    );
+      });
+    });
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText(/bob@example\.org/)).toBeInTheDocument();
     expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(false);
 
     // Grace has a usable key: the choice goes with the draft and the send.
-    act(() =>
+    act(() => {
       composerCryptoStore.setState({
         report: {
           recipients: [
@@ -251,15 +263,19 @@ describe("rich composer", () => {
           autocrypt: "disable",
           suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
         },
-      }),
-    );
+      });
+    });
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(env.store.getState().composer).toBeNull());
+    await waitFor(() => {
+      expect(env.store.getState().composer).toBeNull();
+    });
     const saved = env.transport.requests.filter((r) => r.type === "SaveDraft").pop();
     expect(saved).toMatchObject({ draft: { crypto: choice } });
     const sent = env.transport.requests.find((r) => r.type === "SendDraft");
     expect(sent).toMatchObject({ crypto: choice });
-    act(() => composerCryptoStore.getState().reset());
+    act(() => {
+      composerCryptoStore.getState().reset();
+    });
   });
 
   it("lets the reminder be dismissed", async () => {
@@ -302,8 +318,10 @@ describe("rich composer", () => {
     );
     const { container } = renderNode(widget("composer"), env);
     const content = container.querySelector('[data-part="composer.markdown.content"]');
-    fireEvent.keyDown(content as Element, { key: "Enter", ctrlKey: true });
-    await waitFor(() => expect(env.store.getState().composer).toBeNull());
+    fireEvent.keyDown(must(content), { key: "Enter", ctrlKey: true });
+    await waitFor(() => {
+      expect(env.store.getState().composer).toBeNull();
+    });
     const saved = env.transport.requests.find((r) => r.type === "SaveDraft");
     expect(saved).toMatchObject({ draft: { mode: "markdown", markdown: "# Plan", text: "" } });
     expect(env.store.getState().lastSend).toMatchObject({ subject: "Plan", state: "scheduled" });
@@ -313,7 +331,7 @@ describe("rich composer", () => {
     const env = composerEnv({ subject: "Keep" }, { mode: "html", html: "<p>x</p>" });
     const { container } = renderNode(widget("composer"), env);
     const content = container.querySelector('[data-part="composer.html.content"]');
-    fireEvent.keyDown(content as Element, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(must(content), { key: "s", ctrlKey: true });
     await screen.findByText("Draft saved.");
     const id = env.store.getState().composer?.draftId ?? "";
     expect(env.transport.data.drafts.get(id)).toMatchObject({ mode: "html", html: "<p>x</p>" });
@@ -333,7 +351,9 @@ describe("rich composer", () => {
         target: { value: "Draft 2" },
       });
       await waitFor(
-        () => expect(env.transport.requests.some((r) => r.type === "SaveDraft")).toBe(true),
+        () => {
+          expect(env.transport.requests.some((r) => r.type === "SaveDraft")).toBe(true);
+        },
         { timeout: AUTOSAVE_MS + 1500 },
       );
       await screen.findByText("Draft saved.");
@@ -455,9 +475,9 @@ describe("inline images of reopened drafts", () => {
     const id = activeComposer(env.store.getState().windows) ?? "";
     expect(id).toBe(`composer:${draftId}`);
     const own = () => richStoreFor(env.store, id).getState();
-    await waitFor(() =>
-      expect(own().inlinePreviews["logo1@nail"]).toBe(`data:image/png;base64,${PNG}`),
-    );
+    await waitFor(() => {
+      expect(own().inlinePreviews["logo1@nail"]).toBe(`data:image/png;base64,${PNG}`);
+    });
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "GetDraftAttachment", draft_id: draftId }),
     );
@@ -467,9 +487,9 @@ describe("inline images of reopened drafts", () => {
       </WindowInstanceContext.Provider>,
       env,
     );
-    await waitFor(() =>
-      expect(htmlEditorIn(container)?.getHTML()).toContain(`src="data:image/png;base64,${PNG}"`),
-    );
+    await waitFor(() => {
+      expect(htmlEditorIn(container)?.getHTML()).toContain(`src="data:image/png;base64,${PNG}"`);
+    });
     // The stored HTML still references the content id.
     expect(own().html).toContain('src="cid:logo1@nail"');
   });

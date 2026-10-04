@@ -43,7 +43,7 @@ pub struct Denied {
 
 impl Denied {
     /// A refusal of `call` for want of `permission`.
-    pub fn new(call: &str, permission: impl ToString) -> Self {
+    pub fn new(call: &str, permission: &(impl ToString + ?Sized)) -> Self {
         Self {
             call: call.to_owned(),
             permission: permission.to_string(),
@@ -153,6 +153,7 @@ impl Gate {
 
     /// This gate narrowed to what an MCP client may reach (see
     /// [`ClientLimit`]).
+    #[must_use]
     pub fn limited(&self, limit: Arc<ClientLimit>) -> Self {
         Self {
             grants: self
@@ -192,7 +193,7 @@ impl Gate {
         if self.has(permission) {
             Ok(())
         } else {
-            Err(Denied::new(call, permission))
+            Err(Denied::new(call, &permission))
         }
     }
 
@@ -219,7 +220,7 @@ impl Gate {
     ) -> Result<AccountScope, Denied> {
         let grant = self
             .grant(&PluginPermission::MailRead)
-            .ok_or_else(|| Denied::new(call, PluginPermission::MailRead))?;
+            .ok_or_else(|| Denied::new(call, &PluginPermission::MailRead))?;
         Ok(self.scope_of(grant, expand))
     }
 
@@ -233,7 +234,7 @@ impl Gate {
         let read = self.mail_scope(call, expand)?;
         let body = self
             .grant(&PluginPermission::MailReadBody)
-            .ok_or_else(|| Denied::new(call, PluginPermission::MailReadBody))?;
+            .ok_or_else(|| Denied::new(call, &PluginPermission::MailReadBody))?;
         Ok(read.intersect(&self.scope_of(body, expand)))
     }
 
@@ -247,7 +248,7 @@ impl Gate {
     ) -> Result<AccountScope, Denied> {
         let grant = self
             .grant(permission)
-            .ok_or_else(|| Denied::new(call, permission))?;
+            .ok_or_else(|| Denied::new(call, &permission))?;
         Ok(self.scope_of(grant, expand))
     }
 
@@ -299,7 +300,7 @@ impl Gate {
         if !host_allowed(&patterns, &host) {
             return Err(FetchRefusal::Denied(Denied::new(
                 "nail.http.fetch",
-                format!("network:{host}"),
+                &format!("network:{host}"),
             )));
         }
         let method = init.method.to_ascii_uppercase();

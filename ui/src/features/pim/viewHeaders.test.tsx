@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { CONTACT_DIALOG, GROUPS_DIALOG, TASK_DIALOG } from "./names";
 import { pimStoreFor } from "./store";
+import { must } from "../../test/must";
 
 /** The first contact row's id. */
 function firstContact(): string {
@@ -20,7 +21,9 @@ function firstContact(): string {
 }
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 describe("Contacts view header", () => {
@@ -31,7 +34,7 @@ describe("Contacts view header", () => {
     await settle(env);
     const header = document.querySelector<HTMLElement>('[data-part="pim.view-header"]');
     expect(header).not.toBeNull();
-    const view = within(header as HTMLElement);
+    const view = within(must(header));
     expect(view.getByRole("heading", { name: "Contacts" })).toHaveAttribute(
       "data-part",
       "pim.view-header.title",
@@ -54,7 +57,9 @@ describe("Contacts view header", () => {
     expect(env.store.getState().windows).toContain(GROUPS_DIALOG);
     await user.keyboard("{Escape}");
     const first = await waitFor(() => firstContact());
-    act(() => pimStoreFor(env.store).getState().showContact(first));
+    act(() => {
+      pimStoreFor(env.store).getState().showContact(first);
+    });
     await user.click(view.getByRole("button", { name: "More" }));
     const again = await screen.findByRole("menu");
     expect(within(again).getByRole("menuitem", { name: /^Delete/ })).toBeInTheDocument();
@@ -70,7 +75,9 @@ describe("Contacts view header", () => {
     expect(screen.getByRole("group", { name: "Contact actions" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Delete/ })).toBeNull();
     const first = await waitFor(() => firstContact());
-    act(() => pimStoreFor(env.store).getState().showContact(first));
+    act(() => {
+      pimStoreFor(env.store).getState().showContact(first);
+    });
     expect(await screen.findByRole("button", { name: /^Delete/ })).toBeInTheDocument();
   });
 });
@@ -82,7 +89,7 @@ describe("Tasks view header", () => {
     renderNode(widget("task-list", { options: { header: true } }), env);
     await settle(env);
     const header = document.querySelector<HTMLElement>('[data-part="pim.view-header"]');
-    const view = within(header as HTMLElement);
+    const view = within(must(header));
     expect(view.getByRole("heading", { name: "Tasks" })).toBeInTheDocument();
     const create = view.getByRole("button", { name: "New task" });
     expect(create).toHaveAttribute("data-variant", "primary");

@@ -23,12 +23,12 @@
 //! * M2c (WP53): a fixed port from the MCP settings ([`configured_port`]);
 //!   user-facing texts as Fluent ids ([`messages`]: audit details, start
 //!   and bridge errors, admin errors). Agents keep reading English.
-//! * M4a (WP101, ADR 0079): the write tools ([`writes`]: grant, idempotency
+//! * M4a (WP101, ADR 0079): the write tools (`writes`: grant, idempotency
 //!   keys, rate limits ([`limits`]), action policies and confirmations
 //!   through a [`broker::ConfirmationBroker`] — Nail's confirmation center
 //!   always, MCP elicitation where the client supports it — and audit
 //!   entries with before / after lines), `test_rule`, `edit_open_draft`
-//!   and the four prompts ([`prompts`], templates in `core-mcp.ftl`).
+//!   and the four prompts (`prompts`, templates in `core-mcp.ftl`).
 //!
 //! Data comes through the [`McpData`] trait, which the core implements
 //! (usually via [`CoreData`]) and tests fake.

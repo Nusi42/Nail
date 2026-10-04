@@ -66,13 +66,13 @@ function SourceStep({
   onUseFound,
 }: {
   format: ImportFormat;
-  setFormat(f: ImportFormat): void;
+  setFormat: (f: ImportFormat) => void;
   path: string;
-  setPath(p: string): void;
+  setPath: (p: string) => void;
   busy: boolean;
   problem: LocalizedMessage | null;
-  onNext(): void;
-  onUseFound(format: ImportFormat, path: string): void;
+  onNext: () => void;
+  onUseFound: (format: ImportFormat, path: string) => void;
 }) {
   const t = useT();
   const dates = useDateFormat();
@@ -108,7 +108,9 @@ function SourceStep({
                   data-part="form.button"
                   data-action="use-found"
                   disabled={busy}
-                  onClick={() => onUseFound(s.source.format, s.source.path)}
+                  onClick={() => {
+                    onUseFound(s.source.format, s.source.path);
+                  }}
                 >
                   {t("portability-import-found-use")}
                 </button>
@@ -165,11 +167,11 @@ function TargetFields({
   setFolderName,
 }: {
   target: MailTarget;
-  setTarget(t: MailTarget): void;
+  setTarget: (t: MailTarget) => void;
   parentId: string | null;
-  setParentId(id: string | null): void;
+  setParentId: (id: string | null) => void;
   folderName: string;
-  setFolderName(name: string): void;
+  setFolderName: (name: string) => void;
 }) {
   const t = useT();
   const accounts = useAccounts();
@@ -210,7 +212,9 @@ function TargetFields({
           label={t("portability-import-target-parent")}
           field="target-parent"
           value={parentId ?? ""}
-          onChange={(v) => setParentId(v === "" ? null : v)}
+          onChange={(v) => {
+            setParentId(v === "" ? null : v);
+          }}
         >
           <option value="">{t("portability-import-target-inbox")}</option>
           {(folders.data ?? []).map((f) => (
@@ -233,6 +237,9 @@ function TargetFields({
   );
 }
 
+/** What the options step hands to `onStart`. */
+type StartOptions = Parameters<Parameters<typeof OptionsStep>[0]["onStart"]>[0];
+
 function OptionsStep({
   preview,
   busy,
@@ -243,8 +250,8 @@ function OptionsStep({
   preview: ImportPreview;
   busy: boolean;
   problem: LocalizedMessage | null;
-  onBack(): void;
-  onStart(options: {
+  onBack: () => void;
+  onStart: (options: {
     folders: string[] | null;
     collections: string[] | null;
     target: MailTarget;
@@ -254,7 +261,7 @@ function OptionsStep({
     keepFlags: boolean;
     calendarId: string | null;
     addressBookId: string | null;
-  }): void;
+  }) => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -347,7 +354,9 @@ function OptionsStep({
           label={t("portability-import-calendar")}
           field="calendar"
           value={calendarId ?? ""}
-          onChange={(v) => setCalendarId(v === "" ? null : v)}
+          onChange={(v) => {
+            setCalendarId(v === "" ? null : v);
+          }}
         >
           <option value="">{t("portability-import-default-calendar")}</option>
           {(calendars.data ?? [])
@@ -364,7 +373,9 @@ function OptionsStep({
           label={t("portability-import-address-book")}
           field="address-book"
           value={addressBookId ?? ""}
-          onChange={(v) => setAddressBookId(v === "" ? null : v)}
+          onChange={(v) => {
+            setAddressBookId(v === "" ? null : v);
+          }}
         >
           <option value="">{t("portability-import-default-address-book")}</option>
           {(books.data ?? [])
@@ -406,7 +417,7 @@ function OptionsStep({
           data-variant="primary"
           data-action="start"
           disabled={busy || nothing}
-          onClick={() =>
+          onClick={() => {
             onStart({
               folders: folders.length === preview.folders.length ? null : folders,
               collections: collections.length === preview.collections.length ? null : collections,
@@ -417,8 +428,8 @@ function OptionsStep({
               keepFlags,
               calendarId,
               addressBookId,
-            })
-          }
+            });
+          }}
         >
           {t("portability-import-start")}
         </button>
@@ -517,11 +528,11 @@ export function Proposals({
                     type="checkbox"
                     checked={chosenAccounts.includes(a.key)}
                     disabled={busy || added.includes(a.key)}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setChosenAccounts((list) =>
                         e.target.checked ? [...list, a.key] : list.filter((k) => k !== a.key),
-                      )
-                    }
+                      );
+                    }}
                   />
                   <span data-part="form.check.label">
                     {t("portability-account-option", {
@@ -572,11 +583,11 @@ export function Proposals({
                     type="checkbox"
                     checked={chosenRules.includes(r.key)}
                     disabled={busy || saved.includes(r.key)}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setChosenRules((list) =>
                         e.target.checked ? [...list, r.key] : list.filter((k) => k !== r.key),
-                      )
-                    }
+                      );
+                    }}
                   />
                   <span data-part="form.check.label">{r.rule.name}</span>
                 </label>
@@ -613,7 +624,7 @@ export function Proposals({
 }
 
 /** The import wizard's content. */
-export function ImportWizard({ close }: { close(): void }) {
+export function ImportWizard({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -642,7 +653,7 @@ export function ImportWizard({ close }: { close(): void }) {
     }
   };
 
-  const start: Parameters<typeof OptionsStep>[0]["onStart"] = async (o) => {
+  const start = async (o: StartOptions) => {
     if (!preview) return;
     setBusy(true);
     setProblem(null);
@@ -708,7 +719,9 @@ export function ImportWizard({ close }: { close(): void }) {
             setProblem(null);
             setStep("source");
           }}
-          onStart={(o) => void start(o)}
+          onStart={(o) => {
+            void start(o);
+          }}
         />
       )}
       {step === "job" && jobId && (

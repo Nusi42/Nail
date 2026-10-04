@@ -165,9 +165,8 @@ pub trait McpData: Send + Sync + 'static {
     /// default answers `unsupported` (fakes without PIM data).
     fn pim(
         &self,
-        request: nail_api::Request,
+        _request: nail_api::Request,
     ) -> impl Future<Output = DataResult<nail_api::Response>> + Send {
-        let _ = request;
         async { Err(ApiError::unsupported("no calendar data")) }
     }
 
@@ -199,10 +198,9 @@ pub trait McpData: Send + Sync + 'static {
     /// before. The default answers `unsupported` (fakes without writes).
     fn write(
         &self,
-        by: &ActionAttribution,
-        request: nail_api::Request,
+        _by: &ActionAttribution,
+        _request: nail_api::Request,
     ) -> impl Future<Output = DataResult<nail_api::Response>> + Send {
-        let _ = (by, request);
         async { Err(ApiError::unsupported("writes are not available")) }
     }
 
@@ -238,10 +236,9 @@ pub trait McpData: Send + Sync + 'static {
     fn call_plugin_tool(
         &self,
         name: &str,
-        arguments: serde_json::Value,
-        client: nail_api::agents::McpClientRef,
+        _arguments: serde_json::Value,
+        _client: nail_api::agents::McpClientRef,
     ) -> impl Future<Output = DataResult<serde_json::Value>> + Send {
-        let _ = (arguments, client);
         let name = name.to_owned();
         async move { Err(ApiError::not_found(format!("no plug-in tool {name}"))) }
     }

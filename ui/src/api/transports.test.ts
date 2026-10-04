@@ -110,14 +110,16 @@ describe("TauriTransport", () => {
     let handler: ((e: { payload: unknown }) => void) | null = null;
     const unlisten = vi.fn();
     const api: TauriApi = {
-      invoke: vi.fn(async () => ({
-        type: "Pong",
-        version: "1",
-        protocol: 1,
-      })) as TauriApi["invoke"],
-      listen: vi.fn(async (_name, h) => {
+      invoke: vi.fn(() =>
+        Promise.resolve({
+          type: "Pong",
+          version: "1",
+          protocol: 1,
+        }),
+      ) as TauriApi["invoke"],
+      listen: vi.fn((_name, h) => {
         handler = h as (e: { payload: unknown }) => void;
-        return unlisten;
+        return Promise.resolve(unlisten);
       }) as TauriApi["listen"],
     };
     const transport = new TauriTransport(api);
@@ -139,10 +141,8 @@ describe("TauriTransport", () => {
 
   it("wraps invoke failures", async () => {
     const api: TauriApi = {
-      invoke: (async () => {
-        throw new Error("boom");
-      }) as TauriApi["invoke"],
-      listen: (async () => () => {}) as TauriApi["listen"],
+      invoke: () => Promise.reject(new Error("boom")),
+      listen: () => Promise.resolve(vi.fn()),
     };
     await expect(new TauriTransport(api).send({ type: "Ping" })).rejects.toMatchObject({
       code: "internal",

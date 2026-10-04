@@ -64,7 +64,7 @@ impl AppConfig {
 /// `port` is the port the server is bound to: every request must name a
 /// loopback host with that port in `Host` (and in `Origin`, if present);
 /// anything else is refused with `403` (DNS-rebinding protection, see
-/// [`crate::guard`]).
+/// `crate::guard`).
 pub fn router(service: Service, ui_dir: Option<PathBuf>, port: u16) -> Router {
     router_with_control(service, ui_dir, port, None)
 }
@@ -110,7 +110,7 @@ pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
     if let Some(proxy) = config.proxy {
         session_routes = session_routes.merge(proxy_routes(proxy));
     }
-    let mut session_routes = session_routes.with_state(service.clone());
+    let mut session_routes = session_routes.with_state(service);
     let mut api = Router::new();
     if let Some(auth) = config.auth {
         session_routes = session_routes.layer(middleware::from_fn_with_state(
@@ -118,6 +118,10 @@ pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
             nail_remote_auth::http::require_session,
         ));
         api = api.merge(nail_remote_auth::http::router(auth));
+    } else {
+        // No login on this server: say so, instead of a 404 the browser
+        // logs as an error (the UI probes the route at start).
+        api = api.route(nail_api::remote::AUTH_PATH, post(no_login));
     }
     if let Some(control) = config.control {
         let test = Router::new()
@@ -167,7 +171,7 @@ async fn peer_socket_addr(mut request: axum::extract::Request) -> axum::extract:
     if let Some(ConnectInfo(crate::ClientAddr(addr))) = request
         .extensions()
         .get::<ConnectInfo<crate::ClientAddr>>()
-        .cloned()
+        .copied()
     {
         request.extensions_mut().insert(ConnectInfo(addr));
     }
@@ -245,6 +249,11 @@ async fn acme_challenge(
             .into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// `POST /api/auth` on a server without a login.
+async fn no_login() -> StatusCode {
+    StatusCode::from_u16(nail_api::remote::NO_LOGIN_STATUS).unwrap_or(StatusCode::NO_CONTENT)
 }
 
 async fn not_found() -> StatusCode {
@@ -356,6 +365,28 @@ mod tests {
         let status = response.status();
         let body = response.into_body().collect().await.unwrap().to_bytes();
         (status, body.to_vec())
+    }
+
+    #[tokio::test]
+    async fn a_server_without_login_answers_the_login_probe_with_no_content() {
+        let (service, _d, _c) = service();
+        let router = app_router(service, AppConfig::loopback(None, 4780, None));
+        let request = Request::post(nail_api::remote::AUTH_PATH)
+            .header("Host", "127.0.0.1:4780")
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"type":"Status"}"#))
+            .unwrap();
+        let response = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            response.status().as_u16(),
+            nail_api::remote::NO_LOGIN_STATUS
+        );
+        // Other unknown API routes still answer 404.
+        assert_eq!(
+            status(router, "/api/unknown").await.0,
+            StatusCode::NOT_FOUND
+        );
     }
 
     #[tokio::test]

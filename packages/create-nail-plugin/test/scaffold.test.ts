@@ -37,6 +37,16 @@ const EXPECTED_FILES = [
   "tsconfig.json",
 ];
 
+/** The fields of a package.json these tests read. */
+interface PackageJson {
+  name?: string;
+  devDependencies: Partial<Record<string, string>>;
+}
+
+function readPackage(file: string): PackageJson {
+  return JSON.parse(readFileSync(file, "utf8")) as PackageJson;
+}
+
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const c of cleanups.splice(0)) c();
@@ -80,12 +90,12 @@ describe("scaffold", () => {
     expect(manifest.name).toBe('Weather "Watch"');
     expect(manifest.apiVersion).toBe("1");
 
-    const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+    const pkg = readPackage(path.join(dir, "package.json"));
     expect(pkg.name).toBe("nail-plugin-weather-watch");
-    const sdkSpec: string = pkg.devDependencies["@nail/plugin-api"];
+    const sdkSpec = pkg.devDependencies["@nail/plugin-api"] ?? "";
     expect(sdkSpec.startsWith("file:")).toBe(true);
     expect(realpathSync(path.resolve(dir, sdkSpec.slice(5)))).toBe(realpathSync(SDK_DIR));
-    const sdkPkg = JSON.parse(readFileSync(path.join(SDK_DIR, "package.json"), "utf8"));
+    const sdkPkg = readPackage(path.join(SDK_DIR, "package.json"));
     expect(pkg.devDependencies.esbuild).toBe(sdkPkg.devDependencies.esbuild);
     expect(pkg.devDependencies.typescript).toBe(sdkPkg.devDependencies.typescript);
 
@@ -102,7 +112,7 @@ describe("scaffold", () => {
     const dir = temp();
     const result = scaffold({ dir, id: "my-tool", sdk: "^0.1.0" });
     expect(result.name).toBe("My tool");
-    const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+    const pkg = readPackage(path.join(dir, "package.json"));
     expect(pkg.devDependencies["@nail/plugin-api"]).toBe("^0.1.0");
   });
 
@@ -133,7 +143,7 @@ describe("scaffold", () => {
 
   it("ships the template untouched by placeholders only where expected", () => {
     const manifest = readFileSync(path.join(TEMPLATE_DIR, "manifest.json"), "utf8");
-    expect(JSON.parse(manifest).id).toBe("__PLUGIN_ID__");
+    expect((JSON.parse(manifest) as { id?: unknown }).id).toBe("__PLUGIN_ID__");
   });
 });
 

@@ -1,5 +1,7 @@
 //! The sync engine against the in-process mock IMAP server.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::{Account, AccountId, AccountKind, ErrorCode, Event, FolderRole, Request, Response};
@@ -89,7 +91,7 @@ async fn folder_totals(service: &Service, account: &AccountId) -> Vec<(String, F
 fn corpus_totals() -> Vec<(String, FolderRole, u32)> {
     let mut totals: Vec<_> = demo_corpus()
         .into_iter()
-        .map(|f| (f.name, f.role, f.messages.len() as u32))
+        .map(|f| (f.name, f.role, u32::try_from(f.messages.len()).unwrap()))
         .collect();
     totals.sort_by(|a, b| a.0.cmp(&b.0));
     totals
@@ -103,12 +105,12 @@ async fn first_sync_mirrors_the_server() {
     let report = f.service.sync_account(&f.account).await.unwrap();
     let expected = corpus_totals();
     let messages: u32 = expected.iter().map(|t| t.2).sum();
-    assert_eq!(report.folders, expected.len() as u32);
+    assert_eq!(report.folders, u32::try_from(expected.len()).unwrap());
     assert_eq!(report.new_messages, messages);
     assert_eq!(folder_totals(&f.service, &f.account).await, expected);
 
     let events = drain(&mut events);
-    let total = expected.len() as u32 + 1;
+    let total = u32::try_from(expected.len()).unwrap() + 1;
     assert_eq!(
         events.last(),
         Some(&Event::SyncProgress {
@@ -181,7 +183,7 @@ async fn second_sync_fetches_only_new_mail() {
         .replace("Subject: ", "Subject: Again: ");
     f.server
         .store()
-        .append("INBOX", raw.as_bytes(), &[] as &[&str])
+        .append::<&str>("INBOX", raw.as_bytes(), &[])
         .unwrap();
     let mut events = f.service.subscribe();
     let report = f.service.sync_account(&f.account).await.unwrap();
@@ -266,7 +268,7 @@ async fn sync_now_runs_in_the_background() {
         Response::SyncStarted
     );
     let expected = corpus_totals();
-    let total = expected.len() as u32 + 1;
+    let total = u32::try_from(expected.len()).unwrap() + 1;
     loop {
         let event = tokio::time::timeout(TIMEOUT, events.recv())
             .await
@@ -361,7 +363,7 @@ async fn a_failing_folder_does_not_stop_the_others() {
     }
     // The pass completes (full progress) and then reports the folder.
     let events = drain(&mut events);
-    let total = expected.len() as u32 + 1;
+    let total = u32::try_from(expected.len()).unwrap() + 1;
     let progress_end = events
         .iter()
         .position(|e| matches!(e, Event::SyncProgress { done, .. } if *done == total))
@@ -424,7 +426,7 @@ async fn raw_mail_of_deleted_folders_is_removed() {
     let raw = b"From: shop@example.org\r\nSubject: Receipt 42\r\n\r\nThanks!\r\n";
     f.server
         .store()
-        .append("Receipts", raw, &[] as &[&str])
+        .append::<&str>("Receipts", raw, &[])
         .unwrap();
     f.service.sync_account(&f.account).await.unwrap();
     let hash = nail_store::BlobHash::of(raw);

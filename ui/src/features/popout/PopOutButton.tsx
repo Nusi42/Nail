@@ -42,8 +42,12 @@ export function PopOutButton({ window, spec }: { window: string; spec?: WindowSp
         setBusy(true);
         setError(null);
         popOutWindow({ client, store, queryClient }, window, t(windowTitleId(window)), resolved)
-          .catch((e: unknown) => setError(errorMessageId(e)))
-          .finally(() => setBusy(false));
+          .catch((e: unknown) => {
+            setError(errorMessageId(e));
+          })
+          .finally(() => {
+            setBusy(false);
+          });
       }}
     >
       <Icon name="external-link" part="window.pop-out.icon" />

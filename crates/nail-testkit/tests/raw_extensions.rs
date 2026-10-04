@@ -1,6 +1,7 @@
 //! Raw IMAP against the mock server's M1 extensions: IDLE push between
 //! sessions, CONDSTORE / QRESYNC, STORE, MOVE, COPY, EXPUNGE, APPEND,
 //! folder commands, XOAUTH2 / OAUTHBEARER, ID and the test helpers.
+#![cfg(test)]
 
 use std::time::Duration;
 
@@ -11,7 +12,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
-use nail_testkit::{MailStore, MockCapabilities, MockImapConfig, MockImapServer};
+use nail_testkit::{MailStore, MockCapabilities, MockImapConfig, MockImapServer, NO_FLAGS};
 
 struct Conn {
     reader: BufReader<OwnedReadHalf>,
@@ -77,7 +78,7 @@ fn store() -> MailStore {
         store.append(
             "INBOX",
             format!("Subject: {subject}\r\n\r\nbody").as_bytes(),
-            &[] as &[&str],
+            NO_FLAGS,
         );
     }
     store
@@ -174,7 +175,7 @@ async fn idle_pushes_changes_made_by_another_session() {
 
     server
         .store()
-        .add_message("INBOX", b"Subject: d\r\n\r\nx", &[] as &[&str]);
+        .add_message("INBOX", b"Subject: d\r\n\r\nx", NO_FLAGS);
     assert_eq!(idler.line().await, "* 4 EXISTS\r\n");
 
     other

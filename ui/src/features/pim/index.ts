@@ -133,9 +133,21 @@ const hasMessage = (ctx: ActionContext) => ctx.store.getState().selectedMessageI
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Shows today in the calendar views. */
-  "calendar.goto-today": { run: (ctx) => pimOf(ctx).getState().setAnchor(null) },
-  "calendar.next": { run: (ctx) => step(ctx, 1) },
-  "calendar.previous": { run: (ctx) => step(ctx, -1) },
+  "calendar.goto-today": {
+    run: (ctx) => {
+      pimOf(ctx).getState().setAnchor(null);
+    },
+  },
+  "calendar.next": {
+    run: (ctx) => {
+      step(ctx, 1);
+    },
+  },
+  "calendar.previous": {
+    run: (ctx) => {
+      step(ctx, -1);
+    },
+  },
   /** `calendar.view "month"`: switches the calendar views. */
   "calendar.view": {
     run: (ctx, args) => {
@@ -154,22 +166,42 @@ export const actions: Feature["actions"] = {
       openNewEvent({ store: ctx.store, pim }, day, { hour: 9, minute: 0 }, tz);
     },
   },
-  "calendar.calendars": { run: (ctx) => ctx.store.getState().openWindow(SOURCES_DIALOG) },
-  "pim.import": { run: (ctx) => ctx.store.getState().openWindow(IMPORT_DIALOG) },
-  "pim.sources": { run: (ctx) => ctx.store.getState().openWindow(SOURCES_DIALOG) },
+  "calendar.calendars": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(SOURCES_DIALOG);
+    },
+  },
+  "pim.import": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(IMPORT_DIALOG);
+    },
+  },
+  "pim.sources": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(SOURCES_DIALOG);
+    },
+  },
   "pim.sync": {
     run: async (ctx) => {
       await ctx.client.request({ type: "SyncPimSources", source_id: null }, "Done");
     },
   },
-  "tasks.new": { run: (ctx) => openNewTask({ store: ctx.store, pim: pimOf(ctx) }, null) },
+  "tasks.new": {
+    run: (ctx) => {
+      openNewTask({ store: ctx.store, pim: pimOf(ctx) }, null);
+    },
+  },
   "contacts.new": {
     run: (ctx) => {
       pimOf(ctx).getState().editContact({ mode: "new", addressBookId: null, fields: null });
       ctx.store.getState().openWindow(CONTACT_DIALOG);
     },
   },
-  "contacts.groups": { run: (ctx) => ctx.store.getState().openWindow(GROUPS_DIALOG) },
+  "contacts.groups": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(GROUPS_DIALOG);
+    },
+  },
   /** Merges the selected contacts, or finds duplicates. */
   "contacts.merge": {
     run: (ctx) => {

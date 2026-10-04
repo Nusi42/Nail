@@ -25,8 +25,7 @@ export async function createClient(win: Window = window): Promise<NailClient> {
   let transport: Transport;
   switch (kind) {
     case "mock": {
-      const { MockTransport } = await import("./mock");
-      const { securityDemoBySender } = await import("../features/security/mock");
+      const { MockTransport, securityDemoBySender } = await import("./mock");
       const mock = new MockTransport({ latencyMs: 80 });
       // The dev mailbox shows every security badge and warning kind.
       mock.data.features.security.bySender = securityDemoBySender();

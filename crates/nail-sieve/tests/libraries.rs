@@ -1,6 +1,7 @@
 //! Smoke tests of the libraries WP51 builds on (WP50, ADR 0043): a rustls
 //! client config with the ring provider (the ManageSieve client's TLS),
 //! SASL PLAIN / XOAUTH2 encodings, script hashes and the regex dialect.
+#![cfg(test)]
 
 use std::sync::Arc;
 

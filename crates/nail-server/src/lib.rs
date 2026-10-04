@@ -29,7 +29,7 @@
 //! and the **sandbox origin** ([`sandbox`]: mail HTML on its own port,
 //! never on the app's origin). Every route checks `Host` and `Origin`
 //! against the names the server is reachable as, plus a fetch-metadata
-//! policy ([`guard`], DNS-rebinding and cross-site protection), and every
+//! policy (`guard`, DNS-rebinding and cross-site protection), and every
 //! response carries the security headers of [`headers`] (strict CSP
 //! without inline script, Trusted Types, COOP/COEP/CORP,
 //! `frame-ancestors 'none'`, HSTS with TLS).
@@ -226,7 +226,7 @@ async fn serve(
         app.into_make_service_with_connect_info::<ClientAddr>(),
     )
     .with_graceful_shutdown(async move {
-        let _ = stop.wait_for(|stopped| *stopped).await;
+        drop(stop.wait_for(|stopped| *stopped).await);
     })
     .await
 }

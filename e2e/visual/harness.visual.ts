@@ -46,14 +46,14 @@ test("every screen opens, settles and is reproducible (current theme)", async ({
         const problems: string[] = [];
         if (!first.stable || !second.stable) {
           problems.push(
-            `did not settle within ${Math.max(first.attempts, second.attempts)} screenshots`,
+            `did not settle within ${String(Math.max(first.attempts, second.attempts))} screenshots`,
           );
         }
         const diff = diffPngs(first.png, second.png);
         if (diff.ratio > maxDiffPixelRatio) {
           problems.push(
-            `two captures from fresh page loads differ in ${diff.pixels} pixels ` +
-              `(box ${JSON.stringify(diff.box)}, more than the tolerance ${maxDiffPixelRatio})`,
+            `two captures from fresh page loads differ in ${String(diff.pixels)} pixels ` +
+              `(box ${JSON.stringify(diff.box)}, more than the tolerance ${String(maxDiffPixelRatio)})`,
           );
           for (const [which, shot] of [
             ["first", first],

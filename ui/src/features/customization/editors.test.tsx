@@ -16,12 +16,15 @@ import {
 import { columnsOf } from "../../widgets/MessageList";
 import { messageLists, recordKey } from "./Editors";
 import { moved } from "./ReorderList";
+import { must } from "../../test/must";
 
 let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
@@ -92,19 +95,15 @@ describe("toolbar-editor", () => {
     const list = within(section).getByRole("list", { name: "Items of the toolbar reader" });
     const items = () => within(list).getAllByRole("listitem");
     expect(items()[0]).toHaveTextContent("Reply");
-    await user.click(
-      within(items()[0] as HTMLElement).getByRole("button", { name: /Move Reply down/ }),
-    );
+    await user.click(within(must(items()[0])).getByRole("button", { name: /Move Reply down/ }));
     expect(items()[1]).toHaveTextContent("Reply");
     // Focus follows the moved item.
-    expect(
-      within(items()[1] as HTMLElement).getByRole("button", { name: /Move Reply down/ }),
-    ).toHaveFocus();
+    expect(within(must(items()[1])).getByRole("button", { name: /Move Reply down/ })).toHaveFocus();
     await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
     expect(items()[0]).toHaveTextContent("Reply");
     await user.click(within(section).getByRole("button", { name: "Add separator" }));
     expect(items().at(-1)).toHaveTextContent("Separator");
-    await user.click(within(items()[1] as HTMLElement).getByRole("button", { name: /Remove/ }));
+    await user.click(within(must(items()[1])).getByRole("button", { name: /Remove/ }));
     await user.click(within(section).getByRole("button", { name: "Save to layout.kdl" }));
     expect(await within(section).findByText("Saved to layout.kdl.")).toBeVisible();
     const [update] = sent(env, "UpdateLayout");
@@ -114,11 +113,11 @@ describe("toolbar-editor", () => {
     expect(written.some((i) => i.type === "action" && i.action === "mail.reply-all")).toBe(false);
 
     await user.click(within(section).getByRole("button", { name: "Back to the default toolbar" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "UpdateLayout")[1]?.patches).toEqual([
         { op: "reset-toolbar", toolbar: "reader" },
-      ]),
-    );
+      ]);
+    });
   });
 });
 
@@ -154,24 +153,26 @@ describe("key-binding-editor", () => {
     const row = await within(table).findByText("Ctrl+Shift+K");
     const tr = row.closest("tr") as HTMLElement;
     await user.click(within(tr).getByRole("button", { name: /Remove Ctrl\+Shift\+K/ }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "UpdateLayout")[1]?.patches).toEqual([
         { op: "remove-key-binding", context: "global", key: "ctrl+shift+k" },
-      ]),
-    );
+      ]);
+    });
     const reply = within(table).getByRole("button", { name: "Restore the default for R" });
     await user.click(reply);
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "UpdateLayout")[2]?.patches).toEqual([
         { op: "reset-key-binding", context: "global", key: "r" },
-      ]),
-    );
+      ]);
+    });
   });
 
   it("does not let recorded keys trigger the app's shortcuts", async () => {
     const { env } = renderEditor("key-binding-editor");
     const capture = await screen.findByLabelText("Keys");
-    act(() => capture.focus());
+    act(() => {
+      capture.focus();
+    });
     const event = new KeyboardEvent("keydown", { key: "c", bubbles: true, cancelable: true });
     act(() => {
       capture.dispatchEvent(event);
@@ -213,9 +214,9 @@ describe("column-editor", () => {
     // The list now renders one cell per column, in that order.
     env.store.setState({ activeAccountId: "acc-personal", activeFolderId: "acc-personal/Inbox" });
     const { container } = renderWithProviders(<NodeView node={node} path="t" />, env);
-    await waitFor(() =>
-      expect(container.querySelector('[data-part="message-list.row.columns"]')).not.toBeNull(),
-    );
+    await waitFor(() => {
+      expect(container.querySelector('[data-part="message-list.row.columns"]')).not.toBeNull();
+    });
     const row = container.querySelector('[data-part="message-list.row"]');
     const cells = row?.querySelectorAll('[data-part="message-list.row.cell"]') ?? [];
     expect([...cells].map((c) => c.getAttribute("data-column"))).toEqual([

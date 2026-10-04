@@ -68,7 +68,9 @@ function ActionFields({
         { value: "on", label: `${prefix}-on` },
         { value: "off", label: `${prefix}-off` },
       ]}
-      onChange={(v) => set(v === "on")}
+      onChange={(v) => {
+        set(v === "on");
+      }}
     />
   );
   switch (a.type) {
@@ -79,7 +81,9 @@ function ActionFields({
           name={name}
           value={a.folder}
           accounts={accounts}
-          onChange={(folder) => onChange({ ...a, folder })}
+          onChange={(folder) => {
+            onChange({ ...a, folder });
+          }}
         />
       );
     case "delete":
@@ -88,7 +92,9 @@ function ActionFields({
           labelId="rules-delete-permanent"
           name={`${name}-permanent`}
           checked={a.permanent}
-          onChange={(permanent) => onChange({ ...a, permanent })}
+          onChange={(permanent) => {
+            onChange({ ...a, permanent });
+          }}
         />
       );
     case "tag":
@@ -98,24 +104,32 @@ function ActionFields({
           labelId="rules-tag"
           name={`${name}-tag`}
           value={a.tag}
-          onChange={(tag) => onChange({ ...a, tag: tag.trim() })}
+          onChange={(tag) => {
+            onChange({ ...a, tag: tag.trim() });
+          }}
         />
       );
     case "flag":
-      return onOff("flagged", a.flagged, "rules-set-flag", (flagged) =>
-        onChange({ ...a, flagged }),
-      );
+      return onOff("flagged", a.flagged, "rules-set-flag", (flagged) => {
+        onChange({ ...a, flagged });
+      });
     case "mark-read":
-      return onOff("read", a.read, "rules-set-read", (read) => onChange({ ...a, read }));
+      return onOff("read", a.read, "rules-set-read", (read) => {
+        onChange({ ...a, read });
+      });
     case "notify":
-      return onOff("notify", a.notify, "rules-set-notify", (notify) => onChange({ ...a, notify }));
+      return onOff("notify", a.notify, "rules-set-notify", (notify) => {
+        onChange({ ...a, notify });
+      });
     case "forward":
     case "redirect":
       return (
         <AddressesField
           name={`${name}-to`}
           value={a.to}
-          onChange={(to) => onChange({ ...a, to })}
+          onChange={(to) => {
+            onChange({ ...a, to });
+          }}
         />
       );
     case "reply":
@@ -124,7 +138,9 @@ function ActionFields({
           labelId="rules-reply-template"
           name={`${name}-template`}
           value={a.template}
-          onChange={(template) => onChange({ ...a, template })}
+          onChange={(template) => {
+            onChange({ ...a, template });
+          }}
         />
       );
     case "archive":
@@ -144,8 +160,9 @@ export function ActionEditor({
   const t = useT();
   const accounts = useAccounts();
   const [kind, setKind] = useState<ActionKind>("move");
-  const set = (index: number, action: RuleAction) =>
+  const set = (index: number, action: RuleAction) => {
     onChange(value.map((a, i) => (i === index ? action : a)));
+  };
   return (
     <div data-part="rules.actions">
       <ol data-part="rules.actions.items">
@@ -153,23 +170,29 @@ export function ActionEditor({
           <li key={index} data-part="rules.action" data-kind={action.type}>
             <SelectField
               labelId="rules-action-kind"
-              name={`a-${index}-kind`}
+              name={`a-${String(index)}-kind`}
               value={action.type}
               choices={kindChoices}
-              onChange={(k) => set(index, newAction(k as ActionKind))}
+              onChange={(k) => {
+                set(index, newAction(k as ActionKind));
+              }}
             />
             <ActionFields
-              name={`a-${index}`}
+              name={`a-${String(index)}`}
               action={action}
               accounts={accounts.data ?? []}
-              onChange={(a) => set(index, a)}
+              onChange={(a) => {
+                set(index, a);
+              }}
             />
             <button
               type="button"
               data-part="form.button"
               data-action="action-up"
               disabled={index === 0}
-              onClick={() => onChange(moveItem(value, index, -1))}
+              onClick={() => {
+                onChange(moveItem(value, index, -1));
+              }}
             >
               {t("rules-move-up")}
             </button>
@@ -178,7 +201,9 @@ export function ActionEditor({
               data-part="form.button"
               data-action="action-down"
               disabled={index === value.length - 1}
-              onClick={() => onChange(moveItem(value, index, 1))}
+              onClick={() => {
+                onChange(moveItem(value, index, 1));
+              }}
             >
               {t("rules-move-down")}
             </button>
@@ -186,7 +211,9 @@ export function ActionEditor({
               type="button"
               data-part="form.button"
               data-action="remove-action"
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
+              onClick={() => {
+                onChange(value.filter((_, i) => i !== index));
+              }}
             >
               {t("rules-remove")}
             </button>
@@ -199,13 +226,17 @@ export function ActionEditor({
           name="add-action"
           value={kind}
           choices={kindChoices}
-          onChange={(k) => setKind(k as ActionKind)}
+          onChange={(k) => {
+            setKind(k as ActionKind);
+          }}
         />
         <button
           type="button"
           data-part="form.button"
           data-action="add-action"
-          onClick={() => onChange([...value, newAction(kind)])}
+          onClick={() => {
+            onChange([...value, newAction(kind)]);
+          }}
         >
           {t("rules-add-action")}
         </button>

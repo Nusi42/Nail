@@ -509,6 +509,13 @@ pub fn is_package_path(path: &str) -> bool {
         })
 }
 
+/// Whether `path` ends in `.<ext>` for one of `exts` (case-sensitive, like
+/// the package paths themselves).
+fn has_extension(path: &str, exts: &[&str]) -> bool {
+    path.rsplit_once('.')
+        .is_some_and(|(_, ext)| exts.contains(&ext))
+}
+
 /// Whether `tag` looks like a BCP 47 language tag (`en`, `de`, `pt-BR`,
 /// `zh-Hant`): a 2–3 letter language and optional alphanumeric subtags.
 pub fn is_language_tag(tag: &str) -> bool {
@@ -822,9 +829,7 @@ impl PluginManifest {
                 &self.api_version,
             );
         }
-        if !is_package_path(&self.main)
-            || !(self.main.ends_with(".js") || self.main.ends_with(".mjs"))
-        {
+        if !is_package_path(&self.main) || !has_extension(&self.main, &["js", "mjs"]) {
             push(K::InvalidMain, "main".into(), &self.main);
         }
         if let Some(home) = &self.homepage
@@ -932,14 +937,16 @@ impl PluginManifest {
                     .all(|n| n.as_deref().is_none_or(is_layout_name));
             match placement.target() {
                 Some(_) if !neighbours_ok => push(K::InvalidPlacement, path, ""),
-                Some(PlacementTarget::Toolbar {
-                    toolbar: name,
-                    command,
-                })
-                | Some(PlacementTarget::Menu {
-                    menu: name,
-                    command,
-                }) => {
+                Some(
+                    PlacementTarget::Toolbar {
+                        toolbar: name,
+                        command,
+                    }
+                    | PlacementTarget::Menu {
+                        menu: name,
+                        command,
+                    },
+                ) => {
                     let menu_ok = placement.menu.is_none()
                         || name == "app"
                         || name.strip_prefix("context:").is_some_and(is_layout_name);
@@ -978,7 +985,7 @@ impl PluginManifest {
             }
         }
         for (tag, file) in &c.locales {
-            if !is_language_tag(tag) || !is_package_path(file) || !file.ends_with(".ftl") {
+            if !is_language_tag(tag) || !is_package_path(file) || !has_extension(file, &["ftl"]) {
                 push(K::InvalidLocale, format!("contributes.locales.{tag}"), file);
             }
         }
@@ -1234,6 +1241,17 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[test]
+    fn extensions_are_compared_exactly() {
+        assert!(has_extension("dist/index.js", &["js", "mjs"]));
+        assert!(has_extension("dist/index.min.mjs", &["js", "mjs"]));
+        assert!(!has_extension("dist/index.JS", &["js", "mjs"]));
+        assert!(!has_extension("dist/index.ts", &["js", "mjs"]));
+        assert!(!has_extension("js", &["js"]));
+        assert!(!has_extension("dist.js/index", &["js"]));
+        assert!(has_extension("locales/de.ftl", &["ftl"]));
+    }
+
     fn example() -> Value {
         json!({
             "id": "follow-up",
@@ -1315,6 +1333,7 @@ mod tests {
 
     #[test]
     fn permission_problems_are_reported_one_by_one() {
+        use PluginManifestIssueKind as K;
         let mut v = example();
         v["permissions"] = json!([
             "mail.read.body",
@@ -1325,7 +1344,6 @@ mod tests {
             "storage",
             3
         ]);
-        use PluginManifestIssueKind as K;
         assert_eq!(
             kinds(&v),
             [

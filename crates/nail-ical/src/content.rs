@@ -300,7 +300,7 @@ fn decode_param_value(value: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '^' {
             match chars.peek() {
-                Some('n') | Some('N') => {
+                Some('n' | 'N') => {
                     out.push('\n');
                     chars.next();
                 }
@@ -375,7 +375,7 @@ pub fn unescape_text(text: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some('n') | Some('N') => out.push('\n'),
+                Some('n' | 'N') => out.push('\n'),
                 Some(other) => out.push(other),
                 None => out.push('\\'),
             }
@@ -494,6 +494,7 @@ impl Component {
 
     /// A copy with the given properties only and no sub-components
     /// (keeps the original `BEGIN` / `END` lines).
+    #[must_use]
     pub fn shell(&self, keep: impl Fn(&Property) -> bool) -> Component {
         Component {
             name: self.name.clone(),
@@ -783,20 +784,25 @@ pub fn parse(text: &str) -> Document {
             match stack.iter().rposition(|c| c.is(name)) {
                 Some(position) => {
                     // Close anything left open inside it.
-                    while stack.len() > position + 1 {
-                        let mut inner = stack.pop().expect("non-empty");
-                        doc.issues.push(ContentIssue {
-                            line: inner.line,
-                            kind: ContentIssueKind::Unclosed,
-                        });
-                        inner.end_raw = None;
-                        stack.last_mut().expect("parent").components.push(inner);
-                    }
-                    let mut done = stack.pop().expect("matched");
-                    done.end_raw = Some(logical.raw);
-                    match stack.last_mut() {
-                        Some(parent) => parent.components.push(done),
-                        None => doc.components.push(done),
+                    // `open[0]` is the component this END closes; anything
+                    // after it was left open inside it.
+                    let mut open = stack.split_off(position);
+                    while let Some(mut inner) = open.pop() {
+                        if let Some(parent) = open.last_mut() {
+                            doc.issues.push(ContentIssue {
+                                line: inner.line,
+                                kind: ContentIssueKind::Unclosed,
+                            });
+                            inner.end_raw = None;
+                            parent.components.push(inner);
+                        } else {
+                            inner.end_raw = Some(logical.raw);
+                            match stack.last_mut() {
+                                Some(parent) => parent.components.push(inner),
+                                None => doc.components.push(inner),
+                            }
+                            break;
+                        }
                     }
                 }
                 None => doc.issues.push(ContentIssue {
@@ -846,12 +852,11 @@ pub fn decode_bytes(bytes: &[u8]) -> (String, &'static str) {
         let (text, _) = encoding.decode_without_bom_handling(&bytes[bom..]);
         return (text.into_owned(), encoding.name());
     }
-    match std::str::from_utf8(bytes) {
-        Ok(text) => (text.to_owned(), "UTF-8"),
-        Err(_) => {
-            let (text, _, _) = encoding_rs::WINDOWS_1252.decode(bytes);
-            (text.into_owned(), "windows-1252")
-        }
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        (text.to_owned(), "UTF-8")
+    } else {
+        let (text, _, _) = encoding_rs::WINDOWS_1252.decode(bytes);
+        (text.into_owned(), "windows-1252")
     }
 }
 
@@ -1086,9 +1091,12 @@ mod tests {
                 );
                 drop(doc);
                 // The format parsers on top survive too.
-                let _ = crate::ical::parse_calendar(&text, crate::ical::ParseOptions::default());
-                let _ = crate::vcard::parse_cards(&unclosed);
-                let _ = crate::feed::parse_feed_bytes(text.as_bytes());
+                drop(crate::ical::parse_calendar(
+                    &text,
+                    crate::ical::ParseOptions::default(),
+                ));
+                drop(crate::vcard::parse_cards(&unclosed));
+                drop(crate::feed::parse_feed_bytes(text.as_bytes()));
             })
             .unwrap();
         worker.join().expect("no stack overflow");

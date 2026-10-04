@@ -30,7 +30,12 @@ function packageDir(name: string): string {
 /** A fresh temp directory (removed by the returned cleanup). */
 export function tempDir(prefix: string): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
-  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    dir,
+    cleanup: () => {
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
 }
 
 /**
@@ -40,7 +45,9 @@ export function tempDir(prefix: string): { dir: string; cleanup: () => void } {
 export function linkDependencies(dir: string): void {
   const nm = path.join(dir, "node_modules");
   mkdirSync(path.join(nm, "@nail"), { recursive: true });
-  const link = (target: string, at: string) => symlinkSync(target, at, "junction");
+  const link = (target: string, at: string) => {
+    symlinkSync(target, at, "junction");
+  };
   link(SDK, path.join(nm, "@nail", "plugin-api"));
   link(packageDir("esbuild"), path.join(nm, "esbuild"));
   link(packageDir("typescript"), path.join(nm, "typescript"));
@@ -132,7 +139,7 @@ export async function loadBundle(file: string, options: TestHostOptions): Promis
   const restore = host.install();
   try {
     loads += 1;
-    const mod = (await import(`${pathToFileURL(file).href}?load=${loads}`)) as {
+    const mod = (await import(`${pathToFileURL(file).href}?load=${String(loads)}`)) as {
       default: DefinedPlugin;
     };
     await mod.default.activate(host.activationContext());

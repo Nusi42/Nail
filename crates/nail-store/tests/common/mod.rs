@@ -1,10 +1,9 @@
 //! Fixtures shared by the integration tests.
-#![allow(dead_code)]
 
 use nail_api::{Account, AccountKind, Address, Flags, Folder, FolderRole, MessageSummary};
 use nail_store::{Store, StoredMessage};
 
-pub fn account(id: &str) -> Account {
+pub(crate) fn account(id: &str) -> Account {
     Account {
         id: id.into(),
         name: format!("Account {id}"),
@@ -13,7 +12,7 @@ pub fn account(id: &str) -> Account {
     }
 }
 
-pub fn folder(
+pub(crate) fn folder(
     id: &str,
     account: &str,
     path: &str,
@@ -32,7 +31,7 @@ pub fn folder(
     }
 }
 
-pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessage {
+pub(crate) fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessage {
     StoredMessage::new(MessageSummary {
         id: id.into(),
         folder_id: folder.into(),
@@ -66,7 +65,7 @@ pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessa
 }
 
 /// A store with account `a1` and folders `inbox` (INBOX) and `archive`.
-pub fn seeded_store() -> Store {
+pub(crate) fn seeded_store() -> Store {
     let store = Store::open_in_memory().unwrap();
     store.upsert_account(&account("a1")).unwrap();
     store

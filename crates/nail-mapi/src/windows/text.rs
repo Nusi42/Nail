@@ -16,17 +16,17 @@ pub fn ansi_to_string(bytes: &[u8]) -> String {
     // measures.
     let needed =
         unsafe { MultiByteToWideChar(CP_ACP, 0, bytes.as_ptr(), len, std::ptr::null_mut(), 0) };
-    if needed <= 0 {
+    let Some(capacity) = usize::try_from(needed).ok().filter(|&n| n > 0) else {
         return String::from_utf8_lossy(bytes).into_owned();
-    }
-    let mut wide = vec![0u16; needed as usize];
+    };
+    let mut wide = vec![0u16; capacity];
     // SAFETY: `wide` has room for `needed` units.
     let written =
         unsafe { MultiByteToWideChar(CP_ACP, 0, bytes.as_ptr(), len, wide.as_mut_ptr(), needed) };
-    if written <= 0 {
+    let Some(written) = usize::try_from(written).ok().filter(|&n| n > 0) else {
         return String::from_utf8_lossy(bytes).into_owned();
-    }
-    wide.truncate(written as usize);
+    };
+    wide.truncate(written);
     String::from_utf16_lossy(&wide)
 }
 
@@ -63,10 +63,10 @@ pub fn to_ansi(text: &str) -> Vec<u8> {
             std::ptr::null_mut(),
         )
     };
-    if needed <= 0 {
+    let Some(capacity) = usize::try_from(needed).ok().filter(|&n| n > 0) else {
         return vec![0];
-    }
-    let mut out = vec![0u8; needed as usize + 1];
+    };
+    let mut out = vec![0u8; capacity + 1];
     // SAFETY: `out` has room for `needed` bytes plus the terminator.
     let written = unsafe {
         WideCharToMultiByte(
@@ -80,7 +80,7 @@ pub fn to_ansi(text: &str) -> Vec<u8> {
             std::ptr::null_mut(),
         )
     };
-    out.truncate(written.max(0) as usize);
+    out.truncate(usize::try_from(written).unwrap_or(0));
     out.push(0);
     out
 }

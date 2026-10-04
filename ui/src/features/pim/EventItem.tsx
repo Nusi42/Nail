@@ -24,6 +24,7 @@ import { formatClock, formatPimTime } from "./fmt";
 import { EVENT_DIALOG } from "./names";
 import { usePim, usePimStore } from "./store";
 import { sameTime } from "./time";
+import { nonEmpty } from "../../text/empty";
 
 export type DragMode = "move" | "resize";
 
@@ -45,9 +46,9 @@ export interface EventItemProps {
   /** Extra states (`continues-before`, `dragging`, …). */
   states?: readonly string[];
   /** Pointer drag start (move or, from the bottom edge, resize). */
-  onDragStart?(event: ReactPointerEvent<HTMLElement>, mode: DragMode): void;
+  onDragStart?: (event: ReactPointerEvent<HTMLElement>, mode: DragMode) => void;
   /** Swallow the click that ends a drag. */
-  suppressClick?(): boolean;
+  suppressClick?: () => boolean;
 }
 
 /** Opens the event editor on an occurrence. */
@@ -110,7 +111,7 @@ export function EventItem({
     title,
     time,
     day: formatPimTime(format, instance.start, tz),
-    calendar: calendar?.settings.name || "none",
+    calendar: nonEmpty(calendar?.settings.name) ?? "none",
     recurring: instance.recurring ? "yes" : "no",
   });
 
@@ -119,7 +120,7 @@ export function EventItem({
     void requestMove(ctx, instance, start, end).catch((error: unknown) => {
       pimStore.getState().pushToast({
         kind: "problem",
-        id: `move-${Date.now()}`,
+        id: `move-${String(Date.now())}`,
         message: { id: "pim-move-failed", args: { error: String(error) } },
       });
     });
@@ -133,17 +134,18 @@ export function EventItem({
       return;
     }
     if (!event.altKey || instance.read_only) return;
-    const step = keys === "time" ? { up: [0, -15], down: [0, 15] } : { up: [-7, 0], down: [7, 0] };
+    const step: { up: [number, number]; down: [number, number] } =
+      keys === "time" ? { up: [0, -15], down: [0, 15] } : { up: [-7, 0], down: [7, 0] };
     switch (event.key) {
       case "ArrowUp":
         event.preventDefault();
         if (event.shiftKey && keys === "time") move(0, -15, true);
-        else move(step.up[0] as number, step.up[1] as number, false);
+        else move(step.up[0], step.up[1], false);
         break;
       case "ArrowDown":
         event.preventDefault();
         if (event.shiftKey && keys === "time") move(0, 15, true);
-        else move(step.down[0] as number, step.down[1] as number, false);
+        else move(step.down[0], step.down[1], false);
         break;
       case "ArrowLeft":
         event.preventDefault();
@@ -179,14 +181,18 @@ export function EventItem({
         if (suppressClick?.()) return;
         open(instance);
       }}
-      onFocus={() =>
+      onFocus={() => {
         pimStore
           .getState()
-          .select({ eventId: instance.event_id, recurrenceId: instance.recurrence_id })
-      }
+          .select({ eventId: instance.event_id, recurrenceId: instance.recurrence_id });
+      }}
       onKeyDown={onKeyDown}
       onPointerDown={
-        onDragStart && !instance.read_only ? (event) => onDragStart(event, "move") : undefined
+        onDragStart && !instance.read_only
+          ? (event) => {
+              onDragStart(event, "move");
+            }
+          : undefined
       }
     >
       <span data-part="event-card.title">{title}</span>

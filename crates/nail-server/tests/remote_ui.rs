@@ -3,6 +3,9 @@
 //! address and fingerprint, protected routes need a session, disabling
 //! stops it.
 
+#![cfg(test)]
+
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -129,15 +132,16 @@ async fn https(
         .unwrap();
     let mut request = format!("{method} {path} HTTP/1.1\r\nHost: localhost:{port}\r\n");
     for (name, value) in headers {
-        request.push_str(&format!("{name}: {value}\r\n"));
+        let _ = write!(request, "{name}: {value}\r\n");
     }
-    request.push_str(&format!(
+    let _ = write!(
+        request,
         "Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
-    ));
+    );
     tls.write_all(request.as_bytes()).await.unwrap();
     let mut raw = Vec::new();
-    let _ = tokio::time::timeout(Duration::from_secs(10), tls.read_to_end(&mut raw)).await;
+    drop(tokio::time::timeout(Duration::from_secs(10), tls.read_to_end(&mut raw)).await);
     let split = raw.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
     let head = String::from_utf8_lossy(&raw[..split]).into_owned();
     let mut lines = head.split("\r\n");

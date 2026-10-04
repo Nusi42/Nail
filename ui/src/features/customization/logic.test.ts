@@ -25,7 +25,7 @@ function must<T>(value: T | null | undefined): T {
   return value;
 }
 
-const issue = (line: number) => ({ line, column: 1, message: `problem ${line}` });
+const issue = (line: number) => ({ line, column: 1, message: `problem ${String(line)}` });
 
 describe("config error bookkeeping", () => {
   it("keeps every error per file and drops a file that became valid", () => {

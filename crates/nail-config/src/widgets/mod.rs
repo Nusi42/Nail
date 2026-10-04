@@ -85,7 +85,7 @@ pub(crate) const fn widget(
 /// A widget that is not implemented yet (any options are accepted): the
 /// slots of a wave's contract until its UI package types them (M3c: the
 /// Exchange widgets, WP94). Unused between waves.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "unused between waves (see above)")]
 pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     WidgetSpec {
         kind,

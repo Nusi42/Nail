@@ -124,7 +124,7 @@ pub fn is_local_name(name: &str) -> bool {
 
 /// IPv4 ranges that are never fetched.
 const BLOCKED_V4: &[(Ipv4Addr, u8)] = &[
-    (Ipv4Addr::new(0, 0, 0, 0), 8),       // "this network", unspecified
+    (Ipv4Addr::UNSPECIFIED, 8),           // "this network", unspecified
     (Ipv4Addr::new(10, 0, 0, 0), 8),      // private
     (Ipv4Addr::new(100, 64, 0, 0), 10),   // CGNAT
     (Ipv4Addr::new(127, 0, 0, 0), 8),     // loopback
@@ -153,11 +153,9 @@ pub fn is_public_ip(ip: IpAddr) -> bool {
 }
 
 fn is_public_v4(ip: Ipv4Addr) -> bool {
-    !BLOCKED_V4.iter().any(|&(net, prefix)| {
-        Ipv4Net::new(net, prefix)
-            .map(|net| net.contains(&ip))
-            .unwrap_or(true)
-    })
+    !BLOCKED_V4
+        .iter()
+        .any(|&(net, prefix)| Ipv4Net::new(net, prefix).map_or(true, |net| net.contains(&ip)))
 }
 
 fn v6_net(text: &str) -> Ipv6Net {

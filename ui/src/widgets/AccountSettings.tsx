@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { AccountConfig, Identity, SecretInput } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
@@ -45,7 +45,7 @@ export function accountProblems(config: AccountConfig): string[] {
   const problems: string[] = [];
   if (!isEmail(config.email)) problems.push("settings-error-email");
   if (config.incoming.server.host === "") problems.push("settings-error-host");
-  if (config.outgoing && config.outgoing.server.host === "") problems.push("settings-error-host");
+  if (config.outgoing?.server.host === "") problems.push("settings-error-host");
   if (config.identities.length === 0) problems.push("settings-error-no-identity");
   if (config.identities.some((i) => !isEmail(i.email))) problems.push("settings-error-identity");
   return [...new Set(problems)];
@@ -68,34 +68,40 @@ function IdentityEditor({
     <li data-part="account-settings.identity" data-index={index}>
       <TextField
         labelId="identity-email"
-        name={`identity-${index}-email`}
+        name={`identity-${String(index)}-email`}
         type="email"
         value={identity.email}
-        onChange={(email) => onChange({ ...identity, email: email.trim() })}
+        onChange={(email) => {
+          onChange({ ...identity, email: email.trim() });
+        }}
       />
       <TextField
         labelId="identity-name"
-        name={`identity-${index}-name`}
+        name={`identity-${String(index)}-name`}
         value={identity.name ?? ""}
-        onChange={(name) => onChange({ ...identity, name: name === "" ? null : name })}
+        onChange={(name) => {
+          onChange({ ...identity, name: name === "" ? null : name });
+        }}
       />
       <TextField
         labelId="identity-reply-to"
-        name={`identity-${index}-reply-to`}
+        name={`identity-${String(index)}-reply-to`}
         type="email"
         value={identity.reply_to ?? ""}
-        onChange={(v) => onChange({ ...identity, reply_to: v.trim() === "" ? null : v.trim() })}
+        onChange={(v) => {
+          onChange({ ...identity, reply_to: v.trim() === "" ? null : v.trim() });
+        }}
       />
       <TextAreaField
         labelId="identity-signature"
-        name={`identity-${index}-signature`}
+        name={`identity-${String(index)}-signature`}
         value={signature}
-        onChange={(text) =>
+        onChange={(text) => {
           onChange({
             ...identity,
             signature: text === "" ? null : { text, html: null, markdown: null },
-          })
-        }
+          });
+        }}
       />
       {onRemove && (
         <button
@@ -241,7 +247,7 @@ function AccountForm({
     }
   };
 
-  const save = (event: FormEvent) => {
+  const save = (event: SubmitEvent) => {
     event.preventDefault();
     if (problems.length > 0) return;
     void run(async () => {
@@ -276,11 +282,12 @@ function AccountForm({
       return "settings-removed";
     });
 
-  const setIdentity = (index: number, identity: Identity) =>
+  const setIdentity = (index: number, identity: Identity) => {
     setConfig({
       ...config,
       identities: config.identities.map((old, i) => (i === index ? identity : old)),
     });
+  };
 
   const incoming = config.incoming;
   return (
@@ -290,25 +297,33 @@ function AccountForm({
           labelId="settings-name"
           name="name"
           value={config.name}
-          onChange={(name) => setConfig({ ...config, name })}
+          onChange={(name) => {
+            setConfig({ ...config, name });
+          }}
         />
         <TextField
           labelId="settings-email"
           name="email"
           type="email"
           value={config.email}
-          onChange={(email) => setConfig({ ...config, email: email.trim() })}
+          onChange={(email) => {
+            setConfig({ ...config, email: email.trim() });
+          }}
         />
         <CheckField
           labelId="settings-enabled"
           name="enabled"
           checked={config.enabled}
-          onChange={(enabled) => setConfig({ ...config, enabled })}
+          onChange={(enabled) => {
+            setConfig({ ...config, enabled });
+          }}
         />
       </Section>
       <IncomingFields
         incoming={incoming}
-        onChange={(next) => setConfig({ ...config, incoming: next })}
+        onChange={(next) => {
+          setConfig({ ...config, incoming: next });
+        }}
       />
       {incoming.protocol === "imap" && (
         <NumberField
@@ -317,12 +332,12 @@ function AccountForm({
           hintId="settings-poll-interval-hint"
           min={30}
           value={incoming.options.poll_interval_secs}
-          onChange={(v) =>
+          onChange={(v) => {
             setConfig({
               ...config,
               incoming: { ...incoming, options: { ...incoming.options, poll_interval_secs: v } },
-            })
-          }
+            });
+          }}
         />
       )}
       {incoming.protocol === "gmail" && (
@@ -333,27 +348,27 @@ function AccountForm({
             hintId="settings-gmail-poll-interval-hint"
             min={10}
             value={incoming.options.poll_interval_secs}
-            onChange={(v) =>
+            onChange={(v) => {
               setConfig({
                 ...config,
                 incoming: { ...incoming, options: { ...incoming.options, poll_interval_secs: v } },
-              })
-            }
+              });
+            }}
           />
           <NumberField
             labelId="settings-gmail-max-poll-interval"
             name="max-poll-interval"
             min={10}
             value={incoming.options.max_poll_interval_secs}
-            onChange={(v) =>
+            onChange={(v) => {
               setConfig({
                 ...config,
                 incoming: {
                   ...incoming,
                   options: { ...incoming.options, max_poll_interval_secs: v },
                 },
-              })
-            }
+              });
+            }}
           />
         </Section>
       )}
@@ -363,18 +378,20 @@ function AccountForm({
             email={config.email}
             engine={incoming.options.engine}
             auth={incoming.server.auth}
-            onChange={(auth) =>
+            onChange={(auth) => {
               setConfig({
                 ...config,
                 incoming: { ...incoming, server: { ...incoming.server, auth } },
-              })
-            }
+              });
+            }}
             password={password}
             onPasswordChange={setPassword}
           />
           <ExchangeOptionsFields
             options={incoming.options}
-            onChange={(options) => setConfig({ ...config, incoming: { ...incoming, options } })}
+            onChange={(options) => {
+              setConfig({ ...config, incoming: { ...incoming, options } });
+            }}
           />
           <ExchangeStatusPanel accountId={config.id} />
         </>
@@ -385,45 +402,47 @@ function AccountForm({
             labelId="settings-leave-on-server"
             name="leave-on-server"
             checked={incoming.options.leave_on_server ?? true}
-            onChange={(v) =>
+            onChange={(v) => {
               setConfig({
                 ...config,
                 incoming: { ...incoming, options: { ...incoming.options, leave_on_server: v } },
-              })
-            }
+              });
+            }}
           />
           <NumberField
             labelId="settings-delete-after-days"
             name="delete-after-days"
             min={1}
             value={incoming.options.delete_after_days}
-            onChange={(v) =>
+            onChange={(v) => {
               setConfig({
                 ...config,
                 incoming: { ...incoming, options: { ...incoming.options, delete_after_days: v } },
-              })
-            }
+              });
+            }}
           />
           <CheckField
             labelId="settings-delete-when-deleted"
             name="delete-when-deleted"
             checked={incoming.options.delete_when_deleted_locally ?? false}
-            onChange={(v) =>
+            onChange={(v) => {
               setConfig({
                 ...config,
                 incoming: {
                   ...incoming,
                   options: { ...incoming.options, delete_when_deleted_locally: v },
                 },
-              })
-            }
+              });
+            }}
           />
         </Section>
       )}
       {config.outgoing && (
         <OutgoingFields
           outgoing={config.outgoing}
-          onChange={(outgoing) => setConfig({ ...config, outgoing })}
+          onChange={(outgoing) => {
+            setConfig({ ...config, outgoing });
+          }}
         />
       )}
       {accountSignIn(config).kind === "password" && incoming.protocol !== "exchange" && (
@@ -444,14 +463,17 @@ function AccountForm({
               key={index}
               identity={identity}
               index={index}
-              onChange={(next) => setIdentity(index, next)}
+              onChange={(next) => {
+                setIdentity(index, next);
+              }}
               onRemove={
                 config.identities.length > 1
-                  ? () =>
+                  ? () => {
                       setConfig({
                         ...config,
                         identities: config.identities.filter((_, i) => i !== index),
-                      })
+                      });
+                    }
                   : null
               }
             />
@@ -461,9 +483,9 @@ function AccountForm({
           type="button"
           data-part="form.button"
           data-action="add-identity"
-          onClick={() =>
-            setConfig({ ...config, identities: [...config.identities, newIdentity(config.id)] })
-          }
+          onClick={() => {
+            setConfig({ ...config, identities: [...config.identities, newIdentity(config.id)] });
+          }}
         >
           {t("identity-add")}
         </button>
@@ -472,7 +494,9 @@ function AccountForm({
         accountId={config.id}
         ids={config.authserv_ids ?? []}
         disabled={busy}
-        onChange={(authserv_ids) => setConfig({ ...config, authserv_ids })}
+        onChange={(authserv_ids) => {
+          setConfig({ ...config, authserv_ids });
+        }}
         setMessage={setMessage}
       />
       {problems.map((problem) => (
@@ -497,7 +521,9 @@ function AccountForm({
             data-action="remove"
             data-variant="danger"
             disabled={busy}
-            onClick={() => setConfirmRemove(true)}
+            onClick={() => {
+              setConfirmRemove(true);
+            }}
           >
             {t("settings-remove")}
           </button>
@@ -520,7 +546,9 @@ function AccountForm({
               type="button"
               data-part="form.button"
               data-action="cancel"
-              onClick={() => setConfirmRemove(false)}
+              onClick={() => {
+                setConfirmRemove(false);
+              }}
             >
               {t("settings-cancel")}
             </button>
@@ -583,7 +611,9 @@ export function AccountSettings({ node }: WidgetProps) {
           type="button"
           data-part="form.button"
           data-action="add-account"
-          onClick={() => openWindow(SETUP_WINDOW)}
+          onClick={() => {
+            openWindow(SETUP_WINDOW);
+          }}
         >
           {t("settings-add-account")}
         </button>
@@ -600,7 +630,9 @@ export function AccountSettings({ node }: WidgetProps) {
         <AccountForm
           key={current.id}
           account={current}
-          onRemoved={() => setSelected(null)}
+          onRemoved={() => {
+            setSelected(null);
+          }}
           setMessage={setNotice}
         />
       )}

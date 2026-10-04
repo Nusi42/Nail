@@ -5,6 +5,7 @@ import { filterFolders } from "./FolderPicker";
 import { initiallyExpanded, splitQuotes } from "./ThreadView";
 import { applyHint, hintMessageId, hintsFor } from "./SearchBar";
 import { threadStates, threadTemplateData } from "./MessageList";
+import { must } from "../test/must";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -12,7 +13,9 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 describe("search-bar", () => {
   it("offers query-language hints that complete the word being typed", async () => {
@@ -42,7 +45,9 @@ describe("search-bar", () => {
     expect(document.activeElement).not.toBe(document.body);
     expect(hints.contains(document.activeElement)).toBe(true);
     expect(document.activeElement).toHaveAttribute("data-part", "search-bar.hint.button");
-    act(() => (document.activeElement as HTMLElement).blur());
+    act(() => {
+      (document.activeElement as HTMLElement).blur();
+    });
     expect(screen.queryByRole("list", { name: "Search fields" })).toBeNull();
   });
 
@@ -69,7 +74,9 @@ describe("search-bar", () => {
     });
     await user.clear(input);
     await user.type(input, "from:ada");
-    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 
   it("starts a search scoped to the active account and clears it", async () => {
@@ -94,7 +101,9 @@ describe("search-bar", () => {
   it("focuses on search.focus requests", () => {
     const env = createEnv();
     renderNode(widget("search-bar"), env);
-    act(() => env.store.getState().requestFocus("search"));
+    act(() => {
+      env.store.getState().requestFocus("search");
+    });
     expect(screen.getByRole("searchbox")).toHaveFocus();
   });
 
@@ -133,15 +142,15 @@ describe("message-list with search and threads", () => {
     );
     expect(screen.getByRole("listbox")).toHaveAttribute("data-state", "search");
 
-    act(() =>
+    act(() => {
       env.store
         .getState()
-        .setSearch({ text: "size>", accountId: null, folderId: null, error: null }),
-    );
+        .setSearch({ text: "size>", accountId: null, folderId: null, error: null });
+    });
     expect(await screen.findByText(/The search could not be run/)).toBeInTheDocument();
-    await waitFor(() =>
-      expect(env.store.getState().search?.error).toMatchObject({ kind: "unexpected-end" }),
-    );
+    await waitFor(() => {
+      expect(env.store.getState().search?.error).toMatchObject({ kind: "unexpected-end" });
+    });
   });
 
   it("shows an empty search result", async () => {
@@ -159,7 +168,7 @@ describe("message-list with search and threads", () => {
       env,
     );
     const rows = await screen.findAllByRole("option");
-    const thread = rows.find((r) => r.dataset.state?.split(" ").includes("thread")) as HTMLElement;
+    const thread = must(rows.find((r) => r.dataset.state?.split(" ").includes("thread")));
     expect(thread).toBeDefined();
     expect(env.transport.requests.some((r) => r.type === "ListThreads")).toBe(true);
     fireEvent.click(thread);
@@ -222,7 +231,7 @@ describe("thread-view", () => {
     expect(within(newest).getByText("Show quoted text")).toBeInTheDocument();
 
     const oldest = items[0] as HTMLElement;
-    const toggle = within(oldest).getAllByRole("button")[0] as HTMLElement;
+    const toggle = must(within(oldest).getAllByRole("button")[0]);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -235,12 +244,14 @@ describe("thread-view", () => {
     const { container } = renderNode(widget("thread-view"), env);
     expect(container.querySelector('[data-part="thread-view"]')).toBeNull();
     const list = env.transport.data.messages.find((m) => m.id === "acc-work/Archive#list");
-    act(() => env.store.getState().selectThread(list?.thread_id ?? null));
-    await waitFor(() =>
+    act(() => {
+      env.store.getState().selectThread(list?.thread_id ?? null);
+    });
+    await waitFor(() => {
       expect(env.queryClient.getQueryState(["thread", list?.thread_id ?? null])?.status).toBe(
         "success",
-      ),
-    );
+      );
+    });
     expect(container.querySelector('[data-part="thread-view"]')).toBeNull();
   });
 
@@ -273,7 +284,9 @@ describe("folder-picker", () => {
     await user.type(screen.getByRole("textbox", { name: "Find a folder" }), "rec");
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Receipts" }));
-    await waitFor(() => expect(env.store.getState().windows).toEqual([]));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
     expect(env.transport.requests).toContainEqual({
       type: "MoveMessages",
       message_ids: [`${INBOX}#2`],
@@ -287,15 +300,17 @@ describe("folder-picker", () => {
     renderNode(widget("folder-picker"), env);
     expect(await screen.findByText("Select a message first.")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Archive" })).toBeDisabled();
-    act(() => env.store.getState().selectMessage(`${INBOX}#3`));
+    act(() => {
+      env.store.getState().selectMessage(`${INBOX}#3`);
+    });
     await user.type(screen.getByRole("textbox"), "arch{Enter}");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "MoveMessages",
         message_ids: [`${INBOX}#3`],
         target: { folder_id: "acc-personal/Archive" },
-      }),
-    );
+      });
+    });
   });
 
   it("filters by name and path", () => {
@@ -312,12 +327,14 @@ describe("message-view", () => {
     renderNode(widget("message-list"), env);
     renderNode(widget("message-view"), env);
     await screen.findAllByRole("option");
-    act(() => env.store.getState().selectMessage(`${INBOX}#1`));
-    await waitFor(() =>
+    act(() => {
+      env.store.getState().selectMessage(`${INBOX}#1`);
+    });
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual(
         expect.objectContaining({ type: "UpdateFlags", message_ids: [`${INBOX}#1`] }),
-      ),
-    );
+      );
+    });
   });
 
   it("leaves messages unread with mark-read=false", async () => {
@@ -325,7 +342,9 @@ describe("message-view", () => {
     renderNode(widget("message-list"), env);
     renderNode(widget("message-view", { options: { "mark-read": false } }), env);
     await screen.findAllByRole("option");
-    act(() => env.store.getState().selectMessage(`${INBOX}#1`));
+    act(() => {
+      env.store.getState().selectMessage(`${INBOX}#1`);
+    });
     await screen.findByRole("heading", { name: "Compiler notes for Monday" });
     expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(false);
   });
@@ -351,7 +370,7 @@ describe("account-switcher and status-bar", () => {
   it("reports accounts that need attention, pending writes and failures", async () => {
     const env = createEnv();
     env.transport.data.statuses[1] = {
-      ...(env.transport.data.statuses[1] as (typeof env.transport.data.statuses)[number]),
+      ...must(env.transport.data.statuses[1]),
       state: "auth-error",
       error: "auth_failed",
     };
@@ -361,9 +380,13 @@ describe("account-switcher and status-bar", () => {
       "data-state",
       "auth-error",
     );
-    act(() => env.store.getState().opQueued(["op-1", "op-2"]));
+    act(() => {
+      env.store.getState().opQueued(["op-1", "op-2"]);
+    });
     expect(within(status).getByText("Saving 2 changes…")).toBeInTheDocument();
-    act(() => env.store.getState().opFinished("op-1", "network"));
+    act(() => {
+      env.store.getState().opFinished("op-1", "network");
+    });
     expect(
       within(status).getByText("A change could not be saved: The server could not be reached."),
     ).toBeInTheDocument();

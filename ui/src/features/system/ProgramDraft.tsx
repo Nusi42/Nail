@@ -64,7 +64,9 @@ export function ProgramDraftNotice({ draftId }: { draftId?: DraftId | null }) {
         type="button"
         data-part="form.button"
         data-action="dismiss"
-        onClick={() => forget(id)}
+        onClick={() => {
+          forget(id);
+        }}
       >
         {t("system-program-draft-dismiss")}
       </button>

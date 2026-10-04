@@ -92,7 +92,7 @@ expunges). Our own STORE / MOVE / EXPUNGE results are not recorded.
   restored afterwards. `IDLE_REISSUE` = 29 minutes (RFC 2177).
 - `MailboxWatcher::spawn(config, Arc<dyn CredentialProvider>,
   WatchConfig)`: a **dedicated connection** per watched mailbox (INBOX by
-  default) that EXAMINEs it and stays in IDLE (re-issued every
+  default) that opens it with EXAMINE and stays in IDLE (re-issued every
   `idle_reissue`), or polls with `NOOP` every `poll_interval` (default
   2 minutes) when the server lacks IDLE or `use_idle` is off. It emits
   `WatchEvent::Connected` (sync everything now), `Changed(changes)`, and

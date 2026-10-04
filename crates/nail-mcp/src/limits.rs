@@ -36,8 +36,8 @@ impl Window {
 
     fn span(self) -> Duration {
         match self {
-            Self::Requests | Self::Writes => Duration::from_secs(60),
-            Self::Sends => Duration::from_secs(3600),
+            Self::Requests | Self::Writes => Duration::from_mins(1),
+            Self::Sends => Duration::from_hours(1),
         }
     }
 
@@ -109,14 +109,13 @@ impl RateLimiter {
         {
             uses.pop_front();
         }
-        let used = u32::try_from(uses.len()).unwrap_or(u32::MAX);
-        if used.saturating_add(count) > max {
+        let in_window = u32::try_from(uses.len()).unwrap_or(u32::MAX);
+        if in_window.saturating_add(count) > max {
             // The oldest use that has to leave the window first.
-            let leaving = (used.saturating_add(count) - max) as usize;
-            let retry = uses
-                .get(leaving.saturating_sub(1))
-                .map(|t| span.saturating_sub(at.saturating_duration_since(*t)))
-                .unwrap_or(span);
+            let leaving = (in_window.saturating_add(count) - max) as usize;
+            let retry = uses.get(leaving.saturating_sub(1)).map_or(span, |t| {
+                span.saturating_sub(at.saturating_duration_since(*t))
+            });
             return Err(Limited {
                 window,
                 max,
@@ -140,7 +139,7 @@ mod tests {
             created_at: String::new(),
             last_used_at: None,
             token_hint: String::new(),
-            grant: Default::default(),
+            grant: nail_api::mcp::McpGrant::default(),
             revoked_at: None,
             rate_limits: limits,
         }
@@ -157,13 +156,13 @@ mod tests {
         let t0 = Instant::now();
         assert!(limiter.check_at(&c, Window::Requests, 1, t0).is_ok());
         assert!(limiter.check_at(&c, Window::Requests, 1, t0).is_ok());
-        let limited = limiter
+        let refusal = limiter
             .check_at(&c, Window::Requests, 1, t0 + Duration::from_secs(20))
             .unwrap_err();
-        assert_eq!(limited.window, Window::Requests);
-        assert_eq!(limited.max, 2);
-        assert_eq!(limited.retry_after_secs, 40);
-        assert!(limited.to_string().contains("requests_per_minute"));
+        assert_eq!(refusal.window, Window::Requests);
+        assert_eq!(refusal.max, 2);
+        assert_eq!(refusal.retry_after_secs, 40);
+        assert!(refusal.to_string().contains("requests_per_minute"));
         // A minute later the window has room again.
         assert!(
             limiter
@@ -177,8 +176,8 @@ mod tests {
         // Sends per hour; a refused batch counts nothing.
         assert!(limiter.check_at(&c, Window::Sends, 2, t0).is_err());
         assert!(limiter.check_at(&c, Window::Sends, 1, t0).is_ok());
-        let limited = limiter.check_at(&c, Window::Sends, 1, t0).unwrap_err();
-        assert_eq!(limited.retry_after_secs, 3600);
+        let refusal = limiter.check_at(&c, Window::Sends, 1, t0).unwrap_err();
+        assert_eq!(refusal.retry_after_secs, 3600);
     }
 
     #[test]

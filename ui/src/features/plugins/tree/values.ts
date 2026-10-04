@@ -15,6 +15,7 @@
  * plus the checks a primary dialog button runs before it submits.
  */
 import type { Address, JsonValue, PluginUiNode } from "../../../api/generated";
+import { charCount } from "../../../text/chars";
 
 export type Values = Record<string, JsonValue>;
 
@@ -49,7 +50,7 @@ function pad(n: number): string {
 
 /** `YYYY-MM-DD` of a local date. */
 export function isoDate(date: Date): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** The time a `today` / `tomorrow` default gets when a time is picked too. */
@@ -173,7 +174,7 @@ function isEmpty(value: JsonValue | undefined): boolean {
 }
 
 function length(text: string): number {
-  return [...text].length;
+  return charCount(text);
 }
 
 /** The problem with one node's value, or `null`. */

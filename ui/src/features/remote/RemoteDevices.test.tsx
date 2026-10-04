@@ -8,13 +8,13 @@ import { remoteStore } from "./state";
 import { PASSWORD, createAda, pairedBrowser } from "./testUtil";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleRemoteEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 afterEach(() => {
@@ -51,7 +51,9 @@ describe("remote-devices", () => {
     const revoke = within(sessions).getByRole("button", { name: "Sign out ada on Phone" });
     revoke.focus();
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(within(sessions).getAllByRole("listitem")).toHaveLength(1));
+    await waitFor(() => {
+      expect(within(sessions).getAllByRole("listitem")).toHaveLength(1);
+    });
     expect(events).toContainEqual({
       type: "RemoteSessionEnded",
       session_id: phone.session.id,
@@ -172,7 +174,9 @@ describe("remote-audit", () => {
     await act(async () => {
       await browser.send({ type: "Logout" });
     });
-    await waitFor(() => expect(within(table).getAllByRole("row")).toHaveLength(9));
+    await waitFor(() => {
+      expect(within(table).getAllByRole("row")).toHaveLength(9);
+    });
 
     await user.selectOptions(screen.getByRole("combobox", { name: "User" }), "All users");
     expect(screen.queryByRole("button", { name: "Load older entries" })).not.toBeInTheDocument();
@@ -194,7 +198,7 @@ describe("remote-audit", () => {
         ip: null,
         user_agent: null,
         method: null,
-        name: `Req${i}`,
+        name: `Req${String(i)}`,
         error: i % 10 === 0 ? "forbidden" : null,
         detail: null,
       });
@@ -208,7 +212,9 @@ describe("remote-audit", () => {
       0,
     );
     await user.click(screen.getByRole("button", { name: "Load older entries" }));
-    await waitFor(() => expect(within(table).getAllByRole("row")).toHaveLength(AUDIT_PAGE + 6));
+    await waitFor(() => {
+      expect(within(table).getAllByRole("row")).toHaveLength(AUDIT_PAGE + 6);
+    });
     expect(screen.queryByRole("button", { name: "Load older entries" })).not.toBeInTheDocument();
   });
 });

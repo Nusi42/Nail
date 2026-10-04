@@ -128,7 +128,9 @@ describe("remote login: a paired browser", () => {
     const button = await screen.findByRole("button", { name: "Sign in with a passkey" });
     expect(button).toHaveFocus();
     await user$.keyboard("{Enter}");
-    await waitFor(() => expect(loggedIn).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(loggedIn).toHaveBeenCalledTimes(1);
+    });
     expect(loggedIn.mock.calls[0]?.[0]).toMatchObject({ auth_method: "passkey" });
     expect(requestTypes(browser)).toEqual(["Status", "PasskeyStart", "PasskeyFinish"]);
     expect(passkeys.calls[0]).toMatchObject({ userVerification: "required" });
@@ -167,7 +169,9 @@ describe("remote login: a paired browser", () => {
     expect(await within(totp).findByRole("alert")).toHaveTextContent("That code is not valid.");
     expect(code).toHaveValue("");
     await user$.type(code, "123456{Enter}");
-    await waitFor(() => expect(loggedIn).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(loggedIn).toHaveBeenCalledTimes(1);
+    });
     expect(loggedIn.mock.calls[0]?.[0]).toMatchObject({ auth_method: "password-totp" });
   });
 
@@ -188,7 +192,7 @@ describe("remote login: a paired browser", () => {
     const signIn = screen.getByRole("button", { name: "Sign in" });
     for (let i = 0; i < 5; i++) {
       await user$.clear(password);
-      await user$.type(password, `wrong ${i}`);
+      await user$.type(password, `wrong ${String(i)}`);
       await user$.click(signIn);
       await screen.findByRole("alert");
     }
@@ -205,7 +209,9 @@ describe("remote login: a paired browser", () => {
       <RemoteLogin auth={browser} passkeys={fakePasskeys()} onLoggedIn={loggedIn} />,
       env,
     );
-    await waitFor(() => expect(loggedIn).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(loggedIn).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("offers a retry when Nail cannot be reached", async () => {
@@ -250,7 +256,9 @@ describe("remote re-authentication", () => {
     expect(await within(group).findByRole("alert")).toHaveTextContent("wrong");
     await user$.clear(within(group).getByLabelText("Password"));
     await user$.keyboard(`${PASSWORD}{Enter}`);
-    await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(done).toHaveBeenCalledTimes(1);
+    });
     expect(browser.requests.at(-1)).toMatchObject({ type: "Password", purpose: "reauth" });
     await user$.keyboard("{Escape}");
     expect(cancel).toHaveBeenCalledTimes(1);

@@ -2,6 +2,7 @@
 //! every path that reports a message (full listing, history, appends) must
 //! carry the server's `threadId`, and replies the mock threads together
 //! share it, so the core can map them into `messages.remote_thread_id`.
+#![cfg(test)]
 
 use nail_api::domain::Flags;
 use nail_api::engine::{DeltaOutcome, MailApiEngine, RemoteMessage, RemoteWrite, WriteOutcome};

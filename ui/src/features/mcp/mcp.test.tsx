@@ -9,12 +9,13 @@ import { clientState } from "./McpClients";
 import { emptyGrant, grantIsEmpty, toggled } from "./queries";
 import { INDICATOR_MS, mcpStore } from "./state";
 import { readerSelection, REPORT_DELAY_MS, UiContextReporter } from "./UiContextReporter";
+import { must } from "../../test/must";
 
 /** Feeds core events to the feature's event handler, as the app shell does. */
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
-    handleMcpEvent(event, { client: env.client, queryClient: env.queryClient, store: env.store }),
-  );
+  return env.client.subscribe((event) => {
+    handleMcpEvent(event, { client: env.client, queryClient: env.queryClient, store: env.store });
+  });
 }
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
@@ -43,7 +44,7 @@ describe("mcp-clients", () => {
     await user.click(screen.getByRole("button", { name: "Create client" }));
 
     const panel = await screen.findByRole("region", { name: "Token for “Cursor”" });
-    const token = within(panel).getByText(/^nail_mcp_/).textContent ?? "";
+    const token = within(panel).getByText(/^nail_mcp_/).textContent;
     expect(token).toHaveLength("nail_mcp_".length + 43);
     expect(within(panel).getByText(/cannot show it again/)).toBeInTheDocument();
     expect(requestsOf(env, "CreateMcpClient")[0]).toMatchObject({
@@ -81,21 +82,21 @@ describe("mcp-clients", () => {
     const env = createEnv();
     wireEvents(env);
     renderNode(widget("mcp-clients"), env);
-    await screen.findByRole("list", { name: "MCP clients" });
+    const clients = await screen.findByRole("list", { name: "MCP clients" });
     await user.type(screen.getByRole("textbox", { name: "Client name" }), "Agent");
     await user.click(screen.getByRole("button", { name: "Create client" }));
     const form = await screen.findByRole("form", { name: "Access of Agent" });
     const save = within(form).getByRole("button", { name: "Save access" });
     expect(save).toBeDisabled();
 
-    await user.click(within(form).getByRole("checkbox", { name: "Original message source" }));
-    await user.click(within(form).getByRole("checkbox", { name: "Read mail" }));
-    await user.click(within(form).getByRole("checkbox", { name: "Work (ada@work.example)" }));
+    await user.click(within(form).getByLabelText("Original message source"));
+    await user.click(within(form).getByLabelText("Read mail"));
+    await user.click(within(form).getByLabelText("Work (ada@work.example)"));
     // Folders of the granted account can be hidden.
     const folders = await within(form).findByText(/^Work/, { selector: "summary" });
     await user.click(folders);
-    const hide = await within(form).findAllByRole("checkbox", { name: /^Hide / });
-    await user.click(hide[0] as HTMLElement);
+    const hide = await within(form).findAllByLabelText(/^Hide /);
+    await user.click(must(hide[0]));
     expect(save).toBeEnabled();
     await user.click(save);
 
@@ -106,7 +107,7 @@ describe("mcp-clients", () => {
     expect(update?.grant.all_accounts).toBe(false);
     expect(update?.grant.excluded_folders).toHaveLength(1);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Agent/, pressed: true })).toHaveAttribute(
+      expect(within(clients).getByRole("button", { name: /Agent/, pressed: true })).toHaveAttribute(
         "data-access",
         "granted",
       ),
@@ -114,10 +115,8 @@ describe("mcp-clients", () => {
     expect(screen.queryByText(/This client has no access/)).not.toBeInTheDocument();
 
     // All accounts replaces the account list.
-    await user.click(within(form).getByRole("checkbox", { name: /All accounts/ }));
-    expect(
-      within(form).queryByRole("checkbox", { name: "Work (ada@work.example)" }),
-    ).not.toBeInTheDocument();
+    await user.click(within(form).getByLabelText(/All accounts/));
+    expect(within(form).queryByLabelText("Work (ada@work.example)")).not.toBeInTheDocument();
   });
 
   it("revokes a client after confirmation", async () => {
@@ -152,14 +151,14 @@ describe("mcp-clients", () => {
     const rows = await within(log).findAllByRole("row");
     expect(rows).toHaveLength(4); // header + 3 demo entries, newest first
     expect(rows[1]).toHaveAttribute("data-outcome", "denied");
-    expect(within(rows[1] as HTMLElement).getByText("Denied")).toBeInTheDocument();
+    expect(within(must(rows[1])).getByText("Denied")).toBeInTheDocument();
     // The core's localized text, not its English diagnostic.
-    const detail = within(rows[1] as HTMLElement).getByText(
+    const detail = within(must(rows[1])).getByText(
       /refused: the account .acc-personal. is not granted/,
     );
     expect(detail).toHaveAttribute("data-part", "mcp-audit.detail");
     expect(
-      within(rows[1] as HTMLElement).queryByText("account `acc-personal` not granted"),
+      within(must(rows[1])).queryByText("account `acc-personal` not granted"),
     ).not.toBeInTheDocument();
     expect(requestsOf(env, "ListMcpAudit")).toContainEqual(
       expect.objectContaining({ client_id: "mcp-1", before: null }),
@@ -169,17 +168,19 @@ describe("mcp-clients", () => {
     act(() => {
       simulateContextRead(env.transport, "mcp-1");
     });
-    await waitFor(() => expect(within(log).getAllByRole("row")).toHaveLength(5));
+    await waitFor(() => {
+      expect(within(log).getAllByRole("row")).toHaveLength(5);
+    });
 
     await user.click(screen.getByRole("checkbox", { name: "Show activity of all clients" }));
-    await waitFor(() =>
-      expect(requestsOf(env, "ListMcpAudit").some((r) => r.client_id === null)).toBe(true),
-    );
+    await waitFor(() => {
+      expect(requestsOf(env, "ListMcpAudit").some((r) => r.client_id === null)).toBe(true);
+    });
   });
 });
 
 describe("mcp-context-indicator", () => {
-  it("appears while an agent reads the screen and hides again", async () => {
+  it("appears while an agent reads the screen and hides again", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const env = createEnv();
     wireEvents(env);
@@ -249,7 +250,9 @@ describe("UI context reporting", () => {
       state: { activeAccountId: "acc-work", activeFolderId: "f-work-inbox" },
     });
     renderWithProviders(<UiContextReporter />, env);
-    await waitFor(() => expect(requestsOf(env, "ReportUiContext")).toHaveLength(1));
+    await waitFor(() => {
+      expect(requestsOf(env, "ReportUiContext")).toHaveLength(1);
+    });
     expect(requestsOf(env, "ReportUiContext")[0]?.context).toEqual({
       account_id: "acc-work",
       folder_id: "f-work-inbox",
@@ -264,7 +267,9 @@ describe("UI context reporting", () => {
     act(() => {
       env.store.getState().selectMessage("m-1");
     });
-    await waitFor(() => expect(requestsOf(env, "ReportUiContext")).toHaveLength(2));
+    await waitFor(() => {
+      expect(requestsOf(env, "ReportUiContext")).toHaveLength(2);
+    });
     expect(requestsOf(env, "ReportUiContext")[1]?.context).toMatchObject({
       message_id: "m-1",
       selected_message_ids: ["m-1"],
@@ -286,8 +291,8 @@ describe("UI context reporting", () => {
       '<div data-part="message-view.text"><p id="in">Quarterly plan</p></div><p id="out">Other</p>';
     const select = (id: string) => {
       const range = document.createRange();
-      range.selectNodeContents(document.getElementById(id) as HTMLElement);
-      const selection = document.getSelection() as Selection;
+      range.selectNodeContents(must(document.getElementById(id)));
+      const selection = must(document.getSelection());
       selection.removeAllRanges();
       selection.addRange(range);
       return selection;
@@ -351,7 +356,7 @@ describe("mcp mock and helpers", () => {
   });
 
   it("derives client states and edits grants", () => {
-    const client: McpClient = createMcpMockState().clients[0] as McpClient;
+    const client: McpClient = must(createMcpMockState().clients[0]);
     expect(clientState(client)).toBe("granted");
     expect(clientState({ ...client, grant: emptyGrant() })).toBe("no-access");
     expect(clientState({ ...client, revoked_at: "2026-01-01T00:00:00Z" })).toBe("revoked");

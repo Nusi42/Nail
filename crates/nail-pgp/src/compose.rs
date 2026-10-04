@@ -48,6 +48,7 @@ pub const PROTECTED_HEADERS: &[&str] = &[
 pub const OBSCURED_SUBJECT: &str = "...";
 
 /// How to protect an outgoing message.
+#[derive(Debug)]
 pub struct Protection<'a> {
     /// Sign with this own key.
     pub signer: Option<&'a UnlockedKey>,
@@ -182,7 +183,9 @@ fn protect(raw: &[u8], protection: &Protection<'_>) -> Result<Vec<u8>> {
         out.extend_from_slice(&mime::to_crlf(armored.as_bytes()));
         out.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     } else {
-        let signer = protection.signer.expect("checked above");
+        let Some(signer) = protection.signer else {
+            return Err(Problem::NothingToProtect.into());
+        };
         let signing_key = signer.signing_key(protection.now)?;
         let signature = DetachedSignature::sign_binary_data(
             thread_rng(),

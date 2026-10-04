@@ -449,11 +449,15 @@ impl Service {
         let mut split = None;
         match scope {
             EditScope::This => {
-                let rid = recurrence_id.as_ref().expect("checked above");
+                let Some(rid) = recurrence_id.as_ref() else {
+                    return Err(invalid(&[PimIssue::InvalidScope]));
+                };
                 edit::override_occurrence(&mut event, rid, fields).map_err(scope_error)?;
             }
             EditScope::ThisAndFollowing => {
-                let rid = recurrence_id.as_ref().expect("checked above");
+                let Some(rid) = recurrence_id.as_ref() else {
+                    return Err(invalid(&[PimIssue::InvalidScope]));
+                };
                 edit::check_scope(&event, scope, Some(rid)).map_err(scope_error)?;
                 // The editor sends the series' recurrence back unchanged
                 // unless the user changed it: then the split's own (counts,
@@ -838,17 +842,14 @@ impl Service {
 /// the whole series (recurrence ids, `RDATE`s and `EXDATE`s follow, as
 /// the UI's mock does).
 fn apply_all(event: &mut CalendarEvent, fields: EventFields, recurrence: Option<Recurrence>) {
-    match recurrence {
-        Some(r) => {
-            event.recurrence = Some(r);
-            if event.fields.start != fields.start {
-                let _ = edit::move_series(event, fields.start.clone(), fields.end.clone());
-            }
+    if let Some(r) = recurrence {
+        event.recurrence = Some(r);
+        if event.fields.start != fields.start {
+            let _ = edit::move_series(event, fields.start.clone(), fields.end.clone());
         }
-        None => {
-            event.recurrence = None;
-            event.overrides.clear();
-        }
+    } else {
+        event.recurrence = None;
+        event.overrides.clear();
     }
     event.fields = fields;
 }

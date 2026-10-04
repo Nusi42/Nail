@@ -126,7 +126,7 @@ pub(crate) fn state_for_error(code: ErrorCode) -> AccountState {
 
 /// Waits until `stop` is set (or its sender is gone).
 pub(crate) async fn stopped(stop: &mut watch::Receiver<bool>) {
-    let _ = stop.wait_for(|s| *s).await;
+    drop(stop.wait_for(|s| *s).await);
 }
 
 /// Sleeps for `delay`, or less when the user asks to sync now or the
@@ -334,8 +334,8 @@ mod tests {
         let signals = Signals::default();
         let (tx, mut rx) = watch::channel(false);
         signals.sync.notify_one();
-        assert!(pause(Duration::from_secs(60), &signals, &mut rx).await);
+        assert!(pause(Duration::from_mins(1), &signals, &mut rx).await);
         tx.send(true).unwrap();
-        assert!(!pause(Duration::from_secs(60), &signals, &mut rx).await);
+        assert!(!pause(Duration::from_mins(1), &signals, &mut rx).await);
     }
 }

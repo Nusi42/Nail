@@ -80,9 +80,9 @@ describe("label list", () => {
       <NodeView node={widget("label-list")} path="t/0" />,
       env,
     );
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "ListAccounts")).toBe(true),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "ListAccounts")).toBe(true);
+    });
     await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
     expect(container.querySelector('[data-part="label-list"]')).toBeNull();
     expect(requests(env, "ListGmailLabels")).toEqual([]);
@@ -164,7 +164,9 @@ describe("label dialogs", () => {
     await user.selectOptions(screen.getByLabelText("Nest under"), "Work");
     await user.click(screen.getByRole("radio", { name: /Light blue/ }));
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "CreateGmailLabel")[0]?.settings).toEqual({
       name: "Work/Family",
       color: { background: "#c9daf8", text: "#1c4587" },
@@ -206,7 +208,9 @@ describe("label dialogs", () => {
     await user.click(screen.getByRole("radio", { name: /No colour/ }));
     await user.selectOptions(screen.getByLabelText("In the label list"), "show-if-unread");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "UpdateGmailLabel")[0]).toMatchObject({
       label_id: "Label_4",
       settings: { name: "Work/Research", color: null, list_visibility: "show-if-unread" },
@@ -242,7 +246,9 @@ describe("label dialogs", () => {
     renderWithProviders(<Delete name={LABEL_DELETE_DIALOG} close={close} />, env);
     expect(screen.getByText(/Delete the label “Travel”\? Its 2 messages/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete label" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "DeleteGmailLabel")[0]?.label_id).toBe("Label_2");
   });
 
@@ -263,7 +269,9 @@ describe("label dialogs", () => {
     await user.clear(screen.getByLabelText("Find a label"));
     await user.click(screen.getByRole("checkbox", { name: "Travel" }));
     await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(requests(env, "UpdateFlags")[0]?.change).toMatchObject({
       add_tags: ["Receipts"],
       remove_tags: ["Travel"],
@@ -348,23 +356,23 @@ describe("gmail actions", () => {
     const env = setup();
     const c = ctx(env);
     expect(actions["gmail.new-label"]?.enabled?.(c, [])).toBe(false);
-    await env.queryClient.fetchQuery({
+    await env.queryClient.query({
       queryKey: queryKeys.accounts,
       queryFn: async () =>
         (await env.client.request({ type: "ListAccounts" }, "Accounts")).accounts,
     });
-    await env.queryClient.fetchQuery({
+    await env.queryClient.query({
       queryKey: queryKeys.folders(GMAIL_ACCOUNT),
       queryFn: async () =>
         (await env.client.request({ type: "ListFolders", account_id: GMAIL_ACCOUNT }, "Folders"))
           .folders,
     });
     expect(actions["gmail.new-label"]?.enabled?.(c, [])).toBe(true);
-    actions["gmail.new-label"]?.run(c, []);
+    await actions["gmail.new-label"]?.run(c, []);
     expect(env.store.getState().windows).toContain(LABEL_EDITOR_DIALOG);
-    actions["gmail.label-view"]?.run(c, ["Receipts"]);
+    await actions["gmail.label-view"]?.run(c, ["Receipts"]);
     expect(env.store.getState().search?.text).toBe("tag:Receipts");
-    actions["gmail.category"]?.run(c, ["promotions"]);
+    await actions["gmail.category"]?.run(c, ["promotions"]);
     expect(env.store.getState().search?.text).toBe("category:promotions");
     expect(actions["gmail.apply-labels"]?.enabled?.(c, [])).toBe(false);
     const summary = message(env, "Lunch on Friday?");

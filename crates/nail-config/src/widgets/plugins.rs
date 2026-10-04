@@ -57,8 +57,6 @@ mod tests {
     }
 
     fn panel_options(text: &str) -> serde_json::Map<String, serde_json::Value> {
-        let file = crate::parse_layout(text, "layout.kdl").unwrap();
-        let mut found = None;
         fn walk(
             node: &nail_api::LayoutNode,
             found: &mut Option<serde_json::Map<String, serde_json::Value>>,
@@ -72,6 +70,8 @@ mod tests {
                 walk(child, found);
             }
         }
+        let file = crate::parse_layout(text, "layout.kdl").unwrap();
+        let mut found = None;
         for breakpoints in file.windows.values() {
             for breakpoint in breakpoints {
                 walk(&breakpoint.root, &mut found);

@@ -1,6 +1,6 @@
-//! Requests of M1b WP24 (customization, ADR 0026): UpdateLayout,
-//! PreviewConfigMerge, ResolveConfigMerge, ApplyConfigMerge,
-//! ListConfigBackups, RevertConfig, OpenConfigFile.
+//! Requests of M1b WP24 (customization, ADR 0026): `UpdateLayout`,
+//! `PreviewConfigMerge`, `ResolveConfigMerge`, `ApplyConfigMerge`,
+//! `ListConfigBackups`, `RevertConfig`, `OpenConfigFile`.
 //!
 //! The work is done by [`nail_config::ConfigManager`]; every write returns
 //! the resulting [`nail_config::ConfigUpdate`]s, which are broadcast at

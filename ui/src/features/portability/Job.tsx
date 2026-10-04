@@ -32,6 +32,7 @@ import {
   severityId,
 } from "./model";
 import { rememberJob, useJob } from "./queries";
+import { hasText } from "../../text/empty";
 
 /** A problem text from the core (`LocalizedMessage`). */
 export function Problem({
@@ -86,7 +87,7 @@ function IssueRow({ issue }: { issue: ItemIssue }) {
       <span data-part="portability.issue.text">
         {t(issue.localized.id || issueCodeId(issue.code), issue.localized.args)}
       </span>
-      {(issue.item.label || where || issue.item.index !== null) && (
+      {(hasText(issue.item.label) || hasText(where) || issue.item.index !== null) && (
         <span data-part="portability.issue.where">
           {issue.item.label && <span data-part="portability.issue.label">{issue.item.label}</span>}
           {where && <span data-part="portability.issue.path">{where}</span>}

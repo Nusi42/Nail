@@ -69,7 +69,7 @@ use crate::texts;
 pub const MAX_HOPS: usize = 10;
 
 /// Default time for a whole run.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// What to discover.
 #[derive(Debug, Clone, Default)]
@@ -324,12 +324,11 @@ impl Autodiscoverer {
             insecure: false,
             trace: Vec::new(),
         };
-        match tokio::time::timeout(self.timeout, run.start(&address)).await {
-            Ok(result) => result,
-            Err(_) => {
-                tracing::debug!("Autodiscover timed out");
-                Ok(AutodiscoverOutcome::NotFound { trace: run.trace })
-            }
+        if let Ok(result) = tokio::time::timeout(self.timeout, run.start(&address)).await {
+            result
+        } else {
+            tracing::debug!("Autodiscover timed out");
+            Ok(AutodiscoverOutcome::NotFound { trace: run.trace })
         }
     }
 }
@@ -517,9 +516,8 @@ impl Run<'_> {
             "text/xml; charset=utf-8",
             pox::request_body(address).into_bytes(),
         );
-        let first = match self.d.http.send(&request).await {
-            Ok(r) => r,
-            Err(_) => return Ok(None),
+        let Ok(first) = self.d.http.send(&request).await else {
+            return Ok(None);
         };
         let response = answer_challenge(self.d.http.as_ref(), request, first, &self.request.login)
             .await

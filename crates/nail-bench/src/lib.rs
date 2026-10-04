@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 pub mod corpus;
 pub mod memory;
 pub mod mock;
+pub mod num;
 pub mod run;
 
 /// Why a benchmark run failed.
@@ -467,6 +468,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "budgets are scaled by exact factors (1.5, 1.0), the results are exact"
+    )]
     fn tolerance_widens_every_budget() {
         let budgets = Budgets {
             corpus: "standard".into(),
@@ -499,6 +504,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "merging copies measured values unchanged")]
     fn later_reports_replace_earlier_measurements() {
         let a = vec![
             Metric {

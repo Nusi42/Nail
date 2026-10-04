@@ -4,6 +4,8 @@
 //! API engine; messages without iTIP parts carry no card. The flows
 //! themselves are in `tests/scheduling.rs` and `tests/gmail.rs`.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::gmail::GmailLabelSettings;

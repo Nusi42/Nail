@@ -4,7 +4,7 @@
 //! * [`Module`]: what Nail needs from a PKCS#11 module (tokens, objects,
 //!   login, sign, decrypt, ECDH). [`CryptokiModule`] implements it over the
 //!   vendor DLL with `cryptoki` (Apache-2.0; loaded at run time, no
-//!   OpenSSL); the `testing` feature adds [`testing::SoftToken`], an
+//!   OpenSSL); the `testing` feature adds `testing::SoftToken`, an
 //!   in-memory token with real RSA / P-256 keys for tests without hardware.
 //! * [`Smartcards`]: the configured modules
 //!   ([`nail_api::smartcard::SmartcardSettings`]), the token listing as the
@@ -101,13 +101,20 @@ fn der_integer(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Appends a DER length (short form below 128, long form above).
 fn push_len(out: &mut Vec<u8>, len: usize) {
-    if len < 0x80 {
-        out.push(len as u8);
-    } else if len < 0x100 {
-        out.extend([0x81, len as u8]);
-    } else {
-        out.extend([0x82, (len >> 8) as u8, len as u8]);
+    match (u8::try_from(len), u16::try_from(len)) {
+        (Ok(short), _) if short < 0x80 => out.push(short),
+        (Ok(byte), _) => out.extend([0x81, byte]),
+        (_, Ok(word)) => {
+            out.push(0x82);
+            out.extend(word.to_be_bytes());
+        }
+        // Not reached by signatures; encoded correctly all the same.
+        _ => {
+            out.push(0x84);
+            out.extend(u32::try_from(len).unwrap_or(u32::MAX).to_be_bytes());
+        }
     }
 }
 
@@ -235,6 +242,22 @@ pub fn certificate_facts(der_bytes: &[u8]) -> Option<SmartcardCertificate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn der_lengths_use_the_shortest_form() {
+        let len = |n: usize| {
+            let mut out = Vec::new();
+            push_len(&mut out, n);
+            out
+        };
+        assert_eq!(len(0), [0x00]);
+        assert_eq!(len(0x7f), [0x7f]);
+        assert_eq!(len(0x80), [0x81, 0x80]);
+        assert_eq!(len(0xff), [0x81, 0xff]);
+        assert_eq!(len(0x100), [0x82, 0x01, 0x00]);
+        assert_eq!(len(0xffff), [0x82, 0xff, 0xff]);
+        assert_eq!(len(0x1_0000), [0x84, 0x00, 0x01, 0x00, 0x00]);
+    }
 
     #[test]
     fn missing_and_broken_modules_are_refused() {

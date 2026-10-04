@@ -6,6 +6,8 @@
 //! `TestAccount` signs in through the engine; the store keeps Exchange
 //! state.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::exchange::{

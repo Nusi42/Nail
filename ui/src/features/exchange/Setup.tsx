@@ -63,7 +63,7 @@ export function ExchangeAccountType({
   choice: ExchangeSetupChoice;
   /** The Exchange server's host (EWS). */
   host: string;
-  onChange(choice: ExchangeSetupChoice, host: string): void;
+  onChange: (choice: ExchangeSetupChoice, host: string) => void;
 }) {
   const t = useT();
   const ids = { group: useId(), host: useId(), hint: useId() };
@@ -76,7 +76,9 @@ export function ExchangeAccountType({
             type="radio"
             name={ids.group}
             checked={choice === c}
-            onChange={() => onChange(c, host)}
+            onChange={() => {
+              onChange(c, host);
+            }}
           />
           <span data-part="form.check.label">{t(`exchange-setup-type-${c}`)}</span>
         </label>
@@ -92,7 +94,9 @@ export function ExchangeAccountType({
             value={host}
             autoComplete="off"
             aria-describedby={ids.hint}
-            onChange={(e) => onChange(choice, e.target.value.trim())}
+            onChange={(e) => {
+              onChange(choice, e.target.value.trim());
+            }}
           />
           <p id={ids.hint} data-part="form.hint">
             {t("exchange-setup-host-hint")}
@@ -118,10 +122,10 @@ export function ExchangeServerReview({
 }: {
   email: string;
   candidate: DiscoveredAccount;
-  onChange(candidate: DiscoveredAccount): void;
+  onChange: (candidate: DiscoveredAccount) => void;
   /** The user trusts a redirected server. */
   confirmed: boolean;
-  onConfirm(confirmed: boolean): void;
+  onConfirm: (confirmed: boolean) => void;
 }) {
   const t = useT();
   const ids = { engine: useId(), url: useId(), confirm: useId() };
@@ -131,13 +135,15 @@ export function ExchangeServerReview({
   const redirected = redirectedHost(email, candidate);
   const warnings = exchangeWarnings(incoming);
   const domain = email.split("@")[1] ?? "";
-  const setUrl = (url: string) =>
+  const setUrl = (url: string) => {
     onChange({
       ...candidate,
       incoming: { ...incoming, options: { ...incoming.options, url: url.trim() || null } },
     });
-  const setHost = (host: string) =>
+  };
+  const setHost = (host: string) => {
     onChange({ ...candidate, incoming: { ...incoming, server: { ...incoming.server, host } } });
+  };
   return (
     <section data-part="exchange.setup.review" data-engine={engine}>
       <h3 data-part="exchange.setup.title">{t("exchange-setup-found")}</h3>
@@ -166,7 +172,9 @@ export function ExchangeServerReview({
               data-part="form.checkbox"
               type="checkbox"
               checked={confirmed}
-              onChange={(e) => onConfirm(e.target.checked)}
+              onChange={(e) => {
+                onConfirm(e.target.checked);
+              }}
             />
             <span data-part="form.check.label">
               {t("exchange-setup-redirect-confirm", { host: redirected })}
@@ -187,7 +195,9 @@ export function ExchangeServerReview({
               type="radio"
               name={ids.engine}
               checked={engine === e}
-              onChange={() => onChange(withEngine(candidate, e, email))}
+              onChange={() => {
+                onChange(withEngine(candidate, e, email));
+              }}
             />
             <span data-part="form.check.label">{t(`exchange-engine-${e}`)}</span>
           </label>
@@ -203,7 +213,9 @@ export function ExchangeServerReview({
               id={`${ids.url}-host`}
               data-part="form.input"
               value={incoming.server.host}
-              onChange={(e) => setHost(e.target.value.trim())}
+              onChange={(e) => {
+                setHost(e.target.value.trim());
+              }}
             />
           </div>
           <div data-part="form.field" data-field="exchange-url">
@@ -216,7 +228,9 @@ export function ExchangeServerReview({
               type="url"
               value={incoming.options.url ?? ""}
               aria-describedby={`${ids.url}-hint`}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value);
+              }}
             />
             <p id={`${ids.url}-hint`} data-part="form.hint">
               {t("exchange-setup-url-hint", { host: incoming.server.host || "…" })}
@@ -240,9 +254,9 @@ export function ExchangeSignInFields({
   email: string;
   engine: ExchangeEngine;
   auth: AuthConfig;
-  onChange(auth: AuthConfig): void;
+  onChange: (auth: AuthConfig) => void;
   password: string;
-  onPasswordChange(password: string): void;
+  onPasswordChange: (password: string) => void;
 }) {
   const t = useT();
   const ids = { group: useId(), login: useId(), pkg: useId(), password: useId(), hint: useId() };
@@ -271,7 +285,9 @@ export function ExchangeSignInFields({
               type="radio"
               name={ids.group}
               checked={signIn === c}
-              onChange={() => onChange(withExchangeSignIn(auth, c, email))}
+              onChange={() => {
+                onChange(withExchangeSignIn(auth, c, email));
+              }}
             />
             <span data-part="form.check.label">{t(`exchange-sign-in-${c}`)}</span>
           </label>
@@ -293,7 +309,9 @@ export function ExchangeSignInFields({
             data-part="form.input"
             value={login}
             autoComplete="username"
-            onChange={(e) => setLogin(e.target.value.trim())}
+            onChange={(e) => {
+              setLogin(e.target.value.trim());
+            }}
           />
         </div>
       )}
@@ -306,13 +324,13 @@ export function ExchangeSignInFields({
             id={ids.pkg}
             data-part="form.select"
             value={pkg}
-            onChange={(e) =>
-              auth.method === "windows" &&
+            onChange={(e) => {
+              if (auth.method !== "windows") return;
               onChange({
                 ...auth,
                 package: e.target.value === "negotiate" ? null : (e.target.value as SspiPackage),
-              })
-            }
+              });
+            }}
           >
             {PACKAGES.map((p) => (
               <option key={p} value={p}>
@@ -334,7 +352,9 @@ export function ExchangeSignInFields({
             value={password}
             autoComplete="current-password"
             aria-describedby={ids.hint}
-            onChange={(e) => onPasswordChange(e.target.value)}
+            onChange={(e) => {
+              onPasswordChange(e.target.value);
+            }}
           />
           <p id={ids.hint} data-part="form.hint">
             {t(
@@ -356,7 +376,7 @@ export function ExchangeOptionsFields({
   onChange,
 }: {
   options: ExchangeOptions;
-  onChange(options: ExchangeOptions): void;
+  onChange: (options: ExchangeOptions) => void;
 }) {
   const t = useT();
   const ids = { poll: useId(), max: useId(), url: useId() };
@@ -377,7 +397,9 @@ export function ExchangeOptionsFields({
           min={10}
           aria-describedby={`${ids.poll}-hint`}
           value={options.poll_interval_secs ?? ""}
-          onChange={(e) => onChange({ ...options, poll_interval_secs: number(e.target.value) })}
+          onChange={(e) => {
+            onChange({ ...options, poll_interval_secs: number(e.target.value) });
+          }}
         />
         <p id={`${ids.poll}-hint`} data-part="form.hint">
           {t("exchange-options-default", { seconds: 30 })}
@@ -395,7 +417,9 @@ export function ExchangeOptionsFields({
           min={10}
           aria-describedby={`${ids.max}-hint`}
           value={options.max_poll_interval_secs ?? ""}
-          onChange={(e) => onChange({ ...options, max_poll_interval_secs: number(e.target.value) })}
+          onChange={(e) => {
+            onChange({ ...options, max_poll_interval_secs: number(e.target.value) });
+          }}
         />
         <p id={`${ids.max}-hint`} data-part="form.hint">
           {t("exchange-options-default", { seconds: 300 })}
@@ -412,7 +436,9 @@ export function ExchangeOptionsFields({
               data-part="form.input"
               type="url"
               value={options.url ?? ""}
-              onChange={(e) => onChange({ ...options, url: e.target.value.trim() || null })}
+              onChange={(e) => {
+                onChange({ ...options, url: e.target.value.trim() || null });
+              }}
             />
           </div>
           <label data-part="form.check" data-field="streaming">
@@ -420,7 +446,9 @@ export function ExchangeOptionsFields({
               data-part="form.checkbox"
               type="checkbox"
               checked={options.streaming !== false}
-              onChange={(e) => onChange({ ...options, streaming: e.target.checked ? null : false })}
+              onChange={(e) => {
+                onChange({ ...options, streaming: e.target.checked ? null : false });
+              }}
             />
             <span data-part="form.check.label">{t("exchange-options-streaming")}</span>
           </label>
@@ -431,7 +459,9 @@ export function ExchangeOptionsFields({
           data-part="form.checkbox"
           type="checkbox"
           checked={options.server_rules !== false}
-          onChange={(e) => onChange({ ...options, server_rules: e.target.checked ? null : false })}
+          onChange={(e) => {
+            onChange({ ...options, server_rules: e.target.checked ? null : false });
+          }}
         />
         <span data-part="form.check.label">{t("exchange-rules-server-switch")}</span>
       </label>

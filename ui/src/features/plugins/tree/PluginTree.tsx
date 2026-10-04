@@ -29,11 +29,11 @@ export interface TreeProps {
   plugin: string;
   nodes: readonly PluginUiNode[];
   values: Values;
-  onChange(id: string, value: JsonValue): void;
+  onChange: (id: string, value: JsonValue) => void;
   /** Problems to show, by node id. */
   issues: Readonly<Record<string, FieldIssue>>;
   /** A `button` node was pressed. */
-  onAction(componentId: string): void;
+  onAction: (componentId: string) => void;
   /** While a call is running, buttons are disabled. */
   busy?: boolean;
 }
@@ -114,7 +114,7 @@ function ContactPicker({
   node: Extract<PluginUiNode, { type: "contact-picker" }>;
   value: JsonValue | undefined;
   issue: FieldIssue | undefined;
-  onChange(value: JsonValue): void;
+  onChange: (value: JsonValue) => void;
 }) {
   const t = useT();
   const [text, setText] = useState("");
@@ -163,13 +163,13 @@ function ContactPicker({
                     {...partAttrs("plugin.contact-picker.remove", plugin)}
                     aria-label={t("plugin-contact-remove", { address: contact.email })}
                     title={t("plugin-contact-remove", { address: contact.email })}
-                    onClick={() =>
+                    onClick={() => {
                       onChange(
                         contacts
                           .filter((c) => c.email !== contact.email)
                           .map((c) => ({ name: c.name, email: c.email })),
-                      )
-                    }
+                      );
+                    }}
                   >
                     {t("plugin-contact-remove-short")}
                   </button>
@@ -217,7 +217,7 @@ function FolderPickerNode({
   node: Extract<PluginUiNode, { type: "folder-picker" }>;
   value: JsonValue | undefined;
   issue: FieldIssue | undefined;
-  onChange(value: JsonValue): void;
+  onChange: (value: JsonValue) => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -246,7 +246,9 @@ function FolderPickerNode({
           {...partAttrs("plugin.folder-picker", plugin, node.id)}
           aria-required={node.required ? true : undefined}
           value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value === "" ? null : event.target.value);
+          }}
         >
           <option value="">{t("plugin-folder-none")}</option>
           {accountIds.map((accountId, index) => (
@@ -273,7 +275,7 @@ function MessageListNode({
   plugin: string;
   node: Extract<PluginUiNode, { type: "message-list" }>;
   value: JsonValue | undefined;
-  onChange(value: JsonValue): void;
+  onChange: (value: JsonValue) => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -318,7 +320,9 @@ function MessageListNode({
                   type={node.multiple ? "checkbox" : "radio"}
                   name={name}
                   checked={on}
-                  onChange={(event) => toggle(message.id, event.target.checked)}
+                  onChange={(event) => {
+                    toggle(message.id, event.target.checked);
+                  }}
                 />
                 {content}
               </label>
@@ -341,7 +345,7 @@ function TableNode({
   plugin: string;
   node: Extract<PluginUiNode, { type: "table" }>;
   value: JsonValue | undefined;
-  onChange(value: JsonValue): void;
+  onChange: (value: JsonValue) => void;
 }) {
   const t = useT();
   const name = useId();
@@ -385,7 +389,9 @@ function TableNode({
                     name={name}
                     aria-label={t("plugin-table-select-row", { row: rowIndex + 1 })}
                     checked={on}
-                    onChange={(event) => toggle(rowIndex, event.target.checked)}
+                    onChange={(event) => {
+                      toggle(rowIndex, event.target.checked);
+                    }}
                   />
                 </td>
               )}
@@ -444,7 +450,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
               maxLength={node.maxLength}
               placeholder={node.placeholder}
               value={typeof value === "string" ? value : ""}
-              onChange={(event) => onChange(node.id, event.target.value)}
+              onChange={(event) => {
+                onChange(node.id, event.target.value);
+              }}
             />
           )}
         />
@@ -467,7 +475,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
               maxLength={node.maxLength}
               placeholder={node.placeholder}
               value={typeof value === "string" ? value : ""}
-              onChange={(event) => onChange(node.id, event.target.value)}
+              onChange={(event) => {
+                onChange(node.id, event.target.value);
+              }}
             />
           )}
         />
@@ -489,12 +499,12 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
                 multiple
                 aria-required={node.required ? true : undefined}
                 value={Array.isArray(value) ? value.filter((v) => typeof v === "string") : []}
-                onChange={(event) =>
+                onChange={(event) => {
                   onChange(
                     node.id,
                     [...event.target.selectedOptions].map((o) => o.value),
-                  )
-                }
+                  );
+                }}
               >
                 {node.options.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -508,7 +518,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
                 {...partAttrs("plugin.select", plugin, node.id)}
                 aria-required={node.required ? true : undefined}
                 value={typeof value === "string" ? value : ""}
-                onChange={(event) => onChange(node.id, event.target.value)}
+                onChange={(event) => {
+                  onChange(node.id, event.target.value);
+                }}
               >
                 {(node.default === undefined || node.default.length === 0) && (
                   <option value="">{t("plugin-select-none")}</option>
@@ -533,7 +545,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
               {...partAttrs("plugin.checkbox", plugin, node.id)}
               type="checkbox"
               checked={value === true}
-              onChange={(event) => onChange(node.id, event.target.checked)}
+              onChange={(event) => {
+                onChange(node.id, event.target.checked);
+              }}
             />
             {node.label}
           </label>
@@ -557,9 +571,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
               min={node.min === undefined ? undefined : node.time ? `${node.min}T00:00` : node.min}
               max={node.max === undefined ? undefined : node.time ? `${node.max}T23:59` : node.max}
               value={typeof value === "string" ? value : ""}
-              onChange={(event) =>
-                onChange(node.id, event.target.value === "" ? null : event.target.value)
-              }
+              onChange={(event) => {
+                onChange(node.id, event.target.value === "" ? null : event.target.value);
+              }}
             />
           )}
         />
@@ -572,7 +586,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
           node={node}
           value={values[node.id]}
           issue={issues[node.id]}
-          onChange={(value) => onChange(node.id, value)}
+          onChange={(value) => {
+            onChange(node.id, value);
+          }}
         />
       );
     case "folder-picker":
@@ -582,7 +598,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
           node={node}
           value={values[node.id]}
           issue={issues[node.id]}
-          onChange={(value) => onChange(node.id, value)}
+          onChange={(value) => {
+            onChange(node.id, value);
+          }}
         />
       );
     case "message-list":
@@ -614,7 +632,9 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
           {...partAttrs("plugin.button", plugin, node.id)}
           data-variant={node.variant ?? "default"}
           disabled={node.disabled === true || busy === true}
-          onClick={() => onAction(node.id)}
+          onClick={() => {
+            onAction(node.id);
+          }}
         >
           <Icon name={node.icon} part={"plugin.button.icon" satisfies PluginPart} />
           <span {...partAttrs("plugin.button.label", plugin)}>{node.label}</span>

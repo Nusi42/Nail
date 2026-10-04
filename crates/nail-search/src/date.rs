@@ -4,7 +4,7 @@
 use crate::query::DateValue;
 
 /// Whether `year-month-day` is a real calendar day.
-pub fn is_valid_day(year: i32, month: u8, day: u8) -> bool {
+pub(crate) fn is_valid_day(year: i32, month: u8, day: u8) -> bool {
     (1..=12).contains(&month) && day >= 1 && day <= days_in_month(year, month)
 }
 
@@ -23,7 +23,7 @@ fn days_in_month(year: i32, month: u8) -> u8 {
 }
 
 /// Days since 1970-01-01 (Howard Hinnant's `days_from_civil`).
-pub fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
+pub(crate) fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
     let y = i64::from(year) - i64::from(month <= 2);
     let era = y.div_euclid(400);
     let yoe = y - era * 400;
@@ -35,7 +35,7 @@ pub fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
 
 /// When a [`DateValue`] starts, in Unix seconds: local midnight of a day
 /// (`utc_offset_secs` east of UTC), or `now` minus an age.
-pub fn resolve(date: DateValue, now: i64, utc_offset_secs: i32) -> i64 {
+pub(crate) fn resolve(date: DateValue, now: i64, utc_offset_secs: i32) -> i64 {
     match date {
         DateValue::Day { year, month, day } => {
             days_from_civil(year, month, day) * 86_400 - i64::from(utc_offset_secs)

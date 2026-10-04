@@ -265,7 +265,7 @@ impl GraphEngine {
             .map_err(|e| GraphError::Protocol(format!("findMeetingTimes: {e}")))?;
         Ok(result
             .meeting_time_suggestions
-            .into_iter()
+            .iter()
             .filter_map(suggestion)
             .collect())
     }
@@ -340,7 +340,7 @@ struct WireSuggestions {
     meeting_time_suggestions: Vec<Value>,
 }
 
-fn suggestion(value: Value) -> Option<MeetingSuggestion> {
+fn suggestion(value: &Value) -> Option<MeetingSuggestion> {
     let slot = value.get("meetingTimeSlot")?;
     let start = text::to_utc(slot.pointer("/start/dateTime")?.as_str()?)?;
     let end = text::to_utc(slot.pointer("/end/dateTime")?.as_str()?)?;
@@ -350,7 +350,11 @@ fn suggestion(value: Value) -> Option<MeetingSuggestion> {
         .filter(|c| c.is_finite() && *c >= 0.0)
         .map(|c| {
             // At most 100 after the clamp, so the cast cannot truncate.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "clamped to 0..=100 above, so the cast is exact"
+            )]
             let percent = c.min(100.0).round() as u32;
             percent
         });
@@ -470,7 +474,7 @@ mod tests {
 
     #[test]
     fn suggestions_parse() {
-        let s = suggestion(json!({
+        let s = suggestion(&json!({
             "confidence": 87.5,
             "suggestionReason": "Suggested because it is one of the nearest times when all attendees are available.",
             "meetingTimeSlot": {
@@ -490,6 +494,6 @@ mod tests {
             [("bob@contoso.example".to_owned(), "free".to_owned())]
         );
         assert_eq!(s.rooms, ["adams@contoso.example"]);
-        assert!(suggestion(json!({})).is_none());
+        assert!(suggestion(&json!({})).is_none());
     }
 }

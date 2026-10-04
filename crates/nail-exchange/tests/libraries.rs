@@ -2,6 +2,7 @@
 //! against the loopback mock server through the nail-auth HTTP client, a
 //! POX answer read with quick-xml, Windows zone names through nail-ical,
 //! and the contract's mailbox / category mapping helpers.
+#![cfg(test)]
 
 use nail_api::exchange::{CategoryColor, ExchangeMailboxSettings, split_mailbox_folder_path};
 use nail_exchange::testing::MockAutodiscoverServer;

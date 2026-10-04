@@ -23,7 +23,7 @@ fn digest(parts: &[&[u8]]) -> String {
 }
 
 /// The id of the folder at `path` in `account`.
-pub fn folder_id(account: &AccountId, path: &str) -> FolderId {
+pub(crate) fn folder_id(account: &AccountId, path: &str) -> FolderId {
     FolderId::new(format!(
         "f-{}",
         digest(&[account.as_str().as_bytes(), path.as_bytes()])
@@ -32,7 +32,12 @@ pub fn folder_id(account: &AccountId, path: &str) -> FolderId {
 
 /// The id of the message with `uid` in the folder at `path`, valid for one
 /// `UIDVALIDITY` of that folder.
-pub fn message_id(account: &AccountId, path: &str, uid_validity: u32, uid: u32) -> MessageId {
+pub(crate) fn message_id(
+    account: &AccountId,
+    path: &str,
+    uid_validity: u32,
+    uid: u32,
+) -> MessageId {
     MessageId::new(format!(
         "m-{}",
         digest(&[
@@ -45,7 +50,7 @@ pub fn message_id(account: &AccountId, path: &str, uid_validity: u32, uid: u32) 
 }
 
 /// The id of a message downloaded from a POP3 server (by its `UIDL`).
-pub fn pop3_message_id(account: &AccountId, uidl: &str) -> MessageId {
+pub(crate) fn pop3_message_id(account: &AccountId, uidl: &str) -> MessageId {
     MessageId::new(format!(
         "m-{}",
         digest(&[account.as_str().as_bytes(), b"\0pop3", uidl.as_bytes()])
@@ -54,7 +59,7 @@ pub fn pop3_message_id(account: &AccountId, uidl: &str) -> MessageId {
 
 /// The id of a message the core created locally (e.g. a Sent copy of a
 /// POP3 account), from its content hash and a folder.
-pub fn local_message_id(folder: &FolderId, content: &str) -> MessageId {
+pub(crate) fn local_message_id(folder: &FolderId, content: &str) -> MessageId {
     MessageId::new(format!(
         "m-{}",
         digest(&[folder.as_str().as_bytes(), b"\0local", content.as_bytes()])
@@ -62,12 +67,12 @@ pub fn local_message_id(folder: &FolderId, content: &str) -> MessageId {
 }
 
 /// The wire form of a queued operation's id (`op-42`).
-pub fn op_id(id: nail_store::OpId) -> OpId {
+pub(crate) fn op_id(id: nail_store::OpId) -> OpId {
     OpId::new(format!("op-{}", id.0))
 }
 
 /// The store's id of a wire op id; `None` when it is not one of ours.
-pub fn parse_op_id(id: &OpId) -> Option<nail_store::OpId> {
+pub(crate) fn parse_op_id(id: &OpId) -> Option<nail_store::OpId> {
     id.as_str()
         .strip_prefix("op-")
         .and_then(|n| n.parse().ok())

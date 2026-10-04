@@ -3,6 +3,7 @@
 //! fetches (`PR_TRANSPORT_MESSAGE_HEADERS`), moves between mailboxes
 //! (cross-mailbox `MoveItem`, or a MIME copy where the server refuses),
 //! conversation ids as thread ids.
+#![cfg(test)]
 
 use std::time::Duration;
 
@@ -20,7 +21,7 @@ use pretty_assertions::assert_eq;
 fn engine(server: &MockEwsServer) -> EwsEngine {
     let client = EwsClient::with_http(
         lane_http(CALL_TIMEOUT).unwrap(),
-        lane_http(Duration::from_secs(120)).unwrap(),
+        lane_http(Duration::from_mins(2)).unwrap(),
         &server.url(),
         EwsAuth::None,
     )

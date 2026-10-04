@@ -165,7 +165,9 @@ impl Conn {
                 })
         })
         .await?;
-        let _ = tcp.set_nodelay(true);
+        if let Err(err) = tcp.set_nodelay(true) {
+            tracing::debug!(%err, "TCP_NODELAY not set");
+        }
         let stream = if implicit_tls {
             handshake(config, tcp).await?
         } else {
@@ -266,9 +268,11 @@ impl Conn {
         .await
     }
 
-    /// Closes the connection (TLS close_notify when encrypted).
+    /// Closes the connection (TLS `close_notify` when encrypted).
     pub(crate) async fn shutdown(mut self) {
-        let _ = self.reader.get_mut().shutdown().await;
+        if let Err(err) = self.reader.get_mut().shutdown().await {
+            tracing::debug!(%err, "ManageSieve connection did not shut down cleanly");
+        }
     }
 }
 

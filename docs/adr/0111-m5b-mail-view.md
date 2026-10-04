@@ -8,7 +8,7 @@ ADR 0109 gave the layout model for toolbar overflow (`rank`, `display`,
 `more { … }`, `hide-disabled`, `overflow`), menu headings, the folder-pane
 sections, the `list-header` widget and the list filters. WP162 builds the
 mail view on it as the approved proposal shows it
-(a published page, not linked here "Mail, restructured"),
+(a published page, not linked here, "Mail, restructured"),
 and fixes the M5a deferrals in the mail widgets. Only `ui/src/widgets/`,
 `ui/src/theme/skin.ts` and `locales/*/app.ftl` were edited; everything else
 is a request to WP165.

@@ -24,6 +24,7 @@ import { setAutosaveDelay } from "./features/composer/store";
 import { WindowLayer } from "./layout/WindowLayer";
 import { applyPopOuts } from "./state/windowState";
 import { createEnv, renderWithProviders, stubElementSizes, type Env } from "./test/harness";
+import { must } from "./test/must";
 
 const INBOX = "acc-personal/Inbox";
 const PAGE = { width: 1600, height: 1200 };
@@ -122,7 +123,9 @@ describe("every window opens through the window manager", () => {
             }
           : base;
       const spec = resolveWindowSpec(name, used, appRegistry.windows);
-      act(() => env.store.getState().openWindow(name));
+      act(() => {
+        env.store.getState().openWindow(name);
+      });
       const { container } = renderWithProviders(<WindowLayer layout={used} />, env, {
         layout: used,
       });
@@ -136,14 +139,16 @@ describe("every window opens through the window manager", () => {
       expect(container.querySelector('[data-part="window-scrim"]') !== null).toBe(spec.modal);
       // Opens at its declared size (the page is larger than every default).
       expect(sizeOf(frame)).toEqual(spec.size);
-      const header = within(frame as HTMLElement).getAllByRole("group")[0] as HTMLElement;
+      const header = must(within(frame as HTMLElement).getAllByRole("group")[0]);
       expect(header).toHaveAttribute("data-part", "window.header");
       const steps =
         Math.ceil(
           Math.max(spec.size.width - spec.min_size.width, spec.size.height - spec.min_size.height) /
             WINDOW_KEYBOARD_STEP,
         ) + 2;
-      act(() => header.focus());
+      act(() => {
+        header.focus();
+      });
       for (let i = 0; i < steps; i++) {
         fireEvent.keyDown(header, { key: "ArrowLeft", shiftKey: true });
         fireEvent.keyDown(header, { key: "ArrowUp", shiftKey: true });
@@ -168,31 +173,41 @@ describe("window titles and the title bar", () => {
     const id = openComposer(ctxOf(env), { ...emptyComposer(), identityId: "ada@example.org" });
     renderWithProviders(<WindowLayer layout={env.transport.data.layout} />, env);
     expect(await screen.findByRole("dialog", { name: "New message" })).toBeInTheDocument();
-    act(() => env.store.getState().updateComposerOf(id, { subject: "Quarterly report" }));
+    act(() => {
+      env.store.getState().updateComposerOf(id, { subject: "Quarterly report" });
+    });
     expect(await screen.findByRole("dialog", { name: "Quarterly report" })).toBeInTheDocument();
   });
 
   it("offers Open in new window only in the desktop app, never for confirmations", async () => {
     const browser = createEnv();
-    act(() => browser.store.getState().openWindow("rules"));
+    act(() => {
+      browser.store.getState().openWindow("rules");
+    });
     const first = renderWithProviders(
       <WindowLayer layout={browser.transport.data.layout} />,
       browser,
     );
     await screen.findByRole("dialog", { name: "Filter rules" });
-    await waitFor(() => expect(browser.queryClient.isFetching()).toBe(0));
+    await waitFor(() => {
+      expect(browser.queryClient.isFetching()).toBe(0);
+    });
     expect(first.container.querySelector('[data-part="window.pop-out"]')).toBeNull();
     first.unmount();
 
     const desktop = createEnv();
     enableMockPopOuts(desktop.transport);
-    act(() => desktop.store.getState().openWindow("rules"));
+    act(() => {
+      desktop.store.getState().openWindow("rules");
+    });
     renderWithProviders(<WindowLayer layout={desktop.transport.data.layout} />, desktop);
     const rules = await screen.findByRole("dialog", { name: "Filter rules" });
     expect(
       await within(rules).findByRole("button", { name: "Open in new window" }),
     ).toBeInTheDocument();
-    act(() => desktop.store.getState().openWindow("mail-delete-permanently"));
+    act(() => {
+      desktop.store.getState().openWindow("mail-delete-permanently");
+    });
     const confirm = await screen.findByRole("dialog", { name: "Delete permanently?" });
     expect(within(confirm).queryByRole("button", { name: "Open in new window" })).toBeNull();
   });
@@ -212,14 +227,18 @@ describe("window titles and the title bar", () => {
     // A stateful editor (it edits the main page's selection) stays in the page.
     const desktop = createEnv();
     enableMockPopOuts(desktop.transport);
-    act(() => desktop.store.getState().openWindow("pim-event-editor"));
+    act(() => {
+      desktop.store.getState().openWindow("pim-event-editor");
+    });
     renderWithProviders(<WindowLayer layout={desktop.transport.data.layout} />, desktop);
     const editor = await waitFor(() => {
       const found = document.querySelector<HTMLElement>('[data-window="pim-event-editor"]');
       if (found === null) throw new Error("no editor");
       return found;
     });
-    await waitFor(() => expect(desktop.queryClient.isFetching()).toBe(0));
+    await waitFor(() => {
+      expect(desktop.queryClient.isFetching()).toBe(0);
+    });
     expect(editor.querySelector('[data-part="window.pop-out"]')).toBeNull();
   });
 });
@@ -247,7 +266,9 @@ describe("composers in pop-out windows", () => {
     );
     const dialog = await screen.findByRole("dialog", { name: "Popped" });
     await user.click(await within(dialog).findByRole("button", { name: "Open in new window" }));
-    await waitFor(() => expect(main.store.getState().windows).not.toContain(id));
+    await waitFor(() => {
+      expect(main.store.getState().windows).not.toContain(id);
+    });
     const listed = await main.client.call({ type: "ListPopOuts" });
     if (listed.type !== "PopOuts") throw new Error("no pop-outs");
     const entry = listed.pop_outs.find((p) => p.window === id);
@@ -271,7 +292,9 @@ describe("composers in pop-out windows", () => {
     );
     const subject = await screen.findByRole("textbox", { name: "Subject" });
     await waitFor(() => expect(subject).toHaveValue("Popped"));
-    await waitFor(() => expect(document.title).toBe("Popped"));
+    await waitFor(() => {
+      expect(document.title).toBe("Popped");
+    });
     expect(page.store.getState().windows).toEqual([id]);
 
     // Edited in the pop-out, then "Return to main window": the draft is
@@ -279,16 +302,18 @@ describe("composers in pop-out windows", () => {
     await user.clear(subject);
     await user.type(subject, "Popped back");
     await user.click(screen.getByRole("button", { name: "Return to main window" }));
-    await waitFor(() =>
-      expect(main.transport.data.drafts.get(draft ?? "")?.subject).toBe("Popped back"),
-    );
+    await waitFor(() => {
+      expect(main.transport.data.drafts.get(draft ?? "")?.subject).toBe("Popped back");
+    });
     // What the main page does on `PopOutChanged returned`: the list without
     // it, and the window back in the page.
     act(() => {
       applyPopOuts(main.queryClient, []);
       main.store.getState().openWindow(id);
     });
-    await waitFor(() => expect(main.store.getState().composers[id]?.subject).toBe("Popped back"));
+    await waitFor(() => {
+      expect(main.store.getState().composers[id]?.subject).toBe("Popped back");
+    });
   });
 
   /**
@@ -318,7 +343,9 @@ describe("composers in pop-out windows", () => {
     await userEvent
       .setup()
       .click(await within(dialog).findByRole("button", { name: "Open in new window" }));
-    await waitFor(() => expect(main.store.getState().windows).not.toContain(id));
+    await waitFor(() => {
+      expect(main.store.getState().windows).not.toContain(id);
+    });
     preparer.unmount();
 
     const page = createEnv();
@@ -362,7 +389,9 @@ describe("composers in pop-out windows", () => {
       expect(page.store.getState().windows).toEqual([id, `composer-discard:${key}`]);
       await user.click(within(question).getByRole("button", { name: "Discard" }));
       // Discarded: the composer closes, and with it the OS window.
-      await waitFor(() => expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]));
+      await waitFor(() => {
+        expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]);
+      });
     } finally {
       setAutosaveDelay(null);
     }
@@ -377,7 +406,9 @@ describe("composers in pop-out windows", () => {
       const question = await findWindow(`composer-close:${key}`);
       expect(within(question).getByText(/has changes that are not saved yet/)).toBeVisible();
       await user.click(within(question).getByRole("button", { name: "Keep editing" }));
-      await waitFor(() => expect(windowEl(`composer-close:${key}`)).toBeNull());
+      await waitFor(() => {
+        expect(windowEl(`composer-close:${key}`)).toBeNull();
+      });
       expect(page.store.getState().windows).toEqual([id]);
       expect(closes()).toEqual([]);
 
@@ -394,7 +425,9 @@ describe("composers in pop-out windows", () => {
       expect(closes()).toEqual([]);
       // "Save draft": saved, then the composer and the OS window close.
       await user.click(within(again).getByRole("button", { name: "Save draft" }));
-      await waitFor(() => expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]));
+      await waitFor(() => {
+        expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]);
+      });
       const saved = [...page.transport.data.drafts.values()].map((d) => d.subject);
       expect(saved).toContain("Popped again");
     } finally {
@@ -408,7 +441,9 @@ describe("composers in pop-out windows", () => {
       act(() => {
         globalThis.dispatchEvent(new Event(POP_OUT_CLOSE_EVENT));
       });
-      await waitFor(() => expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]));
+      await waitFor(() => {
+        expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]);
+      });
     } finally {
       setAutosaveDelay(null);
     }
@@ -432,7 +467,9 @@ describe("several composers: per-window readers", () => {
     openComposer(ctx, { ...emptyComposer(), identityId: "ada@example.org", draftId: "d-mine" });
     systemStoreFor(env.store).getState().noteProgramDraft("d-prog", "Report tool");
     renderWithProviders(<WindowLayer layout={env.transport.data.layout} />, env);
-    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    await waitFor(() => {
+      expect(screen.getAllByRole("dialog")).toHaveLength(2);
+    });
     const notes = await screen.findAllByRole("note", { name: /program/i });
     expect(notes).toHaveLength(1);
     const owner = notes[0]?.closest('[data-part="window"]');

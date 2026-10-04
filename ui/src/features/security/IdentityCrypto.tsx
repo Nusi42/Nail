@@ -49,7 +49,9 @@ export function IdentityCryptoFields({
 }) {
   const t = useT();
   const crypto = identity.crypto ?? defaultIdentityCrypto();
-  const set = (patch: Partial<IdentityCrypto>) => onChange({ ...crypto, ...patch });
+  const set = (patch: Partial<IdentityCrypto>) => {
+    onChange({ ...crypto, ...patch });
+  };
   const pgpKeys = ownKeysFor(ownKeys, "openpgp", identity.email);
   const smimeCerts = ownKeysFor(ownKeys, "smime", identity.email);
   const name = identity.id || identity.email;
@@ -70,27 +72,35 @@ export function IdentityCryptoFields({
         labelId="security-identity-technology"
         name={`${name}-technology`}
         value={crypto.technology}
-        onChange={(v) => set({ technology: v as CryptoPreference })}
+        onChange={(v) => {
+          set({ technology: v as CryptoPreference });
+        }}
         choices={PREFERENCES.map((p) => ({ value: p, label: `security-preference-${p}` }))}
       />
       <CheckField
         labelId="security-identity-sign"
         name={`${name}-sign`}
         checked={crypto.sign}
-        onChange={(sign) => set({ sign })}
+        onChange={(sign) => {
+          set({ sign });
+        }}
       />
       <CheckField
         labelId="security-identity-encrypt"
         name={`${name}-encrypt`}
         checked={crypto.encrypt}
-        onChange={(encrypt) => set({ encrypt })}
+        onChange={(encrypt) => {
+          set({ encrypt });
+        }}
       />
       <p data-part="form.hint">{t("security-identity-encrypt-hint")}</p>
       <SelectField
         labelId="security-identity-openpgp-key"
         name={`${name}-openpgp-key`}
         value={crypto.openpgp_key ?? ""}
-        onChange={(v) => set({ openpgp_key: v === "" ? null : v })}
+        onChange={(v) => {
+          set({ openpgp_key: v === "" ? null : v });
+        }}
         choices={[
           { value: "", label: "security-identity-key-auto" },
           ...pgpKeys.map(keyChoice),
@@ -106,7 +116,9 @@ export function IdentityCryptoFields({
         labelId="security-identity-smime-cert"
         name={`${name}-smime-cert`}
         value={crypto.smime_certificate ?? ""}
-        onChange={(v) => set({ smime_certificate: v === "" ? null : v })}
+        onChange={(v) => {
+          set({ smime_certificate: v === "" ? null : v });
+        }}
         choices={[
           { value: "", label: "security-identity-key-auto" },
           ...smimeCerts.map(keyChoice),
@@ -122,21 +134,27 @@ export function IdentityCryptoFields({
         labelId="security-identity-autocrypt"
         name={`${name}-autocrypt`}
         checked={crypto.autocrypt}
-        onChange={(autocrypt) => set({ autocrypt })}
+        onChange={(autocrypt) => {
+          set({ autocrypt });
+        }}
       />
       {crypto.autocrypt && (
         <CheckField
           labelId="security-identity-prefer-encrypt"
           name={`${name}-prefer-encrypt`}
           checked={crypto.prefer_encrypt === "mutual"}
-          onChange={(on) => set({ prefer_encrypt: on ? "mutual" : "nopreference" })}
+          onChange={(on) => {
+            set({ prefer_encrypt: on ? "mutual" : "nopreference" });
+          }}
         />
       )}
       <CheckField
         labelId="security-identity-protect-headers"
         name={`${name}-protect-headers`}
         checked={crypto.protect_headers}
-        onChange={(protect_headers) => set({ protect_headers })}
+        onChange={(protect_headers) => {
+          set({ protect_headers });
+        }}
       />
       <p data-part="form.hint">{t("security-identity-protect-headers-hint")}</p>
     </fieldset>
@@ -186,14 +204,14 @@ function AccountCrypto({ account, ownKeys }: { account: AccountConfig; ownKeys: 
           key={identity.id || index}
           identity={identity}
           ownKeys={ownKeys}
-          onChange={(crypto) =>
+          onChange={(crypto) => {
             setDraft({
               ...draft,
               identities: draft.identities.map((old, i) =>
                 i === index ? { ...old, crypto } : old,
               ),
-            })
-          }
+            });
+          }}
         />
       ))}
       <button

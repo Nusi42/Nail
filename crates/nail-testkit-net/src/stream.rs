@@ -183,9 +183,9 @@ impl Connection {
         self.write(format!("{text}\r\n").as_bytes()).await
     }
 
-    /// Closes the connection (TLS close_notify when encrypted).
+    /// Closes the connection (TLS `close_notify` when encrypted).
     pub(crate) async fn shutdown(mut self) {
-        let _ = self.reader.get_mut().shutdown().await;
+        drop(self.reader.get_mut().shutdown().await);
     }
 }
 
@@ -201,8 +201,7 @@ pub(crate) fn verb(line: &str) -> String {
 pub(crate) fn args(line: &str) -> &str {
     line.trim_start()
         .split_once(char::is_whitespace)
-        .map(|(_, rest)| rest.trim())
-        .unwrap_or("")
+        .map_or("", |(_, rest)| rest.trim())
 }
 
 #[cfg(test)]

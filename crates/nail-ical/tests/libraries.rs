@@ -1,6 +1,7 @@
 //! Smoke tests of the libraries WP71 builds on (WP70, ADR 0058):
 //! calcard parses and writes iCalendar and vCard and expands recurrence
 //! rules in IANA zones on Windows MSVC.
+#![cfg(test)]
 
 use calcard::common::timezone::Tz;
 use calcard::icalendar::ICalendar;

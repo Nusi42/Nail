@@ -22,6 +22,7 @@ import { errorResponse, type MockCore } from "../../api/mockMail";
 import { ACCOUNT_PERMISSIONS } from "./grants";
 import { createExtensionsMockState, type ExtensionsMockState } from "./extensionsMock";
 import { answerHost, createMockHost, type MockHost } from "./mockHost";
+import { charCount } from "../../text/chars";
 
 /** The requests this feature answers. */
 export const PLUGINS_REQUESTS = [
@@ -113,7 +114,7 @@ export function acceptsSetting(def: PluginSettingDef, value: JsonValue): boolean
   switch (def.type) {
     case "string":
       return (
-        typeof value === "string" && [...value].length <= Math.min(def.maxLength ?? 10_000, 10_000)
+        typeof value === "string" && charCount(value) <= Math.min(def.maxLength ?? 10_000, 10_000)
       );
     case "number":
       return (
@@ -271,7 +272,7 @@ export function answerPlugins(core: MockCore, request: PluginsRequest): Response
         const invalid = Object.entries(request.values)
           .filter(([key, value]) => {
             const def = schema.find((d) => d.key === key);
-            return !def || value === undefined || !acceptsSetting(def, value);
+            return !def || !acceptsSetting(def, value);
           })
           .map(([key]) => key)
           .sort();
@@ -285,7 +286,7 @@ export function answerPlugins(core: MockCore, request: PluginsRequest): Response
         }
         state.settings[plugin.id] = {
           ...state.settings[plugin.id],
-          ...(request.values as Record<string, JsonValue>),
+          ...request.values,
         };
       }
       return {

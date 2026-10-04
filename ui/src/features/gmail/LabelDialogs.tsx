@@ -7,7 +7,7 @@
  * change through the operation queue).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import type {
   GmailLabel,
   GmailLabelColor,
@@ -55,7 +55,7 @@ function ColorOption({
   color: GmailLabelColor | null;
   group: string;
   checked: boolean;
-  onPick(): void;
+  onPick: () => void;
 }) {
   const t = useT();
   const geom = `gmail-color-${useId().replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -117,7 +117,7 @@ function LabelEditor({
   label: GmailLabel | null;
   parent: string | null;
   labels: readonly GmailLabel[];
-  close(): void;
+  close: () => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -154,7 +154,7 @@ function LabelEditor({
     close();
   };
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const issue = labelIssues(
       { ...settings, name: name.trim() === "" ? "" : fullName },
@@ -193,7 +193,9 @@ function LabelEditor({
           value={name}
           maxLength={225}
           aria-invalid={problem !== null}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
         />
       </div>
       <div data-part="form.field" data-field="parent">
@@ -204,7 +206,9 @@ function LabelEditor({
           id={ids.parent}
           data-part="form.select"
           value={parent}
-          onChange={(e) => setParent(e.target.value)}
+          onChange={(e) => {
+            setParent(e.target.value);
+          }}
         >
           <option value="">{t("gmail-label-parent-none")}</option>
           {parents.map((p) => (
@@ -221,7 +225,9 @@ function LabelEditor({
           color={null}
           group={ids.colors}
           checked={color === null}
-          onPick={() => setColor(null)}
+          onPick={() => {
+            setColor(null);
+          }}
         />
         {color !== null && current === null && (
           <ColorOption
@@ -239,7 +245,9 @@ function LabelEditor({
             color={p.color}
             group={ids.colors}
             checked={current === p.name}
-            onPick={() => setColor(p.color)}
+            onPick={() => {
+              setColor(p.color);
+            }}
           />
         ))}
       </fieldset>
@@ -251,7 +259,9 @@ function LabelEditor({
           id={ids.list}
           data-part="form.select"
           value={list}
-          onChange={(e) => setList(e.target.value as GmailLabelListVisibility)}
+          onChange={(e) => {
+            setList(e.target.value as GmailLabelListVisibility);
+          }}
         >
           {LIST_VISIBILITIES.map((v) => (
             <option key={v} value={v}>
@@ -268,7 +278,9 @@ function LabelEditor({
           id={ids.message}
           data-part="form.select"
           value={message}
-          onChange={(e) => setMessage(e.target.value as GmailMessageListVisibility)}
+          onChange={(e) => {
+            setMessage(e.target.value as GmailMessageListVisibility);
+          }}
         >
           {MESSAGE_VISIBILITIES.map((v) => (
             <option key={v} value={v}>
@@ -447,7 +459,9 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
           data-part="form.input"
           type="search"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => {
+            setFilter(e.target.value);
+          }}
         />
       </div>
       <fieldset data-part="gmail.apply.labels">

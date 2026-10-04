@@ -9,7 +9,7 @@ import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 import type { DraftAttachment } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { Icon } from "../../widgets/Icon";
@@ -26,14 +26,14 @@ export function htmlEditorIn(root: ParentNode): Editor | null {
 
 export interface HtmlEditorProps {
   value: string;
-  onChange(html: string): void;
+  onChange: (html: string) => void;
   label: string;
   /** Local previews of inline images (content id → URL). */
   previews: Readonly<Record<string, string>>;
   /** Uploads images as inline attachments; resolves with them. */
-  onInsertImages(files: File[]): Promise<DraftAttachment[]>;
+  onInsertImages: (files: File[]) => Promise<DraftAttachment[]>;
   source: boolean;
-  onToggleSource(): void;
+  onToggleSource: () => void;
 }
 
 function ToolButton({
@@ -45,7 +45,7 @@ function ToolButton({
   id: string;
   pressed?: boolean | undefined;
   disabled?: boolean | undefined;
-  onClick(): void;
+  onClick: () => void;
 }) {
   const t = useT();
   return (
@@ -58,7 +58,9 @@ function ToolButton({
       aria-label={t(`composer-format-${id}`)}
       title={t(`composer-format-${id}`)}
       disabled={disabled}
-      onMouseDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
       onClick={onClick}
     >
       <Icon name={FORMAT_ICONS[id]} part="composer.format.icon" />
@@ -115,7 +117,7 @@ export function HtmlEditor({
 
   // A new value from outside (mode switch, source view, reopened draft).
   useEffect(() => {
-    if (!editor || source || value === emitted.current) return;
+    if (source || value === emitted.current) return;
     const current = toStoredHtml(editor.getHTML(), previewsRef.current);
     if (current !== value) {
       editor.commands.setContent(toDisplayHtml(value, previewsRef.current), {
@@ -128,7 +130,7 @@ export function HtmlEditor({
   // Previews that arrive later (inline images of a reopened draft) replace
   // their `cid:` references in the editor; the stored HTML stays the same.
   useEffect(() => {
-    if (!editor || source) return;
+    if (source) return;
     const shown = editor.getHTML();
     if (!Object.keys(previews).some((cid) => shown.includes(`cid:${cid}`))) return;
     editor.commands.setContent(toDisplayHtml(toStoredHtml(shown, previews), previews), {
@@ -137,13 +139,12 @@ export function HtmlEditor({
   }, [editor, previews, source]);
 
   const run = (command: Command) => {
-    if (editor) command.run(editor.chain().focus()).run();
+    command.run(editor.chain().focus()).run();
   };
 
-  const applyLink = (event: FormEvent) => {
+  const applyLink = (event: SyntheticEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!editor) return;
     const url = href.trim();
     const chain = editor.chain().focus().extendMarkRange("link");
     if (url === "") chain.unsetLink().run();
@@ -153,7 +154,6 @@ export function HtmlEditor({
 
   const insertImages = async (files: File[]) => {
     const added = await onInsertImages(files);
-    if (!editor) return;
     for (const attachment of added) {
       const cid = attachment.content_id;
       const src = cid === null ? null : (previewsRef.current[cid] ?? `cid:${cid}`);
@@ -166,14 +166,14 @@ export function HtmlEditor({
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = root.current;
-    if (!element || !editor) return;
+    if (!element) return;
     editors.set(element, editor);
     return () => {
       editors.delete(element);
     };
   }, [editor]);
 
-  const inTable = editor?.isActive("table") ?? false;
+  const inTable = editor.isActive("table");
 
   return (
     <div ref={root} data-part="composer.html" data-state={source ? "source" : undefined}>
@@ -182,29 +182,33 @@ export function HtmlEditor({
           <ToolButton
             key={command.id}
             id={command.id}
-            disabled={source || !editor}
-            pressed={command.active && editor ? editor.isActive(...command.active) : undefined}
-            onClick={() => run(command)}
+            disabled={source}
+            pressed={command.active ? editor.isActive(...command.active) : undefined}
+            onClick={() => {
+              run(command);
+            }}
           />
         ))}
         <ToolButton
           id="link"
-          disabled={source || !editor}
-          pressed={editor?.isActive("link") ?? false}
+          disabled={source}
+          pressed={editor.isActive("link")}
           onClick={() => {
-            setHref(String(editor?.getAttributes("link").href ?? ""));
+            setHref(String(editor.getAttributes("link").href ?? ""));
             setLinkOpen(!linkOpen);
           }}
         />
-        <ToolButton
-          id="image"
-          disabled={source || !editor}
-          onClick={() => imageInput.current?.click()}
-        />
+        <ToolButton id="image" disabled={source} onClick={() => imageInput.current?.click()} />
         {inTable &&
           !source &&
           TABLE_COMMANDS.map((command) => (
-            <ToolButton key={command.id} id={command.id} onClick={() => run(command)} />
+            <ToolButton
+              key={command.id}
+              id={command.id}
+              onClick={() => {
+                run(command);
+              }}
+            />
           ))}
         <ToolButton id="source" pressed={source} onClick={onToggleSource} />
         <input
@@ -232,8 +236,11 @@ export function HtmlEditor({
             data-part="composer.link.input"
             type="url"
             value={href}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- the link field opens on request (the Link button) and takes the focus.
             autoFocus
-            onChange={(event) => setHref(event.target.value)}
+            onChange={(event) => {
+              setHref(event.target.value);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") applyLink(event);
             }}
@@ -250,7 +257,9 @@ export function HtmlEditor({
             type="button"
             data-part="form.button"
             data-action="cancel-link"
-            onClick={() => setLinkOpen(false)}
+            onClick={() => {
+              setLinkOpen(false);
+            }}
           >
             {t("composer-link-cancel")}
           </button>
@@ -262,7 +271,9 @@ export function HtmlEditor({
           aria-label={t("composer-html-source")}
           spellCheck={false}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
         />
       )}
       {/* Stays mounted in source view so the editor keeps its history. */}

@@ -32,11 +32,21 @@ test("build output goes to NAIL_BUILD_DIR, LOCALAPPDATA or tmp", () => {
 
 test("output inside the repository is refused, except .nail-build", () => {
   const repo = path.resolve("repo");
-  assert.throws(() => assertOutsideRepo(repo, repo), /outside the repository/);
-  assert.throws(() => assertOutsideRepo(path.join(repo, "target"), repo), /outside/);
-  assert.doesNotThrow(() => assertOutsideRepo(path.join(repo, ".nail-build", "dist"), repo));
-  assert.doesNotThrow(() => assertOutsideRepo(path.resolve("elsewhere"), repo));
-  assert.doesNotThrow(() => assertOutsideRepo(path.resolve("repo-2"), repo));
+  assert.throws(() => {
+    assertOutsideRepo(repo, repo);
+  }, /outside the repository/);
+  assert.throws(() => {
+    assertOutsideRepo(path.join(repo, "target"), repo);
+  }, /outside/);
+  assert.doesNotThrow(() => {
+    assertOutsideRepo(path.join(repo, ".nail-build", "dist"), repo);
+  });
+  assert.doesNotThrow(() => {
+    assertOutsideRepo(path.resolve("elsewhere"), repo);
+  });
+  assert.doesNotThrow(() => {
+    assertOutsideRepo(path.resolve("repo-2"), repo);
+  });
 });
 
 test("options", () => {
@@ -192,7 +202,7 @@ test("the overlay: no UI build, CLI in bin, MAPI DLLs in mapi", () => {
     cliPath: "n.exe",
     mapiDlls: { x86: "x86.dll", x64: "x64.dll" },
   });
-  assert.deepEqual(withDlls.bundle.resources, {
+  assert.deepEqual(/** @type {{ resources?: unknown }} */ (withDlls.bundle).resources, {
     "n.exe": "bin/nail.exe",
     "x64.dll": "mapi/x64/NailMapi.dll",
     "x86.dll": "mapi/x86/NailMapi.dll",
@@ -232,6 +242,7 @@ test("the overlay: static settings, version, offline WebView2, signing, updater"
 });
 
 test("the update key comes as a pair or not at all", () => {
+  /** @param {string} f */
   const read = (f) => `pub from ${f}\n`;
   assert.equal(updaterKeyFromEnv({}, read), null);
   assert.deepEqual(
@@ -298,6 +309,7 @@ test("listFiles walks a directory tree", () => {
       { name: "a.css", isDirectory: () => false, isFile: () => true },
     ],
   };
+  /** @param {string} dir */
   const readdir = (dir) => tree[path.normalize(dir)] ?? [];
   assert.deepEqual(listFiles("root", readdir), [
     path.join("assets", "a.css"),
@@ -336,7 +348,7 @@ test("the update key reaches only tauri bundle", async () => {
   const script = readFileSync(new URL("../build-installer.mjs", import.meta.url), "utf8");
   const runs = [...script.matchAll(/run\(\s*"(npx|npm|cargo)",\s*\[([^\]]*)\]/g)];
   assert.ok(runs.length >= 4, "found the child processes");
-  for (const [call, command, args] of runs) {
+  for (const [call, command, args = ""] of runs) {
     const start = script.indexOf(call);
     const rest = script.slice(start, script.indexOf(");", start));
     if (command === "npx" && args.includes('"bundle"')) {

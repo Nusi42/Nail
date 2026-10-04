@@ -54,7 +54,9 @@ export function Logs({ pluginId }: { pluginId: string }) {
           id={levelId}
           data-part="form.select"
           value={level}
-          onChange={(event) => setLevel(event.target.value as PluginLogLevel)}
+          onChange={(event) => {
+            setLevel(event.target.value as PluginLogLevel);
+          }}
         >
           {LOG_LEVELS.map((l) => (
             <option key={l} value={l}>

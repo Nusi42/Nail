@@ -340,12 +340,12 @@ mod tests {
         tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = [0u8; 4096];
-            let _ = socket.read(&mut request).await;
-            let _ = socket
+            drop(socket.read(&mut request).await);
+            drop(socket
                 .write_all(
                     b"HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nTransfer-Encoding: chunked\r\n\r\n",
                 )
-                .await;
+                .await);
             // Chunks without an end.
             let chunk = format!("{:x}\r\n{}\r\n", 64 * 1024, "x".repeat(64 * 1024));
             while socket.write_all(chunk.as_bytes()).await.is_ok() {}

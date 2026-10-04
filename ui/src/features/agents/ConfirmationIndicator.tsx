@@ -30,7 +30,9 @@ export function ConfirmationIndicator({ node }: WidgetProps) {
       data-risk={destructive ? "destructive" : undefined}
       aria-label={t("agents-indicator-label", { count })}
       title={t("agents-indicator-label", { count })}
-      onClick={() => openWindow(CENTER_DIALOG)}
+      onClick={() => {
+        openWindow(CENTER_DIALOG);
+      }}
     >
       <span data-part="confirmation-indicator.count" aria-hidden="true">
         {t("agents-indicator-count", { count })}

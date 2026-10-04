@@ -318,7 +318,7 @@ impl Service {
 
     /// Starts every enabled plug-in (at start-up).
     pub(crate) async fn start_enabled_plugins(&self) {
-        let records = match self.store().call(|s| s.plugins()).await {
+        let records = match self.store().call(nail_store::Store::plugins).await {
             Ok(records) => records,
             Err(err) => {
                 tracing::warn!(%err, "cannot list plug-ins");
@@ -345,50 +345,47 @@ impl Service {
                 .await?
         };
         let host = self.plugin_host().clone();
-        let result = match &record.source {
-            PluginPackageSource::Dev { folder } => {
-                let folder = std::path::PathBuf::from(folder);
-                match host.load_dev(&folder, grants, settings).await {
-                    Ok(manifest) => {
-                        self.remember_dev_catalogs(&id, &folder, &manifest).await;
-                        Ok(())
-                    }
-                    Err(err) => Err(err.to_api_error()),
+        let result = if let PluginPackageSource::Dev { folder } = &record.source {
+            let folder = std::path::PathBuf::from(folder);
+            match host.load_dev(&folder, grants, settings).await {
+                Ok(manifest) => {
+                    self.remember_dev_catalogs(&id, &folder, &manifest).await;
+                    Ok(())
                 }
+                Err(err) => Err(err.to_api_error()),
             }
-            _ => {
-                let packages = self.inner.plugins.packages()?.clone();
-                let sha = record.package_sha256.clone();
-                let load_id = id.clone();
-                let loaded =
-                    tokio::task::spawn_blocking(move || packages.load(&load_id, sha.as_deref()))
-                        .await?;
-                match loaded {
-                    Ok(package) => match package.valid_manifest().cloned() {
-                        Some(manifest) => {
-                            self.inner.plugins.set_catalogs(
-                                &id,
-                                Some(package.sha256.clone()),
-                                PluginCatalogs::load(&manifest, &package.files),
-                            );
-                            host.start(PluginSpec {
-                                manifest,
-                                files: package.files,
-                                grants,
-                                settings,
-                                dev_folder: None,
-                            })
-                            .await
-                        }
-                        None => Err(ApiError::invalid_request(format!(
-                            "the installed package of {id} has manifest problems"
-                        ))),
-                    },
-                    Err(err) => {
-                        let error = err.to_api_error();
-                        self.record_plugin_error(&id, Some(error.clone())).await;
-                        Err(error)
+        } else {
+            let packages = self.inner.plugins.packages()?.clone();
+            let sha = record.package_sha256.clone();
+            let load_id = id.clone();
+            let loaded =
+                tokio::task::spawn_blocking(move || packages.load(&load_id, sha.as_deref()))
+                    .await?;
+            match loaded {
+                Ok(package) => match package.valid_manifest().cloned() {
+                    Some(manifest) => {
+                        self.inner.plugins.set_catalogs(
+                            &id,
+                            Some(package.sha256.clone()),
+                            PluginCatalogs::load(&manifest, &package.files),
+                        );
+                        host.start(PluginSpec {
+                            manifest,
+                            files: package.files,
+                            grants,
+                            settings,
+                            dev_folder: None,
+                        })
+                        .await
                     }
+                    None => Err(ApiError::invalid_request(format!(
+                        "the installed package of {id} has manifest problems"
+                    ))),
+                },
+                Err(err) => {
+                    let error = err.to_api_error();
+                    self.record_plugin_error(&id, Some(error.clone())).await;
+                    Err(error)
                 }
             }
         };
@@ -480,7 +477,7 @@ impl Service {
 
     /// Tells the merge preview which plug-in commands and panels exist.
     pub(crate) async fn refresh_installed_plugins(&self) {
-        let Ok(records) = self.store().call(|s| s.plugins()).await else {
+        let Ok(records) = self.store().call(nail_store::Store::plugins).await else {
             return;
         };
         let mut installed = nail_config::InstalledPlugins::default();
@@ -498,7 +495,7 @@ impl Service {
         let Some(host) = self.inner.plugins.existing_host().cloned() else {
             return;
         };
-        let Ok(records) = self.store().call(|s| s.plugins()).await else {
+        let Ok(records) = self.store().call(nail_store::Store::plugins).await else {
             return;
         };
         for record in records {
@@ -811,7 +808,12 @@ impl PluginServices for CoreServices {
                 .blocking(move |s| s.message_is_encrypted(&check))
                 .await
                 .map_err(api)?;
-            if encrypted_now || message.security.as_ref().is_some_and(|s| s.is_encrypted()) {
+            if encrypted_now
+                || message
+                    .security
+                    .as_ref()
+                    .is_some_and(nail_api::SecurityStatus::is_encrypted)
+            {
                 return Err(forbidden());
             }
             Ok(Some(PluginMessageBody {
@@ -848,9 +850,10 @@ impl PluginServices for CoreServices {
             // Message text only where `mail.read.body` is granted; header
             // fields elsewhere (M2d review: `body:` probing).
             let headers = header_only(&parsed).map(|q| q.to_string());
-            let parts: Vec<(Option<AccountId>, String)> = match (&scope, &body_scope) {
-                (AccountScope::All, AccountScope::All) => vec![(None, query.clone())],
-                _ => {
+            let parts: Vec<(Option<AccountId>, String)> =
+                if let (AccountScope::All, AccountScope::All) = (&scope, &body_scope) {
+                    vec![(None, query.clone())]
+                } else {
                     let accounts = match &scope {
                         AccountScope::All => service.all_members().await.map_err(api)?,
                         AccountScope::Only(accounts) => accounts.clone(),
@@ -866,11 +869,10 @@ impl PluginServices for CoreServices {
                             Some((Some(account), text))
                         })
                         .collect()
-                }
-            };
+                };
             if parts.is_empty() && headers.is_none() {
                 return Err(
-                    Denied::new("nail.mail.search", PluginPermission::MailReadBody).to_api_error(),
+                    Denied::new("nail.mail.search", &PluginPermission::MailReadBody).to_api_error(),
                 );
             }
             // While the index holds decrypted text of encrypted mail, such
@@ -1099,17 +1101,16 @@ impl PluginServices for CoreServices {
                 self.handle.spawn(async move {
                     let quiet = service
                         .store()
-                        .call(|s| s.notification_settings())
+                        .call(nail_store::Store::notification_settings)
                         .await
-                        .map(|settings| {
+                        .is_ok_and(|settings| {
                             let local = service.inner.clock.now().with_timezone(&chrono::Local);
                             !settings.enabled
                                 || settings
                                     .quiet_hours
                                     .as_ref()
                                     .is_some_and(|q| nail_triage::notify::in_quiet_hours(q, &local))
-                        })
-                        .unwrap_or(false);
+                        });
                     if quiet {
                         notification.spec.system = false;
                     }

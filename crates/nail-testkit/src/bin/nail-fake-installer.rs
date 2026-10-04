@@ -6,6 +6,7 @@
 //! run) to the file named by `NAIL_FAKE_INSTALLER_RECORD`, then exits.
 //! Without the variable it does nothing.
 
+use std::fmt::Write as _;
 use std::io::Write;
 
 /// The variable naming the record file.
@@ -18,7 +19,9 @@ fn json_string(text: &str) -> String {
         match c {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
-            c if u32::from(c) < 0x20 => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c if u32::from(c) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
             c => out.push(c),
         }
     }

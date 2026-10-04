@@ -117,20 +117,15 @@ pub(crate) async fn get<D: McpData>(
         return Err(err);
     };
     let args = string_arguments(&request);
-    let built = match shared.count_request(client) {
-        Err(limited) => Err(limited),
-        Ok(()) => {
-            let access = shared.access(client).await;
-            match prompt {
-                McpPrompt::SummarizeThread => {
-                    summarize_thread(shared, &access, arguments(args)?).await
-                }
-                McpPrompt::TriageFolder => triage_folder(shared, &access, arguments(args)?).await,
-                McpPrompt::DraftReply => draft_reply(shared, &access, arguments(args)?).await,
-                McpPrompt::PrepareMeeting => {
-                    prepare_meeting(shared, &access, arguments(args)?).await
-                }
-            }
+    let built = if let Err(limited) = shared.count_request(client) {
+        Err(limited)
+    } else {
+        let access = shared.access(client).await;
+        match prompt {
+            McpPrompt::SummarizeThread => summarize_thread(shared, &access, arguments(args)?).await,
+            McpPrompt::TriageFolder => triage_folder(shared, &access, arguments(args)?).await,
+            McpPrompt::DraftReply => draft_reply(shared, &access, arguments(args)?).await,
+            McpPrompt::PrepareMeeting => prepare_meeting(shared, &access, arguments(args)?).await,
         }
     };
     let (texts, uri, data) = shared
@@ -253,14 +248,13 @@ async fn draft_reply<D: McpData>(
         .reply_all
         .as_deref()
         .is_some_and(|v| v.trim().eq_ignore_ascii_case("true"));
-    let thread = match &summary.thread_id {
-        Some(thread) => shared.thread_with_texts(access, thread).await?,
-        None => {
-            let body = shared.data.message_body(&id).await?;
-            let mut message = summary_json(&summary);
-            message["text"] = json!(body.text);
-            json!({ "messages": [message] })
-        }
+    let thread = if let Some(thread) = &summary.thread_id {
+        shared.thread_with_texts(access, thread).await?
+    } else {
+        let body = shared.data.message_body(&id).await?;
+        let mut message = summary_json(&summary);
+        message["text"] = json!(body.text);
+        json!({ "messages": [message] })
     };
     let mut texts = vec![
         LocalizedMessage::new(McpPrompt::DraftReply.instructions_id()),

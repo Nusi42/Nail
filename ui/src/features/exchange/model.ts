@@ -32,6 +32,7 @@ import type {
   SecretInput,
   SspiPackage,
 } from "../../api/generated";
+import { charCount } from "../../text/chars";
 
 // ---------------------------------------------------------------------------
 // Accounts
@@ -112,9 +113,9 @@ export function categoryIssues(
   const out: ExchangeCategoryIssue[] = [];
   const name = settings.name.trim();
   if (name === "") return ["missing-name"];
-  if ([...name].length > MAX_CATEGORY_NAME) out.push("name-too-long");
+  if (charCount(name) > MAX_CATEGORY_NAME) out.push("name-too-long");
   // Outlook separates categories with commas / semicolons.
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- control characters are what it rejects.
   if (/[,;\u0000-\u001f\u007f-\u009f]/.test(name)) out.push("invalid-name");
   if (others.some((c) => c.name.toLowerCase() === name.toLowerCase())) out.push("duplicate-name");
   return out;
@@ -181,7 +182,7 @@ export function isPlausibleEmail(text: string): boolean {
     domain !== "" &&
     !domain.startsWith(".") &&
     !domain.endsWith(".") &&
-    // eslint-disable-next-line no-control-regex
+    // eslint-disable-next-line no-control-regex -- control characters are what it rejects.
     !/[\s\u0000-\u001f\u007f]/.test(text)
   );
 }
@@ -249,8 +250,8 @@ export function automaticRepliesIssues(
     out.push("empty-external-reply");
   }
   if (
-    [...settings.internal_reply].length > MAX_REPLY_CHARS ||
-    [...settings.external_reply].length > MAX_REPLY_CHARS
+    charCount(settings.internal_reply) > MAX_REPLY_CHARS ||
+    charCount(settings.external_reply) > MAX_REPLY_CHARS
   ) {
     out.push("reply-too-long");
   }
@@ -590,7 +591,7 @@ export function groupTaskLists(lists: readonly Calendar[]): TaskListGroup[] {
     g.lists.sort(
       (a, b) =>
         rank(a) - rank(b) ||
-        (a.settings.order ?? 0) - (b.settings.order ?? 0) ||
+        a.settings.order - b.settings.order ||
         a.settings.name.localeCompare(b.settings.name),
     );
   }

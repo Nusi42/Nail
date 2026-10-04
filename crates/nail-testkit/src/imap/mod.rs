@@ -60,7 +60,10 @@ pub enum MockTls {
 /// `IMAP4rev1` and `AUTH=PLAIN` are always on; `AUTH=XOAUTH2` and
 /// `AUTH=OAUTHBEARER` follow [`MockImapConfig::oauth_token`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent feature switches of a mock server; each test turns single ones on or off"
+)]
 pub struct MockCapabilities {
     /// `IDLE` (RFC 2177).
     pub idle: bool,
@@ -225,7 +228,9 @@ pub(crate) struct Control {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|p| p.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 impl Control {
@@ -512,7 +517,7 @@ impl MockImapServer {
     pub async fn shutdown(mut self) {
         let _ = self.shutdown.send(true);
         if let Some(task) = self.task.take() {
-            let _ = task.await;
+            drop(task.await);
         }
     }
 }

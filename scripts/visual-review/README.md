@@ -7,7 +7,7 @@ status, filters, the skipped variants with their reasons and baselines no
 screen uses any more. A human accepts the changes with
 `npm run visual:update` or fixes the UI.
 
-```
+```text
 node scripts/visual-review/generate.mjs [--results <dir>] [--out <dir>] [--baselines <dir>]
 ```
 

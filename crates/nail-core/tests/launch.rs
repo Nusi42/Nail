@@ -2,6 +2,8 @@
 //! the UI takes each request once, and `.eml` files are imported into the
 //! local "Opened files" account.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::launch::{LaunchRequest, MailtoLink, OPENED_FILES_ACCOUNT_ID};

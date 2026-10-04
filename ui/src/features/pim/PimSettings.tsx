@@ -76,7 +76,9 @@ export function PimSettings() {
           <button
             type="button"
             data-part="form.button"
-            onClick={() => store.getState().openWindow(IMPORT_DIALOG)}
+            onClick={() => {
+              store.getState().openWindow(IMPORT_DIALOG);
+            }}
           >
             <Icon name="import" part="form.button.icon" />
             <span data-part="form.button.label">{t("pim-import-open")}</span>

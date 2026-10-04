@@ -31,8 +31,10 @@ export const ignores = [
   "**/target/",
   ".nail-build/",
   "app/src-tauri/gen/",
-  "ui/src/api/generated/",
-  "packages/plugin-api/src/generated/",
+  // Patterns are relative to the config file that uses this list (the root
+  // or ui/), hence `**/`.
+  "**/src/api/generated/",
+  "**/plugin-api/src/generated/",
   // Test fixtures that only look like JavaScript (a Thunderbird prefs.js).
   "crates/*/tests/fixtures/",
   // Workflow-harness scripts: run by the Claude Code workflow runtime with

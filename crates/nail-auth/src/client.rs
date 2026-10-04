@@ -49,7 +49,7 @@ impl fmt::Debug for TokenSet {
 
 impl TokenSet {
     /// Lifetime assumed when the server gives no `expires_in`.
-    pub const DEFAULT_LIFETIME: Duration = Duration::from_secs(3600);
+    pub const DEFAULT_LIFETIME: Duration = Duration::from_hours(1);
 
     fn from_response(response: &BasicTokenResponse) -> Self {
         Self {
@@ -285,7 +285,7 @@ mod tests {
         let text = format!("{tokens:?}");
         assert!(!text.contains("ya29") && !text.contains("1//refresh"));
         assert!(tokens.is_fresh(Duration::from_secs(1)));
-        assert!(!tokens.is_fresh(Duration::from_secs(60)));
+        assert!(!tokens.is_fresh(Duration::from_mins(1)));
     }
 
     #[test]

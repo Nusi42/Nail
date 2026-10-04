@@ -73,7 +73,7 @@ describe("actions", () => {
 
   it("ignores unknown actions and contains handler failures", async () => {
     const ctx = context();
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const info = vi.spyOn(console, "info").mockReturnValue(undefined);
     expectConsole('nail: action "boom" failed');
     await expect(createDispatcher(ctx).dispatch("no.such")).resolves.toBeUndefined();
     await createDispatcher(ctx, { boom: { run: () => Promise.reject(new Error("x")) } }).dispatch(

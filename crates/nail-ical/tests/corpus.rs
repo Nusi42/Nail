@@ -3,7 +3,9 @@
 //! read without unexpected problems, its items mean what the producer
 //! meant, unchanged items are written back byte for byte, and an edit
 //! keeps every other line of the original.
+#![cfg(test)]
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
@@ -36,7 +38,7 @@ fn bytes(name: &str) -> Vec<u8> {
 fn calendar(name: &str) -> ParsedCalendar {
     match import::read_bytes(&bytes(name), Some(name)) {
         import::ImportData::Calendar(c) => c,
-        other => panic!("{name}: {other:?}"),
+        other @ import::ImportData::Cards(_) => panic!("{name}: {other:?}"),
     }
 }
 
@@ -794,10 +796,11 @@ fn large_imports_stay_linear() {
         "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//EN\r\nBEGIN:VTIMEZONE\r\nTZID:Custom Berlin\r\nBEGIN:STANDARD\r\nDTSTART:16011028T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nBEGIN:DAYLIGHT\r\nDTSTART:16010325T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\n",
     );
     for i in 0..3000 {
-        text.push_str(&format!(
+        write!(
+            text,
             "BEGIN:VEVENT\r\nUID:bulk-{i}@t\r\nDTSTAMP:20261001T000000Z\r\nDTSTART;TZID=Custom Berlin:20261005T{:02}0000\r\nDURATION:PT1H\r\nSUMMARY:Item {i}\r\nEND:VEVENT\r\n",
             i % 24
-        ));
+        ).unwrap();
     }
     text.push_str("END:VCALENDAR\r\n");
     let started = std::time::Instant::now();

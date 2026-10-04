@@ -185,7 +185,7 @@ function MoreButton({ index, labelOverride, icon, entries, measuring }: MoreProp
           label={text}
           x={open.x}
           y={open.y}
-          autoFocus={open.keyboard}
+          focusOnOpen={open.keyboard}
           onRun={(action, args) => {
             close(true);
             void dispatch(action, args);
@@ -214,7 +214,7 @@ function measure(root: HTMLElement, items: readonly ToolbarItem[]): Fit {
   const gap = px(style.columnGap);
   const available = root.clientWidth - px(style.paddingLeft) - px(style.paddingRight) + gap;
   const widths = items.map((_item, i) => {
-    const el = root.querySelector<HTMLElement>(`:scope > [data-item="${i}"]`);
+    const el = root.querySelector<HTMLElement>(`:scope > [data-item="${String(i)}"]`);
     return el ? el.getBoundingClientRect().width + gap : 0;
   });
   const auto = root.querySelector<HTMLElement>(
@@ -280,7 +280,9 @@ export function Toolbar({ node }: WidgetProps) {
       setWidthTick((n) => n + 1);
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, []);
 
   // Wrapping: separators at a line's start are removed, at its end hidden.
@@ -290,7 +292,7 @@ export function Toolbar({ node }: WidgetProps) {
     const rendered = [...el.querySelectorAll<HTMLElement>(":scope > [data-item]")];
     for (const child of rendered) child.removeAttribute("data-wrap-edge");
     const kinds = rendered.map((child) => ({
-      kind: (shown[Number(child.dataset.item)]?.type ?? "action") as ToolbarItem["type"],
+      kind: shown[Number(child.dataset.item)]?.type ?? "action",
       top: child.offsetTop,
     }));
     wrapEdges(kinds).forEach((edge, i) => {

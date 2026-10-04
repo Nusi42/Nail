@@ -2,6 +2,8 @@
 //! compile and work on Windows MSVC without OpenSSL, and produce what the
 //! store accepts.
 
+#![cfg(test)]
+
 use argon2::Argon2;
 use argon2::password_hash::phc::PasswordHash;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier};

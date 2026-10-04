@@ -105,7 +105,7 @@ impl Drop for DevEndpoint {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let _ = std::fs::remove_file(&self.file);
+        drop(std::fs::remove_file(&self.file));
     }
 }
 
@@ -196,12 +196,12 @@ async fn session(service: Service, socket: WebSocket) {
         let service = service.clone();
         let out = out.clone();
         tokio::spawn(async move {
-            let _ = out.send(answer(&service, request).await).await;
+            drop(out.send(answer(&service, request).await).await);
         });
     }
     events_task.abort();
     drop(out);
-    let _ = writer.await;
+    drop(writer.await);
 }
 
 #[cfg(test)]
@@ -211,6 +211,7 @@ mod tests {
     use nail_api::{Event, Request};
     use pretty_assertions::assert_eq;
     use tokio_tungstenite::tungstenite;
+    use tungstenite::client::IntoClientRequest;
 
     fn open(data: &Path, config: &Path) -> Service {
         let args = crate::AppArgs {
@@ -266,7 +267,6 @@ mod tests {
         let socket = format!("{}api/ws", file.url.replace("http://", "ws://"));
 
         // Without the token: refused.
-        use tungstenite::client::IntoClientRequest;
         let err = tokio_tungstenite::connect_async(socket.as_str())
             .await
             .unwrap_err();
@@ -355,7 +355,7 @@ mod tests {
                     event: Event::PluginsChanged,
                 } => break,
                 ServerMessage::Event { event } => {
-                    assert!(dev_endpoint_forwards(&event), "{event:?} was forwarded")
+                    assert!(dev_endpoint_forwards(&event), "{event:?} was forwarded");
                 }
                 ServerMessage::Response { .. } => {}
             }

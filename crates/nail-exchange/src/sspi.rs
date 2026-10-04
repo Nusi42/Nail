@@ -179,7 +179,9 @@ fn sspi_error(code: ErrorCode, message: String) -> EngineError {
 
 #[cfg(windows)]
 mod imp {
-    #![allow(unsafe_code)]
+    //! The SSPI calls. Every `unsafe` block of the crate is here, each with
+    //! its safety argument; each item that needs one carries its own
+    //! `#[expect(unsafe_code)]`.
 
     use std::ffi::c_void;
 
@@ -203,6 +205,7 @@ mod imp {
         split_username, sspi_error,
     };
 
+    #[expect(unsafe_code, reason = "QuerySecurityPackageInfoW and its buffer")]
     pub(super) fn package_info(package: SspiPackage) -> Result<PackageInfo, EngineError> {
         let name = HSTRING::from(package.sspi_name());
         // SAFETY: `name` outlives the call; on success SSPI returns a
@@ -231,7 +234,7 @@ mod imp {
         };
         // SAFETY: `info` came from `QuerySecurityPackageInfoW` and is
         // freed exactly once.
-        let _ = unsafe { FreeContextBuffer(info.cast()) };
+        drop(unsafe { FreeContextBuffer(info.cast()) });
         Ok(result)
     }
 
@@ -284,6 +287,10 @@ mod imp {
     // SAFETY: the handles are plain values owned by this session; SSPI
     // contexts may be used from any thread as long as calls do not overlap,
     // which `&mut self` guarantees.
+    #[expect(
+        unsafe_code,
+        reason = "SSPI handles are plain values; see the SAFETY note"
+    )]
     unsafe impl Send for Session {}
 
     impl std::fmt::Debug for Session {
@@ -292,23 +299,28 @@ mod imp {
                 .field("package", &self.package)
                 .field("started", &self.context.is_some())
                 .field("done", &self.done)
-                .finish()
+                .finish_non_exhaustive()
         }
     }
 
     impl Drop for Session {
+        #[expect(unsafe_code, reason = "releases the SSPI handles")]
         fn drop(&mut self) {
             // SAFETY: both handles were created by SSPI for this session
             // and are released exactly once here.
             unsafe {
                 if let Some(context) = self.context.take() {
-                    let _ = DeleteSecurityContext(&context);
+                    drop(DeleteSecurityContext(&raw const context));
                 }
-                let _ = FreeCredentialsHandle(&self.credentials);
+                drop(FreeCredentialsHandle(&raw const self.credentials));
             }
         }
     }
 
+    #[expect(
+        unsafe_code,
+        reason = "AcquireCredentialsHandleW with an auth identity"
+    )]
     pub(super) fn start(
         package: SspiPackage,
         credentials: &SspiCredentials,
@@ -331,8 +343,8 @@ mod imp {
                         None,
                         None,
                         None,
-                        &mut handle,
-                        Some(&mut expiry),
+                        &raw mut handle,
+                        Some(&raw mut expiry),
                     )
                 }
             }
@@ -361,12 +373,12 @@ mod imp {
                         Some(std::ptr::from_ref(&identity).cast::<c_void>()),
                         None,
                         None,
-                        &mut handle,
-                        Some(&mut expiry),
+                        &raw mut handle,
+                        Some(&raw mut expiry),
                     )
                 };
                 // Do not leave the password in memory longer than needed.
-                secret.iter_mut().for_each(|c| *c = 0);
+                secret.fill(0);
                 result
             }
         };
@@ -389,6 +401,7 @@ mod imp {
     }
 
     impl NegotiateSession for Session {
+        #[expect(unsafe_code, reason = "InitializeSecurityContextW / CompleteAuthToken")]
         fn step(&mut self, server_token: Option<&[u8]>) -> Result<NegotiateStep, EngineError> {
             if self.done && server_token.is_none() {
                 return Ok(NegotiateStep::Done(None));
@@ -408,7 +421,7 @@ mod imp {
             let input_desc = SecBufferDesc {
                 ulVersion: SECBUFFER_VERSION,
                 cBuffers: 1,
-                pBuffers: &mut input_buffer,
+                pBuffers: &raw mut input_buffer,
             };
             let mut output_bytes = vec![0u8; self.max_token];
             let mut output_buffer = SecBuffer {
@@ -419,7 +432,7 @@ mod imp {
             let mut output_desc = SecBufferDesc {
                 ulVersion: SECBUFFER_VERSION,
                 cBuffers: 1,
-                pBuffers: &mut output_buffer,
+                pBuffers: &raw mut output_buffer,
             };
             let flags: ISC_REQ_FLAGS = ISC_REQ_CONNECTION | ISC_REQ_MUTUAL_AUTH;
             let mut new_context = self.context.unwrap_or_default();
@@ -430,7 +443,7 @@ mod imp {
             // the output buffer has room for the package's largest token.
             let status = unsafe {
                 InitializeSecurityContextW(
-                    Some(&self.credentials),
+                    Some(&raw const self.credentials),
                     self.context.as_ref().map(std::ptr::from_ref),
                     Some(self.target.as_ptr()),
                     flags,
@@ -440,10 +453,10 @@ mod imp {
                         .is_some()
                         .then_some(std::ptr::from_ref(&input_desc)),
                     0,
-                    Some(&mut new_context),
-                    Some(&mut output_desc),
-                    &mut attributes,
-                    Some(&mut expiry),
+                    Some(&raw mut new_context),
+                    Some(&raw mut output_desc),
+                    &raw mut attributes,
+                    Some(&raw mut expiry),
                 )
             };
             // The first successful call creates the context; later calls
@@ -517,21 +530,27 @@ mod imp {
         }
 
         impl Drop for ServerContext {
+            #[expect(unsafe_code, reason = "releases the SSPI handles")]
             fn drop(&mut self) {
                 // SAFETY: handles from SSPI, released once.
                 unsafe {
                     if let Some(context) = self.context.take() {
-                        let _ = DeleteSecurityContext(&context);
+                        drop(DeleteSecurityContext(&raw const context));
                     }
-                    let _ = FreeCredentialsHandle(&self.credentials);
+                    drop(FreeCredentialsHandle(&raw const self.credentials));
                 }
             }
         }
 
         // SAFETY: plain handles used from one thread at a time (`&mut`).
+        #[expect(
+            unsafe_code,
+            reason = "SSPI handles are plain values; see the SAFETY note"
+        )]
         unsafe impl Send for ServerContext {}
 
         impl ServerContext {
+            #[expect(unsafe_code, reason = "AcquireCredentialsHandleW for inbound use")]
             pub(crate) fn new(package: SspiPackage) -> Result<Self, String> {
                 let info = package_info(package).map_err(|e| e.message)?;
                 let name = HSTRING::from(package.sspi_name());
@@ -546,7 +565,7 @@ mod imp {
                         None,
                         None,
                         None,
-                        &mut credentials,
+                        &raw mut credentials,
                         None,
                     )
                 }
@@ -559,6 +578,7 @@ mod imp {
             }
 
             /// Accepts a client token: `Ok((done, reply token))`.
+            #[expect(unsafe_code, reason = "AcceptSecurityContext")]
             pub(crate) fn accept(&mut self, token: &[u8]) -> Result<(bool, Vec<u8>), String> {
                 let mut input = token.to_vec();
                 let mut input_buffer = SecBuffer {
@@ -569,7 +589,7 @@ mod imp {
                 let input_desc = SecBufferDesc {
                     ulVersion: SECBUFFER_VERSION,
                     cBuffers: 1,
-                    pBuffers: &mut input_buffer,
+                    pBuffers: &raw mut input_buffer,
                 };
                 let mut output = vec![0u8; self.max_token];
                 let mut output_buffer = SecBuffer {
@@ -580,21 +600,21 @@ mod imp {
                 let mut output_desc = SecBufferDesc {
                     ulVersion: SECBUFFER_VERSION,
                     cBuffers: 1,
-                    pBuffers: &mut output_buffer,
+                    pBuffers: &raw mut output_buffer,
                 };
                 let mut new_context = self.context.unwrap_or_default();
                 let mut attributes = 0u32;
                 // SAFETY: valid handles and buffers that outlive the call.
                 let status = unsafe {
                     AcceptSecurityContext(
-                        Some(&self.credentials),
+                        Some(&raw const self.credentials),
                         self.context.as_ref().map(std::ptr::from_ref),
-                        Some(&input_desc),
+                        Some(&raw const input_desc),
                         ASC_REQ_CONNECTION,
                         SECURITY_NATIVE_DREP,
-                        Some(&mut new_context),
-                        Some(&mut output_desc),
-                        &mut attributes,
+                        Some(&raw mut new_context),
+                        Some(&raw mut output_desc),
+                        &raw mut attributes,
                         None,
                     )
                 };
@@ -704,7 +724,7 @@ mod tests {
         }
     }
 
-    /// NTLM's first token is a NEGOTIATE_MESSAGE: no network, no server,
+    /// NTLM's first token is a `NEGOTIATE_MESSAGE`: no network, no server,
     /// the signed-in user's credentials handle only.
     #[cfg(windows)]
     #[test]

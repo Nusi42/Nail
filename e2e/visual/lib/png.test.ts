@@ -30,11 +30,11 @@ function encodePng(width: number, height: number, pixels: number[], channels: 3 
     const filter = y % 5;
     raw.push(filter);
     for (let x = 0; x < stride; x++) {
-      const v = pixels[y * stride + x]!;
-      const left = x >= channels ? pixels[y * stride + x - channels]! : 0;
-      const up = y > 0 ? pixels[(y - 1) * stride + x]! : 0;
-      const upLeft = y > 0 && x >= channels ? pixels[(y - 1) * stride + x - channels]! : 0;
-      const predicted = [0, left, up, (left + up) >> 1, paeth(left, up, upLeft)][filter]!;
+      const v = pixels[y * stride + x] ?? 0;
+      const left = x >= channels ? (pixels[y * stride + x - channels] ?? 0) : 0;
+      const up = y > 0 ? (pixels[(y - 1) * stride + x] ?? 0) : 0;
+      const upLeft = y > 0 && x >= channels ? (pixels[(y - 1) * stride + x - channels] ?? 0) : 0;
+      const predicted = [0, left, up, (left + up) >> 1, paeth(left, up, upLeft)][filter] ?? 0;
       raw.push((v - predicted + 256) & 0xff);
     }
   }
@@ -102,7 +102,7 @@ test("pixel differences are counted with their bounding box", () => {
     [4, 2],
     [12, 7],
   ] as const) {
-    b[(y * 20 + x) * 4] = (b[(y * 20 + x) * 4]! + 1) % 256;
+    b[(y * 20 + x) * 4] = ((b[(y * 20 + x) * 4] ?? 0) + 1) % 256;
   }
   const same = diffPngs(encodePng(20, 10, a, 4), encodePng(20, 10, a, 4));
   assert.deepEqual(same, { pixels: 0, ratio: 0, box: null });

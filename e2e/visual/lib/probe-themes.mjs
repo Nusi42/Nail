@@ -19,6 +19,12 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
+/** @typedef {{ bin: string, uiDir: string, timeoutMs: number }} Options */
+
+/**
+ * @param {string[]} argv
+ * @returns {Options}
+ */
 export function parseArgs(argv) {
   const options = { bin: "", uiDir: "", timeoutMs: 60_000 };
   for (let i = 0; i < argv.length; i++) {
@@ -26,7 +32,7 @@ export function parseArgs(argv) {
     if (arg === "--bin") options.bin = argv[++i] ?? "";
     else if (arg === "--ui-dir") options.uiDir = argv[++i] ?? "";
     else if (arg === "--timeout-ms") options.timeoutMs = Number(argv[++i]);
-    else throw new Error(`unknown argument ${arg}`);
+    else throw new Error(`unknown argument ${arg ?? ""}`);
   }
   if (!options.bin) throw new Error("--bin is required");
   if (!options.uiDir) throw new Error("--ui-dir is required");
@@ -36,7 +42,14 @@ export function parseArgs(argv) {
   return options;
 }
 
-/** Sends one request over the server's WebSocket and resolves with the response. */
+/**
+ * Sends one request over the server's WebSocket and resolves with the response.
+ *
+ * @param {string} baseUrl
+ * @param {{ type: string }} request
+ * @param {number} timeoutMs
+ * @returns {Promise<unknown>}
+ */
 export function rpc(baseUrl, request, timeoutMs) {
   const url = new URL("api/ws", baseUrl);
   url.protocol = url.protocol.replace("http", "ws");
@@ -46,10 +59,22 @@ export function rpc(baseUrl, request, timeoutMs) {
       socket.close();
       reject(new Error(`no answer to ${request.type}`));
     }, timeoutMs);
-    socket.addEventListener("open", () => socket.send(JSON.stringify({ id: 1, request })));
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ id: 1, request }));
+    });
     socket.addEventListener("message", (message) => {
+      /** @type {unknown} */
       const frame = JSON.parse(String(message.data));
-      if (frame.kind === "response" && frame.id === 1 && frame.response) {
+      if (
+        typeof frame === "object" &&
+        frame !== null &&
+        "kind" in frame &&
+        frame.kind === "response" &&
+        "id" in frame &&
+        frame.id === 1 &&
+        "response" in frame &&
+        frame.response
+      ) {
         clearTimeout(timer);
         socket.close();
         resolve(frame.response);
@@ -62,11 +87,11 @@ export function rpc(baseUrl, request, timeoutMs) {
   });
 }
 
+/** @param {Options} options */
 async function probe(options) {
-  const dirs = [
-    mkdtempSync(path.join(tmpdir(), "nail-visual-probe-data-")),
-    mkdtempSync(path.join(tmpdir(), "nail-visual-probe-config-")),
-  ];
+  const dataDir = mkdtempSync(path.join(tmpdir(), "nail-visual-probe-data-"));
+  const configDir = mkdtempSync(path.join(tmpdir(), "nail-visual-probe-config-"));
+  const dirs = [dataDir, configDir];
   const args = [
     "serve",
     "--port",
@@ -74,9 +99,9 @@ async function probe(options) {
     "--seed",
     "demo-multi",
     "--data-dir",
-    dirs[0],
+    dataDir,
     "--config-dir",
-    dirs[1],
+    configDir,
     "--ui-dir",
     options.uiDir,
   ];
@@ -85,12 +110,12 @@ async function probe(options) {
     env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
   });
   try {
+    /** @type {string} */
     const url = await new Promise((resolve, reject) => {
       const lines = createInterface({ input: child.stdout });
-      const timer = setTimeout(
-        () => reject(new Error("nail serve did not start")),
-        options.timeoutMs,
-      );
+      const timer = setTimeout(() => {
+        reject(new Error("nail serve did not start"));
+      }, options.timeoutMs);
       lines.once("line", (line) => {
         clearTimeout(timer);
         resolve(line.trim());
@@ -101,13 +126,15 @@ async function probe(options) {
       });
       child.once("exit", (code) => {
         clearTimeout(timer);
-        reject(new Error(`nail serve exited with ${code}`));
+        reject(new Error(`nail serve exited with ${String(code)}`));
       });
     });
     return { answer: await rpc(url, { type: "ListThemes" }, options.timeoutMs) };
   } finally {
     if (child.exitCode === null && child.pid !== undefined) {
-      const exited = new Promise((resolve) => child.once("exit", resolve));
+      const exited = new Promise((resolve) => {
+        child.once("exit", resolve);
+      });
       child.kill();
       await exited;
     }

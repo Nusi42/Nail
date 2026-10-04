@@ -1,5 +1,6 @@
 //! JSON Schema snapshot of `rules.kdl` (`crates/nail-config/schema/rules.schema.json`).
 //! Regenerate with `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema`.
+#![cfg(test)]
 
 use std::path::PathBuf;
 

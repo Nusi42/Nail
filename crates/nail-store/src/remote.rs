@@ -142,8 +142,8 @@ fn enum_from<T: serde::de::DeserializeOwned>(idx: usize, s: String) -> rusqlite:
     })
 }
 
-fn grant_from(idx: usize, text: String) -> rusqlite::Result<RemoteGrant> {
-    serde_json::from_str(&text).map_err(|e| {
+fn grant_from(idx: usize, text: &str) -> rusqlite::Result<RemoteGrant> {
+    serde_json::from_str(text).map_err(|e| {
         rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
     })
 }
@@ -333,7 +333,7 @@ fn user_from_row(row: &Row<'_>) -> rusqlite::Result<RemoteUser> {
         has_password: row.get(5)?,
         totp_enabled: row.get(6)?,
         passkeys: Vec::new(),
-        grant: grant_from(7, row.get(7)?)?,
+        grant: grant_from(7, &row.get::<_, String>(7)?)?,
         disabled: row.get(8)?,
         locked_until: opt_rfc3339(row.get(9)?),
     })
@@ -369,7 +369,7 @@ fn device_from_row(row: &Row<'_>) -> rusqlite::Result<RemoteDevice> {
         last_seen_at: opt_rfc3339(row.get(4)?),
         user_agent: row.get(5)?,
         last_ip: row.get(6)?,
-        grant: grant_from(7, row.get(7)?)?,
+        grant: grant_from(7, &row.get::<_, String>(7)?)?,
         revoked_at: opt_rfc3339(row.get(8)?),
     })
 }
@@ -395,7 +395,7 @@ fn session_from_row(row: &Row<'_>) -> rusqlite::Result<RemoteSession> {
         ip: row.get(9)?,
         user_agent: row.get(10)?,
         reauth_at: opt_rfc3339(row.get(11)?),
-        grant: grant_from(12, row.get(12)?)?,
+        grant: grant_from(12, &row.get::<_, String>(12)?)?,
         ended_at: opt_rfc3339(row.get(13)?),
         end_reason: row
             .get::<_, Option<String>>(14)?
@@ -424,7 +424,7 @@ fn pairing_from_row(row: &Row<'_>, now: i64) -> rusqlite::Result<PairingCode> {
         id: pairing_id(row.get(0)?),
         user_id: user_id(row.get(1)?),
         device_name: row.get(2)?,
-        grant: grant_from(3, row.get(3)?)?,
+        grant: grant_from(3, &row.get::<_, String>(3)?)?,
         created_at: rfc3339(row.get(4)?),
         expires_at: rfc3339(expires_at),
         state,
@@ -1489,7 +1489,7 @@ impl Store {
         let kind = enum_str(record.kind)?;
         let outcome = enum_str(record.outcome)?;
         let method = record.method.map(enum_str).transpose()?;
-        let error = record.error.map(|e| e.as_str());
+        let error = record.error.map(ErrorCode::as_str);
         self.with_conn(|conn| {
             // Rows that no longer exist are recorded without the reference.
             let exists = |table: &str, n: Option<i64>| -> rusqlite::Result<Option<i64>> {

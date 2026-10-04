@@ -17,10 +17,10 @@ export interface AgentsUiState {
   /** The confirmation to bring into view in the center (`null` = none). */
   focus: ConfirmationId | null;
   /** A confirmation was requested: show a notice. */
-  notice(confirmation: Confirmation): void;
+  notice: (confirmation: Confirmation) => void;
   /** A notice was dismissed, or its confirmation decided. */
-  dismiss(id: ConfirmationId): void;
-  setFocus(id: ConfirmationId | null): void;
+  dismiss: (id: ConfirmationId) => void;
+  setFocus: (id: ConfirmationId | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<AgentsUiState>>();
@@ -29,14 +29,19 @@ export function createAgentsStore(): StoreApi<AgentsUiState> {
   return createStore<AgentsUiState>()((set) => ({
     notices: [],
     focus: null,
-    notice: (confirmation) =>
+    notice: (confirmation) => {
       set((s) => ({
         notices: [...s.notices.filter((n) => n.id !== confirmation.id), confirmation].slice(
           -MAX_NOTICES,
         ),
-      })),
-    dismiss: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
-    setFocus: (focus) => set({ focus }),
+      }));
+    },
+    dismiss: (id) => {
+      set((s) => ({ notices: s.notices.filter((n) => n.id !== id) }));
+    },
+    setFocus: (focus) => {
+      set({ focus });
+    },
   }));
 }
 

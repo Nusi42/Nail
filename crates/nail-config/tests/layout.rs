@@ -1,4 +1,5 @@
 //! Layout parsing, merging and error reporting.
+#![cfg(test)]
 
 use nail_api::{ActionDef, LayoutNode, MenuItem, Orientation, ResolvedLayout, ToolbarItem};
 use nail_config::{ConfigError, parse_layout};
@@ -606,7 +607,10 @@ fn shell_sections_replace_the_base_and_old_files_inherit_them() {
     assert_eq!(old.rail, default.rail);
     assert_eq!(old.settings, default.settings);
     // A replaced toolbar takes its settings from the file.
-    assert_eq!(old.toolbar_settings["main"], Default::default());
+    assert_eq!(
+        old.toolbar_settings["main"],
+        nail_api::ToolbarSettings::default()
+    );
     // Sections in the file replace the base's as a whole.
     let l = layout(
         "layout \"mine\" extends=\"default\" {\n  views {\n    view \"tasks\" window=\"tasks\"\n  }\n  rail {\n    view \"tasks\"\n  }\n}\n",

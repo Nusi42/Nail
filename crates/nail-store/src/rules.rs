@@ -293,9 +293,10 @@ impl Store {
                 params![n, state_str(state), matched, message, at],
             )?;
             if changed == 0 {
-                return Err(match Self::run_exists(conn, n)? {
-                    true => Error::Conflict(format!("rule run {run} is not running")),
-                    false => Error::not_found("rule run", run),
+                return Err(if Self::run_exists(conn, n)? {
+                    Error::Conflict(format!("rule run {run} is not running"))
+                } else {
+                    Error::not_found("rule run", run)
                 });
             }
             Ok(())
@@ -687,7 +688,7 @@ mod tests {
                     &run,
                     &RuleRunAction {
                         message_id: message.into(),
-                        op_id: Some(OpId(n as i64 + 1)),
+                        op_id: Some(OpId(i64::try_from(n).unwrap() + 1)),
                         action: archive.clone(),
                         undo: Some(undo),
                     },

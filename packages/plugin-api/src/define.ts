@@ -161,7 +161,7 @@ export interface DefinedPlugin extends PluginDefinition {
 
 /** A preview renderer's answer as the host wants it. */
 export function toPreview(value: PluginPreview | UiChild): PluginPreview {
-  return isPreview(value) ? value : previewTree(value as UiChild);
+  return isPreview(value) ? value : previewTree(value);
 }
 
 /** Wraps an SDK preview renderer for the host (JSX → tree). */
@@ -225,9 +225,12 @@ export function definePlugin(setup: PluginSetup): DefinedPlugin {
         hooks: registry(hostCtx, "hooks"),
         composer: registry(hostCtx, "composer"),
         attachments: {
-          registerPreview: (name, renderer) =>
-            attachments.registerPreview(name, hostPreview(renderer)),
-          registerAction: (name, handler) => attachments.registerAction(name, handler),
+          registerPreview: (name, renderer) => {
+            attachments.registerPreview(name, hostPreview(renderer));
+          },
+          registerAction: (name, handler) => {
+            attachments.registerAction(name, handler);
+          },
         },
         links: registry(hostCtx, "links"),
         jobs: registry(hostCtx, "jobs"),
@@ -239,8 +242,9 @@ export function definePlugin(setup: PluginSetup): DefinedPlugin {
     },
   };
   if (setup.deactivate) {
-    const deactivate = setup.deactivate;
-    definition.deactivate = () => deactivate();
+    definition.deactivate = () => {
+      setup.deactivate?.();
+    };
   }
   return definition;
 }
@@ -250,18 +254,36 @@ function registerAll(ctx: PluginContext, setup: PluginSetup): void {
   const each = <T>(map: Record<string, T> | undefined, register: (name: string, v: T) => void) => {
     for (const [name, value] of Object.entries(map ?? {})) register(name, value);
   };
-  each(setup.commands, (name, handler) => ctx.commands.register(name, handler));
-  each(setup.panels, (name, panel) => ctx.panels.register(name, panel));
+  each(setup.commands, (name, handler) => {
+    ctx.commands.register(name, handler);
+  });
+  each(setup.panels, (name, panel) => {
+    ctx.panels.register(name, panel);
+  });
   const hooks = setup.hooks ?? {};
   if (hooks.arrival) ctx.hooks.register("arrival", hooks.arrival);
   if (hooks.beforeSend) ctx.hooks.register("beforeSend", hooks.beforeSend);
   if (hooks.open) ctx.hooks.register("open", hooks.open);
   if (hooks.onBannerAction) ctx.hooks.onBannerAction(hooks.onBannerAction);
-  each(setup.composer?.actions, (name, h) => ctx.composer.registerAction(name, h));
-  each(setup.composer?.markdownBlocks, (name, r) => ctx.composer.registerBlock(name, r));
-  each(setup.attachments?.previews, (name, r) => ctx.attachments.registerPreview(name, r));
-  each(setup.attachments?.actions, (name, h) => ctx.attachments.registerAction(name, h));
-  each(setup.links, (name, h) => ctx.links.registerAction(name, h));
-  each(setup.jobs, (id, h) => ctx.jobs.register(id, h));
-  each(setup.mcpTools, (id, h) => ctx.mcp.registerTool(id, h));
+  each(setup.composer?.actions, (name, h) => {
+    ctx.composer.registerAction(name, h);
+  });
+  each(setup.composer?.markdownBlocks, (name, r) => {
+    ctx.composer.registerBlock(name, r);
+  });
+  each(setup.attachments?.previews, (name, r) => {
+    ctx.attachments.registerPreview(name, r);
+  });
+  each(setup.attachments?.actions, (name, h) => {
+    ctx.attachments.registerAction(name, h);
+  });
+  each(setup.links, (name, h) => {
+    ctx.links.registerAction(name, h);
+  });
+  each(setup.jobs, (id, h) => {
+    ctx.jobs.register(id, h);
+  });
+  each(setup.mcpTools, (id, h) => {
+    ctx.mcp.registerTool(id, h);
+  });
 }

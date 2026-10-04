@@ -89,7 +89,12 @@ function ComposerWindows() {
           <WindowInstanceContext.Provider key={id} value={id}>
             <section aria-label={id}>
               {Dialog ? (
-                <Dialog name={id} close={() => closeWindow(id)} />
+                <Dialog
+                  name={id}
+                  close={() => {
+                    closeWindow(id);
+                  }}
+                />
               ) : (
                 <NodeView node={widget("composer")} path={id} />
               )}
@@ -108,13 +113,21 @@ function renderWindows(env: Env) {
 const region = (id: string) => within(screen.getByRole("region", { name: id }));
 const formOf = (id: string) => region(id).getByRole("form", { name: "New message" });
 
-afterEach(() => act(() => composerCryptoStore.getState().reset()));
+afterEach(() => {
+  act(() => {
+    composerCryptoStore.getState().reset();
+  });
+});
 
 describe("composer windows", () => {
   // The closing flows check "unsaved changes": the autosave (real timers)
   // must not save in between, however slow the run is.
-  beforeEach(() => setAutosaveDelay(10 * 60 * 1000));
-  afterEach(() => setAutosaveDelay(null));
+  beforeEach(() => {
+    setAutosaveDelay(10 * 60 * 1000);
+  });
+  afterEach(() => {
+    setAutosaveDelay(null);
+  });
 
   it("opens one window per message and mirrors the focused one", async () => {
     const env = setup();
@@ -126,17 +139,25 @@ describe("composer windows", () => {
     expect(ui(env).composer).toBe(ui(env).composers["composer:w2"]);
 
     // Edits of a composer in the background stay its own.
-    act(() => ui(env).updateComposerOf("composer:w1", { subject: "First" }));
+    act(() => {
+      ui(env).updateComposerOf("composer:w1", { subject: "First" });
+    });
     expect(ui(env).composer?.subject).toBe("");
     // Focusing it (the window manager raises it) moves the mirror.
-    act(() => ui(env).focusWindow("composer:w1"));
+    act(() => {
+      ui(env).focusWindow("composer:w1");
+    });
     expect(ui(env).composer?.subject).toBe("First");
     // A write to the mirror (an older flow) goes to the focused composer.
-    act(() => ui(env).updateComposer({ to: "grace@navy.example" }));
+    act(() => {
+      ui(env).updateComposer({ to: "grace@navy.example" });
+    });
     expect(ui(env).composers["composer:w1"]?.to).toBe("grace@navy.example");
     expect(ui(env).composers["composer:w2"]?.to).toBe("");
     // Other windows on top do not change which composer is focused.
-    act(() => ui(env).openWindow("settings"));
+    act(() => {
+      ui(env).openWindow("settings");
+    });
     expect(composerTarget(ui(env))).toBe("composer:w1");
     expect(ui(env).composer?.subject).toBe("First");
   });
@@ -147,7 +168,9 @@ describe("composer windows", () => {
     expect(id).toBe("composer:d42");
     expect(findComposerByDraft(ui(env), "d42")).toBe("composer:d42");
     // The same draft again: the open window, raised.
-    act(() => ui(env).openWindow("settings"));
+    act(() => {
+      ui(env).openWindow("settings");
+    });
     expect(openComposer(env.ctx, { ...emptyComposer(), draftId: "d42" })).toBe("composer:d42");
     expect(ui(env).windows).toEqual(["settings", "composer:d42"]);
     // Ids that are no instance keys get a generated one.
@@ -160,7 +183,9 @@ describe("composer windows", () => {
 
   it("opens a draft in a named window (a pop-out's route)", async () => {
     const env = setup();
-    act(() => ui(env).setComposerOf("composer:w1", emptyComposer()));
+    act(() => {
+      ui(env).setComposerOf("composer:w1", emptyComposer());
+    });
     const { draft_id } = await env.client.request(
       {
         type: "SaveDraft",
@@ -188,14 +213,22 @@ describe("composer windows", () => {
     expect(ui(env).composer?.subject).toBe("Popped");
     // An open window without a composer (the pop-out page opened its route's
     // window first) takes the draft.
-    act(() => closeComposerNow(env.ctx, "composer:w7"));
-    act(() => ui(env).openWindow("composer:w7"));
+    act(() => {
+      closeComposerNow(env.ctx, "composer:w7");
+    });
+    act(() => {
+      ui(env).openWindow("composer:w7");
+    });
     await act(() => openRichDraft(env.ctx, draft_id, { window: "composer:w7" }));
     expect(ui(env).windows).toEqual(["composer:w7"]);
     expect(ui(env).composers["composer:w7"]?.subject).toBe("Popped");
     // A window id with a composer is not reused.
-    act(() => ui(env).setComposerOf("composer:w8", emptyComposer()));
-    act(() => closeComposerNow(env.ctx, "composer:w7"));
+    act(() => {
+      ui(env).setComposerOf("composer:w8", emptyComposer());
+    });
+    act(() => {
+      closeComposerNow(env.ctx, "composer:w7");
+    });
     await act(() => openRichDraft(env.ctx, draft_id, { window: "composer:w8" }));
     expect(ui(env).windows).toContain(`composer:${draft_id}`);
   });
@@ -224,15 +257,17 @@ describe("composer windows", () => {
 
     // Each composer has its own format.
     await user.click(within(second).getByRole("radio", { name: "Markdown" }));
-    await waitFor(() =>
-      expect(richStoreFor(env.store, "composer:w2").getState().mode).toBe("markdown"),
-    );
+    await waitFor(() => {
+      expect(richStoreFor(env.store, "composer:w2").getState().mode).toBe("markdown");
+    });
     expect(richStoreFor(env.store, "composer:w1").getState().mode).toBe("plain");
     expect(within(first).getByRole("radio", { name: "Plain text" })).toBeChecked();
 
     // Sending the first closes only that one.
     await user.click(within(first).getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(ui(env).windows).toEqual(["composer:w2"]));
+    await waitFor(() => {
+      expect(ui(env).windows).toEqual(["composer:w2"]);
+    });
     expect(ui(env).lastSend).toMatchObject({ subject: "Lab photos" });
     expect(ui(env).composers["composer:w1"]).toBeUndefined();
     expect(ui(env).composer?.subject).toBe("Budget");
@@ -256,7 +291,9 @@ describe("composer windows", () => {
     expect(env.transport.data.drafts.get(two ?? "")?.subject).toBe("Two");
     expect(findComposerByDraft(ui(env), one ?? "")).toBe("composer:w1");
     // Without a window the flows work on the focused composer.
-    act(() => ui(env).updateComposerOf("composer:w2", { subject: "Two, again" }));
+    act(() => {
+      ui(env).updateComposerOf("composer:w2", { subject: "Two, again" });
+    });
     await saveRich(env.ctx);
     expect(env.transport.data.drafts.get(two ?? "")?.subject).toBe("Two, again");
   });
@@ -266,11 +303,13 @@ describe("composer windows", () => {
     await startRichCompose(env.ctx);
     renderWindows(env);
     // The composer took what it opened with as its baseline.
-    await waitFor(() =>
-      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull(),
-    );
+    await waitFor(() => {
+      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull();
+    });
     expect(isUnsaved(env.store, "composer:w1")).toBe(false);
-    act(() => ui(env).closeWindow("composer:w1"));
+    act(() => {
+      ui(env).closeWindow("composer:w1");
+    });
     expect(ui(env).windows).toEqual([]);
     expect(ui(env).composers).toEqual({});
     expect(ui(env).composer).toBeNull();
@@ -286,7 +325,9 @@ describe("composer windows", () => {
     expect(isUnsaved(env.store, "composer:w1")).toBe(true);
 
     // The title bar's close button (closeWindow): it stays, the confirmation asks.
-    act(() => ui(env).closeWindow("composer:w1"));
+    act(() => {
+      ui(env).closeWindow("composer:w1");
+    });
     expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
     expect(ui(env).composers["composer:w1"]?.subject).toBe("Unsent");
     const confirm = region("composer-close:w1");
@@ -300,7 +341,9 @@ describe("composer windows", () => {
     expect(region("composer:w1").getByRole("textbox", { name: "Subject" })).toHaveValue("Unsent");
 
     // Escape (window.close closes the topmost window): asked again.
-    act(() => ui(env).closeWindow());
+    act(() => {
+      ui(env).closeWindow();
+    });
     expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
     await user.click(
       region("composer-close:w1").getByRole("button", { name: "Close without saving" }),
@@ -317,10 +360,14 @@ describe("composer windows", () => {
     await startRichCompose(env.ctx);
     renderWindows(env);
     await user.type(region("composer:w1").getByRole("textbox", { name: "Subject" }), "Keep me");
-    act(() => requestClose(env.ctx, "composer:w1"));
+    act(() => {
+      requestClose(env.ctx, "composer:w1");
+    });
     expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
     await user.click(region("composer-close:w1").getByRole("button", { name: "Save draft" }));
-    await waitFor(() => expect(ui(env).windows).toEqual([]));
+    await waitFor(() => {
+      expect(ui(env).windows).toEqual([]);
+    });
     const saved = [...env.transport.data.drafts.values()];
     expect(saved.map((d) => d.subject)).toEqual(["Keep me"]);
   });
@@ -330,9 +377,9 @@ describe("composer windows", () => {
     const env = setup();
     await startRichCompose(env.ctx);
     renderWindows(env);
-    await waitFor(() =>
-      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull(),
-    );
+    await waitFor(() => {
+      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull();
+    });
     await user.click(region("composer:w1").getByRole("button", { name: "Discard" }));
     expect(ui(env).windows).toEqual([]);
 
@@ -340,7 +387,9 @@ describe("composer windows", () => {
     const id = activeComposer(ui(env).windows) ?? "";
     await user.type(region(id).getByRole("textbox", { name: "Subject" }), "Draft to drop");
     await user.click(region(id).getByRole("button", { name: "Save draft" }));
-    await waitFor(() => expect(ui(env).composers[id]?.draftId).not.toBeNull());
+    await waitFor(() => {
+      expect(ui(env).composers[id]?.draftId).not.toBeNull();
+    });
     const draftId = ui(env).composers[id]?.draftId ?? "";
     await user.click(region(id).getByRole("button", { name: "Discard" }));
     const confirm = confirmWindowFor(DISCARD_CONFIRM_KIND, id);
@@ -350,7 +399,9 @@ describe("composer windows", () => {
       dialog.getByText("Discard “Draft to drop”? Its saved draft is deleted too."),
     ).toBeVisible();
     await user.click(dialog.getByRole("button", { name: "Discard" }));
-    await waitFor(() => expect(env.transport.data.drafts.has(draftId)).toBe(false));
+    await waitFor(() => {
+      expect(env.transport.data.drafts.has(draftId)).toBe(false);
+    });
     expect(ui(env).windows).toEqual([]);
     expect(env.transport.requests).toContainEqual({ type: "DeleteDraft", draft_id: draftId });
     await act(() => requestDiscard(env.ctx, id));
@@ -377,7 +428,9 @@ describe("composer windows", () => {
     const env = setup();
     const choice = { sign: true, encrypt: true, technology: null, protect_headers: null };
     const first = openComposer(env.ctx, { ...emptyComposer(), identityId: "ada@example.org" });
-    act(() => composerCryptoStore.getState().setChoice(choice));
+    act(() => {
+      composerCryptoStore.getState().setChoice(choice);
+    });
     const second = openComposer(
       env.ctx,
       { ...emptyComposer(), identityId: "ada@example.org", draftId: "d2" },
@@ -388,7 +441,9 @@ describe("composer windows", () => {
     expect(composerCryptoStore.getState().choice).toBeNull();
     expect(cryptoFor(env.store, first)).toEqual(choice);
     expect(cryptoFor(env.store, second)).toBeUndefined();
-    act(() => ui(env).focusWindow(first));
+    act(() => {
+      ui(env).focusWindow(first);
+    });
     expect(composerCryptoStore.getState().choice).toEqual(choice);
     expect(cryptoFor(env.store, second)).toBeNull();
     // A composer in the background saves its own choice, not the focused one's.
@@ -446,17 +501,23 @@ describe("composer windows", () => {
     const env = setup();
     await startRichCompose(env.ctx);
     await startRichCompose(env.ctx);
-    act(() => ui(env).focusWindow("composer:w1"));
+    act(() => {
+      ui(env).focusWindow("composer:w1");
+    });
     const actionCtx = { ...env.ctx, layout: env.transport.data.layout } as unknown as ActionContext;
     const setMode = appRegistry.actions["composer.set-mode"];
     expect(setMode?.enabled?.(actionCtx, ["html"])).toBe(true);
     await act(() => setMode?.run(actionCtx, ["html"]));
     expect(richStoreFor(env.store, "composer:w1").getState().mode).toBe("html");
     expect(richStoreFor(env.store, "composer:w2").getState().mode).toBe("plain");
-    appRegistry.actions["composer.attach"]?.run(actionCtx, []);
+    await appRegistry.actions["composer.attach"]?.run(actionCtx, []);
     expect(richStoreFor(env.store, "composer:w1").getState().attachRequest).toBe(1);
-    act(() => closeComposerNow(env.ctx, "composer:w1"));
-    act(() => closeComposerNow(env.ctx, "composer:w2"));
+    act(() => {
+      closeComposerNow(env.ctx, "composer:w1");
+    });
+    act(() => {
+      closeComposerNow(env.ctx, "composer:w2");
+    });
     expect(appRegistry.actions["composer.attach"]?.enabled?.(actionCtx, [])).toBe(false);
   });
 
@@ -467,7 +528,9 @@ describe("composer windows", () => {
     expect(windowTitles.composer?.(ui(env), id)).toBeNull();
     renderWithProviders(<ComposerWindowTitle id={id} />, env);
     expect(screen.getByText("New message")).toBeInTheDocument();
-    act(() => ui(env).updateComposerOf(id, { subject: "Quarterly report" }));
+    act(() => {
+      ui(env).updateComposerOf(id, { subject: "Quarterly report" });
+    });
     expect(screen.getByText("Quarterly report")).toBeInTheDocument();
     expect(composerSubjectTitle(ui(env), id)).toBe("Quarterly report");
     // The plain composer's title comes from `UiState.composer`.
@@ -565,7 +628,9 @@ describe("window model", () => {
 });
 
 describe("the autosave delay", () => {
-  afterEach(() => setAutosaveDelay(null));
+  afterEach(() => {
+    setAutosaveDelay(null);
+  });
 
   it("is AUTOSAVE_MS unless a test overrides it", () => {
     expect(autosaveDelay()).toBe(AUTOSAVE_MS);

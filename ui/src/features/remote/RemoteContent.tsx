@@ -141,7 +141,6 @@ export function RemoteContentBar({ message }: { message: MessageBody }) {
       data-part="remote-content"
       data-state={allowed ? "allowed" : "blocked"}
       data-scope={view.allowedBy ?? undefined}
-      role="region"
       aria-label={t("remote-content-label")}
     >
       <p data-part="remote-content.text">
@@ -230,7 +229,7 @@ export function RemoteContentWidget({ node }: WidgetProps) {
   const label = useLabel();
   const selectedId = useUi((s) => s.selectedMessageId);
   const message = useMessage(selectedId).data;
-  if (!message || message.id !== selectedId || remoteContentView(message) === null) return null;
+  if (message?.id !== selectedId || remoteContentView(message) === null) return null;
   return (
     <div
       data-part="remote-content.slot"

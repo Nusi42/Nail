@@ -1,0 +1,9 @@
+// Release notes become the update manifest's in-app notes verbatim
+// (scripts/update-manifest.mjs --notes, release.yml): they are plain text
+// shown under the update's version, so they start with a sentence, not a
+// heading. Only MD041 (first line is an H1) is off here.
+{
+  "config": {
+    "MD041": false,
+  },
+}

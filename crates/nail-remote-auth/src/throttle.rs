@@ -87,13 +87,14 @@ pub fn ip_key(ip: Option<IpAddr>) -> String {
     match ip {
         None => "ip:unknown".to_owned(),
         Some(IpAddr::V4(v4)) => format!("ip:{v4}"),
-        Some(IpAddr::V6(v6)) => match v6.to_ipv4_mapped() {
-            Some(v4) => format!("ip:{v4}"),
-            None => {
+        Some(IpAddr::V6(v6)) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                format!("ip:{v4}")
+            } else {
                 let s = v6.segments();
                 format!("ip:{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
             }
-        },
+        }
     }
 }
 

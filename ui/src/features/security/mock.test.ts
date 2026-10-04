@@ -483,9 +483,7 @@ describe("security mock", () => {
       expect(progress.at(-1)).toMatchObject({
         status: { state: "encrypted", phase: null, key_in_keychain: true },
       });
-      const phases = new Set(
-        progress.map((e) => (e.type === "VaultProgress" ? e.status.phase : null)),
-      );
+      const phases = new Set(progress.map((e) => e.status.phase));
       expect([...phases]).toEqual(expect.arrayContaining(["database", "blobs", "index"]));
       // Already encrypted: nothing to do.
       expect(
@@ -601,7 +599,7 @@ describe("security mock", () => {
       { type: "UnlockKey", key_id: "key-2", passphrase: "demo", remember_minutes: null },
       "Done",
     );
-    expect(s.messages["m-1"]?.security?.encryption?.state).toBe("decrypted");
+    expect(s.messages["m-1"].security?.encryption?.state).toBe("decrypted");
   });
 
   it("sends signed or encrypted mail only when the keys allow it, never plain", async () => {

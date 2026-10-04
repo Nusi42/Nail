@@ -17,7 +17,7 @@ import { COMPOSER_KIND, isComposerInstance } from "./store";
 /** The draft id in a pop-out context (`{ "draft": "<id>" }`), else `null`. */
 export function draftOfPopOutContext(context: JsonValue | null): string | null {
   if (context === null || typeof context !== "object" || Array.isArray(context)) return null;
-  const draft = (context as { [key: string]: JsonValue | undefined }).draft;
+  const draft = (context as Record<string, JsonValue | undefined>).draft;
   return typeof draft === "string" && draft !== "" ? draft : null;
 }
 

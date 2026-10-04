@@ -3,6 +3,7 @@
 //! shared mailboxes), throttling and batching, sign-in, settings
 //! (categories, automatic replies, rules), directory (rooms, mailboxes,
 //! free/busy, meeting times) and PIM (calendars, contacts, To Do).
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -862,7 +863,9 @@ async fn batches_split_and_retry_throttled_parts() {
     let answers = engine.client().batch(&requests).await.unwrap();
     assert_eq!(answers.len(), 45);
     assert!(
-        answers.iter().all(|a| a.ok()),
+        answers
+            .iter()
+            .all(nail_proto_graph::batch::BatchResponse::ok),
         "throttled parts were retried"
     );
     let batches = server

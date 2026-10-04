@@ -377,17 +377,16 @@ impl CardKey {
                 "the user PIN is locked",
             ));
         }
-        let out = match op(module, slot)? {
-            Some(out) => out,
-            None => {
-                self.login(module, &token, purpose)?;
-                op(module, slot)?.ok_or_else(|| {
-                    CardError::new(
-                        SmartcardError::DeviceError,
-                        "the card still wants a login after the PIN was accepted",
-                    )
-                })?
-            }
+        let out = if let Some(out) = op(module, slot)? {
+            out
+        } else {
+            self.login(module, &token, purpose)?;
+            op(module, slot)?.ok_or_else(|| {
+                CardError::new(
+                    SmartcardError::DeviceError,
+                    "the card still wants a login after the PIN was accepted",
+                )
+            })?
         };
         if module.is_logged_in(slot) {
             if shared.pin_cache.is_zero() {

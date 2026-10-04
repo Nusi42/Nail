@@ -46,6 +46,10 @@ pub fn email_of_user_id(user_id: &str) -> Option<String> {
 }
 
 /// Display name of a public-key algorithm, e.g. `Ed25519`, `RSA 3072`.
+#[expect(
+    clippy::match_wildcard_for_single_variants,
+    reason = "pgp's `draft-pqc` feature adds variants; feature unification may turn it on"
+)]
 pub(crate) fn algorithm_name(alg: PublicKeyAlgorithm, params: &PublicParams) -> String {
     match params {
         PublicParams::RSA(_) => match params.to_bytes() {
@@ -265,9 +269,8 @@ impl KeyInfo {
         }
         let binding = users.first().map(|(_, s)| *s).or(direct);
         let alg = primary.algorithm();
-        let (primary_sign, primary_encrypt) = binding
-            .map(|s| capabilities(s, alg))
-            .unwrap_or((false, false));
+        let (primary_sign, primary_encrypt) =
+            binding.map_or((false, false), |s| capabilities(s, alg));
         let expires_at = binding
             .and_then(|s| expiry(created_at, s))
             .or_else(|| direct.and_then(|s| expiry(created_at, s)));
@@ -613,27 +616,26 @@ pub fn minimal_for(key: &SignedPublicKey, addr: &str, now: i64) -> Result<Signed
             }))?;
             Some(pgp::types::SignedUser::new(u.id.clone(), vec![sig.clone()]))
         });
-    let user = match user {
-        Some(u) => u,
-        None => {
-            let first = info
-                .user_ids
-                .first()
-                .ok_or_else(|| Error::NoKey("the key has no user id".into()))?;
-            let u = key
-                .details
-                .users
-                .iter()
-                .find(|u| u.id.as_str() == Some(first.as_str()))
-                .ok_or_else(|| Error::NoKey("the key has no user id".into()))?;
-            let sig = newest(
-                u.signatures
-                    .iter()
-                    .filter(|s| s.verify_certification(primary, Tag::UserId, &u.id).is_ok()),
-            )
+    let user = if let Some(u) = user {
+        u
+    } else {
+        let first = info
+            .user_ids
+            .first()
             .ok_or_else(|| Error::NoKey("the key has no user id".into()))?;
-            pgp::types::SignedUser::new(u.id.clone(), vec![sig.clone()])
-        }
+        let u = key
+            .details
+            .users
+            .iter()
+            .find(|u| u.id.as_str() == Some(first.as_str()))
+            .ok_or_else(|| Error::NoKey("the key has no user id".into()))?;
+        let sig = newest(
+            u.signatures
+                .iter()
+                .filter(|s| s.verify_certification(primary, Tag::UserId, &u.id).is_ok()),
+        )
+        .ok_or_else(|| Error::NoKey("the key has no user id".into()))?;
+        pgp::types::SignedUser::new(u.id.clone(), vec![sig.clone()])
     };
     let subkeys = match info.encryption_component(now)? {
         Some(index) => {
@@ -694,7 +696,7 @@ pub fn bind_to_address(key: &SignedPublicKey, addr: &str) -> Result<SignedPublic
         .collect();
     if users.is_empty() {
         return Err(Problem::NoUserIdFor {
-            address: addr.to_string(),
+            address: addr.clone(),
         }
         .into());
     }

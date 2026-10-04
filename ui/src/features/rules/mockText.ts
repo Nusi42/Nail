@@ -95,11 +95,11 @@ function renderCondition(c: Condition, depth: number): string {
       return kids.length === 0 ? leaf("attachment") : block(pad, "attachment", kids);
     }
     case "size":
-      return leaf(`size ${c.cmp === "greater" ? "larger" : "smaller"}=${c.bytes}`);
+      return leaf(`size ${c.cmp === "greater" ? "larger" : "smaller"}=${String(c.bytes)}`);
     case "date":
       return leaf(`date ${c.cmp}=${quote(c.date)}`);
     case "age":
-      return leaf(`age ${c.cmp === "greater" ? "older-than" : "newer-than"}=${c.days}`);
+      return leaf(`age ${c.cmp === "greater" ? "older-than" : "newer-than"}=${String(c.days)}`);
     case "flag":
       return leaf(`flag ${quote(c.flag)}${c.set ? "" : " set=#false"}`);
     case "tag":
@@ -170,9 +170,9 @@ export function ruleToText(rule: Rule): string {
     for (const t of rule.triggers) {
       children.push(
         t.type === "schedule"
-          ? `${IND}trigger "schedule" every=${t.interval_minutes}\n`
+          ? `${IND}trigger "schedule" every=${String(t.interval_minutes)}\n`
           : t.type === "older-than"
-            ? `${IND}trigger "older-than" days=${t.days}\n`
+            ? `${IND}trigger "older-than" days=${String(t.days)}\n`
             : `${IND}trigger ${quote(t.type)}\n`,
       );
     }
@@ -383,10 +383,12 @@ const err = (n: Node | Entry, message: string): never => {
 const TEXT_OPS: readonly TextOp[] = ["equals", "contains", "starts-with", "ends-with", "regex"];
 const ADDRESS_FIELDS = ["from", "to", "cc", "recipients", "reply-to", "sender"] as const;
 
+function textMatch(n: Node, required: true): TextMatch;
+function textMatch(n: Node, required: false): TextMatch | null;
 function textMatch(n: Node, required: boolean): TextMatch | null {
   const found = n.entries.find((e) => e.name !== null && TEXT_OPS.includes(e.name as TextOp));
   if (!found) {
-    if (required) err(n, `\`${n.name}\` needs a comparison`);
+    if (required) return err(n, `\`${n.name}\` needs a comparison`);
     return null;
   }
   return {
@@ -414,7 +416,7 @@ function condition(n: Node): Condition {
     return {
       type: "address",
       field: n.name as (typeof ADDRESS_FIELDS)[number],
-      matches: textMatch(n, true) as TextMatch,
+      matches: textMatch(n, true),
     };
   }
   switch (n.name) {
@@ -423,9 +425,10 @@ function condition(n: Node): Condition {
       return { type: n.name, conditions: n.children.map(condition) };
     case "not": {
       const kids = n.children.map(condition);
+      const [only] = kids;
       return {
         type: "not",
-        condition: kids.length === 1 ? (kids[0] as Condition) : { type: "all", conditions: kids },
+        condition: kids.length === 1 && only ? only : { type: "all", conditions: kids },
       };
     }
     case "header": {
@@ -434,7 +437,7 @@ function condition(n: Node): Condition {
     }
     case "subject":
     case "body":
-      return { type: n.name, matches: textMatch(n, true) as TextMatch };
+      return { type: n.name, matches: textMatch(n, true) };
     case "query":
       return { type: "query", query: firstStr };
     case "attachment": {
@@ -629,7 +632,7 @@ export function ruleFromText(text: string): { rule: Rule | null; errors: ConfigI
             message:
               nodes.length === 0
                 ? 'expected one `rule "<name>" { … }` node, found none'
-                : `expected one \`rule\` node, found ${nodes.length}`,
+                : `expected one \`rule\` node, found ${String(nodes.length)}`,
           },
         ],
       };

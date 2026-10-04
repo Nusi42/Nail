@@ -69,7 +69,7 @@ pub fn write_file(target: &Path, bytes: &[u8], overwrite: bool) -> Result<()> {
         file.sync_all()
     })();
     if let Err(err) = written {
-        let _ = std::fs::remove_file(&temp);
+        drop(std::fs::remove_file(&temp));
         return Err(PortabilityError::io(temp.display().to_string(), err));
     }
     persist(&temp, target, overwrite)

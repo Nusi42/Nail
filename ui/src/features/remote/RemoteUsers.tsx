@@ -6,7 +6,7 @@
  * password and can only sign in from a device paired with a code.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type {
   Passkey,
@@ -26,6 +26,7 @@ import { PAIR_DIALOG } from "./PairDevice";
 import { QrCode } from "./QrCode";
 import { remoteKeys, useRemoteUsers } from "./queries";
 import { remoteStore } from "./state";
+import { charCount } from "../../text/chars";
 
 type Notice = { id: string; error: boolean; args?: Record<string, string> } | null;
 
@@ -75,10 +76,10 @@ function CreateUser({ onCreated }: { onCreated: (id: RemoteUserId) => void }) {
   const [preset, setPreset] = useState<RemoteAccessPreset>("no-send");
   const [admin, setAdmin] = useState(false);
 
-  const create = async (event: FormEvent) => {
+  const create = async (event: SubmitEvent) => {
     event.preventDefault();
     if (busy || name.trim() === "") return;
-    let id: RemoteUserId | null = null;
+    const created: RemoteUserId[] = [];
     const ok = await run(async () => {
       const answer = await client.request(
         {
@@ -89,9 +90,10 @@ function CreateUser({ onCreated }: { onCreated: (id: RemoteUserId) => void }) {
         },
         "RemoteUserSaved",
       );
-      id = answer.user.id;
+      created.push(answer.user.id);
     });
-    if (ok && id !== null) {
+    const [id] = created;
+    if (ok && id !== undefined) {
       setName("");
       setDisplayName("");
       setAdmin(false);
@@ -118,7 +120,9 @@ function CreateUser({ onCreated }: { onCreated: (id: RemoteUserId) => void }) {
         labelId="remote-access"
         name="user-access"
         value={preset}
-        onChange={(v) => setPreset(v as RemoteAccessPreset)}
+        onChange={(v) => {
+          setPreset(v as RemoteAccessPreset);
+        }}
         choices={PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` }))}
       />
       <Toggle labelId="remote-access-admin" name="user-admin" checked={admin} onChange={setAdmin} />
@@ -178,7 +182,9 @@ function Access({ user }: { user: RemoteUser }) {
         labelId="remote-access"
         name="access"
         value={preset}
-        onChange={(v) => setPreset(v as RemoteAccessPreset | "custom")}
+        onChange={(v) => {
+          setPreset(v as RemoteAccessPreset | "custom");
+        }}
         choices={[
           ...PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` })),
           ...(current === "custom" ? [{ value: "custom", label: "remote-preset-custom" }] : []),
@@ -207,10 +213,10 @@ function Password({ user }: { user: RemoteUser }) {
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (busy) return;
-    if ([...password].length < MIN_PASSWORD_LENGTH) {
+    if (charCount(password) < MIN_PASSWORD_LENGTH) {
       setNotice({
         id: "remote-password-too-short",
         error: true,
@@ -315,7 +321,7 @@ function Totp({ user }: { user: RemoteUser }) {
       setCode("");
     });
 
-  const confirm = async (event: FormEvent) => {
+  const confirm = async (event: SubmitEvent) => {
     event.preventDefault();
     if (busy || code.trim() === "") return;
     const ok = await run(
@@ -394,7 +400,7 @@ function Totp({ user }: { user: RemoteUser }) {
             onChange={setCode}
             inputMode="numeric"
             autoComplete="one-time-code"
-            autoFocus
+            focusOnMount
             maxLength={enrollment.digits + 2}
           />
           <div data-part="remote-users.actions">
@@ -432,7 +438,7 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
   const { client, busy, notice, run } = useAccessRequest();
   const [name, setName] = useState<string | null>(null);
 
-  const rename = async (event: FormEvent) => {
+  const rename = async (event: SubmitEvent) => {
     event.preventDefault();
     if (name === null || name.trim() === "" || busy) return;
     const ok = await run(() =>
@@ -463,7 +469,9 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
             data-part="form.button"
             data-action="rename-passkey"
             aria-label={t("remote-passkey-rename-label", { name: passkey.name })}
-            onClick={() => setName(passkey.name)}
+            onClick={() => {
+              setName(passkey.name);
+            }}
           >
             {t("remote-rename")}
           </button>
@@ -490,7 +498,7 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
             name="passkey-name"
             value={name}
             onChange={setName}
-            autoFocus
+            focusOnMount
           />
           <button
             type="submit"
@@ -504,7 +512,9 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
             type="button"
             data-part="form.button"
             data-action="cancel"
-            onClick={() => setName(null)}
+            onClick={() => {
+              setName(null);
+            }}
           >
             {t("remote-cancel")}
           </button>
@@ -665,7 +675,9 @@ export function RemoteUsersWidget({ node }: WidgetProps) {
                 data-part="remote-users.select"
                 data-state={`${u.disabled ? "disabled" : "active"}${u.id === current?.id ? " selected" : ""}`}
                 aria-pressed={u.id === current?.id}
-                onClick={() => setSelected(u.id)}
+                onClick={() => {
+                  setSelected(u.id);
+                }}
               >
                 <span data-part="remote-users.name">{u.display_name ?? u.name}</span>
                 <span data-part="remote-users.methods">

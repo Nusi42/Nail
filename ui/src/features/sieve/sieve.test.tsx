@@ -67,7 +67,9 @@ describe("sieve-status", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("without spaces");
     await user.clear(screen.getByLabelText("Server"));
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(sent(env, "UpdateAccount")).toHaveLength(1));
+    await waitFor(() => {
+      expect(sent(env, "UpdateAccount")).toHaveLength(1);
+    });
     expect(sent(env, "UpdateAccount")[0]?.config.sieve).toEqual({
       enabled: true,
       host: null,

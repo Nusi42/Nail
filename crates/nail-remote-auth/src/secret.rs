@@ -81,7 +81,10 @@ impl CsrfKey {
     }
 
     fn mac(&self, binding: &str) -> Vec<u8> {
-        #[allow(clippy::expect_used)]
+        #[expect(
+            clippy::expect_used,
+            reason = "HMAC-SHA256 accepts keys of any length, so new_from_slice cannot fail"
+        )]
         let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(self.0.as_ref())
             .expect("HMAC accepts any key length");
         mac.update(b"nail-csrf\0");
@@ -108,7 +111,7 @@ mod tests {
     #[test]
     fn constant_time_eq() {
         assert!(ct_eq(b"abc", b"abc"));
-        assert!(!ct_eq(b"abc", b"abd"));
+        assert!(!ct_eq(b"abc", b"abx"));
         assert!(!ct_eq(b"abc", b"abcd"));
     }
 

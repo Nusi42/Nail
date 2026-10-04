@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn internal_url_alone_and_redirects() {
-        let internal = r#"<Autodiscover><Response><Account><Protocol><Type>EXCH</Type><EwsUrl>https://ex.corp.example/EWS/Exchange.asmx</EwsUrl></Protocol></Account></Response></Autodiscover>"#;
+        let internal = r"<Autodiscover><Response><Account><Protocol><Type>EXCH</Type><EwsUrl>https://ex.corp.example/EWS/Exchange.asmx</EwsUrl></Protocol></Account></Response></Autodiscover>";
         let PoxAnswer::Settings(settings) = parse_response(internal.as_bytes(), "a@b").unwrap()
         else {
             panic!()

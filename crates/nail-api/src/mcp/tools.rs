@@ -4,7 +4,7 @@
 //! [`MCP_TOOLS`] lists every tool Nail's MCP server offers with the scopes
 //! a client needs and, for writes, the [`ActionKind`] whose policy decides
 //! whether the user confirms first. The argument structs below are what
-//! agents send (snake_case JSON, ids as strings); with the `json-schema`
+//! agents send (`snake_case` JSON, ids as strings); with the `json-schema`
 //! feature they also derive `schemars::JsonSchema`, so `nail-mcp` publishes
 //! exactly these shapes as the tools' input schemas.
 //!
@@ -605,7 +605,7 @@ pub struct EditOpenDraftArgs {
     pub draft_id: Option<String>,
 }
 
-/// What a write tool answers (the structured result, snake_case).
+/// What a write tool answers (the structured result, `snake_case`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "kebab-case")]
 pub enum McpWriteResult {

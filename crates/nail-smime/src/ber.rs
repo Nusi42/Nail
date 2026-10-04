@@ -1,14 +1,14 @@
 //! BER → DER normalization for CMS input.
 //!
 //! The RustCrypto `der` crate reads DER only, but S/MIME producers stream
-//! CMS in BER: indefinite lengths and constructed (chunked) OCTET STRINGs
+//! CMS in BER: indefinite lengths and constructed (chunked) OCTET STRING values
 //! for the content (Thunderbird / NSS, Outlook, `openssl cms -stream`).
 //! This module rewrites such input into DER without changing any value:
 //!
 //! * indefinite lengths become definite (minimal) lengths;
 //! * a constructed OCTET STRING becomes one primitive OCTET STRING;
 //! * the `encryptedContent [0] IMPLICIT OCTET STRING` of an
-//!   `EncryptedContentInfo` (a SEQUENCE of OID, AlgorithmIdentifier,
+//!   `EncryptedContentInfo` (a SEQUENCE of OID, `AlgorithmIdentifier`,
 //!   constructed `[0]` of OCTET STRING chunks) becomes primitive `[0]`.
 //!
 //! DER input comes out byte for byte identical, so signed attributes and
@@ -180,13 +180,19 @@ pub(crate) fn children(mut value: &[u8]) -> Result<Vec<Tlv<'_>>> {
 }
 
 fn write_len(len: usize, out: &mut Vec<u8>) {
-    if len < 0x80 {
-        out.push(len as u8);
-    } else {
-        let bytes = len.to_be_bytes();
-        let skip = bytes.iter().take_while(|b| **b == 0).count();
-        out.push(0x80 | (bytes.len() - skip) as u8);
-        out.extend_from_slice(&bytes[skip..]);
+    let bytes = len.to_be_bytes();
+    let skip = bytes.iter().take_while(|b| **b == 0).count();
+    let significant = &bytes[skip..];
+    match significant {
+        [] => out.push(0),
+        [short] if *short < 0x80 => out.push(*short),
+        _ => {
+            // Long form: the count of length bytes (at most
+            // `size_of::<usize>()`), then the bytes.
+            let count = u8::try_from(significant.len()).unwrap_or(u8::MAX);
+            out.push(0x80 | count);
+            out.extend_from_slice(significant);
+        }
     }
 }
 

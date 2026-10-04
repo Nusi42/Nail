@@ -329,16 +329,16 @@ mod tests {
             header("@e"),
         ]);
         let menu = resolve_menu(&l, "context:message-list.row", "list").unwrap();
-        let kinds: Vec<String> = menu
-            .items
-            .iter()
-            .map(|e| match e {
-                ResolvedMenuEntry::Header { label } => label.clone(),
-                ResolvedMenuEntry::Action { action, .. } => action.clone(),
-                ResolvedMenuEntry::Separator => "-".into(),
-                ResolvedMenuEntry::Submenu { label, .. } => label.clone(),
-            })
-            .collect();
+        let kinds: Vec<String> =
+            menu.items
+                .iter()
+                .map(|e| match e {
+                    ResolvedMenuEntry::Header { label }
+                    | ResolvedMenuEntry::Submenu { label, .. } => label.clone(),
+                    ResolvedMenuEntry::Action { action, .. } => action.clone(),
+                    ResolvedMenuEntry::Separator => "-".into(),
+                })
+                .collect();
         assert_eq!(kinds, ["@b", "mail.reply", "-", "@d", "mail.archive"]);
         // Headings alone make no menu.
         let l = layout(vec![header("@a"), MenuItem::Separator, header("@b")]);

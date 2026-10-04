@@ -93,9 +93,9 @@ function Review({
 }: {
   stage: Extract<Stage, { kind: "review" }>;
   busy: boolean;
-  onChange(stage: Extract<Stage, { kind: "review" }>): void;
-  onInstall(): void;
-  onBack(): void;
+  onChange: (stage: Extract<Stage, { kind: "review" }>) => void;
+  onInstall: () => void;
+  onBack: () => void;
 }) {
   const t = useT();
   const accounts = useAccounts();
@@ -168,7 +168,9 @@ function Review({
               grants={stage.grants}
               accounts={accounts.data ?? []}
               disabled={busy}
-              onChange={(grants) => onChange({ ...stage, grants })}
+              onChange={(grants) => {
+                onChange({ ...stage, grants });
+              }}
             />
           </section>
           {preview.source.kind !== "dev" && (
@@ -178,7 +180,9 @@ function Review({
                 data-field="enable"
                 checked={stage.enable}
                 disabled={busy}
-                onChange={(event) => onChange({ ...stage, enable: event.target.checked })}
+                onChange={(event) => {
+                  onChange({ ...stage, enable: event.target.checked });
+                }}
               />
               {t("plugin-install-enable")}
             </label>
@@ -254,7 +258,7 @@ export function InstallDialog({ close }: DialogProps) {
   const install = async () => {
     if (stage.kind !== "review" || !stage.preview.manifest) return;
     const { preview: p, enable } = stage;
-    const manifest = p.manifest as PluginManifest;
+    const manifest = stage.preview.manifest;
     const grants = orderedGrants(manifest.permissions ?? [], stage.grants);
     setBusy(true);
     setProblem(null);
@@ -316,7 +320,9 @@ export function InstallDialog({ close }: DialogProps) {
                   name={kindName}
                   data-kind={k}
                   checked={kind === k}
-                  onChange={() => setKind(k)}
+                  onChange={() => {
+                    setKind(k);
+                  }}
                 />
                 {t(`plugin-install-source-${k}`)}
               </label>
@@ -364,7 +370,9 @@ export function InstallDialog({ close }: DialogProps) {
           </p>
           <Placements
             pluginId={stage.plugin.id}
-            onDone={() => setStage({ kind: "done", plugin: stage.plugin })}
+            onDone={() => {
+              setStage({ kind: "done", plugin: stage.plugin });
+            }}
           />
         </>
       )}

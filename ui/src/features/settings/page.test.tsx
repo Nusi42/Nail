@@ -20,12 +20,15 @@ import { UI_STATE_SETTINGS_SECTION } from "../../state/uiState";
 import { actions } from ".";
 import { settingsStoreFor } from "./store";
 import { FOUND_ATTRIBUTE } from "./widgets";
+import { must } from "../../test/must";
 
 let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 const page = () => widget("settings-page");
 
@@ -120,13 +123,13 @@ describe("settings page (M5b)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("One section matches “quiet”.");
     const results = screen.getByRole("list", { name: "Search results" });
     const marks = [...results.querySelectorAll('[data-part="settings-page.mark"]')];
-    expect(marks.map((m) => m.textContent?.toLowerCase())).toContain("quiet");
+    expect(marks.map((m) => m.textContent.toLowerCase())).toContain("quiet");
     // A setting's highlighted label is one flex item of its button (the
     // marks must not split it into separately wrapping pieces).
     for (const setting of results.querySelectorAll('[data-part="settings-page.result.setting"]')) {
-      expect(
-        [...setting.childNodes].map((n) => (n as Element).getAttribute?.("data-part")),
-      ).toEqual(["settings-page.result.label"]);
+      expect([...setting.childNodes].map((n) => (n as Element).getAttribute("data-part"))).toEqual([
+        "settings-page.result.label",
+      ]);
     }
     // The groups give way to the results while searching.
     expect(within(nav()).queryByRole("group")).toBeNull();
@@ -184,7 +187,7 @@ describe("settings page (M5b)", () => {
       expect(title()).toHaveTextContent("Notifications");
       // The widget loads its settings first; the page waits for the row.
       const found = await waitFor(() => {
-        const el = document.querySelector(`[${FOUND_ATTRIBUTE}]`);
+        const el = document.querySelector<HTMLLabelElement>(`[${FOUND_ATTRIBUTE}]`);
         expect(el).not.toBeNull();
         return el as HTMLElement;
       });
@@ -212,8 +215,10 @@ describe("settings page (M5b)", () => {
         text: "Account name",
       });
     });
-    await waitFor(() => expect(document.querySelector(`[${FOUND_ATTRIBUTE}]`)).not.toBeNull());
-    const label = document.querySelector(`[${FOUND_ATTRIBUTE}]`) as HTMLLabelElement;
+    await waitFor(() => {
+      expect(document.querySelector<HTMLLabelElement>(`[${FOUND_ATTRIBUTE}]`)).not.toBeNull();
+    });
+    const label = must(document.querySelector<HTMLLabelElement>(`[${FOUND_ATTRIBUTE}]`));
     expect(label.tagName).toBe("LABEL");
     expect(document.activeElement).toBe(document.getElementById(label.htmlFor));
     await settleQueries(env);
@@ -267,7 +272,9 @@ describe("settings actions (M5b)", () => {
       widget: "security-smartcards",
       text: null,
     });
-    await vi.waitFor(async () => expect(await uiState(env)).toBe("keys"));
+    await vi.waitFor(async () => {
+      expect(await uiState(env)).toBe("keys");
+    });
 
     // Rendered, the page shows the section and reveals the widget's card.
     const { container } = renderNode(page(), env);

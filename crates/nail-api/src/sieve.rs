@@ -241,7 +241,7 @@ pub struct VacationSettings {
     /// Whether replies are sent.
     pub enabled: bool,
     /// Subject of the reply; empty = the server's default (usually
-    /// "Auto: <original subject>").
+    /// `Auto: <original subject>`).
     pub subject: String,
     /// Plain-text body of the reply.
     pub body: String,

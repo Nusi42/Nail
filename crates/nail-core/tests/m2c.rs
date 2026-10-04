@@ -3,6 +3,8 @@
 //! messages, and the local side of junk marks and snoozes. The server side
 //! is tested against the mock servers in `m2c_wired.rs`.
 
+#![cfg(test)]
+
 use std::time::Duration;
 
 use nail_api::accounts::{BodyPolicy, FolderMatch};

@@ -144,6 +144,10 @@ impl SoftToken {
     /// `CKA_ID`). `show_public` = the private key object exposes its
     /// modulus / point (many cards only show it on the public key or the
     /// certificate).
+    ///
+    /// # Panics
+    ///
+    /// When no token was added for `slot_id` (a mistake in the test).
     pub fn add_key(
         &self,
         slot_id: u64,
@@ -157,7 +161,7 @@ impl SoftToken {
         let slot = slots
             .iter_mut()
             .find(|s| s.slot_id == slot_id)
-            .expect("add the token first");
+            .unwrap_or_else(|| panic!("no token in slot {slot_id}: add the token first"));
         slot.objects.push(SoftObject {
             id: id.to_vec(),
             label: label.to_owned(),
@@ -421,8 +425,13 @@ impl Module for SoftToken {
 
 /// A small RSA key for tests (2048 bits: what the crypto crates accept; never
 /// use outside tests).
+///
+/// # Panics
+///
+/// When the operating system's random number generator fails.
 pub fn test_rsa_key() -> rsa::RsaPrivateKey {
-    rsa::RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048).expect("RSA key generation")
+    rsa::RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048)
+        .unwrap_or_else(|e| panic!("RSA key generation failed: {e}"))
 }
 
 /// A P-256 key for tests.

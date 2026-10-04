@@ -529,6 +529,10 @@ impl Default for HostUpdateState {
 /// The desktop app's own settings (stored by the core; `start_with_windows`
 /// is the per-user Run key, which the shell reads and writes).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off settings (one checkbox each) in a fixed wire format"
+)]
 pub struct DesktopSettings {
     /// Closing the main window keeps Nail running in the tray (sync,
     /// rules, reminders and MCP go on); "Quit" in the tray menu ends it.

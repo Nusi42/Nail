@@ -138,7 +138,7 @@ follow-up could give the desktop an endpoint).
 
 `system` plug-in notifications become OS notifications in the Tauri shell
 (`Service::plugin_notification_texts`: the plug-in's title, its body and
-"from <plug-in>").
+"from `<plug-in>`").
 
 ### Fixes found while integrating
 

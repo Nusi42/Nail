@@ -102,7 +102,7 @@ interface DraftItem {
 }
 
 function keyed(items: readonly ToolbarItem[]): DraftItem[] {
-  return items.map((item, index) => ({ key: `i${index}`, item }));
+  return items.map((item, index) => ({ key: `i${String(index)}`, item }));
 }
 
 function ToolbarDraft({
@@ -135,7 +135,7 @@ function ToolbarDraft({
     kind: d.item.type,
   }));
   const add = (item: ToolbarItem) => {
-    setDraft([...draft, { key: `n${counter}`, item }]);
+    setDraft([...draft, { key: `n${String(counter)}`, item }]);
     setCounter(counter + 1);
   };
   const changed = JSON.stringify(draft.map((d) => d.item)) !== JSON.stringify(items);
@@ -146,8 +146,12 @@ function ToolbarDraft({
         entries={entries}
         label={t("customize-toolbar-items", { toolbar: name })}
         part="toolbar-editor"
-        onMove={(from, to) => setDraft(moved(draft, from, to))}
-        onRemove={(index) => setDraft(draft.filter((_, i) => i !== index))}
+        onMove={(from, to) => {
+          setDraft(moved(draft, from, to));
+        }}
+        onRemove={(index) => {
+          setDraft(draft.filter((_, i) => i !== index));
+        }}
       />
       <div data-part="toolbar-editor.add" role="group" aria-label={t("customize-toolbar-add")}>
         <label data-part="form.label" htmlFor={`${ids}-action`}>
@@ -157,7 +161,9 @@ function ToolbarDraft({
           id={`${ids}-action`}
           data-part="form.select"
           value={adding}
-          onChange={(event) => setAdding(event.target.value)}
+          onChange={(event) => {
+            setAdding(event.target.value);
+          }}
         >
           {choices.map((c) => (
             <option key={c.value} value={c.value}>
@@ -169,14 +175,28 @@ function ToolbarDraft({
           type="button"
           data-part="form.button"
           disabled={adding === ""}
-          onClick={() => add({ type: "action", action: adding, args: [], label: null, icon: null })}
+          onClick={() => {
+            add({ type: "action", action: adding, args: [], label: null, icon: null });
+          }}
         >
           {t("customize-toolbar-add-action")}
         </button>
-        <button type="button" data-part="form.button" onClick={() => add({ type: "separator" })}>
+        <button
+          type="button"
+          data-part="form.button"
+          onClick={() => {
+            add({ type: "separator" });
+          }}
+        >
           {t("customize-toolbar-add-separator")}
         </button>
-        <button type="button" data-part="form.button" onClick={() => add({ type: "spacer" })}>
+        <button
+          type="button"
+          data-part="form.button"
+          onClick={() => {
+            add({ type: "spacer" });
+          }}
+        >
           {t("customize-toolbar-add-spacer")}
         </button>
       </div>
@@ -204,7 +224,9 @@ function ToolbarDraft({
           type="button"
           data-part="form.button"
           disabled={!changed}
-          onClick={() => setDraft(keyed(items))}
+          onClick={() => {
+            setDraft(keyed(items));
+          }}
         >
           {t("customize-discard")}
         </button>
@@ -251,7 +273,9 @@ export function ToolbarEditor({ node }: WidgetProps) {
           id={`${ids}-toolbar`}
           data-part="form.select"
           value={name ?? ""}
-          onChange={(event) => setChosen(event.target.value)}
+          onChange={(event) => {
+            setChosen(event.target.value);
+          }}
         >
           {names.map((n) => (
             <option key={n} value={n}>
@@ -292,7 +316,7 @@ export function recordKey(
   return steps.length >= 3 ? combo : [...steps, combo].join(" ");
 }
 
-function KeyRecorder({ value, onChange }: { value: string; onChange(value: string): void }) {
+function KeyRecorder({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const t = useT();
   const ids = useId();
   return (
@@ -366,7 +390,10 @@ export function KeyBindingEditor({ node }: WidgetProps) {
     const name = keyLabel(binding.key, t);
     const what = actionText(layout, binding.action, label);
     return (
-      <tr key={`${binding.context}:${binding.key}:${index}`} data-part="key-binding-editor.row">
+      <tr
+        key={`${binding.context}:${binding.key}:${String(index)}`}
+        data-part="key-binding-editor.row"
+      >
         <td data-part="key-binding-editor.key">
           <kbd data-part="key-binding-editor.kbd">{name}</kbd>
         </td>
@@ -431,7 +458,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             id={`${ids}-context`}
             data-part="form.select"
             value={context}
-            onChange={(event) => setContext(event.target.value)}
+            onChange={(event) => {
+              setContext(event.target.value);
+            }}
           >
             {contexts.map((c) => (
               <option key={c} value={c}>
@@ -448,7 +477,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             id={`${ids}-action`}
             data-part="form.select"
             value={action}
-            onChange={(event) => setAction(event.target.value)}
+            onChange={(event) => {
+              setAction(event.target.value);
+            }}
           >
             {choices.map((c) => (
               <option key={c.value} value={c.value}>
@@ -466,7 +497,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             data-part="form.input"
             type="text"
             value={arg}
-            onChange={(event) => setArg(event.target.value)}
+            onChange={(event) => {
+              setArg(event.target.value);
+            }}
           />
         </div>
         <KeyRecorder value={key} onChange={setKey} />
@@ -489,7 +522,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             type="button"
             data-part="form.button"
             disabled={key === ""}
-            onClick={() => setKey("")}
+            onClick={() => {
+              setKey("");
+            }}
           >
             {t("customize-keys-clear")}
           </button>
@@ -504,7 +539,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
           id={`${ids}-filter`}
           data-part="form.select"
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => {
+            setFilter(event.target.value);
+          }}
         >
           <option value="">{t("customize-keys-filter-all")}</option>
           {contexts.map((c) => (
@@ -545,10 +582,14 @@ export function messageLists(layout: ResolvedLayout): ListNode[] {
       if (node.kind === "message-list") out.push({ ref: { window, breakpoint, path }, node });
       return;
     }
-    node.children.forEach((child, index) => walk(child, window, breakpoint, [...path, index]));
+    node.children.forEach((child, index) => {
+      walk(child, window, breakpoint, [...path, index]);
+    });
   };
   for (const [window, breakpoints] of Object.entries(layout.windows)) {
-    breakpoints.forEach((bp, index) => walk(bp.root, window, index, []));
+    breakpoints.forEach((bp, index) => {
+      walk(bp.root, window, index, []);
+    });
   }
   return out;
 }
@@ -576,8 +617,12 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
         entries={entries}
         label={t("customize-columns-items")}
         part="column-editor"
-        onMove={(from, to) => setColumns(moved(columns, from, to))}
-        onRemove={(index) => setColumns(columns.filter((_, i) => i !== index))}
+        onMove={(from, to) => {
+          setColumns(moved(columns, from, to));
+        }}
+        onRemove={(index) => {
+          setColumns(columns.filter((_, i) => i !== index));
+        }}
       />
       {available.length > 0 && (
         <div data-part="column-editor.add" role="group" aria-label={t("customize-columns-add")}>
@@ -588,7 +633,9 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
             id={`${ids}-column`}
             data-part="form.select"
             value={addable}
-            onChange={(event) => setAdding(event.target.value)}
+            onChange={(event) => {
+              setAdding(event.target.value);
+            }}
           >
             {available.map((c) => (
               <option key={c} value={c}>
@@ -599,7 +646,9 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
           <button
             type="button"
             data-part="form.button"
-            onClick={() => setColumns([...columns, addable])}
+            onClick={() => {
+              setColumns([...columns, addable]);
+            }}
           >
             {t("customize-columns-add-column")}
           </button>
@@ -621,7 +670,9 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
           type="button"
           data-part="form.button"
           disabled={!changed}
-          onClick={() => setColumns(initial)}
+          onClick={() => {
+            setColumns(initial);
+          }}
         >
           {t("customize-discard")}
         </button>
@@ -665,7 +716,9 @@ export function ColumnEditor({ node }: WidgetProps) {
               id={`${ids}-list`}
               data-part="form.select"
               value={String(chosen)}
-              onChange={(event) => setChosen(Number(event.target.value))}
+              onChange={(event) => {
+                setChosen(Number(event.target.value));
+              }}
             >
               {lists.map((l, index) => (
                 <option key={index} value={String(index)}>
@@ -676,7 +729,7 @@ export function ColumnEditor({ node }: WidgetProps) {
           </div>
           {list && (
             <ColumnDraft
-              key={`${JSON.stringify(list.ref)}:${String(list.node.options.columns ?? "")}`}
+              key={`${JSON.stringify(list.ref)}:${JSON.stringify(list.node.options.columns ?? null)}`}
               list={list}
               write={write}
             />

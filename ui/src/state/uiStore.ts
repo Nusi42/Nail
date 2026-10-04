@@ -151,46 +151,46 @@ export interface UiState {
   /** The message list's filter chip (M5b; `list.filter`). */
   listFilter: ListFilter;
 
-  selectAccount(id: AccountId): void;
-  selectFolder(id: FolderId | null): void;
-  selectMessage(id: MessageId | null): void;
-  setMessageOrder(ids: MessageId[]): void;
-  toggleNode(id: string): void;
-  setSplitSizes(key: string, sizes: string[]): void;
-  setActiveTab(key: string, index: number): void;
-  setKeyContext(context: string): void;
-  setConnection(status: ConnectionStatus): void;
-  setSync(sync: SyncState | null): void;
-  setSyncError(error: SyncErrorState | null): void;
-  setConfigError(error: ConfigErrorState | null): void;
-  setModeOverride(mode: ThemeMode | null): void;
-  setLocaleOverride(locale: string | null): void;
-  selectThread(id: ThreadId | null): void;
+  selectAccount: (id: AccountId) => void;
+  selectFolder: (id: FolderId | null) => void;
+  selectMessage: (id: MessageId | null) => void;
+  setMessageOrder: (ids: MessageId[]) => void;
+  toggleNode: (id: string) => void;
+  setSplitSizes: (key: string, sizes: string[]) => void;
+  setActiveTab: (key: string, index: number) => void;
+  setKeyContext: (context: string) => void;
+  setConnection: (status: ConnectionStatus) => void;
+  setSync: (sync: SyncState | null) => void;
+  setSyncError: (error: SyncErrorState | null) => void;
+  setConfigError: (error: ConfigErrorState | null) => void;
+  setModeOverride: (mode: ThemeMode | null) => void;
+  setLocaleOverride: (locale: string | null) => void;
+  selectThread: (id: ThreadId | null) => void;
   /** Opens a window (id) on top, or raises it when open. */
-  openWindow(name: string): void;
+  openWindow: (name: string) => void;
   /** Closes the named window, or the topmost one. */
-  closeWindow(name?: string): void;
+  closeWindow: (name?: string) => void;
   /** Raises an open window to the top (focus order = z-order; M5c). */
-  focusWindow(name: string): void;
+  focusWindow: (name: string) => void;
   /** Sets (`null` removes) the composer of a `composer:<instance>` window (M5c). */
-  setComposerOf(windowId: string, composer: ComposerState | null): void;
+  setComposerOf: (windowId: string, composer: ComposerState | null) => void;
   /** Patches the composer of a `composer:<instance>` window (M5c). */
-  updateComposerOf(windowId: string, patch: Partial<ComposerState>): void;
-  setComposer(composer: ComposerState | null): void;
-  updateComposer(patch: Partial<ComposerState>): void;
-  setSearch(search: SearchState | null): void;
-  setSearchInput(text: string): void;
-  requestFocus(target: string): void;
-  opQueued(ids: OpId[]): void;
-  opFinished(id: OpId, error: ErrorCode | null): void;
-  dismissOpError(): void;
-  setLastSend(entry: OutboxEntry | null): void;
-  setSendProgress(outboxId: string, progress: SendProgressState | null): void;
-  setOAuthResult(flowId: string, error: ErrorCode | null): void;
+  updateComposerOf: (windowId: string, patch: Partial<ComposerState>) => void;
+  setComposer: (composer: ComposerState | null) => void;
+  updateComposer: (patch: Partial<ComposerState>) => void;
+  setSearch: (search: SearchState | null) => void;
+  setSearchInput: (text: string) => void;
+  requestFocus: (target: string) => void;
+  opQueued: (ids: OpId[]) => void;
+  opFinished: (id: OpId, error: ErrorCode | null) => void;
+  dismissOpError: () => void;
+  setLastSend: (entry: OutboxEntry | null) => void;
+  setSendProgress: (outboxId: string, progress: SendProgressState | null) => void;
+  setOAuthResult: (flowId: string, error: ErrorCode | null) => void;
   /** Shows a view (M5b; `view.show`). */
-  setActiveView(view: string | null): void;
+  setActiveView: (view: string | null) => void;
   /** Sets the message list's filter chip (M5b). */
-  setListFilter(filter: ListFilter): void;
+  setListFilter: (filter: ListFilter) => void;
 }
 
 /** Upload progress of a message being sent (`SendProgress`). */
@@ -239,7 +239,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     activeView: null,
     listFilter: "all",
 
-    selectAccount: (id) =>
+    selectAccount: (id) => {
       set((s) =>
         s.activeAccountId === id
           ? s
@@ -251,8 +251,9 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
               messageOrder: [],
               search: null,
             },
-      ),
-    selectFolder: (id) =>
+      );
+    },
+    selectFolder: (id) => {
       set((s) =>
         s.activeFolderId === id
           ? s
@@ -263,38 +264,67 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
               messageOrder: [],
               search: null,
             },
-      ),
-    selectMessage: (id) => set({ selectedMessageId: id }),
-    setMessageOrder: (ids) => set({ messageOrder: ids }),
-    toggleNode: (id) =>
+      );
+    },
+    selectMessage: (id) => {
+      set({ selectedMessageId: id });
+    },
+    setMessageOrder: (ids) => {
+      set({ messageOrder: ids });
+    },
+    toggleNode: (id) => {
       set((s) => ({
         hiddenNodes: s.hiddenNodes.includes(id)
           ? s.hiddenNodes.filter((n) => n !== id)
           : [...s.hiddenNodes, id],
-      })),
-    setSplitSizes: (key, sizes) => set((s) => ({ splitSizes: { ...s.splitSizes, [key]: sizes } })),
-    setActiveTab: (key, index) => set((s) => ({ activeTabs: { ...s.activeTabs, [key]: index } })),
-    setKeyContext: (context) =>
-      set((s) => (s.keyContext === context ? s : { keyContext: context })),
-    setConnection: (connection) => set({ connection }),
-    setSync: (sync) => set({ sync }),
-    setSyncError: (syncError) => set({ syncError }),
-    setConfigError: (configError) => set({ configError }),
-    setModeOverride: (modeOverride) => set({ modeOverride }),
-    setLocaleOverride: (localeOverride) => set({ localeOverride }),
-    selectThread: (selectedThreadId) => set({ selectedThreadId }),
-    openWindow: (name) => set((s) => ({ windows: [...s.windows.filter((w) => w !== name), name] })),
-    closeWindow: (name) =>
+      }));
+    },
+    setSplitSizes: (key, sizes) => {
+      set((s) => ({ splitSizes: { ...s.splitSizes, [key]: sizes } }));
+    },
+    setActiveTab: (key, index) => {
+      set((s) => ({ activeTabs: { ...s.activeTabs, [key]: index } }));
+    },
+    setKeyContext: (context) => {
+      set((s) => (s.keyContext === context ? s : { keyContext: context }));
+    },
+    setConnection: (connection) => {
+      set({ connection });
+    },
+    setSync: (sync) => {
+      set({ sync });
+    },
+    setSyncError: (syncError) => {
+      set({ syncError });
+    },
+    setConfigError: (configError) => {
+      set({ configError });
+    },
+    setModeOverride: (modeOverride) => {
+      set({ modeOverride });
+    },
+    setLocaleOverride: (localeOverride) => {
+      set({ localeOverride });
+    },
+    selectThread: (selectedThreadId) => {
+      set({ selectedThreadId });
+    },
+    openWindow: (name) => {
+      set((s) => ({ windows: [...s.windows.filter((w) => w !== name), name] }));
+    },
+    closeWindow: (name) => {
       set((s) => ({
         windows: name === undefined ? s.windows.slice(0, -1) : s.windows.filter((w) => w !== name),
-      })),
-    focusWindow: (name) =>
+      }));
+    },
+    focusWindow: (name) => {
       set((s) =>
         !s.windows.includes(name) || s.windows[s.windows.length - 1] === name
           ? s
           : { windows: [...s.windows.filter((w) => w !== name), name] },
-      ),
-    setComposerOf: (windowId, composer) =>
+      );
+    },
+    setComposerOf: (windowId, composer) => {
       set((s) => {
         if (composer !== null) return { composers: { ...s.composers, [windowId]: composer } };
         if (!Object.hasOwn(s.composers, windowId)) return s;
@@ -303,18 +333,23 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
             Object.entries(s.composers).filter(([id]) => id !== windowId),
           ),
         };
-      }),
-    updateComposerOf: (windowId, patch) =>
+      });
+    },
+    updateComposerOf: (windowId, patch) => {
       set((s) => {
         const current = Object.hasOwn(s.composers, windowId) ? s.composers[windowId] : undefined;
         return current
           ? { composers: { ...s.composers, [windowId]: { ...current, ...patch } } }
           : s;
-      }),
-    setComposer: (composer) => set({ composer }),
-    updateComposer: (patch) =>
-      set((s) => (s.composer ? { composer: { ...s.composer, ...patch } } : s)),
-    setSearch: (search) =>
+      });
+    },
+    setComposer: (composer) => {
+      set({ composer });
+    },
+    updateComposer: (patch) => {
+      set((s) => (s.composer ? { composer: { ...s.composer, ...patch } } : s));
+    },
+    setSearch: (search) => {
       set((s) =>
         search === null
           ? { search: null, searchInput: "" }
@@ -325,12 +360,18 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
                 ? {}
                 : { selectedMessageId: null, selectedThreadId: null, messageOrder: [] }),
             },
-      ),
-    setSearchInput: (searchInput) => set({ searchInput }),
-    requestFocus: (target) =>
-      set((s) => ({ focusRequest: { target, seq: (s.focusRequest?.seq ?? 0) + 1 } })),
-    opQueued: (ids) => set((s) => ({ pendingOps: [...s.pendingOps, ...ids] })),
-    opFinished: (id, error) =>
+      );
+    },
+    setSearchInput: (searchInput) => {
+      set({ searchInput });
+    },
+    requestFocus: (target) => {
+      set((s) => ({ focusRequest: { target, seq: (s.focusRequest?.seq ?? 0) + 1 } }));
+    },
+    opQueued: (ids) => {
+      set((s) => ({ pendingOps: [...s.pendingOps, ...ids] }));
+    },
+    opFinished: (id, error) => {
       set((s) => {
         const cleared = s.pendingOps.includes(id);
         return {
@@ -338,10 +379,15 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
           opError: error ?? (cleared ? null : s.opError),
           failedOp: error !== null ? id : cleared ? null : s.failedOp,
         };
-      }),
-    dismissOpError: () => set({ opError: null, failedOp: null }),
-    setLastSend: (lastSend) => set({ lastSend }),
-    setSendProgress: (outboxId, progress) =>
+      });
+    },
+    dismissOpError: () => {
+      set({ opError: null, failedOp: null });
+    },
+    setLastSend: (lastSend) => {
+      set({ lastSend });
+    },
+    setSendProgress: (outboxId, progress) => {
       set((s) => {
         if (progress === null) {
           if (!(outboxId in s.sendProgress)) return s;
@@ -352,11 +398,17 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
           };
         }
         return { sendProgress: { ...s.sendProgress, [outboxId]: progress } };
-      }),
-    setOAuthResult: (flowId, error) =>
-      set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } })),
-    setActiveView: (activeView) => set((s) => (s.activeView === activeView ? s : { activeView })),
-    setListFilter: (listFilter) => set((s) => (s.listFilter === listFilter ? s : { listFilter })),
+      });
+    },
+    setOAuthResult: (flowId, error) => {
+      set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } }));
+    },
+    setActiveView: (activeView) => {
+      set((s) => (s.activeView === activeView ? s : { activeView }));
+    },
+    setListFilter: (listFilter) => {
+      set((s) => (s.listFilter === listFilter ? s : { listFilter }));
+    },
     ...initial,
   }));
 }

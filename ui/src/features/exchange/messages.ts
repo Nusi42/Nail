@@ -84,7 +84,7 @@ export const CATEGORY_ISSUES: readonly ExchangeCategoryIssue[] = [
 /** Category colours (`CategoryColor::message_id`), `none` first. */
 export const CATEGORY_COLORS: readonly CategoryColor[] = [
   "none",
-  ...Array.from({ length: 25 }, (_, i) => `preset${i}` as CategoryColor),
+  ...Array.from({ length: 25 }, (_, i) => `preset${String(i)}` as CategoryColor),
 ];
 
 /** Automatic-reply problems (`AutomaticRepliesIssue::message_id`). */

@@ -9,7 +9,7 @@ mail.
 All files were produced by **GnuPG 2.4.9** (the one shipped with Git for
 Windows, see `generated-with.txt`) with `generate.sh` in this directory:
 
-```
+```sh
 bash crates/nail-testkit/corpus/crypto/pgp/generate.sh      # regenerates everything in place
 ```
 

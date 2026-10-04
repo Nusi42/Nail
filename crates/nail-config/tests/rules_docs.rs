@@ -1,5 +1,6 @@
 //! Every KDL example in `userDocs/en/rules.md` is a valid `rules.kdl`, and
 //! every inline example in its condition and action tables parses.
+#![cfg(test)]
 
 use std::path::PathBuf;
 

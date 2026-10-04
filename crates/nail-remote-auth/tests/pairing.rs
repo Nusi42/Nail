@@ -1,6 +1,12 @@
 //! Pairing: a code approved on the desktop pairs one browser once;
 //! guessing codes backs off and locks out.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;

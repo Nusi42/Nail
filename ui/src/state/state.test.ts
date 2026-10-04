@@ -20,6 +20,7 @@ import {
 import { deleteMessages, findSummary, moveMessages, nextSelection, setFlags } from "./mailOps";
 import { queryKeys } from "./queries";
 import { createUiStore } from "./uiStore";
+import { must } from "../test/must";
 
 function context(state = {}): ComposeContext & { transport: MockTransport } {
   const transport = new MockTransport({ data: createMockData(20) });
@@ -93,7 +94,7 @@ describe("message writes", () => {
   it("sets flags optimistically and queues the change", async () => {
     const ctx = context();
     const messages = await loadFolder(ctx, "acc-personal/Inbox");
-    const unread = messages.find((m) => !m.flags.seen) as MessageSummary;
+    const unread = must(messages.find((m) => !m.flags.seen));
     const pending = setFlags(ctx, [unread.id], { seen: true });
     expect(findSummary(ctx.queryClient, unread.id)?.flags.seen).toBe(true);
     await pending;

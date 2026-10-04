@@ -99,7 +99,7 @@ function SettingsEditor({
 }: {
   status: JunkStatus;
   notice: string | null;
-  onNotice(id: string | null): void;
+  onNotice: (id: string | null) => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -179,7 +179,9 @@ function SettingsEditor({
           labelId="junk-settings-enabled"
           name="enabled"
           checked={draft.enabled}
-          onChange={(enabled) => update({ enabled })}
+          onChange={(enabled) => {
+            update({ enabled });
+          }}
         />
         <NumberField
           labelId="junk-settings-threshold"
@@ -188,7 +190,9 @@ function SettingsEditor({
           min={50}
           max={99}
           value={draft.threshold}
-          onChange={(threshold) => update({ threshold: threshold ?? 0 })}
+          onChange={(threshold) => {
+            update({ threshold: threshold ?? 0 });
+          }}
         />
         <NumberField
           labelId="junk-settings-min-training"
@@ -197,19 +201,25 @@ function SettingsEditor({
           min={1}
           max={10000}
           value={draft.min_training}
-          onChange={(value) => update({ min_training: value ?? 0 })}
+          onChange={(value) => {
+            update({ min_training: value ?? 0 });
+          }}
         />
         <CheckField
           labelId="junk-settings-honor-server"
           name="honor-server-flags"
           checked={draft.honor_server_flags}
-          onChange={(honor_server_flags) => update({ honor_server_flags })}
+          onChange={(honor_server_flags) => {
+            update({ honor_server_flags });
+          }}
         />
         <CheckField
           labelId="junk-settings-move"
           name="move-to-junk"
           checked={draft.move_to_junk}
-          onChange={(move_to_junk) => update({ move_to_junk })}
+          onChange={(move_to_junk) => {
+            update({ move_to_junk });
+          }}
         />
         <p data-part="form.hint">{t("junk-settings-never-deletes")}</p>
       </fieldset>
@@ -239,12 +249,24 @@ function SettingsEditor({
             >
               {t("junk-reset-yes")}
             </button>
-            <button type="button" data-part="form.button" onClick={() => setConfirmReset(false)}>
+            <button
+              type="button"
+              data-part="form.button"
+              onClick={() => {
+                setConfirmReset(false);
+              }}
+            >
               {t("junk-reset-no")}
             </button>
           </div>
         ) : (
-          <button type="button" data-part="form.button" onClick={() => setConfirmReset(true)}>
+          <button
+            type="button"
+            data-part="form.button"
+            onClick={() => {
+              setConfirmReset(true);
+            }}
+          >
             {t("junk-reset")}
           </button>
         )}

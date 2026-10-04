@@ -1,5 +1,6 @@
 //! Operation queue v2: per-account passes, moves, deletes, tags and the
 //! sync-side merge that keeps pending local changes.
+#![cfg(test)]
 
 mod common;
 
@@ -94,8 +95,8 @@ async fn a_blocked_account_does_not_stall_others() {
     assert_eq!(report.deferred, [a1_first]);
     assert_eq!(report.done, [n1, n2], "a2 replays although a1 is offline");
     // a1's second op was not tried (order within the account holds).
-    let replayed = replayer.replayed.lock().unwrap().clone();
-    assert!(!replayed.contains(&("a1".into(), "m2".into())));
+    let calls = replayer.replayed.lock().unwrap().clone();
+    assert!(!calls.contains(&("a1".into(), "m2".into())));
     assert_eq!(store.pending_op_count().unwrap(), 2);
     assert_eq!(
         store.accounts_with_pending_ops().unwrap(),
@@ -163,8 +164,8 @@ async fn account_passes_are_independent_and_serialized_per_account() {
         store.replay_account(&a1, &replayer, ReplayPolicy::default()),
     );
     assert_eq!(r1.unwrap().done.len() + r2.unwrap().done.len(), 2);
-    let replayed = replayer.replayed.lock().unwrap().clone();
-    assert_eq!(replayed.len(), 3);
+    let calls = replayer.replayed.lock().unwrap().clone();
+    assert_eq!(calls.len(), 3);
 }
 
 #[test]
@@ -499,7 +500,7 @@ fn merge_records_headers_and_size() {
     synced.meta = Some(MessageMeta {
         message_id: Some("<m1@example.org>".into()),
         in_reply_to: vec![" <root@example.org> ".into()],
-        references: vec!["<root@example.org>".into(), "".into()],
+        references: vec!["<root@example.org>".into(), String::new()],
         size: Some(2048),
         remote_thread_id: None,
     });

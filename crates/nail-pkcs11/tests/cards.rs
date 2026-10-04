@@ -1,6 +1,7 @@
 //! Smartcards over the soft token (no hardware): listing, signing and
 //! decrypting on the card, the PIN flow (prompt, retry, cancel, lock),
 //! the PIN cache, removed / moved tokens and module problems.
+#![cfg(test)]
 
 use std::sync::Arc;
 
@@ -55,11 +56,8 @@ fn token() -> Arc<SoftToken> {
 }
 
 fn cards(token: &Arc<SoftToken>, cache_minutes: u32, pins: Arc<FixedPin>) -> Smartcards {
-    Smartcards::from_modules(
-        vec![Arc::clone(token) as Arc<dyn Module>],
-        cache_minutes,
-        pins,
-    )
+    let module: Arc<dyn Module> = token.clone();
+    Smartcards::from_modules(vec![module], cache_minutes, pins)
 }
 
 fn key_ref(id: &str) -> SmartcardKeyRef {
@@ -168,6 +166,8 @@ fn rsa_signing_asks_for_the_pin_once_and_verifies() {
 
 #[test]
 fn without_a_pin_cache_every_operation_logs_out_again() {
+    use p256::ecdsa::signature::hazmat::PrehashVerifier;
+
     let token = token();
     let pins = Arc::new(FixedPin::answers([Some(PIN), Some(PIN)]));
     let cards = cards(&token, 0, Arc::clone(&pins));
@@ -175,7 +175,6 @@ fn without_a_pin_cache_every_operation_logs_out_again() {
     let digest = sha256(b"ecdsa");
     let raw = key.sign(SignMechanism::Ecdsa, &digest).unwrap();
     assert_eq!(raw.len(), 64);
-    use p256::ecdsa::signature::hazmat::PrehashVerifier;
     let sig = p256::ecdsa::Signature::from_slice(&raw).unwrap();
     p256::ecdsa::VerifyingKey::from(bob_key().public_key())
         .verify_prehash(&digest, &sig)
@@ -240,6 +239,8 @@ fn cancelling_the_prompt_stops_the_operation() {
 
 #[test]
 fn decryption_and_ecdh_happen_on_the_card() {
+    use p256::elliptic_curve::sec1::ToEncodedPoint;
+
     let token = token();
     let pins = Arc::new(FixedPin::answers([Some(PIN)]));
     let cards = cards(&token, 5, Arc::clone(&pins));
@@ -275,7 +276,6 @@ fn decryption_and_ecdh_happen_on_the_card() {
 
     let bob = cards.card_key(&key_ref("02")).unwrap();
     let peer = p256::SecretKey::random(&mut rng);
-    use p256::elliptic_curve::sec1::ToEncodedPoint;
     let peer_point = peer.public_key().to_encoded_point(false);
     let on_card = bob.ecdh(peer_point.as_bytes()).unwrap();
     let expected =

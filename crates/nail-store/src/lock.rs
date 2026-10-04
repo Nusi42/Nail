@@ -121,10 +121,14 @@ fn write_info(dir: &Path, holder: &LockHolder) -> std::io::Result<()> {
 impl Drop for DataDirLock {
     fn drop(&mut self) {
         // Remove the description only while it is still ours.
-        if Self::holder(&self.dir).is_some_and(|h| h == self.holder) {
-            let _ = std::fs::remove_file(self.dir.join(LOCK_INFO_FILE));
+        if Self::holder(&self.dir).is_some_and(|h| h == self.holder)
+            && let Err(err) = std::fs::remove_file(self.dir.join(LOCK_INFO_FILE))
+        {
+            tracing::debug!(%err, "lock description not removed");
         }
-        let _ = self.file.unlock();
+        if let Err(err) = self.file.unlock() {
+            tracing::debug!(%err, "data directory lock not released (the OS releases it on exit)");
+        }
     }
 }
 

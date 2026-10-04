@@ -52,7 +52,9 @@ export function useNarrowViewSwitch(
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(check);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [bar, enabled, watch, narrow]);
 
   return enabled && narrow;

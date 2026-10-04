@@ -17,7 +17,7 @@ use crate::install::UpdateSource;
 use crate::updater::{BackendError, PendingUpdate, UpdateBackend};
 
 /// How long one manifest or package request may take.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+const REQUEST_TIMEOUT: Duration = Duration::from_mins(5);
 
 /// Which step an error happened in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +80,12 @@ pub struct TauriBackend<R: Runtime> {
     source: UpdateSource,
 }
 
+impl<R: Runtime> std::fmt::Debug for TauriBackend<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TauriBackend").finish_non_exhaustive()
+    }
+}
+
 impl<R: Runtime> TauriBackend<R> {
     /// For the app with the given source.
     pub fn new(app: AppHandle<R>, source: UpdateSource) -> Self {
@@ -106,11 +112,11 @@ impl<R: Runtime> UpdateBackend for TauriBackend<R> {
                 .check()
                 .await
                 .map_err(|e| (failure_of(&e, Phase::Check), e.to_string()))?;
-            Ok(found.map(|update| {
+            Ok(found.map(|update| -> Arc<dyn PendingUpdate> {
                 Arc::new(TauriUpdate {
                     info: update_info(&update, channel),
                     update,
-                }) as Arc<dyn PendingUpdate>
+                })
             }))
         })
     }

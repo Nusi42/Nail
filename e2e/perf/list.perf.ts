@@ -21,6 +21,7 @@ import {
   type Metric,
   type PerfServer,
 } from "./support";
+import { defined } from "../support/defined";
 
 const ROW = '[data-part="message-list.row"]';
 /** Wheel steps while scrolling and pixels per step. */
@@ -54,9 +55,9 @@ test.afterAll(async () => {
 function record(metric: string, value: number, samples: number): void {
   metrics.push({ metric, value, samples });
   const max = budgetMax(metric);
-  console.log(`${metric}: ${value.toFixed(1)} (budget ${max})`);
+  console.log(`${metric}: ${value.toFixed(1)} (budget ${String(max)})`);
   expect
-    .soft(value, `${metric} ${value.toFixed(1)} is over its budget ${max}`)
+    .soft(value, `${metric} ${value.toFixed(1)} is over its budget ${String(max)}`)
     .toBeLessThanOrEqual(max);
 }
 
@@ -87,10 +88,10 @@ test("first render of the large Inbox", async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await watchFirstRows(page);
-    await page.goto(server!.url);
+    await page.goto(defined(server, "the perf server").url);
     await expect(page.locator(ROW).first()).toBeVisible({ timeout: 120_000 });
     await page.waitForFunction(() => (window as PerfWindow).__nailFirstRows !== undefined);
-    samples.push(await page.evaluate(() => (window as PerfWindow).__nailFirstRows!));
+    samples.push(await page.evaluate(() => (window as PerfWindow).__nailFirstRows ?? 0));
     await context.close();
   }
   details.firstRenderSamples = samples;
@@ -98,7 +99,7 @@ test("first render of the large Inbox", async ({ browser }) => {
 });
 
 test("scrolling the large Inbox", async ({ page, browser }) => {
-  await page.goto(server!.url);
+  await page.goto(defined(server, "the perf server").url);
   const list = page.locator('[data-part="message-list"]');
   await expect(page.locator(ROW).first()).toBeVisible({ timeout: 120_000 });
   await expect(list).toHaveAttribute("aria-busy", "false");
@@ -113,7 +114,7 @@ test("scrolling the large Inbox", async ({ page, browser }) => {
     w.__nailRecording = true;
     let last = performance.now();
     const tick = (now: number) => {
-      w.__nailFrames!.push(now - last);
+      w.__nailFrames?.push(now - last);
       last = now;
       if (w.__nailRecording) requestAnimationFrame(tick);
     };

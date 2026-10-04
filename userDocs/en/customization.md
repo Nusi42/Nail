@@ -42,7 +42,7 @@ the editor named in the environment variable `NAIL_EDITOR`, `VISUAL` or
 a value containing `{file}` is used as a command template, with `{line}`
 and `{column}` filled in too:
 
-```
+```text
 NAIL_EDITOR=myeditor --goto {line}:{column} {file}
 ```
 

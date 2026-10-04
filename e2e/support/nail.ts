@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import { defined } from "./defined";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -41,7 +42,7 @@ export function freePort(): number {
     "const s=require('node:net').createServer();" +
     "s.listen(0,'127.0.0.1',()=>{process.stdout.write(String(s.address().port));s.close();});";
   const port = Number(execFileSync(process.execPath, ["-e", script], { encoding: "utf8" }));
-  if (!Number.isInteger(port) || port <= 0) throw new Error(`no free port: ${port}`);
+  if (!Number.isInteger(port) || port <= 0) throw new Error(`no free port: ${String(port)}`);
   return port;
 }
 
@@ -120,15 +121,17 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
     env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
   });
   const url = await new Promise<string>((resolve, reject) => {
-    const lines = createInterface({ input: child.stdout! });
-    const timer = setTimeout(() => reject(new Error("nail serve did not start")), 30_000);
+    const lines = createInterface({ input: defined(child.stdout, "the server's stdout") });
+    const timer = setTimeout(() => {
+      reject(new Error("nail serve did not start"));
+    }, 30_000);
     lines.once("line", (line) => {
       clearTimeout(timer);
       resolve(line.trim());
     });
     child.once("exit", (code) => {
       clearTimeout(timer);
-      reject(new Error(`nail serve exited with ${code}`));
+      reject(new Error(`nail serve exited with ${String(code)}`));
     });
   });
   return {
@@ -166,7 +169,9 @@ export async function control<T = unknown>(
     body: JSON.stringify(args),
   });
   if (!response.ok) {
-    throw new Error(`control ${command} failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `control ${command} failed: ${String(response.status)} ${await response.text()}`,
+    );
   }
   return (await response.json()) as T;
 }

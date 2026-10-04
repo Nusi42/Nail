@@ -31,11 +31,11 @@ export interface MonthGridProps {
   /** Part name prefix (`mini-month`, `date-picker`, `year-view.month`). */
   part: string;
   /** Move the tab stop. */
-  onFocusDay(day: CalendarDate): void;
+  onFocusDay: (day: CalendarDate) => void;
   /** Choose a day. */
-  onSelect(day: CalendarDate): void;
+  onSelect: (day: CalendarDate) => void;
   /** Take focus when the focused day changes (keyboard use). */
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   /** Use compact (narrow) weekday headers. */
   narrow?: boolean;
   /** Show the month's name above the grid (`<part>.title`; the year view). */
@@ -52,7 +52,7 @@ export function MonthGrid({
   part,
   onFocusDay,
   onSelect,
-  autoFocus = false,
+  focusOnMount = false,
   narrow = false,
   caption,
 }: MonthGridProps) {
@@ -65,10 +65,10 @@ export function MonthGrid({
   const focusedKey = dateString(focused);
 
   useEffect(() => {
-    if (!keyboard.current && !autoFocus) return;
+    if (!keyboard.current && !focusOnMount) return;
     keyboard.current = false;
     tableRef.current?.querySelector<HTMLElement>(`[data-day="${focusedKey}"]`)?.focus();
-  }, [focusedKey, autoFocus]);
+  }, [focusedKey, focusOnMount]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
     let next: CalendarDate;

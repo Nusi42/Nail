@@ -10,7 +10,8 @@ import type { ResolvedLayout } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { normalizeLayout } from "../api/normalize";
 import { listFolders } from "../api/mockMail";
-import { BUILTIN_THEMES, resolveMockTheme } from "../features/appearance";
+import { BUILTIN_THEMES } from "../features/appearance";
+import { resolveMockTheme } from "../features/appearance/themes";
 import { FULL_DATE_TIME, formatDateTime, formatRelative, formatShortDate } from "../i18n/format";
 import { NodeView } from "../layout/LayoutRenderer";
 import { UI_STATE_COLLAPSED_SECTIONS } from "../state/uiState";
@@ -25,6 +26,8 @@ import {
   type Env,
 } from "../test/harness";
 import { PROPOSAL_READER } from "./proposalToolbars";
+import { must } from "../test/must";
+import { objectContaining } from "../test/matchers";
 
 const INBOX = "acc-personal/Inbox";
 const FIRST = `${INBOX}#1`;
@@ -107,16 +110,16 @@ describe("grouped folder pane (M5b)", () => {
     const env = paneEnv();
     renderNode(PANE, env);
     fireEvent.click(await screen.findByRole("button", { name: "New message" }));
-    await waitFor(() =>
-      expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true),
-    );
+    await waitFor(() => {
+      expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
+    });
   });
 
   it("chooses folders across accounts and the unified favorites", async () => {
     const env = paneEnv();
     renderNode(PANE, env);
     const work = await screen.findByText("Work · ada@work.example");
-    const workSection = work.closest('[data-part="folder-tree.section"]') as HTMLElement;
+    const workSection = must(work.closest<HTMLElement>('[data-part="folder-tree.section"]'));
     fireEvent.click(await within(workSection).findByRole("treeitem", { name: /Archive/ }));
     expect(env.store.getState().activeAccountId).toBe("acc-work");
     expect(env.store.getState().activeFolderId).toBe("acc-work/Archive");
@@ -146,14 +149,16 @@ describe("grouped folder pane (M5b)", () => {
     expect(env.store.getState().searchInput).toBe("is:flagged");
     // Snoozed: its own window.
     fireEvent.click(within(section("favorites")).getByRole("treeitem", { name: /Snoozed/ }));
-    await waitFor(() => expect(env.store.getState().windows).toContain("snoozed"));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain("snoozed");
+    });
   });
 
   it("collapses a section, remembers it in the UI state and shows its unread mail", async () => {
     const env = paneEnv();
     renderNode(PANE, env);
     const personal = await screen.findByText("Personal · ada@example.org");
-    const header = personal.closest('[data-part="folder-tree.account"]') as HTMLElement;
+    const header = must(personal.closest<HTMLElement>('[data-part="folder-tree.account"]'));
     expect(header).toHaveAttribute("data-account", "acc-personal");
     fireEvent.click(header);
     const sectionEl = section("account:acc-personal");
@@ -162,13 +167,13 @@ describe("grouped folder pane (M5b)", () => {
     expect(
       sectionEl.querySelector('[data-part="folder-tree.section.unread-count"]'),
     ).toHaveTextContent("10");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "SetUiState",
         key: UI_STATE_COLLAPSED_SECTIONS,
         value: ["account:acc-personal"],
-      }),
-    );
+      });
+    });
     // The collapsed section keeps the tab stop of the selected folder.
     expect(sectionEl).toHaveAttribute("tabindex", "0");
     fireEvent.click(header);
@@ -212,7 +217,9 @@ describe("grouped folder pane (M5b)", () => {
     renderNode(PANE, env);
     await screen.findByText("Work · ada@work.example");
     const favorites = section("favorites");
-    act(() => favorites.focus());
+    act(() => {
+      favorites.focus();
+    });
     fireEvent.keyDown(favorites, { key: "ArrowDown" });
     const allInboxes = within(favorites).getByRole("treeitem", { name: /All inboxes/ });
     expect(allInboxes).toHaveFocus();
@@ -224,7 +231,7 @@ describe("grouped folder pane (M5b)", () => {
     await waitFor(() => expect(favorites).toHaveAttribute("aria-expanded", "true"));
     fireEvent.keyDown(favorites, { key: "ArrowRight" });
     expect(within(favorites).getByRole("treeitem", { name: /All inboxes/ })).toHaveFocus();
-    fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+    fireEvent.keyDown(must(document.activeElement), { key: "End" });
     const last = document.activeElement as HTMLElement;
     expect(last).toHaveAttribute("data-part", "folder-tree.item");
     fireEvent.keyDown(last, { key: "Enter" });
@@ -310,7 +317,7 @@ describe("folder pane after the M5b review", () => {
       attempts: 0,
       error: null,
       message: null,
-    } as (typeof env.transport.data.outbox)[number]);
+    });
     renderNode(pane, env);
     const outbox = await screen.findByRole("treeitem", { name: /Outbox/ });
     expect(within(outbox).getByLabelText("One message waiting to be sent")).toHaveTextContent("1");
@@ -343,7 +350,7 @@ describe("list header (M5b)", () => {
       (f) => f.id === "all/inbox",
     )?.unread;
     expect(region.querySelector('[data-part="list-header.counts"]')).toHaveTextContent(
-      `${unread} unread · 2 accounts`,
+      `${String(must(unread))} unread · 2 accounts`,
     );
     const chips = within(
       within(region).getByRole("group", { name: "Filter messages" }),
@@ -353,7 +360,7 @@ describe("list header (M5b)", () => {
     // Typing hides the key hint; the search title replaces the folder's.
     fireEvent.change(input, { target: { value: "grace" } });
     expect(region.querySelector('[data-part="search-bar.shortcut"]')).toBeNull();
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
+    fireEvent.submit(must(input.closest<HTMLElement>("form")));
     expect(within(region).getByRole("heading", { name: "Search results" })).toBeInTheDocument();
     await settleQueries(env);
   });
@@ -383,18 +390,18 @@ describe("list header (M5b)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unread" }));
     expect(env.store.getState().listFilter).toBe("unread");
     expect(screen.getByRole("button", { name: "Unread" })).toHaveAttribute("aria-pressed", "true");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual(
         expect.objectContaining({
           type: "Search",
-          query: expect.objectContaining({
+          query: objectContaining({
             text: "is:unread",
             account_id: "acc-personal",
             folder_id: INBOX,
           }),
         }),
-      ),
-    );
+      );
+    });
     await waitFor(() => {
       const rows = screen.getAllByRole("option");
       expect(rows.length).toBeGreaterThan(0);
@@ -405,7 +412,9 @@ describe("list header (M5b)", () => {
     // No search summary for a filter (that is for typed searches).
     expect(document.querySelector('[data-part="message-list.search-summary"]')).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "All" }));
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(all.length));
+    await waitFor(() => {
+      expect(screen.getAllByRole("option")).toHaveLength(all.length);
+    });
     await settleQueries(env);
   });
 
@@ -431,7 +440,9 @@ describe("list header (M5b)", () => {
     });
     renderNode(widget("toolbar", { options: { toolbar: "t" } }), env, { layout });
     fireEvent.click(screen.getByRole("button", { name: "Files" }));
-    await waitFor(() => expect(env.store.getState().listFilter).toBe("attachments"));
+    await waitFor(() => {
+      expect(env.store.getState().listFilter).toBe("attachments");
+    });
   });
 });
 
@@ -452,7 +463,7 @@ describe("dates follow the UI locale, not the browser's (regression)", () => {
       env,
       { locale: "en" },
     );
-    const row = (await screen.findAllByRole("option"))[0] as HTMLElement;
+    const row = must((await screen.findAllByRole("option"))[0]);
     const summary = env.transport.data.messages.find(
       (m) => m.id === row.getAttribute("data-message"),
     );
@@ -484,7 +495,7 @@ describe("reader (M5b)", () => {
     env.store.getState().selectMessage(FIRST);
     renderNode(widget("message-view"), env);
     const save = await screen.findByRole("button", { name: /^Save / });
-    const card = save.closest('[data-part="attachment-card"]') as HTMLElement;
+    const card = must(save.closest<HTMLElement>('[data-part="attachment-card"]'));
     const status = card.querySelector('[data-part="attachment-card.status"]');
     expect(status).toHaveAttribute("role", "status");
     expect(status).toHaveAttribute("data-state", "empty");

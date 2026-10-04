@@ -15,6 +15,7 @@ import {
 import { candidates, defaultChoice, mergedFields } from "./merge";
 import { SCOPE_DIALOG } from "./names";
 import { pimStoreFor } from "./store";
+import { stringMatching } from "../../test/matchers";
 
 /** The value, or a test failure when it is missing. */
 function must<T>(value: T | null | undefined): T {
@@ -23,8 +24,12 @@ function must<T>(value: T | null | undefined): T {
 }
 
 const BERLIN = "Europe/Berlin";
-beforeAll(() => setLocalTimeZone(BERLIN));
-afterAll(() => resetLocalTimeZone());
+beforeAll(() => {
+  setLocalTimeZone(BERLIN);
+});
+afterAll(() => {
+  resetLocalTimeZone();
+});
 
 function instanceOf(over: Partial<EventInstance>): EventInstance {
   return {
@@ -170,7 +175,7 @@ describe("moving occurrences", () => {
     expect(
       transport.data.features.pim.events.find((e) => e.id === "ev-standup")?.fields.start,
     ).toMatchObject({
-      local: expect.stringMatching(/T10:00:00$/),
+      local: stringMatching(/T10:00:00$/),
     });
 
     await requestDelete(ctx, standup);

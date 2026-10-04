@@ -14,6 +14,7 @@
 //! keeps the table honest: every text colour the default part rules use,
 //! and every text / background pair a rule declares together, must be in
 //! it, so a new part rule with an unchecked combination fails here.
+#![cfg(test)]
 
 use nail_api::{ResolvedTheme, ThemeMode};
 
@@ -179,6 +180,11 @@ impl Rgb {
         0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "channels are 0..=255, so the rounded value fits a u8"
+    )]
     fn hex(self) -> String {
         let [r, g, b] = self.0.map(|c| c.round() as u8);
         format!("#{r:02x}{g:02x}{b:02x}")

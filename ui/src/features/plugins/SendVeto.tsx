@@ -151,6 +151,7 @@ function VetoView() {
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the confirmation's keys (Enter, Escape) arrive from the buttons inside it. */}
       <div
         ref={ref}
         data-part="plugin-veto"
@@ -187,7 +188,9 @@ function VetoView() {
             data-action="keep-editing"
             data-variant="primary"
             disabled={busy}
-            onClick={() => close(null)}
+            onClick={() => {
+              close(null);
+            }}
           >
             {t("plugin-veto-keep-editing")}
           </button>

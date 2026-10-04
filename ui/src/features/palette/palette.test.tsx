@@ -20,6 +20,7 @@ import { contextsOf } from "./contexts";
 import { fold, matchToken, mergeRanges, searchPalette } from "./fuzzy";
 import { PALETTE_DIALOG, PALETTE_OPEN_ACTION, loadPalette } from ".";
 import { paletteStoreFor } from "./store";
+import { must } from "../../test/must";
 
 beforeAll(() => loadPalette());
 
@@ -179,16 +180,20 @@ describe("command palette", () => {
     expect(first).toHaveAttribute("data-action", "mail.reply-all");
     expect(first).toHaveAttribute("aria-selected", "true");
     expect(input).toHaveAttribute("aria-activedescendant", first?.id);
-    expect(within(first as HTMLElement).getByText("A")).toBeVisible();
+    expect(within(must(first)).getByText("A")).toBeVisible();
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(env.store.getState().windows).not.toContain(PALETTE_DIALOG));
-    await waitFor(() => expect(env.store.getState().composer).not.toBeNull());
-    await waitFor(() =>
+    await waitFor(() => {
+      expect(env.store.getState().windows).not.toContain(PALETTE_DIALOG);
+    });
+    await waitFor(() => {
+      expect(env.store.getState().composer).not.toBeNull();
+    });
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "RecordActionUsed",
         action_id: "mail.reply-all",
-      }),
-    );
+      });
+    });
   });
 
   it("moves with the arrow keys and lists recent actions first", async () => {
@@ -260,7 +265,9 @@ describe("command palette", () => {
     render(env);
     await openPalette(user);
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(env.store.getState().windows).not.toContain(PALETTE_DIALOG));
+    await waitFor(() => {
+      expect(env.store.getState().windows).not.toContain(PALETTE_DIALOG);
+    });
     await user.click(screen.getByRole("button", { name: "open palette" }));
     await user.click(screen.getByRole("button", { name: "open palette" }));
     expect(env.store.getState().windows).not.toContain(PALETTE_DIALOG);

@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// Default port of `nail serve`.
-pub const DEFAULT_PORT: u16 = 4780;
+pub(crate) const DEFAULT_PORT: u16 = 4780;
 
 /// Nail: email and PIM client.
 #[derive(Debug, Parser)]
 #[command(name = "nail", version, about)]
-pub struct Cli {
+pub(crate) struct Cli {
     /// What to do.
     #[command(subcommand)]
     pub command: Command,
@@ -18,12 +18,12 @@ pub struct Cli {
 
 /// Subcommands.
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub(crate) enum Command {
     /// Run the core headless and serve the web UI on localhost.
     Serve(ServeArgs),
     /// Connect a stdio MCP client to Nail (forwards to its MCP server on
     /// 127.0.0.1); starts Nail headless when it is not running. The
-    /// client's token is read from $NAIL_MCP_TOKEN.
+    /// client's token is read from $`NAIL_MCP_TOKEN`.
     Mcp(McpArgs),
     /// Plug-in tools (M2d).
     Plugin {
@@ -41,7 +41,7 @@ pub enum Command {
 
 /// `nail config …`
 #[derive(Debug, Subcommand)]
-pub enum ConfigCommand {
+pub(crate) enum ConfigCommand {
     /// Print the JSON Schema of theme.kdl, layout.kdl or accounts.kdl (JSON
     /// form of the file model, for editor tooling).
     Schema {
@@ -53,7 +53,7 @@ pub enum ConfigCommand {
 
 /// The configuration file a schema describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum SchemaKind {
+pub(crate) enum SchemaKind {
     /// theme.kdl
     Theme,
     /// layout.kdl
@@ -64,7 +64,7 @@ pub enum SchemaKind {
 
 /// Demo data for `nail serve --seed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Seed {
+pub(crate) enum Seed {
     /// Load the demo mail corpus as a local account (no network).
     Demo,
     /// Serve the demo corpus from an in-process mock IMAP server and sync
@@ -80,7 +80,7 @@ pub enum Seed {
 
 /// `nail serve …`
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ServeArgs {
+pub(crate) struct ServeArgs {
     /// Port on 127.0.0.1 (0 picks a free port; the URL is printed).
     /// Default: 4780, or a free port when 4780 is taken. An explicit port
     /// that is taken is an error.
@@ -92,7 +92,7 @@ pub struct ServeArgs {
     /// Config directory (theme.kdl, layout.kdl). Default: %APPDATA%\Nail.
     #[arg(long, value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
-    /// Directory of the built UI (ui/dist). Default: $NAIL_UI_DIR, `ui`
+    /// Directory of the built UI (ui/dist). Default: $`NAIL_UI_DIR`, `ui`
     /// next to the executable, or the repository's ui/dist.
     #[arg(long, value_name = "DIR")]
     pub ui_dir: Option<PathBuf>,
@@ -111,7 +111,7 @@ pub struct ServeArgs {
     #[arg(long)]
     pub no_watch: bool,
     /// Port of the MCP server on 127.0.0.1 (0 picks a free port; agents
-    /// find it in <data-dir>/mcp-endpoint.json). Default: the fixed port of
+    /// find it in mcp-endpoint.json of the data directory). Default: the fixed port of
     /// the MCP settings, else a free port.
     #[arg(long, value_name = "PORT")]
     pub mcp_port: Option<u16>,
@@ -123,14 +123,14 @@ pub struct ServeArgs {
     /// `webcal:` link (repeatable). The UI takes them at start.
     #[arg(long, value_name = "FILE_OR_LINK")]
     pub launch: Vec<String>,
-    /// More log output (-v debug, -vv trace). NAIL_LOG overrides.
+    /// More log output (-v debug, -vv trace). `NAIL_LOG` overrides.
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
 }
 
 /// `nail mcp …`
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct McpArgs {
+pub(crate) struct McpArgs {
     /// Name of the MCP client as created in Settings → MCP clients; checked
     /// against the token.
     #[arg(long, value_name = "NAME")]

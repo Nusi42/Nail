@@ -2,6 +2,8 @@
 //! create (with the recovery kit), verify, the locked data directory after
 //! the keychain entry was lost, restore and reopen, remove.
 
+#![cfg(test)]
+
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,7 +18,7 @@ fn open(data: &Path, config: &Path, secrets: &Arc<MemorySecretStore>) -> Service
     let mut options = ServiceOptions::new(data, config);
     options.watch_config = false;
     options.start_engines = false;
-    options.secrets = Some(Arc::clone(secrets) as Arc<dyn SecretStore>);
+    options.secrets = Some(secrets.clone());
     Service::open(nail_core::demo::demo_options(options)).unwrap()
 }
 
@@ -44,7 +46,7 @@ async fn encrypted(service: &Service) {
     else {
         panic!("vault status expected");
     };
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    let deadline = tokio::time::Instant::now() + Duration::from_mins(1);
     while status(service).await.state != VaultState::Encrypted {
         assert!(
             tokio::time::Instant::now() < deadline,
@@ -204,7 +206,7 @@ async fn demo_multi_keeps_the_file_keychain_across_a_restart() {
     let keychain = data.path().join(DEMO_KEYCHAIN_FILE);
     let open_multi = |demo: &nail_core::demo::DemoMulti| {
         let mut options = ServiceOptions::new(data.path(), config.path());
-        options.secrets = Some(Arc::new(FileSecretStore::open(&keychain)) as Arc<dyn SecretStore>);
+        options.secrets = Some(Arc::new(FileSecretStore::open(&keychain)));
         let mut options = demo.service_options(options);
         options.watch_config = false;
         options.start_engines = false;

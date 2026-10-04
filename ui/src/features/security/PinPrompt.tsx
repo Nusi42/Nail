@@ -10,7 +10,7 @@
  * logged or shown; remote sessions never get these events.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { errorMessageOf } from "../../api/client";
@@ -31,12 +31,12 @@ export interface PinUiState {
   prompts: PinPrompt[];
   /** Why the shown prompt closed without this window's answer. */
   closed: PinPromptCloseReason | null;
-  request(prompt: PinPrompt): void;
+  request: (prompt: PinPrompt) => void;
   /** The core closed a prompt; `shown` = it was the one on screen. */
-  close(promptId: string, reason: PinPromptCloseReason): void;
+  close: (promptId: string, reason: PinPromptCloseReason) => void;
   /** This window answered the first prompt. */
-  answered(promptId: string): void;
-  dismiss(): void;
+  answered: (promptId: string) => void;
+  dismiss: () => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PinUiState>>();
@@ -45,22 +45,27 @@ export function createPinStore(): StoreApi<PinUiState> {
   return createStore<PinUiState>()((set) => ({
     prompts: [],
     closed: null,
-    request: (prompt) =>
+    request: (prompt) => {
       set((s) => ({
         prompts: [...s.prompts.filter((p) => p.prompt_id !== prompt.prompt_id), prompt],
         closed: null,
-      })),
-    close: (promptId, reason) =>
+      }));
+    },
+    close: (promptId, reason) => {
       set((s) => {
         const shown = s.prompts[0]?.prompt_id === promptId;
         return {
           prompts: s.prompts.filter((p) => p.prompt_id !== promptId),
           closed: shown && reason !== "answered" ? reason : s.closed,
         };
-      }),
-    answered: (promptId) =>
-      set((s) => ({ prompts: s.prompts.filter((p) => p.prompt_id !== promptId) })),
-    dismiss: () => set({ closed: null }),
+      });
+    },
+    answered: (promptId) => {
+      set((s) => ({ prompts: s.prompts.filter((p) => p.prompt_id !== promptId) }));
+    },
+    dismiss: () => {
+      set({ closed: null });
+    },
   }));
 }
 
@@ -97,7 +102,7 @@ export const handlePinEvent: FeatureEventHandler = (event, { queryClient, store 
 };
 
 /** The form for one prompt (a new prompt mounts a fresh, empty form). */
-function PinForm({ prompt, close }: { prompt: PinPrompt; close(): void }) {
+function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
   const t = useT();
   const format = useDateFormat();
   const client = useClient();
@@ -132,7 +137,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close(): void }) {
     }
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (pinIsPlausible(pin)) void answer(pin);
   };
@@ -172,7 +177,9 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close(): void }) {
           spellCheck={false}
           value={pin}
           aria-describedby={`${id}-hint`}
-          onChange={(e) => setPin(e.target.value)}
+          onChange={(e) => {
+            setPin(e.target.value);
+          }}
         />
         <p data-part="form.hint" id={`${id}-hint`}>
           {t("security-pin-hint", {
@@ -210,7 +217,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close(): void }) {
 }
 
 /** The PIN dialog's content. */
-export function PinPromptView({ close }: { close(): void }) {
+export function PinPromptView({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const ui = useUiStoreApi();

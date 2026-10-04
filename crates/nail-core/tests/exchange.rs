@@ -8,6 +8,8 @@
 //! calendars / contacts / To Do, meetings through the meeting API,
 //! placement of Nail rules as inbox rules, EWS streaming, `TestAccount`.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -116,7 +118,7 @@ account "{GRAPH}" email="ada@contoso.example" name="Contoso" {{
         .unwrap();
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
-    options.secrets = Some(secrets as Arc<dyn SecretStore>);
+    options.secrets = Some(secrets);
     options.timing = EngineTiming::fast();
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     Env {
@@ -259,7 +261,7 @@ async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         },
     )
@@ -1154,7 +1156,7 @@ async fn all_in(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSumm
     }
 }
 
-/// Counts the messages NewMail announces for an account from now on.
+/// Counts the messages `NewMail` announces for an account from now on.
 fn count_new_mail(service: &Service, account: &str) -> Arc<std::sync::atomic::AtomicUsize> {
     let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut events = service.subscribe();

@@ -3,6 +3,10 @@
 //! The same checks also run against the mock server of nail-testkit-net
 //! (over TLS), so they are known to work before CI reaches a real server.
 
+// Test code only: helpers outside `#[test]` functions get clippy's
+// test exemptions (`allow-unwrap-in-tests`) too.
+#![cfg(test)]
+
 use nail_api::ErrorCode;
 use nail_api::engine::BoxFuture;
 use nail_api::pim::calendar::CalendarComponent;

@@ -45,9 +45,11 @@ describe("zip", () => {
     const zip = createZip(entries);
     const back = readZip(zip);
     expect(back.map((e) => e.name)).toEqual(entries.map((e) => e.name));
-    back.forEach((e, i) => expect(Buffer.compare(e.data, Buffer.from(entries[i]!.data))).toBe(0));
+    back.forEach((e, i) => {
+      expect(Buffer.compare(e.data, Buffer.from(entries[i]?.data ?? ""))).toBe(0);
+    });
     // The repetitive file is compressed.
-    expect(zip.length).toBeLessThan(entries[1]!.data.length);
+    expect(zip.length).toBeLessThan(entries[1]?.data.length ?? 0);
   });
 
   it("is deterministic", () => {
@@ -182,7 +184,9 @@ describe("packPlugin and the CLI", () => {
     writeFileSync(path.join(dir, "assets", "img", "logo.png"), Buffer.from([137, 80, 78, 71]));
     writeFileSync(path.join(dir, "src", "index.tsx"), "// source, not packed\n");
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   it("packs manifest, main, locales and assets only", () => {
     const result = packPlugin({ dir });
@@ -198,7 +202,8 @@ describe("packPlugin and the CLI", () => {
     expect(result.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
     const entries = readZip(bytes);
     expect(entries.map((e) => e.name)).toEqual(result.files);
-    expect(JSON.parse(entries[0]!.data.toString("utf8")).id).toBe("follow-up");
+    const packed = JSON.parse(entries[0]?.data.toString("utf8") ?? "{}") as { id?: string };
+    expect(packed.id).toBe("follow-up");
 
     // Packing again (the old archive sits in dist/) gives the same bytes.
     const again = packPlugin({ dir, out: path.join(dir, "other.nailplugin") });

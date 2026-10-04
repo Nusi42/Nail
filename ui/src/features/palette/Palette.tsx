@@ -71,6 +71,11 @@ export function pluginTitles(layout: ReturnType<typeof useLayoutConfig>): Record
 }
 
 /** The title with the matched parts marked. */
+/** The element id of result row `index` in the palette with id `base`. */
+function optionId(base: string, index: number): string {
+  return `${base}-option-${String(index)}`;
+}
+
 function Highlighted({ text, ranges }: { text: string; ranges: readonly Range[] }) {
   if (ranges.length === 0) return <>{text}</>;
   const pieces: { text: string; match: boolean }[] = [];
@@ -122,13 +127,14 @@ function Row({
   id: string;
   active: boolean;
   firstOther: boolean;
-  onRun(): void;
-  onHover(): void;
+  onRun: () => void;
+  onHover: () => void;
 }) {
   const t = useT();
   const { entry } = scored;
   const shortcut = entry.shortcuts[0];
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the combobox input handles the keyboard for its options (aria-activedescendant).
     <li
       id={id}
       role="option"
@@ -148,7 +154,9 @@ function Row({
       aria-selected={active}
       aria-disabled={!entry.available || undefined}
       aria-keyshortcuts={shortcut ? ariaShortcut(shortcut) : undefined}
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => {
+        e.preventDefault();
+      }}
       onMouseMove={onHover}
       onClick={onRun}
     >
@@ -181,7 +189,7 @@ function needsText(info: ActionInfo | undefined, t: ReturnType<typeof useT>): st
 }
 
 /** The palette's content. */
-export function CommandPalette({ close }: { close(): void }) {
+export function CommandPalette({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -198,7 +206,6 @@ export function CommandPalette({ close }: { close(): void }) {
   const listRef = useRef<HTMLUListElement>(null);
   const base = useId();
   const listId = `${base}-list`;
-  const optionId = (index: number) => `${base}-option-${index}`;
 
   const infos = useMemo(() => paletteInfos(), []);
   const contexts = useMemo(() => {
@@ -227,10 +234,12 @@ export function CommandPalette({ close }: { close(): void }) {
 
   // Keep the active row in view.
   useEffect(() => {
-    const row = listRef.current?.querySelector<HTMLElement>(`#${CSS.escape(optionId(current))}`);
-    row?.scrollIntoView?.({ block: "nearest" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, results]);
+    const row = listRef.current?.querySelector<HTMLElement>(
+      `#${CSS.escape(optionId(base, current))}`,
+    );
+    row?.scrollIntoView({ block: "nearest" });
+    // `results`: a new result list moves the rows under the active index.
+  }, [base, current, results]);
 
   const run = async (scored: ScoredEntry | undefined) => {
     if (!scored) return;
@@ -267,19 +276,33 @@ export function CommandPalette({ close }: { close(): void }) {
       setActive(Math.max(0, Math.min(last, to)));
     };
     switch (event.key) {
-      case "ArrowDown":
-        return move(current >= last ? 0 : current + 1);
-      case "ArrowUp":
-        return move(current <= 0 ? last : current - 1);
-      case "PageDown":
-        return move(current + PAGE);
-      case "PageUp":
-        return move(current - PAGE);
+      case "ArrowDown": {
+        move(current >= last ? 0 : current + 1);
+        return;
+      }
+      case "ArrowUp": {
+        move(current <= 0 ? last : current - 1);
+        return;
+      }
+      case "PageDown": {
+        move(current + PAGE);
+        return;
+      }
+      case "PageUp": {
+        move(current - PAGE);
+        return;
+      }
       case "Home":
-        if (event.ctrlKey) return move(0);
+        if (event.ctrlKey) {
+          move(0);
+          return;
+        }
         return;
       case "End":
-        if (event.ctrlKey) return move(last);
+        if (event.ctrlKey) {
+          move(last);
+          return;
+        }
         return;
       case "Enter":
         event.preventDefault();
@@ -300,7 +323,7 @@ export function CommandPalette({ close }: { close(): void }) {
           aria-expanded="true"
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={results.length > 0 ? optionId(current) : undefined}
+          aria-activedescendant={results.length > 0 ? optionId(base, current) : undefined}
           aria-label={t("palette-search-label")}
           placeholder={t("palette-search-placeholder")}
           autoComplete="off"
@@ -330,11 +353,13 @@ export function CommandPalette({ close }: { close(): void }) {
           {results.map((scored, index) => (
             <Row
               key={scored.entry.id}
-              id={optionId(index)}
+              id={optionId(base, index)}
               scored={scored}
               active={index === current}
               firstOther={index === firstUnavailable && index > 0}
-              onHover={() => setActive(index)}
+              onHover={() => {
+                setActive(index);
+              }}
               onRun={() => void run(scored)}
             />
           ))}

@@ -109,7 +109,9 @@ function OpsItem() {
         dismiss();
         queued(op_ids);
       })
-      .catch((e: unknown) => setRetryError(errorMessageIdOf(e)));
+      .catch((e: unknown) => {
+        setRetryError(errorMessageIdOf(e));
+      });
   };
   if (error) {
     return (
@@ -118,7 +120,13 @@ function OpsItem() {
           {t("status-op-failed", { reason: t(retryError ?? errorMessageId(error)) })}
         </span>
         {failedOp !== null && (
-          <button type="button" data-part="status-bar.button" onClick={() => retry(failedOp)}>
+          <button
+            type="button"
+            data-part="status-bar.button"
+            onClick={() => {
+              retry(failedOp);
+            }}
+          >
             {t("status-retry")}
           </button>
         )}
@@ -142,10 +150,14 @@ function useSecondsUntil(iso: string | null): number {
   const [seconds, setSeconds] = useState(compute);
   useEffect(() => {
     if (Number.isNaN(target)) return;
-    const tick = () => setSeconds(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    const tick = () => {
+      setSeconds(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    };
     tick();
     const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, [target]);
   return seconds;
 }
@@ -168,7 +180,9 @@ function SendStatusItem() {
       const current = ctx.store.getState().lastSend;
       if (current?.id === sentId) setLastSend(null);
     }, SENT_NOTICE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [sentId, setLastSend, ctx.store]);
 
   if (!entry || entry.state === "cancelled") return null;

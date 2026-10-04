@@ -543,6 +543,10 @@ pub enum CancelScope {
 /// settings; [`crate::Request::GetSchedulingSettings`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent scheduling switches (one checkbox each)"
+)]
 pub struct SchedulingSettings {
     /// Put new invitations into the calendar unanswered (`NEEDS-ACTION`,
     /// shown as tentative) on arrival. Default true.

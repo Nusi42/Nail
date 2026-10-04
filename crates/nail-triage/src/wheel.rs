@@ -22,7 +22,19 @@ const SLOTS: usize = 1 << SLOT_BITS;
 const SLOT_MASK: u64 = (SLOTS as u64) - 1;
 /// The wheel covers one aligned block of 64⁶ s; deadlines in a later block
 /// wait in an overflow list until time reaches their block.
-const BLOCK_MASK: u64 = (1u64 << (SLOT_BITS * LEVELS as u32)) - 1;
+const BLOCK_MASK: u64 = (1u64 << SHIFTS[LEVELS]) - 1;
+/// `SHIFTS[level]` is the bit offset of a level's base-64 digit
+/// (`SLOT_BITS * level`); `SHIFTS[LEVELS]` is the width of a block.
+const SHIFTS: [u32; LEVELS + 1] = {
+    let mut shifts = [0; LEVELS + 1];
+    let (mut level, mut shift) = (0, 0);
+    while level <= LEVELS {
+        shifts[level] = shift;
+        shift += SLOT_BITS;
+        level += 1;
+    }
+    shifts
+};
 
 #[derive(Debug, Clone)]
 struct Entry<K> {
@@ -117,7 +129,7 @@ impl<K: Clone + Eq + Hash + Ord> TimerWheel<K> {
             return;
         }
         let level = level_for(self.elapsed, when);
-        let slot = ((when >> (SLOT_BITS * level as u32)) & SLOT_MASK) as usize;
+        let slot = ((when >> SHIFTS[level]) & SLOT_MASK) as usize;
         self.levels[level][slot].push(entry);
         self.occupied[level] |= 1 << slot;
     }
@@ -125,14 +137,14 @@ impl<K: Clone + Eq + Hash + Ord> TimerWheel<K> {
     /// Start time of the next occupied slot of a level (slots before the
     /// current digit cannot be occupied: see the module docs).
     fn next_slot(&self, level: usize) -> Option<(u64, usize)> {
-        let shift = SLOT_BITS * level as u32;
+        let shift = SHIFTS[level];
         let current = ((self.elapsed >> shift) & SLOT_MASK) as usize;
         let mask = self.occupied[level] & (u64::MAX << current);
         if mask == 0 {
             return None;
         }
         let slot = mask.trailing_zeros() as usize;
-        let block = SLOT_BITS * (level as u32 + 1);
+        let block = SHIFTS[level + 1];
         let base = if block >= 64 {
             0
         } else {
@@ -150,8 +162,7 @@ impl<K: Clone + Eq + Hash + Ord> TimerWheel<K> {
             .filter(|e| self.is_live(e))
             .map(|e| e.deadline)
             .min();
-        for level in 0..LEVELS {
-            let shift = SLOT_BITS * level as u32;
+        for (level, &shift) in SHIFTS.iter().enumerate().take(LEVELS) {
             let current = ((self.elapsed >> shift) & SLOT_MASK) as usize;
             let mut mask = self.occupied[level] & (u64::MAX << current);
             // The first slot with a live entry holds the level's minimum.

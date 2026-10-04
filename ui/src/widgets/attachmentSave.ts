@@ -33,7 +33,9 @@ export function downloadFile(name: string, mime: string, data: string): boolean 
   link.click();
   link.remove();
   // After the click has started the download.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
   return true;
 }
 

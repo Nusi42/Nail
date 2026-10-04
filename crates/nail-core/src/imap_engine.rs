@@ -250,14 +250,16 @@ impl Conns<'_> {
             if let Some(replay) = replay
                 && let Ok(client) = Arc::try_unwrap(replay)
             {
-                let _ = tokio::time::timeout(Duration::from_secs(2), client.into_inner().logout())
-                    .await;
+                drop(
+                    tokio::time::timeout(Duration::from_secs(2), client.into_inner().logout())
+                        .await,
+                );
             }
             self.main
         };
         if matches!(end, SessionEnd::Stopped) {
             let client = main.into_inner();
-            let _ = tokio::time::timeout(Duration::from_secs(2), client.logout()).await;
+            drop(tokio::time::timeout(Duration::from_secs(2), client.logout()).await);
         }
         end
     }
@@ -283,7 +285,7 @@ async fn session_loop(
     };
     let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + poll, poll);
     let end = loop {
-        let step = tokio::select! {
+        let next_step = tokio::select! {
             () = stopped(stop) => break SessionEnd::Stopped,
             Some((path, event)) = events.recv() => match event {
                 WatchEvent::Connected { .. } | WatchEvent::Changed(_) => {
@@ -300,7 +302,7 @@ async fn session_loop(
             () = signals.sync.notified() => full_cycle(service, account, conns).await,
             _ = timer.tick() => full_cycle(service, account, conns).await,
         };
-        if let Err(err) = step {
+        if let Err(err) = next_step {
             let broken = client.lock().await.is_broken();
             if broken
                 || err.is_transient()
@@ -377,7 +379,7 @@ impl WatcherSet {
             let _ = stop.send(());
         }
         for task in self.tasks {
-            let _ = tokio::time::timeout(Duration::from_secs(2), task).await;
+            drop(tokio::time::timeout(Duration::from_secs(2), task).await);
         }
     }
 }

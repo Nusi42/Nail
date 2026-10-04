@@ -1,6 +1,6 @@
 //! HTML → plain text and HTML → Markdown.
 //!
-//! One walker over the parsed tree (dom_query / html5ever) writes either
+//! One walker over the parsed tree (`dom_query` / html5ever) writes either
 //! target. Block structure (paragraphs, lists, quotes, tables, code) is kept
 //! in both; Markdown adds inline markup. Markdown cannot express everything
 //! HTML can (colours, fonts, underline, cell spans, image sizes …): the
@@ -94,6 +94,10 @@ struct Pending {
     hard: bool,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags of the serializer's position, not the states of one machine"
+)]
 struct Writer {
     target: Target,
     out: String,
@@ -476,7 +480,7 @@ impl Writer {
                 "color" | "bgcolor" => self.drop("color"),
                 "width" | "height" if name == "img" => self.drop("image-size"),
                 "width" | "height" | "border" | "cellpadding" | "cellspacing" => {
-                    self.drop("table-layout")
+                    self.drop("table-layout");
                 }
                 "colspan" | "rowspan" if a.value.trim() != "1" => self.drop("table-layout"),
                 _ => {}
@@ -527,8 +531,9 @@ impl Writer {
                 self.raw("[");
                 self.children(node);
                 self.space = false;
-                self.line
-                    .push_str(&format!("]({})", href.replace(' ', "%20")));
+                self.line.push_str("](");
+                self.line.push_str(&href.replace(' ', "%20"));
+                self.line.push(')');
             }
         } else {
             self.children(node);

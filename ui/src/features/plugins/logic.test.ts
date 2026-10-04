@@ -26,6 +26,7 @@ import {
   parseAddress,
   validate,
 } from "./tree/values";
+import { objectContaining } from "../../test/matchers";
 
 function plugin(extra: Partial<PluginInfo> = {}): PluginInfo {
   return {
@@ -224,7 +225,7 @@ describe("plug-in commands", () => {
       type: "RunPluginCommand",
       command: "plugin.follow-up.remind",
       surface: "reader",
-      context: expect.objectContaining({ message_id: "m1" }),
+      context: objectContaining({ message_id: "m1" }),
       client_id: clientIdOf(client),
     });
     queryClient.setQueryData(pluginKeys.list, [plugin({ enabled: false, state: "disabled" })]);
@@ -528,14 +529,14 @@ describe("feature state", () => {
     for (let i = 0; i < MAX_TOASTS + 2; i++) {
       store.getState().pushToast({
         kind: "stopped",
-        id: `t${i}`,
+        id: `t${String(i)}`,
         pluginId: "p",
         level: "error",
         message: { id: "x" },
       });
     }
     expect(store.getState().toasts).toHaveLength(MAX_TOASTS);
-    store.getState().dismissToast(`t${MAX_TOASTS + 1}`);
+    store.getState().dismissToast(`t${String(MAX_TOASTS + 1)}`);
     expect(store.getState().toasts).toHaveLength(MAX_TOASTS - 1);
   });
 

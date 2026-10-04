@@ -7,7 +7,7 @@
  *   remove, and add a subscription or server (tested first). A DAV source
  *   can use a mail account's login (`account=` in `accounts.kdl`).
  */
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type SubmitEvent } from "react";
 import { errorMessageId } from "../../api/client";
 import type {
   LocalizedMessage,
@@ -38,7 +38,7 @@ export function sourceIdFor(name: string, taken: readonly string[]): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || "source";
   let id = base === "local" ? "local-1" : base;
-  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${String(n)}`;
   return id;
 }
 
@@ -242,7 +242,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
     }
   };
 
-  const add = async (event: FormEvent) => {
+  const add = async (event: SubmitEvent) => {
     event.preventDefault();
     setBusy(true);
     setProblem(null);
@@ -276,7 +276,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           id={ids.kind}
           data-part="form.select"
           value={kind}
-          onChange={(e) => setKind(e.target.value as NewSourceKind)}
+          onChange={(e) => {
+            setKind(e.target.value as NewSourceKind);
+          }}
         >
           {SOURCE_KINDS.map((k) => (
             <option key={k} value={k}>
@@ -293,7 +295,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           id={ids.name}
           data-part="form.input"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
         />
       </div>
       {kind !== "ics" && (
@@ -305,7 +309,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
             id={ids.account}
             data-part="form.select"
             value={account}
-            onChange={(e) => setAccount(e.target.value)}
+            onChange={(e) => {
+              setAccount(e.target.value);
+            }}
           >
             <option value="">{t("pim-source-account-none")}</option>
             {realAccounts.map((a) => (
@@ -325,7 +331,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           data-part="form.input"
           type="url"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+          }}
         />
       </div>
       {kind !== "ics" && !account && (
@@ -339,7 +347,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
               data-part="form.input"
               autoComplete="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+              }}
             />
           </div>
           <div data-part="form.field" data-field="password">
@@ -352,7 +362,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+              }}
             />
           </div>
         </>
@@ -366,7 +378,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
             id={ids.color}
             data-part="form.input"
             value={color}
-            onChange={(e) => setColor(e.target.value)}
+            onChange={(e) => {
+              setColor(e.target.value);
+            }}
           />
         </div>
       )}
@@ -381,7 +395,9 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           inputMode="numeric"
           min={1}
           value={refresh}
-          onChange={(e) => setRefresh(e.target.value)}
+          onChange={(e) => {
+            setRefresh(e.target.value);
+          }}
         />
       </div>
       {tested && (

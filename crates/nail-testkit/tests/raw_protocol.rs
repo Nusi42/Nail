@@ -1,5 +1,6 @@
 //! Talks raw IMAP to the mock server to check wire details that the client
 //! tests do not exercise (literals, SASL-IR, non-peek fetch, SELECT).
+#![cfg(test)]
 
 use std::time::Duration;
 

@@ -8,6 +8,7 @@
 //! uses `;` on Windows.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -105,7 +106,7 @@ pub fn scan(root: &Path) -> Result<Vec<MailFolderSource>> {
     let mut out = Vec::new();
     for (segments, dir) in found {
         let (folder, renamed) = source_folder(&segments);
-        let (messages, size_bytes) = dir.as_deref().map(count).unwrap_or((0, 0));
+        let (messages, size_bytes) = dir.as_deref().map_or((0, 0), count);
         out.push(MailFolderSource {
             folder,
             renamed_from: renamed.then(|| segments.join("/")),
@@ -180,10 +181,7 @@ fn count(dir: &Path) -> (u64, u64) {
     message_files(dir)
         .iter()
         .fold((0, 0), |(n, size), (path, _)| {
-            (
-                n + 1,
-                size + fs::metadata(path).map(|m| m.len()).unwrap_or(0),
-            )
+            (n + 1, size + fs::metadata(path).map_or(0, |m| m.len()))
         })
 }
 
@@ -345,7 +343,7 @@ pub fn read_folder(
             index: Some(index as u64 + 1),
             ..ItemRef::default()
         };
-        let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let size = fs::metadata(&path).map_or(0, |m| m.len());
         if size > MAX_IMPORT_MESSAGE_BYTES {
             ctx.advance(0, size);
             visit(
@@ -401,6 +399,7 @@ pub fn read_folder(
 static UNIQUE: AtomicU64 = AtomicU64::new(0);
 
 /// Writes a Maildir++ tree: the root maildir and `.A.B` subfolders.
+#[derive(Debug)]
 pub struct MaildirWriter {
     root: PathBuf,
     /// Keywords per folder directory (letter order).
@@ -476,7 +475,11 @@ impl MaildirWriter {
                     continue;
                 }
             };
-            letters.push(char::from(b'a' + index as u8));
+            // At most 26 keywords per folder (checked above).
+            let Some(letter) = u8::try_from(index).ok().map(|i| b'a' + i) else {
+                continue;
+            };
+            letters.push(char::from(letter));
         }
         let mut info = String::new();
         if flags.draft {
@@ -522,11 +525,14 @@ impl MaildirWriter {
             if keywords.is_empty() {
                 continue;
             }
-            let text: String = keywords
-                .iter()
-                .enumerate()
-                .map(|(i, k)| format!("{i} {k}\n"))
-                .collect();
+            let text: String =
+                keywords
+                    .iter()
+                    .enumerate()
+                    .fold(String::new(), |mut out, (i, k)| {
+                        let _ = writeln!(out, "{i} {k}");
+                        out
+                    });
             let path = dir.join("dovecot-keywords");
             fs::write(&path, text)
                 .map_err(|e| PortabilityError::io(path.display().to_string(), e))?;

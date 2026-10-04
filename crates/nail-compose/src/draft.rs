@@ -182,7 +182,7 @@ pub fn new_draft(
             let html = original.html.as_deref();
             if kind == DraftContextMode::Forward {
                 draft.subject = forward_subject(&original.subject);
-                draft.attachments = original.attachments.clone();
+                draft.attachments.clone_from(&original.attachments);
                 forward_body(
                     mode,
                     &strings.forward_intro,
@@ -244,7 +244,6 @@ pub fn convert_draft(draft: &Draft, mode: ComposerMode, style: &MailStyle) -> Co
     let mut dropped = Vec::new();
     let body = match (draft.mode, mode) {
         (ComposerMode::Plain, ComposerMode::Html) => text_to_html(&source),
-        (ComposerMode::Plain, ComposerMode::Markdown) => source,
         (ComposerMode::Markdown, ComposerMode::Html) => render_markdown(&source, style),
         (ComposerMode::Markdown, ComposerMode::Plain) => {
             if has_formatting(&render_markdown(&source, style)) {
@@ -263,6 +262,8 @@ pub fn convert_draft(draft: &Draft, mode: ComposerMode, style: &MailStyle) -> Co
             }
             html_to_text(&source)
         }
+        // The same mode, and plain text to Markdown: plain text is valid
+        // Markdown as it is.
         (_, _) => source,
     };
     out.markdown_part = out.markdown_part && mode == ComposerMode::Markdown;

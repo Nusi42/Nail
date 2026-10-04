@@ -4,6 +4,8 @@
 //! notifications and quiet hours, headers-only sync with on-demand bodies,
 //! and the server-side search fallback.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -27,8 +29,8 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 struct Fixture {
     service: Service,
     demo: DemoMulti,
-    _config_dir: TempDir,
-    _data_dir: TempDir,
+    config_dir_guard: TempDir,
+    data_dir_guard: TempDir,
 }
 
 async fn setup() -> Fixture {
@@ -41,8 +43,8 @@ async fn setup() -> Fixture {
     Fixture {
         service,
         demo,
-        _config_dir: config_dir,
-        _data_dir: data_dir,
+        config_dir_guard: config_dir,
+        data_dir_guard: data_dir,
     }
 }
 
@@ -173,7 +175,7 @@ async fn next_notification(
         let left = deadline.saturating_duration_since(tokio::time::Instant::now());
         match tokio::time::timeout(left, events.recv()).await {
             Ok(Ok(Event::NotificationRequested { notification })) => return Some(notification),
-            Ok(Ok(_)) | Ok(Err(broadcast::error::RecvError::Lagged(_))) => {}
+            Ok(Ok(_) | Err(broadcast::error::RecvError::Lagged(_))) => {}
             Ok(Err(broadcast::error::RecvError::Closed)) | Err(_) => return None,
         }
     }
@@ -712,8 +714,8 @@ async fn snoozes_survive_a_restart_and_notify_per_folder() {
     // Nail is not running when the wake time passes.
     f.demo.clock.advance(7200);
     let options = f.demo.service_options(ServiceOptions::new(
-        f._data_dir.path(),
-        f._config_dir.path(),
+        f.data_dir_guard.path(),
+        f.config_dir_guard.path(),
     ));
     let service = Service::open(options).unwrap();
     let mut events = service.subscribe();
@@ -782,8 +784,8 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
     let f = Fixture {
         service: open(&demo, &data_dir, &config_dir),
         demo,
-        _config_dir: config_dir,
-        _data_dir: data_dir,
+        config_dir_guard: config_dir,
+        data_dir_guard: data_dir,
     };
     synced(&f).await;
     eventually(
@@ -878,7 +880,7 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
     .await;
     f.service.shutdown().await;
 
-    let service = open(&f.demo, &f._data_dir, &f._config_dir);
+    let service = open(&f.demo, &f.data_dir_guard, &f.config_dir_guard);
     eventually("the stranded mail is back in the Inbox", || async {
         messages(&service, &inbox.id)
             .await
@@ -969,7 +971,7 @@ async fn search_page(
                 folder_id: None,
                 offset,
                 limit,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         })
         .await
@@ -1087,7 +1089,7 @@ async fn headers_only_mail_is_found_on_the_server_and_fetched_on_open() {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         })
         .await

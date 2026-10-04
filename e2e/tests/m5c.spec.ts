@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
 import { composerWindow, composerWindows, runFromPalette } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Wave M5c (ADRs 0116–0121) against `nail serve --seed demo`: the window
@@ -18,7 +19,8 @@ import { composerWindow, composerWindows, runFromPalette } from "../support/view
 let server: NailServer;
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
@@ -89,8 +91,12 @@ async function dragTitleTo(page: Page, window: Locator, to: { x: number; y: numb
   if (up) await page.mouse.up();
 }
 
-const near = (actual: number, expected: number, tolerance = 2) =>
-  expect(Math.abs(actual - expected), `${actual} ≈ ${expected}`).toBeLessThanOrEqual(tolerance);
+const near = (actual: number, expected: number, tolerance = 2) => {
+  expect(
+    Math.abs(actual - expected),
+    `${String(actual)} ≈ ${String(expected)}`,
+  ).toBeLessThanOrEqual(tolerance);
+};
 
 test("a window moves by its title bar and resizes from every edge and corner", async ({ page }) => {
   await open(page);
@@ -136,7 +142,7 @@ test("a window moves by its title bar and resizes from every edge and corner", a
 test("windows snap to the left and right half and come loose again", async ({ page }) => {
   await open(page);
   const rules = await openRules(page);
-  const viewport = page.viewportSize()!;
+  const viewport = defined(page.viewportSize(), "the viewport");
   const before = await box(rules);
 
   await dragTitleTo(page, rules, { x: 5, y: 300 }, false);
@@ -166,7 +172,7 @@ test("a double-click on the title bar maximizes and restores", async ({ page }) 
   await open(page);
   const rules = await openRules(page);
   const before = await box(rules);
-  const viewport = page.viewportSize()!;
+  const viewport = defined(page.viewportSize(), "the viewport");
 
   await titleBar(rules).locator('[data-part="window.title"]').dblclick();
   await expect(rules).toHaveAttribute("data-state", /maximized/);
@@ -262,12 +268,12 @@ test("window geometry is remembered across a reload", async ({ page }) => {
 test("two composers side by side: each edits and sends on its own", async ({ page }) => {
   // demo-multi: accounts with identities and a mock SMTP server.
   await open(page, "demo-multi");
-  const viewport = page.viewportSize()!;
+  const viewport = defined(page.viewportSize(), "the viewport");
   await rows(page).first().click();
   await page.keyboard.press("c");
   const first = composerWindow(page);
   await expect(first).toBeVisible();
-  const firstId = (await first.getAttribute("data-window"))!;
+  const firstId = defined(await first.getAttribute("data-window"), "the window id");
   expect(firstId).toMatch(/^composer:/);
   const left = win(page, firstId);
   await left.getByRole("textbox", { name: "Subject" }).fill("Left draft");
@@ -281,7 +287,7 @@ test("two composers side by side: each edits and sends on its own", async ({ pag
   await expect(page.locator('[data-part="window"]:focus-within')).toHaveCount(0);
   await page.keyboard.press("c");
   await expect(composerWindows(page)).toHaveCount(2);
-  const secondId = (await composerWindow(page).getAttribute("data-window"))!;
+  const secondId = defined(await composerWindow(page).getAttribute("data-window"), "the window id");
   expect(secondId).not.toBe(firstId);
   const right = win(page, secondId);
   await dragTitleTo(page, right, { x: viewport.width - 4, y: 400 });
@@ -311,12 +317,12 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await rows(page).first().click();
   await page.keyboard.press("c");
   const composer = composerWindow(page);
-  const id = (await composer.getAttribute("data-window"))!;
+  const id = defined(await composer.getAttribute("data-window"), "the window id");
   const own = win(page, id);
   await own.getByRole("textbox", { name: "Subject" }).fill("Unsaved thoughts");
   // Closed with unsaved changes (the autosave is lengthened): the composer asks.
   await own.locator('[data-part="window.close"]').click();
-  const key = id.split(":")[1];
+  const key = id.split(":")[1] ?? "";
   const confirm = win(page, `composer-close:${key}`);
   await expect(confirm).toBeVisible();
   await expect(confirm).toHaveAttribute("data-owner", id);
@@ -336,7 +342,10 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
 
   // A confirmation from the main window ("Delete permanently?") covers the
   // main window, not the composer (snapped right, out of the list's way).
-  await dragTitleTo(page, own, { x: page.viewportSize()!.width - 4, y: 400 });
+  await dragTitleTo(page, own, {
+    x: defined(page.viewportSize(), "the viewport").width - 4,
+    y: 400,
+  });
   await expect(own).toHaveAttribute("data-snap", "right");
   await rows(page)
     .first()
@@ -376,11 +385,11 @@ test("Escape closes the focused window, not windows behind the main window", asy
   // confirmation closes only the confirmation.
   await page.keyboard.press("c");
   const composer = composerWindow(page);
-  const id = (await composer.getAttribute("data-window"))!;
+  const id = defined(await composer.getAttribute("data-window"), "the window id");
   const own = win(page, id);
   await own.getByRole("textbox", { name: "Subject" }).fill("Not yet");
   await own.getByRole("textbox", { name: "Subject" }).press("Escape");
-  const confirm = win(page, `composer-close:${id.split(":")[1]}`);
+  const confirm = win(page, `composer-close:${id.split(":")[1] ?? ""}`);
   await expect(confirm).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(confirm).toBeHidden();

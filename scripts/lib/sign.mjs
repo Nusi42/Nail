@@ -22,26 +22,59 @@ import path from "node:path";
 
 export const DEFAULT_TIMESTAMP_URL = "http://timestamp.digicert.com";
 
-/** The signing settings, or `null` when no certificate is configured. */
+/**
+ * Authenticode settings from the environment.
+ *
+ * @typedef {object} Signing
+ * @property {string} thumbprint
+ * @property {string} timestampUrl
+ * @property {string} description
+ * @property {string | null} signtool
+ */
+
+/**
+ * `value`, or `fallback` when it is missing or empty (an empty variable
+ * counts as unset).
+ *
+ * @template T
+ * @param {string | undefined} value
+ * @param {T} fallback
+ * @returns {string | T}
+ */
+function orDefault(value, fallback) {
+  if (!value) return fallback;
+  return value;
+}
+
+/**
+ * The signing settings, or `null` when no certificate is configured.
+ *
+ * @param {Partial<Record<string, string>>} env
+ * @returns {Signing | null}
+ */
 export function signingFromEnv(env) {
   const thumbprint = (env.NAIL_SIGN_THUMBPRINT ?? "").replace(/[\s:]/g, "").toUpperCase();
   if (!thumbprint) return null;
   if (!/^[0-9A-F]{40}$/.test(thumbprint)) {
     throw new Error("NAIL_SIGN_THUMBPRINT must be a 40-digit SHA-1 thumbprint");
   }
-  const timestampUrl = env.NAIL_SIGN_TIMESTAMP_URL || DEFAULT_TIMESTAMP_URL;
+  const timestampUrl = orDefault(env.NAIL_SIGN_TIMESTAMP_URL, DEFAULT_TIMESTAMP_URL);
   if (!/^https?:\/\//.test(timestampUrl)) {
     throw new Error(`NAIL_SIGN_TIMESTAMP_URL must be a URL: ${timestampUrl}`);
   }
   return {
     thumbprint,
     timestampUrl,
-    description: env.NAIL_SIGN_DESCRIPTION || "Nail",
-    signtool: env.NAIL_SIGNTOOL || null,
+    description: orDefault(env.NAIL_SIGN_DESCRIPTION, "Nail"),
+    signtool: orDefault(env.NAIL_SIGNTOOL, null),
   };
 }
 
-/** The bundler's part (`bundle.windows` of the config overlay). */
+/**
+ * The bundler's part (`bundle.windows` of the config overlay).
+ *
+ * @param {Signing | null} signing
+ */
 export function tauriSigning(signing) {
   if (!signing) return null;
   return {
@@ -54,7 +87,12 @@ export function tauriSigning(signing) {
   };
 }
 
-/** `signtool sign` arguments for one file (SHA-256, RFC 3161 timestamp). */
+/**
+ * `signtool sign` arguments for one file (SHA-256, RFC 3161 timestamp).
+ *
+ * @param {Signing} signing
+ * @param {string} file
+ */
 export function signtoolArgs(signing, file) {
   return [
     "sign",
@@ -72,7 +110,11 @@ export function signtoolArgs(signing, file) {
   ];
 }
 
-/** `signtool verify` arguments (Authenticode policy, all signatures). */
+/**
+ * `signtool verify` arguments (Authenticode policy, all signatures).
+ *
+ * @param {string} file
+ */
 export function verifyArgs(file) {
   return ["verify", "/pa", "/all", file];
 }
@@ -81,11 +123,16 @@ export function verifyArgs(file) {
  * signtool.exe: `NAIL_SIGNTOOL`, else the newest Windows 10/11 SDK's x64
  * build. `readdir(dir)` lists a directory (names), `exists(file)` tests a
  * file; `programFilesX86` is `%ProgramFiles(x86)%`.
+ *
+ * @param {{ signing?: Pick<Signing, "signtool"> | null, programFilesX86?: string | undefined,
+ *   readdir: (dir: string) => string[], exists: (file: string) => boolean }} options
+ * @returns {string}
  */
 export function findSigntool({ signing, programFilesX86, readdir, exists }) {
   if (signing?.signtool) return signing.signtool;
   const bin = path.join(programFilesX86 ?? "C:\\Program Files (x86)", "Windows Kits", "10", "bin");
-  let versions = [];
+  /** @type {string[]} */
+  let versions;
   try {
     versions = readdir(bin).filter((v) => /^10\.\d+\.\d+\.\d+$/.test(v));
   } catch {
@@ -94,7 +141,10 @@ export function findSigntool({ signing, programFilesX86, readdir, exists }) {
   versions.sort((a, b) => {
     const x = a.split(".").map(Number);
     const y = b.split(".").map(Number);
-    for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return y[i] - x[i];
+    for (let i = 0; i < 4; i++) {
+      const [xi = 0, yi = 0] = [x[i], y[i]];
+      if (xi !== yi) return yi - xi;
+    }
     return 0;
   });
   for (const version of versions) {

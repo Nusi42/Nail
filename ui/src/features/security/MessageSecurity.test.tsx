@@ -4,6 +4,7 @@ import type { MessageBody, Request, SecurityStatus } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { AuthBadge, SecurityBadge } from "./MessageSecurity";
 import { securityDemoBySender } from "./mockSeed";
+import { must } from "../../test/must";
 
 const demo = securityDemoBySender();
 
@@ -168,13 +169,9 @@ describe("auth badge", () => {
     expect(within(details).getByText(/probably does not come from/)).toBeInTheDocument();
     const rows = within(details).getAllByRole("listitem");
     expect(rows.map((r) => r.getAttribute("data-method"))).toEqual(["dmarc", "dkim", "spf"]);
-    expect(
-      within(rows[1] as HTMLElement).getByText("shop.example (selector mail)"),
-    ).toBeInTheDocument();
-    expect(
-      within(rows[1] as HTMLElement).getByText("signature did not verify"),
-    ).toBeInTheDocument();
-    expect(within(rows[2] as HTMLElement).getByText("soft fail")).toBeInTheDocument();
+    expect(within(must(rows[1])).getByText("shop.example (selector mail)")).toBeInTheDocument();
+    expect(within(must(rows[1])).getByText("signature did not verify")).toBeInTheDocument();
+    expect(within(must(rows[2])).getByText("soft fail")).toBeInTheDocument();
     expect(within(details).getByText("Checked by imap.example.org")).toBeInTheDocument();
   });
 
@@ -211,7 +208,9 @@ describe("security-message widget", () => {
     const body = withFindings(env, "grace@navy.example");
     renderNode(widget("security-message"), env);
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
-    act(() => env.store.getState().selectMessage(body.id));
+    act(() => {
+      env.store.getState().selectMessage(body.id);
+    });
     const group = await screen.findByRole("group", { name: "Message security" });
     expect(within(group).getByRole("button", { name: /Security:/ })).toBeInTheDocument();
     expect(within(group).getByRole("button", { name: /Sender check:/ })).toBeInTheDocument();
@@ -222,10 +221,12 @@ describe("security-message widget", () => {
     const body = [...env.transport.data.bodies.values()][1];
     if (!body) throw new Error("no body");
     const { container } = renderNode(widget("security-message"), env);
-    act(() => env.store.getState().selectMessage(body.id));
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "GetMessage")).toBe(true),
-    );
+    act(() => {
+      env.store.getState().selectMessage(body.id);
+    });
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "GetMessage")).toBe(true);
+    });
     expect(container.querySelector('[data-part="security-message"]')).toBeNull();
   });
 });

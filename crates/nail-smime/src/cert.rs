@@ -27,7 +27,7 @@ use crate::time::rfc3339;
 #[derive(Clone)]
 pub struct Cert {
     der: Vec<u8>,
-    cert: Certificate,
+    parsed: Certificate,
     fingerprint: String,
 }
 
@@ -44,7 +44,7 @@ impl fmt::Debug for Cert {
         f.debug_struct("Cert")
             .field("subject", &self.subject())
             .field("fingerprint", &self.fingerprint)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -78,7 +78,7 @@ impl Cert {
         let fingerprint = hex_upper(&Sha256::digest(&der));
         Self {
             der,
-            cert,
+            parsed: cert,
             fingerprint,
         }
     }
@@ -118,7 +118,7 @@ impl Cert {
 
     /// The parsed certificate.
     pub fn inner(&self) -> &Certificate {
-        &self.cert
+        &self.parsed
     }
 
     /// SHA-256 of the DER encoding, uppercase hex (the keyring fingerprint).
@@ -133,32 +133,32 @@ impl Cert {
 
     /// Subject distinguished name (RFC 4514).
     pub fn subject(&self) -> String {
-        self.cert.tbs_certificate.subject.to_string()
+        self.parsed.tbs_certificate.subject.to_string()
     }
 
     /// Issuer distinguished name (RFC 4514).
     pub fn issuer(&self) -> String {
-        self.cert.tbs_certificate.issuer.to_string()
+        self.parsed.tbs_certificate.issuer.to_string()
     }
 
     /// Serial number, uppercase hex.
     pub fn serial(&self) -> String {
-        hex_upper(self.cert.tbs_certificate.serial_number.as_bytes())
+        hex_upper(self.parsed.tbs_certificate.serial_number.as_bytes())
     }
 
     /// The subject's common name, if any.
     pub fn common_name(&self) -> Option<String> {
-        name_attribute(&self.cert.tbs_certificate.subject, oids::COMMON_NAME)
+        name_attribute(&self.parsed.tbs_certificate.subject, oids::COMMON_NAME)
     }
 
     /// Start of validity, Unix seconds.
     pub fn not_before(&self) -> i64 {
-        unix(self.cert.tbs_certificate.validity.not_before)
+        unix(self.parsed.tbs_certificate.validity.not_before)
     }
 
     /// End of validity, Unix seconds.
     pub fn not_after(&self) -> i64 {
-        unix(self.cert.tbs_certificate.validity.not_after)
+        unix(self.parsed.tbs_certificate.validity.not_after)
     }
 
     /// Whether `at` (Unix seconds) is within the validity period.
@@ -183,7 +183,7 @@ impl Cert {
                 }
             }
         }
-        for rdn in self.cert.tbs_certificate.subject.0.iter() {
+        for rdn in &self.parsed.tbs_certificate.subject.0 {
             for atv in rdn.0.iter() {
                 if atv.oid == oids::EMAIL_ADDRESS
                     && let Some(text) = any_text(&atv.value)
@@ -203,7 +203,7 @@ impl Cert {
 
     /// The public key.
     pub fn public_key(&self) -> Result<PublicKey> {
-        PublicKey::from_spki(&self.cert.tbs_certificate.subject_public_key_info)
+        PublicKey::from_spki(&self.parsed.tbs_certificate.subject_public_key_info)
     }
 
     /// Display name of the key algorithm; the OID for unsupported ones.
@@ -211,7 +211,7 @@ impl Cert {
         match self.public_key() {
             Ok(key) => key.algorithm_name(),
             Err(_) => self
-                .cert
+                .parsed
                 .tbs_certificate
                 .subject_public_key_info
                 .algorithm
@@ -222,7 +222,7 @@ impl Cert {
 
     /// A decoded extension, `None` when absent or undecodable.
     fn extension<T: for<'a> Decode<'a>>(&self, oid: ObjectIdentifier) -> Option<T> {
-        self.cert
+        self.parsed
             .tbs_certificate
             .extensions
             .as_ref()?
@@ -232,7 +232,7 @@ impl Cert {
     }
 
     fn has_extension(&self, oid: ObjectIdentifier) -> bool {
-        self.cert
+        self.parsed
             .tbs_certificate
             .extensions
             .as_ref()
@@ -276,7 +276,7 @@ impl Cert {
 
     /// Whether subject and issuer are the same name.
     pub fn is_self_issued(&self) -> bool {
-        self.cert.tbs_certificate.subject == self.cert.tbs_certificate.issuer
+        self.parsed.tbs_certificate.subject == self.parsed.tbs_certificate.issuer
     }
 
     /// Critical extensions this implementation does not process (a chain
@@ -292,7 +292,7 @@ impl Cert {
             oids::CE_SUBJECT_KEY_ID,
             oids::CE_CERTIFICATE_POLICIES,
         ];
-        self.cert
+        self.parsed
             .tbs_certificate
             .extensions
             .iter()
@@ -359,15 +359,15 @@ impl Cert {
     /// Issuer and serial number (a CMS recipient / signer identifier).
     pub fn issuer_and_serial(&self) -> IssuerAndSerialNumber {
         IssuerAndSerialNumber {
-            issuer: self.cert.tbs_certificate.issuer.clone(),
-            serial_number: self.cert.tbs_certificate.serial_number.clone(),
+            issuer: self.parsed.tbs_certificate.issuer.clone(),
+            serial_number: self.parsed.tbs_certificate.serial_number.clone(),
         }
     }
 
     /// Whether this is the certificate named by issuer and serial.
     pub fn matches_issuer_serial(&self, id: &IssuerAndSerialNumber) -> bool {
-        self.cert.tbs_certificate.issuer == id.issuer
-            && self.cert.tbs_certificate.serial_number == id.serial_number
+        self.parsed.tbs_certificate.issuer == id.issuer
+            && self.parsed.tbs_certificate.serial_number == id.serial_number
     }
 
     /// Whether this is the certificate with this subject key identifier.
@@ -389,10 +389,10 @@ impl Cert {
 
     /// Checks that `issuer`'s key made this certificate's signature.
     pub fn verify_signed_by(&self, issuer: &Cert) -> Result<()> {
-        let scheme = crate::keys::SignScheme::resolve(&self.cert.signature_algorithm, None)?;
-        let tbs = self.cert.tbs_certificate.to_der()?;
+        let scheme = crate::keys::SignScheme::resolve(&self.parsed.signature_algorithm, None)?;
+        let tbs = self.parsed.tbs_certificate.to_der()?;
         let signature = self
-            .cert
+            .parsed
             .signature
             .as_bytes()
             .ok_or_else(|| Error::malformed("signature is not octet-aligned"))?;

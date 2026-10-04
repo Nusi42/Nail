@@ -139,6 +139,11 @@ fn default_layout_file() -> &'static LayoutFile {
 }
 
 /// The resolved default theme.
+///
+/// # Panics
+///
+/// When the theme compiled into the binary does not resolve (a build
+/// defect the crate's tests catch).
 pub fn default_theme() -> ResolvedTheme {
     static THEME: OnceLock<ResolvedTheme> = OnceLock::new();
     THEME
@@ -155,6 +160,11 @@ pub fn default_theme() -> ResolvedTheme {
 /// default light theme (Frost) on top of the shipped base. This is what
 /// [`ConfigManager::theme`] starts with; [`default_theme`] is the base
 /// alone.
+///
+/// # Panics
+///
+/// When the built-in themes do not resolve (a build defect the crate's
+/// tests catch).
 pub fn default_selected_theme() -> ResolvedTheme {
     static THEME: OnceLock<ResolvedTheme> = OnceLock::new();
     THEME
@@ -167,6 +177,11 @@ pub fn default_selected_theme() -> ResolvedTheme {
 }
 
 /// The resolved default layout.
+///
+/// # Panics
+///
+/// When the layout compiled into the binary does not resolve (a build
+/// defect the crate's tests catch).
 pub fn default_layout() -> ResolvedLayout {
     static LAYOUT: OnceLock<ResolvedLayout> = OnceLock::new();
     LAYOUT

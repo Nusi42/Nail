@@ -14,6 +14,7 @@ import type {
   TextMatch,
   TextOp,
 } from "../../api/generated";
+import { nonEmpty } from "../../text/empty";
 
 export type ConditionKind = Condition["type"];
 export type ActionKind = RuleAction["type"];
@@ -231,9 +232,9 @@ export function addChild(root: Condition, path: ConditionPath, child: Condition)
  * of a `not` removes the `not` itself.
  */
 export function removeAt(root: Condition, path: ConditionPath): Condition {
-  if (path.length === 0) return root;
+  const index = path.at(-1);
+  if (index === undefined) return root;
   const parentPath = path.slice(0, -1);
-  const index = path[path.length - 1] as number;
   const parent = conditionAt(root, parentPath);
   if (!parent) return root;
   if (parent.type === "not") return removeAt(root, parentPath);
@@ -256,11 +257,12 @@ export function setGroupMode(root: Condition, path: ConditionPath, mode: "all" |
 
 /** Tree order of condition paths: a group before its children, children by index. */
 export function comparePaths(a: readonly number[], b: readonly number[]): number {
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    const d = (a[i] as number) - (b[i] as number);
-    if (d !== 0) return d;
+  for (let i = 0; ; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x === undefined || y === undefined) return a.length - b.length;
+    if (x !== y) return x - y;
   }
-  return a.length - b.length;
 }
 
 /** Swaps an item with its neighbour; returns the list unchanged at the ends. */
@@ -387,7 +389,7 @@ export function ruleFromMessage(message: MessageSummary): Rule {
   }
   return {
     ...newRule(),
-    name: message.from?.name || from || message.subject,
+    name: nonEmpty(message.from?.name) ?? nonEmpty(from) ?? message.subject,
     conditions: { type: "all", conditions },
   };
 }

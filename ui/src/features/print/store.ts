@@ -21,9 +21,9 @@ export interface PrintUiState {
   autoPrint: PrintJobId | null;
   /** Content printed without a job (shown by the print host, then printed). */
   sheet: ReactNode | null;
-  prepare(target: PrintTarget | null, mode: PrintMode): void;
-  setAutoPrint(jobId: PrintJobId | null): void;
-  setSheet(sheet: ReactNode | null): void;
+  prepare: (target: PrintTarget | null, mode: PrintMode) => void;
+  setAutoPrint: (jobId: PrintJobId | null) => void;
+  setSheet: (sheet: ReactNode | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PrintUiState>>();
@@ -34,9 +34,15 @@ export function createPrintStore(): StoreApi<PrintUiState> {
     mode: "print",
     autoPrint: null,
     sheet: null,
-    prepare: (target, mode) => set({ target, mode }),
-    setAutoPrint: (autoPrint) => set({ autoPrint }),
-    setSheet: (sheet) => set({ sheet }),
+    prepare: (target, mode) => {
+      set({ target, mode });
+    },
+    setAutoPrint: (autoPrint) => {
+      set({ autoPrint });
+    },
+    setSheet: (sheet) => {
+      set({ sheet });
+    },
   }));
 }
 

@@ -103,7 +103,7 @@ mod tests {
         assert!(caps.has("8bitmime"));
         assert!(caps.has("DSN"));
         assert!(!caps.has("STARTTLS"));
-        assert!(!caps.has("SIZ"));
+        assert!(!caps.has("SI"));
         assert_eq!(caps.auth_mechanisms(), ["LOGIN", "PLAIN", "XOAUTH2"]);
         assert!(caps.has_auth("XOAUTH2"));
         assert_eq!(caps.extensions.len(), 6);

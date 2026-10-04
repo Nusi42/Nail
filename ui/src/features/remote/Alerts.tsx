@@ -18,7 +18,9 @@ function Toast({ shown }: { shown: ShownAlert }) {
   const locale = useLocale();
   const uiStore = useUiStoreApi();
   const { alert } = shown;
-  const dismiss = () => remoteStore.getState().dismissAlert(shown.id);
+  const dismiss = () => {
+    remoteStore.getState().dismissAlert(shown.id);
+  };
   const text =
     alert.kind === "new-device"
       ? t(alert.ip === null ? "remote-alert-new-device" : "remote-alert-new-device-ip", {
@@ -39,6 +41,7 @@ function Toast({ shown }: { shown: ShownAlert }) {
           },
         );
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape from the alert's buttons dismisses the alert.
     <div
       data-part="remote-alerts.toast"
       data-kind={alert.kind}

@@ -252,7 +252,7 @@ impl SigningKey for CardSigningKey {
             }
             other => Err(self.fail(CardError::new(
                 SmartcardError::MechanismUnsupported,
-                format!("OpenPGP {:?} keys on smartcards", other),
+                format!("OpenPGP {other:?} keys on smartcards"),
             ))),
         }
     }
@@ -331,7 +331,7 @@ mod tests {
         DecryptionState, KeyAlgorithm, KeySource, SecretStorage, SignatureState,
     };
     use nail_pkcs11::testing::{SoftKey, SoftToken};
-    use nail_pkcs11::{FixedPin, Module, PinPrompter, Smartcards};
+    use nail_pkcs11::{FixedPin, Module, Smartcards};
     use nail_store::Store;
     use pgp::composed::SignedSecretKey;
     use pgp::types::PlainSecretParams;
@@ -418,11 +418,8 @@ Subject: Card mail\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSigned on t
                 true,
             );
             let pins = Arc::new(FixedPin::answers(pins.iter().copied()));
-            let cards = Smartcards::from_modules(
-                vec![Arc::clone(&token) as Arc<dyn Module>],
-                10,
-                Arc::clone(&pins) as Arc<dyn PinPrompter>,
-            );
+            let module: Arc<dyn Module> = token.clone();
+            let cards = Smartcards::from_modules(vec![module], 10, pins.clone());
             let store = Store::open_in_memory().unwrap();
             let secrets = MemorySecretStore::new();
             let cache = UnlockCache::new();
@@ -504,11 +501,8 @@ Subject: Card mail\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSigned on t
             None,
             true,
         );
-        let cards = Smartcards::from_modules(
-            vec![Arc::new(other) as Arc<dyn Module>],
-            0,
-            Arc::new(FixedPin::default()) as Arc<dyn PinPrompter>,
-        );
+        let module: Arc<dyn Module> = Arc::new(other);
+        let cards = Smartcards::from_modules(vec![module], 0, Arc::new(FixedPin::default()));
         let ring = Keyring::new(&env.store, &env.secrets, &env.cache).with_smartcards(&cards);
         let unknown = SmartcardKeyRef {
             module: r"C:\test\other.dll".into(),

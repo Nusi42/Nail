@@ -2,6 +2,7 @@
 //! [`nail_vault::open_data_dir`], interrupted migrations, the vault file,
 //! and the recovery key (create, verify, rotate, remove, restore after the
 //! keychain entry was lost).
+#![cfg(test)]
 
 use std::ops::ControlFlow;
 use std::path::PathBuf;

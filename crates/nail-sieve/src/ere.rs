@@ -16,6 +16,8 @@
 //! The output is itself valid Rust syntax and translates to itself
 //! (idempotent), which the round-trip harness relies on.
 
+use std::fmt::Write as _;
+
 use regex_syntax::ast::{
     AssertionKind, Ast, ClassAsciiKind, ClassPerl, ClassPerlKind, ClassSet, ClassSetItem,
     GroupKind, LiteralKind, RepetitionKind, RepetitionRange, SpecialLiteralKind,
@@ -102,13 +104,13 @@ fn write(ast: &Ast, out: &mut String) -> Option<()> {
                 RepetitionKind::ZeroOrMore => out.push('*'),
                 RepetitionKind::OneOrMore => out.push('+'),
                 RepetitionKind::Range(RepetitionRange::Exactly(n)) => {
-                    out.push_str(&format!("{{{n}}}"));
+                    let _ = write!(out, "{{{n}}}");
                 }
                 RepetitionKind::Range(RepetitionRange::AtLeast(n)) => {
-                    out.push_str(&format!("{{{n},}}"));
+                    let _ = write!(out, "{{{n},}}");
                 }
                 RepetitionKind::Range(RepetitionRange::Bounded(a, b)) => {
-                    out.push_str(&format!("{{{a},{b}}}"));
+                    let _ = write!(out, "{{{a},{b}}}");
                 }
             }
             // POSIX limits bounds to RE_DUP_MAX (255).

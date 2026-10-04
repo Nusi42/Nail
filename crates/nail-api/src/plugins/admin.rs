@@ -1,7 +1,7 @@
 //! Installed plug-ins, install sources and previews, logs and storage
 //! limits (plan M2d WP60: plug-in admin requests).
 //!
-//! These types travel in the protocol (snake_case JSON), not to plug-in
+//! These types travel in the protocol (`snake_case` JSON), not to plug-in
 //! code.
 
 use serde::{Deserialize, Serialize};

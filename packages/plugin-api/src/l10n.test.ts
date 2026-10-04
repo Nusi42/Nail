@@ -23,6 +23,7 @@ broken = { $oops
 only-en = English only
 `;
 
+// German catalog. spellchecker:off
 const DE = `
 hello = Hallo, { $name }!
 items = { $count ->
@@ -30,6 +31,7 @@ items = { $count ->
    *[other] { $count } Einträge
 }
 `;
+// spellchecker:on
 
 describe("FluentCatalog", () => {
   const catalog = new FluentCatalog(EN);
@@ -64,7 +66,7 @@ describe("createLocalizer", () => {
     const l10n = createLocalizer("de-AT", { en: EN, de: DE });
     expect(l10n.locale).toBe("de-AT");
     expect(l10n.t("hello", { name: "Ada" })).toBe("Hallo, Ada!");
-    expect(l10n.t("items", { count: 1 })).toBe("Ein Eintrag");
+    expect(l10n.t("items", { count: 1 })).toBe("Ein Eintrag"); // spellchecker:disable-line
     expect(l10n.t("items", { count: 3 })).toBe("3 Einträge");
     expect(l10n.t("only-en")).toBe("English only");
     expect(l10n.t("nowhere")).toBe("nowhere");

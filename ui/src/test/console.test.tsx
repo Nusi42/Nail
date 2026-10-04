@@ -6,8 +6,12 @@ import { allowConsole, consoleProblems, expectConsole, resetConsole } from "./co
 function LateUpdate() {
   const [n, setN] = useState(0);
   useEffect(() => {
-    const timer = setTimeout(() => setN(1), 0);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setN(1);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
   return <output>{n}</output>;
 }

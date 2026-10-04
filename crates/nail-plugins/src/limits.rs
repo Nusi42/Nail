@@ -87,7 +87,7 @@ impl Default for HostLimits {
             max_pending_calls: 64,
             max_open_dialogs: 5,
             max_timers: 100,
-            max_timer_delay: Duration::from_secs(24 * 60 * 60),
+            max_timer_delay: Duration::from_hours(24),
             max_log_lines_per_call: 200,
             max_log_lines_per_minute: 600,
             notifications_per_minute: 20,
@@ -102,10 +102,10 @@ impl Default for HostLimits {
             job_wall_clock: Duration::from_millis(nail_api::plugins::jobs::JOB_WALL_CLOCK_MS),
             job_tick: Duration::from_secs(15),
             event_coalesce: Duration::from_millis(nail_api::plugins::jobs::EVENT_COALESCE_MS),
-            mcp_tool_timeout: Duration::from_secs(60),
+            mcp_tool_timeout: Duration::from_mins(1),
             max_tool_result_bytes: 1024 * 1024,
             max_blob_bytes: 32 * 1024 * 1024,
-            composer_edit_window: Duration::from_secs(5 * 60),
+            composer_edit_window: Duration::from_mins(5),
         }
     }
 }

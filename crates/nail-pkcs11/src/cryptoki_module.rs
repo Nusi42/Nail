@@ -287,7 +287,7 @@ impl Module for CryptokiModule {
 
     fn logout(&self, slot_id: u64) {
         if lock(&self.logged_in).remove(&slot_id) {
-            let _ = self.with_session(slot_id, Session::logout);
+            drop(self.with_session(slot_id, Session::logout));
         }
     }
 
@@ -355,7 +355,7 @@ impl Module for CryptokiModule {
             ];
             let secret = session.derive_key(&Mechanism::Ecdh1Derive(params), key, &template)?;
             let value = session.get_attributes(secret, &[AttributeType::Value]);
-            let _ = session.destroy_object(secret);
+            drop(session.destroy_object(secret));
             let value = value?.into_iter().find_map(|a| match a {
                 Attribute::Value(v) => Some(v),
                 _ => None,

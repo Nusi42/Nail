@@ -11,7 +11,7 @@
 //! `Request::PreviewPluginPlacements` with that text and the merge preview;
 //! the user confirms in the merge dialog (`ApplyConfigMerge`).
 //!
-//! The file is edited in place ([`crate::kdl_edit`], like the write-back),
+//! The file is edited in place (the `kdl_edit` module, like the write-back),
 //! so everything else stays byte for byte. The reference algorithm of the
 //! UI mock is `ui/src/features/plugins/placementText.ts`.
 //!
@@ -339,19 +339,19 @@ fn place_panel(
             continue;
         };
         let found = anchor.and_then(|kind| find_widget(root, kind, window_depth + 1));
-        match found {
-            Some((path, depth)) => {
-                let (parent, index) = follow(root, &path);
-                let at = if after { index + 1 } else { index };
-                insert_child(parent, at, panel, depth, &style);
+        if let Some((path, depth)) = found {
+            // `find_widget` returns non-empty paths.
+            let Some((parent, index)) = follow(root, &path) else {
+                continue;
+            };
+            let at = if after { index + 1 } else { index };
+            insert_child(parent, at, panel, depth, &style);
+        } else {
+            if !CONTAINERS.contains(&root.name().value()) {
+                continue;
             }
-            None => {
-                if !CONTAINERS.contains(&root.name().value()) {
-                    continue;
-                }
-                let count = root.children().map_or(0, |c| c.nodes().len());
-                insert_child(root, count, panel, window_depth + 2, &style);
-            }
+            let count = root.children().map_or(0, |c| c.nodes().len());
+            insert_child(root, count, panel, window_depth + 2, &style);
         }
     }
     Ok(())
@@ -388,14 +388,15 @@ fn find_widget(root: &KdlNode, kind: &str, depth: usize) -> Option<(Vec<usize>, 
     None
 }
 
-/// The parent of the node at `path` and its index there.
-fn follow<'a>(root: &'a mut KdlNode, path: &[usize]) -> (&'a mut KdlNode, usize) {
-    let (last, rest) = path.split_last().expect("a non-empty path");
+/// The parent of the node at `path` and its index there (`None` for an
+/// empty path).
+fn follow<'a>(root: &'a mut KdlNode, path: &[usize]) -> Option<(&'a mut KdlNode, usize)> {
+    let (last, rest) = path.split_last()?;
     let mut node = root;
     for &i in rest {
         node = &mut node.ensure_children().nodes_mut()[i];
     }
-    (node, *last)
+    Some((node, *last))
 }
 
 /// Inserts `plugin-panel "<panel>"` as the `at`-th child of `parent` (its

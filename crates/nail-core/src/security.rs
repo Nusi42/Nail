@@ -508,7 +508,7 @@ async fn send_autocrypt_setup(
         name: identity.name.clone(),
         email: identity.email.clone(),
     }];
-    draft.subject = nail_pgp::autocrypt::SETUP_SUBJECT.to_owned();
+    nail_pgp::autocrypt::SETUP_SUBJECT.clone_into(&mut draft.subject);
     draft.attachments = vec![DraftAttachment {
         filename: "autocrypt-setup-message.eml".to_owned(),
         mime: "message/rfc822".to_owned(),

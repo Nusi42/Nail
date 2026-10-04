@@ -145,7 +145,7 @@ fn matcher(
             errors.push(ConditionError::new(
                 path,
                 format!("invalid regular expression: {e}"),
-                LocalizedMessage::new("rule-issue-regex").arg("detail", e.to_string()),
+                LocalizedMessage::new("rule-issue-regex").arg("detail", e.clone()),
             ));
             None
         }
@@ -226,9 +226,10 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
             }
         }
         Condition::Size { cmp, bytes } => Node::Size(*cmp, *bytes),
-        Condition::Date { cmp, date } => match parse_day(date) {
-            Some(day) => Node::Date(*cmp, day),
-            None => {
+        Condition::Date { cmp, date } => {
+            if let Some(day) = parse_day(date) {
+                Node::Date(*cmp, day)
+            } else {
                 errors.push(ConditionError::new(
                     path,
                     format!("{date:?} is not a date (expected YYYY-MM-DD)"),
@@ -236,7 +237,7 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
                 ));
                 never()
             }
-        },
+        }
         Condition::Age { cmp, days } => Node::Age(*cmp, *days),
         Condition::Flag { flag, set } => Node::Flag(*flag, *set),
         Condition::Tag { tag } => Node::Tag(tag.clone()),
@@ -277,7 +278,7 @@ pub(crate) fn auth_results(message: &dyn MessageView, method: AuthMethod) -> Vec
             let result: String = rest
                 .trim_start()
                 .chars()
-                .take_while(|c| c.is_ascii_alphanumeric())
+                .take_while(char::is_ascii_alphanumeric)
                 .collect();
             Some(result.to_lowercase())
         })

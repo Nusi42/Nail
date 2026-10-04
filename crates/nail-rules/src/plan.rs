@@ -66,9 +66,10 @@ pub enum SkipReason {
 }
 
 /// What an action does to one message.
-// Plans are short-lived and small in number; boxing the operations would
-// only make matching on them clumsier.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "plans are short-lived and few; boxing the operations would only make matching on them clumsier"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     /// Queue `op`; queueing `undo` reverts it (`None`: it cannot be undone,

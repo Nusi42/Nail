@@ -2,6 +2,12 @@
 //! `CoreAccess` — requests map to the Client API, raw sources come from the
 //! blob store, attachments are cut out with nail-mime.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::sync::Mutex;
@@ -194,7 +200,7 @@ async fn core_data_reads_through_requests_store_and_blobs() {
         folder_id: None,
         offset: 3,
         limit: 5,
-        sort: Default::default(),
+        sort: nail_api::search::SearchSort::default(),
     };
     // MCP pages over local hits only: server hits and their count go.
     let SearchOutcome::Hits {
@@ -232,7 +238,7 @@ async fn core_data_writes_through_the_handler() {
             &by,
             Request::UpdateFlags {
                 message_ids: vec!["m1".into()],
-                change: Default::default(),
+                change: nail_api::FlagChange::default(),
             },
         )
         .await

@@ -292,7 +292,7 @@ fn fields_of(e: &ExchangeEvent, notes: &mut Vec<LocalizedMessage>) -> EventField
         Sensitivity::Confidential => Visibility::Confidential,
     };
     fields.priority = priority_of(e.importance);
-    fields.categories = e.categories.clone();
+    fields.categories.clone_from(&e.categories);
     fields.organizer = e.organizer.as_ref().map(|o| Organizer {
         email: o.address.clone(),
         name: o.name.clone(),

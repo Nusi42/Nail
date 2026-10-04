@@ -1,4 +1,5 @@
 //! `accounts.kdl`: Gmail API accounts (`gmail` node, M3b, ADR 0065).
+#![cfg(test)]
 
 use nail_api::accounts::{AuthConfig, IncomingServer, MailProtocol, TlsMode, default_port};
 use nail_api::domain::AccountKind;

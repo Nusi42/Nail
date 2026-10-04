@@ -145,7 +145,7 @@ impl Service {
                 }
             }
         }
-        let _ = client.logout().await;
+        drop(client.logout().await);
         (ok, bad)
     }
 
@@ -158,7 +158,7 @@ impl Service {
         changed: &mut Vec<FolderId>,
     ) -> (Vec<MessageId>, Vec<MessageId>) {
         let all: Vec<MessageId> = targets.iter().map(|t| t.message_id.clone()).collect();
-        let engine = match crate::exchange::engine_of(self, account).await {
+        let engine = match crate::exchange::engine_of(self, account) {
             Ok(engine) => engine,
             Err(err) => {
                 tracing::info!(account = %account.id, %err, "no Exchange engine to fetch bodies");

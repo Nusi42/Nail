@@ -32,7 +32,7 @@ export default defineConfig({
       ]
     : "list",
   use: { trace: "off" },
-  // The new headless mode (full Chromium) composits like the desktop
+  // The new headless mode (full Chromium) composites like the desktop
   // browser; the headless shell would measure a different pipeline.
   projects: [
     {

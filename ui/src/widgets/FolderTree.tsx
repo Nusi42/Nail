@@ -107,7 +107,7 @@ interface FolderRowProps {
   selected: boolean;
   tabbable: boolean;
   showUnread: boolean;
-  onChoose(): void;
+  onChoose: () => void;
   rowRef?: (el: HTMLLIElement | null) => void;
 }
 
@@ -125,6 +125,7 @@ function FolderRow({
   const t = useT();
   const roleLabel = folderRoleLabelId(folder);
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the tree handles the keyboard for its items (roving tabindex, Enter / Space).
     <li
       ref={rowRef}
       role="treeitem"
@@ -212,7 +213,9 @@ function AccountFolderTree({ node }: WidgetProps) {
             selected={folder.id === activeFolderId}
             tabbable={folder.id === focusable}
             showUnread={showUnread}
-            onChoose={() => selectFolder(folder.id)}
+            onChoose={() => {
+              selectFolder(folder.id);
+            }}
             rowRef={(el) => {
               if (el) items.current.set(folder.id, el);
               else items.current.delete(folder.id);
@@ -233,7 +236,7 @@ interface PaneContext {
   focusKey: string | null;
   collapsible: boolean;
   showUnread: boolean;
-  toggle(id: string): void;
+  toggle: (id: string) => void;
 }
 
 interface SectionProps {
@@ -292,13 +295,20 @@ function Section({
       data-status={account?.state ?? undefined}
       data-key={key}
     >
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the section's tree item expands and collapses with the arrow keys; this is its pointer target. */}
       <div
         data-part={
           section.accountId !== null ? "folder-tree.account" : "folder-tree.section.header"
         }
         data-account={section.accountId ?? undefined}
         data-section={section.id}
-        onClick={pane.collapsible ? () => pane.toggle(section.id) : undefined}
+        onClick={
+          pane.collapsible
+            ? () => {
+                pane.toggle(section.id);
+              }
+            : undefined
+        }
       >
         {pane.collapsible && (
           <Icon
@@ -414,6 +424,7 @@ function FavoritesSection({
       {rows.map(({ favorite, selected, choose, count }) => {
         const key = `favorite:${favorite}`;
         return (
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the tree handles the keyboard for its items (roving tabindex, Enter / Space).
           <li
             key={favorite}
             role="treeitem"
@@ -533,13 +544,14 @@ function SmartFoldersSection({
       title={t("folder-section-smart-folders")}
       colorSlot={null}
       collapsedCount={null}
-      childKeys={saved.map((s, index) => `smart:${s.id ?? `saved-${index}`}`)}
+      childKeys={saved.map((s, index) => `smart:${s.id ?? `saved-${String(index)}`}`)}
     >
       {saved.map((s, index) => {
-        const id = s.id ?? `saved-${index}`;
+        const id = s.id ?? `saved-${String(index)}`;
         const key = `smart:${id}`;
         const selected = isActiveSearch(s, search);
         return (
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the tree handles the keyboard for its items (roving tabindex, Enter / Space).
           <li
             key={id}
             role="treeitem"

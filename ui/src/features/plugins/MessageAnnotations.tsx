@@ -120,7 +120,7 @@ export function PluginBadges({ messageId }: { messageId: MessageId }) {
         });
         return (
           <li
-            key={`${badge.plugin_id}-${index}`}
+            key={`${badge.plugin_id}-${String(index)}`}
             data-part="plugin-badge"
             data-plugin={badge.plugin_id}
             data-level={badge.badge.level ?? "info"}

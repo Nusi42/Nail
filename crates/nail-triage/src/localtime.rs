@@ -76,7 +76,7 @@ pub(crate) mod testzone {
 
     /// DST rules.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum Rule {
+    pub(crate) enum Rule {
         /// EU: last Sunday of March 01:00 UTC → last Sunday of October
         /// 01:00 UTC.
         Eu,
@@ -87,7 +87,7 @@ pub(crate) mod testzone {
 
     /// A zone.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Zone {
+    pub(crate) struct Zone {
         /// Standard offset in hours.
         pub std_hours: i32,
         /// Its rules.
@@ -95,19 +95,19 @@ pub(crate) mod testzone {
     }
 
     /// Europe/Berlin.
-    pub const BERLIN: Zone = Zone {
+    pub(crate) const BERLIN: Zone = Zone {
         std_hours: 1,
         rule: Rule::Eu,
     };
-    /// America/New_York.
-    pub const NEW_YORK: Zone = Zone {
+    /// `America/New_York`.
+    pub(crate) const NEW_YORK: Zone = Zone {
         std_hours: -5,
         rule: Rule::Us,
     };
 
     /// An offset of a [`Zone`].
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct ZoneOffset {
+    pub(crate) struct ZoneOffset {
         zone: Zone,
         dst: bool,
     }
@@ -147,7 +147,7 @@ pub(crate) mod testzone {
 
     impl Zone {
         /// DST start and end as UTC instants.
-        fn window(&self, year: i32) -> (NaiveDateTime, NaiveDateTime) {
+        fn window(self, year: i32) -> (NaiveDateTime, NaiveDateTime) {
             let t = |h| NaiveTime::from_hms_opt(h, 0, 0).unwrap();
             match self.rule {
                 Rule::Eu => (
@@ -166,9 +166,9 @@ pub(crate) mod testzone {
             }
         }
 
-        fn is_dst_utc(&self, utc: &NaiveDateTime) -> bool {
+        fn is_dst_utc(self, utc: NaiveDateTime) -> bool {
             let (start, end) = self.window(utc.year());
-            *utc >= start && *utc < end
+            utc >= start && utc < end
         }
     }
 
@@ -189,7 +189,7 @@ pub(crate) mod testzone {
             for dst in [true, false] {
                 let off = ZoneOffset { zone: *self, dst };
                 let utc = *local - Duration::seconds(i64::from(off.fix().local_minus_utc()));
-                if self.is_dst_utc(&utc) == dst {
+                if self.is_dst_utc(utc) == dst {
                     found.push(off);
                 }
             }
@@ -207,7 +207,7 @@ pub(crate) mod testzone {
         fn offset_from_utc_datetime(&self, utc: &NaiveDateTime) -> ZoneOffset {
             ZoneOffset {
                 zone: *self,
-                dst: self.is_dst_utc(utc),
+                dst: self.is_dst_utc(*utc),
             }
         }
     }

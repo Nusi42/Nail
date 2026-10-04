@@ -929,7 +929,7 @@ impl GraphEngine {
             }
             PimFolderKind::Tasks => {
                 self.fold_tasks(&folder.remote_id, entries, &mut delta)
-                    .await?
+                    .await?;
             }
         }
         Ok(PimDeltaOutcome::Delta(delta))

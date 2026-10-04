@@ -3,6 +3,7 @@ import { normalizeLayout } from "../api/normalize";
 import { createEnv, renderNode, stubElementSizes, widget } from "../test/harness";
 import { flattenFolders } from "./FolderTree";
 import { compileRows, rowStates } from "./MessageList";
+import { must } from "../test/must";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -10,7 +11,9 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 describe("account-switcher", () => {
   it("lists accounts and selects one", async () => {
@@ -119,7 +122,7 @@ describe("folder-tree", () => {
     });
     expect(
       flattenFolders([f("b", "a"), f("a", null), f("c", null), f("orphan", "gone")]).map(
-        (r) => `${r.folder.id}:${r.depth}`,
+        (r) => `${r.folder.id}:${String(r.depth)}`,
       ),
     ).toEqual(["a:0", "b:1", "c:0", "orphan:0"]);
   });
@@ -143,7 +146,7 @@ describe("message-list", () => {
     // 600px viewport / 40px rows + overscan — far fewer than 50 loaded rows.
     expect(rows.length).toBeGreaterThan(5);
     expect(rows.length).toBeLessThan(40);
-    const first = rows[0] as HTMLElement;
+    const first = must(rows[0]);
     expect(first).toHaveAttribute("data-part", "message-list.row");
     expect(first).toHaveAttribute("data-state", "unread flagged answered has-attachments");
     expect(first.querySelectorAll('[data-part="message-list.row.line"]')).toHaveLength(3);
@@ -167,22 +170,21 @@ describe("message-list", () => {
     const env = createEnv({ state: { activeFolderId: INBOX } });
     renderNode(node(), env);
     const rows = await screen.findAllByRole("option");
-    fireEvent.click(rows[1] as HTMLElement);
+    fireEvent.click(must(rows[1]));
     expect(env.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
     expect(rows[1]).toHaveAttribute("aria-selected", "true");
-    expect((rows[1] as HTMLElement).dataset.state?.split(" ")).toContain("selected");
-    expect(screen.getByRole("listbox")).toHaveAttribute(
-      "aria-activedescendant",
-      (rows[1] as HTMLElement).id,
-    );
+    expect(must(rows[1]).dataset.state?.split(" ")).toContain("selected");
+    expect(screen.getByRole("listbox")).toHaveAttribute("aria-activedescendant", must(rows[1]).id);
   });
 
   it("loads further pages as the end comes into view", async () => {
     const env = createEnv({ inboxSize: 30, state: { activeFolderId: INBOX } });
     renderNode(widget("message-list", { options: { "page-size": 10 } }), env);
-    await waitFor(() => expect(env.store.getState().messageOrder).toHaveLength(30));
+    await waitFor(() => {
+      expect(env.store.getState().messageOrder).toHaveLength(30);
+    });
     const pages = env.transport.requests.filter((r) => r.type === "ListMessages");
-    expect(pages.map((r) => (r.type === "ListMessages" ? r.offset : -1))).toEqual([0, 10, 20]);
+    expect(pages.map((r) => r.offset)).toEqual([0, 10, 20]);
   });
 
   it("shows an empty state", async () => {
@@ -204,7 +206,7 @@ describe("message-list", () => {
   });
 
   it("falls back to the default rows for invalid templates", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
     expect(compileRows(["{subject | nope}"]).map((t) => t.source)).toEqual([
       "{from.name | bold-if-unread}  {date | relative}",
       "{subject}",
@@ -262,7 +264,7 @@ describe("message-view", () => {
     expect(container.querySelector('[data-field="from"]')).toHaveTextContent(
       "FromGrace Hopper <grace@navy.example>",
     );
-    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const iframe = must(container.querySelector("iframe"));
     expect(iframe).toHaveAttribute("data-part", "message-view.body");
     expect(iframe.getAttribute("sandbox")).toBe("");
     const doc = iframe.getAttribute("srcdoc") ?? "";
@@ -299,7 +301,7 @@ describe("message-view", () => {
 });
 
 describe("toolbar", () => {
-  it("renders items from the layout with i18n labels, icons and disabled states", async () => {
+  it("renders items from the layout with i18n labels, icons and disabled states", () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
     // The default reader bar (M5b: ranked, "More", hide-disabled), shown here
     // with disabled actions and wrapping so jsdom (no widths) sees every item.
@@ -344,7 +346,7 @@ describe("toolbar", () => {
     expect(container.querySelectorAll('[data-part="toolbar.separator"]')).toHaveLength(1);
   });
 
-  it("hides the reader bar's disabled actions (hide-disabled)", async () => {
+  it("hides the reader bar's disabled actions (hide-disabled)", () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
     renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env);
     const toolbar = screen.getByRole("toolbar", { name: "Message actions" });
@@ -366,9 +368,9 @@ describe("toolbar", () => {
     });
     renderNode(widget("toolbar", { options: { toolbar: "main" } }), env, { layout });
     fireEvent.click(screen.getByRole("button", { name: "Check for new mail" }));
-    await waitFor(() =>
-      expect(env.transport.requests).toContainEqual({ type: "SyncNow", account_id: "acc-work" }),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests).toContainEqual({ type: "SyncNow", account_id: "acc-work" });
+    });
     fireEvent.click(screen.getByRole("button", { name: "Sidebar" }));
     expect(env.store.getState().hiddenNodes).toEqual(["sidebar"]);
   });
@@ -386,10 +388,12 @@ describe("status-bar", () => {
     const status = screen.getByRole("status", { name: "Status" });
     expect(within(status).getByText(/A change could not be saved/)).toBeInTheDocument();
     fireEvent.click(within(status).getByRole("button", { name: "Retry" }));
-    await waitFor(() =>
-      expect(env.transport.requests).toContainEqual({ type: "RetryOp", op_id: "op-9" }),
-    );
-    await waitFor(() => expect(env.store.getState().opError).toBeNull());
+    await waitFor(() => {
+      expect(env.transport.requests).toContainEqual({ type: "RetryOp", op_id: "op-9" });
+    });
+    await waitFor(() => {
+      expect(env.store.getState().opError).toBeNull();
+    });
     expect(within(status).queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
@@ -404,16 +408,20 @@ describe("status-bar", () => {
       "folder-counts",
     );
 
-    act(() => env.store.getState().setSync({ accountId: "acc-personal", done: 2, total: 5 }));
+    act(() => {
+      env.store.getState().setSync({ accountId: "acc-personal", done: 2, total: 5 });
+    });
     expect(within(status).getByText("Syncing… 2 of 5")).toHaveAttribute("data-state", "syncing");
-    act(() =>
-      env.store.getState().setConfigError({ file: "theme.kdl", line: 3, column: 7, message: "x" }),
-    );
+    act(() => {
+      env.store.getState().setConfigError({ file: "theme.kdl", line: 3, column: 7, message: "x" });
+    });
     expect(within(status).getByText(/theme\.kdl, line 3, column 7/)).toHaveAttribute(
       "data-state",
       "error",
     );
-    act(() => env.store.getState().setConnection("reconnecting"));
+    act(() => {
+      env.store.getState().setConnection("reconnecting");
+    });
     expect(within(status).getByText("Offline – reconnecting…")).toBeInTheDocument();
   });
 });

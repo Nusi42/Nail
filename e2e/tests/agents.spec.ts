@@ -3,6 +3,7 @@ import { expect, test as base, type Locator, type Page } from "@playwright/test"
 import { McpSession, type JsonRpcResponse } from "../support/mcp";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
 import { openSettings, rail, showView } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * Wave M4a (plan WP105, ADR 0084): an AI agent (MCP client) writes through
@@ -14,6 +15,7 @@ import { openSettings, rail, showView } from "../support/views";
  * the thread; the client's rate limit, saved in the settings, trips.
  */
 const test = base.extend<{ nail: NailServer }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
   nail: async ({}, use) => {
     const server = await startNail({ seed: "demo-multi" });
     await use(server);
@@ -66,7 +68,7 @@ async function agent(
   await form.getByRole("checkbox", { name: /All accounts/ }).check();
   await form.getByRole("button", { name: "Save access" }).click();
   await expect(form.getByRole("status")).toHaveText("Access saved.");
-  const mcp = new McpSession(url!, token!);
+  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
   await mcp.open();
   return { mcp, settings };
 }
@@ -101,7 +103,7 @@ async function draft(mcp: McpSession, subject: string): Promise<string> {
   );
   expect(created.status).toBe("done");
   expect(created.confirmation_id).toBeUndefined();
-  return (created.created as string[])[0]!;
+  return defined((created.created as string[])[0], "the created message");
 }
 
 async function smtpSubjects(server: NailServer): Promise<string> {
@@ -213,7 +215,7 @@ test("the summarize_thread prompt returns the thread and the rate limit trips", 
   });
   expect(prompt.error).toBeUndefined();
   const messages = JSON.stringify(prompt.result?.messages);
-  expect(messages).toContain(subject!);
+  expect(messages).toContain(defined(subject, "the subject"));
   expect(messages).toContain("untrusted");
 
   // At most 2 changes per minute, saved in the client's settings.

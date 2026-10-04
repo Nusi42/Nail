@@ -208,7 +208,7 @@ impl Lines {
     }
 
     pub(crate) async fn shutdown(&mut self) {
-        let _ = self.reader.get_mut().shutdown().await;
+        drop(self.reader.get_mut().shutdown().await);
     }
 }
 

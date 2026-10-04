@@ -236,7 +236,10 @@ async fn save_collection(
                     let mut settings = before.as_ref().map_or_else(
                         || {
                             let mut settings = CalendarSettings::named(&folder.name);
-                            settings.color = folder.color.and_then(|c| c.rgb()).map(str::to_owned);
+                            settings.color = folder
+                                .color
+                                .and_then(nail_api::exchange::CategoryColor::rgb)
+                                .map(str::to_owned);
                             settings
                         },
                         |c| c.settings.clone(),
@@ -710,7 +713,7 @@ async fn forget(
         })
         .await?;
     if gone {
-        service.reindex_pim().await;
+        service.reindex_pim();
         service.pim_events([
             nail_api::Event::CalendarsChanged,
             nail_api::Event::AddressBooksChanged,
@@ -804,8 +807,8 @@ fn ews_zones(event: &mut ExchangeEvent, local: &str) -> std::result::Result<(), 
             .filter(|tz| *tz != chrono_tz::Tz::UTC)
             .and_then(|tz| windows_zone(tz, year))
             .unwrap_or("UTC");
-        event.start.time_zone = zone.to_owned();
-        event.end.time_zone = zone.to_owned();
+        zone.clone_into(&mut event.start.time_zone);
+        zone.clone_into(&mut event.end.time_zone);
         if let Some(recurrence) = &mut event.recurrence {
             recurrence.time_zone = Some(zone.to_owned());
         }
@@ -822,8 +825,8 @@ fn ews_zones(event: &mut ExchangeEvent, local: &str) -> std::result::Result<(), 
                             .format("%Y-%m-%dT%H:%M:%S")
                             .to_string();
                 }
-                event.start.time_zone = windows.to_owned();
-                event.end.time_zone = windows.to_owned();
+                windows.clone_into(&mut event.start.time_zone);
+                windows.clone_into(&mut event.end.time_zone);
                 if let Some(recurrence) = &mut event.recurrence {
                     recurrence.time_zone = Some(windows.to_owned());
                 }
@@ -856,7 +859,7 @@ impl ExchangeReplayer<'_> {
 
     /// The zone of dates and floating times of events (EWS: mapped to a
     /// Windows id by [`ews_zones`]).
-    fn zone(&self) -> String {
+    fn zone() -> String {
         crate::pim::local_zone_name()
     }
 
@@ -988,7 +991,7 @@ impl ExchangeReplayer<'_> {
                         .map_err(|e| e.to_string())?
                 {
                     if href.is_none() {
-                        href = object.href.clone();
+                        href.clone_from(&object.href);
                     }
                     raw = Some(object.raw);
                 }
@@ -1096,14 +1099,15 @@ impl ExchangeReplayer<'_> {
                 {
                     Ok(()) => {
                         let (k, uid) = (collection.collection_id.clone(), event.uid.clone());
-                        let _ = self
-                            .service
-                            .inner
-                            .store
-                            .call(move |s| {
-                                s.finish_exchange_meeting_answer(&k, &uid, status.as_deref())
-                            })
-                            .await;
+                        drop(
+                            self.service
+                                .inner
+                                .store
+                                .call(move |s| {
+                                    s.finish_exchange_meeting_answer(&k, &uid, status.as_deref())
+                                })
+                                .await,
+                        );
                         Ok(PimReplayOutcome::Done {
                             href: Some(remote.to_owned()),
                             etag: None,
@@ -1113,7 +1117,7 @@ impl ExchangeReplayer<'_> {
                 };
             }
         }
-        let zone = self.zone();
+        let zone = Self::zone();
         let ctx = WriteContext {
             remote: remote.map(|r| (r, etag)),
             default_zone: &zone,
@@ -1164,12 +1168,13 @@ impl ExchangeReplayer<'_> {
             let outcome = self.write_task_tree(collection, key, parent).await?;
             if href.is_none() && matches!(outcome, PimReplayOutcome::Done { .. }) {
                 let (k, uid) = (key.to_owned(), task.uid.clone());
-                let _ = self
-                    .service
-                    .inner
-                    .store
-                    .call(move |s| s.remove_server_item(&k, None, Some(&uid)))
-                    .await;
+                drop(
+                    self.service
+                        .inner
+                        .store
+                        .call(move |s| s.remove_server_item(&k, None, Some(&uid)))
+                        .await,
+                );
             }
             return Ok(match outcome {
                 PimReplayOutcome::Done { .. } => PimReplayOutcome::Done {

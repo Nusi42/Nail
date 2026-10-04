@@ -11,7 +11,8 @@
 import { act, waitFor } from "@testing-library/react";
 import type { Density } from "./api/generated";
 import { defaultTheme } from "./api/mockData";
-import { BUILTIN_THEMES, resolveMockTheme } from "./features/appearance";
+import { BUILTIN_THEMES } from "./features/appearance";
+import { resolveMockTheme } from "./features/appearance/themes";
 import { NodeView, WindowView } from "./layout/LayoutRenderer";
 import { emptyComposer } from "./state/compose";
 import { violations } from "./test/axe";
@@ -24,10 +25,14 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });

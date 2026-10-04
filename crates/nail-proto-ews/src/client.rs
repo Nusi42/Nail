@@ -30,12 +30,12 @@ use crate::soap::{
     SoapResponse,
 };
 
-/// Largest answer read (a 100 MB message as base64 MimeContent stays
+/// Largest answer read (a 100 MB message as base64 `MimeContent` stays
 /// below).
 pub const MAX_RESPONSE: usize = 160 * 1024 * 1024;
 
 /// How long an ordinary call may take.
-pub const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+pub const CALL_TIMEOUT: Duration = Duration::from_mins(2);
 
 /// Inline retries of throttling and server errors: exponential backoff
 /// from `base_delay` up to `max_delay`, or the server's
@@ -216,7 +216,7 @@ impl EwsClient {
     /// (`https://mail.corp.example/EWS/Exchange.asmx`).
     pub fn new(url: &str, auth: EwsAuth) -> Result<Self, EwsError> {
         let main = tls_lane(CALL_TIMEOUT)?;
-        let stream = tls_lane(Duration::from_secs(40 * 60))?;
+        let stream = tls_lane(Duration::from_mins(40))?;
         Self::with_http(main, stream, url, auth)
     }
 
@@ -498,7 +498,7 @@ impl EwsClient {
         let status = response.status().as_u16();
         if !(200..300).contains(&status) && status != 500 {
             let retry_after = retry_after_secs(response.headers());
-            let _ = read_body(response, op.what).await;
+            drop(read_body(response, op.what).await);
             return Err(match status {
                 401 => EwsError::AuthFailed,
                 403 => EwsError::Forbidden(format!("HTTP 403 to {}", op.what)),
@@ -547,7 +547,7 @@ impl EwsClient {
                     return Ok((response, Some(guard)));
                 }
                 // The connection was replaced: sign in again.
-                let _ = response.bytes().await;
+                drop(response.bytes().await);
                 *guard = false;
             }
             let mut session = negotiate.start(&self.inner.spn).map_err(negotiate_error)?;
@@ -571,7 +571,7 @@ impl EwsClient {
                         .filter_map(|v| v.to_str().ok()),
                 );
                 if response.status().as_u16() == 401 {
-                    let _ = response.bytes().await;
+                    drop(response.bytes().await);
                     let Some(Some(server_token)) = challenge else {
                         return Err(EwsError::AuthFailed);
                     };
@@ -599,7 +599,7 @@ impl EwsClient {
             let header = self.inner.headers.header(auth, refreshed).await?;
             let response = self.post(lane, envelope, anchor, header, timeout).await?;
             if response.status().as_u16() == 401 {
-                let _ = response.bytes().await;
+                drop(response.bytes().await);
                 let may_refresh = matches!(
                     auth,
                     EwsAuth::OAuth2 { .. }
@@ -750,29 +750,26 @@ impl EnvelopeStream {
             let Some(response) = self.response.as_mut() else {
                 return Ok(None);
             };
-            match response.chunk().await.map_err(transport_error)? {
-                Some(chunk) => {
-                    self.read += chunk.len();
-                    if self.read > MAX_RESPONSE {
-                        return Err(EwsError::TooLarge("streaming answer".to_owned()));
-                    }
-                    self.bytes.extend_from_slice(&chunk);
-                    // Keep incomplete UTF-8 sequences for the next chunk.
-                    let valid = match std::str::from_utf8(&self.bytes) {
-                        Ok(_) => self.bytes.len(),
-                        Err(e) => e.valid_up_to(),
-                    };
-                    let rest = self.bytes.split_off(valid);
-                    let text = std::mem::replace(&mut self.bytes, rest);
-                    self.buffer.push_str(&String::from_utf8_lossy(&text));
-                    self.pending.extend(soap::split_envelopes(&mut self.buffer));
+            if let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                self.read += chunk.len();
+                if self.read > MAX_RESPONSE {
+                    return Err(EwsError::TooLarge("streaming answer".to_owned()));
                 }
-                None => {
-                    self.response = None;
-                    let rest = std::mem::take(&mut self.buffer);
-                    if !rest.trim().is_empty() {
-                        self.pending.push_back(rest);
-                    }
+                self.bytes.extend_from_slice(&chunk);
+                // Keep incomplete UTF-8 sequences for the next chunk.
+                let valid = match std::str::from_utf8(&self.bytes) {
+                    Ok(_) => self.bytes.len(),
+                    Err(e) => e.valid_up_to(),
+                };
+                let rest = self.bytes.split_off(valid);
+                let text = std::mem::replace(&mut self.bytes, rest);
+                self.buffer.push_str(&String::from_utf8_lossy(&text));
+                self.pending.extend(soap::split_envelopes(&mut self.buffer));
+            } else {
+                self.response = None;
+                let rest = std::mem::take(&mut self.buffer);
+                if !rest.trim().is_empty() {
+                    self.pending.push_back(rest);
                 }
             }
         }

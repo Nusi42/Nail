@@ -6,10 +6,12 @@
 import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { colorSlot } from "../theme/skin";
 import { Icon } from "./Icon";
+import { chars } from "../text/chars";
+import { nonEmpty } from "../text/empty";
 
 export interface SwitchProps {
   checked: boolean;
-  onChange(checked: boolean): void;
+  onChange: (checked: boolean) => void;
   /** Localized label (also the accessible name). */
   label: string;
   /** Localized hint under the label. */
@@ -42,7 +44,9 @@ export function Switch({ checked, onChange, label, hint, disabled = false, name 
         aria-labelledby={`${id}-label`}
         aria-describedby={hint ? `${id}-hint` : undefined}
         disabled={disabled}
-        onClick={() => onChange(!checked)}
+        onClick={() => {
+          onChange(!checked);
+        }}
       >
         <span data-part="switch.thumb" aria-hidden="true" />
       </button>
@@ -59,7 +63,7 @@ export interface SegmentedOption {
 export interface SegmentedProps {
   value: string;
   options: readonly SegmentedOption[];
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   /** Localized name of the group. */
   label: string;
   name?: string;
@@ -108,8 +112,12 @@ export function Segmented({ value, options, onChange, label, name, disabled }: S
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             disabled={disabled}
-            onClick={() => onChange(option.value)}
-            onKeyDown={(event) => onKeyDown(event, index)}
+            onClick={() => {
+              onChange(option.value);
+            }}
+            onKeyDown={(event) => {
+              onKeyDown(event, index);
+            }}
           >
             {option.label}
           </button>
@@ -146,12 +154,12 @@ export function Tag({ text, icon, dot, tone, kind, title }: TagProps) {
 
 /** Up to two initials of a display name or address (`Ada Lovelace` → `AL`). */
 export function initialsOf(name: string | null | undefined, email = ""): string {
-  const source = (name ?? "").trim() || email.split("@")[0] || "";
+  const source = nonEmpty((name ?? "").trim()) ?? email.split("@")[0] ?? "";
   const words = source
     .replace(/[<>"()[\]]/g, " ")
     .split(/[\s._-]+/)
     .filter((w) => w.length > 0 && /\p{L}|\p{N}/u.test(w));
-  const letters = (w: string) => [...w].find((c) => /\p{L}|\p{N}/u.test(c)) ?? "";
+  const letters = (w: string) => chars(w).find((c) => /\p{L}|\p{N}/u.test(c)) ?? "";
   if (words.length === 0) return "";
   const first = letters(words[0] ?? "");
   const last = words.length > 1 ? letters(words[words.length - 1] ?? "") : "";
@@ -167,7 +175,7 @@ export interface AvatarProps {
 /** Initials on a stable colour per address (decorative: the name is shown next to it). */
 export function Avatar({ name, email, part = "avatar" }: AvatarProps): ReactNode {
   return (
-    <span data-part={part} data-color={colorSlot(email || name || "")} aria-hidden="true">
+    <span data-part={part} data-color={colorSlot(nonEmpty(email) ?? name ?? "")} aria-hidden="true">
       {initialsOf(name, email)}
     </span>
   );

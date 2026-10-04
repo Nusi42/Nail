@@ -3,6 +3,7 @@
 //! appending, progress, retries, clean-up), send as / on behalf of shared
 //! mailboxes, headers-only fetches, moves between mailboxes, conversation
 //! ids as thread ids.
+#![cfg(test)]
 
 use std::sync::Mutex;
 

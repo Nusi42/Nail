@@ -81,7 +81,7 @@ pub fn task_from_exchange(t: &ExchangeTask) -> MappedTask {
     fields.start = t.start.as_ref().map(|s| task_time(s, &mut notes));
     fields.due = t.due.as_ref().map(|d| task_time(d, &mut notes));
     fields.completed_at = t.completed.as_ref().and_then(utc_text);
-    fields.categories = t.categories.clone();
+    fields.categories.clone_from(&t.categories);
     fields.url = t.linked_resources.iter().find_map(|l| l.web_url.clone());
     fields.alarms = t
         .reminder

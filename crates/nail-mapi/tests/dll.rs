@@ -1,8 +1,13 @@
 //! The DLL as programs see it: loaded with `LoadLibraryW`, called through
 //! `GetProcAddress`, talking to a fake app on a test pipe (`NAIL_MAPI_PIPE`).
 //! The tests share the process environment, so they run one at a time.
+
+#![cfg(test)]
 #![cfg(windows)]
-#![allow(unsafe_code)]
+#![expect(
+    unsafe_code,
+    reason = "loads the DLL and calls its exports like a program does"
+)]
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -28,7 +33,9 @@ struct TestEnv {
 
 impl TestEnv {
     fn new(tag: &str) -> Self {
-        let lock = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let lock = ENV
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let pipe = unique_pipe_name(tag);
         // SAFETY: tests touching the environment hold `ENV`.
         unsafe {
@@ -38,6 +45,10 @@ impl TestEnv {
         Self { pipe, _lock: lock }
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "taking the guard proves the environment lock is held"
+    )]
     fn set(&self, key: &str, value: &std::ffi::OsStr) {
         // SAFETY: the environment lock is held.
         unsafe { std::env::set_var(key, value) };
@@ -143,7 +154,10 @@ fn send_mail_w_opens_the_composer_with_copies_of_the_files() {
     assert_eq!(m.addresses(MapiRecipientClass::Cc), ["bob@x.example"]);
     let program = m.program.as_deref().unwrap().to_ascii_lowercase();
     assert!(
-        program.starts_with("dll-") && program.ends_with(".exe"),
+        program.starts_with("dll-")
+            && std::path::Path::new(&program)
+                .extension()
+                .is_some_and(|e| e == "exe"),
         "{program}"
     );
     // The app got a private copy, not the caller's file …
@@ -239,7 +253,7 @@ fn invalid_input_is_answered_without_the_app() {
             ..Default::default()
         };
         assert_eq!(
-            dll.send_mail_w_raw(&garbage, 0),
+            dll.send_mail_w_raw(&raw const garbage, 0),
             Some(MapiResult::InvalidRecips.code())
         );
     }

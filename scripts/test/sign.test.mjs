@@ -23,6 +23,7 @@ test("no certificate configured: nothing is signed", () => {
 
 test("a configured certificate: thumbprint normalized, defaults filled in", () => {
   const signing = signingFromEnv({ NAIL_SIGN_THUMBPRINT: "01:23 45" + thumb.slice(6) });
+  assert.ok(signing);
   assert.equal(signing.thumbprint, thumb.toUpperCase());
   assert.equal(signing.timestampUrl, DEFAULT_TIMESTAMP_URL);
   assert.equal(signing.description, "Nail");
@@ -33,6 +34,7 @@ test("a configured certificate: thumbprint normalized, defaults filled in", () =
     NAIL_SIGN_DESCRIPTION: "Nail mail",
     NAIL_SIGNTOOL: "C:\\sdk\\signtool.exe",
   });
+  assert.ok(custom);
   assert.equal(custom.timestampUrl, "https://ts.example/rfc3161");
   assert.equal(custom.signtool, "C:\\sdk\\signtool.exe");
   assert.throws(() => signingFromEnv({ NAIL_SIGN_THUMBPRINT: "abc" }), /40-digit/);
@@ -44,6 +46,7 @@ test("a configured certificate: thumbprint normalized, defaults filled in", () =
 
 test("signtool and bundler settings: SHA-256 with an RFC 3161 timestamp", () => {
   const signing = signingFromEnv({ NAIL_SIGN_THUMBPRINT: thumb });
+  assert.ok(signing);
   assert.deepEqual(signtoolArgs(signing, "C:\\b\\nail.exe"), [
     "sign",
     "/sha1",

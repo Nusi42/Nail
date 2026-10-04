@@ -38,7 +38,7 @@ function PolicyRow({
 }: {
   policy: ActionPolicy;
   disabled: boolean;
-  onChange(kind: ActionKind, mode: ActionPolicyMode | null): void;
+  onChange: (kind: ActionKind, mode: ActionPolicyMode | null) => void;
 }) {
   const t = useT();
   const name = useId();
@@ -61,9 +61,9 @@ function PolicyRow({
               name={`${name}-mode`}
               data-mode={mode}
               checked={policy.mode === mode}
-              onChange={() =>
-                onChange(policy.kind, mode === defaultMode(policy.kind) ? null : mode)
-              }
+              onChange={() => {
+                onChange(policy.kind, mode === defaultMode(policy.kind) ? null : mode);
+              }}
             />
             {t(modeMessageId(mode))}
             {mode === defaultMode(policy.kind) && (

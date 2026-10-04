@@ -10,7 +10,7 @@ export interface DialogProps {
   /** The dialog's name (its window name). */
   name: string;
   /** Closes the dialog. */
-  close(): void;
+  close: () => void;
 }
 
 export type DialogRegistry = Readonly<Record<string, ComponentType<DialogProps>>>;

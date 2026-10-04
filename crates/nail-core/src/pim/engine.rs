@@ -17,13 +17,12 @@
 //! state (`offline` for retryable errors with a growing backoff,
 //! `auth-error`, `error`).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
 use nail_api::accounts::{AuthConfig, SecretValue};
-use nail_api::engine::AccessTokenProvider;
 use nail_api::pim::source::{DiscoveredCollection, PimSourceTestResult};
 use nail_api::pim::{
     AddressBook, AddressBookSettings, Calendar, CalendarComponent, CalendarSettings, ContactGroup,
@@ -300,11 +299,13 @@ impl Service {
             let id = config.id.clone();
             let store = self.inner.store.clone();
             tokio::spawn(async move {
-                let _ = store
-                    .call(move |s| {
-                        s.set_pim_source_state(&id, PimSourceState::Disabled, None, None)
-                    })
-                    .await;
+                drop(
+                    store
+                        .call(move |s| {
+                            s.set_pim_source_state(&id, PimSourceState::Disabled, None, None)
+                        })
+                        .await,
+                );
             });
         }
     }
@@ -813,39 +814,35 @@ pub(crate) async fn dav_client(
     secret: Option<&SecretValue>,
 ) -> Result<DavClient> {
     let accounts = service.inner.accounts.config();
-    let (auth, reference) = match config.account() {
-        Some(account) => {
-            let account_config = accounts
-                .account(account)
-                .ok_or_else(|| not_found(format!("account {account}")))?;
-            let auth = account_config.incoming.server().auth.clone();
-            let reference = auth.secret_ref(account);
-            (auth, reference)
-        }
-        None => {
-            let auth = config.auth().cloned().unwrap_or(AuthConfig::None);
-            (auth, Service::pim_secret_ref(config))
-        }
+    let (auth, reference) = if let Some(account) = config.account() {
+        let account_config = accounts
+            .account(account)
+            .ok_or_else(|| not_found(format!("account {account}")))?;
+        let auth = account_config.incoming.server().auth.clone();
+        let reference = auth.secret_ref(account);
+        (auth, reference)
+    } else {
+        let auth = config.auth().cloned().unwrap_or(AuthConfig::None);
+        (auth, Service::pim_secret_ref(config))
     };
     let dav_auth = match auth {
         AuthConfig::None => DavAuth::None,
         AuthConfig::Password { username, .. } => {
-            let password = match secret {
-                Some(SecretValue::Password { password }) => password.clone(),
-                _ => {
-                    let reference = reference
-                        .ok_or_else(|| ApiError::new(ErrorCode::Config, "no secret reference"))?;
-                    let store = Arc::clone(&service.inner.secrets);
-                    let r = reference.clone();
-                    tokio::task::spawn_blocking(move || store.get(&r))
-                        .await??
-                        .ok_or_else(|| {
-                            ApiError::new(
-                                ErrorCode::AuthFailed,
-                                format!("no password stored under {reference}"),
-                            )
-                        })?
-                }
+            let password = if let Some(SecretValue::Password { password }) = secret {
+                password.clone()
+            } else {
+                let reference = reference
+                    .ok_or_else(|| ApiError::new(ErrorCode::Config, "no secret reference"))?;
+                let store = Arc::clone(&service.inner.secrets);
+                let r = reference.clone();
+                tokio::task::spawn_blocking(move || store.get(&r))
+                    .await??
+                    .ok_or_else(|| {
+                        ApiError::new(
+                            ErrorCode::AuthFailed,
+                            format!("no password stored under {reference}"),
+                        )
+                    })?
             };
             DavAuth::Basic { username, password }
         }
@@ -857,7 +854,7 @@ pub(crate) async fn dav_client(
                 let reference = reference
                     .ok_or_else(|| ApiError::new(ErrorCode::Config, "no secret reference"))?;
                 DavAuth::OAuth2 {
-                    tokens: Arc::clone(&service.inner.tokens) as Arc<dyn AccessTokenProvider>,
+                    tokens: service.inner.tokens.clone(),
                     provider,
                     secret: reference,
                 }
@@ -1276,7 +1273,7 @@ async fn sync_dav(
                         let settings = before.as_ref().map_or_else(
                             || {
                                 let mut settings = CalendarSettings::named(collection.name());
-                                settings.description = collection.description.clone();
+                                settings.description.clone_from(&collection.description);
                                 settings.color = collection
                                     .color
                                     .clone()
@@ -1309,7 +1306,7 @@ async fn sync_dav(
                         let settings = before.map_or_else(
                             || {
                                 let mut settings = AddressBookSettings::named(collection.name());
-                                settings.description = collection.description.clone();
+                                settings.description.clone_from(&collection.description);
                                 settings
                             },
                             |b| b.settings,
@@ -1453,8 +1450,8 @@ async fn sync_dav_collection(
                 }
             }
             let mut sync = s.collection_sync(&key)?;
-            sync.sync_token = outcome.state.sync_token.clone();
-            sync.ctag = outcome.state.ctag.clone();
+            sync.sync_token.clone_from(&outcome.state.sync_token);
+            sync.ctag.clone_from(&outcome.state.ctag);
             sync.last_sync_at = Some(now);
             s.set_collection_sync(&key, &sync)?;
             Ok((applied, removed))
@@ -1531,7 +1528,13 @@ pub(crate) async fn report_replay(
             },
         ]);
     }
-    let _ = service.inner.store.call(|s| s.purge_done_pim_ops()).await;
+    drop(
+        service
+            .inner
+            .store
+            .call(nail_store::Store::purge_done_pim_ops)
+            .await,
+    );
 }
 
 struct DavReplayer {
@@ -1783,16 +1786,6 @@ impl PimReplayer for DavReplayer {
     }
 }
 
-/// Source ids of the DAV sources configured now (for tests).
-#[allow(dead_code)]
-pub(crate) fn dav_source_ids(sources: &[PimSourceConfig]) -> HashSet<PimSourceId> {
-    sources
-        .iter()
-        .filter(|s| matches!(s.kind(), PimSourceKind::Caldav | PimSourceKind::Carddav))
-        .map(|s| s.id.clone())
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1822,7 +1815,7 @@ ORGANIZER:mailto:ada@x.org\r\nATTENDEE:mailto:bob@x.org\r\nEND:VEVENT\r\nEND:VCA
         let mut event = nail_itip::parse_itip(raw, Some("PUBLISH"))
             .event
             .unwrap()
-            .into_event("ev".into(), "cal".into(), false, Default::default());
+            .into_event("ev".into(), "cal".into(), false, PimItemSync::default());
         let attendees = std::mem::take(&mut event.fields.attendees);
         // No attendees: left alone.
         assert_eq!(client_scheduled(raw, &event), raw);

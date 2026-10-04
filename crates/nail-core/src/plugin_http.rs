@@ -31,10 +31,10 @@ use reqwest::header::{HeaderName, HeaderValue};
 use url::{Host, Url};
 
 /// Redirects followed per request.
-pub const MAX_REDIRECTS: u8 = 5;
+pub(crate) const MAX_REDIRECTS: u8 = 5;
 
 /// `User-Agent` of plug-in requests.
-pub const USER_AGENT: &str = "Nail-Plugin";
+pub(crate) const USER_AGENT: &str = "Nail-Plugin";
 
 /// Executes plug-in HTTP requests (see the module docs).
 #[derive(Clone)]
@@ -166,7 +166,7 @@ impl PluginHttp {
                 next.set_fragment(None);
                 let code = status.as_u16();
                 if code == 303 || (matches!(code, 301 | 302) && method == "POST") {
-                    method = "GET".to_owned();
+                    "GET".clone_into(&mut method);
                     body = None;
                 }
                 url = next;

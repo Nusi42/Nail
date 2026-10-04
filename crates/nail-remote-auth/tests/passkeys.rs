@@ -2,6 +2,12 @@
 //! login, login and re-authentication work, replayed or foreign answers
 //! and cloned authenticators are refused.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;

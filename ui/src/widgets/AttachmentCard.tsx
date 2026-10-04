@@ -132,13 +132,17 @@ export function AttachmentCard({
   const onSave = () => {
     setSave("saving");
     saveAttachment(client, messageId, attachment, name)
-      .then((outcome) => setSave(outcome === "cancelled" ? "idle" : outcome))
-      .catch(() => setSave("failed"));
+      .then((outcome) => {
+        setSave(outcome === "cancelled" ? "idle" : outcome);
+      })
+      .catch(() => {
+        setSave("failed");
+      });
   };
   const onPreview = () => {
     const pane = document.getElementById(previewId);
     if (!pane) return;
-    pane.scrollIntoView?.({ block: "nearest" });
+    pane.scrollIntoView({ block: "nearest" });
     pane.focus({ preventScroll: true });
   };
   return (

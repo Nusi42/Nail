@@ -165,6 +165,7 @@ impl WakePlan {
 }
 
 /// The scheduler: snoozes in a timer wheel, persisted through a store.
+#[derive(Debug)]
 pub struct SnoozeScheduler<S, C> {
     store: S,
     clock: C,
@@ -285,7 +286,7 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
                 due.push(entry.clone());
             }
         }
-        self.finish(due, folders)
+        Ok(self.finish(due, folders))
     }
 
     /// Wakes every message whose time has come.
@@ -295,18 +296,14 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
             .into_iter()
             .filter_map(|(id, _)| self.entries.get(&id).cloned())
             .collect();
-        self.finish(due, folders)
+        Ok(self.finish(due, folders))
     }
 
     /// The plan for due entries. The records stay in the store until the
     /// caller commits the plan (see the module docs).
-    fn finish(
-        &mut self,
-        due: Vec<SnoozeEntry>,
-        folders: &impl FolderLookup,
-    ) -> Result<WakePlan, S::Error> {
+    fn finish(&mut self, due: Vec<SnoozeEntry>, folders: &impl FolderLookup) -> WakePlan {
         if due.is_empty() {
-            return Ok(WakePlan::default());
+            return WakePlan::default();
         }
         let ids: Vec<MessageId> = due.iter().map(|e| e.message_id.clone()).collect();
         let mut plan = WakePlan::default();
@@ -338,7 +335,7 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
         }];
         ops.extend(moves);
         plan.ops = group_ops(ops);
-        Ok(plan)
+        plan
     }
 
     /// Removes the records of a carried-out wake plan from the store (for

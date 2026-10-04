@@ -94,7 +94,7 @@ impl PendingFile {
     }
 
     fn discard(self) {
-        let _ = fs::remove_file(&self.temp);
+        drop(fs::remove_file(&self.temp));
     }
 }
 
@@ -279,7 +279,7 @@ fn export_mbox(
             dialect: None,
         };
         let found = MboxReader::new(BufReader::new(file), options)
-            .filter(Result::is_ok)
+            .flatten()
             .count() as u64;
         if found != expected {
             ctx.warning(

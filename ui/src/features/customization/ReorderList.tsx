@@ -22,8 +22,8 @@ export interface ReorderListProps {
   label: string;
   /** `data-part` prefix, e.g. `toolbar-editor`. */
   part: string;
-  onMove(from: number, to: number): void;
-  onRemove(index: number): void;
+  onMove: (from: number, to: number) => void;
+  onRemove: (index: number) => void;
 }
 
 type Button = "up" | "down" | "remove" | "entry";
@@ -71,6 +71,7 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
   return (
     <ol data-part={`${part}.items`} aria-label={label}>
       {entries.map((entry, index) => (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the item takes the focus programmatically so Alt+arrow keys can move it; its buttons do the same by pointer.
         <li
           key={entry.key}
           ref={setRef(`${entry.key}:entry`)}
@@ -82,7 +83,9 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
             position: index + 1,
             count: entries.length,
           })}
-          onKeyDown={(event) => onKeyDown(event, index)}
+          onKeyDown={(event) => {
+            onKeyDown(event, index);
+          }}
         >
           <span data-part={`${part}.item.label`}>{entry.label}</span>
           <button
@@ -92,7 +95,9 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
             data-action="move-up"
             disabled={index === 0}
             aria-label={t("customize-move-up", { label: entry.label })}
-            onClick={() => move(index, -1, "up")}
+            onClick={() => {
+              move(index, -1, "up");
+            }}
           >
             {t("customize-move-up-short")}
           </button>
@@ -103,7 +108,9 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
             data-action="move-down"
             disabled={index === entries.length - 1}
             aria-label={t("customize-move-down", { label: entry.label })}
-            onClick={() => move(index, 1, "down")}
+            onClick={() => {
+              move(index, 1, "down");
+            }}
           >
             {t("customize-move-down-short")}
           </button>
@@ -112,7 +119,9 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
             data-part="form.button"
             data-action="remove"
             aria-label={t("customize-remove", { label: entry.label })}
-            onClick={() => remove(index)}
+            onClick={() => {
+              remove(index);
+            }}
           >
             {t("customize-remove-short")}
           </button>

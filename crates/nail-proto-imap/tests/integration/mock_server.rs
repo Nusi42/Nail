@@ -7,7 +7,7 @@ use nail_proto_imap::{
     AuthMechanism, Credentials, FetchBatchLimits, ImapClient, ImapConfig, ImapError, Security,
     SyncState, TlsTrust, UidRange,
 };
-use nail_testkit::{MailStore, MockImapConfig, MockImapServer, MockTls, demo_corpus};
+use nail_testkit::{MailStore, MockImapConfig, MockImapServer, MockTls, NO_FLAGS, demo_corpus};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -441,9 +441,7 @@ async fn plans_are_batched_by_size_and_fetched_batch_by_batch() {
         "Subject: b\r\n\r\nb",
         "Subject: c\r\n\r\nc",
     ] {
-        store
-            .append("INBOX", raw.as_bytes(), &[] as &[&str])
-            .unwrap();
+        store.append("INBOX", raw.as_bytes(), NO_FLAGS).unwrap();
     }
     let server = MockImapServer::start(MockImapConfig::default(), store)
         .await

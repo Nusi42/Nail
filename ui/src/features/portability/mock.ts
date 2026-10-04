@@ -424,7 +424,10 @@ function startJob(
     report: null,
   };
   state.jobs[report.job_id] = { status, phases, step: 0, total, report };
-  if (state.autoProgress) core.later(() => tick(core, report.job_id));
+  if (state.autoProgress)
+    core.later(() => {
+      tick(core, report.job_id);
+    });
   return { type: "PortabilityJob", job: structuredClone(status) };
 }
 
@@ -448,7 +451,7 @@ function finish(core: MockCore, job: MockJob, cancelled: boolean): void {
 function tick(core: MockCore, jobId: string): void {
   const state = core.data.features.portability;
   const job = state.jobs[jobId];
-  if (!job || job.status.state !== "running") return;
+  if (job?.status.state !== "running") return;
   const perPhase = Math.max(1, state.stepsPerPhase);
   const steps = job.phases.length * perPhase;
   job.step++;
@@ -467,7 +470,10 @@ function tick(core: MockCore, jobId: string): void {
   }
   progress.current = job.report.source ? baseName(job.report.source) : baseName(job.status.path);
   core.emit({ type: "PortabilityJobProgress", job_id: jobId, progress: structuredClone(progress) });
-  if (state.autoProgress) core.later(() => tick(core, jobId));
+  if (state.autoProgress)
+    core.later(() => {
+      tick(core, jobId);
+    });
 }
 
 /** Runs every running job one step (tests with `autoProgress` off). */
@@ -817,10 +823,8 @@ function previewRestore(
   const state = core.data.features.portability;
   const opened = openBackup(state, path, passphrase);
   if (opened.error) return opened.error;
-  if (contents && backupContentsIssues(contents).length > 0) {
-    const problem = backupContentsIssues(contents)[0];
-    return fail("invalid_request", String(problem), `backup-issue-${problem}`);
-  }
+  const problem = contents ? backupContentsIssues(contents)[0] : undefined;
+  if (problem !== undefined) return fail("invalid_request", problem, `backup-issue-${problem}`);
   const planned = restoreActions(opened.backup, contents);
   const plan: RestorePlan = {
     manifest: structuredClone(opened.backup.manifest),
@@ -852,7 +856,7 @@ function startRestore(
     actions: planned.actions,
     config_backups: planned.actions
       .filter((a) => a.effect === "replace")
-      .map((a) => `${a.item}-${Date.now()}`),
+      .map((a) => `${a.item}-${String(Date.now())}`),
     accounts_needing_secrets: planned.accountsNeedingSecrets,
     restart_required: planned.restartRequired,
   };
@@ -928,7 +932,7 @@ function diagnosticsEntries(core: MockCore, options: DiagnosticsOptions): Diagno
         text(
           "store/stats.json",
           item,
-          `{\n  "schema": 15,\n  "messages": ${core.data.messages.length}\n}`,
+          `{\n  "schema": 15,\n  "messages": ${String(core.data.messages.length)}\n}`,
         );
         break;
       case "operation-queue":

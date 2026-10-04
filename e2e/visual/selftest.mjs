@@ -21,16 +21,29 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "../../scripts/lib/json.mjs";
 import { buildBase } from "../../scripts/visual-review/generate.mjs";
+
+/** @typedef {import("../../scripts/visual-review/generate.mjs").Entry} Entry */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCREENS = ["main", "menu", "dialog"];
 
-/** Checks one step's summary; answers the problems (empty = as expected). */
+/**
+ * Checks one step's summary; answers the problems (empty = as expected).
+ *
+ * @param {string} name
+ * @param {{ exitCode: number, entries: Pick<Entry, "variant" | "screen" | "status" | "message">[] }} summary
+ * @param {{ exitCode: number, statuses: Record<string, string> }} expected
+ * @returns {string[]}
+ */
 export function checkStep(name, summary, expected) {
+  /** @type {string[]} */
   const problems = [];
   if (summary.exitCode !== expected.exitCode) {
-    problems.push(`${name}: exit code ${summary.exitCode}, expected ${expected.exitCode}`);
+    problems.push(
+      `${name}: exit code ${String(summary.exitCode)}, expected ${String(expected.exitCode)}`,
+    );
   }
   const byScreen = new Map(
     summary.entries.filter((e) => e.variant === "current-comfortable").map((e) => [e.screen, e]),
@@ -47,13 +60,19 @@ export function checkStep(name, summary, expected) {
   return problems;
 }
 
+/**
+ * Runs the harness; answers its exit code and the review summary's entries.
+ *
+ * @param {Record<string, string> & { NAIL_VISUAL_RESULTS: string }} env
+ * @param {string[]} args
+ */
 function run(env, args) {
   const result = spawnSync(process.execPath, [path.join(here, "run-visual.mjs"), ...args], {
     stdio: "inherit",
     env: { ...process.env, ...env },
   });
   const summaryFile = path.join(env.NAIL_VISUAL_RESULTS, "review", "summary.json");
-  const summary = JSON.parse(readFileSync(summaryFile, "utf8"));
+  const summary = /** @type {{ entries: Entry[] }} */ (readJson(summaryFile));
   return { exitCode: result.status ?? 1, entries: summary.entries, file: summaryFile };
 }
 
@@ -67,7 +86,9 @@ function main() {
     NAIL_VISUAL_DENSITIES: "comfortable",
     NAIL_VISUAL_SCREENS: SCREENS.join(","),
   };
+  /** @param {string} status */
   const all = (status) => Object.fromEntries(SCREENS.map((s) => [s, status]));
+  /** @type {string[]} */
   const problems = [];
   try {
     const spec = ["--", "themes.visual.ts"];

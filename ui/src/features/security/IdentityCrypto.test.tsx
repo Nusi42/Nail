@@ -5,6 +5,7 @@ import type { Identity, Request } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { IdentityCryptoFields, identityText } from "./IdentityCrypto";
 import { makeKey } from "./mockSeed";
+import { must } from "../../test/must";
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
@@ -116,7 +117,7 @@ describe("identity crypto fields", () => {
           },
         }}
         ownKeys={[]}
-        onChange={() => {}}
+        onChange={vi.fn()}
       />,
       createEnv(),
     );
@@ -140,13 +141,13 @@ describe("security-identities widget", () => {
     expect(save).toBeDisabled();
     const group = within(work).getByRole("group", { name: /ada@work.example/ });
     await user.click(within(group).getByRole("checkbox", { name: "Sign new messages" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         within(within(group).getByRole("combobox", { name: "S/MIME certificate" })).getAllByRole(
           "option",
         ),
-      ).toHaveLength(2),
-    );
+      ).toHaveLength(2);
+    });
     expect(save).toBeEnabled();
     await user.click(save);
     expect(await within(work).findByRole("status")).toHaveTextContent("Saved.");
@@ -171,7 +172,7 @@ describe("security-identities widget", () => {
     const env = createEnv();
     renderNode(widget("security-identities"), env);
     const personal = await screen.findByRole("region", { name: "Personal" });
-    const group = within(personal).getAllByRole("group")[0] as HTMLElement;
+    const group = must(within(personal).getAllByRole("group")[0]);
     await user.click(within(group).getByRole("checkbox", { name: "Sign new messages" }));
     env.transport.data.accountsConfig.accounts = env.transport.data.accountsConfig.accounts.filter(
       (a) => a.id !== "acc-personal",

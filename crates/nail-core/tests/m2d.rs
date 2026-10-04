@@ -3,6 +3,8 @@
 //! uninstalling) and the host requests' answers without a running
 //! plug-in. `tests/plugins.rs` runs real packages.
 
+#![cfg(test)]
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -269,7 +271,7 @@ async fn logs_are_listed_and_cleared() {
             .store()
             .append_plugin_log(&PluginLogLine {
                 plugin_id: &id(),
-                at_ms: 1_790_000_000_000 + i as i64,
+                at_ms: 1_790_000_000_000 + i64::try_from(i).unwrap(),
                 level,
                 source: PluginLogSource::Plugin,
                 message: &format!("line {i}"),

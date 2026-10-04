@@ -3,6 +3,8 @@
 //! reopened; every Rust metric is measured and the data stays for the
 //! Playwright scenarios.
 
+#![cfg(test)]
+
 use nail_bench::run::{ARRIVALS, MockMode, RunOptions, run};
 use nail_bench::{BenchReport, Budgets, CorpusSpec, MetricName};
 
@@ -44,7 +46,7 @@ async fn a_tiny_run_measures_every_rust_metric() {
     let largest = facts.largest_folder.as_ref().unwrap();
     assert_eq!(largest.path, "INBOX");
     assert!(
-        largest.total as u64 > ARRIVALS,
+        u64::from(largest.total) > ARRIVALS,
         "the arrivals landed in the Inbox"
     );
     // The rare word is found exactly once, the sender queries find mail.

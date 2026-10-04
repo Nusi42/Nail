@@ -12,7 +12,7 @@
  * Keyboard: Up / Down move between tasks, Right / Left expand / collapse
  * subtasks, Space completes, Enter opens the editor, Delete deletes.
  */
-import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type SubmitEvent, type KeyboardEvent } from "react";
 import { TaskListChooser } from "../exchange";
 import type { Calendar, LocalizedMessage, Task } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
@@ -174,7 +174,7 @@ export function TaskList({ node }: WidgetProps) {
     }
   };
 
-  const add = async (event: FormEvent) => {
+  const add = async (event: SubmitEvent) => {
     event.preventDefault();
     const text = title.trim();
     if (!text || !addTarget) return;
@@ -268,7 +268,9 @@ export function TaskList({ node }: WidgetProps) {
       data-part="form.button"
       data-variant={variant}
       data-action="new-task"
-      onClick={() => openNewTask(ctx, addTarget?.id ?? null)}
+      onClick={() => {
+        openNewTask(ctx, addTarget?.id ?? null);
+      }}
     >
       <Icon name="plus" part="form.button.icon" />
       {t("pim-task-new")}
@@ -291,7 +293,9 @@ export function TaskList({ node }: WidgetProps) {
           <input
             type="checkbox"
             checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
+            onChange={(e) => {
+              setShowCompleted(e.target.checked);
+            }}
           />
           <span>{t("pim-tasks-show-completed")}</span>
         </label>
@@ -306,7 +310,9 @@ export function TaskList({ node }: WidgetProps) {
             id={ids.add}
             data-part="form.input"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+            }}
           />
           <button type="submit" data-part="form.button" disabled={title.trim() === ""}>
             {t("pim-task-add")}
@@ -381,11 +387,11 @@ export function TaskList({ node }: WidgetProps) {
                       collapsed.includes(task.id) ? "pim-task-expand" : "pim-task-collapse",
                       { title: name },
                     )}
-                    onClick={() =>
+                    onClick={() => {
                       setCollapsed((c) =>
                         c.includes(task.id) ? c.filter((x) => x !== task.id) : [...c, task.id],
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Icon
                       name={collapsed.includes(task.id) ? "chevron-right" : "chevron-down"}
@@ -397,7 +403,9 @@ export function TaskList({ node }: WidgetProps) {
                   type="button"
                   tabIndex={-1}
                   data-part="task-list.title"
-                  onClick={() => open(task)}
+                  onClick={() => {
+                    open(task);
+                  }}
                 >
                   {name}
                 </button>

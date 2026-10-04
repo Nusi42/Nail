@@ -70,7 +70,7 @@ export function SystemAppearanceReporter() {
   const available = media(QUERIES.dark) !== null;
   useEffect(() => {
     if (!loaded || !available) return;
-    const key = `${scheme}:${highContrast}`;
+    const key = `${scheme}:${String(highContrast)}`;
     const changed = lastSeen.current !== null && lastSeen.current !== key;
     const first = lastSeen.current === null;
     lastSeen.current = key;

@@ -3,6 +3,7 @@
 //! Used by this crate's and `nail-server`'s tests; never in release builds.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -143,7 +144,7 @@ impl Upstream {
                     state.connections.fetch_add(1, Ordering::SeqCst);
                     let state = Arc::clone(&state);
                     tokio::spawn(async move {
-                        let _ = serve_inner(stream, &state).await;
+                        drop(serve_inner(stream, &state).await);
                     });
                 }
             })
@@ -166,7 +167,7 @@ impl Upstream {
                     let acceptor = acceptor.clone();
                     tokio::spawn(async move {
                         if let Ok(stream) = acceptor.accept(stream).await {
-                            let _ = serve_inner(stream, &state).await;
+                            drop(serve_inner(stream, &state).await);
                         }
                     });
                 }
@@ -248,10 +249,11 @@ where
     }
     let mut head = format!("HTTP/1.1 {} X\r\nConnection: close\r\n", reply.status);
     for (name, value) in &reply.headers {
-        head.push_str(&format!("{name}: {value}\r\n"));
+        // Writing to a String cannot fail.
+        let _ = write!(head, "{name}: {value}\r\n");
     }
     if reply.content_length {
-        head.push_str(&format!("Content-Length: {}\r\n", reply.body.len()));
+        let _ = write!(head, "Content-Length: {}\r\n", reply.body.len());
     }
     head.push_str("\r\n");
     stream.write_all(head.as_bytes()).await?;
@@ -280,6 +282,10 @@ impl ScriptedResolver {
     }
 
     /// `name` always answers `addrs`.
+    ///
+    /// # Panics
+    ///
+    /// When an entry of `addrs` is not an IP address (a bug in the test).
     pub fn set(&self, name: &str, addrs: &[&str]) {
         let addrs = addrs
             .iter()

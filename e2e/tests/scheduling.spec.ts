@@ -17,7 +17,8 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 const WORK = "ada@work.example";
@@ -58,7 +59,7 @@ function imip(m: Imip): string {
     `To: ${WORK}`,
     `Subject: ${m.subject}`,
     "Date: Thu, 01 Oct 2026 08:00:00 +0000",
-    `Message-ID: <${m.uid}-${m.method}-${m.sequence ?? 0}@example.org>`,
+    `Message-ID: <${m.uid}-${m.method}-${String(m.sequence ?? 0)}@example.org>`,
     "MIME-Version: 1.0",
     `Content-Type: text/calendar; method=${m.method}; charset=utf-8`,
     "",
@@ -69,7 +70,7 @@ function imip(m: Imip): string {
     "BEGIN:VEVENT",
     `UID:${m.uid}`,
     `DTSTAMP:${m.stamp ?? "20261001T080000Z"}`,
-    `SEQUENCE:${m.sequence ?? 0}`,
+    `SEQUENCE:${String(m.sequence ?? 0)}`,
     ...m.lines,
     "END:VEVENT",
     "END:VCALENDAR",

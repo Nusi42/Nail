@@ -431,7 +431,7 @@ impl ZoneResolver {
             .collect();
         Self {
             definitions,
-            cache: Default::default(),
+            cache: std::cell::RefCell::default(),
             year,
         }
     }
@@ -588,9 +588,9 @@ END:VCALENDAR\r\n";
             Some(chrono_tz::America::Chicago)
         );
         assert_eq!(iana_for_name("Nowhere Standard Time"), None);
-        assert_eq!(fixed_offset_zone(3600).map(|t| t.name()), Some("Etc/GMT-1"));
+        assert_eq!(fixed_offset_zone(3600).map(Tz::name), Some("Etc/GMT-1"));
         assert_eq!(
-            fixed_offset_zone(-5 * 3600).map(|t| t.name()),
+            fixed_offset_zone(-5 * 3600).map(Tz::name),
             Some("Etc/GMT+5")
         );
         assert_eq!(fixed_offset_zone(1800), None);

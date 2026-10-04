@@ -9,8 +9,6 @@ import { useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { Rule, RuleTrigger } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import type { DialogProps } from "../../layout/dialogRegistry";
-import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { reorderRules, rulesKeys, saveRule, useRules } from "./api";
 import { moveItem, newRule } from "./model";
@@ -59,7 +57,9 @@ function RuleList({
         type="button"
         data-part="form.button"
         data-action="new-rule"
-        onClick={() => startNew(newRule())}
+        onClick={() => {
+          startNew(newRule());
+        }}
       >
         {t("rules-new")}
       </button>
@@ -78,7 +78,9 @@ function RuleList({
                 type="button"
                 data-part="rules.list.select"
                 aria-pressed={rule.id === selected}
-                onClick={() => select(rule.id)}
+                onClick={() => {
+                  select(rule.id);
+                }}
               >
                 {rule.name}
               </button>
@@ -155,8 +157,12 @@ export function RuleManagerView() {
         <RuleEditor
           key={editing?.key}
           initial={initial}
-          onSaved={(rule) => saved(rule.id)}
-          onDeleted={() => select(null)}
+          onSaved={(rule) => {
+            saved(rule.id);
+          }}
+          onDeleted={() => {
+            select(null);
+          }}
         />
       ) : (
         <p data-part="rules.hint">{t("rules-select-hint")}</p>
@@ -166,13 +172,11 @@ export function RuleManagerView() {
 }
 
 /** The `rule-manager` layout widget. */
-export function RuleManager(props: WidgetProps) {
-  void props;
+export function RuleManager() {
   return <RuleManagerView />;
 }
 
 /** The `rules` dialog (window frame and title come from the window layer). */
-export function RulesDialog(props: DialogProps) {
-  void props;
+export function RulesDialog() {
   return <RuleManagerView />;
 }

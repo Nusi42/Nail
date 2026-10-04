@@ -10,7 +10,7 @@ import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 export interface TriageState {
   /** Messages the snooze dialog snoozes. */
   snoozing: MessageId[];
-  setSnoozing(ids: MessageId[]): void;
+  setSnoozing: (ids: MessageId[]) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<TriageState>>();
@@ -20,7 +20,9 @@ export function triageStoreFor(ui: UiStore): StoreApi<TriageState> {
   if (existing) return existing;
   const store = createStore<TriageState>()((set) => ({
     snoozing: [],
-    setSnoozing: (snoozing) => set({ snoozing }),
+    setSnoozing: (snoozing) => {
+      set({ snoozing });
+    },
   }));
   stores.set(ui, store);
   return store;

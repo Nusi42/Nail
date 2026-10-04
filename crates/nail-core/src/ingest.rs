@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn stores_threads_and_indexes() {
         let (store, blobs, _dir, folder) = setup();
-        let index = SearchIndex::open_in_ram(Default::default()).unwrap();
+        let index = SearchIndex::open_in_ram(nail_search::CommitPolicy::default()).unwrap();
         let report = ingest(
             &store,
             &blobs,
@@ -646,7 +646,7 @@ mod tests {
     fn reindexes_from_blobs() {
         let (store, blobs, _dir, folder) = setup();
         ingest(&store, &blobs, None, &folder, 1, &[mail(1, "m@x", "")]).unwrap();
-        let index = SearchIndex::open_in_ram(Default::default()).unwrap();
+        let index = SearchIndex::open_in_ram(nail_search::CommitPolicy::default()).unwrap();
         assert_eq!(reindex_all(&store, &blobs, &index).unwrap(), 1);
         assert_eq!(index.doc_count().unwrap(), 1);
         assert_eq!(backfill_meta(&store, &blobs).unwrap(), 0);

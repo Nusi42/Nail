@@ -151,14 +151,14 @@ fn attendees_text(list: &[Attendee]) -> Option<String> {
     joined(list.iter().map(|a| a.email.as_str()))
 }
 
-fn opt(text: &Option<String>) -> Option<String> {
-    text.clone().filter(|t| !t.is_empty())
+fn opt(text: Option<&str>) -> Option<String> {
+    text.filter(|t| !t.is_empty()).map(str::to_owned)
 }
 
 /// An empty string clears an optional text.
-fn set_text(field: &mut Option<String>, value: &Option<String>) {
+fn set_text(field: &mut Option<String>, value: Option<&str>) {
     if let Some(value) = value {
-        *field = (!value.trim().is_empty()).then(|| value.clone());
+        *field = (!value.trim().is_empty()).then(|| value.to_owned());
     }
 }
 
@@ -273,8 +273,8 @@ pub(crate) async fn create_event<D: McpData>(
     let start = parse_time(&a.start, a.tz.as_deref())?;
     let end = parse_time(&a.end, a.tz.as_deref())?;
     let mut fields = EventFields::new(a.title.trim(), start, end);
-    fields.location = opt(&a.location);
-    fields.description = opt(&a.description);
+    fields.location = opt(a.location.as_deref());
+    fields.description = opt(a.description.as_deref());
     fields.attendees = a
         .attendees
         .iter()
@@ -400,7 +400,7 @@ pub(crate) async fn update_event<D: McpData>(
         if title.trim().is_empty() {
             return Err(invalid("the title is empty"));
         }
-        fields.title = title.trim().to_owned();
+        title.trim().clone_into(&mut fields.title);
     }
     let tz = a.tz.as_deref().or_else(|| zone_of(&before.start));
     if let Some(start) = &a.start {
@@ -409,8 +409,8 @@ pub(crate) async fn update_event<D: McpData>(
     if let Some(end) = &a.end {
         fields.end = parse_time(end, tz)?;
     }
-    set_text(&mut fields.location, &a.location);
-    set_text(&mut fields.description, &a.description);
+    set_text(&mut fields.location, a.location.as_deref());
+    set_text(&mut fields.description, a.description.as_deref());
     for text in &a.add_attendees {
         let new = attendee(text, a.send_updates)?;
         if !fields
@@ -593,7 +593,7 @@ pub(crate) async fn respond_to_invite<D: McpData>(
         None,
         Some(ctx.text(value_id)),
     )];
-    if let Some(comment) = opt(&a.comment) {
+    if let Some(comment) = opt(a.comment.as_deref()) {
         changes.push(change("mcp-tool-field-comment", None, Some(comment)));
     }
     Ok(Plan {
@@ -617,7 +617,7 @@ pub(crate) async fn respond_to_invite<D: McpData>(
             requests: vec![Request::RespondToInvitation {
                 target: target_ref,
                 response,
-                comment: opt(&a.comment),
+                comment: opt(a.comment.as_deref()),
                 send: a.send,
                 calendar_id: None,
             }],
@@ -651,66 +651,62 @@ pub(crate) async fn upsert_contact<D: McpData>(
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Pim)?;
     let books = ctx.books().await?;
-    let (existing, book): (Option<Contact>, AddressBook) = match &a.contact_id {
-        Some(id) => {
-            let response = ctx
-                .shared
-                .data
-                .query(Request::GetContact {
-                    contact_id: ContactId::new(id.clone()),
-                })
-                .await
-                .map_err(|_| not_found(format!("contact {id}")))?;
-            let Response::PimContact { contact } = response else {
-                return Err(unexpected(&response));
-            };
-            let book = books
-                .into_iter()
-                .find(|b| b.id == contact.address_book_id)
-                .ok_or_else(|| not_found(format!("contact {id}")))?;
-            if contact.read_only || book.read_only {
-                return Err(forbidden(format!("contact {id}")));
-            }
-            (Some(*contact), book)
+    let (existing, book): (Option<Contact>, AddressBook) = if let Some(id) = &a.contact_id {
+        let response = ctx
+            .shared
+            .data
+            .query(Request::GetContact {
+                contact_id: ContactId::new(id.clone()),
+            })
+            .await
+            .map_err(|_| not_found(format!("contact {id}")))?;
+        let Response::PimContact { contact } = response else {
+            return Err(unexpected(&response));
+        };
+        let book = books
+            .into_iter()
+            .find(|b| b.id == contact.address_book_id)
+            .ok_or_else(|| not_found(format!("contact {id}")))?;
+        if contact.read_only || book.read_only {
+            return Err(forbidden(format!("contact {id}")));
         }
-        None => {
-            let book = match &a.address_book_id {
-                Some(id) => {
-                    let book = books
-                        .into_iter()
-                        .find(|b| b.id.as_str() == id)
-                        .ok_or_else(|| not_found(format!("address book {id}")))?;
-                    if book.read_only {
-                        return Err(forbidden(format!("address book {id}")));
-                    }
-                    book
-                }
-                None => books
+        (Some(*contact), book)
+    } else {
+        let book = match &a.address_book_id {
+            Some(id) => {
+                let book = books
                     .into_iter()
-                    .find(|b| !b.read_only && b.role != Some(AddressBookRole::Collected))
-                    .ok_or_else(|| not_found("an address book"))?,
-            };
-            (None, book)
-        }
+                    .find(|b| b.id.as_str() == id)
+                    .ok_or_else(|| not_found(format!("address book {id}")))?;
+                if book.read_only {
+                    return Err(forbidden(format!("address book {id}")));
+                }
+                book
+            }
+            None => books
+                .into_iter()
+                .find(|b| !b.read_only && b.role != Some(AddressBookRole::Collected))
+                .ok_or_else(|| not_found("an address book"))?,
+        };
+        (None, book)
     };
     let before = existing.as_ref().map(|c| c.fields.clone());
-    let mut fields = match &before {
-        Some(fields) => fields.clone(),
-        None => {
-            let name = a
-                .full_name
-                .clone()
-                .filter(|n| !n.trim().is_empty())
-                .or_else(|| a.emails.as_ref().and_then(|e| e.first().cloned()))
-                .ok_or_else(|| invalid("a new contact needs full_name or an email address"))?;
-            ContactFields::named(name.trim())
-        }
+    let mut fields = if let Some(fields) = &before {
+        fields.clone()
+    } else {
+        let name = a
+            .full_name
+            .clone()
+            .filter(|n| !n.trim().is_empty())
+            .or_else(|| a.emails.as_ref().and_then(|e| e.first().cloned()))
+            .ok_or_else(|| invalid("a new contact needs full_name or an email address"))?;
+        ContactFields::named(name.trim())
     };
     if let Some(name) = &a.full_name {
         if name.trim().is_empty() {
             return Err(invalid("full_name is empty"));
         }
-        fields.display_name = name.trim().to_owned();
+        name.trim().clone_into(&mut fields.display_name);
     }
     if let Some(emails) = &a.emails {
         fields.emails = labeled(emails);
@@ -724,8 +720,8 @@ pub(crate) async fn upsert_contact<D: McpData>(
             units: Vec::new(),
         });
     }
-    set_text(&mut fields.title, &a.title);
-    set_text(&mut fields.notes, &a.notes);
+    set_text(&mut fields.title, a.title.as_deref());
+    set_text(&mut fields.notes, a.notes.as_deref());
     issue(&fields.issues())?;
     let old = before.as_ref();
     let mut changes = Vec::new();
@@ -848,16 +844,15 @@ pub(crate) async fn upsert_task<D: McpData>(
         None => (None, ctx.calendar(a.list_id.as_deref(), true).await?),
     };
     let before = existing.as_ref().map(|t| t.fields.clone());
-    let mut fields = match &before {
-        Some(fields) => fields.clone(),
-        None => {
-            let title = a
-                .title
-                .clone()
-                .filter(|t| !t.trim().is_empty())
-                .ok_or_else(|| invalid("a new task needs a title"))?;
-            TaskFields::titled(title.trim())
-        }
+    let mut fields = if let Some(fields) = &before {
+        fields.clone()
+    } else {
+        let title = a
+            .title
+            .clone()
+            .filter(|t| !t.trim().is_empty())
+            .ok_or_else(|| invalid("a new task needs a title"))?;
+        TaskFields::titled(title.trim())
     };
     if let Some(title) = &a.title {
         if title.trim().is_empty() {
@@ -872,7 +867,7 @@ pub(crate) async fn upsert_task<D: McpData>(
             Some(due(text)?)
         };
     }
-    set_text(&mut fields.description, &a.notes);
+    set_text(&mut fields.description, a.notes.as_deref());
     if let Some(priority) = a.priority {
         fields.priority = (priority > 0).then_some(priority);
     }
@@ -1227,9 +1222,9 @@ mod tests {
         assert!(values[0].preferred && !values[1].preferred);
         assert_eq!(values_text(&values).as_deref(), Some("a@x.org, b@x.org"));
         let mut field = Some("x".to_owned());
-        set_text(&mut field, &Some(" ".into()));
+        set_text(&mut field, Some(" "));
         assert_eq!(field, None);
-        set_text(&mut field, &None);
+        set_text(&mut field, None);
         assert_eq!(field, None);
     }
 }

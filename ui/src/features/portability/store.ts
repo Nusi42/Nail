@@ -16,9 +16,9 @@ export interface PortabilityUiState {
   pickerUnavailable: boolean;
   /** Messages the diagnostics dialog offers to include (opt-in). */
   diagnosticsMessages: MessageId[];
-  showReport(jobId: JobId): void;
-  setPickerUnavailable(): void;
-  setDiagnosticsMessages(ids: MessageId[]): void;
+  showReport: (jobId: JobId) => void;
+  setPickerUnavailable: () => void;
+  setDiagnosticsMessages: (ids: MessageId[]) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PortabilityUiState>>();
@@ -28,9 +28,15 @@ export function createPortabilityStore(): StoreApi<PortabilityUiState> {
     reportJobId: null,
     pickerUnavailable: false,
     diagnosticsMessages: [],
-    showReport: (reportJobId) => set({ reportJobId }),
-    setPickerUnavailable: () => set({ pickerUnavailable: true }),
-    setDiagnosticsMessages: (diagnosticsMessages) => set({ diagnosticsMessages }),
+    showReport: (reportJobId) => {
+      set({ reportJobId });
+    },
+    setPickerUnavailable: () => {
+      set({ pickerUnavailable: true });
+    },
+    setDiagnosticsMessages: (diagnosticsMessages) => {
+      set({ diagnosticsMessages });
+    },
   }));
 }
 

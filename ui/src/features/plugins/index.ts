@@ -69,8 +69,6 @@ export {
   markdownBlocksFor,
   previewRenderersFor,
 } from "./extensions";
-export { answerSendDraft, checkSendVeto } from "./extensionsMock";
-export { installDemoExtensions } from "./extensionsSeed";
 export type { PendingEdit } from "./store";
 
 /** Layout widget kinds → components. */
@@ -98,7 +96,11 @@ export const actions: Feature["actions"] = {
     },
   },
   /** Opens the plug-in manager. */
-  "plugins.manage": { run: (ctx) => ctx.store.getState().openWindow(MANAGER_DIALOG) },
+  "plugins.manage": {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(MANAGER_DIALOG);
+    },
+  },
 };
 
 /** Dialog names → components. */
@@ -184,7 +186,7 @@ export const handlePluginsEvent: FeatureEventHandler = (event, { client, queryCl
           ?.find((p) => p.id === event.plugin_id)?.manifest.name ?? event.plugin_id;
       plugins.pushToast({
         kind: "stopped",
-        id: `stopped-${event.plugin_id}-${Date.now()}`,
+        id: `stopped-${event.plugin_id}-${String(Date.now())}`,
         pluginId: event.plugin_id,
         level: "error",
         message: {

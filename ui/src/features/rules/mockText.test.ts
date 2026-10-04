@@ -1,6 +1,7 @@
 import type { Rule } from "../../api/generated";
 import { sampleRule } from "./mock";
 import { ruleFromText, ruleIdBase, ruleToText } from "./mockText";
+import { must } from "../../test/must";
 
 /** The canonical form nail-config writes for the design example (tests/rules.rs). */
 const DESIGN_EXAMPLE = `rule "Newsletters" trigger="arrival" scope="account:Everything" {
@@ -22,7 +23,7 @@ describe("mock rule text", () => {
   it("reads and writes the design example like nail-config", () => {
     const parsed = ruleFromText(DESIGN_EXAMPLE);
     expect(parsed.errors).toEqual([]);
-    const rule = parsed.rule as Rule;
+    const rule = must(parsed.rule);
     expect(rule).toMatchObject({
       id: "newsletters",
       name: "Newsletters",
@@ -114,7 +115,7 @@ describe("mock rule text", () => {
     const text = ruleToText(rule);
     const back = ruleFromText(text);
     expect(back.errors).toEqual([]);
-    expect(strip(back.rule as Rule)).toEqual(rule);
+    expect(strip(must(back.rule))).toEqual(rule);
   });
 
   it("derives ids like nail-config", () => {

@@ -3,6 +3,7 @@
 //! read, merged onto the defaults field by field, resolved into
 //! `ResolvedLayout::window_frames`, and kept by the merge dialog and the
 //! write-back.
+#![cfg(test)]
 
 use nail_api::customize::{ConfigFile, LayoutNodeRef, LayoutPatch, MergeChoice, MergeTake};
 use nail_api::windows::{

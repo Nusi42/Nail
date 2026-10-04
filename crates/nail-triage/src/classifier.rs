@@ -225,9 +225,11 @@ fn chi2_q(x2: f64, v: usize) -> f64 {
     let m = x2 / 2.0;
     let mut term = (-m).exp();
     let mut sum = term;
-    for i in 1..v / 2 {
-        term *= m / i as f64;
+    let mut k = 1.0;
+    for _ in 1..v / 2 {
+        term *= m / k;
         sum += term;
+        k += 1.0;
     }
     sum.min(1.0)
 }
@@ -263,11 +265,17 @@ pub fn score(
         }
         let s = 1.0 - chi2_q(-2.0 * ln_junk, 2 * n);
         let h = 1.0 - chi2_q(-2.0 * ln_ham, 2 * n);
-        ((s - h + 1.0) / 2.0).clamp(0.0, 1.0)
+        f64::midpoint(s - h, 1.0).clamp(0.0, 1.0)
     };
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "probability is clamped to 0..=1, so the rounded percent is 0..=100"
+    )]
+    let percent = (probability * 100.0).round() as u8;
     Score {
         probability,
-        percent: (probability * 100.0).round() as u8,
+        percent,
         clues: n,
     }
 }
@@ -298,10 +306,10 @@ pub fn classify<S: JunkStore>(
         return Ok(Classification::NotReady { trained, needed });
     }
     let counts = store.token_counts(account, tokens)?;
-    let score = score(params, tokens, &counts, trained);
+    let scored = score(params, tokens, &counts, trained);
     Ok(Classification::Scored {
-        score,
-        class: class_of(params, settings, score.percent),
+        score: scored,
+        class: class_of(params, settings, scored.percent),
     })
 }
 

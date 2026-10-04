@@ -9,8 +9,8 @@ Plan section 7, WP53, on the contract of ADR 0043: sync policy `bodies`
 (headers only / recent N days) with on-demand bodies, an IMAP `SEARCH`
 fallback for messages without a local body, a separate replay connection,
 `text/markdown` alternatives in `nail-mime`, every user-facing message
-built in `nail-config`, `nail-mcp`, the CLI and `nail-rules` as a Fluent id
-+ arguments, a fixed MCP port, a headless `nail mcp` with a single-instance
+built in `nail-config`, `nail-mcp`, the CLI and `nail-rules` as a Fluent id +
+arguments, a fixed MCP port, a headless `nail mcp` with a single-instance
 lock, and `RuleFromMessage` over the full header list. WP53 owns
 `nail-proto-imap`, `nail-mime`, `nail-store`, `nail-config`, `nail-mcp`,
 `nail-cli`, `nail-rules`, `nail-search` and `locales/{en,de}/core.ftl`; the
@@ -44,7 +44,7 @@ core is wired by WP55.
   errors carry `localized` too.
 - Arguments are language-neutral: `what` is a property (`` `key` ``) or a
   node's argument (`` `node` #1 ``), `found` is the value as written in
-  KDL (`"text"`, `5`, `#true`), lists are joined with `, `. Consequences
+  KDL (`"text"`, `5`, `#true`), lists are joined with ", " (comma and space). Consequences
   for the English wording (tests adapted): "found the string \"x\"" →
   "found \"x\""; "`x` needs the action as argument 2" → "`x` needs a value
   as argument 2"; choice lists read "one of a, b, c"; "is given twice" →

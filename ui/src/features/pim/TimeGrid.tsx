@@ -57,7 +57,7 @@ export interface TimeGridProps {
   /** Hour to scroll to when shown. */
   scrollTo: number;
   /** Go to a day (day header). */
-  onDay(day: CalendarDate): void;
+  onDay: (day: CalendarDate) => void;
 }
 
 interface DragState {
@@ -73,7 +73,7 @@ interface DragState {
   moved: boolean;
 }
 
-const pct = (value: number) => `${Math.round(value * 10000) / 100}%`;
+const pct = (value: number) => `${String(Math.round(value * 10000) / 100)}%`;
 
 function Positioned({
   geom,
@@ -102,8 +102,8 @@ function Columns({
   children: React.ReactNode;
 }) {
   useGeometry(geom, {
-    "grid-template-columns": `repeat(${count}, minmax(0, 1fr))`,
-    ...(rows !== undefined ? { "grid-template-rows": `repeat(${rows}, auto)` } : {}),
+    "grid-template-columns": `repeat(${String(count)}, minmax(0, 1fr))`,
+    ...(rows !== undefined ? { "grid-template-rows": `repeat(${String(rows)}, auto)` } : {}),
   });
   return (
     <div data-part={part} data-geom={geom}>
@@ -131,6 +131,7 @@ export function TimeGrid({
   const nowMs = useNow();
   const today = todayIn(tz, nowMs);
   const hours = Array.from({ length: Math.max(1, hourEnd - hourStart) }, (_, i) => hourStart + i);
+  const firstDay = days[0];
   const visibleMinutes = hours.length * 60;
   const scrollRef = useRef<HTMLDivElement>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
@@ -151,27 +152,29 @@ export function TimeGrid({
   };
   const slotKeyboard = useRef(false);
 
+  // Only when the view is shown or its hours change, not on every render.
+  const hourCount = hours.length;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = initialScrollTop(
       scrollTo - hourStart,
-      el.scrollHeight / Math.max(1, hours.length),
+      el.scrollHeight / Math.max(1, hourCount),
       el.scrollHeight - el.clientHeight,
     );
-    // Only when the view is shown, not on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollTo, hourStart]);
+  }, [scrollTo, hourStart, hourCount]);
 
   useEffect(() => {
     if (!slotKeyboard.current) return;
     slotKeyboard.current = false;
     slotsRef.current
-      ?.querySelector<HTMLElement>(`[data-slot="${chosenSlot.day}-${chosenSlot.hour}"]`)
+      ?.querySelector<HTMLElement>(
+        `[data-slot="${String(chosenSlot.day)}-${String(chosenSlot.hour)}"]`,
+      )
       ?.focus();
   }, [chosenSlot]);
 
-  const repeat = { "grid-template-columns": `repeat(${days.length}, minmax(0, 1fr))` };
+  const repeat = { "grid-template-columns": `repeat(${String(days.length)}, minmax(0, 1fr))` };
   const slotsGeom = geomId(nodeKey, "slots");
   const columnsGeom = geomId(nodeKey, "columns");
   useGeometry(slotsGeom, repeat);
@@ -232,7 +235,7 @@ export function TimeGrid({
     if (event.button !== 0) return;
     const columns = columnsRef.current?.getBoundingClientRect();
     if (!columns || columns.height <= 0 || columns.width <= 0) return;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.setPointerCapture(event.pointerId);
     setDrag({
       instance,
       mode,
@@ -281,7 +284,7 @@ export function TimeGrid({
     void requestMove(ctx, finished.instance, start, end).catch(() => {
       pim.getState().pushToast({
         kind: "problem",
-        id: `move-${Date.now()}`,
+        id: `move-${String(Date.now())}`,
         message: { id: "pim-move-failed", args: { error: "" } },
       });
     });
@@ -294,8 +297,10 @@ export function TimeGrid({
   };
 
   const ghost = (() => {
-    if (!drag || !drag.moved) return null;
-    const placed = placeDay([drag.instance], days[drag.dayIndex] as CalendarDate, tz)[0];
+    if (!drag?.moved) return null;
+    const dragDay = days[drag.dayIndex];
+    if (!dragDay) return null;
+    const placed = placeDay([drag.instance], dragDay, tz)[0];
     if (!placed) return null;
     const start = drag.mode === "move" ? placed.startMinute + drag.minutes : placed.startMinute;
     const end =
@@ -321,7 +326,9 @@ export function TimeGrid({
       data-days={days.length}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => setDrag(null)}
+      onPointerCancel={() => {
+        setDrag(null);
+      }}
     >
       <div data-part="calendar.head" data-zones={zones}>
         <div data-part="calendar.corner">
@@ -344,7 +351,9 @@ export function TimeGrid({
               aria-label={t("pim-go-to-day", {
                 day: formatDay(format, day, { dateStyle: "full" }),
               })}
-              onClick={() => onDay(day)}
+              onClick={() => {
+                onDay(day);
+              }}
             >
               <span data-part="calendar.day-head.weekday">
                 {format.dateTime(dayDate(day), { weekday: "short", timeZone: "UTC" })}
@@ -375,7 +384,9 @@ export function TimeGrid({
               label={t("pim-new-all-day-event", {
                 day: formatDay(format, day, { dateStyle: "full" }),
               })}
-              onCreate={() => createAt(day, null)}
+              onCreate={() => {
+                createAt(day, null);
+              }}
             />
           ))}
           <ul data-part="calendar.all-day.events" aria-label={t("pim-all-day-events")}>
@@ -390,8 +401,8 @@ export function TimeGrid({
                   calendars={calendars}
                   geom={geomId(nodeKey, "span", s.instance.event_id, s.instance.start_utc)}
                   position={{
-                    "grid-column": `${s.first + 1} / span ${s.last - s.first + 1}`,
-                    "grid-row": `${s.row + 1}`,
+                    "grid-column": `${String(s.first + 1)} / span ${String(s.last - s.first + 1)}`,
+                    "grid-row": String(s.row + 1),
                   }}
                   part="calendar.chip"
                   keys="days"
@@ -415,11 +426,10 @@ export function TimeGrid({
               </span>
             ))}
           </div>
-          {secondaryTz && (
+          {secondaryTz && firstDay && (
             <div data-part="calendar.gutter" data-zone="secondary" aria-hidden="true">
               {hours.map((hour) => {
-                const day = days[0] as CalendarDate;
-                const ms = toZoned(day, tz).add({ hours: hour }).toDate().getTime();
+                const ms = toZoned(firstDay, tz).add({ hours: hour }).toDate().getTime();
                 return (
                   <span key={hour} data-part="calendar.hour">
                     {formatInstant(format, ms, secondaryTz, { hour: "numeric" })}
@@ -429,6 +439,7 @@ export function TimeGrid({
             </div>
           )}
           <div data-part="calendar.canvas">
+            {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- the grid's cells take the focus (roving tabindex), not the grid itself. */}
             <div
               ref={slotsRef}
               role="grid"
@@ -446,7 +457,7 @@ export function TimeGrid({
                         key={dateString(day)}
                         role="gridcell"
                         data-part="calendar.slot"
-                        data-slot={`${dayIndex}-${hour}`}
+                        data-slot={`${String(dayIndex)}-${String(hour)}`}
                         data-day={dateString(day)}
                         data-state={day.compare(today) === 0 ? "today" : undefined}
                         tabIndex={active ? 0 : -1}
@@ -461,7 +472,9 @@ export function TimeGrid({
                         onFocus={() => {
                           if (!active) setSlot({ day: dayIndex, hour });
                         }}
-                        onDoubleClick={() => createAt(day, hour)}
+                        onDoubleClick={() => {
+                          createAt(day, hour);
+                        }}
                       />
                     );
                   })}
@@ -521,9 +534,9 @@ export function TimeGrid({
                               p.continuesAfter ? "continues-after" : null,
                               dragging ? "dragging" : null,
                             ].filter((x): x is string => x !== null)}
-                            onDragStart={(event, mode) =>
-                              startDrag(event, p.instance, dayIndex, mode)
-                            }
+                            onDragStart={(event, mode) => {
+                              startDrag(event, p.instance, dayIndex, mode);
+                            }}
                             suppressClick={suppressClick}
                           />
                         </li>
@@ -576,9 +589,12 @@ function AllDayCell({
   rows: number;
   day: CalendarDate;
   label: string;
-  onCreate(): void;
+  onCreate: () => void;
 }) {
-  useGeometry(geom, { "grid-column": `${index + 1}`, "grid-row": `1 / span ${rows}` });
+  useGeometry(geom, {
+    "grid-column": String(index + 1),
+    "grid-row": `1 / span ${String(rows)}`,
+  });
   return (
     <button
       type="button"

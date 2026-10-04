@@ -3,6 +3,7 @@
 //! fixtures leave out). After changing `defaults/*.kdl`, regenerate them
 //! with `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults`
 //! (then `npx prettier --write crates/nail-api/fixtures`).
+#![cfg(test)]
 
 use std::path::Path;
 

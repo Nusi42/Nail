@@ -168,7 +168,7 @@ pub(crate) struct SyncCtx {
 impl SyncCtx {
     pub(crate) fn emit(&self, event: Event) {
         // An error only means nobody is listening right now.
-        let _ = self.events.send(event);
+        drop(self.events.send(event));
     }
 }
 

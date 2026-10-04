@@ -44,7 +44,6 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
   return (
     <section
       data-part="security-warnings"
-      role="region"
       aria-label={t("security-warnings-label")}
       data-count={warnings.length}
     >
@@ -54,7 +53,7 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
       <ul data-part="security-warnings.list">
         {links.map((w, i) => (
           <li
-            key={`link-${w.link}-${w.kind}-${i}`}
+            key={`link-${String(w.link)}-${w.kind}-${String(i)}`}
             data-part="security-warnings.item"
             data-kind={w.kind}
             data-link={w.link}
@@ -67,7 +66,7 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
         ))}
         {files.map((w) => (
           <li
-            key={`file-${w.index}`}
+            key={`file-${String(w.index)}`}
             data-part="security-warnings.item"
             data-kind={w.kind}
             data-risk={w.risk}
@@ -112,7 +111,7 @@ export function SecurityWarningsWidget({ node }: WidgetProps) {
   const label = useLabel();
   const selectedId = useUi((s) => s.selectedMessageId);
   const message = useMessage(selectedId).data;
-  if (!message || message.id !== selectedId || (message.warnings ?? []).length === 0) return null;
+  if (message?.id !== selectedId || (message.warnings ?? []).length === 0) return null;
   return (
     <div
       data-part="security-warnings.slot"

@@ -111,6 +111,10 @@ pub struct Address {
 /// Standard IMAP system flags of a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the IMAP system flags are independent booleans by definition"
+)]
 pub struct Flags {
     /// `\Seen`: the message has been read.
     pub seen: bool,

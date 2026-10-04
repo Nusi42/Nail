@@ -52,11 +52,12 @@ function asGroup(c: Condition): Condition {
 
 function TriggerFields({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) => void }) {
   const has = (kind: TriggerKind) => rule.triggers.find((t) => t.type === kind);
-  const setTrigger = (next: RuleTrigger) =>
+  const setTrigger = (next: RuleTrigger) => {
     onChange({
       ...rule,
       triggers: rule.triggers.map((t) => (t.type === next.type ? next : t)),
     });
+  };
   const schedule = has("schedule");
   const older = has("older-than");
   return (
@@ -67,7 +68,9 @@ function TriggerFields({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) 
           labelId={`rules-trigger-${kind}`}
           name={`trigger-${kind}`}
           checked={has(kind) !== undefined}
-          onChange={(on) => onChange(toggleTrigger(rule, kind, on))}
+          onChange={(on) => {
+            onChange(toggleTrigger(rule, kind, on));
+          }}
         />
       ))}
       {schedule?.type === "schedule" && (
@@ -76,7 +79,9 @@ function TriggerFields({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) 
           name="schedule-minutes"
           min={1}
           value={schedule.interval_minutes}
-          onChange={(n) => setTrigger({ type: "schedule", interval_minutes: n ?? 0 })}
+          onChange={(n) => {
+            setTrigger({ type: "schedule", interval_minutes: n ?? 0 });
+          }}
         />
       )}
       {older?.type === "older-than" && (
@@ -85,7 +90,9 @@ function TriggerFields({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) 
           name="older-than-days"
           min={1}
           value={older.days}
-          onChange={(n) => setTrigger({ type: "older-than", days: n ?? 0 })}
+          onChange={(n) => {
+            setTrigger({ type: "older-than", days: n ?? 0 });
+          }}
         />
       )}
     </Section>
@@ -112,9 +119,9 @@ function ScopeField({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) => 
               literal: true,
             })),
           ]}
-          onChange={(id) =>
-            onChange({ ...rule, scope: id === "" ? [] : [{ type: "account", account_id: id }] })
-          }
+          onChange={(id) => {
+            onChange({ ...rule, scope: id === "" ? [] : [{ type: "account", account_id: id }] });
+          }}
         />
       ) : (
         <p data-part="rules.hint">{t("rules-scope-custom")}</p>
@@ -145,7 +152,9 @@ function TextView({
           name="rule-text"
           spellCheck={false}
           value={text}
-          onChange={(event) => onText(event.target.value)}
+          onChange={(event) => {
+            onText(event.target.value);
+          }}
         />
       </label>
       {errors.length > 0 && (
@@ -422,7 +431,11 @@ export function RuleEditor({
           text={text}
           errors={textErrors}
           onText={setText}
-          onApply={() => void run(async () => void (await fromText()))}
+          onApply={() =>
+            void run(async () => {
+              await fromText();
+            })
+          }
         />
       ) : (
         <>
@@ -431,26 +444,34 @@ export function RuleEditor({
             name="rule-name"
             value={rule.name}
             required
-            onChange={(name) => setRule({ ...rule, name })}
+            onChange={(name) => {
+              setRule({ ...rule, name });
+            }}
           />
           <CheckField
             labelId="rules-enabled"
             name="rule-enabled"
             checked={rule.enabled}
-            onChange={(enabled) => setRule({ ...rule, enabled })}
+            onChange={(enabled) => {
+              setRule({ ...rule, enabled });
+            }}
           />
           <TriggerFields rule={rule} onChange={setRule} />
           <ScopeField rule={rule} onChange={setRule} />
           <Section titleId="rules-section-conditions">
             <ConditionEditor
               value={rule.conditions}
-              onChange={(conditions) => setRule({ ...rule, conditions })}
+              onChange={(conditions) => {
+                setRule({ ...rule, conditions });
+              }}
             />
           </Section>
           <Section titleId="rules-section-actions">
             <ActionEditor
               value={rule.actions}
-              onChange={(actions) => setRule({ ...rule, actions })}
+              onChange={(actions) => {
+                setRule({ ...rule, actions });
+              }}
             />
           </Section>
         </>

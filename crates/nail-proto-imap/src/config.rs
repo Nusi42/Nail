@@ -79,6 +79,16 @@ pub enum Secret {
     AccessToken(String),
 }
 
+/// Never prints the secret text.
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Password(_) => f.write_str("Password(<redacted>)"),
+            Self::AccessToken(_) => f.write_str("AccessToken(<redacted>)"),
+        }
+    }
+}
+
 impl Secret {
     /// The secret text.
     pub fn expose(&self) -> &str {
@@ -189,7 +199,7 @@ impl Default for FetchBatchLimits {
 
 impl ImapConfig {
     /// Default per-operation timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
 
     /// Implicit TLS on port 993 with platform trust: the recommended setup.
     pub fn new(host: impl Into<String>) -> Self {
@@ -288,6 +298,10 @@ mod tests {
         assert!(text.contains("access token"));
         assert!(!text.contains("ya29"));
         assert_eq!(Credentials::oauth2("s", "t").secret.expose(), "t");
+        let secret = Secret::Password("hunter2".into());
+        assert_eq!(format!("{secret:?}"), "Password(<redacted>)");
+        let token = Secret::AccessToken("ya29.token".into());
+        assert_eq!(format!("{token:?}"), "AccessToken(<redacted>)");
         assert!(AuthMechanism::XOAuth2.is_oauth());
         assert!(!AuthMechanism::Plain.is_oauth());
         let trust = format!("{:?}", TlsTrust::CustomRoots(vec![vec![1, 2, 3]]));

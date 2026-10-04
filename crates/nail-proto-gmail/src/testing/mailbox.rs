@@ -57,7 +57,7 @@ impl MockError {
 type Test<'a> = Box<dyn Fn(&MockMessage) -> bool + 'a>;
 
 /// Mock result.
-pub type MockResult<T> = Result<T, MockError>;
+pub(super) type MockResult<T> = Result<T, MockError>;
 
 /// A stored message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -582,7 +582,7 @@ impl Mailbox {
             current.clone()
         };
         if let Some(name) = patch.get("name").and_then(Value::as_str) {
-            next.name = name.trim().to_owned();
+            name.trim().clone_into(&mut next.name);
         }
         for (key, slot) in [
             ("labelListVisibility", &mut next.label_list_visibility),
@@ -944,15 +944,16 @@ fn snippet(raw: &[u8]) -> String {
 }
 
 fn content_type(raw: &[u8]) -> String {
-    header_value(&raw_headers(raw), "Content-Type")
-        .map(|v| {
+    header_value(&raw_headers(raw), "Content-Type").map_or_else(
+        || "text/plain".to_owned(),
+        |v| {
             v.split(';')
                 .next()
                 .unwrap_or_default()
                 .trim()
                 .to_ascii_lowercase()
-        })
-        .unwrap_or_else(|| "text/plain".to_owned())
+        },
+    )
 }
 
 fn attachments(raw: &[u8]) -> Vec<(String, String, u64)> {
@@ -962,13 +963,13 @@ fn attachments(raw: &[u8]) -> Vec<(String, String, u64)> {
     parsed
         .attachments()
         .map(|part| {
-            let mime = part
-                .content_type()
-                .map(|c| match c.subtype() {
+            let mime = part.content_type().map_or_else(
+                || "application/octet-stream".to_owned(),
+                |c| match c.subtype() {
                     Some(sub) => format!("{}/{sub}", c.ctype()),
                     None => c.ctype().to_owned(),
-                })
-                .unwrap_or_else(|| "application/octet-stream".to_owned());
+                },
+            );
             (
                 part.attachment_name().unwrap_or_default().to_owned(),
                 mime,
@@ -1076,7 +1077,7 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        assert!(mb.search(Some("label:inbox"), &[], false).unwrap().len() == 1);
+        assert_eq!(mb.search(Some("label:inbox"), &[], false).unwrap().len(), 1);
         assert_eq!(
             mb.search(Some("frobnicate:x"), &[], false)
                 .unwrap_err()

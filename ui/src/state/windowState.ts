@@ -68,7 +68,9 @@ export function useSetWindowState() {
           "WindowStates",
         )
       ).states,
-    onMutate: ({ window, state }) => applyWindowStateChange(queryClient, windowKind(window), state),
+    onMutate: ({ window, state }) => {
+      applyWindowStateChange(queryClient, windowKind(window), state);
+    },
     onSuccess: (states) => queryClient.setQueryData(windowStatesKey, states),
   });
 }

@@ -708,7 +708,7 @@ impl Validator {
                 }
             }
             PluginUiNode::Checkbox { label, .. } | PluginUiNode::FolderPicker { label, .. } => {
-                self.text(path, &[label])
+                self.text(path, &[label]);
             }
             PluginUiNode::ContactPicker {
                 label,
@@ -917,13 +917,13 @@ mod tests {
 
     #[test]
     fn values_and_limits_are_checked() {
+        use PluginUiIssueKind as K;
         let check = |v: serde_json::Value| -> Vec<PluginUiIssueKind> {
             validate_tree(&[parse(v)])
                 .into_iter()
                 .map(|i| i.kind)
                 .collect()
         };
-        use PluginUiIssueKind as K;
         assert_eq!(
             check(json!({"type": "select", "id": "s", "label": "S",
                 "options": [{"value": "a", "label": "A"}], "default": ["b"]})),

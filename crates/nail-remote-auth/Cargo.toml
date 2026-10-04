@@ -33,7 +33,6 @@ rand.workspace = true
 base64.workspace = true
 sha2.workspace = true
 hmac.workspace = true
-hex.workspace = true
 zeroize.workspace = true
 # Constant-time comparison of CSRF tokens (BSD-3-Clause; already in the
 # lock through the RustCrypto crates).

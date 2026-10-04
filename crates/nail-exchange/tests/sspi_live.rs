@@ -15,6 +15,7 @@
 //! handshake (`SspiNegotiate` over the real `ReqwestHttp`) and expects the
 //! server to accept the login (any answer but `401`; EWS answers a `GET`
 //! with its service description or `405`).
+#![cfg(test)]
 
 use nail_api::accounts::SspiPackage;
 use nail_exchange::http::{HttpRequest, ReqwestHttp};

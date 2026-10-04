@@ -20,6 +20,7 @@
 //! [`NotificationBatcher::max_delay`]. The texts are
 //! [`LocalizedMessage`]s from `core-triage.ftl`.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike};
@@ -101,12 +102,10 @@ pub fn in_quiet_hours<Tz: TimeZone>(quiet: &QuietHours, local: &DateTime<Tz>) ->
     let today = weekday(local.weekday());
     let yesterday = weekday(local.weekday().pred());
     let on = |day: Weekday| quiet.days.is_empty() || quiet.days.contains(&day);
-    if start < end {
-        (start..end).contains(&minute) && on(today)
-    } else if start > end {
-        (minute >= start && on(today)) || (minute < end && on(yesterday))
-    } else {
-        false
+    match start.cmp(&end) {
+        Ordering::Less => (start..end).contains(&minute) && on(today),
+        Ordering::Greater => (minute >= start && on(today)) || (minute < end && on(yesterday)),
+        Ordering::Equal => false,
     }
 }
 

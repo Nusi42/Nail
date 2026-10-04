@@ -87,9 +87,7 @@ pub fn automatic_replies_of(
     let end = parse_date(vacation.end_date.as_deref())
         .and_then(|d| d.succ_opt())
         .map(|d| midnight(d, zone));
-    let (status, start, end) = if !vacation.enabled {
-        (AutomaticRepliesStatus::Disabled, None, None)
-    } else {
+    let (status, start, end) = if vacation.enabled {
         match (start, end) {
             (None, None) => (AutomaticRepliesStatus::AlwaysEnabled, None, None),
             (Some(start), Some(end)) => (AutomaticRepliesStatus::Scheduled, Some(start), Some(end)),
@@ -106,6 +104,8 @@ pub fn automatic_replies_of(
                 (AutomaticRepliesStatus::Scheduled, Some(now), Some(end))
             }
         }
+    } else {
+        (AutomaticRepliesStatus::Disabled, None, None)
     };
     Mapped {
         value: AutomaticRepliesSettings {

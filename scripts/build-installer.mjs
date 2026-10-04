@@ -54,6 +54,7 @@ import {
   buildBase,
   checksumLines,
   installerConfigOverlay,
+  isOverlay,
   listFiles,
   mapiArchs,
   parseArgs,
@@ -64,6 +65,7 @@ import {
   updaterPluginConfig,
   withoutUpdaterSecrets,
 } from "./lib/build.mjs";
+import { readJson } from "./lib/json.mjs";
 import { findSigntool, signingFromEnv, signtoolArgs, tauriSigning } from "./lib/sign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { writeSboms } from "./sbom.mjs";
@@ -71,15 +73,27 @@ import { writeSboms } from "./sbom.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const shell = process.platform === "win32";
 
-/** Quotes an argument for cmd.exe when needed. */
+/**
+ * Quotes an argument for cmd.exe when needed.
+ *
+ * @param {string} arg
+ */
 function quote(arg) {
   return /[\s"&|<>^]/.test(arg) ? `"${arg.replaceAll('"', '""')}"` : arg;
 }
 
+/**
+ * Runs a command with inherited output; throws when it fails.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ env?: NodeJS.ProcessEnv, shell?: boolean }} [options]
+ */
 function run(command, args, options = {}) {
   const useShell = options.shell ?? shell;
   console.log(`> ${command} ${args.join(" ")}`);
   // Without an explicit env a child never sees the update key.
+  /** @type {import("node:child_process").ExecFileSyncOptions} */
   const spawnOptions = {
     cwd: repoRoot,
     stdio: "inherit",
@@ -95,11 +109,17 @@ function run(command, args, options = {}) {
   }
 }
 
+/** @param {string} file */
 function sha256(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-/** First existing path, or an error naming all candidates. */
+/**
+ * First existing path, or an error naming all candidates.
+ *
+ * @param {string[]} candidates
+ * @param {string} what
+ */
 function firstExisting(candidates, what) {
   const found = candidates.find((c) => existsSync(c));
   if (!found) throw new Error(`${what} not found; looked for:\n  ${candidates.join("\n  ")}`);
@@ -138,11 +158,11 @@ function main() {
   }
 
   const appDir = path.join(repoRoot, "app", "src-tauri");
-  const conf = JSON.parse(readFileSync(path.join(appDir, "tauri.conf.json"), "utf8"));
+  const conf = /** @type {{ version: string }} */ (readJson(path.join(appDir, "tauri.conf.json")));
   const version = options.version ?? conf.version;
   const names = artifactNames(version, options.arch);
-  const staticOverlay = JSON.parse(
-    readFileSync(path.join(appDir, "windows", "bundle.json"), "utf8"),
+  const staticOverlay = /** @type {import("./lib/build.mjs").Overlay} */ (
+    readJson(path.join(appDir, "windows", "bundle.json"))
   );
 
   // Authenticode: only with a configured certificate.
@@ -157,18 +177,21 @@ function main() {
     : null;
   console.log(
     signing
-      ? `Authenticode: signing with certificate ${signing.thumbprint} (${signtool})`
+      ? `Authenticode: signing with certificate ${signing.thumbprint} (${signtool ?? ""})`
       : "Authenticode: no certificate configured (NAIL_SIGN_THUMBPRINT) - building unsigned",
   );
+  /** @param {string} file */
   const sign = (file) => {
-    if (signing) run(signtool, signtoolArgs(signing, file), { shell: false });
+    if (signing && signtool) run(signtool, signtoolArgs(signing, file), { shell: false });
   };
 
   // Update key: the release key from the environment, or the local dev key.
   // Only `tauri bundle` gets it (bundleEnv); everything else runs with
   // buildEnv, which never holds it.
   const buildEnv = withoutUpdaterSecrets({ ...process.env, CARGO_TARGET_DIR: targetDir });
+  /** @type {NodeJS.ProcessEnv} */
   const bundleEnv = { ...process.env, CARGO_TARGET_DIR: targetDir };
+  /** @type {{ pubkey: string } | null} */
   let updaterKey;
   if (options.devUpdaterKey) {
     const dev = devKeyPaths({ base, repoRoot });
@@ -213,17 +236,21 @@ function main() {
   const rustflags = [process.env.RUSTFLAGS, "-C target-feature=+crt-static"]
     .filter(Boolean)
     .join(" ");
-  const cargoStatic = (args) =>
+  /** @param {string[]} args */
+  const cargoStatic = (args) => {
     run("cargo", ["build", "--release", ...locked, ...args, "--target-dir", staticTarget], {
       env: { ...buildEnv, CARGO_TARGET_DIR: staticTarget, RUSTFLAGS: rustflags },
       shell: false,
     });
+  };
+  /** @type {string | null} */
   let cliExe = null;
   if (options.cli) {
     cargoStatic(["-p", "nail-cli", "--target", triple]);
     cliExe = path.join(staticTarget, triple, "release", "nail.exe");
     sign(cliExe);
   }
+  /** @type {Record<string, string>} */
   const mapiDlls = {};
   if (options.mapi) {
     for (const arch of mapiArchs(options.arch)) {
@@ -294,7 +321,12 @@ function main() {
     ],
     { env: bundleEnv },
   );
+  /** @type {string[]} */
   const artifacts = [];
+  /**
+   * @param {string} from
+   * @param {string} name
+   */
   const copyArtifact = (from, name) => {
     copyFileSync(from, path.join(outDir, name));
     artifacts.push(name);
@@ -331,7 +363,7 @@ function main() {
       webview: "offline",
     });
     // No second set of update signatures for the variant.
-    offlineOverlay.bundle.createUpdaterArtifacts = false;
+    if (isOverlay(offlineOverlay.bundle)) offlineOverlay.bundle.createUpdaterArtifacts = false;
     const offlineFile = path.join(targetDir, "nail-installer-offline.conf.json");
     writeFileSync(offlineFile, JSON.stringify(offlineOverlay, null, 2));
     run(
@@ -359,7 +391,7 @@ function main() {
     for (const file of portableLayout({ appExe: portableExe, cliExe, uiDir, uiFiles })) {
       const to = path.join(root, file.to);
       mkdirSync(path.dirname(to), { recursive: true });
-      if (file.from) copyFileSync(file.from, to);
+      if ("from" in file) copyFileSync(file.from, to);
       else writeFileSync(to, file.content);
     }
     const zip = path.join(outDir, names.portableZip);

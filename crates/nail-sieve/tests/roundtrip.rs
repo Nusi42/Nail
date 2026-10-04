@@ -2,6 +2,7 @@
 //! compiles to a script the mock server accepts, which parses and
 //! decompiles back to the rule's canonical form; everything else gets the
 //! right placement and reasons.
+#![cfg(test)]
 
 use nail_api::domain::FolderRole;
 use nail_api::localized::MessageArg;
@@ -580,6 +581,7 @@ fn not_expressible_rules_say_why() {
 
 #[test]
 fn client_rules_and_scope() {
+    use RulePlacement::{Client, Server};
     let folders = folders();
     let opts = options(&folders, COMMON_EXTENSIONS);
     let base = || rule("r", Condition::always(), vec![tag("x")]);
@@ -656,7 +658,6 @@ fn client_rules_and_scope() {
         .iter()
         .map(|s| (s.placement, reason_ids(s)))
         .collect();
-    use RulePlacement::{Client, Server};
     assert_eq!(
         got,
         [
@@ -679,6 +680,7 @@ fn client_rules_and_scope() {
 
 #[test]
 fn missing_extensions_keep_rules_on_the_client() {
+    use RulePlacement::{Client, Server};
     let folders = folders();
     let rules = vec![
         rule(
@@ -738,7 +740,6 @@ fn missing_extensions_keep_rules_on_the_client() {
             )
         })
         .collect();
-    use RulePlacement::{Client, Server};
     assert_eq!(
         got,
         [

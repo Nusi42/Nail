@@ -3,6 +3,7 @@
  * sequences like `g i`, per context with `global` as the fallback.
  */
 import type { JsonValue, KeyBinding } from "../api/generated";
+import { charCount } from "../text/chars";
 
 const MODIFIER_KEYS = new Set(["control", "shift", "alt", "meta", "altgraph", "capslock", "os"]);
 const ALIASES: Record<string, string> = { esc: "escape", del: "delete", space: " ", spacebar: " " };
@@ -33,7 +34,7 @@ export function comboFromEvent(event: KeyLike): string | null {
   const parts: string[] = [];
   if (event.ctrlKey) parts.push("ctrl");
   if (event.altKey) parts.push("alt");
-  const isSymbol = [...key].length === 1 && !/[a-z0-9]/.test(key);
+  const isSymbol = charCount(key) === 1 && !/[a-z0-9]/.test(key);
   if (event.shiftKey && !isSymbol) parts.push("shift");
   if (event.metaKey) parts.push("meta");
   parts.push(key);

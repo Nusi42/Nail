@@ -17,7 +17,6 @@
 import type {
   Calendar,
   CategoryColor,
-  FolderRole,
   Identity,
   InferenceClassification,
   MessageSummary,
@@ -272,7 +271,7 @@ export function seedExchangeDemo(data: MockData, options: { now?: number } = {})
       parent_id: null,
       name,
       path: name,
-      role: role as FolderRole,
+      role: role,
       unread: 0,
       total: 0,
     });
@@ -301,7 +300,7 @@ export function seedExchangeDemo(data: MockData, options: { now?: number } = {})
   );
 
   MAILS.forEach((mail, index) => {
-    const id = `${mail.folder}#x${index + 1}`;
+    const id = `${mail.folder}#x${String(index + 1)}`;
     const itemId = `AAMkAD${(0x2000 + index).toString(16)}`;
     const summary: MessageSummary = {
       id,

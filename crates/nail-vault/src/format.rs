@@ -379,7 +379,7 @@ mod tests {
     fn round_trips_all_sizes_around_chunk_boundaries() {
         let key = key();
         for len in [0usize, 1, 1023, 1024, 1025, 2048, 2049, 5000] {
-            let plain: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+            let plain: Vec<u8> = (0..len).map(|i| u8::try_from(i % 251).unwrap()).collect();
             let sealed = seal_with_chunk(&key, b"ctx", &plain, 10).unwrap();
             assert!(is_sealed(&sealed));
             let layout = SealedLayout::parse(&sealed, sealed.len()).unwrap();

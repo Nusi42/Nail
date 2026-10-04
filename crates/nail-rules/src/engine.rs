@@ -70,6 +70,12 @@ impl std::fmt::Display for RuleIssue {
 /// Every problem of a rule: invalid regular expressions, queries and
 /// dates, empty names, tags and recipient lists, zero intervals.
 pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
+    check(rule).0
+}
+
+/// [`validate`] plus the compiled condition tree (`None` when it has
+/// issues).
+fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
     let mut issues = Vec::new();
     let mut push = |location: IssueLocation, message: &str, id: &str| {
         let localized = match &location {
@@ -156,14 +162,18 @@ pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
             _ => {}
         }
     }
-    if let Err(errors) = CompiledCondition::new(&rule.conditions) {
-        issues.extend(errors.into_iter().map(|e| RuleIssue {
-            location: IssueLocation::Condition { path: e.path },
-            message: e.message,
-            localized: e.localized,
-        }));
-    }
-    issues
+    let condition = match CompiledCondition::new(&rule.conditions) {
+        Ok(condition) => Some(condition),
+        Err(errors) => {
+            issues.extend(errors.into_iter().map(|e| RuleIssue {
+                location: IssueLocation::Condition { path: e.path },
+                message: e.message,
+                localized: e.localized,
+            }));
+            None
+        }
+    };
+    (issues, condition)
 }
 
 /// A rule ready to be evaluated.
@@ -188,13 +198,10 @@ pub struct Explanation {
 impl CompiledRule {
     /// Compiles a rule; fails with every problem [`validate`] finds.
     pub fn new(rule: Rule) -> Result<Self, Vec<RuleIssue>> {
-        let issues = validate(&rule);
-        if !issues.is_empty() {
-            return Err(issues);
+        match check(&rule) {
+            (issues, Some(condition)) if issues.is_empty() => Ok(Self { rule, condition }),
+            (issues, _) => Err(issues),
         }
-        let condition = CompiledCondition::new(&rule.conditions)
-            .expect("validate() compiled the conditions already");
-        Ok(Self { rule, condition })
     }
 
     /// The rule.

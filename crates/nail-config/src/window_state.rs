@@ -46,15 +46,16 @@ pub fn read_window_states(dir: &Path) -> WindowStates {
     let path = dir.join(WINDOW_STATE_FILE);
     match read_optional(&path) {
         Ok(None) => WindowStates::new(),
-        Ok(Some(text)) => match WindowStateFile::parse(&text) {
-            Some(file) => file.windows,
-            None => {
+        Ok(Some(text)) => {
+            if let Some(file) = WindowStateFile::parse(&text) {
+                file.windows
+            } else {
                 tracing::warn!(
                     "{WINDOW_STATE_FILE} is not a version-1 window-state file; starting empty"
                 );
                 WindowStates::new()
             }
-        },
+        }
         Err(err) => {
             tracing::warn!(%err, "cannot read {WINDOW_STATE_FILE}; starting empty");
             WindowStates::new()

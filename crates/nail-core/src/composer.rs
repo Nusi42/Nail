@@ -1,5 +1,5 @@
-//! Requests of M1b WP21 (composer, ADR 0023): NewDraft, RenderPreview,
-//! ConvertDraft, UploadAttachment, SuggestAddresses — plus what the rest of
+//! Requests of M1b WP21 (composer, ADR 0023): `NewDraft`, `RenderPreview`,
+//! `ConvertDraft`, `UploadAttachment`, `SuggestAddresses` — plus what the rest of
 //! the core needs from the composer: the identity's style and settings,
 //! building a draft's message ([`Service::build_draft_message`]) and the
 //! autosave copy in the server's Drafts folder.
@@ -34,9 +34,8 @@ use crate::ingest::{IncomingMessage, ingest};
 use crate::service::{Service, lock};
 use crate::strings::{message, message_with};
 
-/// Largest attachment `UploadAttachment` accepts (decoded bytes;
-/// `nail_api::compose::MAX_ATTACHMENT_BYTES`, 25 MiB on every target).
-pub(crate) const MAX_ATTACHMENT_BYTES: usize = nail_api::compose::MAX_ATTACHMENT_BYTES as usize;
+/// Largest attachment `UploadAttachment` accepts (decoded bytes, 25 MiB).
+pub(crate) const MAX_ATTACHMENT_BYTES: u64 = nail_api::compose::MAX_ATTACHMENT_BYTES;
 
 /// Longest address suggestion list.
 const MAX_SUGGESTIONS: u32 = 50;
@@ -138,11 +137,12 @@ pub(crate) fn settings_of(identity: &Identity) -> ComposeSettings {
     }
 }
 
-fn compose_error(err: ComposeError) -> ApiError {
+fn compose_error(err: &ComposeError) -> ApiError {
     match err {
         ComposeError::MissingBlob { .. } => ApiError::not_found(err.to_string()),
-        ComposeError::NoSender => ApiError::invalid_request(err.to_string()),
-        ComposeError::Stylesheet(_) => ApiError::invalid_request(err.to_string()),
+        ComposeError::NoSender | ComposeError::Stylesheet(_) => {
+            ApiError::invalid_request(err.to_string())
+        }
         ComposeError::Io(_) => ApiError::internal(err.to_string()),
     }
 }
@@ -234,7 +234,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 nail_compose::render_markdown_document(&markdown, &style)
             })
             .await?
-            .map_err(compose_error)?;
+            .map_err(|e| compose_error(&e))?;
             Response::PreviewRendered { html }
         }
         Request::ConvertDraft { draft, mode } => {
@@ -452,7 +452,7 @@ impl Service {
             .map_err(|e| {
                 ApiError::invalid_request(format!("attachment data is not base64: {e}"))
             })?;
-        if bytes.len() > MAX_ATTACHMENT_BYTES {
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_ATTACHMENT_BYTES {
             return Err(ApiError::new(
                 ErrorCode::TooLarge,
                 format!(
@@ -545,7 +545,7 @@ impl Service {
             )
         })
         .await?
-        .map_err(compose_error)?;
+        .map_err(|e| compose_error(&e))?;
         Ok(built)
     }
 
@@ -907,11 +907,11 @@ mod tests {
         let id: DraftId = "draft-1".into();
         // A waiting upload is dropped.
         let (waiting, _, _keep) = gated(&log, "waiting");
-        uploads.schedule(&id, Duration::from_secs(3600), waiting);
+        uploads.schedule(&id, Duration::from_hours(1), waiting);
         drop(uploads.cancel(&id).await);
         // A replaced waiting upload never runs either.
         let (replaced, _, _keep2) = gated(&log, "replaced");
-        uploads.schedule(&id, Duration::from_secs(3600), replaced);
+        uploads.schedule(&id, Duration::from_hours(1), replaced);
         let (running, started, release) = gated(&log, "running");
         uploads.schedule(&id, Duration::ZERO, running);
         started.await.unwrap();
@@ -983,11 +983,11 @@ mod tests {
     #[test]
     fn compose_errors_map_to_api_codes() {
         assert_eq!(
-            compose_error(ComposeError::NoSender).code,
+            compose_error(&ComposeError::NoSender).code,
             ErrorCode::InvalidRequest
         );
         assert_eq!(
-            compose_error(ComposeError::MissingBlob {
+            compose_error(&ComposeError::MissingBlob {
                 filename: "a".into(),
                 blob: "b".into()
             })

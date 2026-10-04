@@ -1,6 +1,12 @@
 //! Dev mode: loading a folder, hot reload on change, API calls in the log
 //! stream.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::collections::BTreeMap;
@@ -37,7 +43,7 @@ fn version_js(tag: &str) -> String {
 /// The bound of every wait below: only there so a broken watcher fails
 /// instead of hanging; generous because the full workspace suite loads the
 /// machine (post-M4c: 10 and 20 s bounds flaked).
-const WAIT: Duration = Duration::from_secs(120);
+const WAIT: Duration = Duration::from_mins(2);
 
 /// A host with activation and reply timeouts that hold under load.
 fn patient_host(fake: &std::sync::Arc<Fake>) -> nail_plugins::PluginHost {
@@ -68,7 +74,7 @@ async fn reloaded(
             }
             Ok(Ok(_) | Err(broadcast::error::RecvError::Lagged(_))) => {}
             Ok(Err(e)) => panic!("reload notices: {e}"),
-            Err(_) => panic!("no {outcome:?} reload within {WAIT:?}"),
+            Err(elapsed) => panic!("no {outcome:?} reload within {WAIT:?}: {elapsed}"),
         }
     }
 }
@@ -89,7 +95,7 @@ async fn until<T>(
             Instant::now() < deadline,
             "{what} did not happen in {WAIT:?}"
         );
-        let _ = tokio::time::timeout(Duration::from_millis(50), reloads.recv()).await;
+        drop(tokio::time::timeout(Duration::from_millis(50), reloads.recv()).await);
     }
 }
 

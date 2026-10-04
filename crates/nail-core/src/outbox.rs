@@ -294,15 +294,14 @@ impl Service {
             return Err(ApiError::invalid_request("the message has no recipients").into());
         }
         let now = unix_now();
-        let at = match send_at {
-            Some(text) => chrono::DateTime::parse_from_rfc3339(&text)
+        let at = if let Some(text) = send_at {
+            chrono::DateTime::parse_from_rfc3339(&text)
                 .map_err(|e| ApiError::invalid_request(format!("send_at {text:?}: {e}")))?
-                .timestamp(),
-            None => {
-                let delay = delay_secs
-                    .unwrap_or_else(|| self.inner.accounts.config().effective_undo_send_secs());
-                now + i64::from(delay)
-            }
+                .timestamp()
+        } else {
+            let delay = delay_secs
+                .unwrap_or_else(|| self.inner.accounts.config().effective_undo_send_secs());
+            now + i64::from(delay)
         };
         let account_id = account.id.clone();
         // The draft is about to go; an upload now would only leave a copy
@@ -336,16 +335,13 @@ impl Service {
     /// The transport of an account's outgoing server: SMTP, the Gmail API
     /// for Gmail accounts (M3b; `messages.send`), or the Graph / EWS
     /// engine for Exchange accounts (M3c; the server files the Sent copy).
-    pub(crate) async fn transport(
-        &self,
-        account: &AccountConfig,
-    ) -> Result<Arc<dyn OutgoingTransport>> {
+    pub(crate) fn transport(&self, account: &AccountConfig) -> Result<Arc<dyn OutgoingTransport>> {
         if let IncomingServer::Gmail { .. } = &account.incoming {
             return Ok(Arc::new(crate::gmail::engine_for(self, account)?));
         }
         if let IncomingServer::Exchange { .. } = &account.incoming {
-            let engine = crate::exchange::engine_of(self, account).await?;
-            return Ok(engine as Arc<dyn OutgoingTransport>);
+            let engine = crate::exchange::engine_of(self, account)?;
+            return Ok(engine);
         }
         Ok(Arc::new(self.smtp_transport(account)?))
     }
@@ -363,7 +359,7 @@ impl Service {
             &account.id,
             &server.auth,
             Arc::clone(&self.inner.secrets),
-            Arc::clone(&self.inner.tokens) as Arc<dyn nail_api::engine::AccessTokenProvider>,
+            self.inner.tokens.clone(),
         )?;
         let config = SmtpConfig::from_endpoint(server).with_timeout(crate::creds::NETWORK_TIMEOUT);
         Ok(SmtpTransport::new(config, auth, SendOptions::from(options)))
@@ -475,7 +471,7 @@ impl Service {
                 .ok()
                 .flatten()
         };
-        let transport = self.transport(&account).await.map_err(EngineError::from)?;
+        let transport = self.transport(&account).map_err(EngineError::from)?;
         // M4c: upload progress (Graph upload sessions for large messages)
         // as `SendProgress`, at most a few per second.
         let events = self.inner.events.clone();
@@ -487,11 +483,11 @@ impl Service {
                 || last.is_none_or(|at| at.elapsed() >= Duration::from_millis(250));
             if due {
                 *last = Some(std::time::Instant::now());
-                let _ = events.send(Event::SendProgress {
+                drop(events.send(Event::SendProgress {
                     outbox_id: outbox_id.clone(),
                     sent_bytes,
                     total_bytes,
-                });
+                }));
             }
         };
         for message in &messages {
@@ -557,7 +553,7 @@ impl Service {
         {
             host.deliver_event(
                 nail_api::plugins::jobs::PluginEventName::MessageSent,
-                copies,
+                &copies,
             );
         }
     }
@@ -662,15 +658,15 @@ pub(crate) async fn run_sender(service: Service) {
         let next = service
             .inner
             .store
-            .call(|s| s.next_send_due())
+            .call(nail_store::Store::next_send_due)
             .await
             .ok()
             .flatten();
         let wait = match next {
             Some(at) => Duration::from_secs(u64::try_from((at - unix_now()).max(0)).unwrap_or(0))
                 .max(Duration::from_millis(100))
-                .min(Duration::from_secs(60)),
-            None => Duration::from_secs(60),
+                .min(Duration::from_mins(1)),
+            None => Duration::from_mins(1),
         };
         tokio::select! {
             () = tokio::time::sleep(wait) => {}

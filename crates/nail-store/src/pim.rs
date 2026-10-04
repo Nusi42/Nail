@@ -230,7 +230,7 @@ mod tests {
     }
 
     /// Schema v10: removing a source removes everything of it; reminders
-    /// go with their event or task; the CHECKs hold.
+    /// go with their event or task; the CHECK constraints hold.
     #[test]
     fn v10_cascades_and_checks() {
         let store = Store::open_in_memory().unwrap();
@@ -300,7 +300,7 @@ mod tests {
         let sealed: Vec<String> = crate::seal::SEALED_COLUMNS
             .iter()
             .filter(|c| c.table.starts_with("pim_"))
-            .map(|c| c.name())
+            .map(super::super::seal::SealedColumn::name)
             .collect();
         assert_eq!(
             sealed,
@@ -316,8 +316,7 @@ mod tests {
 
     #[test]
     fn items_know_their_kind_collection_and_id() {
-        let fixtures = testing::Fixtures::new();
-        let event = PimItem::Event(fixtures.event("ev1", "u1", "Standup"));
+        let event = PimItem::Event(testing::event("ev1", "u1", "Standup"));
         assert_eq!(event.kind(), PimItemKind::Event);
         assert_eq!(event.collection_id(), testing::CAL);
         assert_eq!(event.uid(), "u1");

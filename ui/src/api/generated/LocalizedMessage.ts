@@ -4,7 +4,7 @@ import type { MessageArg } from "./MessageArg";
 /**
  * A user-facing message: a Fluent id and its arguments.
  *
- * JSON: `{"id": "config-unknown-node", "args": {"name": "windw"}}`
+ * JSON: `{"id": "config-unknown-node", "args": {"name": "gizmo"}}`
  * (`args` is omitted when empty).
  */
 export type LocalizedMessage = { 

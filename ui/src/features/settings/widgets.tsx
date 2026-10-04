@@ -73,7 +73,7 @@ function elementWithText(scope: Element, text: string): HTMLElement | null {
   let found: HTMLElement | null = null;
   const walk = (el: Element) => {
     if (el.getAttribute("aria-hidden") === "true" || el.closest("[hidden]")) return;
-    if (el instanceof HTMLElement && el.textContent?.trim() === text) found = el;
+    if (el instanceof HTMLElement && el.textContent.trim() === text) found = el;
     for (const child of el.children) walk(child);
   };
   walk(scope);
@@ -107,11 +107,13 @@ function controlOf(el: HTMLElement): HTMLElement | null {
 
 /** Scrolls to a found setting, marks it for a moment and focuses its control. */
 function showFound(el: HTMLElement, fallbackFocus: HTMLElement | null): () => void {
-  el.scrollIntoView?.({ block: "center" });
+  el.scrollIntoView({ block: "center" });
   el.setAttribute(FOUND_ATTRIBUTE, "");
   const control = controlOf(el);
   (control ?? fallbackFocus)?.focus({ preventScroll: true });
-  const timer = setTimeout(() => el.removeAttribute(FOUND_ATTRIBUTE), FOUND_MARK_MS);
+  const timer = setTimeout(() => {
+    el.removeAttribute(FOUND_ATTRIBUTE);
+  }, FOUND_MARK_MS);
   return () => {
     clearTimeout(timer);
     el.removeAttribute(FOUND_ATTRIBUTE);
@@ -136,7 +138,7 @@ function SectionCards({ section }: { section: SettingsSection }) {
           data-card-for={child.id ?? undefined}
           tabIndex={-1}
         >
-          <NodeView node={child} path={`settings/${section.id}/${index}`} />
+          <NodeView node={child} path={`settings/${section.id}/${String(index)}`} />
         </div>
       ))}
     </>
@@ -145,9 +147,9 @@ function SectionCards({ section }: { section: SettingsSection }) {
 
 interface SearchProps {
   query: string;
-  onQuery(query: string): void;
-  onFirst(): void;
-  onDown(): void;
+  onQuery: (query: string) => void;
+  onFirst: () => void;
+  onDown: () => void;
   focusSignal: number;
 }
 
@@ -186,7 +188,9 @@ function SearchBox({ query, onQuery, onFirst, onDown, focusSignal }: SearchProps
         autoComplete="off"
         spellCheck={false}
         value={query}
-        onChange={(event) => onQuery(event.target.value)}
+        onChange={(event) => {
+          onQuery(event.target.value);
+        }}
         onKeyDown={onKeyDown}
       />
       {query !== "" && (
@@ -262,13 +266,13 @@ export function SettingsPage({ node }: WidgetProps) {
 
   // A new section starts at its top.
   useEffect(() => {
-    body.current?.scrollTo?.({ top: 0 });
+    body.current?.scrollTo({ top: 0 });
   }, [sectionId]);
 
   // Reveal the requested setting once the section shows it (widgets may
   // render their rows after their data arrived).
   useEffect(() => {
-    if (reveal === null || reveal.section !== sectionId) return;
+    if (reveal?.section !== sectionId) return;
     const root = body.current;
     if (!root) return;
     const { seq } = reveal;
@@ -338,7 +342,9 @@ export function SettingsPage({ node }: WidgetProps) {
                   type="button"
                   data-part="settings-page.result.section"
                   aria-current={hit.section === sectionId ? "page" : undefined}
-                  onClick={() => open(hit.section, null)}
+                  onClick={() => {
+                    open(hit.section, null);
+                  }}
                 >
                   <Icon name={s.icon} part="settings-page.nav.icon" />
                   <span data-part="settings-page.nav.label">
@@ -352,7 +358,9 @@ export function SettingsPage({ node }: WidgetProps) {
                         <button
                           type="button"
                           data-part="settings-page.result.setting"
-                          onClick={() => open(hit.section, entry)}
+                          onClick={() => {
+                            open(hit.section, entry);
+                          }}
                         >
                           {/* One flex item: marks must not split the text into items. */}
                           <span data-part="settings-page.result.label">
@@ -389,7 +397,9 @@ export function SettingsPage({ node }: WidgetProps) {
                 data-part="settings-page.nav.item"
                 data-section={s.id}
                 aria-current={s.id === sectionId ? "page" : undefined}
-                onClick={() => go(s.id)}
+                onClick={() => {
+                  go(s.id);
+                }}
               >
                 <Icon name={s.icon} part="settings-page.nav.icon" />
                 <span data-part="settings-page.nav.label">{sectionText(s)}</span>
@@ -407,7 +417,9 @@ export function SettingsPage({ node }: WidgetProps) {
         {showSearch && (
           <SearchBox
             query={query}
-            onQuery={(q) => settingsStore.getState().setQuery(q)}
+            onQuery={(q) => {
+              settingsStore.getState().setQuery(q);
+            }}
             focusSignal={focusSearch}
             onFirst={() => {
               const first = hits[0];

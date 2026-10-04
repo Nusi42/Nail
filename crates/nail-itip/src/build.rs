@@ -447,8 +447,10 @@ pub fn build_cancel(source_text: &str, options: &CancelOptions<'_>) -> Result<St
                     .component
                     .properties_named("ATTENDEE")
                     .find(|p| same(&p.value, address))
-                    .map(clean)
-                    .unwrap_or_else(|| attendee_property(&Attendee::new(normalize(address))));
+                    .map_or_else(
+                        || attendee_property(&Attendee::new(normalize(address))),
+                        clean,
+                    );
                 comp.properties.push(p);
             }
         }
@@ -653,8 +655,10 @@ fn build_minimal(
         .component
         .properties_named("ATTENDEE")
         .find(|p| same(&p.value, options.attendee))
-        .map(clean)
-        .unwrap_or_else(|| attendee_property(&Attendee::new(normalize(options.attendee))));
+        .map_or_else(
+            || attendee_property(&Attendee::new(normalize(options.attendee))),
+            clean,
+        );
     comp.properties.push(attendee);
     comp.properties.extend(comment(options.comment));
     Ok(calendar(method, &source.zones(), vec![comp]))
@@ -719,7 +723,7 @@ pub fn build_delegated_request(
             comp.properties.push(attendee_property(&me));
         }
         let mut added = delegate.clone();
-        added.email = delegate_email.clone();
+        added.email.clone_from(&delegate_email);
         added.role = role;
         added.status = nail_api::pim::calendar::ParticipationStatus::NeedsAction;
         added.rsvp = true;

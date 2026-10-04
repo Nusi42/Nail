@@ -37,13 +37,13 @@ use crate::service::Service;
 const MAX_LOG_PAGE: u32 = 1000;
 
 /// Longest download of a package from a URL.
-const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(1);
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     Ok(match request {
         Request::ListPlugins => {
-            let records = service.store().call(|s| s.plugins()).await?;
+            let records = service.store().call(nail_store::Store::plugins).await?;
             let mut plugins = Vec::with_capacity(records.len());
             for record in records {
                 plugins.push(info(service, record).await?);
@@ -107,7 +107,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             let package = parse_package(bytes.clone()).await?;
             let Some(manifest) = package.valid_manifest().cloned() else {
-                let first = package.issues().first().map(|i| i.localized());
+                let first = package
+                    .issues()
+                    .first()
+                    .map(nail_api::plugins::PluginManifestIssue::localized);
                 let mut error = ApiError::invalid_request("the package's manifest has problems");
                 if let Some(localized) = first {
                     error = error.with_localized(localized);

@@ -5,7 +5,7 @@ Status: accepted · 2026-10-03 · M5b WP164 (the integrator renumbers)
 ## Context
 
 Plan section 10, wave M5b, WP164: redesign the calendar view as in the approved
-proposal (a published page, not linked here "Calendar and
+proposal (a published page, not linked here, "Calendar and
 Settings get their own space"): one toolbar line with Today, previous / next and
 the range that never wraps, a segmented view switch, a side panel with the
 mini-month and a calendar list with colour squares and per-calendar "…" menus

@@ -37,5 +37,6 @@ pub use imap::{
     ClientId, MockCapabilities, MockImapConfig, MockImapServer, MockServerError, MockTls,
 };
 pub use mailstore::{
-    FlagUpdate, MailStore, Mailbox, MailboxError, StoreOutcome, StoredFlags, StoredMessage,
+    FlagUpdate, MailStore, Mailbox, MailboxError, NO_FLAGS, StoreOutcome, StoredFlags,
+    StoredMessage,
 };

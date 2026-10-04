@@ -1,6 +1,7 @@
 //! The Gmail engine against the loopback mock Gmail server: full and
 //! incremental sync, history expiry and slicing, raw fetches, replayed
 //! writes, sending, labels, threads, tokens, quotas and backoff.
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -802,9 +803,9 @@ async fn quotas_and_server_errors_back_off() {
     assert_eq!(err.code, ErrorCode::RateLimited);
     assert_eq!(err.retry_after_secs, Some(120));
     assert!(err.retryable);
-    let mut timer = PollTimer::new(&Default::default());
+    let mut timer = PollTimer::new(&nail_api::gmail::GmailOptions::default());
     timer.observe(&Err(err));
-    assert_eq!(timer.next_delay(), std::time::Duration::from_secs(120));
+    assert_eq!(timer.next_delay(), std::time::Duration::from_mins(2));
 
     // Retries run out.
     // 1 + 3 retries of RetryPolicy::fast.
@@ -906,7 +907,7 @@ async fn engine_for_a_configured_account() {
                 mechanism: None,
             },
         },
-        options: Default::default(),
+        options: nail_api::gmail::GmailOptions::default(),
     };
     let mut account: nail_api::AccountConfig = serde_json::from_value(serde_json::json!({
         "id": "gm", "name": "Gmail", "email": "ada@gmail.example",

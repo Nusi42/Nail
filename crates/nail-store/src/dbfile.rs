@@ -19,6 +19,7 @@
 //!   it, the new file is complete. Which form the file is in is read from
 //!   its header, so nothing else must be recorded first.
 
+use std::fmt::Write as _;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -151,7 +152,7 @@ fn sqlite_uri(path: &Path, query: &str) -> String {
         if b.is_ascii_alphanumeric() || b"/:-._~".contains(&b) {
             out.push(char::from(b));
         } else {
-            out.push_str(&format!("%{b:02X}"));
+            let _ = write!(out, "%{b:02X}");
         }
     }
     out.push('?');

@@ -8,14 +8,7 @@
  * the series are always kept.
  */
 import { CalendarDate, CalendarDateTime, toZoned } from "@internationalized/date";
-import type {
-  Frequency,
-  PimTime,
-  Recurrence,
-  RecurrenceRule,
-  Weekday,
-  WeekdayNum,
-} from "../../api/generated";
+import type { PimTime, Recurrence, RecurrenceRule, Weekday, WeekdayNum } from "../../api/generated";
 import type { MessageArgs } from "../../i18n/localizer";
 import { WEEKDAYS, dateString, localString, parseDay, splitPimTime, utcString } from "./time";
 
@@ -49,7 +42,7 @@ export function weekdayOf(day: CalendarDate): Weekday {
   // 1970-01-05 was a Monday.
   const monday = new CalendarDate(1970, 1, 5);
   const index = (((day.compare(monday) % 7) + 7) % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  return WEEKDAYS[index] as Weekday;
+  return WEEKDAYS[index];
 }
 
 /** Which occurrence of its weekday in the month a day is (1–5, or -1 for the last). */
@@ -81,8 +74,8 @@ export function choiceOf(recurrence: Recurrence | null, start: PimTime): Recurre
       ? { type: "custom", recurrence }
       : { type: "none" };
   }
-  const simple =
-    recurrence.rules.length === 1 ? simpleOf(recurrence.rules[0] as RecurrenceRule, start) : null;
+  const [rule] = recurrence.rules;
+  const simple = recurrence.rules.length === 1 && rule ? simpleOf(rule, start) : null;
   return simple !== null && recurrence.dates.length === 0
     ? { type: "simple", rule: simple }
     : { type: "custom", recurrence };
@@ -148,8 +141,7 @@ export function simpleOf(rule: RecurrenceRule, start: PimTime): SimpleRule | nul
         const [only] = rule.by_day;
         const { ordinal, last } = weekdayOrdinal(startDay);
         if (
-          only &&
-          only.day === weekdayOf(startDay) &&
+          only?.day === weekdayOf(startDay) &&
           (only.ordinal === ordinal || (only.ordinal === -1 && last))
         ) {
           return { ...base, weekdays: [], monthly: "weekday" };
@@ -227,7 +219,7 @@ export function ruleOf(simple: SimpleRule, start: PimTime): RecurrenceRule {
   }
   return {
     ...NO_PARTS,
-    freq: simple.freq as Frequency,
+    freq: simple.freq,
     interval: Math.max(1, Math.trunc(simple.interval) || 1),
     end,
     by_day: byDay,

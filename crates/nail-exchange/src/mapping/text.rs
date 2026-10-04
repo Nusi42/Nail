@@ -71,15 +71,14 @@ pub fn html_to_text(html: &str) -> String {
         }
         if rest.starts_with('&') {
             let entity_end = rest[1..].find(';').filter(|e| *e <= 10);
-            match entity_end.and_then(|e| decode_entity(&rest[1..=e]).map(|c| (c, e))) {
-                Some((c, e)) => {
-                    out.push(c);
-                    rest = &rest[e + 2..];
-                }
-                None => {
-                    out.push('&');
-                    rest = &rest[1..];
-                }
+            if let Some((c, e)) =
+                entity_end.and_then(|e| decode_entity(&rest[1..=e]).map(|c| (c, e)))
+            {
+                out.push(c);
+                rest = &rest[e + 2..];
+            } else {
+                out.push('&');
+                rest = &rest[1..];
             }
             continue;
         }
@@ -98,7 +97,7 @@ pub fn html_to_text(html: &str) -> String {
         let name: String = tag
             .trim_start_matches('/')
             .chars()
-            .take_while(|c| c.is_ascii_alphanumeric())
+            .take_while(char::is_ascii_alphanumeric)
             .collect();
         if !closing && (name == "script" || name == "style" || name == "head") {
             skip_until = Some(match name.as_str() {
@@ -112,7 +111,7 @@ pub fn html_to_text(html: &str) -> String {
             out.push('\n');
         }
     }
-    let lines: Vec<&str> = out.lines().map(|l| l.trim_end()).collect();
+    let lines: Vec<&str> = out.lines().map(str::trim_end).collect();
     let mut text = lines.join("\n");
     while text.contains("\n\n\n") {
         text = text.replace("\n\n\n", "\n\n");

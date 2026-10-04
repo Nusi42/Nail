@@ -146,6 +146,7 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
   const invalidCount = Object.keys(issues).length;
 
   const frame = (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the dialog's keys (Enter, Escape) arrive from the controls inside it.
     <div
       ref={ref}
       {...partAttrs("plugin.dialog", plugin)}
@@ -204,7 +205,9 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
                         event.preventDefault();
                         submit(button.id, true);
                       }
-                    : () => submit(button.id, false)
+                    : () => {
+                        submit(button.id, false);
+                      }
                 }
               >
                 {button.label}

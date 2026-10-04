@@ -69,18 +69,22 @@ test("every listed built-in runs in both densities, in gallery order", () => {
 
 test("missing and broken themes are skipped with a clear message; extra built-ins are added", () => {
   const themes = allBuiltins().filter((t) => t.id !== "sage");
-  themes.find((t) => t.id === "nocturne")!.problem = { id: "theme-problem-invalid" };
+  const nocturne = themes.find((t) => t.id === "nocturne");
+  assert.ok(nocturne);
+  nocturne.problem = { id: "theme-problem-invalid" };
   themes.push(builtin("ocean"), { id: "mine", kind: "dark", source: "user" });
   const probe: ThemeProbe = { ok: true, appearance: appearance(themes) };
   const byId = new Map(planVariants(probe).map((v) => [v.id, v]));
   assert.match(
-    byId.get("sage-compact")!.skip!,
+    byId.get("sage-compact")?.skip ?? "",
     /theme "sage" is not listed by ListThemes \(listed: frost, graphite/,
   );
-  assert.match(byId.get("nocturne-comfortable")!.skip!, /problem theme-problem-invalid/);
-  assert.equal(byId.get("frost-compact")!.skip, undefined);
+  assert.match(byId.get("nocturne-comfortable")?.skip ?? "", /problem theme-problem-invalid/);
+  assert.ok(byId.has("frost-compact"));
+  assert.equal(byId.get("frost-compact")?.skip, undefined);
   // A further built-in is captured too (it then needs baselines); user themes never.
-  assert.equal(byId.get("ocean-comfortable")!.skip, undefined);
+  assert.ok(byId.has("ocean-comfortable"));
+  assert.equal(byId.get("ocean-comfortable")?.skip, undefined);
   assert.equal(byId.has("mine-comfortable"), false);
   assert.equal([...byId.keys()].at(-1), "ocean-compact");
 });
@@ -106,7 +110,7 @@ test("unexpected answers and failures become reasons", () => {
     reason: "unexpected answer Done",
   });
   const failed: ThemeProbe = { ok: false, reason: "nail serve did not start" };
-  assert.match(unavailableReason(failed, "frost")!, /nail serve did not start/);
+  assert.match(unavailableReason(failed, "frost") ?? "", /nail serve did not start/);
   assert.equal(
     unavailableReason({ ok: true, appearance: appearance([builtin("frost")]) }, "frost"),
     null,
@@ -139,7 +143,7 @@ test("the current theme runs only on request, first, comfortable without ListThe
       ["current-compact", false],
     ],
   );
-  assert.match(variants[1]!.skip!, /density "compact" cannot be selected/);
+  assert.match(variants[1]?.skip ?? "", /density "compact" cannot be selected/);
   const ready: ThemeProbe = { ok: true, appearance: appearance(allBuiltins()) };
   const both = planVariants(ready, { themes: ["current", "frost"] });
   assert.deepEqual(

@@ -126,7 +126,9 @@ function Vault() {
           data-part="form.button"
           data-variant={on ? undefined : "primary"}
           data-action={on ? "vault-off" : "vault-on"}
-          onClick={() => setConfirm(!on)}
+          onClick={() => {
+            setConfirm(!on);
+          }}
         >
           {t(on ? "security-vault-turn-off" : "security-vault-turn-on")}
         </button>
@@ -149,7 +151,9 @@ function Vault() {
             type="button"
             data-part="form.button"
             data-action="cancel"
-            onClick={() => setConfirm(null)}
+            onClick={() => {
+              setConfirm(null);
+            }}
           >
             {t("security-cancel")}
           </button>

@@ -9,6 +9,7 @@ import type {
   VacationIssue,
   VacationSettings,
 } from "../../api/generated";
+import { charCount } from "../../text/chars";
 
 export const SIEVE_STATES: readonly SieveState[] = [
   "disabled",
@@ -96,7 +97,7 @@ export function manageSieveIssues(c: {
   const name = c.script_name;
   if (
     name !== null &&
-    (name.trim() === "" || [...name].length > 128 || SCRIPT_NAME_FORBIDDEN.test(name))
+    (name.trim() === "" || charCount(name) > 128 || SCRIPT_NAME_FORBIDDEN.test(name))
   ) {
     out.push("script-name");
   }

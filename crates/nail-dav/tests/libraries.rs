@@ -1,6 +1,7 @@
 //! Smoke tests of the libraries WP72 builds on (WP70, ADR 0058): custom
 //! WebDAV methods through reqwest with the ring TLS configuration,
 //! namespaced multistatus parsing with quick-xml, Basic credentials.
+#![cfg(test)]
 
 use base64::Engine as _;
 use quick_xml::events::Event;

@@ -21,13 +21,19 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseJson } from "../../scripts/lib/json.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
+/**
+ * @param {string[]} argv
+ * @returns {{ corpus: string, tolerant: boolean }}
+ */
 export function parseArgs(argv) {
   const options = { corpus: "standard", tolerant: false };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     if (arg === "--tolerant") options.tolerant = true;
     else if (arg === "--corpus") options.corpus = argv[++i] ?? "";
     else throw new Error(`unknown argument ${arg}`);
@@ -45,13 +51,23 @@ function buildDir() {
     : path.join(tmpdir(), "nail-build");
 }
 
+/**
+ * A release binary: `$envName`, else cargo's release directory.
+ *
+ * @param {string} name
+ * @param {string} envName
+ * @returns {string}
+ */
 function release(name, envName) {
-  if (process.env[envName]) return process.env[envName];
-  const metadata = JSON.parse(
-    execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }),
+  const fromEnv = process.env[envName];
+  if (fromEnv) return fromEnv;
+  const metadata = /** @type {{ target_directory: string }} */ (
+    parseJson(
+      execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+      }),
+    )
   );
   const exe = process.platform === "win32" ? `${name}.exe` : name;
   const bin = path.join(metadata.target_directory, "release", exe);
@@ -59,6 +75,13 @@ function release(name, envName) {
   return bin;
 }
 
+/**
+ * Runs a command with inherited output; answers its exit code.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @param {Record<string, string>} [env]
+ */
 function run(command, args, env = {}) {
   console.log(`> ${path.basename(command)} ${args.join(" ")}`);
   const result = spawnSync(command, args, {

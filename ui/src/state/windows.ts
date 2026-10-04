@@ -110,7 +110,7 @@ export function windowKind(id: string): string {
 export function newWindowInstance(kind: string, openIds: readonly string[]): string {
   const used = new Set(openIds);
   for (let n = 1; ; n += 1) {
-    const id = windowId(kind, `w${n}`);
+    const id = windowId(kind, `w${String(n)}`);
     if (!used.has(id)) return id;
   }
 }

@@ -276,7 +276,7 @@ function syncMailbox(core: MockCore, accountId: AccountId, address: string): voi
         removeMailboxFolders(core, accountId, address);
         mailbox.root_folder_id = null;
       }
-      if (mailbox.settings.name === null) mailbox.settings.name = entry.name;
+      mailbox.settings.name ??= entry.name;
     }
     changed(core, accountId, ["mailboxes"]);
     folderChange(core, accountId);
@@ -330,7 +330,9 @@ function placementOf(rule: Rule): Pick<ExchangeRuleStatus, "placement" | "reason
     switch (c.type) {
       case "all":
       case "any":
-        c.conditions.forEach((inner, i) => walk(inner, position * 10 + i + 1));
+        c.conditions.forEach((inner, i) => {
+          walk(inner, position * 10 + i + 1);
+        });
         return;
       case "not":
         walk(c.condition, position);
@@ -565,7 +567,9 @@ export function answerExchange(core: MockCore, request: ExchangeRequest): Respon
       const category = categoriesOf(core, accountId).find((c) => c.id === request.category_id);
       if (!category) return errorResponse("not_found", `category ${request.category_id}`);
       s.categories[accountId] = categoriesOf(core, accountId).filter((c) => c !== category);
-      const op = enqueue(core, accountId, () => changed(core, accountId, ["categories"]));
+      const op = enqueue(core, accountId, () => {
+        changed(core, accountId, ["categories"]);
+      });
       changed(core, accountId, ["categories"]);
       return { type: "Queued", op_ids: [op] };
     }
@@ -621,7 +625,9 @@ export function answerExchange(core: MockCore, request: ExchangeRequest): Respon
       }
       if (request.type === "SetExchangeInboxRuleEnabled") rule.enabled = request.enabled;
       else status.server_rules = status.server_rules.filter((r) => r !== rule);
-      const op = enqueue(core, accountId, () => changed(core, accountId, ["rules"]));
+      const op = enqueue(core, accountId, () => {
+        changed(core, accountId, ["rules"]);
+      });
       changed(core, accountId, ["rules"]);
       return { type: "Queued", op_ids: [op] };
     }

@@ -7,6 +7,7 @@ import { ContextMenuHost } from "./ContextMenuHost";
 import { ariaShortcut, chordText, keyLabel } from "./keyLabels";
 import { contextTarget, menuStoreFor } from "./store";
 import { findContextTarget, isTextInput } from "./targets";
+import { must } from "../../test/must";
 
 const INBOX = "acc-personal/Inbox";
 const FIELD = "field";
@@ -15,7 +16,9 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 const action = (id: string, args: JsonValue[] = []): MenuItem => ({
   type: "action",
@@ -67,10 +70,10 @@ function renderMail() {
 }
 
 async function firstRow(container: HTMLElement): Promise<HTMLElement> {
-  await waitFor(() =>
-    expect(container.querySelector('[data-part="message-list.row"]')).not.toBeNull(),
-  );
-  return container.querySelector('[data-part="message-list.row"]') as HTMLElement;
+  await waitFor(() => {
+    expect(container.querySelector('[data-part="message-list.row"]')).not.toBeNull();
+  });
+  return must(container.querySelector<HTMLElement>('[data-part="message-list.row"]'));
 }
 
 describe("key labels", () => {
@@ -121,7 +124,7 @@ describe("context menu", () => {
     const user = userEvent.setup();
     const { env, container } = renderMail();
     const row = await firstRow(container);
-    const id = row.getAttribute("data-message") as string;
+    const id = must(row.getAttribute("data-message"));
     fireEvent.contextMenu(row, { clientX: 40, clientY: 50, button: 2 });
     const menu = await screen.findByRole("menu", { name: "Message actions" });
     expect(env.store.getState().selectedMessageId).toBe(id);
@@ -141,7 +144,9 @@ describe("context menu", () => {
     const flag = within(menu).getByRole("menuitem", { name: /flag/i });
     while (document.activeElement !== flag) await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "UpdateFlags", message_ids: [id] }),
     );
@@ -153,8 +158,10 @@ describe("context menu", () => {
     const user = userEvent.setup();
     const { env, container } = renderMail();
     await firstRow(container);
-    const list = container.querySelector('[data-part="message-list"]') as HTMLElement;
-    act(() => env.store.getState().selectMessage(env.store.getState().messageOrder[0] ?? null));
+    const list = must(container.querySelector<HTMLElement>('[data-part="message-list"]'));
+    act(() => {
+      env.store.getState().selectMessage(env.store.getState().messageOrder[0] ?? null);
+    });
     list.focus();
     await user.keyboard("{Shift>}{F10}{/Shift}");
     const menu = await screen.findByRole("menu");
@@ -185,7 +192,7 @@ describe("context menu", () => {
     const submenu = await screen.findAllByRole("menu");
     expect(submenu).toHaveLength(2);
     expect(sub).toHaveAttribute("aria-expanded", "true");
-    expect(within(submenu[1] as HTMLElement).getAllByRole("menuitem")[0]).toHaveFocus();
+    expect(within(must(submenu[1])).getAllByRole("menuitem")[0]).toHaveFocus();
     await user.keyboard("{ArrowLeft}");
     expect(screen.getAllByRole("menu")).toHaveLength(1);
     expect(sub).toHaveFocus();
@@ -246,7 +253,9 @@ describe("context menu", () => {
     );
     const again = await screen.findByRole("treeitem", { name: /Archive/ });
     fireEvent.contextMenu(again, { clientX: 5, clientY: 5, button: 2 });
-    await waitFor(() => expect(menuStoreFor(env.store).getState().open).toBeNull());
+    await waitFor(() => {
+      expect(menuStoreFor(env.store).getState().open).toBeNull();
+    });
     expect(screen.queryByRole("menu")).toBeNull();
   });
 });

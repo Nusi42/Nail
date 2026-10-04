@@ -110,6 +110,10 @@ fn align_up(t: i64) -> i64 {
 }
 
 /// A row to cache.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors the four independent boolean columns of pim_event_instances"
+)]
 struct Row {
     recurrence_id: String,
     start: CacheTime,
@@ -129,8 +133,7 @@ fn busy(fields: &EventFields, cancelled: bool) -> bool {
 fn fields_of<'a>(event: &'a CalendarEvent, recurrence_id: Option<&PimTime>) -> &'a EventFields {
     recurrence_id
         .and_then(|rid| event.overrides.iter().find(|o| &o.recurrence_id == rid))
-        .map(|o| &o.fields)
-        .unwrap_or(&event.fields)
+        .map_or(&event.fields, |o| &o.fields)
 }
 
 fn row_of(event: &CalendarEvent, instance: &ExpandedInstance) -> Option<Row> {
@@ -363,11 +366,12 @@ impl Store {
         to: i64,
         expander: &dyn InstanceExpander,
     ) -> Result<()> {
+        /// An event that can have occurrences in the range and lacks
+        /// expansion: id, expanded window, stored data.
+        type Missing = (String, Option<(i64, i64)>, rusqlite::types::Value);
         let need_from = align_down(from - FLOATING_SLACK) - INSTANCE_CHUNK;
         let need_until = align_up(to + FLOATING_SLACK);
         let refs: Vec<&str> = calendars.iter().map(String::as_str).collect();
-        // Events that can have occurrences there and lack expansion.
-        type Missing = (String, Option<(i64, i64)>, rusqlite::types::Value);
         let missing: Vec<Missing> = self.with_conn(|conn| {
             let mut stmt = conn.prepare(&format!(
                 "SELECT e.id, w.expanded_from, w.expanded_until, e.data
@@ -460,7 +464,7 @@ impl Store {
             return Ok(Vec::new());
         }
         self.ensure_instances(&calendars, from, to, expander)?;
-        let rows = self.instance_rows(&calendars, from, to, &tz)?;
+        let rows = self.instance_rows(&calendars, from, to, tz)?;
         let ids: Vec<&str> = {
             let mut ids: Vec<&str> = rows.iter().map(|r| r.event_id.as_str()).collect();
             ids.sort_unstable();
@@ -547,7 +551,7 @@ impl Store {
         }
         self.ensure_instances(&calendars, from, to, expander)?;
         let mut intervals: Vec<(i64, i64)> = self
-            .instance_rows(&calendars, from, to, &tz)?
+            .instance_rows(&calendars, from, to, tz)?
             .into_iter()
             .filter(|r| r.busy)
             .map(|r| (r.placed_start.max(from), r.placed_end.min(to)))
@@ -569,7 +573,7 @@ impl Store {
         calendars: &[String],
         from: i64,
         to: i64,
-        tz: &Tz,
+        tz: Tz,
     ) -> Result<Vec<CachedRow>> {
         let refs: Vec<&str> = calendars.iter().map(String::as_str).collect();
         let n = refs.len();
@@ -603,14 +607,14 @@ impl Store {
                             secs: start_at,
                             floating,
                         },
-                        tz,
+                        &tz,
                     ),
                     placed_end: place(
                         CacheTime {
                             secs: end_at,
                             floating,
                         },
-                        tz,
+                        &tz,
                     ),
                     all_day: r.get(5)?,
                     overridden: r.get(6)?,
@@ -632,6 +636,10 @@ impl Store {
 }
 
 /// A cached occurrence placed in the viewer's zone.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors the four independent boolean columns of pim_event_instances"
+)]
 struct CachedRow {
     event_id: String,
     recurrence_id: String,
@@ -928,10 +936,7 @@ mod tests {
     #[test]
     fn hidden_calendars_and_ranges() {
         let store = testing::store();
-        save(
-            &store,
-            &testing::Fixtures::new().event("e", "ue", "Visible"),
-        );
+        save(&store, &testing::event("e", "uid-e", "Visible"));
         let expander = TestExpander::default();
         let range = (at("2026-10-01T00:00:00Z"), at("2026-10-02T00:00:00Z"));
         assert_eq!(
@@ -1043,7 +1048,7 @@ mod tests {
     #[test]
     fn deleting_drops_instances() {
         let store = testing::store();
-        let e = testing::Fixtures::new().event("e", "ue", "Gone");
+        let e = testing::event("e", "uid-e", "Gone");
         save(&store, &e);
         let expander = TestExpander::default();
         let range = (at("2026-10-01T00:00:00Z"), at("2026-10-02T00:00:00Z"));
@@ -1120,7 +1125,7 @@ mod tests {
             store: store.clone(),
             inner: TestExpander::default(),
             change: true,
-            spent: Default::default(),
+            spent: std::sync::atomic::AtomicBool::default(),
             spend_after: usize::MAX,
         };
         let shown = store
@@ -1144,10 +1149,10 @@ mod tests {
             store: other.clone(),
             inner: TestExpander::default(),
             change: false,
-            spent: Default::default(),
+            spent: std::sync::atomic::AtomicBool::default(),
             spend_after: 1,
         };
-        let _ = other
+        let _instances = other
             .list_event_instances(range.0, range.1, None, "UTC", &spent)
             .unwrap();
         assert_eq!(other.instance_window(&"s".into()).unwrap(), None);

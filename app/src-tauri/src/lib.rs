@@ -3,7 +3,7 @@
 //! Hosts a [`nail_core::Service`] in-process and exposes it to the webview
 //! exactly like `nail serve` exposes it over the WebSocket (ADR 0002):
 //!
-//! * one command, [`nail_call`]: a `nail_api::Request` in, a
+//! * one command, `nail_call`: a `nail_api::Request` in, a
 //!   `nail_api::Response` out (errors are `Response::Error`, never a
 //!   rejected promise);
 //! * every `nail_api::Event` the core broadcasts is emitted to the webview
@@ -35,7 +35,7 @@
 //!
 //! M5c (WP173, ADR 0116): windows pop out into their own OS windows
 //! ([`popout`]): a webview window per pop-out (`popout-<id>`) loads the same
-//! UI at `#/window/<id>` and talks to the same core through [`nail_call`];
+//! UI at `#/window/<id>` and talks to the same core through `nail_call`;
 //! every core event reaches every webview, so each window keeps itself
 //! current. Closing the main window closes its pop-outs.
 
@@ -145,7 +145,7 @@ impl AppArgs {
             "--config-dir",
         )?;
         let mut options = ServiceOptions::new(data_dir, config_dir);
-        options.locale = self.locale.clone();
+        options.locale.clone_from(&self.locale);
         // OAuth2 sign-ins open the system browser.
         options.open_browser = true;
         // "Open file at line" starts the user's editor, except in demo runs.
@@ -236,11 +236,19 @@ pub struct Running {
     pub mcp: McpSlot,
     /// The single-instance lock of the data directory (a headless
     /// `nail mcp` or `nail serve` cannot open the same data meanwhile).
-    pub _lock: nail_core::DataDirLock,
+    pub lock: nail_core::DataDirLock,
     /// The temporary directory of a seeded run.
     pub temp: Option<tempfile::TempDir>,
     /// The remote UI (stopped when the app exits).
-    pub _remote_ui: nail_server::RemoteUiHost,
+    pub remote_ui: nail_server::RemoteUiHost,
+}
+
+impl std::fmt::Debug for Running {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Running")
+            .field("temp", &self.temp)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Answers one request. Config errors found before the UI asked for its
@@ -328,6 +336,10 @@ async fn nail_call(
 /// [`shell::test_control`]): a tray menu entry, or whether the window shows.
 /// Registered only with `--seed`, never for a real profile.
 #[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri commands receive their arguments by value"
+)]
 fn nail_test_shell(app: AppHandle, op: String) -> Result<serde_json::Value, String> {
     shell::test_control(&app, &op)
 }
@@ -497,7 +509,7 @@ async fn show_notifications(app: AppHandle, service: Service) {
 
 /// Tells the user why the app does not start (another Nail process holds
 /// the data directory).
-#[allow(unsafe_code)] // One MessageBoxW call.
+#[expect(unsafe_code, reason = "one MessageBoxW call")]
 fn refuse_start(message: &str) {
     tracing::error!("{message}");
     #[cfg(windows)]
@@ -523,14 +535,16 @@ fn refuse_start(message: &str) {
 ///
 /// Panics when the Tauri runtime fails to start (e.g. no WebView2 runtime).
 pub fn run() {
-    let _ = tracing_subscriber::fmt()
+    drop(
+        tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_env("NAIL_LOG")
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         // Recent lines for the diagnostics bundle (M4c).
         .with_writer(|| nail_core::logs::TeeWriter)
-        .try_init();
+        .try_init(),
+    );
     let args = AppArgs::from_process_args(
         std::env::args_os()
             .skip(1)
@@ -605,7 +619,7 @@ pub fn run() {
             // M4b: the desktop host (installation facts, updater, Run key,
             // dev endpoint, default apps) for the core's desktop requests.
             let host = shell::desktop_host(app.handle(), &args, &data_dir);
-            options.desktop = Some(Arc::clone(&host) as Arc<dyn nail_api::DesktopHost>);
+            options.desktop = Some(host.clone());
             let service =
                 tauri::async_runtime::block_on(async { open_service_with(&args, options) })?;
             host.bind_service(service.clone());
@@ -683,9 +697,9 @@ pub fn run() {
             });
             app.manage(Running {
                 mcp,
-                _lock: lock,
+                lock,
                 temp,
-                _remote_ui: remote_ui,
+                remote_ui,
             });
             app.manage(ShellState {
                 host,
@@ -717,7 +731,7 @@ pub fn run() {
                     shell.host.main_window_closing();
                     if shell.hides_on_close() {
                         api.prevent_close();
-                        let _ = window.hide();
+                        drop(window.hide());
                     }
                 }
                 tauri::WindowEvent::Destroyed => shell.host.main_window_closing(),
@@ -731,9 +745,13 @@ pub fn run() {
     } else {
         builder.invoke_handler(tauri::generate_handler![nail_call])
     };
-    let app = builder
-        .build(tauri::generate_context!())
-        .expect("failed to build the Tauri application");
+    let app = match builder.build(tauri::generate_context!()) {
+        Ok(app) => app,
+        Err(err) => {
+            tracing::error!(%err, "cannot build the Tauri application");
+            std::process::exit(1);
+        }
+    };
     app.run(|app, event| {
         // Quitting with a downloaded update installs it (no restart).
         if let tauri::RunEvent::Exit = event

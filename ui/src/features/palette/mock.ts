@@ -6,6 +6,7 @@
  */
 import type { RecentActions, Request, Response } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
+import { charCount } from "../../text/chars";
 
 /** The requests this feature answers. */
 export const PALETTE_REQUESTS = [
@@ -25,7 +26,7 @@ export const MAX_RECENT_ACTIONS = 20;
 
 /** `nail_api::palette::is_action_id`. */
 export function isActionId(id: string): boolean {
-  const chars = [...id].length;
+  const chars = charCount(id);
   return chars >= 1 && chars <= 160 && !/[\s\p{Cc}]/u.test(id);
 }
 

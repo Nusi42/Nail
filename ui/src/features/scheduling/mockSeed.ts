@@ -79,7 +79,7 @@ function seedCore(data: MockData): MockCore {
     data,
     emit: () => undefined,
     later: () => undefined,
-    nextId: (prefix) => `${prefix}seed-${++n}`,
+    nextId: (prefix) => `${prefix}seed-${String(++n)}`,
   };
 }
 

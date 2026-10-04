@@ -7,6 +7,8 @@
 //! ([`KeyLookupCandidate`]) and [`import_candidate`] stores one when the
 //! user (or the automatic lookup policy) accepts it.
 
+use std::fmt::Write as _;
+
 use nail_api::ErrorCode;
 use nail_api::engine::{BoxFuture, EngineError};
 use nail_api::security::{
@@ -70,7 +72,7 @@ pub fn percent_encode(text: &str) -> String {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
             out.push(byte as char);
         } else {
-            out.push_str(&format!("%{byte:02X}"));
+            let _ = write!(out, "%{byte:02X}");
         }
     }
     out

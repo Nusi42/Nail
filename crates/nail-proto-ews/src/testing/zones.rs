@@ -14,7 +14,7 @@ enum Dst {
 /// A zone: Windows id, display name, standard offset (local − UTC,
 /// minutes) and daylight-saving rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Zone {
+pub(super) struct Zone {
     /// The Windows id.
     pub id: &'static str,
     name: &'static str,
@@ -68,7 +68,7 @@ const ZONES: [Zone; 7] = [
 ];
 
 /// The zone of a Windows id.
-pub fn zone(id: &str) -> Option<Zone> {
+pub(super) fn zone(id: &str) -> Option<Zone> {
     ZONES
         .iter()
         .copied()
@@ -95,7 +95,7 @@ fn last_sunday(year: i32, month: u32) -> NaiveDate {
 
 impl Zone {
     /// Local − UTC in minutes at a UTC time.
-    pub fn offset_at(&self, utc: NaiveDateTime) -> i64 {
+    pub(super) fn offset_at(&self, utc: NaiveDateTime) -> i64 {
         let year = utc.year();
         let daylight = match self.dst {
             Dst::None => false,
@@ -124,13 +124,13 @@ impl Zone {
     }
 
     /// The UTC time of a wall time.
-    pub fn to_utc(self, local: NaiveDateTime) -> NaiveDateTime {
+    pub(super) fn to_utc(self, local: NaiveDateTime) -> NaiveDateTime {
         let guess = local - Duration::minutes(self.standard);
         local - Duration::minutes(self.offset_at(guess))
     }
 
     /// The `StartTimeZone` element.
-    pub fn element(&self, tag: &str) -> String {
+    pub(super) fn element(&self, tag: &str) -> String {
         let bias = |minutes: i64| {
             let sign = if minutes > 0 { "-" } else { "" };
             let m = minutes.abs();

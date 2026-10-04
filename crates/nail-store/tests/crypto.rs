@@ -1,5 +1,6 @@
 //! Schema v5 (ADR 0029): keyring, trust decisions, Autocrypt peers,
 //! encryption-at-rest state, cached message security and settings.
+#![cfg(test)]
 
 mod common;
 

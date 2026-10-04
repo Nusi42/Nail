@@ -12,6 +12,8 @@
  * wrong arguments and syntax errors are rejected at compile time.
  */
 import { formatRelative, formatShortDate } from "../i18n/format";
+import { chars } from "../text/chars";
+import { nonEmpty } from "../text/empty";
 
 /** A value flowing through pipes. */
 export type TemplateValue =
@@ -56,7 +58,7 @@ export class TemplateError extends Error {
   readonly position: number;
 
   constructor(message: string, position: number) {
-    super(`${message} at column ${position + 1}`);
+    super(`${message} at column ${String(position + 1)}`);
     this.name = "TemplateError";
     this.position = position;
   }
@@ -95,7 +97,7 @@ class Parser {
       text = "";
     };
     while (this.pos < this.src.length) {
-      const c = this.src[this.pos] as string;
+      const c = this.src.charAt(this.pos);
       const next = this.src[this.pos + 1];
       if (c === "{" && next === "{") {
         text += "{";
@@ -207,7 +209,7 @@ class Parser {
       this.pos++;
       let value = "";
       while (this.pos < this.src.length && this.src[this.pos] !== '"') {
-        value += this.src[this.pos];
+        value += this.src.charAt(this.pos);
         this.pos++;
       }
       if (this.src[this.pos] !== '"') throw new TemplateError("unclosed string", start);
@@ -261,9 +263,17 @@ export function lookup(root: unknown, path: readonly string[]): unknown {
 export function display(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) return value.map(display).filter(Boolean).join(", ");
-  if (isAddress(value)) return value.name || value.email;
-  if (typeof value === "object") return "";
-  return String(value);
+  if (isAddress(value)) return nonEmpty(value.name) ?? value.email;
+  switch (typeof value) {
+    case "string":
+      return value;
+    case "number":
+    case "boolean":
+    case "bigint":
+      return String(value);
+    default:
+      return "";
+  }
 }
 
 function toDate(value: unknown): Date | null {
@@ -311,8 +321,8 @@ export function renderTemplate(
         case "truncate": {
           const max = pipe.args[0] as number;
           const text = display(value);
-          const chars = [...text];
-          value = chars.length > max ? `${chars.slice(0, max).join("").trimEnd()}…` : text;
+          const points = chars(text);
+          value = points.length > max ? `${points.slice(0, max).join("").trimEnd()}…` : text;
           break;
         }
         case "bold-if-unread":

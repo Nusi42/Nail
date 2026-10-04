@@ -95,7 +95,7 @@ function StartupStep() {
   );
 }
 
-function ImportStep({ onImport }: { onImport(): void }) {
+function ImportStep({ onImport }: { onImport: () => void }) {
   const t = useT();
   const actions = useActions();
   const available = actions.isEnabled(IMPORT_WIZARD_ACTION);
@@ -117,7 +117,7 @@ function ImportStep({ onImport }: { onImport(): void }) {
 }
 
 /** The first-run screen's content. */
-export function FirstRun({ close }: { close(): void }) {
+export function FirstRun({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();

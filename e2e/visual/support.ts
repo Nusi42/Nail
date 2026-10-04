@@ -53,6 +53,7 @@ export function collectedProbe(): ThemeProbe {
 /** A private demo-multi server per worker, with the calendar screen's events synced. */
 export const test = base.extend<object, { nail: NailServer }>({
   nail: [
+    // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
     async ({}, use) => {
       const server = await startNail({ seed: "demo-multi", locale: "en" });
       try {
@@ -163,7 +164,7 @@ async function markUnread(server: NailServer, subjects: readonly string[]): Prom
         sort: "date",
       },
     });
-    const hits = (found.hits as { message: { id: string; flags: { seen: boolean } } }[]) ?? [];
+    const hits = (found.hits ?? []) as { message: { id: string; flags: { seen: boolean } } }[];
     const ids = hits.filter((h) => h.message.flags.seen).map((h) => h.message.id);
     if (ids.length === 0) continue;
     const answer = await rpc(server, {
@@ -276,7 +277,7 @@ export function compareWithBaseline(
   let message: string | null = matched ? null : plain(newErrors[0]?.message);
   if (matched && updating && !baselineExisted) message = "baseline written";
   if (!shot.stable) {
-    message = `the screen did not settle within ${shot.attempts} screenshots; ${message ?? ""}`;
+    message = `the screen did not settle within ${String(shot.attempts)} screenshots; ${message ?? ""}`;
   }
   return writeEntry({
     variant: variant.id,

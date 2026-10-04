@@ -2,6 +2,8 @@
 //! core with the same keychain reads its data again — mail, search and
 //! the vault state — and the files on disk stay sealed.
 
+#![cfg(test)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,7 +55,7 @@ async fn hits(service: &Service, text: &str) -> u32 {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         })
         .await

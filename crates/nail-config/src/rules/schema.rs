@@ -8,7 +8,7 @@
 //! `tests/rules.rs` checks that the node and property names the reader
 //! accepts are in the schema.
 
-#![allow(dead_code)] // Schema-only mirror types are never constructed.
+#![expect(dead_code, reason = "schema-only mirror types are never constructed")]
 
 use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, generate::SchemaSettings};

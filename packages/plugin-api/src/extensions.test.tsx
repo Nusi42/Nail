@@ -49,7 +49,7 @@ describe("before-send answers", () => {
     expect(beforeSendProblems(veto(" "))).toEqual(["veto reason empty or too long"]);
     expect(beforeSendProblems(veto("x".repeat(501)))).toEqual(["veto reason empty or too long"]);
     expect(beforeSendProblems(veto("😀".repeat(500)))).toEqual([]); // counted in characters
-    const headers = Array.from({ length: 11 }, (_, i) => ({ name: `X-H${i}`, value: "v" }));
+    const headers = Array.from({ length: 11 }, (_, i) => ({ name: `X-H${String(i)}`, value: "v" }));
     expect(beforeSendProblems({ headers })).toEqual(["too many headers"]);
     expect(beforeSendProblems({ headers: [{ name: "Subject", value: "x" }] })).toEqual([
       "invalid header",

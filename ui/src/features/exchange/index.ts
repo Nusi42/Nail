@@ -175,7 +175,9 @@ export const actions: Feature["actions"] = {
   },
   /** The categories of the selected Exchange message (tags written as categories). */
   "exchange.apply-categories": {
-    run: (ctx) => ctx.store.getState().openWindow(APPLY_CATEGORIES_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(APPLY_CATEGORIES_DIALOG);
+    },
     enabled: (ctx) => {
       const id = ctx.store.getState().selectedMessageId;
       return id !== null && findSummary(ctx.queryClient, id)?.exchange != null;

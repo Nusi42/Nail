@@ -127,6 +127,8 @@ This message contains calendar data. Calendar programs can add the event to your
 
 #[test]
 fn subjects_for_every_method() {
+    use ParticipationStatus as P;
+
     let en = English::new();
     let f = fields();
     let mut bob = Attendee::new("bob@example.org");
@@ -147,7 +149,6 @@ fn subjects_for_every_method() {
             &en,
         )
     };
-    use ParticipationStatus as P;
     let s = |m, u, st, rid| subject(m, u, st, rid).subject;
     assert_eq!(
         s(ItipMethod::Request, true, P::NeedsAction, None),

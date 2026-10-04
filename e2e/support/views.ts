@@ -87,7 +87,7 @@ export async function discardComposer(page: Page, composer: Locator): Promise<vo
   const confirm = page.locator(
     `[data-part="window"][data-window="composer-discard${key ? `:${key}` : ""}"]`,
   );
-  const gone = page.locator(`[data-part="window"][data-window="${window}"]`);
+  const gone = page.locator(`[data-part="window"][data-window="${window ?? ""}"]`);
   await expect(confirm.or(gone))
     .toHaveCount(1)
     .catch(() => undefined);

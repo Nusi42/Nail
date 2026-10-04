@@ -6,6 +6,7 @@ import {
   defaultWebSocketUrl,
   type WebSocketLike,
 } from "./websocket";
+import { must } from "../test/must";
 
 class FakeSocket implements WebSocketLike {
   static instances: FakeSocket[] = [];
@@ -49,7 +50,7 @@ class FakeSocket implements WebSocketLike {
   }
 }
 
-const latest = () => FakeSocket.instances[FakeSocket.instances.length - 1] as FakeSocket;
+const latest = () => must(FakeSocket.instances[FakeSocket.instances.length - 1]);
 
 function create() {
   return new WebSocketTransport({
@@ -111,7 +112,7 @@ describe("WebSocketTransport", () => {
     const socket = latest();
     socket.open();
     const result = client.request({ type: "GetMessage", id: "x" }, "Message");
-    const id = (socket.sent[0] as RpcRequest).id;
+    const id = must(socket.sent[0]).id;
     socket.push({
       kind: "response",
       id,
@@ -136,7 +137,7 @@ describe("WebSocketTransport", () => {
     const transport = create();
     const socket = latest();
     socket.open();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
     const events: NailEvent[] = [];
     transport.onEvent((e) => events.push(e));
     socket.push("not json");
@@ -178,7 +179,7 @@ describe("WebSocketTransport", () => {
     const third = latest();
     third.open();
     expect(statuses).toEqual(["connected", "reconnecting", "connected"]);
-    const frame = third.sent[0] as RpcRequest;
+    const frame = must(third.sent[0]);
     expect(frame.request).toEqual({ type: "Ping" });
     third.push({
       kind: "response",

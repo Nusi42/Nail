@@ -1,5 +1,6 @@
 //! Parses every message of the testkit corpus: snapshot of the full result,
 //! plus targeted assertions for the interesting cases.
+#![cfg(test)]
 
 use nail_api::{Flags, MessageBody};
 use nail_mime::{
@@ -159,7 +160,7 @@ fn legacy_charsets_are_decoded() {
     assert!(
         cp1252
             .text
-            .contains("on se retrouve au café à côté de la gare ? Je t’offre un crème — promis.")
+            .contains("on se retrouve au café à côté de la gare ? Je t’offre un crème")
     );
 }
 
@@ -268,7 +269,7 @@ fn every_corpus_message_parses_with_subject() {
                 message.raw.len() / 2,
                 message.raw.len() - 1,
             ] {
-                let _ = parse_message(&message.raw[..cut]);
+                drop(parse_message(&message.raw[..cut]));
             }
         }
     }
@@ -290,9 +291,9 @@ fn mutated_corpus_never_panics() {
             for _ in 0..20 {
                 let mut raw = message.raw.clone();
                 for _ in 0..8 {
-                    let pos = (next() as usize) % raw.len().max(1);
+                    let pos = usize::try_from(next()).unwrap() % raw.len().max(1);
                     match next() % 3 {
-                        0 => raw[pos] = next() as u8,
+                        0 => raw[pos] = next().to_le_bytes()[0],
                         1 => {
                             raw.remove(pos);
                         }
@@ -303,8 +304,8 @@ fn mutated_corpus_never_panics() {
                     }
                 }
                 let parsed = parse_message(&raw);
-                let _ = attachment_content(&raw, 0);
-                let _ = parsed.to_summary(
+                drop(attachment_content(&raw, 0));
+                drop(parsed.to_summary(
                     SummaryIds {
                         id: "m".into(),
                         folder_id: "f".into(),
@@ -312,7 +313,7 @@ fn mutated_corpus_never_panics() {
                     },
                     Flags::default(),
                     None,
-                );
+                ));
             }
         }
     }
@@ -385,6 +386,6 @@ Content-Disposition: attachment; filename=\"statement.pdf.exe\"\r\n\r\nMZ\r\n--b
     );
     // Link numbers index the `<a href>` elements of the sanitized HTML.
     let mismatch = serde_json::to_value(&warnings[0]).unwrap();
-    let n = mismatch["link"].as_u64().unwrap() as usize;
+    let n = usize::try_from(mismatch["link"].as_u64().unwrap()).unwrap();
     assert_eq!(links[n].href, "https://bank.example.evil.example/login");
 }

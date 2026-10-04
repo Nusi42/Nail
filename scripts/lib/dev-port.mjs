@@ -28,6 +28,9 @@ export const DEV_PORT_ENV = "NAIL_DEV_PORT";
 /**
  * Parses a `NAIL_DEV_PORT` value: `undefined` when unset or empty, else a
  * port in 1–65535 (throws on anything else).
+ *
+ * @param {string | undefined} value
+ * @returns {number | undefined}
  */
 export function parsePortEnv(value) {
   if (value === undefined || value.trim() === "") return undefined;
@@ -39,21 +42,40 @@ export function parsePortEnv(value) {
   return port;
 }
 
-/** Binds `port` on {@link DEV_HOST} (0 = any free port) and returns the server. */
+/**
+ * Binds `port` on {@link DEV_HOST} (0 = any free port) and returns the server.
+ *
+ * @param {number} port
+ * @returns {Promise<net.Server>}
+ */
 function bind(port) {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.unref();
     server.once("error", reject);
-    server.listen({ port, host: "127.0.0.1", exclusive: true }, () => resolve(server));
+    server.listen({ port, host: "127.0.0.1", exclusive: true }, () => {
+      resolve(server);
+    });
   });
 }
 
+/**
+ * @param {net.Server} server
+ * @returns {Promise<void>}
+ */
 function close(server) {
-  return new Promise((resolve) => server.close(() => resolve()));
+  return new Promise((resolve) => {
+    server.close(() => {
+      resolve();
+    });
+  });
 }
 
-/** Whether `port` can be bound on 127.0.0.1 right now. */
+/**
+ * Whether `port` can be bound on 127.0.0.1 right now.
+ *
+ * @param {number} port
+ */
 export async function isPortFree(port) {
   try {
     await close(await bind(port));
@@ -63,12 +85,19 @@ export async function isPortFree(port) {
   }
 }
 
-/** A port the OS reports free on 127.0.0.1. */
+/**
+ * A port the OS reports free on 127.0.0.1.
+ *
+ * @returns {Promise<number>}
+ */
 export async function freePort() {
   const server = await bind(0);
-  const { port } = server.address();
+  const address = server.address();
   await close(server);
-  return port;
+  if (address === null || typeof address === "string") {
+    throw new Error("the free-port probe is not a TCP server");
+  }
+  return address.port;
 }
 
 /**
@@ -88,7 +117,7 @@ export async function pickDevPort({
   const fixed = parsePortEnv(env[DEV_PORT_ENV]);
   if (fixed !== undefined) {
     if (!(await isFree(fixed))) {
-      throw new Error(`${DEV_PORT_ENV}=${fixed} is taken; free it or choose another port`);
+      throw new Error(`${DEV_PORT_ENV}=${String(fixed)} is taken; free it or choose another port`);
     }
     return { port: fixed, source: "env" };
   }
@@ -96,15 +125,21 @@ export async function pickDevPort({
   return { port: await anyFree(), source: "free" };
 }
 
-/** The dev server URL Tauri loads for `port`. */
+/**
+ * The dev server URL Tauri loads for `port`.
+ *
+ * @param {number} port
+ */
 export function devUrl(port) {
-  return `http://${DEV_HOST}:${port}`;
+  return `http://${DEV_HOST}:${String(port)}`;
 }
 
 /**
  * The `tauri dev --config` override: load the UI from our Vite server and
  * start no dev server of Tauri's own (`null` removes `beforeDevCommand` in
  * the JSON merge patch the Tauri CLI applies).
+ *
+ * @param {number} port
  */
 export function tauriDevConfig(port) {
   return { build: { devUrl: devUrl(port), beforeDevCommand: null } };
@@ -114,9 +149,12 @@ export function tauriDevConfig(port) {
  * Writes the override to a temporary file (outside the repository) and
  * returns its path; the Tauri CLI accepts a path for `--config`, which
  * avoids quoting JSON through the Windows shell.
+ *
+ * @param {number} port
+ * @param {string} [dir]
  */
 export function writeTauriDevConfig(port, dir = os.tmpdir()) {
-  const file = path.join(dir, `nail-tauri-dev-${process.pid}.json`);
+  const file = path.join(dir, `nail-tauri-dev-${String(process.pid)}.json`);
   fs.writeFileSync(file, JSON.stringify(tauriDevConfig(port), null, 2));
   return file;
 }
@@ -124,6 +162,8 @@ export function writeTauriDevConfig(port, dir = os.tmpdir()) {
 /**
  * Splits the dev script's arguments: `tauri` as the first argument runs
  * the desktop app too; everything after it goes to `tauri dev`.
+ *
+ * @param {string[]} argv
  */
 export function parseDevArgs(argv) {
   if (argv[0] === "tauri") return { tauri: true, tauriArgs: argv.slice(1) };

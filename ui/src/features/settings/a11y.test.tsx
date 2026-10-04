@@ -14,14 +14,17 @@ import { UI_STATE_SETTINGS_SECTION } from "../../state/uiState";
 import { violations } from "../../test/axe";
 import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
-import { BUILTIN_THEMES, resolveMockTheme } from "../appearance";
+import { BUILTIN_THEMES } from "../appearance";
+import { resolveMockTheme } from "../appearance/themes";
 import { SETTINGS_SKIN_CSS } from "./skin";
 
 let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 const DENSITIES: readonly Density[] = ["comfortable", "compact"];
 const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));

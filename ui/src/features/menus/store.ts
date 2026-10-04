@@ -26,9 +26,9 @@ export interface OpenMenu {
 
 export interface MenuState {
   open: OpenMenu | null;
-  show(open: OpenMenu): void;
+  show: (open: OpenMenu) => void;
   /** Closes the menu; `restoreFocus` puts focus back where it was. */
-  close(restoreFocus: boolean): void;
+  close: (restoreFocus: boolean) => void;
 }
 
 export type MenuStore = StoreApi<MenuState>;
@@ -41,7 +41,9 @@ export function menuStoreFor(ui: UiStore): MenuStore {
   if (existing) return existing;
   const store = createStore<MenuState>()((set, get) => ({
     open: null,
-    show: (open) => set({ open }),
+    show: (open) => {
+      set({ open });
+    },
     close: (restoreFocus) => {
       const open = get().open;
       if (!open) return;

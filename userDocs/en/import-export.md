@@ -79,10 +79,10 @@ and keywords from Maildir file names and from the `Status`, `X-Status`,
 
 Nail reads mbox files of any size without loading them into memory. It
 understands the common variants: `mboxrd` and `mboxo` (lines starting with
-`From ` are written as `>From `), and `mboxcl` / `mboxcl2` (with a
+"From " are written as ">From "), and `mboxcl` / `mboxcl2` (with a
 `Content-Length` header). One limitation is built into the old `mboxo`
-variant itself: a line that really started with `>From ` cannot be told
-apart from a quoted `From ` line, so it loses its `>`.
+variant itself: a line that really started with ">From " cannot be told
+apart from a quoted "From " line, so it loses its `>`.
 
 ## Importing from Thunderbird
 

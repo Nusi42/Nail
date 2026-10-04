@@ -15,6 +15,24 @@ configure({ asyncUtilTimeout: 5_000 });
 // warnings would otherwise go unnoticed.
 installConsoleRecorder();
 
+// DOM methods that every browser (and WebView2) has but jsdom does not
+// implement: the components call them unconditionally, so tests get no-op
+// stand-ins. A test that checks a call replaces them with a spy.
+function polyfill(target: object, name: string, value: () => unknown): void {
+  if (!(name in target))
+    Object.defineProperty(target, name, { value, configurable: true, writable: true });
+}
+const nothing = () => undefined;
+// Suites that run in the `node` environment have no DOM at all.
+if (typeof Element !== "undefined") {
+  polyfill(Element.prototype, "scrollIntoView", nothing);
+  polyfill(Element.prototype, "scrollTo", nothing);
+  polyfill(Element.prototype, "setPointerCapture", nothing);
+  polyfill(Element.prototype, "releasePointerCapture", nothing);
+  polyfill(Element.prototype, "hasPointerCapture", () => false);
+  polyfill(Document.prototype, "elementFromPoint", () => null);
+}
+
 function fail(problems: string[], when: string): void {
   if (problems.length > 0) throw new Error(`${when}:\n\n${problems.join("\n\n")}`);
 }

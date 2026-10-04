@@ -21,21 +21,22 @@ import {
   IMPORT_ACTION,
   IMPORT_DIALOG,
   RESTORE_DIALOG,
-  advancePortabilityJobs,
-  finishPortabilityJobs,
   handlePortabilityEvent,
 } from ".";
+import { advancePortabilityJobs, finishPortabilityJobs } from "./mock";
 import { defaultBackupContents } from "./model";
+import { must } from "../../test/must";
+import { arrayContaining, notArrayContaining } from "../../test/matchers";
 
 /** Routes the core's events to the feature, like the app shell. */
 function listen(env: Env): () => void {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handlePortabilityEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function setup(options: { desktop?: boolean } = {}) {
@@ -66,11 +67,15 @@ function renderDialogs(env: Env, extra: React.ReactNode = null) {
 }
 
 function step(env: Env, n = 1) {
-  act(() => advancePortabilityJobs(env.transport, n));
+  act(() => {
+    advancePortabilityJobs(env.transport, n);
+  });
 }
 
 function finish(env: Env) {
-  act(() => finishPortabilityJobs(env.transport));
+  act(() => {
+    finishPortabilityJobs(env.transport);
+  });
 }
 
 describe("import wizard", () => {
@@ -129,7 +134,9 @@ describe("import wizard", () => {
     const { env, stop } = setup({ desktop: true });
     const user = userEvent.setup();
     renderDialogs(env);
-    act(() => env.store.getState().openWindow(IMPORT_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(IMPORT_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog");
     await user.click(await within(dialog).findByRole("button", { name: "Use this profile" }));
     expect(await within(dialog).findByText("Step 2 of 3")).toBeVisible();
@@ -151,9 +158,9 @@ describe("import wizard", () => {
     expect(within(proposals).getByRole("checkbox", { name: /ada@example\.org/ })).not.toBeChecked();
     expect(within(proposals).getByText("Already in Nail as “acc-personal”.")).toBeVisible();
     await user.click(within(proposals).getByRole("button", { name: "Add chosen accounts" }));
-    await waitFor(() =>
-      expect(env.transport.requests.filter((r) => r.type === "AddAccount")).toHaveLength(1),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.filter((r) => r.type === "AddAccount")).toHaveLength(1);
+    });
     expect(env.transport.requests.find((r) => r.type === "AddAccount")).toMatchObject({
       config: { email: "ada@club.example" },
       secrets: [],
@@ -161,11 +168,11 @@ describe("import wizard", () => {
     expect(await within(proposals).findByText("Added. Sign in to start syncing.")).toBeVisible();
     const rules = within(dialog).getByRole("region", { name: "Filters found in Thunderbird" });
     await user.click(within(rules).getByRole("button", { name: "Save chosen filters as rules" }));
-    await waitFor(() =>
-      expect(env.transport.requests.filter((r) => r.type === "SaveRule")).toHaveLength(2),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.filter((r) => r.type === "SaveRule")).toHaveLength(2);
+    });
     const saved = env.transport.requests.filter((r) => r.type === "SaveRule");
-    expect(saved.map((r) => (r.type === "SaveRule" ? [r.rule.name, r.rule.enabled] : []))).toEqual([
+    expect(saved.map((r) => [r.rule.name, r.rule.enabled])).toEqual([
       ["Newsletters", true],
       ["Junk by size", false],
     ]);
@@ -177,7 +184,9 @@ describe("import wizard", () => {
     env.transport.data.features.portability.missing = ["C:\\gone"];
     const user = userEvent.setup();
     renderDialogs(env);
-    act(() => env.store.getState().openWindow(IMPORT_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(IMPORT_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("radio", { name: "Maildir folder" }));
     await user.type(within(dialog).getByLabelText("Folder"), "C:\\gone");
@@ -208,10 +217,14 @@ describe("export wizard", () => {
   it("exports folders and refuses an existing target until Replace is ticked", async () => {
     const { env, stop } = setup();
     env.transport.data.features.portability.existing = ["C:\\out\\inbox.mbox"];
-    act(() => env.store.getState().selectFolder("acc-personal/Inbox"));
+    act(() => {
+      env.store.getState().selectFolder("acc-personal/Inbox");
+    });
     const user = userEvent.setup();
     const { container } = renderDialogs(env);
-    act(() => env.store.getState().openWindow(EXPORT_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(EXPORT_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Export" });
     expect(await within(dialog).findByRole("checkbox", { name: "Inbox" })).toBeChecked();
     expect(within(dialog).getByRole("radio", { name: "The selected message" })).toBeDisabled();
@@ -239,7 +252,9 @@ describe("backup and restore", () => {
     const { env, stop } = setup({ desktop: true });
     const user = userEvent.setup();
     const { container } = renderDialogs(env);
-    act(() => env.store.getState().openWindow(BACKUP_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(BACKUP_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Back up Nail" });
     expect(within(dialog).getByRole("checkbox", { name: "Encryption keys" })).not.toBeChecked();
     await user.click(within(dialog).getByRole("checkbox", { name: "Encryption keys" }));
@@ -254,7 +269,7 @@ describe("backup and restore", () => {
     await user.clear(within(dialog).getByLabelText("Passphrase again"));
     await user.type(within(dialog).getByLabelText("Passphrase again"), "short but now long");
     await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
-    expect((within(dialog).getByLabelText("Backup file") as HTMLInputElement).value).toMatch(
+    expect(within(dialog).getByLabelText<HTMLInputElement>("Backup file").value).toMatch(
       /Nail backup \d{4}-\d{2}-\d{2}\.nailbackup$/,
     );
     expect(await violations(container)).toEqual([]);
@@ -279,12 +294,14 @@ describe("backup and restore", () => {
     const { env, stop } = setup({ desktop: true });
     const user = userEvent.setup();
     renderDialogs(env);
-    act(() => env.store.getState().openWindow(BACKUP_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(BACKUP_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Back up Nail" });
     await user.type(within(dialog).getByLabelText("Passphrase"), "correct horse battery");
     await user.type(within(dialog).getByLabelText("Passphrase again"), "correct horse battery");
     await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
-    const field = within(dialog).getByLabelText("Backup file") as HTMLInputElement;
+    const field = within(dialog).getByLabelText<HTMLInputElement>("Backup file");
     const picked = field.value;
     env.transport.data.features.portability.existing = [picked];
     // Typed (here: the picked path edited and typed back): not confirmed.
@@ -321,11 +338,15 @@ describe("backup and restore", () => {
       contents: defaultBackupContents(),
       passphrase: "correct horse battery",
     });
-    act(() => finishPortabilityJobs(env.transport));
+    act(() => {
+      finishPortabilityJobs(env.transport);
+    });
     env.transport.data.features.portability.backups[path]?.damaged.push("config/layout.kdl");
     const user = userEvent.setup();
     const { container } = renderDialogs(env);
-    act(() => env.store.getState().openWindow(RESTORE_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(RESTORE_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Restore from a backup" });
     await user.type(within(dialog).getByLabelText("Backup file"), path);
     await user.type(within(dialog).getByLabelText("Passphrase"), "wrong passphrase");
@@ -357,7 +378,7 @@ describe("backup and restore", () => {
     expect(await within(dialog).findByRole("table", { name: "What was restored" })).toBeVisible();
     expect(within(dialog).getByText("Restart Nail to finish the restore.")).toBeVisible();
     expect(env.transport.requests.find((r) => r.type === "StartRestore")).toMatchObject({
-      contents: { items: expect.not.arrayContaining(["plugins"]) },
+      contents: { items: notArrayContaining(["plugins"]) },
     });
     stop();
   });
@@ -397,9 +418,7 @@ describe("job lists", () => {
     await user.click(screen.getByRole("button", { name: "Show report" }));
     const dialog = await screen.findByRole("dialog", { name: "Report" });
     expect(await within(dialog).findByText("32 contacts")).toBeVisible();
-    await user.click(
-      within(dialog).getAllByRole("button", { name: "Close" }).at(-1) as HTMLElement,
-    );
+    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
     await user.click(screen.getByRole("button", { name: "Import…" }));
     expect(env.store.getState().windows).toContain(IMPORT_DIALOG);
     stop();
@@ -423,7 +442,9 @@ describe("diagnostics bundle", () => {
   it("shows exactly what goes in before saving, with mail only when picked", async () => {
     const { env, stop } = setup();
     const first = env.transport.data.messages.find((m) => m.folder_id === "acc-personal/Inbox");
-    act(() => env.store.getState().selectMessage(first?.id ?? null));
+    act(() => {
+      env.store.getState().selectMessage(first?.id ?? null);
+    });
     const user = userEvent.setup();
     const { container } = renderDialogs(env, <Run id={DIAGNOSTICS_ACTION} />);
     await user.click(screen.getByRole("button", { name: `run ${DIAGNOSTICS_ACTION}` }));
@@ -456,7 +477,7 @@ describe("diagnostics bundle", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save bundle" }));
     expect(await within(dialog).findByText(/Checksum \(SHA-256\): 9f2c4e1a/)).toBeVisible();
     expect(env.transport.requests.find((r) => r.type === "CreateDiagnosticsBundle")).toMatchObject({
-      options: { items: expect.arrayContaining(["mail-content"]), message_ids: [first?.id] },
+      options: { items: arrayContaining(["mail-content"]), message_ids: [first?.id] },
       path: "C:\\support\\nail.zip",
       // A typed path never replaces a file.
       overwrite: false,

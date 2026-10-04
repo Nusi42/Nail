@@ -126,7 +126,7 @@ export function mergedFields(contacts: readonly Contact[], choice: MergeChoice):
   for (const field of SINGLE_FIELDS) {
     const key = choice.single[field];
     const pick = candidates(contacts, field).find((c) => c.key === key);
-    if (pick) assign(field, structuredClone(pick.value) as ContactFields[typeof field]);
+    if (pick) assign(field, structuredClone<ContactFields[typeof field]>(pick.value));
   }
   for (const field of LIST_FIELDS) {
     const excluded = new Set(choice.excluded[field] ?? []);
@@ -147,7 +147,7 @@ export function mergedFields(contacts: readonly Contact[], choice: MergeChoice):
       customKeys.add(key);
       return true;
     });
-  if (!fields.name) fields.name = contacts.find((c) => c.fields.name)?.fields.name ?? null;
+  fields.name ??= contacts.find((c) => c.fields.name)?.fields.name ?? null;
   // Only one preferred entry per list.
   for (const field of LIST_FIELDS) {
     let seen = false;

@@ -222,8 +222,7 @@ impl Service {
             }),
             None => Ok(SecretSource::Stored {
                 secrets: Arc::clone(&self.inner.secrets),
-                tokens: Arc::clone(&self.inner.tokens)
-                    as Arc<dyn nail_api::engine::AccessTokenProvider>,
+                tokens: self.inner.tokens.clone(),
             }),
         }
     }
@@ -261,7 +260,7 @@ impl Service {
                     async {
                         let client = crate::sync::connect(&settings).await?;
                         let caps = client.capabilities().iter().map(str::to_owned).collect();
-                        let _ = client.logout().await;
+                        drop(client.logout().await);
                         Ok::<_, nail_proto_imap::ImapError>(caps)
                     }
                     .await
@@ -402,7 +401,7 @@ impl Service {
         // Claim the sign-ins that were used.
         for input in secrets {
             if let SecretValue::OAuth2 { flow_id } = &input.value {
-                let _ = self.inner.flows.take(flow_id);
+                drop(self.inner.flows.take(flow_id));
             }
         }
         Ok(())
@@ -441,7 +440,7 @@ impl Service {
         }
         normalize_account(&mut config);
         let id = config.id.clone();
-        let (_, saved) = self
+        let ((), saved) = self
             .inner
             .accounts
             .edit(|doc| doc.upsert_account(config).map_err(edit_error))?;
@@ -617,7 +616,7 @@ impl Service {
             return Err(ApiError::not_found(format!("virtual account {}", config.id)).into());
         }
         let id = config.id.clone();
-        let (_, saved) = self
+        let ((), saved) = self
             .inner
             .accounts
             .edit(|doc| doc.upsert_virtual_account(config).map_err(edit_error))?;

@@ -20,11 +20,11 @@ export type Editing =
 export interface RulesUiState {
   editing: Editing | null;
   /** Edits a saved rule. */
-  select(id: RuleId | null): void;
+  select: (id: RuleId | null) => void;
   /** The rule being edited was saved as `id` (a new rule becomes a saved one). */
-  saved(id: RuleId): void;
+  saved: (id: RuleId) => void;
   /** Starts a new rule from `rule` (a blank rule or one from a message). */
-  startNew(rule: Rule): void;
+  startNew: (rule: Rule) => void;
 }
 
 const stores = new WeakMap<NailClient, StoreApi<RulesUiState>>();
@@ -35,11 +35,15 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
     let seq = 0;
     store = createStore<RulesUiState>((set) => ({
       editing: null,
-      select: (id) =>
-        set({ editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` } }),
-      saved: (id) =>
-        set((s) => ({ editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` } })),
-      startNew: (rule) => set({ editing: { kind: "new", rule, key: `new-${++seq}` } }),
+      select: (id) => {
+        set({ editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` } });
+      },
+      saved: (id) => {
+        set((s) => ({ editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` } }));
+      },
+      startNew: (rule) => {
+        set({ editing: { kind: "new", rule, key: `new-${String(++seq)}` } });
+      },
     }));
     stores.set(client, store);
   }

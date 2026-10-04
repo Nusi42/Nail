@@ -141,7 +141,9 @@ export function ListHeader({ node }: WidgetProps) {
               data-part="chip"
               data-filter={chip}
               aria-pressed={filter === chip}
-              onClick={() => setListFilter(chip)}
+              onClick={() => {
+                setListFilter(chip);
+              }}
             >
               {t(`list-filter-${chip}`)}
             </button>

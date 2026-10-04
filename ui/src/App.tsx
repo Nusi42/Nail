@@ -145,7 +145,11 @@ export function App({
       <I18nProvider locale={store.getState().localeOverride}>
         <BootTheme modeOverride={store.getState().modeOverride}>
           <div data-part="app" data-state="login">
-            <RemoteLoginPage onLoggedIn={() => setGate("open")} />
+            <RemoteLoginPage
+              onLoggedIn={() => {
+                setGate("open");
+              }}
+            />
           </div>
         </BootTheme>
       </I18nProvider>
@@ -197,7 +201,7 @@ function useCoreEvents(): void {
     const invalidate = (...keys: (readonly unknown[])[]) => {
       for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
     };
-    const refreshMail = () =>
+    const refreshMail = () => {
       invalidate(
         queryKeys.allFolders,
         queryKeys.allMessages,
@@ -205,6 +209,7 @@ function useCoreEvents(): void {
         queryKeys.allThreadDetails,
         queryKeys.allSearches,
       );
+    };
     const offEvents = client.subscribe((event) => {
       // Feature slots (src/features/*) handle their own events.
       for (const handler of appRegistry.events) {
@@ -269,8 +274,8 @@ function useCoreEvents(): void {
           break;
         case "SendProgress":
           ui().setSendProgress(event.outbox_id, {
-            sentBytes: Number(event.sent_bytes),
-            totalBytes: Number(event.total_bytes),
+            sentBytes: event.sent_bytes,
+            totalBytes: event.total_bytes,
           });
           break;
         case "SendStatus": {
@@ -335,9 +340,10 @@ function useDefaultSelection(): void {
 
   useEffect(() => {
     const list = accounts.data;
-    if (!list || list.length === 0) return;
+    const first = list?.[0];
+    if (!list || first === undefined) return;
     if (accountId === null || !list.some((a) => a.id === accountId)) {
-      selectAccount((list[0] as (typeof list)[number]).id);
+      selectAccount(first.id);
     }
   }, [accounts.data, accountId, selectAccount]);
 

@@ -2,6 +2,7 @@
 //! text, events, tasks and contacts; invariants of recurrence expansion,
 //! and Nail's recurrence engine against calcard's (a port of rust-rrule /
 //! python-dateutil) as an independent oracle.
+#![cfg(test)]
 
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use chrono_tz::Tz;

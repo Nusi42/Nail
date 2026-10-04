@@ -191,10 +191,10 @@ impl MockMailServer {
                 mut stdin,
                 ..
             } => {
-                let _ = writeln!(stdin, "quit");
+                drop(writeln!(stdin, "quit"));
                 drop(stdin);
                 if child.wait().is_err() {
-                    let _ = child.kill();
+                    drop(child.kill());
                 }
             }
         }

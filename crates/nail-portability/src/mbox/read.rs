@@ -99,7 +99,7 @@ struct Line {
     bytes: Vec<u8>,
     offset: u64,
     /// Whether the piece starts a line (else it continues a long one).
-    starts_line: bool,
+    first_piece: bool,
 }
 
 impl Line {
@@ -108,15 +108,16 @@ impl Line {
     }
 
     fn is_blank(&self) -> bool {
-        self.starts_line && (self.bytes == b"\n" || self.bytes == b"\r\n")
+        self.first_piece && (self.bytes == b"\n" || self.bytes == b"\r\n")
     }
 
     fn is_from(&self) -> bool {
-        self.starts_line && self.bytes.starts_with(b"From ")
+        self.first_piece && self.bytes.starts_with(b"From ")
     }
 }
 
 /// Streams the messages of an mbox file.
+#[derive(Debug)]
 pub struct MboxReader<R> {
     reader: R,
     options: MboxReadOptions,
@@ -155,7 +156,7 @@ impl<R: BufRead> MboxReader<R> {
             return Ok(Some(line));
         }
         let offset = self.offset;
-        let starts_line = self.at_line_start;
+        let first_piece = self.at_line_start;
         let mut bytes = Vec::new();
         loop {
             let buf = match self.reader.fill_buf() {
@@ -185,7 +186,7 @@ impl<R: BufRead> MboxReader<R> {
         Ok(Some(Line {
             bytes,
             offset,
-            starts_line,
+            first_piece,
         }))
     }
 
@@ -264,7 +265,7 @@ impl<R: BufRead> MboxReader<R> {
                 self.pending_from = Some(line);
                 return Ok(Some(message.finish(entry, false)));
             }
-            if line.starts_line
+            if line.first_piece
                 && let Some(value) = header_line_value(&line.bytes, b"content-length")
             {
                 content_length = value.trim().parse().ok();
@@ -438,7 +439,7 @@ impl MessageBuilder {
     /// quoting showed (`>>From ` = mboxrd, `>From ` = mboxo or mboxrd).
     fn push_body(&mut self, line: &Line, dialect: MboxDialect) -> Option<MboxDialect> {
         let blank = line.is_blank();
-        if !line.starts_line || !line.bytes.starts_with(b">") {
+        if !line.first_piece || !line.bytes.starts_with(b">") {
             self.push_raw(&line.bytes, line.bytes.len(), blank);
             return None;
         }

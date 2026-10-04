@@ -8,6 +8,8 @@
 //! tests open exactly its port with `allow_loopback_port_for_tests`
 //! (feature `test-support`) where a fetch is meant to succeed.
 
+#![cfg(test)]
+
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,8 +41,7 @@ fn client_tls(roots: rustls::RootCertStore) -> Arc<rustls::ClientConfig> {
 }
 
 fn fetcher(resolver: &Arc<ScriptedResolver>) -> Fetcher {
-    Fetcher::new(client_tls(rustls::RootCertStore::empty()))
-        .with_resolver(Arc::clone(resolver) as Arc<dyn nail_proxy::Resolver>)
+    Fetcher::new(client_tls(rustls::RootCertStore::empty())).with_resolver(resolver.clone())
 }
 
 fn url(text: &str) -> Url {
@@ -409,7 +410,7 @@ async fn https_upstreams_are_verified_and_use_the_host_name() {
     let mut roots = rustls::RootCertStore::empty();
     roots.add(cert).unwrap();
     let f = Fetcher::new(client_tls(roots))
-        .with_resolver(Arc::clone(&dns) as Arc<dyn nail_proxy::Resolver>)
+        .with_resolver(dns.clone())
         .allow_loopback_port_for_tests(up.port());
     let fetched = f
         .fetch(&url(&format!(

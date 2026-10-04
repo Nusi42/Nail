@@ -1,6 +1,12 @@
 //! Password (+ TOTP) logins: paired devices only, brute force backs off
 //! and locks out, TOTP codes work once and tolerate one step of skew.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;
@@ -187,7 +193,7 @@ async fn disabled_users_cannot_log_in() {
     assert_eq!(failure(&reply).0, AuthFailure::Disabled);
 }
 
-async fn enroll_totp(h: &Harness, user: &nail_api::remote::RemoteUser) -> Vec<u8> {
+fn enroll_totp(h: &Harness, user: &nail_api::remote::RemoteUser) -> Vec<u8> {
     let enrollment = h.auth.start_totp_enrollment(&user.id).unwrap();
     let secret = Secret::try_from_base32(&enrollment.secret)
         .unwrap()
@@ -212,7 +218,7 @@ async fn enroll_totp(h: &Harness, user: &nail_api::remote::RemoteUser) -> Vec<u8
 async fn totp_is_required_and_each_code_works_once() {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
-    let secret = enroll_totp(&h, &ada).await;
+    let secret = enroll_totp(&h, &ada);
     let mut browser = logged_out_paired(&h, &ada).await;
 
     let reply = browser.password(&h, "ada", PASSWORD, None).await;
@@ -257,7 +263,7 @@ async fn totp_is_required_and_each_code_works_once() {
 async fn totp_tolerates_one_step_of_clock_skew() {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
-    let secret = enroll_totp(&h, &ada).await;
+    let secret = enroll_totp(&h, &ada);
     let mut browser = logged_out_paired(&h, &ada).await;
 
     // The phone runs 30 s ahead: its code is for the next step.

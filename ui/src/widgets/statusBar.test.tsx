@@ -6,13 +6,13 @@ describe("status-bar sync status", () => {
   it("shows the core's localized reason for a failed synchronization", () => {
     const env = createEnv();
     renderNode(widget("status-bar", { options: { items: "sync-progress" } }), env);
-    act(() =>
+    act(() => {
       env.store.getState().setSyncError({
         accountId: "work",
         code: "network",
         localized: { id: "sync-error-folders", args: { count: 2, folders: "Lists, Receipts" } },
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("status", { name: "Status" })).toHaveTextContent(
       "Synchronization failed: 2 folders could not be synchronized: Lists, Receipts",
     );
@@ -21,7 +21,9 @@ describe("status-bar sync status", () => {
   it("falls back to the text of the error code", () => {
     const env = createEnv();
     renderNode(widget("status-bar", { options: { items: "sync-progress" } }), env);
-    act(() => env.store.getState().setSyncError({ accountId: "work", code: "auth_failed" }));
+    act(() => {
+      env.store.getState().setSyncError({ accountId: "work", code: "auth_failed" });
+    });
     expect(screen.getByRole("status", { name: "Status" })).toHaveTextContent(
       /^Synchronization failed: /,
     );
@@ -47,12 +49,18 @@ describe("send progress", () => {
   it("shows the upload progress of a large message in the status bar", () => {
     const env = createEnv();
     renderNode(widget("status-bar", { options: { items: "send-status" } }), env);
-    act(() => env.store.getState().setLastSend(sending));
+    act(() => {
+      env.store.getState().setLastSend(sending);
+    });
     const status = screen.getByRole("status", { name: "Status" });
     expect(status).toHaveTextContent("Sending…");
-    act(() => env.store.getState().setSendProgress("out-1", { sentBytes: 3, totalBytes: 8 }));
+    act(() => {
+      env.store.getState().setSendProgress("out-1", { sentBytes: 3, totalBytes: 8 });
+    });
     expect(status).toHaveTextContent("Sending… 37% uploaded");
-    act(() => env.store.getState().setSendProgress("out-1", null));
+    act(() => {
+      env.store.getState().setSendProgress("out-1", null);
+    });
     expect(status).not.toHaveTextContent("uploaded");
   });
 

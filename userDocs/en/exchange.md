@@ -181,7 +181,7 @@ you write with your answer goes to the organizer with it.
 ## Microsoft To Do
 
 Your To Do lists appear in the task widget under **Microsoft To Do —
-<account>**, with **Tasks** first and **Flagged email** last; task lists of
+`<account>`**, with **Tasks** first and **Flagged email** last; task lists of
 shared mailboxes follow, then your other lists. A task's checklist items
 are its subtasks. A subtask you add in Nail shows briefly as gone after it
 is saved and comes back with the next sync (Exchange gives it its id).

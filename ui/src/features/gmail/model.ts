@@ -10,6 +10,7 @@ import type {
   GmailLabelIssue,
   GmailLabelSettings,
 } from "../../api/generated";
+import { charCount, chars } from "../../text/chars";
 
 /** Longest label name (`nail_api::gmail::MAX_LABEL_NAME`). */
 export const MAX_LABEL_NAME = 225;
@@ -56,8 +57,8 @@ export function labelIssues(
   if (name === "") {
     out.push("missing-name");
   } else {
-    if ([...name].length > MAX_LABEL_NAME) out.push("name-too-long");
-    const hasControl = [...name].some((c) => {
+    if (charCount(name) > MAX_LABEL_NAME) out.push("name-too-long");
+    const hasControl = chars(name).some((c) => {
       const code = c.codePointAt(0) ?? 0;
       return code < 0x20 || (code >= 0x7f && code < 0xa0);
     });
@@ -115,7 +116,9 @@ export function labelTree(labels: readonly GmailLabel[]): LabelNode[] {
   }
   const sort = (nodes: LabelNode[]) => {
     nodes.sort((a, b) => a.name.localeCompare(b.name));
-    nodes.forEach((n) => sort(n.children));
+    nodes.forEach((n) => {
+      sort(n.children);
+    });
   };
   sort(root);
   return root;

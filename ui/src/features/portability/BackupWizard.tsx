@@ -97,7 +97,7 @@ function ItemChoices({
 }: {
   items: readonly BackupItem[];
   selected: BackupItem[];
-  onChange(items: BackupItem[]): void;
+  onChange: (items: BackupItem[]) => void;
   legend: string;
 }) {
   const t = useT();
@@ -122,7 +122,7 @@ function defaultBackupName(t: (id: string, args?: Record<string, string>) => str
 }
 
 /** The backup wizard's content. */
-export function BackupWizard({ close }: { close(): void }) {
+export function BackupWizard({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -368,7 +368,7 @@ function RestoreSummary({ report }: { report: RestoreReport }) {
 type RestoreStep = "open" | "choose" | "plan" | "job";
 
 /** The restore wizard's content. */
-export function RestoreWizard({ close }: { close(): void }) {
+export function RestoreWizard({ close }: { close: () => void }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -514,7 +514,9 @@ export function RestoreWizard({ close }: { close(): void }) {
               data-part="form.button"
               data-action="back"
               disabled={busy}
-              onClick={() => setStep("open")}
+              onClick={() => {
+                setStep("open");
+              }}
             >
               {t("portability-back")}
             </button>
@@ -559,7 +561,9 @@ export function RestoreWizard({ close }: { close(): void }) {
               data-part="form.button"
               data-action="back"
               disabled={busy}
-              onClick={() => setStep("choose")}
+              onClick={() => {
+                setStep("choose");
+              }}
             >
               {t("portability-back")}
             </button>

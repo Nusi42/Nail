@@ -1,4 +1,7 @@
 //! `text/markdown` parts as body alternatives (M2c WP53).
+#![cfg(test)]
+
+use std::fmt::Write as _;
 
 use nail_mime::{attachment_content, parse_message};
 use pretty_assertions::assert_eq;
@@ -11,9 +14,11 @@ fn alternative(parts: &[(&str, &str)]) -> String {
          MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"alt\"\r\n\r\n",
     );
     for (content_type, body) in parts {
-        raw.push_str(&format!(
+        write!(
+            raw,
             "--alt\r\nContent-Type: {content_type}; charset=utf-8\r\n\r\n{body}\r\n"
-        ));
+        )
+        .unwrap();
     }
     raw.push_str("--alt--\r\n");
     raw

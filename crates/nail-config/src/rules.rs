@@ -148,11 +148,14 @@ pub fn derive_rule_id(name: &str, taken: impl Fn(&str) -> bool) -> RuleId {
     if !taken(&base) {
         return RuleId::new(base);
     }
-    (2..)
-        .map(|n| format!("{base}-{n}"))
-        .find(|id| !taken(id))
-        .map(RuleId::new)
-        .expect("an unbounded range always yields a free id")
+    let mut n: u64 = 2;
+    loop {
+        let id = format!("{base}-{n}");
+        if !taken(&id) {
+            return RuleId::new(id);
+        }
+        n += 1;
+    }
 }
 
 /// The form a rule has after being written and read back: the conditions'
@@ -229,7 +232,7 @@ impl RulesDocument {
         let temp = dir.join(format!(".{RULES_FILE}.tmp"));
         std::fs::write(&temp, self.text.as_bytes()).map_err(io)?;
         std::fs::rename(&temp, &target).map_err(|e| {
-            let _ = std::fs::remove_file(&temp);
+            crate::backup::remove_temp(&temp);
             io(e)
         })
     }
@@ -315,18 +318,15 @@ impl RulesDocument {
         if rule.id.as_str().is_empty() {
             rule.id = self.derive_id(&rule.name);
         }
-        match rules.iter_mut().find(|r| r.id == rule.id) {
-            Some(existing) => *existing = rule.clone(),
-            None => {
-                let at = position.unwrap_or(rules.len()).min(rules.len());
-                rules.insert(at, rule.clone());
-            }
+        if let Some(existing) = rules.iter_mut().find(|r| r.id == rule.id) {
+            *existing = rule.clone();
+        } else {
+            let at = position.unwrap_or(rules.len()).min(rules.len());
+            rules.insert(at, rule.clone());
         }
         self.set_rules(rules)?;
-        Ok(self
-            .rule(&rule.id)
-            .cloned()
-            .expect("the saved rule is in the document"))
+        // The document holds the saved rule (as written back).
+        Ok(self.rule(&rule.id).cloned().unwrap_or(rule))
     }
 
     /// Removes a rule. Returns whether it existed.

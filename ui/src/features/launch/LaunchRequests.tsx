@@ -114,7 +114,13 @@ export function LaunchRequests() {
           ...(notice.reason ? { reason: t(notice.reason.id, notice.reason.args) } : {}),
         })}
       </p>
-      <button type="button" data-part="form.button" onClick={() => setNotice(null)}>
+      <button
+        type="button"
+        data-part="form.button"
+        onClick={() => {
+          setNotice(null);
+        }}
+      >
         {t("launch-dismiss")}
       </button>
     </div>

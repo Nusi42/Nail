@@ -3,9 +3,10 @@
  * tests exercise realistic flows.
  */
 import { TransportClient } from "./client";
-import type { AccountConfig, Draft, Event as NailEvent } from "./generated";
+import type { Draft, Event as NailEvent } from "./generated";
 import { MockTransport } from "./mock";
 import { createMockData, LIST_MESSAGE_ID } from "./mockData";
+import { must } from "../test/must";
 
 function setup(inboxSize = 20) {
   const transport = new MockTransport({ data: createMockData(inboxSize) });
@@ -154,11 +155,11 @@ describe("writes in the mock core", () => {
     expect(m?.flags).toMatchObject({ seen: true, flagged: true });
     expect(m?.tags).toContain("x");
     expect(events[0]).toMatchObject({ type: "MailChanged" });
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(events.filter((e) => e.type === "OpStatus" && e.status.state === "done")).toHaveLength(
         2,
-      ),
-    );
+      );
+    });
   });
 
   it("reports failed replays when told to", async () => {
@@ -168,13 +169,13 @@ describe("writes in the mock core", () => {
       { type: "MoveMessages", message_ids: ["acc-personal/Inbox#2"], target: { role: "archive" } },
       "Queued",
     );
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(
         events.find((e) => e.type === "OpStatus" && e.status.state === "failed"),
       ).toMatchObject({
         status: { error: "network" },
-      }),
-    );
+      });
+    });
   });
 
   it("moves by role and by (virtual) folder, resolving to the source account", async () => {
@@ -301,7 +302,7 @@ describe("accounts in the mock core", () => {
 
   it("tests servers: success, bad password, unreachable host", async () => {
     const { client, transport } = setup();
-    const config = structuredClone(transport.data.accountsConfig.accounts[0] as AccountConfig);
+    const config = structuredClone(must(transport.data.accountsConfig.accounts[0]));
     const ok = await client.request(
       {
         type: "TestAccount",
@@ -336,14 +337,14 @@ describe("accounts in the mock core", () => {
       { type: "StartOAuth", provider: "google", login_hint: "ada@gmail.com", protocol: null },
       "OAuthStarted",
     );
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(events).toContainEqual({
         type: "OAuthFinished",
         flow_id: started.flow_id,
         error: null,
         message: null,
-      }),
-    );
+      });
+    });
     expect(
       await client.call({ type: "StartOAuth", provider: "acme", login_hint: null, protocol: null }),
     ).toMatchObject({
@@ -353,7 +354,7 @@ describe("accounts in the mock core", () => {
 
   it("adds, updates and removes accounts and announces the changes", async () => {
     const { client, transport, events } = setup();
-    const config = structuredClone(transport.data.accountsConfig.accounts[1] as AccountConfig);
+    const config = structuredClone(must(transport.data.accountsConfig.accounts[1]));
     const added = await client.request(
       {
         type: "AddAccount",
@@ -365,9 +366,9 @@ describe("accounts in the mock core", () => {
     expect(added.config.id).toBe("club");
     expect(added.config.identities.map((i) => i.id)).toEqual(["ada@club.example"]);
     expect(events.map((e) => e.type)).toContain("AccountsChanged");
-    await vi.waitFor(() =>
-      expect(transport.data.statuses.find((s) => s.account_id === "club")?.state).toBe("online"),
-    );
+    await vi.waitFor(() => {
+      expect(transport.data.statuses.find((s) => s.account_id === "club")?.state).toBe("online");
+    });
     expect(
       await client.call({ type: "AddAccount", config: { ...added.config }, secrets: [] }),
     ).toMatchObject({ code: "conflict" });
@@ -436,9 +437,7 @@ describe("drafts and the outbox in the mock core", () => {
     expect(Date.parse(entry.send_at) - Date.now()).toBe(10_000);
     expect((await client.request({ type: "ListOutbox" }, "Outbox")).entries).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(10_000 + transport.data.behaviour.workMs);
-    const states = events
-      .filter((e) => e.type === "SendStatus")
-      .map((e) => e.type === "SendStatus" && e.state);
+    const states = events.filter((e) => e.type === "SendStatus").map((e) => e.state);
     expect(states).toEqual(["sending", "sent"]);
     expect(transport.data.messages[0]).toMatchObject({
       folder_id: "acc-personal/Sent",
@@ -561,18 +560,20 @@ describe("M1b requests in the mock core", () => {
       },
       "Queued",
     );
-    const opId = op_ids[0] as string;
-    await vi.waitFor(() => expect(transport.data.failedOps.has(opId)).toBe(true));
+    const opId = must(op_ids[0]);
+    await vi.waitFor(() => {
+      expect(transport.data.failedOps.has(opId)).toBe(true);
+    });
     transport.data.behaviour.opError = null;
     expect(await client.request({ type: "RetryOp", op_id: opId }, "Queued")).toEqual({
       type: "Queued",
       op_ids: [opId],
     });
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(
         events.filter((e) => e.type === "OpStatus" && e.status.op_id === opId).at(-1),
-      ).toMatchObject({ status: { state: "done" } }),
-    );
+      ).toMatchObject({ status: { state: "done" } });
+    });
     expect(await client.call({ type: "RetryOp", op_id: opId })).toMatchObject({
       code: "conflict",
     });
@@ -614,10 +615,12 @@ describe("M1b requests in the mock core", () => {
     expect(
       await client.call({ type: "SaveSavedSearch", search: { ...base, query: "from:" } }),
     ).toMatchObject({ code: "invalid_request" });
-    await client.request({ type: "DeleteSavedSearch", search_id: search.id as string }, "Done");
+    await client.request({ type: "DeleteSavedSearch", search_id: must(search.id) }, "Done");
     expect(
-      await client.call({ type: "DeleteSavedSearch", search_id: search.id as string }),
-    ).toMatchObject({ code: "not_found" });
+      await client.call({ type: "DeleteSavedSearch", search_id: must(search.id) }),
+    ).toMatchObject({
+      code: "not_found",
+    });
   });
 
   it("answers every feature package's requests through the feature mocks", async () => {

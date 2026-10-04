@@ -6,7 +6,7 @@
  */
 import type { Density, ThemeKind, ThemeOverridesIssue } from "../../api/generated";
 import { LUCIDE_ICONS } from "../../widgets/lucideIcons";
-import { BUILTIN_THEMES } from "./mock";
+import { BUILTIN_THEMES } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["appearance-", "theme-", "density-"];

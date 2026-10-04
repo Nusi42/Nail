@@ -93,7 +93,7 @@ impl RootGuard {
                 handle.as_raw_handle(),
                 FileAttributeTagInfo,
                 (&raw mut info).cast(),
-                size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+                super::size_u32::<FILE_ATTRIBUTE_TAG_INFO>(),
             )
         };
         if ok == 0 {
@@ -127,11 +127,11 @@ pub fn owner_sid(handle: &OwnedHandle) -> Option<String> {
             handle.as_raw_handle(),
             SE_FILE_OBJECT,
             OWNER_SECURITY_INFORMATION,
-            &mut owner,
+            &raw mut owner,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            &mut descriptor,
+            &raw mut descriptor,
         )
     };
     if status != ERROR_SUCCESS || owner.is_null() {
@@ -143,7 +143,7 @@ pub fn owner_sid(handle: &OwnedHandle) -> Option<String> {
     }
     let mut text: *mut u16 = std::ptr::null_mut();
     // SAFETY: `owner` is a valid SID inside `descriptor`.
-    let converted = unsafe { ConvertSidToStringSidW(owner, &mut text) } != 0 && !text.is_null();
+    let converted = unsafe { ConvertSidToStringSidW(owner, &raw mut text) } != 0 && !text.is_null();
     let result = converted.then(|| {
         let mut len = 0;
         // SAFETY: a zero-terminated string from Windows.

@@ -96,7 +96,7 @@ impl DnsLookup for SystemDns {
 }
 
 /// Host name as discovery stores it: no trailing dot, lower case.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg(any(windows, test))]
 fn host(name: &str) -> String {
     name.trim_end_matches('.').to_ascii_lowercase()
 }
@@ -104,8 +104,8 @@ fn host(name: &str) -> String {
 #[cfg(windows)]
 mod windows_dns {
     //! `DnsQuery_W` and the record list it returns. Every `unsafe` block of
-    //! the crate is in this module, each with its safety argument.
-    #![allow(unsafe_code)]
+    //! the crate is in this module, each with its safety argument; each item
+    //! that needs one carries its own `#[expect(unsafe_code)]`.
 
     use windows::Win32::Foundation::{
         DNS_ERROR_RCODE_NAME_ERROR, DNS_ERROR_RECORD_DOES_NOT_EXIST, DNS_INFO_NO_RECORDS,
@@ -161,6 +161,7 @@ mod windows_dns {
     struct RecordList(*mut DNS_RECORDW);
 
     impl Drop for RecordList {
+        #[expect(unsafe_code, reason = "frees the list DnsQuery_W allocated")]
         fn drop(&mut self) {
             if !self.0.is_null() {
                 // SAFETY: the pointer came from a successful DnsQuery_W and
@@ -172,6 +173,7 @@ mod windows_dns {
 
     /// Asks the DNS Client service for `kind` records of `name` (as a
     /// fully qualified name; no LLMNR / NetBIOS).
+    #[expect(unsafe_code, reason = "calls DnsQuery_W and reads its record list")]
     pub(super) fn query(name: &str, kind: Kind) -> Result<Vec<Answer>, NetError> {
         let fqdn = HSTRING::from(format!("{}.", name.trim_end_matches('.')));
         let mut results: *mut DNS_RECORDA = std::ptr::null_mut();
@@ -207,6 +209,7 @@ mod windows_dns {
     ///
     /// # Safety
     /// `text` is null or points to a NUL-terminated UTF-16 string.
+    #[expect(unsafe_code, reason = "reads a NUL-terminated string owned by Windows")]
     unsafe fn text(text: PWSTR) -> Result<String, NetError> {
         if text.is_null() {
             return Ok(String::new());
@@ -221,6 +224,7 @@ mod windows_dns {
     /// # Safety
     /// `first` is null or the head of a valid `DNS_RECORDW` list whose
     /// `pNext` links and strings stay valid for the call.
+    #[expect(unsafe_code, reason = "walks the raw DNS_RECORDW list and its unions")]
     pub(super) unsafe fn answers(
         first: *const DNS_RECORDW,
         kind: Kind,
@@ -288,6 +292,7 @@ mod windows_dns {
         }
 
         /// Links `records` in order and reads them back.
+        #[expect(unsafe_code, reason = "feeds a hand-built record list to `answers`")]
         fn read(records: &mut [DNS_RECORDW], kind: Kind) -> Vec<Answer> {
             for i in 1..records.len() {
                 let next: *mut DNS_RECORDW = &raw mut records[i];

@@ -3,11 +3,18 @@
 //! only when readable), `app.started`, no overlapping runs, the wall-clock
 //! limit (pending promises included) and the cumulative CPU quota.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::time::Duration;
 
 use common::*;
+use nail_api::MessageId;
 use nail_api::plugins::{PluginEventName, PluginJobOutcome, PluginRunState};
 use nail_api::{ErrorCode, Event};
 use nail_plugins::HostLimits;
@@ -23,7 +30,7 @@ fn job_limits() -> HostLimits {
 }
 
 fn jobs(defs: Value) -> Value {
-    json!({ "jobs": defs })
+    Value::Object(serde_json::Map::from_iter([("jobs".to_owned(), defs)]))
 }
 
 const LOGGER: &str = r#"
@@ -149,14 +156,14 @@ async fn events_are_coalesced_and_carry_readable_messages_only() {
     );
     host.deliver_event(
         PluginEventName::MessageReceived,
-        vec!["m1".into(), "m2".into()],
+        &[MessageId::from("m1"), MessageId::from("m2")],
     );
     host.deliver_event(
         PluginEventName::MessageReceived,
-        vec!["m3".into(), "nope".into()],
+        &[MessageId::from("m3"), MessageId::from("nope")],
     );
     // Not subscribed: nothing.
-    host.deliver_event(PluginEventName::MessageSent, vec!["m1".into()]);
+    host.deliver_event(PluginEventName::MessageSent, &[MessageId::from("m1")]);
     let line = result(&fake, "events", "RUN tagger ").await;
     assert_eq!(
         serde_json::from_str::<Value>(&line).unwrap(),
@@ -174,7 +181,7 @@ async fn events_are_coalesced_and_carry_readable_messages_only() {
     ))
     .await
     .unwrap();
-    host.deliver_event(PluginEventName::MessageReceived, vec!["m1".into()]);
+    host.deliver_event(PluginEventName::MessageReceived, &[MessageId::from("m1")]);
     assert_eq!(
         json_result(&fake, "blind", "RUN tagger ").await,
         json!({"kind": "event", "event": "message.received", "messageIds": []})
@@ -336,7 +343,7 @@ async fn jobs_need_the_background_permission() {
     host.start(s).await.unwrap();
     let err = host.run_job(&plugin_id("nobg"), "boot").unwrap_err();
     assert_eq!(err.code, ErrorCode::Unavailable);
-    host.deliver_event(PluginEventName::MessageReceived, vec!["m1".into()]);
+    host.deliver_event(PluginEventName::MessageReceived, &[MessageId::from("m1")]);
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(fake.results("nobg", "RUN ").is_empty());
     assert!(fake.job_runs("nobg").is_empty());

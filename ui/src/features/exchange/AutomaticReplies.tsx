@@ -170,7 +170,9 @@ function RepliesForm({
         tz={tz}
         invalid={timeProblem}
         describedBy={timeProblem ? ids.problem : undefined}
-        onChange={(day, time) => change({ [key]: utcOf(day, time ?? wall.time, tz) })}
+        onChange={(day, time) => {
+          change({ [key]: utcOf(day, time ?? wall.time, tz) });
+        }}
       />
     );
   };
@@ -193,7 +195,9 @@ function RepliesForm({
               type="radio"
               name={ids.status}
               checked={draft.status === status}
-              onChange={() => change({ status })}
+              onChange={() => {
+                change({ status });
+              }}
             />
             <span data-part="form.check.label">{t(`exchange-oof-status-${status}`)}</span>
           </label>
@@ -216,7 +220,9 @@ function RepliesForm({
           data-part="form.textarea"
           value={draft.internal_reply}
           aria-invalid={problem?.id === "exchange-oof-issue-empty-internal-reply"}
-          onChange={(e) => change({ internal_reply: e.target.value })}
+          onChange={(e) => {
+            change({ internal_reply: e.target.value });
+          }}
         />
       </div>
       <div data-part="form.field" data-field="external-audience">
@@ -227,7 +233,9 @@ function RepliesForm({
           id={ids.audience}
           data-part="form.select"
           value={draft.external_audience}
-          onChange={(e) => change({ external_audience: e.target.value as ExternalAudience })}
+          onChange={(e) => {
+            change({ external_audience: e.target.value as ExternalAudience });
+          }}
         >
           {AUDIENCES.map((a) => (
             <option key={a} value={a}>
@@ -246,7 +254,9 @@ function RepliesForm({
             data-part="form.textarea"
             value={draft.external_reply}
             aria-invalid={problem?.id === "exchange-oof-issue-empty-external-reply"}
-            onChange={(e) => change({ external_reply: e.target.value })}
+            onChange={(e) => {
+              change({ external_reply: e.target.value });
+            }}
           />
         </div>
       )}
@@ -323,7 +333,9 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
             id={ids.account}
             data-part="form.select"
             value={account.id}
-            onChange={(e) => setPicked(e.target.value)}
+            onChange={(e) => {
+              setPicked(e.target.value);
+            }}
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>

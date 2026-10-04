@@ -4,7 +4,7 @@
 //! `PrintToPdf` writes it with the job's paper size and orientation, and
 //! the window closes.
 
-#![allow(unsafe_code)] // WebView2 COM calls, each with its SAFETY note.
+#![expect(unsafe_code, reason = "WebView2 COM calls, each with its SAFETY note")]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -16,10 +16,10 @@ use nail_api::{ApiError, LocalizedMessage, PrintJobId};
 use tokio::sync::oneshot;
 
 /// How long the print view may take to load its data.
-pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub const READY_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// How long WebView2 may take to write the PDF.
-pub const PDF_TIMEOUT: Duration = Duration::from_secs(120);
+pub const PDF_TIMEOUT: Duration = Duration::from_mins(2);
 
 /// Millimetres per inch (WebView2 print settings are in inches).
 const MM_PER_INCH: f64 = 25.4;
@@ -132,7 +132,7 @@ pub fn print_webview_to_pdf(
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take()
             {
-                let _ = tx.send(result);
+                drop(tx.send(result));
             }
         }
     };

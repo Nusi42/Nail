@@ -115,7 +115,7 @@ impl Line {
     }
 
     fn account(self, account: Option<&nail_api::AccountId>) -> Self {
-        self.prop_opt("account", account.map(|a| a.as_str()))
+        self.prop_opt("account", account.map(nail_api::AccountId::as_str))
     }
 
     /// The node at `depth`, with a children block when `children` is not
@@ -382,14 +382,18 @@ pub(crate) fn render_action(action: &RuleAction, depth: usize, indent: &str) -> 
         RuleAction::Forward { to, identity_id } => to
             .iter()
             .fold(Line::new("forward"), |l, a| l.arg(a))
-            .prop_opt("identity", identity_id.as_ref().map(|i| i.as_str())),
+            .prop_opt(
+                "identity",
+                identity_id.as_ref().map(nail_api::IdentityId::as_str),
+            ),
         RuleAction::Redirect { to } => to.iter().fold(Line::new("redirect"), |l, a| l.arg(a)),
         RuleAction::Reply {
             template,
             identity_id,
-        } => Line::new("reply")
-            .arg(template)
-            .prop_opt("identity", identity_id.as_ref().map(|i| i.as_str())),
+        } => Line::new("reply").arg(template).prop_opt(
+            "identity",
+            identity_id.as_ref().map(nail_api::IdentityId::as_str),
+        ),
         RuleAction::Stop => Line::new("stop"),
     };
     line.finish(depth, indent, &[])
@@ -753,39 +757,36 @@ fn merge_node(
         let similar = exact.or_else(|| {
             (0..old_kids.len()).find(|&i| !used[i] && match_key(&old_kids[i]) == match_key(child))
         });
-        match similar {
-            Some(i) => {
-                used[i] = true;
-                let (leading, own) = pieces[i];
-                let leading = if leading.contains('\n') {
-                    leading
-                } else {
-                    "\n"
-                };
-                out.push_str(leading);
-                if exact.is_some() {
-                    out.push_str(own);
-                } else {
-                    let own_start = own.len() - own.trim_start().len();
-                    out.push_str(&own[..own_start]);
-                    if own_start == 0 {
-                        out.push_str(&indent.repeat(depth + 1));
-                    }
-                    out.push_str(&merge_node(
-                        old_side,
-                        &old_kids[i],
-                        new_side,
-                        child,
-                        depth + 1,
-                        indent,
-                    ));
+        if let Some(i) = similar {
+            used[i] = true;
+            let (leading, own) = pieces[i];
+            let leading = if leading.contains('\n') {
+                leading
+            } else {
+                "\n"
+            };
+            out.push_str(leading);
+            if exact.is_some() {
+                out.push_str(own);
+            } else {
+                let own_start = own.len() - own.trim_start().len();
+                out.push_str(&own[..own_start]);
+                if own_start == 0 {
+                    out.push_str(&indent.repeat(depth + 1));
                 }
+                out.push_str(&merge_node(
+                    old_side,
+                    &old_kids[i],
+                    new_side,
+                    child,
+                    depth + 1,
+                    indent,
+                ));
             }
-            None => {
-                out.push('\n');
-                out.push_str(&indent.repeat(depth + 1));
-                out.push_str(new_side.node_text(child));
-            }
+        } else {
+            out.push('\n');
+            out.push_str(&indent.repeat(depth + 1));
+            out.push_str(new_side.node_text(child));
         }
     }
     match closing {
@@ -892,12 +893,11 @@ pub(crate) fn update_text(text: &str, old: &[Rule], wanted: &[Rule]) -> String {
                 pieces.insert(at + 1, Piece::Rule(w, None));
                 pieces.insert(at + 1, Piece::Gap(newline.to_owned()));
             }
-            None => match pieces.iter().position(|x| matches!(x, Piece::Rule(..))) {
-                Some(at) => {
+            None => {
+                if let Some(at) = pieces.iter().position(|x| matches!(x, Piece::Rule(..))) {
                     pieces.insert(at, Piece::Gap(newline.to_owned()));
                     pieces.insert(at, Piece::Rule(w, None));
-                }
-                None => {
+                } else {
                     let last_text: String = pieces
                         .iter()
                         .map(|p| match p {
@@ -915,7 +915,7 @@ pub(crate) fn update_text(text: &str, old: &[Rule], wanted: &[Rule]) -> String {
                     }
                     pieces.push(Piece::Rule(w, None));
                 }
-            },
+            }
         }
     }
 

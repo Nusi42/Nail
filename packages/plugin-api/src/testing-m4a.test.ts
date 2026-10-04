@@ -279,11 +279,13 @@ const hookManifest = (hooks: PluginManifest["contributes"]): PluginManifest => (
 describe("hooks in the test host", () => {
   it("refuses hooks the manifest does not declare", () => {
     const host = createTestHost({ manifest: hookManifest({ hooks: [{ hook: "open" }] }) });
-    expect(() => host.activationContext().hooks.register("beforeSend", () => null)).toThrow(
-      /not in the manifest/,
-    );
+    expect(() => {
+      host.activationContext().hooks.register("beforeSend", () => null);
+    }).toThrow(/not in the manifest/);
     host.activationContext().hooks.register("open", () => null);
-    expect(() => host.activationContext().hooks.register("open", () => null)).toThrow(/registered/);
+    expect(() => {
+      host.activationContext().hooks.register("open", () => null);
+    }).toThrow(/registered/);
   });
 
   it("skips unregistered and unpermitted hooks and other accounts' mail", async () => {

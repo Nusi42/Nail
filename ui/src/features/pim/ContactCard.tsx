@@ -34,6 +34,7 @@ import {
 import { usePim } from "./store";
 import { localZone } from "./time";
 import { CalendarDate as CalendarDateValue } from "@internationalized/date";
+import { hasText } from "../../text/empty";
 
 /** A contact date for people (`10 December 1815`, or without the year). */
 export function formatContactDate(format: DateFormatter, date: ContactDate): string {
@@ -43,7 +44,7 @@ export function formatContactDate(format: DateFormatter, date: ContactDate): str
       ? formatDay(format, day, { day: "numeric", month: "long" })
       : formatDay(format, day, { dateStyle: "long" });
   } catch {
-    return `${date.month}/${date.day}`;
+    return `${String(date.month)}/${String(date.day)}`;
   }
 }
 
@@ -86,7 +87,7 @@ function ValueList({
           const link = href?.(v.value) ?? null;
           return (
             <li
-              key={`${v.value}-${index}`}
+              key={`${v.value}-${String(index)}`}
               data-part="contact-card.value"
               data-state={v.preferred ? "preferred" : undefined}
             >
@@ -134,7 +135,7 @@ export function ContactCard() {
       </section>
     );
   }
-  if (contact.isError || !contact.data) {
+  if (contact.isError) {
     return (
       <section data-part="contact-card" data-state="error" aria-label={t("pim-contact-card-label")}>
         <Problem message={problemOf(contact.error)} />
@@ -198,7 +199,7 @@ function ContactDetails({ contact }: { contact: Contact }) {
           {f.nicknames.length > 0 && (
             <p data-part="contact-card.nicknames">{f.nicknames.join(", ")}</p>
           )}
-          {(f.title || f.organization) && (
+          {(hasText(f.title) || f.organization !== null) && (
             <p data-part="contact-card.organization">
               {[f.title, f.role, f.organization?.name, ...(f.organization?.units ?? [])]
                 .filter(Boolean)
@@ -235,9 +236,12 @@ function ContactDetails({ contact }: { contact: Contact }) {
               data-part="form.button"
               data-variant="danger"
               data-action="delete"
-              onClick={async () => {
-                await run({ type: "DeleteContacts", contact_ids: [contact.id] }, "PimDeleted");
-                ctx.pim.getState().showContact(null);
+              onClick={() => {
+                void run({ type: "DeleteContacts", contact_ids: [contact.id] }, "PimDeleted").then(
+                  () => {
+                    ctx.pim.getState().showContact(null);
+                  },
+                );
               }}
             >
               {t("pim-delete")}
@@ -322,7 +326,7 @@ function ContactDetails({ contact }: { contact: Contact }) {
       />
       <ValueList title={t("pim-contact-impp")} values={f.impp} field="impp" />
       <ValueList title={t("pim-contact-related")} values={f.related} field="related" />
-      {(f.birthday || f.anniversary) && (
+      {(f.birthday !== null || f.anniversary !== null) && (
         <div data-part="contact-card.section" data-field="dates">
           <h3 data-part="contact-card.heading">{t("pim-contact-dates")}</h3>
           <dl data-part="contact-card.dates">
@@ -401,7 +405,13 @@ function ContactDetails({ contact }: { contact: Contact }) {
   );
 }
 
-function LinkedContacts({ contact, onUnlink }: { contact: Contact; onUnlink(id: string): void }) {
+function LinkedContacts({
+  contact,
+  onUnlink,
+}: {
+  contact: Contact;
+  onUnlink: (id: string) => void;
+}) {
   const t = useT();
   const books = useAddressBooks();
   return (
@@ -413,7 +423,9 @@ function LinkedContacts({ contact, onUnlink }: { contact: Contact; onUnlink(id: 
             key={linked}
             id={linked}
             books={books.data ?? []}
-            onUnlink={() => onUnlink(linked)}
+            onUnlink={() => {
+              onUnlink(linked);
+            }}
           />
         ))}
       </ul>
@@ -428,7 +440,7 @@ function LinkedItem({
 }: {
   id: string;
   books: readonly { id: string; settings: { name: string } }[];
-  onUnlink(): void;
+  onUnlink: () => void;
 }) {
   const t = useT();
   const linked = useContact(id);

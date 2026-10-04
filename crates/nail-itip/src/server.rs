@@ -164,7 +164,6 @@ pub fn mark_client_scheduled(
     organizer: bool,
     attendees: &[String],
 ) -> String {
-    let mut document = content::parse(raw);
     fn visit(c: &mut Component, uid: &str, organizer: bool, attendees: &[String]) {
         let ours = c.is("VEVENT") && c.property("UID").is_some_and(|p| p.value.trim() == uid);
         if ours {
@@ -180,6 +179,8 @@ pub fn mark_client_scheduled(
             visit(sub, uid, organizer, attendees);
         }
     }
+
+    let mut document = content::parse(raw);
     for c in &mut document.components {
         visit(c, uid, organizer, attendees);
     }

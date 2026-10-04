@@ -1,6 +1,7 @@
 //! One client connection of the mock IMAP server.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -130,6 +131,10 @@ fn seq_number(index: usize) -> u32 {
     u32::try_from(index + 1).unwrap_or(u32::MAX)
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent IMAP session states (authenticated, TLS, compression, enabled extensions)"
+)]
 struct Session {
     shared: Shared,
     authenticated: bool,
@@ -194,11 +199,13 @@ async fn serve(stream: TcpStream, shared: Shared) -> io::Result<()> {
             Flow::Close => {
                 // Close gracefully (TLS close_notify, FIN), so the client
                 // reads the final responses instead of a reset.
-                let _ = tokio::time::timeout(
-                    std::time::Duration::from_secs(1),
-                    session.stream.get_mut().shutdown(),
-                )
-                .await;
+                drop(
+                    tokio::time::timeout(
+                        std::time::Duration::from_secs(1),
+                        session.stream.get_mut().shutdown(),
+                    )
+                    .await,
+                );
                 return Ok(());
             }
             Flow::StartTls => {
@@ -393,12 +400,11 @@ impl Session {
         let mut uid = false;
         let mut args: Vec<Token> = args.collect();
         if name == "UID" {
-            let sub = match args.first() {
-                Some(Token::Atom(sub)) => sub.to_ascii_uppercase(),
-                _ => {
-                    self.tagged(&tag, "BAD", "UID needs a command").await?;
-                    return Ok(Flow::Continue);
-                }
+            let sub = if let Some(Token::Atom(sub)) = args.first() {
+                sub.to_ascii_uppercase()
+            } else {
+                self.tagged(&tag, "BAD", "UID needs a command").await?;
+                return Ok(Flow::Continue);
             };
             args.remove(0);
             uid = true;
@@ -704,15 +710,14 @@ impl Session {
         if initial.is_some() && !self.shared.config.capabilities.sasl_ir {
             return Ok(Some(bad("SASL-IR is not supported")));
         }
-        let response = match initial {
-            Some(initial) => initial,
-            None => {
-                self.send(b"+ \r\n").await?;
-                let Some(line) = self.read_line(MAX_COMMAND_LEN).await? else {
-                    return Ok(None);
-                };
-                String::from_utf8_lossy(&line).trim().to_owned()
-            }
+        let response = if let Some(initial) = initial {
+            initial
+        } else {
+            self.send(b"+ \r\n").await?;
+            let Some(line) = self.read_line(MAX_COMMAND_LEN).await? else {
+                return Ok(None);
+            };
+            String::from_utf8_lossy(&line).trim().to_owned()
         };
         if response == "*" {
             return Ok(Some(bad("authentication cancelled")));
@@ -951,10 +956,11 @@ impl Session {
             mailbox.uid_next
         );
         if caps.condstore {
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "* OK [HIGHESTMODSEQ {}] highest\r\n",
                 mailbox.highest_modseq
-            ));
+            );
         }
         if let Some((validity, modseq, known)) = qresync_params
             && validity == mailbox.uid_validity
@@ -971,10 +977,7 @@ impl Session {
             vanished.sort_unstable();
             vanished.dedup();
             if !vanished.is_empty() {
-                out.push_str(&format!(
-                    "* VANISHED (EARLIER) {}\r\n",
-                    number_set(&vanished)
-                ));
+                let _ = write!(out, "* VANISHED (EARLIER) {}\r\n", number_set(&vanished));
             }
             for (index, message) in mailbox.messages.iter().enumerate() {
                 if message.modseq > modseq {
@@ -1247,7 +1250,7 @@ impl Session {
         }
         let mut line = String::from("* SEARCH");
         for hit in hits {
-            line.push_str(&format!(" {hit}"));
+            let _ = write!(line, " {hit}");
         }
         line.push_str("\r\n");
         self.send(line.as_bytes()).await?;
@@ -1330,11 +1333,11 @@ impl Session {
             };
             let mut line = format!("* {seq} FETCH (");
             if uid || self.qresync {
-                line.push_str(&format!("UID {message_uid} "));
+                let _ = write!(line, "UID {message_uid} ");
             }
-            line.push_str(&format!("FLAGS ({})", flags.join(" ")));
+            let _ = write!(line, "FLAGS ({})", flags.join(" "));
             if self.condstore {
-                line.push_str(&format!(" MODSEQ ({modseq})"));
+                let _ = write!(line, " MODSEQ ({modseq})");
             }
             line.push_str(")\r\n");
             out.extend_from_slice(line.as_bytes());
@@ -1381,13 +1384,12 @@ impl Session {
             .into_iter()
             .map(|t| t.1)
             .collect();
-        let mapping = match self
+        let Ok(mapping) = self
             .shared
             .store
             .copy_messages(&mailbox_name, &uids, &target)
-        {
-            Ok(mapping) => mapping,
-            Err(_) => return Ok(no("[TRYCREATE] no such mailbox")),
+        else {
+            return Ok(no("[TRYCREATE] no such mailbox"));
         };
         let code = match self.shared.store.mailbox(&target) {
             Some(mailbox) if self.shared.config.capabilities.uidplus && !mapping.is_empty() => {
@@ -1444,6 +1446,13 @@ impl Session {
     }
 
     async fn idle(&mut self, tag: &str) -> io::Result<Flow> {
+        /// Why the IDLE loop ended.
+        enum End {
+            Done,
+            Garbage,
+            Closed,
+        }
+
         if !self.shared.config.capabilities.idle {
             self.tagged(tag, "BAD", "unsupported command").await?;
             return Ok(Flow::Continue);
@@ -1458,11 +1467,6 @@ impl Session {
         kill.as_mut().enable();
         let _guard = IdleGuard::enter(Arc::clone(&control));
 
-        enum End {
-            Done,
-            Garbage,
-            Closed,
-        }
         let mut line = Vec::new();
         let end = loop {
             tokio::select! {
@@ -1522,11 +1526,11 @@ impl Drop for IdleGuard {
 fn flag_fetch(seq: u32, message: &StoredMessage, with_uid: bool, with_modseq: bool) -> String {
     let mut line = format!("* {seq} FETCH (");
     if with_uid {
-        line.push_str(&format!("UID {} ", message.uid));
+        let _ = write!(line, "UID {} ", message.uid);
     }
-    line.push_str(&format!("FLAGS ({})", message.flags.join(" ")));
+    let _ = write!(line, "FLAGS ({})", message.flags.join(" "));
     if with_modseq {
-        line.push_str(&format!(" MODSEQ ({})", message.modseq));
+        let _ = write!(line, " MODSEQ ({})", message.modseq);
     }
     line.push_str(")\r\n");
     line

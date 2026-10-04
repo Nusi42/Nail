@@ -15,7 +15,7 @@ interface Props {
   permissions: readonly PluginPermission[];
   grants: readonly PluginGrant[];
   accounts: readonly Account[];
-  onChange(grants: PluginGrant[]): void;
+  onChange: (grants: PluginGrant[]) => void;
   disabled?: boolean;
 }
 
@@ -54,7 +54,9 @@ function PermissionRow({
             data-grant="allow"
             checked={grant !== undefined}
             disabled={needsRead}
-            onChange={() => onChange(setGranted(grants, permission, true))}
+            onChange={() => {
+              onChange(setGranted(grants, permission, true));
+            }}
           />
           {t("plugin-permission-allow")}
         </label>
@@ -64,7 +66,9 @@ function PermissionRow({
             name={`${name}-grant`}
             data-grant="deny"
             checked={grant === undefined}
-            onChange={() => onChange(setGranted(grants, permission, false))}
+            onChange={() => {
+              onChange(setGranted(grants, permission, false));
+            }}
           />
           {t("plugin-permission-deny")}
         </label>
@@ -83,7 +87,9 @@ function PermissionRow({
               name={`${name}-scope`}
               data-scope="all"
               checked={grant.accounts === null}
-              onChange={() => onChange(setAccounts(grants, permission, null))}
+              onChange={() => {
+                onChange(setAccounts(grants, permission, null));
+              }}
             />
             {t("plugin-permission-all-accounts")}
           </label>
@@ -93,15 +99,15 @@ function PermissionRow({
               name={`${name}-scope`}
               data-scope="some"
               checked={grant.accounts !== null}
-              onChange={() =>
+              onChange={() => {
                 onChange(
                   setAccounts(
                     grants,
                     permission,
                     accounts[0] === undefined ? null : [accounts[0].id],
                   ),
-                )
-              }
+                );
+              }}
             />
             {t("plugin-permission-some-accounts")}
           </label>

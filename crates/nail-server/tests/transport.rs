@@ -3,6 +3,9 @@
 //! the sandbox origin's isolation from the app origin, the proxy route
 //! (only signed URLs, private ranges refused) and the listener rules.
 
+#![cfg(test)]
+
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -132,18 +135,20 @@ async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(
 ) -> Http {
     let mut request = format!("{method} {path} HTTP/1.1\r\n");
     for (name, value) in headers {
-        request.push_str(&format!("{name}: {value}\r\n"));
+        let _ = write!(request, "{name}: {value}\r\n");
     }
     request.push_str("Connection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
     let mut raw = Vec::new();
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        stream.read_to_end(&mut raw),
-    )
-    .await
-    .expect("response within 10 s");
+    drop(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            stream.read_to_end(&mut raw),
+        )
+        .await
+        .expect("response within 10 s"),
+    );
     let split = raw
         .windows(4)
         .position(|w| w == b"\r\n\r\n")
@@ -286,8 +291,7 @@ async fn serves_https_over_tls13_and_tls12_with_a_pinned_certificate() {
         .await
         .unwrap();
     let mut raw = Vec::new();
-    let _ =
-        tokio::time::timeout(std::time::Duration::from_secs(5), tcp.read_to_end(&mut raw)).await;
+    drop(tokio::time::timeout(std::time::Duration::from_secs(5), tcp.read_to_end(&mut raw)).await);
     assert!(!raw.starts_with(b"HTTP/1.1 200"));
     server.shutdown().await.unwrap();
 }
@@ -440,7 +444,7 @@ struct Rig {
     signer: Signer,
     upstream: Upstream,
     dns: Arc<ScriptedResolver>,
-    _f: Fixture,
+    fixture: Fixture,
 }
 
 async fn rig(source: Option<Arc<dyn MailSource>>) -> Rig {
@@ -466,7 +470,7 @@ async fn rig(source: Option<Arc<dyn MailSource>>) -> Rig {
     );
     let signer = Signer::new(ProxyKey::generate());
     let fetcher = Fetcher::new(tls)
-        .with_resolver(Arc::clone(&dns) as Arc<dyn nail_proxy::Resolver>)
+        .with_resolver(dns.clone())
         .allow_loopback_port_for_tests(upstream.port());
     let proxy = Arc::new(Proxy::new(signer.clone(), fetcher));
     let server = Server::bind_with(
@@ -486,7 +490,7 @@ async fn rig(source: Option<Arc<dyn MailSource>>) -> Rig {
         signer,
         upstream,
         dns,
-        _f: f,
+        fixture: f,
     }
 }
 
@@ -642,7 +646,7 @@ async fn the_app_refuses_requests_made_by_the_sandbox_origin() {
     let app = rig.server.local_addr();
     let sandbox_origin = rig.server.sandbox_origin().unwrap();
     let hash = rig
-        ._f
+        .fixture
         .service
         .blobs()
         .put(b"Subject: secret\r\n\r\nbody")
@@ -831,7 +835,7 @@ async fn the_service_is_the_default_mail_source() {
     // A demo message with HTML, but no live remote session behind the
     // token: the service refuses it (the session binding is tested with
     // real sessions in nail-core's remote tests).
-    let id = demo_html_message(&rig._f.service)
+    let id = demo_html_message(&rig.fixture.service)
         .await
         .expect("the demo corpus has an HTML message");
     let token = rig.signer.sign_render_for(&id, "rsess-1").unwrap();

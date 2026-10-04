@@ -31,7 +31,6 @@ fn words(spec: &str) -> Vec<String> {
     for c in spec.chars() {
         match quote {
             Some(q) if c == q => quote = None,
-            Some(_) => current.push(c),
             None if c == '"' || c == '\'' => {
                 quote = Some(c);
                 any = true;
@@ -42,7 +41,8 @@ fn words(spec: &str) -> Vec<String> {
                     any = false;
                 }
             }
-            None => current.push(c),
+            // Inside quotes, or a plain character.
+            Some(_) | None => current.push(c),
         }
     }
     if any || !current.is_empty() {
@@ -83,9 +83,6 @@ pub fn editor_command(path: &Path, line: u32, column: u32, editor: Option<&str>)
         "code" | "code-insiders" | "codium" | "cursor" | "windsurf" => {
             command.arg("-g").arg(format!("{file}:{line}:{column}"));
         }
-        "subl" | "sublime_text" | "zed" => {
-            command.arg(format!("{file}:{line}:{column}"));
-        }
         "notepad++" => {
             command
                 .arg(format!("-n{line}"))
@@ -98,7 +95,7 @@ pub fn editor_command(path: &Path, line: u32, column: u32, editor: Option<&str>)
         "emacs" | "emacsclient" => {
             command.arg(format!("+{line}:{column}")).arg(&file);
         }
-        "hx" | "helix" => {
+        "subl" | "sublime_text" | "zed" | "hx" | "helix" => {
             command.arg(format!("{file}:{line}:{column}"));
         }
         _ => {

@@ -27,7 +27,8 @@ import {
 let server: NailServer;
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
@@ -93,9 +94,10 @@ test("the Mail badge shows the unread inbox mail and the last view survives a re
   await expect
     .poll(() => {
       try {
-        return JSON.parse(readFileSync(path.join(server.configDir, "ui-state.json"), "utf8"))[
-          "shell.view"
-        ];
+        const state = JSON.parse(
+          readFileSync(path.join(server.configDir, "ui-state.json"), "utf8"),
+        ) as Record<string, unknown>;
+        return state["shell.view"];
       } catch {
         return null;
       }
@@ -346,7 +348,8 @@ test("dates follow the UI language, not a German browser", async ({ browser }) =
   await expect(rows(page).first()).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   const dates = await rows(page).allTextContents();
-  expect(dates.join(" ")).not.toMatch(/\b(vor|gestern|Uhr|Okt|Mär)\b/);
+  // No German relative dates.
+  expect(dates.join(" ")).not.toMatch(/\b(vor|gestern|Uhr|Okt|Mär)\b/); // spellchecker:disable-line
   await context.close();
 });
 

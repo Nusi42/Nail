@@ -45,7 +45,9 @@ export function usePopOutTitle(title: string | null): void {
   useEffect(() => {
     if (setTitle === null) return;
     setTitle(clean);
-    return () => setTitle(null);
+    return () => {
+      setTitle(null);
+    };
   }, [setTitle, clean]);
 }
 

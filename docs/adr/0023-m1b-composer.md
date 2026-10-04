@@ -23,7 +23,7 @@ handlers, the default layout / theme and shared mocks are wired by WP25
   passed in as well (`QuoteStrings`): the core formats them from Fluent.
 - **MIME with mail-builder 1.0**, structure built by hand with `MimePart`:
   plain → `text/plain; format=flowed` (own RFC 3676 encoder: 72 columns,
-  soft breaks, quote depth kept, space-stuffing, `-- ` untouched);
+  soft breaks, quote depth kept, space-stuffing, "-- " untouched);
   HTML → `multipart/alternative [text/plain (HTML → text), multipart/related
   [text/html, cid images]]`; Markdown → `multipart/alternative [text/plain
   (the source), text/markdown; variant=GFM (optional, RFC 7763),
@@ -39,7 +39,7 @@ handlers, the default layout / theme and shared mocks are wired by WP25
   survives clients that strip `<style>`; the theme is per identity
   (`MailStyle::code_theme`, one of syntect's bundled themes, unknown names
   fall back to `InspiredGitHub`). Adapters are cached per theme. A
-  signature after the last `-- ` line is rendered separately with hard
+  signature after the last "-- " line is rendered separately with hard
   line breaks inside `<div class="signature">`.
 - **Mail stylesheet**: `MailStyle { css, code_theme }`; `mail_document`
   wraps a fragment in a full document and inlines the CSS with css-inline
@@ -60,7 +60,7 @@ handlers, the default layout / theme and shared mocks are wired by WP25
   `highlight`). Markdown output escapes specials, uses GFM tables for simple
   tables, fenced code with the language, `\` hard breaks, `<url>` autolinks.
   `has_formatting` decides whether a rich → plain switch is lossy.
-- **Quoting** (`quote` module): plain `> ` (nested `>>`), HTML
+- **Quoting** (`quote` module): plain "> " (nested `>>`), HTML
   `<blockquote type="cite">` with the sanitized original, Markdown `>`
   over the converted original; top or bottom posting (`Posting`), the
   signature placed accordingly. Forwards carry intro + header fields and

@@ -221,7 +221,7 @@ mod win {
     use super::{Hive, RegValue, WindowsRegistry};
 
     /// `ERROR_FILE_NOT_FOUND`: key or value missing.
-    const NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
+    const NOT_FOUND: i32 = 0x8007_0002_u32.cast_signed();
 
     fn base(hive: Hive) -> &'static windows_registry::Key {
         match hive {

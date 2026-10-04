@@ -41,7 +41,7 @@ export type CryptoChoice = SendCrypto | null | undefined;
 export function richDraftOf(
   c: ComposerState,
   r: RichState,
-  choice: CryptoChoice = undefined,
+  choice?: CryptoChoice,
 ): { draft: Draft; invalid: string[] } {
   const to = parseAddressList(c.to);
   const cc = parseAddressList(c.cc);
@@ -72,7 +72,7 @@ export function richDraftOf(
 }
 
 /** A stable key of what would be saved (autosave compares keys). */
-export function draftKey(c: ComposerState, r: RichState, choice: CryptoChoice = undefined): string {
+export function draftKey(c: ComposerState, r: RichState, choice?: CryptoChoice): string {
   const { draft } = richDraftOf(c, r, choice);
   return JSON.stringify({ ...draft, id: null, to: c.to, cc: c.cc, bcc: c.bcc });
 }

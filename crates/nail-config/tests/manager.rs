@@ -1,4 +1,5 @@
-//! ConfigManager: loading a config directory, keep-last-valid and watching.
+//! `ConfigManager`: loading a config directory, keep-last-valid and watching.
+#![cfg(test)]
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -169,7 +170,7 @@ fn the_watcher_reports_changes_and_errors() {
     let (tx, rx) = mpsc::channel();
     let watcher = manager
         .watch(Duration::from_millis(50), move |update| {
-            let _ = tx.send(update);
+            tx.send(update).ok();
         })
         .unwrap();
     assert!(config_dir.is_dir(), "watch creates the directory");
@@ -254,7 +255,7 @@ fn a_change_re_reports_errors_of_the_other_file() {
     let (tx, rx) = mpsc::channel();
     let _watcher = manager
         .watch(Duration::from_millis(50), move |update| {
-            let _ = tx.send(update);
+            tx.send(update).ok();
         })
         .unwrap();
 

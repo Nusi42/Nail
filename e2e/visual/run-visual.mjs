@@ -23,10 +23,17 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
+/** @typedef {{ update: boolean, review: boolean, playwright: string[] }} Options */
+
+/**
+ * @param {string[]} argv
+ * @returns {Options}
+ */
 export function parseArgs(argv) {
+  /** @type {Options} */
   const options = { update: false, review: true, playwright: [] };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     if (arg === "--") {
       options.playwright = argv.slice(i + 1);
       break;
@@ -38,7 +45,11 @@ export function parseArgs(argv) {
   return options;
 }
 
-/** The Playwright CLI arguments of a run. */
+/**
+ * The Playwright CLI arguments of a run.
+ *
+ * @param {Options} options
+ */
 export function playwrightArgs(options) {
   return [
     "test",
@@ -66,8 +77,10 @@ async function main() {
     const { file, summary, entries } = buildReview(reviewArgs([]));
     // Why variants were skipped, once per reason (the list reporter omits it).
     const reasons = new Set(entries.filter((e) => e.status === "skipped").map((e) => e.message));
-    for (const reason of reasons) console.log(`skipped: ${reason}`);
-    const counts = STATUSES.filter((s) => summary[s] > 0).map((s) => `${summary[s]} ${s}`);
+    for (const reason of reasons) console.log(`skipped: ${reason ?? ""}`);
+    const counts = STATUSES.filter((s) => (summary[s] ?? 0) > 0).map(
+      (s) => `${String(summary[s])} ${s}`,
+    );
     console.log(`visual review (${counts.join(", ") || "no results"}): ${file}`);
   }
   return status;
@@ -78,7 +91,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     (status) => {
       process.exitCode = status;
     },
-    (error) => {
+    (/** @type {unknown} */ error) => {
       console.error(error instanceof Error ? error.message : error);
       process.exitCode = 2;
     },

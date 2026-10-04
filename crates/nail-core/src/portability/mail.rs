@@ -180,25 +180,20 @@ impl ImportTarget {
                             ))
                             .into());
                         }
-                        let base = match &target.parent_folder_id {
-                            Some(folder) => {
-                                let f = store.get_folder(folder)?;
-                                if &f.account_id != id {
-                                    return Err(ApiError::invalid_request(format!(
-                                        "folder {folder} is not in account {id}"
-                                    ))
-                                    .into());
-                                }
-                                f
+                        let base = if let Some(folder) = &target.parent_folder_id {
+                            let f = store.get_folder(folder)?;
+                            if &f.account_id != id {
+                                return Err(ApiError::invalid_request(format!(
+                                    "folder {folder} is not in account {id}"
+                                ))
+                                .into());
                             }
-                            None => {
-                                let inbox = store
-                                    .folder_with_role(id, FolderRole::Inbox)?
-                                    .ok_or_else(|| {
-                                        ApiError::not_found(format!("the Inbox of account {id}"))
-                                    })?;
-                                store.get_folder(&inbox)?
-                            }
+                            f
+                        } else {
+                            let inbox = store.folder_with_role(id, FolderRole::Inbox)?.ok_or_else(
+                                || ApiError::not_found(format!("the Inbox of account {id}")),
+                            )?;
+                            store.get_folder(&inbox)?
                         };
                         let queue = !matches!(
                             service
@@ -325,12 +320,11 @@ impl ImportTarget {
                                 && f.name.eq_ignore_ascii_case(&source.name)
                                 && source.parent.is_none())
                     });
-                match found {
-                    Some(folder) => folder,
-                    None => {
-                        self.merged.push((source.path.clone(), base.path.clone()));
-                        base.clone()
-                    }
+                if let Some(folder) = found {
+                    folder
+                } else {
+                    self.merged.push((source.path.clone(), base.path.clone()));
+                    base.clone()
                 }
             }
         };
@@ -598,7 +592,7 @@ impl StoreMailSource {
                     let page = store
                         .list_messages(folder, offset, 500)
                         .map_err(store_err)?;
-                    let n = page.messages.len() as u32;
+                    let n = u32::try_from(page.messages.len()).unwrap_or(u32::MAX);
                     ids.extend(page.messages.into_iter().map(|m| m.id));
                     offset += n;
                     if n == 0 || offset >= page.total {
@@ -675,7 +669,7 @@ impl MailExportSource for StoreMailSource {
                     let r = message_ref(&folder.path, &id);
                     SinkError::Item(format!("{detail} ({})", r.label.unwrap_or_default()))
                 }
-                other => other,
+                other @ SinkError::Fatal(_) => other,
             });
             if visit(item) == Visit::Stop {
                 break;

@@ -598,7 +598,10 @@ struct ManualState {
 
 impl fmt::Debug for ManualSystemAppearance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         f.debug_struct("ManualSystemAppearance")
             .field("current", &state.current)
             .field("listeners", &state.listeners.len())
@@ -610,14 +613,21 @@ impl ManualSystemAppearance {
     /// Starts with `initial`.
     pub fn new(initial: Option<SystemAppearance>) -> Self {
         let source = Self::default();
-        source.state.lock().expect("fresh lock").current = initial;
+        source
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .current = initial;
         source
     }
 
     /// Sets the state and tells the listeners when it changed.
     pub fn set(&self, appearance: SystemAppearance) {
         let listeners: Vec<SystemAppearanceListener> = {
-            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if state.current == Some(appearance) {
                 return;
             }
@@ -632,11 +642,17 @@ impl ManualSystemAppearance {
 
 impl SystemAppearanceSource for ManualSystemAppearance {
     fn current(&self) -> Option<SystemAppearance> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner()).current
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .current
     }
 
     fn watch(&self, listener: SystemAppearanceListener) -> u64 {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.next += 1;
         let handle = state.next;
         state.listeners.push((handle, listener));
@@ -644,7 +660,10 @@ impl SystemAppearanceSource for ManualSystemAppearance {
     }
 
     fn unwatch(&self, handle: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.listeners.retain(|(h, _)| *h != handle);
     }
 }
@@ -870,7 +889,10 @@ mod tests {
         }
         for t in SPACE_TOKENS {
             if t.name != "xxs" {
-                assert_eq!(t.value % 4.0, 0.0, "{t:?} is off the 4 px grid");
+                assert!(
+                    (t.value % 4.0).abs() < f32::EPSILON,
+                    "{t:?} is off the 4 px grid"
+                );
             }
         }
         assert!(token_schema().any(|t| t.category == "font-size" && t.name == "body" && t.density));

@@ -8,6 +8,7 @@ import { startNail, type NailServer } from "../support/nail";
  * they never disturb tests using the shared server.
  */
 const test = base.extend<{ nail: NailServer }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
   nail: async ({}, use) => {
     const server = await startNail();
     await use(server);

@@ -13,8 +13,8 @@ export interface PaletteUiState {
   contexts: ActionAvailability[] | null;
   /** The last action run from the palette (tests, telemetry-free). */
   lastRun: string | null;
-  setContexts(contexts: ActionAvailability[] | null): void;
-  setLastRun(id: string): void;
+  setContexts: (contexts: ActionAvailability[] | null) => void;
+  setLastRun: (id: string) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PaletteUiState>>();
@@ -23,8 +23,12 @@ export function createPaletteStore(): StoreApi<PaletteUiState> {
   return createStore<PaletteUiState>()((set) => ({
     contexts: null,
     lastRun: null,
-    setContexts: (contexts) => set({ contexts }),
-    setLastRun: (lastRun) => set({ lastRun }),
+    setContexts: (contexts) => {
+      set({ contexts });
+    },
+    setLastRun: (lastRun) => {
+      set({ lastRun });
+    },
   }));
 }
 

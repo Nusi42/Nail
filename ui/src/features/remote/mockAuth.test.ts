@@ -1,6 +1,12 @@
 import type { Event as NailEvent, Request, Response } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
-import { HttpAuthTransport, AUTH_PATH, AuthTransportError, CSRF_HEADER } from "./authClient";
+import {
+  HttpAuthTransport,
+  AUTH_PATH,
+  AuthTransportError,
+  CSRF_HEADER,
+  NO_LOGIN_STATUS,
+} from "./authClient";
 import { MOCK_MAX_FAILURES, MOCK_TOTP_CODE } from "./mock";
 import { MockAuthServer } from "./mockAuth";
 import { presetGrant } from "./model";
@@ -162,7 +168,7 @@ describe("mock login protocol", () => {
         purpose: "login",
       });
     for (let i = 1; i < MOCK_MAX_FAILURES; i++) {
-      expect(await attempt(`wrong ${i}`)).toMatchObject({ reason: "invalid-credentials" });
+      expect(await attempt(`wrong ${String(i)}`)).toMatchObject({ reason: "invalid-credentials" });
     }
     expect(await attempt("wrong again")).toMatchObject({
       type: "Failed",
@@ -173,9 +179,7 @@ describe("mock login protocol", () => {
     const locked = await attempt(PASSWORD);
     expect(locked).toMatchObject({ type: "Failed", reason: "locked-out" });
     expect(
-      ctx.events
-        .filter((e) => e.type === "RemoteSecurityAlert")
-        .map((e) => e.type === "RemoteSecurityAlert" && e.alert.kind),
+      ctx.events.filter((e) => e.type === "RemoteSecurityAlert").map((e) => e.alert.kind),
     ).toContain("lockout");
     await ctx.send({ type: "UnlockRemoteUser", user_id: ctx.user.id }, "RemoteUserSaved");
     delete ctx.s.lockedIps["192.168.1.42"];
@@ -265,13 +269,22 @@ describe("HttpAuthTransport", () => {
       calls.push({ url, init });
       const next = answers.shift();
       if (next instanceof Error) return Promise.reject(next);
-      if (typeof next === "number") return Promise.resolve(new Response("", { status: next }));
+      if (typeof next === "number") {
+        // A 204 answer has no body at all.
+        const body = next === NO_LOGIN_STATUS ? null : "";
+        return Promise.resolve(new Response(body, { status: next }));
+      }
       return Promise.resolve(
         new Response(JSON.stringify(next), { headers: { "content-type": "application/json" } }),
       );
     };
     return { fetch, calls };
   }
+  /** The `type` of the JSON request a fake fetch received. */
+  const sentType = (init: RequestInit): string => {
+    if (typeof init.body !== "string") throw new Error("no JSON body");
+    return (JSON.parse(init.body) as { type: string }).type;
+  };
   const status = (csrf: string) => ({
     type: "Status",
     status: {
@@ -304,7 +317,7 @@ describe("HttpAuthTransport", () => {
     expect(await auth.send(login)).toEqual({ type: "TotpRequired" });
     await auth.send({ ...login, totp_code: "123456" });
     await auth.send({ type: "Logout" });
-    expect(calls.map((c) => JSON.parse(String(c.init.body)).type)).toEqual([
+    expect(calls.map((c) => sentType(c.init))).toEqual([
       "Status",
       "Password",
       "Password",
@@ -317,6 +330,12 @@ describe("HttpAuthTransport", () => {
     expect(
       calls.every((c) => c.init.method === "POST" && c.init.credentials === "same-origin"),
     ).toBe(true);
+  });
+
+  it("reports a server without a login (204) as an AuthTransportError", async () => {
+    const { fetch } = fakeFetch([NO_LOGIN_STATUS]);
+    const auth = new HttpAuthTransport({ fetch });
+    await expect(auth.send({ type: "Status" })).rejects.toMatchObject({ status: NO_LOGIN_STATUS });
   });
 
   it("reports HTTP and network errors", async () => {

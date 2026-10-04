@@ -2,6 +2,7 @@
 //! hosts behind one 127.0.0.1 port): engine choice, Windows sign-in and
 //! Basic, redirects, and — above all — that credentials never reach a
 //! host outside the address's domain without the user's confirmation.
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

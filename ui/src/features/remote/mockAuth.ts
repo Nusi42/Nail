@@ -70,7 +70,7 @@ function randomB64(length = 32): string {
 
 function credentialId(credential: unknown): string | null {
   if (credential !== null && typeof credential === "object" && "id" in credential) {
-    const id = (credential as { id: unknown }).id;
+    const id = credential.id;
     return typeof id === "string" ? id : null;
   }
   return null;
@@ -111,13 +111,13 @@ export class MockAuthServer implements AuthTransport {
 
   private device(): RemoteDevice | null {
     const d = this.s.devices.find((x) => x.id === this.deviceId);
-    return d !== undefined && d.revoked_at === null ? d : null;
+    return d?.revoked_at === null ? d : null;
   }
 
   /** The valid session of this browser, if any. */
   session(): RemoteSession | null {
     const found = this.s.sessions.find((x) => x.id === this.sessionId);
-    if (found === undefined || found.ended_at !== null) return null;
+    if (found?.ended_at !== null) return null;
     if (new Date(found.expires_at).getTime() <= Date.now()) return null;
     return this.device() === null ? null : found;
   }
@@ -150,7 +150,7 @@ export class MockAuthServer implements AuthTransport {
   /** Seconds the address or name is still locked out, 0 = not. */
   private lockedFor(user: RemoteUser | undefined): number {
     const until = [this.s.lockedIps[this.ip], user?.locked_until ?? undefined]
-      .filter((x): x is string => x !== undefined && x !== null)
+      .filter((x): x is string => x !== undefined)
       .map((x) => new Date(x).getTime() - Date.now())
       .filter((ms) => ms > 0);
     return until.length === 0 ? 0 : Math.ceil(Math.max(...until) / 1000);
@@ -255,7 +255,7 @@ export class MockAuthServer implements AuthTransport {
     this.clearFailures(user.name);
     if (purpose === "reauth") {
       const session = this.session();
-      if (session === null || session.user_id !== user.id) return this.failed("not-logged-in");
+      if (session?.user_id !== user.id) return this.failed("not-logged-in");
       const stored = this.s.sessions.find((x) => x.id === session.id);
       if (stored !== undefined) stored.reauth_at = now();
       this.audit("reauth", true, user, { method });
@@ -380,11 +380,7 @@ export class MockAuthServer implements AuthTransport {
         this.challenges.delete(request.challenge_id);
         const device = this.device();
         if (device === null) return this.failed("not-paired");
-        if (
-          challenge === undefined ||
-          challenge.kind !== "login" ||
-          challenge.expires < Date.now()
-        ) {
+        if (challenge?.kind !== "login" || challenge.expires < Date.now()) {
           return this.failed("challenge-expired");
         }
         const passkeyId = s.secrets.credentials[credentialId(request.credential) ?? ""];
@@ -442,8 +438,7 @@ export class MockAuthServer implements AuthTransport {
         const session = this.session();
         if (session === null) return this.failed("not-logged-in");
         if (
-          challenge === undefined ||
-          challenge.kind !== "register" ||
+          challenge?.kind !== "register" ||
           challenge.userId !== session.user_id ||
           challenge.expires < Date.now()
         ) {

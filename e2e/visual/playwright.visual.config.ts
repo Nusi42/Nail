@@ -45,7 +45,7 @@ function probeThemes(): ThemeProbe {
   const script = path.join(repoRoot, "e2e", "visual", "lib", "probe-themes.mjs");
   const output = execFileSync(
     process.execPath,
-    [script, "--bin", process.env.NAIL_BIN!, "--ui-dir", path.join(repoRoot, "ui", "dist")],
+    [script, "--bin", process.env.NAIL_BIN ?? "", "--ui-dir", path.join(repoRoot, "ui", "dist")],
     { encoding: "utf8", timeout: 120_000 },
   );
   const result = JSON.parse(output.trim().split("\n").pop() ?? "{}") as {

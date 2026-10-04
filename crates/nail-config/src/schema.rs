@@ -6,7 +6,7 @@
 //! below only describe the parts of the layout that are stored as
 //! `nail_api` types.
 
-#![allow(dead_code)] // Schema-only mirror types are never constructed.
+#![expect(dead_code, reason = "schema-only mirror types are never constructed")]
 
 use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 use serde_json::{Map, Value};

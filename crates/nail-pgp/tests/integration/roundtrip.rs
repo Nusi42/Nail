@@ -2,9 +2,7 @@
 //! encrypt, header protection, and the failure cases (tampering, wrong
 //! key, expired and revoked signers, header mismatch).
 
-mod common;
-
-use common::{Env, NOW, fixture, subject_and_text};
+use crate::common::{Env, NOW, fixture, subject_and_text};
 use nail_api::KeyId;
 use nail_api::security::{
     DecryptionState, HeaderProtection, KeyAlgorithm, KeyEncoding, SecretProtection, SignatureState,
@@ -465,7 +463,11 @@ fn signature_by_an_expired_key() {
 
     // Nail itself refuses to sign or encrypt with it.
     let env = Env::with(&["dave.sec.asc"]);
-    let dave = env.keyring().list(&Default::default()).unwrap().remove(0);
+    let dave = env
+        .keyring()
+        .list(&nail_api::security::KeyFilter::default())
+        .unwrap()
+        .remove(0);
     let key = env
         .keyring()
         .at(NOW)
@@ -621,7 +623,7 @@ fn locked_passphrase_key_cannot_sign_until_unlocked() {
         .unlock(&key.id, "open sesame", Some(1))
         .unwrap();
     let signer = env.keyring().unlocked_key(&stored).unwrap();
-    let signed = protect_message(
+    let signed_message = protect_message(
         PLAIN,
         &Protection {
             signer: Some(&signer),
@@ -633,7 +635,7 @@ fn locked_passphrase_key_cannot_sign_until_unlocked() {
     )
     .unwrap();
     assert_eq!(
-        env.status(&signed).signatures[0].state,
+        env.status(&signed_message).signatures[0].state,
         SignatureState::Valid
     );
 }

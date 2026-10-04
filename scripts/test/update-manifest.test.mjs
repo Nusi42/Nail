@@ -19,12 +19,19 @@ import {
 } from "../lib/update-manifest.mjs";
 
 const key = testKey(generateKeyPairSync("ed25519"));
+/** @type {Partial<Record<string, Buffer>>} */
 const bytes = {
   "Nail_0.2.0_x64-setup.exe": Buffer.from("nsis x64"),
   "Nail_0.2.0_x64_en-US.msi": Buffer.from("msi x64"),
   "Nail_0.2.0_arm64-setup.exe": Buffer.from("nsis arm64"),
 };
-const signed = (name, version = "0.2.0") => key.sign(bytes[name], { file: name, version });
+/** @param {string} name */
+const read = (name) => bytes[name] ?? Buffer.alloc(0);
+/**
+ * @param {string} name
+ * @param {string} [version]
+ */
+const signed = (name, version = "0.2.0") => key.sign(read(name), { file: name, version });
 const files = () => [
   ...Object.keys(bytes).map((name) => ({ name, signature: signed(name) })),
   { name: "Nail_0.2.0_x64-offline-setup.exe", signature: null },
@@ -62,8 +69,9 @@ test("semantic versions compare by precedence", () => {
     "2.0.0",
   ];
   for (let i = 0; i + 1 < ordered.length; i++) {
-    assert.ok(compareVersions(ordered[i], ordered[i + 1]) < 0, `${ordered[i]} < ${ordered[i + 1]}`);
-    assert.ok(compareVersions(ordered[i + 1], ordered[i]) > 0);
+    const [a = "", b = ""] = [ordered[i], ordered[i + 1]];
+    assert.ok(compareVersions(a, b) < 0, `${a} < ${b}`);
+    assert.ok(compareVersions(b, a) > 0);
   }
   assert.equal(compareVersions("v1.0.0", "1.0.0+x"), 0);
 });
@@ -106,31 +114,27 @@ test("a release's platforms: every installer with its signature, checked", () =>
       ["arm64", "nsis", "https://dl.example/v0.2.0/Nail_0.2.0_arm64-setup.exe"],
     ],
   );
-  verifyPlatforms({ entries, publicKey: key.publicKey, version: "0.2.0", read: (n) => bytes[n] });
+  verifyPlatforms({ entries, publicKey: key.publicKey, version: "0.2.0", read });
   // A signature for another version, or of another file, stops the release.
   const stale = entries.map((e) =>
     e.installer === "msi" ? { ...e, signature: signed(e.name, "0.1.0") } : e,
   );
-  assert.throws(
-    () =>
-      verifyPlatforms({
-        entries: stale,
-        publicKey: key.publicKey,
-        version: "0.2.0",
-        read: (n) => bytes[n],
-      }),
-    /Nail_0\.2\.0_x64_en-US\.msi: the signature is for version 0\.1\.0/,
-  );
-  assert.throws(
-    () =>
-      verifyPlatforms({
-        entries,
-        publicKey: key.publicKey,
-        version: "0.2.0",
-        read: () => Buffer.from("x"),
-      }),
-    /does not match the file/,
-  );
+  assert.throws(() => {
+    verifyPlatforms({
+      entries: stale,
+      publicKey: key.publicKey,
+      version: "0.2.0",
+      read,
+    });
+  }, /Nail_0\.2\.0_x64_en-US\.msi: the signature is for version 0\.1\.0/);
+  assert.throws(() => {
+    verifyPlatforms({
+      entries,
+      publicKey: key.publicKey,
+      version: "0.2.0",
+      read: () => Buffer.from("x"),
+    });
+  }, /does not match the file/);
 });
 
 test("a release is whole: unsigned or foreign installers are errors", () => {
@@ -177,11 +181,11 @@ test("the manifest: Tauri's static format, plain targets name NSIS", () => {
     "windows-x86_64-msi",
     "windows-x86_64-nsis",
   ]);
-  assert.equal(manifest.platforms["windows-x86_64"].url, "https://d/Nail_0.2.0_x64-setup.exe");
-  assert.equal(manifest.platforms["windows-x86_64-msi"].url, "https://d/Nail_0.2.0_x64_en-US.msi");
+  assert.equal(manifest.platforms["windows-x86_64"]?.url, "https://d/Nail_0.2.0_x64-setup.exe");
+  assert.equal(manifest.platforms["windows-x86_64-msi"]?.url, "https://d/Nail_0.2.0_x64_en-US.msi");
   // Ed25519 is deterministic: the same file signs the same way.
   assert.equal(
-    manifest.platforms["windows-x86_64-nsis"].signature,
+    manifest.platforms["windows-x86_64-nsis"]?.signature,
     signed("Nail_0.2.0_x64-setup.exe").trim(),
   );
   assert.deepEqual(manifest.platforms["windows-x86_64"], manifest.platforms["windows-x86_64-nsis"]);
@@ -204,7 +208,9 @@ test("manifest rules: pre-releases only on beta, notes limited, dates valid", ()
   );
   assert.throws(() => buildManifest({ ...base, channel: "beta", pubDate: "soon" }), /date/);
   assert.throws(() => buildManifest({ ...base, channel: "nightly" }), /unknown channel/);
-  const twice = [...entries, { ...entries[0], name: "b" }];
+  const [first] = entries;
+  assert.ok(first);
+  const twice = [...entries, { ...first, name: "b" }];
   assert.throws(
     () => buildManifest({ ...base, channel: "beta", entries: twice }),
     /two nsis installers/,

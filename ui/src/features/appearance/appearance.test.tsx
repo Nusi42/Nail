@@ -10,12 +10,16 @@ import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "
 import { builtinThemes, setMockSystemAppearance } from "./mock";
 import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } from "./themes";
 import { overridesOf } from "./AppearanceSettings";
+import { must } from "../../test/must";
+import { stubProperties } from "../../test/stub";
 
 let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 /** Requests the mock received (for "what did the UI ask for"). */
 function recordRequests(env: ReturnType<typeof createEnv>): Request[] {
@@ -30,19 +34,20 @@ function recordRequests(env: ReturnType<typeof createEnv>): Request[] {
 
 /** Replaces `window.matchMedia`; returns a function that flips the answers. */
 function stubMedia(initial: { dark: boolean; contrast: boolean }) {
-  const original = window.matchMedia;
   let state = { ...initial };
   const listeners = new Set<() => void>();
-  window.matchMedia = ((query: string) => ({
-    get matches() {
-      if (query === "(prefers-color-scheme: dark)") return state.dark;
-      if (query === "(prefers-contrast: more)") return state.contrast;
-      return false;
-    },
-    media: query,
-    addEventListener: (_: string, l: () => void) => listeners.add(l),
-    removeEventListener: (_: string, l: () => void) => listeners.delete(l),
-  })) as unknown as typeof window.matchMedia;
+  const restore = stubProperties(window, {
+    matchMedia: ((query: string) => ({
+      get matches() {
+        if (query === "(prefers-color-scheme: dark)") return state.dark;
+        if (query === "(prefers-contrast: more)") return state.contrast;
+        return false;
+      },
+      media: query,
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    })) as unknown as typeof window.matchMedia,
+  });
   return {
     set(next: { dark: boolean; contrast: boolean }) {
       state = { ...next };
@@ -50,9 +55,7 @@ function stubMedia(initial: { dark: boolean; contrast: boolean }) {
         for (const l of [...listeners]) l();
       });
     },
-    restore() {
-      window.matchMedia = original;
-    },
+    restore,
   };
 }
 
@@ -154,7 +157,7 @@ theme "Demo" extends="default" mode="dark" {
   it("lays a theme over the base like the core: variants dropped, user tokens kept", () => {
     const base = defaultTheme();
     const user = structuredClone(base);
-    (user.tokens.color as Record<string, string>).fg = "#123456";
+    must(user.tokens.color).fg = "#123456";
     const frost = BUILTIN_THEME_FILES.get("frost");
     const resolved = resolveMockTheme(
       user,
@@ -249,17 +252,17 @@ describe("appearance-settings widget", () => {
     fireEvent.change(await screen.findByLabelText("Dark theme"), {
       target: { value: "nocturne" },
     });
-    await waitFor(() =>
-      expect(env.transport.data.features.appearance.settings.dark).toBe("nocturne"),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.appearance.settings.dark).toBe("nocturne");
+    });
     fireEvent.click(screen.getByRole("radio", { name: "Compact" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.appearance.settings.density).toBe("compact"),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.appearance.settings.density).toBe("compact");
+    });
     fireEvent.click(screen.getByRole("switch", { name: "Follow Windows" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.appearance.settings.follow_system).toBe(false),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.appearance.settings.follow_system).toBe(false);
+    });
     expect(env.transport.data.features.appearance.settings).toMatchObject({
       light: "frost",
       dark: "nocturne",
@@ -280,16 +283,16 @@ describe("appearance-settings widget", () => {
     fireEvent.change(size, { target: { value: "15" } });
     fireEvent.change(screen.getByLabelText("Accent colour"), { target: { value: "#2e7d5b" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.appearance.settings.overrides).toEqual({
         font_size: 15,
         accent: "#2e7d5b",
-      }),
-    );
+      });
+    });
     fireEvent.click(screen.getByRole("button", { name: "Use theme defaults" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.appearance.settings.overrides).toEqual({}),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
+    });
     await settleQueries(env);
   });
 
@@ -321,11 +324,17 @@ describe("theme switching in the app", () => {
     const app = container.querySelector('[data-part="app"]');
     await waitFor(() => expect(app).toHaveAttribute("data-theme", "Frost"));
     expect(document.documentElement.dataset.nailMode).toBe("light");
-    act(() => setMockSystemAppearance(env.transport, { scheme: "dark", high_contrast: false }));
+    act(() => {
+      setMockSystemAppearance(env.transport, { scheme: "dark", high_contrast: false });
+    });
     await waitFor(() => expect(app).toHaveAttribute("data-theme", "Graphite"));
     expect(document.documentElement.dataset.nailMode).toBe("dark");
-    act(() => setMockSystemAppearance(env.transport, { scheme: "dark", high_contrast: true }));
-    await waitFor(() => expect(document.documentElement.dataset.nailMode).toBe("high-contrast"));
+    act(() => {
+      setMockSystemAppearance(env.transport, { scheme: "dark", high_contrast: true });
+    });
+    await waitFor(() => {
+      expect(document.documentElement.dataset.nailMode).toBe("high-contrast");
+    });
     await settleQueries(env);
   });
 
@@ -378,12 +387,12 @@ describe("Follow Windows from the browser", () => {
         system: { scheme: "dark", high_contrast: false },
       });
       media.set({ dark: true, contrast: true });
-      await waitFor(() =>
+      await waitFor(() => {
         expect(env.transport.data.features.appearance.system).toEqual({
           scheme: "dark",
           high_contrast: true,
-        }),
-      );
+        });
+      });
       await settleQueries(env);
     } finally {
       media.restore();
@@ -411,12 +420,16 @@ describe("Follow Windows from the browser", () => {
           : send(request);
       };
       render(<App client={env2.client} queryClient={env2.queryClient} store={env2.store} />);
-      await waitFor(() => expect(seen).toContain("ListThemes"));
+      await waitFor(() => {
+        expect(seen).toContain("ListThemes");
+      });
       await settleQueries(env2);
       // The core knows the OS state: nothing is pushed back at start.
       expect(seen).not.toContain("ReportSystemAppearance");
       media.set({ dark: false, contrast: false });
-      await waitFor(() => expect(seen).toContain("ReportSystemAppearance"));
+      await waitFor(() => {
+        expect(seen).toContain("ReportSystemAppearance");
+      });
       media.set({ dark: true, contrast: false });
       await settleQueries(env2);
       expect(seen.filter((t) => t === "ReportSystemAppearance")).toHaveLength(1);

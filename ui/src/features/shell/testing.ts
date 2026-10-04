@@ -21,7 +21,7 @@ export function hostLayout(railOptions: Record<string, JsonValue> = {}): Resolve
     ...base,
     windows: {
       ...base.windows,
-      main: (base.windows["main"] ?? []).map((bp) => ({ ...bp, root: withOptions(bp.root) })),
+      main: (base.windows.main ?? []).map((bp) => ({ ...bp, root: withOptions(bp.root) })),
     },
   };
 }
@@ -33,7 +33,7 @@ export function hostLayout(railOptions: Record<string, JsonValue> = {}): Resolve
  */
 export function fallbackLayout(): ResolvedLayout {
   const base = normalizeLayout(defaultLayoutJson);
-  const mailView = base.views["mail"];
+  const mailView = base.views.mail;
   if (mailView === undefined) throw new Error("the default layout has no mail view");
   const { mail, ...windows } = base.windows;
   return {

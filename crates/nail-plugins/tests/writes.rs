@@ -3,6 +3,12 @@
 //! operation, attribution, account scope), names only messages the plug-in
 //! may read / organize, and answers the core's outcome.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;
@@ -131,7 +137,7 @@ async fn every_write_needs_its_permission() {
             r#"return await nail.tasks.delete("t1");"#,
             "tasks.write",
         ),
-        ("w11", r#"return await nail.tasks.lists();"#, "tasks.write"),
+        ("w11", r"return await nail.tasks.lists();", "tasks.write"),
         (
             "w12",
             r#"return await nail.contacts.find("ada@example.com");"#,
@@ -139,7 +145,7 @@ async fn every_write_needs_its_permission() {
         ),
         (
             "w13",
-            r#"return await nail.calendar.calendars();"#,
+            r"return await nail.calendar.calendars();",
             "calendar.write",
         ),
     ];
@@ -313,17 +319,14 @@ async fn invalid_write_arguments_are_refused_before_the_core() {
     let host = host(&fake);
     for (id, body) in [
         ("bad1", r#"return await nail.mail.update(["m1"], {});"#),
-        (
-            "bad2",
-            r#"return await nail.mail.update([], {read: true});"#,
-        ),
+        ("bad2", r"return await nail.mail.update([], {read: true});"),
         (
             "bad3",
             r#"return await nail.tasks.create({title: "x", priority: 42});"#,
         ),
         (
             "bad4",
-            r#"return await nail.tasks.create({title: "x", lsit: "typo"});"#,
+            r#"return await nail.tasks.create({title: "x", lsit: "typo"});"#, // spellchecker:disable-line
         ),
         (
             "bad5",

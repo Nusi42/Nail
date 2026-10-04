@@ -484,6 +484,10 @@ pub trait MailApiEngine: Send + Sync + fmt::Debug {
 /// the maximum, and drops back to the minimum after a change or a user
 /// action. A server's `Retry-After` overrides it once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "the common suffix names the unit"
+)]
 pub struct AdaptivePoll {
     min_secs: u32,
     max_secs: u32,

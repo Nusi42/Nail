@@ -207,7 +207,9 @@ function DeletePanel({ keyInfo, onDeleted }: { keyInfo: CryptoKey; onDeleted: ()
         data-part="form.button"
         data-variant="danger"
         data-action="delete"
-        onClick={() => setConfirm(true)}
+        onClick={() => {
+          setConfirm(true);
+        }}
       >
         {t("security-key-delete")}
       </button>
@@ -337,7 +339,12 @@ export function KeyDetail({ keyInfo, onDeleted }: { keyInfo: CryptoKey; onDelete
             {t("security-key-unlocked")}
           </p>
         ) : (
-          <UnlockForm keyId={keyInfo.id} onUnlocked={() => setUnlocked(true)} />
+          <UnlockForm
+            keyId={keyInfo.id}
+            onUnlocked={() => {
+              setUnlocked(true);
+            }}
+          />
         ))}
       <DeletePanel key={`del-${keyInfo.id}`} keyInfo={keyInfo} onDeleted={onDeleted} />
     </section>

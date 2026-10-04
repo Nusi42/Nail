@@ -19,15 +19,15 @@ export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "cl
 /** The low-level channel a client talks through. */
 export interface Transport {
   /** Sends one request and resolves with its response. */
-  send(request: Request): Promise<Response>;
+  send: (request: Request) => Promise<Response>;
   /** Registers a listener for pushed events; returns an unsubscribe function. */
-  onEvent(listener: (event: NailEvent) => void): () => void;
+  onEvent: (listener: (event: NailEvent) => void) => () => void;
   /** Registers a listener for connection changes; returns an unsubscribe function. */
-  onStatus(listener: (status: ConnectionStatus) => void): () => void;
+  onStatus: (listener: (status: ConnectionStatus) => void) => () => void;
   /** Current connection state. */
-  status(): ConnectionStatus;
+  status: () => ConnectionStatus;
   /** Releases the channel; pending requests fail. */
-  close(): void;
+  close: () => void;
 }
 
 /** An error answered by the core, or a transport failure. */
@@ -68,20 +68,20 @@ type ResponseOf<T extends Response["type"]> = Extract<Response, { type: T }>;
 /** The API the React tree uses. */
 export interface NailClient {
   /** Sends a request and returns the raw response (which may be `Error`). */
-  call(request: Request): Promise<Response>;
+  call: (request: Request) => Promise<Response>;
   /**
    * Sends a request and returns the response if it has the `expected` type.
    * Throws a `NailError` for `Error` responses and for unexpected types.
    */
-  request<T extends Response["type"]>(request: Request, expected: T): Promise<ResponseOf<T>>;
+  request: <T extends Response["type"]>(request: Request, expected: T) => Promise<ResponseOf<T>>;
   /** Listens for events pushed by the core. */
-  subscribe(listener: (event: NailEvent) => void): () => void;
+  subscribe: (listener: (event: NailEvent) => void) => () => void;
   /** Listens for connection changes. */
-  onStatus(listener: (status: ConnectionStatus) => void): () => void;
+  onStatus: (listener: (status: ConnectionStatus) => void) => () => void;
   /** Current connection state. */
-  status(): ConnectionStatus;
+  status: () => ConnectionStatus;
   /** Closes the underlying transport. */
-  close(): void;
+  close: () => void;
 }
 
 /** The standard `NailClient` on top of any `Transport`. */

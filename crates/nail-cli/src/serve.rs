@@ -17,12 +17,12 @@ use crate::cli::{DEFAULT_PORT, Seed, ServeArgs};
 use crate::messages::{self, Localized};
 
 /// Environment variable naming the UI directory.
-pub const UI_DIR_ENV: &str = "NAIL_UI_DIR";
+pub(crate) const UI_DIR_ENV: &str = "NAIL_UI_DIR";
 
 /// The directories of a run. A seeded (demo) run never falls back to the
 /// real data and config directories: missing ones are temporary and go
 /// away with this value.
-pub struct Dirs {
+pub(crate) struct Dirs {
     pub data: PathBuf,
     pub config: PathBuf,
     _temp: Option<tempfile::TempDir>,
@@ -30,7 +30,7 @@ pub struct Dirs {
 
 /// `--data-dir` / `--config-dir`, else temporary directories for a demo
 /// seed, else the platform defaults.
-pub fn resolve_dirs(
+pub(crate) fn resolve_dirs(
     data_dir: Option<PathBuf>,
     config_dir: Option<PathBuf>,
     seed: Option<Seed>,
@@ -74,13 +74,13 @@ pub fn resolve_dirs(
 
 /// Name of the portable build's marker file (as the desktop app's
 /// `portable::MARKER`).
-pub const PORTABLE_MARKER: &str = "portable";
+pub(crate) const PORTABLE_MARKER: &str = "portable";
 
 /// The portable build's root for `nail` at `exe`: in the portable zip the
 /// CLI is `<root>\bin\nail.exe` and the marker is `<root>\portable`; data
 /// and config then default to `<root>\data` and `<root>\config`, like the
 /// desktop app's.
-pub fn portable_root_beside(exe: &Path) -> Option<PathBuf> {
+pub(crate) fn portable_root_beside(exe: &Path) -> Option<PathBuf> {
     let root = exe.parent()?.parent()?;
     root.join(PORTABLE_MARKER)
         .is_file()
@@ -92,7 +92,7 @@ pub fn portable_root_beside(exe: &Path) -> Option<PathBuf> {
 /// its accounts' secrets with the demo keychain and write demo
 /// state next to real accounts. An earlier demo file is replaced (its mock
 /// server ports are gone).
-pub fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::Result<()> {
+pub(crate) fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::Result<()> {
     let path = config_dir.join("accounts.kdl");
     if let Ok(existing) = std::fs::read_to_string(&path)
         && !existing.starts_with(nail_core::demo::MULTI_CONFIG_MARKER)
@@ -117,7 +117,7 @@ fn browser_mode(options: &mut ServiceOptions, seed: Option<Seed>) {
     options.open_editor = false;
 }
 
-pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
+pub(crate) async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let dirs = resolve_dirs(args.data_dir, args.config_dir, args.seed)?;
     let (data_dir, config_dir) = (dirs.data.clone(), dirs.config.clone());
     // One process per data directory (a headless `nail mcp` included).
@@ -142,7 +142,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         // the OS keychain.
         options.secrets = Some(Arc::new(nail_core::demo::FileSecretStore::open(
             data_dir.join(nail_core::demo::DEMO_KEYCHAIN_FILE),
-        )) as Arc<dyn nail_api::engine::SecretStore>);
+        )));
         options = nail_core::demo::demo_options(options);
     }
     // demo-multi: mock servers first, the service is pointed at them.
@@ -204,7 +204,10 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         None
     } else {
         let endpoint = nail_mcp::endpoint::endpoint_path(&data_dir);
-        let settings = service.store().call(|s| s.mcp_settings()).await?;
+        let settings = service
+            .store()
+            .call(nail_store::Store::mcp_settings)
+            .await?;
         let port = nail_mcp::configured_port(&settings, args.mcp_port);
         let running = service
             .start_mcp_server(port, Some(endpoint))
@@ -216,7 +219,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
 
     let test_control = demo_multi
         .clone()
-        .map(|demo| Arc::new(DemoControl(demo, service.clone())) as Arc<dyn TestControl>);
+        .map(|demo| -> Arc<dyn TestControl> { Arc::new(DemoControl(demo, service.clone())) });
     // The local UI: loopback, no login, with the remote-content proxy.
     // No fixed development ports: without `--port`, a taken 4780 falls back
     // to a free port (the printed URL and the endpoint file name it).
@@ -281,7 +284,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
 
 /// Ports `nail serve` tries in order: only an explicit `--port`; else the
 /// default port, then any free port (0).
-pub fn port_candidates(explicit: Option<u16>, default: u16) -> Vec<u16> {
+pub(crate) fn port_candidates(explicit: Option<u16>, default: u16) -> Vec<u16> {
     match explicit {
         Some(port) => vec![port],
         None => vec![default, 0],
@@ -290,7 +293,7 @@ pub fn port_candidates(explicit: Option<u16>, default: u16) -> Vec<u16> {
 
 /// Whether a failed bind means "this port is taken" (or reserved, which
 /// Windows reports as access denied), so the next candidate may be tried.
-pub fn is_port_taken(err: &nail_server::ServerError) -> bool {
+pub(crate) fn is_port_taken(err: &nail_server::ServerError) -> bool {
     matches!(
         err,
         nail_server::ServerError::Bind { source, .. }
@@ -304,7 +307,7 @@ pub fn is_port_taken(err: &nail_server::ServerError) -> bool {
 /// Binds the first free candidate of [`port_candidates`]. Only a taken
 /// default port falls back; every other error (and a taken explicit port)
 /// is returned.
-pub async fn bind_with_fallback<T, F, Fut>(
+pub(crate) async fn bind_with_fallback<T, F, Fut>(
     explicit: Option<u16>,
     default: u16,
     mut bind: F,
@@ -351,7 +354,7 @@ impl TestControl for DemoControl {
 /// repository's `ui/dist` (development builds). Candidates without an
 /// `index.html` are skipped (except an explicit `--ui-dir`, which is used
 /// as given).
-pub fn resolve_ui_dir(
+pub(crate) fn resolve_ui_dir(
     arg: Option<PathBuf>,
     env: Option<PathBuf>,
     exe: Option<&Path>,

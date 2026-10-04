@@ -144,7 +144,7 @@ pub(crate) async fn replay_with_connection(
     if let Err(err) = replay_account(service, account, &executor).await {
         tracing::warn!(%account, %err, "replaying writes failed");
     }
-    let _ = client.into_inner().logout().await;
+    drop(client.into_inner().logout().await);
 }
 
 /// Replays an account without a server (local, POP3).
@@ -409,10 +409,12 @@ async fn append_to_account(
                 .map_err(store_error)?;
             if let Some(remote) = crate::api_moves::append_raw(&api, raw, flags).await? {
                 let id = message.clone();
-                let _ = service
-                    .store()
-                    .call(move |s| s.set_message_remote_id(&id, Some(&remote)))
-                    .await;
+                drop(
+                    service
+                        .store()
+                        .call(move |s| s.set_message_remote_id(&id, Some(&remote)))
+                        .await,
+                );
             }
         }
         return Ok((None, None));
@@ -426,7 +428,7 @@ async fn append_to_account(
     };
     let mut client = connect(&settings).await?;
     let result = append_once(&mut client, op, target, header_message_id, &raw, &flags).await;
-    let _ = client.logout().await;
+    drop(client.logout().await);
     result
 }
 
@@ -794,8 +796,7 @@ impl Service {
             auth: auth.clone(),
             source: crate::creds::SecretSource::Stored {
                 secrets: Arc::clone(&self.inner.secrets),
-                tokens: Arc::clone(&self.inner.tokens)
-                    as Arc<dyn nail_api::engine::AccessTokenProvider>,
+                tokens: self.inner.tokens.clone(),
             },
         }
     }

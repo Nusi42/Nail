@@ -247,15 +247,14 @@ impl SmtpSession {
                 password,
                 mechanism,
             } => {
-                match choose_password_mechanism(&self.caps, *mechanism)? {
-                    SaslMechanism::Login => self.auth_login(username, password).await?,
-                    _ => {
-                        let payload = b64(format!("\0{username}\0{password}").as_bytes());
-                        let reply = self
-                            .cmd(Phase::Auth, format!("AUTH PLAIN {payload}"))
-                            .await?;
-                        self.expect_auth_success(&reply).await?;
-                    }
+                if choose_password_mechanism(&self.caps, *mechanism)? == SaslMechanism::Login {
+                    self.auth_login(username, password).await?;
+                } else {
+                    let payload = b64(format!("\0{username}\0{password}").as_bytes());
+                    let reply = self
+                        .cmd(Phase::Auth, format!("AUTH PLAIN {payload}"))
+                        .await?;
+                    self.expect_auth_success(&reply).await?;
                 }
                 username
             }
@@ -329,7 +328,7 @@ impl SmtpSession {
         }
         if reply.has_code(334) {
             // An unexpected challenge: cancel the exchange.
-            let _ = self.cmd(Phase::Auth, "*".to_owned()).await;
+            drop(self.cmd(Phase::Auth, "*".to_owned()).await);
         }
         Err(SmtpError::Protocol(format!(
             "unexpected reply {} to AUTH",
@@ -473,7 +472,7 @@ impl SmtpSession {
             Err(err) => {
                 // Leave the connection usable for another attempt.
                 if !matches!(err, SmtpError::Timeout(_) | SmtpError::ConnectionLost(_)) {
-                    let _ = tokio::time::timeout(timeout, self.conn.command(Rset)).await;
+                    drop(tokio::time::timeout(timeout, self.conn.command(Rset)).await);
                 }
                 Err(err)
             }

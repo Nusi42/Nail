@@ -116,7 +116,7 @@ function script(core: MockCore, account: AccountConfig): string {
   const vacation = state(core).vacation[account.id];
   const lines = [`# Nail rules for ${account.name}`, 'require ["fileinto", "vacation"];'];
   if (vacation?.enabled) {
-    lines.push(`vacation :days ${vacation.days} ${JSON.stringify(vacation.body)};`);
+    lines.push(`vacation :days ${String(vacation.days)} ${JSON.stringify(vacation.body)};`);
   }
   return `${lines.join("\n")}\n`;
 }

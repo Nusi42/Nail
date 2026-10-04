@@ -94,20 +94,21 @@ impl Service {
     /// Runs `work` on the scheduler (blocking; loads it on first use).
     fn with_scheduler<T>(&self, work: impl FnOnce(&mut Scheduler) -> Result<T>) -> Result<T> {
         let mut guard = lock(&self.inner.snooze.scheduler);
-        if guard.is_none() {
+        let scheduler = if let Some(scheduler) = guard.take() {
+            scheduler
+        } else {
             let loaded = SnoozeScheduler::load(
                 StoreSnooze(self.inner.store.clone()),
                 Arc::clone(&self.inner.clock),
             )?;
-            *guard = Some(loaded);
             // First use after the start: sweep the hidden folders once.
             self.inner
                 .snooze
                 .sweep
                 .store(true, std::sync::atomic::Ordering::Release);
-        }
-        let scheduler = guard.as_mut().expect("loaded above");
-        work(scheduler)
+            loaded
+        };
+        work(guard.insert(scheduler))
     }
 
     /// `SnoozeMessages`.

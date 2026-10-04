@@ -69,7 +69,7 @@ export function parseCsv(
           quoted = false;
         }
       } else {
-        field += ch;
+        field += ch ?? "";
       }
     } else if (ch === '"' && field === "") {
       quoted = true;
@@ -80,7 +80,7 @@ export function parseCsv(
       if (ch === "\r" && text[i + 1] === "\n") i += 1;
       endRow();
     } else {
-      field += ch;
+      field += ch ?? "";
     }
   }
   if (field !== "" || row.length > 0) endRow();

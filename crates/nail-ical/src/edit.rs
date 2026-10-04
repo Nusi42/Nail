@@ -243,7 +243,7 @@ pub fn end_before(
 pub fn split_series(
     event: &mut CalendarEvent,
     recurrence_id: &PimTime,
-    new_id: EventId,
+    new_event_id: EventId,
     new_uid: String,
 ) -> Result<CalendarEvent, EditError> {
     let original = event.clone();
@@ -281,7 +281,7 @@ pub fn split_series(
             .collect(),
     };
     Ok(CalendarEvent {
-        id: new_id,
+        id: new_event_id,
         calendar_id: original.calendar_id.clone(),
         uid: new_uid,
         fields,

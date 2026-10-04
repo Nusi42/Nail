@@ -1,6 +1,8 @@
 //! `nail mcp --client <name>` end to end: the binary forwards JSON-RPC
 //! lines between its stdin/stdout and an MCP server on 127.0.0.1.
 
+#![cfg(test)]
+
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 use std::sync::Arc;

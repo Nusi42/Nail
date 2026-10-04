@@ -11,6 +11,7 @@ import {
   showView,
   viewRegion,
 } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * End-to-end encryption and data protection (M2a, ADR 0034) against the
@@ -424,7 +425,7 @@ test("an MCP client reads encrypted content only with its separate grant", async
   await form.getByRole("button", { name: "Save access" }).click();
   await expect(form.getByRole("status")).toHaveText("Access saved.");
 
-  const mcp = new McpSession(url!, token!);
+  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
   await mcp.open();
   const denied = await mcp.request("tools/call", {
     name: "get_message",

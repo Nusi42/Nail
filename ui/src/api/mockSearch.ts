@@ -65,7 +65,7 @@ function readQuoted(text: string, at: number): { value: string; end: number } {
 
 function readWord(text: string, at: number): number {
   let i = at;
-  while (i < text.length && !STOP.test(text[i] as string)) i++;
+  while (i < text.length && !STOP.test(text.charAt(i))) i++;
   return i;
 }
 
@@ -99,7 +99,7 @@ function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
   while (i < text.length) {
-    const c = text[i] as string;
+    const c = text.charAt(i);
     if (/\s/.test(c)) {
       i++;
     } else if (c === "(" || c === ")") {
@@ -109,7 +109,7 @@ function tokenize(text: string): Token[] {
       const { value, end } = readQuoted(text, i);
       tokens.push({ kind: "term", node: { type: "text", value }, start: i, end });
       i = end;
-    } else if (c === "-" && i + 1 < text.length && !STOP.test(text[i + 1] as string)) {
+    } else if (c === "-" && i + 1 < text.length && !STOP.test(text.charAt(i + 1))) {
       tokens.push({ kind: "not", start: i, end: i + 1 });
       i++;
     } else {
@@ -198,17 +198,17 @@ class Parser {
   }
 
   private or(): QueryNode {
-    const items = [this.and()];
+    const items: [QueryNode, ...QueryNode[]] = [this.and()];
     while (this.peek()?.kind === "or") {
       this.pos++;
       if (!this.peek()) throw this.endError("OR needs a right-hand side");
       items.push(this.and());
     }
-    return items.length === 1 ? (items[0] as QueryNode) : { type: "or", items };
+    return items.length === 1 ? items[0] : { type: "or", items };
   }
 
   private and(): QueryNode {
-    const items = [this.unary()];
+    const items: [QueryNode, ...QueryNode[]] = [this.unary()];
     for (;;) {
       const next = this.peek();
       if (!next || next.kind === "or" || next.kind === "rparen") break;
@@ -218,7 +218,7 @@ class Parser {
       }
       items.push(this.unary());
     }
-    return items.length === 1 ? (items[0] as QueryNode) : { type: "and", items };
+    return items.length === 1 ? items[0] : { type: "and", items };
   }
 
   private enter(token: Token) {

@@ -1,5 +1,6 @@
 //! Discovery against the mock HTTP and DNS servers of `nail-testkit-net`:
 //! real `reqwest` and `hickory-resolver` code paths, no network.
+#![cfg(test)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -252,10 +253,10 @@ async fn srv_records() {
 #[tokio::test]
 async fn autodiscover_with_redirects() {
     let m = mocks(DnsZone::new()).await;
-    let redirect_addr = r#"<Autodiscover><Response><Account><Action>redirectAddr</Action>
-        <RedirectAddr>ada@corp.example</RedirectAddr></Account></Response></Autodiscover>"#;
-    let redirect_url = r#"<Autodiscover><Response><Account><Action>redirectUrl</Action>
-        <RedirectUrl>https://ad.corp.example/autodiscover/autodiscover.xml</RedirectUrl></Account></Response></Autodiscover>"#;
+    let redirect_addr = r"<Autodiscover><Response><Account><Action>redirectAddr</Action>
+        <RedirectAddr>ada@corp.example</RedirectAddr></Account></Response></Autodiscover>";
+    let redirect_url = r"<Autodiscover><Response><Account><Action>redirectUrl</Action>
+        <RedirectUrl>https://ad.corp.example/autodiscover/autodiscover.xml</RedirectUrl></Account></Response></Autodiscover>";
     m.http.post(
         Some("autodiscover.example.org"),
         "/autodiscover/autodiscover.xml",

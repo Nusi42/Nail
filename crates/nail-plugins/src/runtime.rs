@@ -681,7 +681,7 @@ impl State {
                 Ok((value, bytes)) => (Ok(value), bytes),
                 Err(e) => (Err(e), None),
             };
-            let _ = tx.send(ThreadMsg::Resolve { id, result, bytes });
+            drop(tx.send(ThreadMsg::Resolve { id, result, bytes }));
         });
         Answer::Pending(id)
     }
@@ -732,10 +732,8 @@ impl State {
     /// The tree a UI last saw of a panel: its own render or a later update
     /// for all UIs; for a UI without either (or without an id), the latest
     /// tree of the panel.
-    fn panel_tree(&self, name: &str, client: &Option<String>) -> Option<&PanelTree> {
-        let own = client
-            .as_ref()
-            .and_then(|c| self.panel_trees.get(&(name.to_owned(), Some(c.clone()))));
+    fn panel_tree(&self, name: &str, client: Option<&String>) -> Option<&PanelTree> {
+        let own = client.and_then(|c| self.panel_trees.get(&(name.to_owned(), Some(c.clone()))));
         let all = self.panel_trees.get(&(name.to_owned(), None));
         let newest = match (own, all) {
             (Some(a), Some(b)) => Some(if a.0 >= b.0 { a } else { b }),
@@ -787,7 +785,10 @@ impl State {
 
 /// Copies the bytes of a `Uint8Array` (the prelude passes every
 /// `ArrayBuffer` / view as one) out of the engine.
-#[allow(unsafe_code)] // rquickjs offers byte access only as an unsafe slice.
+#[expect(
+    unsafe_code,
+    reason = "rquickjs offers byte access only as an unsafe slice"
+)]
 fn copy_bytes(array: &TypedArray<'_, u8>) -> Option<Vec<u8>> {
     // SAFETY: the slice is copied at once; no JavaScript runs while it is
     // borrowed (rquickjs' condition for `as_bytes`).
@@ -796,7 +797,7 @@ fn copy_bytes(array: &TypedArray<'_, u8>) -> Option<Vec<u8>> {
 
 /// `hostPutBytes(u8)`: keeps bytes the plug-in hands over for this turn;
 /// the id goes into the JSON of the call that uses them.
-fn put_bytes(state: &Rc<RefCell<State>>, array: &TypedArray<'_, u8>) -> rquickjs::Result<f64> {
+fn put_bytes(state: &Rc<RefCell<State>>, array: &TypedArray<'_, u8>) -> rquickjs::Result<u64> {
     let Ok(mut s) = state.try_borrow_mut() else {
         return Err(rquickjs::Error::new_from_js("bytes", "re-entrant call"));
     };
@@ -808,7 +809,7 @@ fn put_bytes(state: &Rc<RefCell<State>>, array: &TypedArray<'_, u8>) -> rquickjs
     s.blob_out_bytes += bytes.len();
     let id = s.next_id();
     s.blobs_out.insert(id, bytes);
-    Ok(id as f64)
+    Ok(id)
 }
 
 fn host_call(state: &Rc<RefCell<State>>, op: &str, payload: &str) -> String {
@@ -894,7 +895,8 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 .and_then(serde_json::Value::as_f64)
                 .unwrap_or(0.0)
                 .max(0.0);
-            let delay = Duration::from_millis(ms as u64).min(s.inner.limits.max_timer_delay);
+            let max = s.inner.limits.max_timer_delay;
+            let delay = Duration::try_from_secs_f64(ms / 1000.0).map_or(max, |d| d.min(max));
             let origin = s.origin.clone();
             s.timers.insert(
                 id,
@@ -933,11 +935,11 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                     s.inner.handle.spawn(async move {
                         let filled =
                             tree::fill_tree(services.as_ref(), scope.as_ref(), nodes).await;
-                        let _ = reply.send(Ok(filled));
+                        drop(reply.send(Ok(filled)));
                     });
                 }
                 Err(e) => {
-                    let _ = reply.send(Err(e));
+                    drop(reply.send(Err(e)));
                 }
             }
             Answer::Ok(serde_json::Value::Null)
@@ -1099,7 +1101,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
             while s
                 .notifications
                 .front()
-                .is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60))
+                .is_some_and(|t| now.duration_since(*t) > Duration::from_mins(1))
             {
                 s.notifications.pop_front();
             }
@@ -1112,7 +1114,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
             s.notifications.push_back(now);
             s.inner.services.emit(Event::PluginNotification {
                 notification: Box::new(PluginNotification {
-                    id: format!("pn-{:032x}", rand::random::<u128>()),
+                    id: format!("pn-{:032x}", rand::random::<u128>()), // spellchecker:disable-line
                     plugin_id: s.id.clone(),
                     client_id: s.origin.client.clone(),
                     spec,
@@ -1190,7 +1192,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                     Ok(value)
                 }
             };
-            let _ = reply.send(result);
+            drop(reply.send(result));
             Answer::Ok(serde_json::Value::Null)
         }
         "l10n.t" => {
@@ -1280,7 +1282,7 @@ fn collections_call(
         ),
     };
     if !allowed {
-        return Ok(s.deny(&Denied::new(call, needed)));
+        return Ok(s.deny(&Denied::new(call, &needed)));
     }
     Ok(match op {
         "calendar.calendars" => s.spawn(call, payload, async move {
@@ -1751,7 +1753,10 @@ impl Resolver for PackageResolver {
         };
         match resolved {
             Some(path)
-                if is_safe_path(&path) && (path.ends_with(".js") || path.ends_with(".mjs")) =>
+                if is_safe_path(&path)
+                    && std::path::Path::new(&path)
+                        .extension()
+                        .is_some_and(|ext| ext == "js" || ext == "mjs") =>
             {
                 Ok(path)
             }
@@ -1870,11 +1875,11 @@ fn natives<'js>(
     let take_state = Rc::clone(state);
     let take = Function::new(
         ctx.clone(),
-        move |ctx: Ctx<'js>, id: f64| -> rquickjs::Result<Value<'js>> {
+        move |ctx: Ctx<'js>, id: u64| -> rquickjs::Result<Value<'js>> {
             let bytes = take_state
                 .try_borrow_mut()
                 .ok()
-                .and_then(|mut s| s.blobs_in.remove(&(id as u64)));
+                .and_then(|mut s| s.blobs_in.remove(&id));
             match bytes {
                 Some(bytes) => Ok(TypedArray::<u8>::new(ctx, bytes)?.into_value()),
                 None => Ok(Value::new_undefined(ctx)),
@@ -1961,7 +1966,7 @@ impl Sandbox {
     }
 
     /// One entry into plug-in code (see the module docs).
-    fn turn(&self, origin: Origin, budget: Duration, call: Call) -> Result<(), Crash> {
+    fn turn(&self, origin: Origin, budget: Duration, call: &Call) -> Result<(), Crash> {
         {
             let mut s = self.state.borrow_mut();
             s.origin = origin;
@@ -1971,7 +1976,7 @@ impl Sandbox {
         self.budget.arm(budget);
         let result = self.ctx.with(|ctx| {
             let run = || -> rquickjs::Result<()> {
-                match &call {
+                match call {
                     Call::Load(main) => {
                         let load = self.load.clone().restore(&ctx)?;
                         let promise = Module::import(&ctx, main.as_str())?;
@@ -2043,9 +2048,9 @@ impl Sandbox {
         origin: Origin,
         budget: Duration,
         kind: &'static str,
-        payload: serde_json::Value,
+        payload: &serde_json::Value,
     ) -> Result<(), Crash> {
-        self.turn(origin, budget, Call::Dispatch(kind, payload.to_string()))
+        self.turn(origin, budget, &Call::Dispatch(kind, payload.to_string()))
     }
 
     /// The plug-in was stopped: `deactivate` runs (short budget; the API
@@ -2053,12 +2058,12 @@ impl Sandbox {
     /// is still queued (resolved calls, timers, commands) never runs.
     fn deactivate(&self, budget: Duration) -> ThreadEnd {
         self.budget.deactivating.store(true, Ordering::SeqCst);
-        let _ = self.dispatch(
+        drop(self.dispatch(
             Origin::default(),
             budget.min(Duration::from_millis(250)),
             "deactivate",
-            json!({}),
-        );
+            &json!({}),
+        ));
         ThreadEnd::Requested
     }
 }
@@ -2082,14 +2087,14 @@ impl State {
             let plugin = self.id.clone();
             let at = now.timestamp();
             self.inner.handle.spawn(async move {
-                let _ = services.record_cpu(plugin, at, ms).await;
+                drop(services.record_cpu(plugin, at, ms).await);
             });
         }
     }
 }
 
 /// Runs a plug-in until it is stopped or crashes.
-pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
+pub(crate) fn run(inner: &Arc<Inner>, launch: Launch) -> ThreadEnd {
     let Launch {
         id,
         generation,
@@ -2122,7 +2127,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         manifest,
         files,
         gate,
-        inner: Arc::clone(&inner),
+        inner: Arc::clone(inner),
         tx,
         alive,
         dev,
@@ -2158,7 +2163,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
     let fail = |activated: &mut Option<Reply<()>>, crash: Crash| {
         inner.thread_ended(&id, generation, ThreadEnd::Crash(crash.clone()));
         if let Some(reply) = activated.take() {
-            let _ = reply.send(Err(crash.to_api_error()));
+            drop(reply.send(Err(crash.to_api_error())));
         }
         ThreadEnd::Crash(crash)
     };
@@ -2169,7 +2174,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
     if let Err(crash) = sandbox.turn(
         Origin::default(),
         limits.activation_budget,
-        Call::Load(main),
+        &Call::Load(main),
     ) {
         return fail(&mut activated, crash);
     }
@@ -2187,7 +2192,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         if activated.is_some() && state.borrow().activated {
             inner.activated(&id, generation);
             if let Some(reply) = activated.take() {
-                let _ = reply.send(Ok(()));
+                drop(reply.send(Ok(())));
             }
         }
         let budget = if activated.is_some() {
@@ -2260,7 +2265,7 @@ fn fire_timers(
     };
     due.sort_by_key(|(due, id, _)| (*due, *id));
     for (_, id, origin) in due {
-        sandbox.dispatch(origin, budget, "timer", json!({ "id": id }))?;
+        sandbox.dispatch(origin, budget, "timer", &json!({ "id": id }))?;
     }
     Ok(())
 }
@@ -2280,11 +2285,11 @@ fn invoke(
     let payload = {
         let mut s = state.borrow_mut();
         if !s.registered.contains(&(call.registry, call.name.clone())) {
-            let _ = reply.send(Err(ApiError::not_found(format!(
+            drop(reply.send(Err(ApiError::not_found(format!(
                 "the plug-in has not registered the {} `{}`",
                 call.registry.as_str(),
                 call.name
-            ))));
+            )))));
             return Ok(());
         }
         let req = s.next_id();
@@ -2315,7 +2320,7 @@ fn invoke(
         }
         payload
     };
-    sandbox.dispatch(call.origin, budget, "invoke", payload)
+    sandbox.dispatch(call.origin, budget, "invoke", &payload)
 }
 
 fn answer<T>(state: &Rc<RefCell<State>>, reply: Reply<T>, outcome: &Result<(), Crash>, ok: T) {
@@ -2327,10 +2332,10 @@ fn answer<T>(state: &Rc<RefCell<State>>, reply: Reply<T>, outcome: &Result<(), C
         };
         inner.thread_ended(&id, generation, ThreadEnd::Crash(crash.clone()));
     }
-    let _ = reply.send(match outcome {
+    drop(reply.send(match outcome {
         Ok(()) => Ok(ok),
         Err(crash) => Err(crash.to_api_error()),
-    });
+    }));
 }
 
 fn handle(
@@ -2367,7 +2372,7 @@ fn handle(
                     );
                 }
             }
-            sandbox.dispatch(call.origin, budget, "resolve", payload)
+            sandbox.dispatch(call.origin, budget, "resolve", &payload)
         }
         ThreadMsg::DialogResponse {
             call_id,
@@ -2389,7 +2394,7 @@ fn handle(
                 dialog.origin,
                 budget,
                 "resolve",
-                json!({ "id": call_id, "value": result }),
+                &json!({ "id": call_id, "value": result }),
             )
         }
         ThreadMsg::DialogAction {
@@ -2407,7 +2412,7 @@ fn handle(
                 )
             });
             let Some((true, values, origin)) = found else {
-                let _ = reply.send(Err(ApiError::not_found("no such button in the dialog")));
+                drop(reply.send(Err(ApiError::not_found("no such button in the dialog"))));
                 return Ok(());
             };
             let outcome = sandbox.dispatch(
@@ -2418,7 +2423,7 @@ fn handle(
                 },
                 budget,
                 "dialogAction",
-                json!({ "id": call_id, "componentId": component_id, "values": values }),
+                &json!({ "id": call_id, "componentId": component_id, "values": values }),
             );
             answer(state, reply, &outcome, ());
             outcome
@@ -2430,16 +2435,16 @@ fn handle(
             reply,
         } => {
             if !state.borrow().commands.contains(&name) {
-                let _ = reply.send(Err(ApiError::not_found(format!(
+                drop(reply.send(Err(ApiError::not_found(format!(
                     "the plug-in has not registered the command `{name}`"
-                ))));
+                )))));
                 return Ok(());
             }
             let outcome = sandbox.dispatch(
                 Origin::client(client_id),
                 budget,
                 "command",
-                json!({ "name": name, "context": context }),
+                &json!({ "name": name, "context": context }),
             );
             answer(state, reply, &outcome, ());
             outcome
@@ -2453,9 +2458,9 @@ fn handle(
             let req = {
                 let mut s = state.borrow_mut();
                 if !s.panels.contains(&name) {
-                    let _ = reply.send(Err(ApiError::not_found(format!(
+                    drop(reply.send(Err(ApiError::not_found(format!(
                         "the plug-in has not registered the panel `{name}`"
-                    ))));
+                    )))));
                     return Ok(());
                 }
                 let req = s.next_id();
@@ -2467,7 +2472,7 @@ fn handle(
                 Origin::client(client_id),
                 budget,
                 "panel",
-                json!({ "req": req, "name": name, "context": context }),
+                &json!({ "req": req, "name": name, "context": context }),
             )
         }
         ThreadMsg::PanelAction {
@@ -2478,21 +2483,21 @@ fn handle(
             reply,
         } => {
             if !state.borrow().panels.contains(&name) {
-                let _ = reply.send(Err(ApiError::not_found(format!(
+                drop(reply.send(Err(ApiError::not_found(format!(
                     "the plug-in has not registered the panel `{name}`"
-                ))));
+                )))));
                 return Ok(());
             }
             // Only buttons and inputs of the tree this UI was last shown
             // (M4a): anything else is refused or dropped.
             let values = {
                 let s = state.borrow();
-                match s.panel_tree(&name, &client_id) {
+                match s.panel_tree(&name, client_id.as_ref()) {
                     Some(tree) if tree.buttons.contains(&component_id) => {
                         tree::clean_values(&tree.kinds, values)
                     }
                     _ => {
-                        let _ = reply.send(Err(ApiError::not_found("no such button in the panel")));
+                        drop(reply.send(Err(ApiError::not_found("no such button in the panel"))));
                         return Ok(());
                     }
                 }
@@ -2501,7 +2506,7 @@ fn handle(
                 Origin::client(client_id),
                 budget,
                 "panelAction",
-                json!({ "name": name, "componentId": component_id, "values": values }),
+                &json!({ "name": name, "componentId": component_id, "values": values }),
             );
             answer(state, reply, &outcome, ());
             outcome
@@ -2510,7 +2515,7 @@ fn handle(
             Origin::default(),
             budget,
             "settings",
-            json!({ "values": values }),
+            &json!({ "values": values }),
         ),
         ThreadMsg::Stop => Ok(()),
     }
@@ -2539,7 +2544,7 @@ mod tests {
     fn budgets_fire_only_when_armed_and_late() {
         let budget = Budget::new(Arc::new(AtomicBool::new(true)));
         assert!(!budget.check());
-        budget.arm(Duration::from_secs(60));
+        budget.arm(Duration::from_mins(1));
         assert!(!budget.check());
         assert!(!budget.disarm());
         budget.arm(Duration::ZERO);
@@ -2555,7 +2560,7 @@ mod tests {
     fn a_stopped_plugin_is_interrupted_except_in_deactivate() {
         let alive = Arc::new(AtomicBool::new(true));
         let budget = Budget::new(Arc::clone(&alive));
-        budget.arm(Duration::from_secs(60));
+        budget.arm(Duration::from_mins(1));
         assert!(!budget.check());
         alive.store(false, Ordering::SeqCst);
         assert!(budget.check());

@@ -10,7 +10,15 @@
  * click elsewhere closes it. The popup is positioned below the button
  * through a geometry rule (`useGeometry`), never inline styles.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { Swatch } from "./common";
@@ -27,7 +35,7 @@ export type PimMenuEntry =
       /** A choice (`menuitemradio`): whether it is the current one. */
       checked?: boolean;
       danger?: boolean;
-      onSelect(): void;
+      onSelect: () => void;
     }
   | { type: "header"; id: string; label: string }
   | { type: "separator"; id: string };
@@ -54,7 +62,7 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [open, setOpen] = useState<"first" | "last" | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  useGeometry(geom, { left: `${position.x}px`, top: `${position.y}px` });
+  useGeometry(geom, { left: `${String(position.x)}px`, top: `${String(position.y)}px` });
 
   const items = entries
     .map((entry, index) => ({ entry, index }))
@@ -80,12 +88,13 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
   }, [open]);
 
   // Focus the first / last item when the menu opens.
-  useEffect(() => {
-    if (open === null) return;
-    const target = open === "first" ? items[0] : items[items.length - 1];
+  // Only when the menu opens (with the items of then).
+  const focusItem = useEffectEvent((which: "first" | "last") => {
+    const target = which === "first" ? items[0] : items[items.length - 1];
     if (target) itemRefs.current[target.index]?.focus();
-    // Only when the menu opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    if (open !== null) focusItem(open);
   }, [open]);
 
   // A click outside closes the menu.
@@ -98,7 +107,9 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
       setOpen(null);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+    };
   }, [open]);
 
   const onButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -158,7 +169,10 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
         aria-haspopup="menu"
         aria-expanded={open !== null}
         aria-controls={open !== null ? `${id}-menu` : undefined}
-        onClick={() => (open !== null ? close(false) : setOpen("first"))}
+        onClick={() => {
+          if (open !== null) close(false);
+          else setOpen("first");
+        }}
         onKeyDown={onButtonKeyDown}
       >
         <Icon name={icon} part={`${part}.icon`} />
@@ -202,8 +216,12 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
                     close(true);
                     entry.onSelect();
                   }}
-                  onPointerEnter={(event) => event.currentTarget.focus()}
-                  onKeyDown={(event) => onItemKeyDown(event, index)}
+                  onPointerEnter={(event) => {
+                    event.currentTarget.focus();
+                  }}
+                  onKeyDown={(event) => {
+                    onItemKeyDown(event, index);
+                  }}
                 >
                   {entry.color !== undefined ? (
                     <Swatch

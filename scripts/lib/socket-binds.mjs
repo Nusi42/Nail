@@ -20,6 +20,19 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * A suspicious line: `kind` is "unspecified address" or "bind without
+ * loopback", `name` the pattern, `text` the trimmed line (1-based `line`).
+ *
+ * @typedef {{ line: number, kind: string, name: string, text: string }} Finding
+ */
+
+/**
+ * A known finding that is not a socket on a non-loopback address.
+ *
+ * @typedef {{ file: string, text: string, reason: string }} AllowEntry
+ */
+
 /** Directories scanned, relative to the repository root. */
 export const ROOTS = ["crates", "app", "e2e"];
 
@@ -39,7 +52,11 @@ const SKIP_DIRS = new Set([
   ".git",
 ]);
 
-/** Unspecified ("any") addresses. */
+/**
+ * Unspecified ("any") addresses.
+ *
+ * @type {{ name: string, re: RegExp }[]}
+ */
 const UNSPECIFIED = [
   { name: "0.0.0.0", re: /(?<![\d.])0\.0\.0\.0(?![\d])/ },
   { name: "[::]", re: /\[::\]/ },
@@ -50,7 +67,11 @@ const UNSPECIFIED = [
   { name: "INADDR_ANY", re: /\bINADDR_ANY\b|\bin6addr_any\b|\bIN6ADDR_ANY/i },
 ];
 
-/** Socket binds that must name a loopback address on the same line. */
+/**
+ * Socket binds that must name a loopback address on the same line.
+ *
+ * @type {{ name: string, re: RegExp, only?: RegExp }[]}
+ */
 const BINDS = [
   { name: "UdpSocket::bind", re: /UdpSocket::bind\s*\(/ },
   { name: "TcpListener::bind", re: /TcpListener::bind\s*\(/ },
@@ -66,6 +87,8 @@ const LOOPBACK = /127\.0\.0\.1|::1\b|LOCALHOST|localhost/;
  * Known findings that are not a socket on a non-loopback address.
  * `file` is relative to the repository root with forward slashes; `text`
  * must occur on the finding's line.
+ *
+ * @type {AllowEntry[]}
  */
 export const ALLOWLIST = [
   // The remote UI listener, enabled by the user (ADR 0041). Server::bind
@@ -155,7 +178,7 @@ export const ALLOWLIST = [
   // The SSRF proxy's blocked ranges and their tests (destinations, not binds).
   {
     file: "crates/nail-proxy/src/policy.rs",
-    text: "(Ipv4Addr::new(0, 0, 0, 0), 8)",
+    text: "(Ipv4Addr::UNSPECIFIED, 8)",
     reason: "blocked range",
   },
   { file: "crates/nail-proxy/src/policy.rs", text: '"0.0.0.0",', reason: "test: blocked address" },
@@ -168,7 +191,11 @@ export const ALLOWLIST = [
   { file: "crates/nail-proxy/tests/fetch.rs", text: '"http://[::]/"', reason: "test: refused URL" },
 ];
 
-/** Whether a source line is a comment (Rust / TS / JS line or block comment). */
+/**
+ * Whether a source line is a comment (Rust / TS / JS line or block comment).
+ *
+ * @param {string} line
+ */
 export function isComment(line) {
   const t = line.trim();
   return t.startsWith("//") || t.startsWith("/*") || t.startsWith("*");
@@ -177,8 +204,13 @@ export function isComment(line) {
 /**
  * Findings of one file's text: `{ line, kind, name, text }` (1-based line).
  * `file` selects the language-specific patterns.
+ *
+ * @param {string} text
+ * @param {string} [file]
+ * @returns {Finding[]}
  */
 export function scanText(text, file = "") {
+  /** @type {Finding[]} */
   const findings = [];
   text.split(/\r?\n/).forEach((raw, index) => {
     if (isComment(raw)) return;
@@ -208,9 +240,17 @@ export function scanText(text, file = "") {
   return findings;
 }
 
-/** Every scanned file under `root` (relative paths with forward slashes). */
+/**
+ * Every scanned file under `root` (relative paths with forward slashes).
+ *
+ * @param {string} root
+ * @param {string[]} [roots]
+ * @returns {string[]}
+ */
 export function listFiles(root, roots = ROOTS) {
+  /** @type {string[]} */
   const out = [];
+  /** @param {string} dir */
   const walk = (dir) => {
     let entries;
     try {
@@ -234,9 +274,15 @@ export function listFiles(root, roots = ROOTS) {
 /**
  * Checks `files` (`[{ file, text }]`) against `allowlist`: findings no
  * entry allows (`violations`) and entries that allowed nothing (`stale`).
+ *
+ * @param {{ file: string, text: string }[]} files
+ * @param {AllowEntry[]} [allowlist]
+ * @returns {{ violations: (Finding & { file: string })[], stale: AllowEntry[] }}
  */
 export function check(files, allowlist = ALLOWLIST) {
+  /** @type {Set<number>} */
   const used = new Set();
+  /** @type {(Finding & { file: string })[]} */
   const violations = [];
   for (const { file, text } of files) {
     for (const f of scanText(text, file)) {
@@ -249,7 +295,11 @@ export function check(files, allowlist = ALLOWLIST) {
   return { violations, stale };
 }
 
-/** Runs the check over the repository at `root`. */
+/**
+ * Runs the check over the repository at `root`.
+ *
+ * @param {string} root
+ */
 export function checkRepository(root) {
   const files = listFiles(root).map((file) => ({
     file,

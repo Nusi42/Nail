@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 
 import { check, checkRepository, scanText } from "../lib/socket-binds.mjs";
 
+/**
+ * @param {string} text
+ * @param {string} [file]
+ */
 const names = (text, file = "x.rs") => scanText(text, file).map((f) => f.name);
 
 test("unspecified addresses are found in every spelling", () => {
@@ -55,7 +59,7 @@ test("the allowlist allows by file and line text and reports stale entries", () 
     allow,
   );
   assert.deepEqual(
-    result.violations.map((v) => `${v.file}:${v.line}`),
+    result.violations.map((v) => `${v.file}:${String(v.line)}`),
     ["a.rs:2", "c.rs:1"],
   );
   assert.deepEqual(
@@ -67,7 +71,7 @@ test("the allowlist allows by file and line text and reports stale entries", () 
 test("the repository opens no sockets on non-loopback addresses", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const { files, violations, stale } = checkRepository(root);
-  assert.ok(files > 100, `scanned ${files} files`);
+  assert.ok(files > 100, `scanned ${String(files)} files`);
   assert.deepEqual(violations, []);
   assert.deepEqual(stale, []);
 });

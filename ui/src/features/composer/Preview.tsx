@@ -24,8 +24,12 @@ export function Preview({
   const client = useClient();
   const [source, setSource] = useState(markdown);
   useEffect(() => {
-    const timer = setTimeout(() => setSource(markdown), PREVIEW_DELAY_MS);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setSource(markdown);
+    }, PREVIEW_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [markdown]);
   const preview = useQuery({
     queryKey: ["composer", "preview", identityId, source],

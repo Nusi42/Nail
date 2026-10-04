@@ -2,6 +2,8 @@
 //! free/busy of people and rooms (`GetUserAvailability`), names
 //! (`ResolveNames`) and delegates (`GetDelegate`).
 
+use std::fmt::Write as _;
+
 use nail_api::exchange::{Room, RoomList};
 use nail_api::scheduling::{BusyKind, BusyPeriod};
 
@@ -159,19 +161,20 @@ impl EwsClient {
         for chunk in addresses.chunks(MAX_AVAILABILITY_MAILBOXES) {
             let mailboxes: String = chunk
                 .iter()
-                .map(|a| {
+                .fold(String::new(), |mut list, a| {
                     let kind = if rooms.iter().any(|r| r.eq_ignore_ascii_case(a)) {
                         "Room"
                     } else {
                         "Required"
                     };
-                    format!(
+                    let _ = write!(
+                        list,
                         "<t:MailboxData><t:Email>{}</t:Email>{}<t:ExcludeConflicts>false</t:ExcludeConflicts></t:MailboxData>",
                         el("t:Address", a),
                         el("t:AttendeeType", kind)
-                    )
-                })
-                .collect();
+                    );
+                    list
+                });
             let body = format!(
                 concat!(
                     "<m:GetUserAvailabilityRequest>{zone}<m:MailboxDataArray>{mailboxes}</m:MailboxDataArray>",

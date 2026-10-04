@@ -234,8 +234,10 @@ pub(crate) fn virtual_folders(
                 .as_ref()
                 .filter(|p| rest_contains(&members, &used, p, account))
                 .and_then(|p| by_id.get(p))
-                .map(|p| FolderId::new(format!("{parent_id}/{}", p.path)))
-                .unwrap_or_else(|| FolderId::new(parent_id.clone()));
+                .map_or_else(
+                    || FolderId::new(parent_id.clone()),
+                    |p| FolderId::new(format!("{parent_id}/{}", p.path)),
+                );
             out.push(make(
                 format!("{parent_id}/{}", folder.path),
                 folder.name.clone(),

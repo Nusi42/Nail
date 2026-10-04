@@ -581,7 +581,7 @@ Look & feel, Security and Extensions.
 
 A mistake is reported with the file, line and column, for example:
 
-```
+```text
 layout.kdl:8:17: unknown option `show-unreed` for `folder-tree` (options: show-unread, show-account-badges)
 ```
 

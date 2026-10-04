@@ -78,8 +78,9 @@ const ARIA_NAMES: Record<string, string> = {
  */
 export function ariaShortcut(binding: string): string | undefined {
   const steps = binding.trim().split(/\s+/).filter(Boolean);
-  if (steps.length !== 1) return undefined;
-  return chordPieces(steps[0] as string)
+  const [chord] = steps;
+  if (steps.length !== 1 || chord === undefined) return undefined;
+  return chordPieces(chord)
     .map((p) => ARIA_NAMES[p] ?? p.charAt(0).toUpperCase() + p.slice(1))
     .join("+");
 }

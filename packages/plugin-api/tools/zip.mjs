@@ -120,7 +120,7 @@ export function readZip(bytes) {
     let data;
     if (method === 0) data = Buffer.from(raw);
     else if (method === 8) data = inflateRawSync(raw);
-    else throw new Error(`unsupported zip compression method ${method} (${name})`);
+    else throw new Error(`unsupported zip compression method ${String(method)} (${name})`);
     if (crc32(data) !== crc) throw new Error(`zip CRC mismatch (${name})`);
     out.push({ name, data });
   }

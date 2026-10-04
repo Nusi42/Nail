@@ -3,7 +3,7 @@
  * accounts (or all accounts) and hidden folders. Nothing is granted until the user saves a grant here.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { Account, McpClient, McpGrant } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
@@ -74,7 +74,7 @@ export function GrantEditor({ client }: { client: McpClient }) {
     setNotice(null);
   };
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (disabled) return;
     setBusy(true);
@@ -115,9 +115,9 @@ export function GrantEditor({ client }: { client: McpClient }) {
                 labelId={`mcp-scope-${scope}`}
                 name={`scope-${scope}`}
                 checked={grant.scopes.includes(scope)}
-                onChange={(on) =>
-                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) })
-                }
+                onChange={(on) => {
+                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) });
+                }}
               />
               <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
             </div>
@@ -131,9 +131,9 @@ export function GrantEditor({ client }: { client: McpClient }) {
                 labelId={`mcp-scope-${scope}`}
                 name={`scope-${scope}`}
                 checked={grant.scopes.includes(scope)}
-                onChange={(on) =>
-                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) })
-                }
+                onChange={(on) => {
+                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) });
+                }}
               />
               <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
             </div>
@@ -144,7 +144,9 @@ export function GrantEditor({ client }: { client: McpClient }) {
             labelId="mcp-grant-all-accounts"
             name="all-accounts"
             checked={grant.all_accounts}
-            onChange={(on) => change({ ...grant, all_accounts: on })}
+            onChange={(on) => {
+              change({ ...grant, all_accounts: on });
+            }}
           />
           {!grant.all_accounts &&
             all.map((account) => (
@@ -154,9 +156,9 @@ export function GrantEditor({ client }: { client: McpClient }) {
                 args={{ name: account.name, email: account.email }}
                 name={`account-${account.id}`}
                 checked={grant.accounts.includes(account.id)}
-                onChange={(on) =>
-                  change({ ...grant, accounts: toggled(grant.accounts, account.id, on) })
-                }
+                onChange={(on) => {
+                  change({ ...grant, accounts: toggled(grant.accounts, account.id, on) });
+                }}
               />
             ))}
         </Section>

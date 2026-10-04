@@ -98,7 +98,7 @@ impl SealedDirectory {
         self
     }
 
-    fn plain_refused(&self, path: &Path) -> io::Error {
+    fn plain_refused(path: &Path) -> io::Error {
         invalid(format!(
             "index file {} is not encrypted",
             path.to_string_lossy()
@@ -124,7 +124,7 @@ impl Directory for SealedDirectory {
                 return Ok(handle);
             }
             return Err(OpenReadError::wrap_io_error(
-                self.plain_refused(path),
+                Self::plain_refused(path),
                 path.to_owned(),
             ));
         }
@@ -173,7 +173,7 @@ impl Directory for SealedDirectory {
             Ok(data)
         } else {
             Err(OpenReadError::wrap_io_error(
-                self.plain_refused(path),
+                Self::plain_refused(path),
                 path.to_owned(),
             ))
         }

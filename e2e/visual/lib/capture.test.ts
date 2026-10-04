@@ -16,12 +16,13 @@ import { actualDir, buildBase, manifestDir, resultsDir } from "./paths.ts";
 function shooter(frames: string[]) {
   let i = 0;
   const calls = { shots: 0, sleeps: [] as number[] };
-  const shoot = async () => {
+  const shoot = () => {
     calls.shots++;
-    return Buffer.from(frames[Math.min(i++, frames.length - 1)]!);
+    return Promise.resolve(Buffer.from(frames[Math.min(i++, frames.length - 1)] ?? ""));
   };
-  const sleep = async (ms: number) => {
+  const sleep = (ms: number) => {
     calls.sleeps.push(ms);
+    return Promise.resolve();
   };
   return { shoot, sleep, calls };
 }
@@ -37,17 +38,21 @@ test("a capture is taken once two consecutive screenshots are identical", async 
 
 test("a screen that never settles is reported, with the last screenshot", async () => {
   let n = 0;
-  const result = await captureStable(async () => Buffer.from(`frame ${n++}`), {
+  const result = await captureStable(() => Promise.resolve(Buffer.from(`frame ${String(n++)}`)), {
     attempts: 3,
-    sleep: async () => {},
+    sleep: async () => {
+      /* no-op */
+    },
   });
   assert.equal(result.stable, false);
   assert.equal(result.attempts, 3);
   assert.equal(result.png.toString(), "frame 2");
   // At least two screenshots, whatever is asked.
-  const once = await captureStable(async () => Buffer.from("x"), {
+  const once = await captureStable(() => Promise.resolve(Buffer.from("x")), {
     attempts: 1,
-    sleep: async () => {},
+    sleep: async () => {
+      /* no-op */
+    },
   });
   assert.deepEqual([once.stable, once.attempts], [true, 2]);
 });

@@ -1,17 +1,15 @@
 //! Shared fixtures: two real accounts, a virtual account over both, their
 //! folders, and a builder for messages.
 
-#![allow(dead_code)]
-
 use nail_api::rules::Rule;
 use nail_api::{Address, Flags, FolderRole};
 use nail_rules::{AccountInfo, Attachment, Env, FolderInfo, MessageData, StaticMailbox};
 
 /// 2026-09-29T12:00:00Z.
-pub const NOW: i64 = 1_790_683_200;
-pub const DAY: i64 = 86_400;
+pub(crate) const NOW: i64 = 1_790_683_200;
+pub(crate) const DAY: i64 = 86_400;
 
-pub fn mailbox() -> StaticMailbox {
+pub(crate) fn mailbox() -> StaticMailbox {
     let folder = |id: &str, account: &str, path: &str, role| FolderInfo {
         id: id.into(),
         account_id: account.into(),
@@ -52,7 +50,7 @@ pub fn mailbox() -> StaticMailbox {
     }
 }
 
-pub fn env(mailbox: &StaticMailbox) -> Env<'_> {
+pub(crate) fn env(mailbox: &StaticMailbox) -> Env<'_> {
     Env {
         now: NOW,
         utc_offset_secs: 0,
@@ -60,7 +58,7 @@ pub fn env(mailbox: &StaticMailbox) -> Env<'_> {
     }
 }
 
-pub fn addr(name: Option<&str>, email: &str) -> Address {
+pub(crate) fn addr(name: Option<&str>, email: &str) -> Address {
     Address {
         name: name.map(str::to_owned),
         email: email.into(),
@@ -68,7 +66,7 @@ pub fn addr(name: Option<&str>, email: &str) -> Address {
 }
 
 /// A newsletter from Substack in the work inbox, a day old.
-pub fn newsletter() -> MessageData {
+pub(crate) fn newsletter() -> MessageData {
     MessageData {
         headers: vec![
             (
@@ -106,7 +104,7 @@ pub fn newsletter() -> MessageData {
 }
 
 /// A personal mail from the boss in the work inbox, 40 days old, read.
-pub fn from_boss() -> MessageData {
+pub(crate) fn from_boss() -> MessageData {
     MessageData {
         headers: vec![(
             "Authentication-Results".into(),
@@ -127,7 +125,7 @@ pub fn from_boss() -> MessageData {
 }
 
 /// A mail in the home account's inbox, without body or headers.
-pub fn at_home() -> MessageData {
+pub(crate) fn at_home() -> MessageData {
     MessageData {
         from: vec![addr(None, "friend@mail.example")],
         to: vec![addr(None, "me@home.example")],
@@ -139,7 +137,7 @@ pub fn at_home() -> MessageData {
 }
 
 /// Parses one rule written in rules.kdl syntax.
-pub fn rule(text: &str) -> Rule {
+pub(crate) fn rule(text: &str) -> Rule {
     nail_config::rules::parse_rule_text(text).unwrap_or_else(|errors| {
         panic!(
             "{}",
@@ -153,7 +151,7 @@ pub fn rule(text: &str) -> Rule {
 }
 
 /// A rule with an arrival trigger and these `when` / `then` bodies.
-pub fn arrival(when: &str, then: &str) -> Rule {
+pub(crate) fn arrival(when: &str, then: &str) -> Rule {
     rule(&format!(
         "rule \"test\" trigger=\"arrival\" {{\n  when {{\n{when}\n  }}\n  then {{\n{then}\n  }}\n}}\n"
     ))

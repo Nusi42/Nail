@@ -575,6 +575,8 @@ pub fn partstat(status: ParticipationStatus) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -786,19 +788,22 @@ ORGANIZER:mailto:ada@example.org\r\nATTENDEE:mailto:bob@example.org\r\nEND:VEVEN
         // read, each with only the zones it uses.
         let mut body = String::new();
         for i in 0..50 {
-            body.push_str(&format!(
+            write!(
+                body,
                 "BEGIN:VTIMEZONE\r\nTZID:Zone {i}\r\nBEGIN:STANDARD\r\nDTSTART:19700101T000000\r\n\
 TZOFFSETFROM:+0100\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
-            ));
+            )
+            .unwrap();
         }
         for day in 0..300 {
             let date =
                 chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap() + chrono::Duration::days(day);
             let stamp = date.format("%Y%m%d");
-            body.push_str(&format!(
+            write!(
+                body,
                 "BEGIN:VEVENT\r\nUID:big\r\nRECURRENCE-ID:{stamp}T090000Z\r\nDTSTART:{stamp}T100000Z\r\n\
 ORGANIZER:mailto:ada@example.org\r\nEND:VEVENT\r\n"
-            ));
+            ).unwrap();
         }
         let object = parse_itip(&cal("METHOD:REQUEST\r\n", &body), None);
         assert_eq!(object.components.len(), MAX_COMPONENTS);

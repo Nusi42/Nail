@@ -1,6 +1,8 @@
 //! The `nail` binary end to end: `serve --seed demo` answers HTTP, and
 //! `config schema` prints JSON.
 
+#![cfg(test)]
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
@@ -10,8 +12,8 @@ struct Killed(Child);
 
 impl Drop for Killed {
     fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+        drop(self.0.kill());
+        drop(self.0.wait());
     }
 }
 
@@ -138,7 +140,7 @@ fn wait_lines(lines: &std::sync::mpsc::Receiver<String>, needles: &[&str]) {
                 missing.retain(|n| !line.contains(n));
                 seen.push(line);
             }
-            Err(_) => panic!("no lines with {missing:?}; saw {seen:#?}"),
+            Err(e) => panic!("no lines with {missing:?} ({e}); saw {seen:#?}"),
         }
     }
 }

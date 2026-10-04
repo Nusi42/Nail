@@ -72,7 +72,9 @@ export function CalendarListView({
       setProblem(problemOf(error));
     }
   };
-  const open = (name: string) => ctx.store.getState().openWindow(name);
+  const open = (name: string) => {
+    ctx.store.getState().openWindow(name);
+  };
   const pim = () => ctx.pim.getState();
 
   const groupLabel = (group: CalendarGroup) =>
@@ -95,14 +97,18 @@ export function CalendarListView({
             id: "new-calendar",
             label: t("pim-calendar-new-calendar"),
             icon: "calendar-plus",
-            onSelect: () => newIn(group, "event"),
+            onSelect: () => {
+              newIn(group, "event");
+            },
           },
           {
             type: "item",
             id: "new-task-list",
             label: t("pim-calendar-new-task-list"),
             icon: "list-plus",
-            onSelect: () => newIn(group, "task"),
+            onSelect: () => {
+              newIn(group, "task");
+            },
           },
           { type: "separator", id: "sep-new" },
         ] satisfies PimMenuEntry[])
@@ -112,21 +118,27 @@ export function CalendarListView({
       id: "new-subscription",
       label: t("pim-calendar-new-subscription"),
       icon: "link",
-      onSelect: () => open(SOURCES_DIALOG),
+      onSelect: () => {
+        open(SOURCES_DIALOG);
+      },
     },
     {
       type: "item",
       id: "sources",
       label: t("pim-sources-open"),
       icon: "server",
-      onSelect: () => open(SOURCES_DIALOG),
+      onSelect: () => {
+        open(SOURCES_DIALOG);
+      },
     },
     {
       type: "item",
       id: "import",
       label: t("pim-import-open"),
       icon: "import",
-      onSelect: () => open(IMPORT_DIALOG),
+      onSelect: () => {
+        open(IMPORT_DIALOG);
+      },
     },
   ];
 
@@ -149,7 +161,9 @@ export function CalendarListView({
         id: "settings",
         label: t("pim-calendar-settings-open"),
         icon: "settings",
-        onSelect: () => editSettings(calendar),
+        onSelect: () => {
+          editSettings(calendar);
+        },
       },
       {
         type: "item",
@@ -179,7 +193,9 @@ export function CalendarListView({
                   : t("pim-calendar-remove-menu"),
               icon: "trash",
               danger: true,
-              onSelect: () => askRemove(calendar),
+              onSelect: () => {
+                askRemove(calendar);
+              },
             },
           ] satisfies PimMenuEntry[])
         : []),
@@ -228,8 +244,12 @@ export function CalendarListView({
                     entries={rowEntries(calendar)}
                     removable={removalOf(calendar, sourceList) !== null}
                     onToggle={(visible) => void save(calendar, { ...calendar.settings, visible })}
-                    onSettings={() => editSettings(calendar)}
-                    onRemove={() => askRemove(calendar)}
+                    onSettings={() => {
+                      editSettings(calendar);
+                    }}
+                    onRemove={() => {
+                      askRemove(calendar);
+                    }}
                   />
                 ))}
               </ul>
@@ -247,9 +267,9 @@ interface RowProps {
   asButtons: boolean;
   entries: readonly PimMenuEntry[];
   removable: boolean;
-  onToggle(visible: boolean): void;
-  onSettings(): void;
-  onRemove(): void;
+  onToggle: (visible: boolean) => void;
+  onSettings: () => void;
+  onRemove: () => void;
 }
 
 function CalendarRow({
@@ -282,7 +302,9 @@ function CalendarRow({
           data-geom={geom}
           data-colored={isCssColor(calendar.settings.color) ? "" : undefined}
           checked={calendar.settings.visible}
-          onChange={(e) => onToggle(e.target.checked)}
+          onChange={(e) => {
+            onToggle(e.target.checked);
+          }}
         />
         <span data-part="calendar-list.name">{name}</span>
         {isTaskList(calendar) && (

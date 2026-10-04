@@ -179,7 +179,7 @@ impl SearchIndex {
     /// An index in memory (tests, demos).
     pub fn open_in_ram(policy: CommitPolicy) -> Result<Self> {
         let (schema, fields) = schema();
-        Self::init(Index::create_in_ram(schema), fields, policy, false, None)
+        Self::init(&Index::create_in_ram(schema), fields, policy, false, None)
     }
 
     /// Opens (or creates) the index in `dir`. An index of another schema
@@ -194,7 +194,7 @@ impl SearchIndex {
     pub fn open_with(
         dir: impl AsRef<Path>,
         policy: CommitPolicy,
-        wrapper: Option<DirectoryWrapper>,
+        wrapper: Option<&DirectoryWrapper>,
     ) -> Result<Self> {
         let dir = dir.as_ref();
         let version_file = dir.join(VERSION_FILE);
@@ -213,18 +213,18 @@ impl SearchIndex {
         }
         std::fs::create_dir_all(dir)?;
         let (schema, fields) = schema();
-        let index = match Self::open_dir(dir, &schema, wrapper.as_ref()) {
+        let index = match Self::open_dir(dir, &schema, wrapper) {
             Ok(index) => index,
             Err(err) => {
                 tracing::warn!(?dir, %err, "search index unreadable; rebuilding");
                 std::fs::remove_dir_all(dir)?;
                 std::fs::create_dir_all(dir)?;
                 rebuilt = true;
-                Self::open_dir(dir, &schema, wrapper.as_ref())?
+                Self::open_dir(dir, &schema, wrapper)?
             }
         };
         std::fs::write(&version_file, SCHEMA_VERSION.to_string())?;
-        Self::init(index, fields, policy, rebuilt, Some(dir.to_owned()))
+        Self::init(&index, fields, policy, rebuilt, Some(dir.to_owned()))
     }
 
     fn open_dir(dir: &Path, schema: &Schema, wrapper: Option<&DirectoryWrapper>) -> Result<Index> {
@@ -240,7 +240,7 @@ impl SearchIndex {
     }
 
     fn init(
-        index: Index,
+        index: &Index,
         fields: Fields,
         policy: CommitPolicy,
         rebuilt: bool,
@@ -421,7 +421,7 @@ impl SearchIndex {
     }
 
     /// Tokens of `text` as the index sees them.
-    fn tokens(&self, text: &str) -> Vec<String> {
+    fn tokens(text: &str) -> Vec<String> {
         let mut analyzer = analyzer();
         let mut stream = analyzer.token_stream(text);
         let mut out = Vec::new();
@@ -435,11 +435,11 @@ impl SearchIndex {
     /// phrase when there are several) in one of the field's index fields.
     /// `None` when the text has no searchable tokens.
     pub(crate) fn text_query(&self, field: TextField, text: &str) -> Option<Box<dyn Query>> {
-        let tokens = self.tokens(text);
+        let tokens = Self::tokens(text);
         if tokens.is_empty() {
             return None;
         }
-        let per_field: Vec<(Occur, Box<dyn Query>)> = self
+        let mut per_field: Vec<(Occur, Box<dyn Query>)> = self
             .fields
             .text(field)
             .into_iter()
@@ -462,15 +462,12 @@ impl SearchIndex {
                 (Occur::Should, q)
             })
             .collect();
-        Some(if per_field.len() == 1 {
-            per_field
-                .into_iter()
-                .next()
-                .map(|(_, q)| q)
-                .expect("one field")
-        } else {
-            Box::new(BooleanQuery::new(per_field))
-        })
+        if per_field.len() == 1
+            && let Some((_, only)) = per_field.pop()
+        {
+            return Some(only);
+        }
+        Some(Box::new(BooleanQuery::new(per_field)))
     }
 
     /// Runs a Tantivy query; returns every matching message with its score.
@@ -494,25 +491,23 @@ impl SearchIndex {
 
     /// All text terms combined with AND (a query that matches nothing
     /// when a term has no tokens is avoided by the caller).
-    pub(crate) fn all_of(queries: Vec<Box<dyn Query>>) -> Box<dyn Query> {
-        match queries.len() {
-            0 => Box::new(AllQuery),
-            1 => queries.into_iter().next().expect("one query"),
-            _ => Box::new(BooleanQuery::new(
-                queries.into_iter().map(|q| (Occur::Must, q)).collect(),
-            )),
+    pub(crate) fn all_of(mut queries: Vec<Box<dyn Query>>) -> Box<dyn Query> {
+        if queries.len() <= 1 {
+            return queries.pop().unwrap_or_else(|| Box::new(AllQuery));
         }
+        Box::new(BooleanQuery::new(
+            queries.into_iter().map(|q| (Occur::Must, q)).collect(),
+        ))
     }
 
     /// Text terms combined with OR.
-    pub(crate) fn any_of(queries: Vec<Box<dyn Query>>) -> Box<dyn Query> {
-        match queries.len() {
-            0 => Box::new(EmptyQuery),
-            1 => queries.into_iter().next().expect("one query"),
-            _ => Box::new(BooleanQuery::new(
-                queries.into_iter().map(|q| (Occur::Should, q)).collect(),
-            )),
+    pub(crate) fn any_of(mut queries: Vec<Box<dyn Query>>) -> Box<dyn Query> {
+        if queries.len() <= 1 {
+            return queries.pop().unwrap_or_else(|| Box::new(EmptyQuery));
         }
+        Box::new(BooleanQuery::new(
+            queries.into_iter().map(|q| (Occur::Should, q)).collect(),
+        ))
     }
 
     /// Message ids matching one full-text term, with scores (e.g. for
@@ -538,7 +533,7 @@ mod tests {
             cc: String::new(),
             subject: subject.into(),
             body: body.into(),
-            attachment_names: vec!["Rechnung-März.pdf".into()],
+            attachment_names: vec!["Rechnung-Menü.pdf".into()],
             decrypted: false,
         }
     }
@@ -602,9 +597,9 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        // ASCII folding: März matches marz.
+        // ASCII folding: Menü matches menu.
         assert_eq!(
-            ids(index.search_text(TextField::Filename, "marz").unwrap()).len(),
+            ids(index.search_text(TextField::Filename, "menu").unwrap()).len(),
             2
         );
         assert!(index.search_text(TextField::Any, "!!!").unwrap().is_empty());
@@ -669,7 +664,7 @@ mod tests {
             inner
         });
         let index =
-            SearchIndex::open_with(dir.path(), CommitPolicy::default(), Some(wrapper)).unwrap();
+            SearchIndex::open_with(dir.path(), CommitPolicy::default(), Some(&wrapper)).unwrap();
         index.add(&[doc("m1", "hello", "world")]).unwrap();
         assert_eq!(index.doc_count().unwrap(), 1);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -679,7 +674,7 @@ mod tests {
     fn commit_batching() {
         let policy = CommitPolicy {
             max_pending: 3,
-            max_delay: Duration::from_secs(3600),
+            max_delay: Duration::from_hours(1),
         };
         let index = SearchIndex::open_in_ram(policy).unwrap();
         index

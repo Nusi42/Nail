@@ -31,9 +31,17 @@ export class PackError extends Error {
 }
 
 /**
+ * The fields of a checked manifest these tools read (`index.d.mts` gives
+ * callers the full generated `PluginManifest`).
+ *
+ * @typedef {{ id: string, name: string, version: string, main: string,
+ *   contributes?: { locales?: Record<string, string> } }} PluginManifest
+ */
+
+/**
  * Reads and checks `<dir>/manifest.json`.
  * @param {string} dir
- * @returns {{ manifest: any, bytes: Buffer }}
+ * @returns {{ manifest: PluginManifest, bytes: Buffer }}
  */
 export function readManifest(dir) {
   const file = path.join(dir, "manifest.json");
@@ -42,9 +50,10 @@ export function readManifest(dir) {
   if (bytes.length > MAX_MANIFEST_BYTES) {
     throw new PackError("manifest.json is larger than 64 KiB", [{ kind: "too-large", path: "" }]);
   }
+  /** @type {unknown} */
   let manifest;
   try {
-    manifest = JSON.parse(bytes.toString("utf8"));
+    manifest = /** @type {unknown} */ (JSON.parse(bytes.toString("utf8")));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new PackError(`manifest.json is not valid JSON: ${message}`, [
@@ -58,7 +67,8 @@ export function readManifest(dir) {
     );
     throw new PackError(`manifest.json has problems:\n${lines.join("\n")}`, issues);
   }
-  return { manifest, bytes };
+  // checkManifest found nothing: the shape is a plug-in manifest.
+  return { manifest: /** @type {PluginManifest} */ (manifest), bytes };
 }
 
 /**
@@ -79,20 +89,21 @@ function listFiles(root, rel) {
 /**
  * The files a package contains, in archive order (manifest first).
  * @param {string} dir
- * @param {any} manifest
+ * @param {PluginManifest} manifest
  * @returns {string[]}
  */
 export function packageFiles(dir, manifest) {
   /** @type {string[]} */
   const files = [manifest.main];
-  for (const file of Object.values(manifest.contributes?.locales ?? {})) files.push(String(file));
+  for (const file of Object.values(manifest.contributes?.locales ?? {})) files.push(file);
   const assets = path.join(dir, "assets");
   if (existsSync(assets) && statSync(assets).isDirectory()) {
     files.push(...listFiles(dir, "assets"));
   }
   const unique = [...new Set(files)].sort();
   for (const file of unique) {
-    if (!isPackagePath(file)) throw new PackError(`not a valid package path: ${file}`);
+    const invalid = `not a valid package path: ${file}`;
+    if (!isPackagePath(file)) throw new PackError(invalid);
     if (file === "manifest.json") throw new PackError("manifest.json cannot be listed twice");
     if (!existsSync(path.join(dir, file))) {
       throw new PackError(
@@ -108,7 +119,8 @@ export function packageFiles(dir, manifest) {
 /**
  * Packs `dir` into `out` (default `<dir>/dist/<id>.nailplugin`).
  * @param {{ dir: string, out?: string | undefined }} options
- * @returns {{ file: string, sha256: string, size: number, files: string[], manifest: any }}
+ * @returns {{ file: string, sha256: string, size: number, files: string[],
+ *   manifest: PluginManifest }}
  */
 export function packPlugin({ dir, out }) {
   const root = path.resolve(dir);
@@ -116,7 +128,7 @@ export function packPlugin({ dir, out }) {
   const files = packageFiles(root, manifest);
   const zip = createZip(files.map((name) => ({ name, data: readFileSync(path.join(root, name)) })));
   if (zip.length > MAX_PACKAGE_BYTES) {
-    throw new PackError(`the package is larger than ${MAX_PACKAGE_BYTES} bytes`);
+    throw new PackError(`the package is larger than ${String(MAX_PACKAGE_BYTES)} bytes`);
   }
   const file = path.resolve(out ?? path.join(root, "dist", `${manifest.id}.${PACKAGE_EXTENSION}`));
   mkdirSync(path.dirname(file), { recursive: true });

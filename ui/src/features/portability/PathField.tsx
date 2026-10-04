@@ -29,7 +29,7 @@ export interface PathFieldProps {
    * The new path; `confirmed` is true when it came from the Save dialog
    * (which asked before replacing an existing file).
    */
-  onChange(path: string, confirmed?: boolean): void;
+  onChange: (path: string, confirmed?: boolean) => void;
   /** Which system dialog Browse opens. */
   kind: PathPickKind;
   /** Fluent id of the dialog's title. */
@@ -48,16 +48,15 @@ export interface SavePath {
   /** The save request's `overwrite`. */
   overwrite: boolean;
   /** For [`PathFieldProps.onChange`]. */
-  onChange(path: string, confirmed?: boolean): void;
+  onChange: (path: string, confirmed?: boolean) => void;
 }
 
 /** State of a save-file [`PathField`]: the path and the confirmed overwrite. */
 export function useSavePath(initial = ""): SavePath {
   const [state, setState] = useState({ path: initial, confirmed: false });
-  const onChange = useCallback(
-    (path: string, confirmed = false) => setState({ path, confirmed }),
-    [],
-  );
+  const onChange = useCallback((path: string, confirmed = false) => {
+    setState({ path, confirmed });
+  }, []);
   return { path: state.path, overwrite: state.confirmed, onChange };
 }
 
@@ -115,7 +114,9 @@ export function PathField({
           disabled={disabled}
           aria-describedby={hintId}
           aria-invalid={relative || undefined}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
         />
         {!unavailable && (
           <button

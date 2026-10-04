@@ -80,6 +80,7 @@ impl Access {
     /// What both reach (review M4a: a plug-in serving an MCP client acts
     /// within the overlap of its own and the client's grant): the scopes
     /// and accounts of both, the folders either excludes.
+    #[must_use]
     pub fn intersect(&self, other: &Access) -> Access {
         let accounts = match (&self.accounts, &other.accounts) {
             (None, x) | (x, None) => x.clone(),

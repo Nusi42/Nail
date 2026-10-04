@@ -10,6 +10,7 @@ import { SHELL_SKIN_CSS } from "../features/shell/skin";
 import { WINDOWS_SKIN_CSS } from "../features/windows/skin";
 import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
+import { must } from "../test/must";
 
 /** WCAG relative luminance of `#rrggbb`. */
 function luminance(hex: string): number {
@@ -254,7 +255,7 @@ describe("M5a skin (theme/skin.ts)", () => {
       ...SKIN_CSS.matchAll(/--nail-color-(?:avatar-\d+|file-[a-z]+), (#[0-9a-f]{6})\)/g),
     ];
     expect(fallbacks.length).toBeGreaterThan(AVATAR_COLORS.length);
-    for (const color of [...AVATAR_COLORS, ...fallbacks.map((m) => m[1] as string)]) {
+    for (const color of [...AVATAR_COLORS, ...fallbacks.map((m) => must(m[1]))]) {
       expect(contrast(color, "#ffffff")).toBeGreaterThanOrEqual(4.5);
     }
   });

@@ -1,6 +1,12 @@
 //! M4a WP105: writes of actors that are not MCP clients (plug-ins) through
 //! the MCP write tools' plans, and plug-in tools offered to MCP clients.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::sync::Arc;

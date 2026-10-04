@@ -41,13 +41,6 @@ import { UpdateSettingsWidget } from "./UpdateSettings";
 
 export * from "./model";
 export * from "./names";
-export {
-  setDefaultApps,
-  setUpdateState,
-  simulateMapiSendMail,
-  updateStatusOf,
-  type MockMapiMessage,
-} from "./mock";
 export { systemKeys } from "./queries";
 export { systemStoreFor } from "./store";
 export { SYSTEM_BASE_CSS } from "./parts";
@@ -75,9 +68,17 @@ export const widgets: Feature["widgets"] = {
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Opens "About Nail". */
-  [ABOUT_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(ABOUT_DIALOG) },
+  [ABOUT_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(ABOUT_DIALOG);
+    },
+  },
   /** Opens the first-run screen again. */
-  [FIRST_RUN_ACTION]: { run: (ctx) => ctx.store.getState().openWindow(FIRST_RUN_DIALOG) },
+  [FIRST_RUN_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(FIRST_RUN_DIALOG);
+    },
+  },
   /** Checks for updates now (the status arrives with `UpdateStatusChanged`). */
   [CHECK_UPDATES_ACTION]: {
     run: async (ctx) => {

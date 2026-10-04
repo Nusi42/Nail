@@ -36,9 +36,13 @@ export function UiContextReporter() {
   const last = useRef<string | null>(null);
 
   useEffect(() => {
-    const onSelection = () => setSelectedText(readerSelection(document.getSelection()));
+    const onSelection = () => {
+      setSelectedText(readerSelection(document.getSelection()));
+    };
     document.addEventListener("selectionchange", onSelection);
-    return () => document.removeEventListener("selectionchange", onSelection);
+    return () => {
+      document.removeEventListener("selectionchange", onSelection);
+    };
   }, []);
 
   useEffect(() => {
@@ -59,7 +63,9 @@ export function UiContextReporter() {
       // Best effort: a failed report only means agents see an older context.
       void client.call({ type: "ReportUiContext", context }).catch(() => undefined);
     }, REPORT_DELAY_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [client, accountId, folderId, messageId, threadId, selectedText, draftId]);
 
   return null;

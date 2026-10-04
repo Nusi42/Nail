@@ -13,10 +13,12 @@ import { appendFileSync, writeFileSync } from "node:fs";
 
 import { createUpdateServer, listenLoopback } from "./lib/update-server.mjs";
 
+/** @param {string[]} argv */
 function parse(argv) {
+  /** @type {{ port: number, root?: string, portFile?: string, log?: string }} */
   const o = { port: 0 };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     const value = () => {
       const v = argv[++i];
       if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
@@ -28,9 +30,10 @@ function parse(argv) {
     else if (arg === "--log") o.log = value();
     else throw new Error(`unknown option ${arg}`);
   }
-  if (!o.root) throw new Error("--root is required");
+  const { root } = o;
+  if (!root) throw new Error("--root is required");
   if (!Number.isInteger(o.port) || o.port < 0 || o.port > 65535) throw new Error("bad --port");
-  return o;
+  return { ...o, root };
 }
 
 const o = parse(process.argv.slice(2));
@@ -44,4 +47,4 @@ const server = createUpdateServer({
 });
 const port = await listenLoopback(server, o.port);
 if (o.portFile) writeFileSync(o.portFile, String(port));
-console.log(`update server: http://127.0.0.1:${port}/ (root ${o.root})`);
+console.log(`update server: http://127.0.0.1:${String(port)}/ (root ${o.root})`);

@@ -117,7 +117,7 @@ describe("colour values from data", () => {
   it("builds the card and swatch declarations", () => {
     expect(eventCardDeclarations("#2563eb")).toEqual({
       "border-left-color": "#2563eb",
-      "background-color": `color-mix(in srgb, #2563eb ${EVENT_TINT}%, var(--nail-color-bg))`,
+      "background-color": `color-mix(in srgb, #2563eb ${String(EVENT_TINT)}%, var(--nail-color-bg))`,
     });
     expect(eventCardDeclarations(null)).toEqual({});
     expect(eventCardDeclarations("url(x)")).toEqual({});

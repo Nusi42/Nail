@@ -77,7 +77,7 @@ pub(crate) struct ContentType {
 }
 
 impl ContentType {
-    pub fn param(&self, name: &str) -> Option<&str> {
+    pub(crate) fn param(&self, name: &str) -> Option<&str> {
         self.params
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case(name))
@@ -457,6 +457,17 @@ pub struct ReadContext<'a> {
     pub now: i64,
 }
 
+impl std::fmt::Debug for ReadContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReadContext")
+            .field("known_certs", &self.known_certs)
+            .field("keys", &self.keys.len())
+            .field("from", &self.from)
+            .field("now", &self.now)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The result of reading an S/MIME message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadOutcome {
@@ -544,29 +555,23 @@ pub fn read(entity: &[u8], ctx: &ReadContext<'_>) -> Result<Option<ReadOutcome>>
             SmimeKind::SignedData => {
                 let verified =
                     decode_body(&current).and_then(|der| signed::verify(&der, None, &verify_ctx));
-                match verified {
-                    Ok(verified) => {
-                        outcome.signers.extend(verified.signers);
-                        outcome.certificates.extend(verified.certificates);
-                        outcome.content = verified.content;
-                    }
-                    Err(_) => {
-                        outcome.signers.push(error_signature());
-                        outcome.content = current;
-                        touched = true;
-                        break;
-                    }
+                if let Ok(verified) = verified {
+                    outcome.signers.extend(verified.signers);
+                    outcome.certificates.extend(verified.certificates);
+                    outcome.content = verified.content;
+                } else {
+                    outcome.signers.push(error_signature());
+                    outcome.content = current;
+                    touched = true;
+                    break;
                 }
             }
             SmimeKind::EnvelopedData | SmimeKind::AuthEnvelopedData => {
                 touched = true;
-                let der = match decode_body(&current) {
-                    Ok(der) => der,
-                    Err(_) => {
-                        outcome.status.encryption = Some(encryption(DecryptionState::Failed, None));
-                        outcome.content = current;
-                        break;
-                    }
+                let Ok(der) = decode_body(&current) else {
+                    outcome.status.encryption = Some(encryption(DecryptionState::Failed, None));
+                    outcome.content = current;
+                    break;
                 };
                 match enveloped::decrypt(&der, ctx.keys) {
                     Ok((
@@ -939,23 +944,23 @@ mod tests {
             chain: &chain,
         };
         for mode in [SignMode::Detached, SignMode::Opaque] {
-            let signed = sign_entity(ENTITY, &signer, mode, AT).unwrap();
+            let signed_mail = sign_entity(ENTITY, &signer, mode, AT).unwrap();
             let expected_kind = match mode {
                 SignMode::Detached => "multipart/signed",
                 SignMode::Opaque => "application/pkcs7-mime",
             };
             assert!(
-                String::from_utf8_lossy(&signed)
+                String::from_utf8_lossy(&signed_mail)
                     .starts_with(&format!("Content-Type: {expected_kind}"))
             );
-            let outcome = read_as(&w, "bob", &signed, "alice@example.org").unwrap();
+            let outcome = read_as(&w, "bob", &signed_mail, "alice@example.org").unwrap();
             assert_eq!(signature(&outcome).state, SignatureState::Valid, "{mode:?}");
             assert_eq!(chain_state(signature(&outcome)), ChainState::Valid);
             assert_eq!(outcome.content, ENTITY);
 
             // Sign, then encrypt to bob and to alice herself.
             let encrypted = encrypt_entity(
-                &signed,
+                &signed_mail,
                 &[w.bob.0.clone(), w.alice.0.clone()],
                 ContentCipher::Aes256Gcm,
             )
@@ -991,9 +996,13 @@ mod tests {
             chain: &[],
         };
         let lf = b"Content-Type: text/plain\n\nline one\nline two\n";
-        let signed = sign_entity(lf, &signer, SignMode::Detached, AT).unwrap();
-        assert!(!signed.windows(2).any(|p| p[1] == b'\n' && p[0] != b'\r'));
-        let outcome = read_as(&w, "bob", &signed, "alice@example.org").unwrap();
+        let signed_mail = sign_entity(lf, &signer, SignMode::Detached, AT).unwrap();
+        assert!(
+            !signed_mail
+                .windows(2)
+                .any(|p| p[1] == b'\n' && p[0] != b'\r')
+        );
+        let outcome = read_as(&w, "bob", &signed_mail, "alice@example.org").unwrap();
         assert_eq!(signature(&outcome).state, SignatureState::Valid);
         assert_eq!(outcome.content, canonicalize(lf));
     }

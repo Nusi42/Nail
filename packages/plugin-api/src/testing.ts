@@ -416,13 +416,26 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Runs `fn` like the body of an `async` function: its result, or what it
+ * throws, settles the returned promise. The host API is asynchronous; the
+ * test host does its work synchronously.
+ */
+function asPromise<T>(fn: () => T | PromiseLike<T>): Promise<T> {
+  return new Promise((resolve) => {
+    resolve(fn());
+  });
+}
+
 function format(args: unknown[]): string {
   return args
     .map((a) => {
       if (typeof a === "string") return a;
       if (a instanceof Error) return `${a.name}: ${a.message}`;
       try {
-        return JSON.stringify(a) ?? String(a);
+        // `undefined` for functions, symbols and `undefined` itself.
+        const json = JSON.stringify(a) as string | undefined;
+        return json ?? String(a);
       } catch {
         return String(a);
       }
@@ -438,10 +451,16 @@ const TIMED_OUT = Symbol("timed out");
 
 /** Runs `fn` with a wall-clock budget. */
 async function withBudget<T>(ms: number, fn: () => T | Promise<T>): Promise<T | typeof TIMED_OUT> {
-  let cancel = () => {};
+  let cancel = () => {
+    /* no-op */
+  };
   const timeout = new Promise<typeof TIMED_OUT>((resolve) => {
-    const id = setTimeout(() => resolve(TIMED_OUT), ms);
-    cancel = () => clearTimeout(id);
+    const id = setTimeout(() => {
+      resolve(TIMED_OUT);
+    }, ms);
+    cancel = () => {
+      clearTimeout(id);
+    };
   });
   try {
     return await Promise.race([Promise.resolve().then(fn), timeout]);
@@ -521,7 +540,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
   const mcpTools = new Map<string, PluginMcpToolHandler>();
 
   let counter = 0;
-  const nextId = (prefix: string) => `${prefix}-${++counter}`;
+  const nextId = (prefix: string) => `${prefix}-${String(++counter)}`;
 
   const has = (permission: string, accountId?: string): boolean =>
     granted.has(permission) &&
@@ -536,7 +555,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     if (!has(permission, accountId)) {
       throw createPluginApiError(
         "forbidden",
-        `permission ${permission} is not granted for account ${accountId}`,
+        `permission ${permission} is not granted for account ${accountId ?? ""}`,
       );
     }
   };
@@ -570,9 +589,10 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     if (map.has(name)) throw createPluginApiError("conflict", `${kind} ${name} is registered`);
     map.set(name, value);
   };
-  const registerCommand = (name: string, handler: PluginCommandHandler): void =>
+  const registerCommand = (name: string, handler: PluginCommandHandler): void => {
     register("command", commands, declaredCommands, name, handler);
-  const registerPanel = (name: string, panel: PluginPanelProvider | PluginPanelRender): void =>
+  };
+  const registerPanel = (name: string, panel: PluginPanelProvider | PluginPanelRender): void => {
     register(
       "panel",
       panels,
@@ -580,13 +600,15 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       name,
       typeof panel === "function" ? { render: panel } : panel,
     );
+  };
   const log =
     (level: PluginLogLevel) =>
     (...args: unknown[]): void => {
       logs.push({ level, message: format(args) });
     };
   const settingsApi: NailApi["settings"] = {
-    get: <T extends JsonValue = JsonValue>(key: string) => settings[key] as T | undefined,
+    // The public signature lets callers name the value's type (`get<string>(key)`).
+    get: ((key: string) => settings[key]) as NailApi["settings"]["get"],
     all: () => ({ ...settings }),
     onChange: (listener) => {
       settingsListeners.push(listener);
@@ -652,26 +674,27 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     return list;
   };
   let lastComposerDraft: DraftId | undefined;
-  const composerEdit = async (
+  const composerEdit = (
     op: ComposerEdit["op"],
     text: string,
     editOptions: { draftId?: DraftId; format?: ComposerEdit["format"] } = {},
-  ) => {
-    need("composer");
-    if (editOptions.format && !["text", "markdown", "html"].includes(editOptions.format)) {
-      throw invalid(`unknown format ${editOptions.format}`);
-    }
-    const draftId = editOptions.draftId ?? lastComposerDraft;
-    if (!draftId || (lastComposerDraft !== undefined && draftId !== lastComposerDraft)) {
-      throw createPluginApiError(
-        "not_found",
-        "no draft to edit: composer edits work only on the draft a composer action ran on",
-      );
-    }
-    const edit: ComposerEdit = { op, text: String(text) };
-    if (editOptions.format) edit.format = editOptions.format;
-    composerEdits.push({ draftId, edit });
-  };
+  ) =>
+    asPromise(() => {
+      need("composer");
+      if (editOptions.format && !["text", "markdown", "html"].includes(editOptions.format)) {
+        throw invalid(`unknown format ${editOptions.format}`);
+      }
+      const draftId = editOptions.draftId ?? lastComposerDraft;
+      if (!draftId || (lastComposerDraft !== undefined && draftId !== lastComposerDraft)) {
+        throw createPluginApiError(
+          "not_found",
+          "no draft to edit: composer edits work only on the draft a composer action ran on",
+        );
+      }
+      const edit: ComposerEdit = { op, text };
+      if (editOptions.format) edit.format = editOptions.format;
+      composerEdits.push({ draftId, edit });
+    });
   const checkPriority = (priority: number | undefined) => {
     if (priority !== undefined && (!Number.isInteger(priority) || priority < 0 || priority > 9)) {
       throw invalid("priority must be 0–9");
@@ -711,67 +734,80 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     },
   };
   const composerRegistry: PluginComposerRegistry = {
-    registerAction: (name, handler) =>
-      register("composer action", composerActions, declaredComposer, name, handler),
-    registerBlock: (name, renderer) =>
-      register("Markdown block", markdownBlocks, declaredBlocks, name, renderer),
+    registerAction: (name, handler) => {
+      register("composer action", composerActions, declaredComposer, name, handler);
+    },
+    registerBlock: (name, renderer) => {
+      register("Markdown block", markdownBlocks, declaredBlocks, name, renderer);
+    },
   };
   const attachmentsRegistry: PluginAttachmentsRegistry = {
-    registerPreview: (name, renderer) =>
-      register("attachment preview", previews, declaredPreviews, name, renderer),
-    registerAction: (name, handler) =>
-      register("attachment action", attachmentActions, declaredAttachmentActions, name, handler),
+    registerPreview: (name, renderer) => {
+      register("attachment preview", previews, declaredPreviews, name, renderer);
+    },
+    registerAction: (name, handler) => {
+      register("attachment action", attachmentActions, declaredAttachmentActions, name, handler);
+    },
   };
   const linksRegistry: PluginLinksRegistry = {
-    registerAction: (name, handler) =>
-      register("link action", linkActions, declaredLinkActions, name, handler),
+    registerAction: (name, handler) => {
+      register("link action", linkActions, declaredLinkActions, name, handler);
+    },
   };
   const jobsRegistry: PluginJobsRegistry = {
-    register: (id, handler) => register("job", jobs, declaredJobs, id, handler),
+    register: (id, handler) => {
+      register("job", jobs, declaredJobs, id, handler);
+    },
   };
   const mcpRegistry: PluginMcpRegistry = {
-    registerTool: (id, handler) => register("MCP tool", mcpTools, declaredTools, id, handler),
+    registerTool: (id, handler) => {
+      register("MCP tool", mcpTools, declaredTools, id, handler);
+    },
   };
 
   const api: NailApi = {
     plugin,
     apiVersion: "1",
     mail: {
-      async get(id) {
-        need("mail.read");
-        const m = message(id);
-        need("mail.read", m.accountId);
-        return clone(m);
-      },
-      async getBody(id) {
-        need("mail.read");
-        need("mail.read.body");
-        const m = message(id);
-        need("mail.read.body", m.accountId);
-        const body = bodies[id];
-        if (!body) throw createPluginApiError("not_found", `message ${id}`);
-        if (m.encrypted) throw createPluginApiError("forbidden", "end-to-end encrypted mail");
-        return clone(body);
-      },
-      async search(query, searchOptions = {}) {
-        need("mail.read");
-        // Like Nail: message text is searched only with `mail.read.body`.
-        if (/(^|[\s(-])(body|filename):/i.test(query)) need("mail.read.body");
-        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-        return [...messages.values()]
-          .filter((m) => has("mail.read", m.accountId))
-          .filter((m) => words.every((w) => m.subject.toLowerCase().includes(w)))
-          .sort((a, b) => b.date.localeCompare(a.date))
-          .slice(0, searchOptions.limit ?? 50)
-          .map(clone);
-      },
-      async thread(threadId) {
-        need("mail.read");
-        return [...messages.values()]
-          .filter((m) => m.threadId === threadId && has("mail.read", m.accountId))
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map(clone);
-      },
+      get: (id) =>
+        asPromise(() => {
+          need("mail.read");
+          const m = message(id);
+          need("mail.read", m.accountId);
+          return clone(m);
+        }),
+      getBody: (id) =>
+        asPromise(() => {
+          need("mail.read");
+          need("mail.read.body");
+          const m = message(id);
+          need("mail.read.body", m.accountId);
+          const body = bodies[id];
+          if (!body) throw createPluginApiError("not_found", `message ${id}`);
+          if (m.encrypted) throw createPluginApiError("forbidden", "end-to-end encrypted mail");
+          return clone(body);
+        }),
+      search: (query, searchOptions = {}) =>
+        asPromise(() => {
+          need("mail.read");
+          // Like Nail: message text is searched only with `mail.read.body`.
+          if (/(^|[\s(-])(body|filename):/i.test(query)) need("mail.read.body");
+          const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+          return [...messages.values()]
+            .filter((m) => has("mail.read", m.accountId))
+            .filter((m) => words.every((w) => m.subject.toLowerCase().includes(w)))
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .slice(0, searchOptions.limit ?? 50)
+            .map(clone);
+        }),
+      thread: (threadId) =>
+        asPromise(() => {
+          need("mail.read");
+          return [...messages.values()]
+            .filter((m) => m.threadId === threadId && has("mail.read", m.accountId))
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map(clone);
+        }),
       async update(ids, changes) {
         need("mail.organize");
         const messageIds = idList(ids);
@@ -782,7 +818,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
           "organize",
           { messageIds, changes },
           messageIds,
-          `Change ${messageIds.length} message(s)`,
+          `Change ${String(messageIds.length)} message(s)`,
           () => {
             for (const m of targets) applyChanges(m, changes);
             return [];
@@ -800,7 +836,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
           permanent ? "permanent-delete" : "trash",
           { messageIds, permanent },
           messageIds,
-          `${permanent ? "Delete" : "Move to Trash"} ${messageIds.length} message(s)`,
+          `${permanent ? "Delete" : "Move to Trash"} ${String(messageIds.length)} message(s)`,
           () => {
             for (const m of targets) {
               if (permanent) messages.delete(m.id);
@@ -879,18 +915,20 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       },
     },
     calendar: {
-      async events(from, to, eventOptions = {}) {
-        need("calendar.read");
-        return (options.events ?? [])
-          .filter((e) => e.start < to && e.end > from)
-          .sort((a, b) => a.start.localeCompare(b.start))
-          .slice(0, eventOptions.limit ?? 500)
-          .map(clone);
-      },
-      async calendars() {
-        need("calendar.write");
-        return clone(calendars);
-      },
+      events: (from, to, eventOptions = {}) =>
+        asPromise(() => {
+          need("calendar.read");
+          return (options.events ?? [])
+            .filter((e) => e.start < to && e.end > from)
+            .sort((a, b) => a.start.localeCompare(b.start))
+            .slice(0, eventOptions.limit ?? 500)
+            .map(clone);
+        }),
+      calendars: () =>
+        asPromise(() => {
+          need("calendar.write");
+          return clone(calendars);
+        }),
       async createEvent(event) {
         need("calendar.write");
         if (!event.title.trim()) throw invalid("an event needs a title");
@@ -957,7 +995,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         }
         if (answer.messageId !== undefined) need("mail.read", message(answer.messageId).accountId);
         else if (!calendarEvents.has(answer.eventId ?? "")) {
-          throw createPluginApiError("not_found", `event ${answer.eventId}`);
+          throw createPluginApiError("not_found", `event ${answer.eventId ?? "(none)"}`);
         }
         const tell = answer.send !== false;
         if (tell) need("mail.send");
@@ -972,18 +1010,20 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       },
     },
     contacts: {
-      async addressBooks() {
-        need("contacts.write");
-        return clone(addressBooks);
-      },
-      async find(email, findOptions = {}) {
-        need("contacts.write");
-        const lower = email.toLowerCase();
-        return [...contactsById.values()]
-          .filter((c) => c.emails.some((e) => e.toLowerCase() === lower))
-          .slice(0, findOptions.limit ?? 10)
-          .map(clone);
-      },
+      addressBooks: () =>
+        asPromise(() => {
+          need("contacts.write");
+          return clone(addressBooks);
+        }),
+      find: (email, findOptions = {}) =>
+        asPromise(() => {
+          need("contacts.write");
+          const lower = email.toLowerCase();
+          return [...contactsById.values()]
+            .filter((c) => c.emails.some((e) => e.toLowerCase() === lower))
+            .slice(0, findOptions.limit ?? 10)
+            .map(clone);
+        }),
       async upsert(input: PluginContactInput) {
         need("contacts.write");
         const existing = input.contactId ? contactsById.get(input.contactId) : undefined;
@@ -1032,10 +1072,11 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       },
     },
     tasks: {
-      async lists() {
-        need("tasks.write");
-        return clone(taskLists);
-      },
+      lists: () =>
+        asPromise(() => {
+          need("tasks.write");
+          return clone(taskLists);
+        }),
       async create(task) {
         need("tasks.write");
         if (typeof task.title !== "string" || !task.title.trim())
@@ -1132,59 +1173,67 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         dialogs.push(spec);
         return options.dialog ? options.dialog(spec) : { button: null, values: {} };
       },
-      async notify(notification) {
-        need("notifications");
-        const spec = typeof notification === "string" ? { title: notification } : notification;
-        if (!spec.title.trim() || spec.title.length > 200 || (spec.body?.length ?? 0) > 2000) {
-          throw createPluginApiError(
-            "invalid_request",
-            "the notification title or body is empty or too long",
-          );
-        }
-        notifications.push(spec);
-      },
-      async updatePanel(name, tree) {
-        if (!panels.has(name)) throw createPluginApiError("not_found", `panel ${name}`);
-        checked(tree, name);
-        panelUpdates.push({ name, tree });
-      },
+      notify: (notification) =>
+        asPromise(() => {
+          need("notifications");
+          const spec = typeof notification === "string" ? { title: notification } : notification;
+          if (!spec.title.trim() || spec.title.length > 200 || (spec.body?.length ?? 0) > 2000) {
+            throw createPluginApiError(
+              "invalid_request",
+              "the notification title or body is empty or too long",
+            );
+          }
+          notifications.push(spec);
+        }),
+      updatePanel: (name, tree) =>
+        asPromise(() => {
+          if (!panels.has(name)) throw createPluginApiError("not_found", `panel ${name}`);
+          checked(tree, name);
+          panelUpdates.push({ name, tree });
+        }),
     },
     commands: { register: registerCommand },
     storage: {
-      async get<T extends JsonValue = JsonValue>(key: string) {
-        need("storage");
-        const value = storage.get(key);
-        return (value === undefined ? null : clone(value)) as T | null;
-      },
-      async set(key, value) {
-        need("storage");
-        if (key.length === 0 || key.length > 256) {
-          throw createPluginApiError("invalid_request", "storage keys are 1–256 bytes");
-        }
-        const before = storage.get(key);
-        storage.set(key, clone(value));
-        if (used() > quota) {
-          if (before === undefined) storage.delete(key);
-          else storage.set(key, before);
-          throw createPluginApiError("too_large", "storage quota exceeded");
-        }
-      },
-      async delete(key) {
-        need("storage");
-        return storage.delete(key);
-      },
-      async keys(prefix) {
-        need("storage");
-        return [...storage.keys()].filter((k) => !prefix || k.startsWith(prefix)).sort();
-      },
-      async clear() {
-        need("storage");
-        storage.clear();
-      },
-      async usage(): Promise<PluginStorageUsage> {
-        need("storage");
-        return { keys: storage.size, usedBytes: used(), quotaBytes: quota };
-      },
+      get: <T extends JsonValue = JsonValue>(key: string) =>
+        asPromise(() => {
+          need("storage");
+          const value = storage.get(key);
+          return (value === undefined ? null : clone(value)) as T | null;
+        }),
+      set: (key, value) =>
+        asPromise(() => {
+          need("storage");
+          if (key.length === 0 || key.length > 256) {
+            throw createPluginApiError("invalid_request", "storage keys are 1–256 bytes");
+          }
+          const before = storage.get(key);
+          storage.set(key, clone(value));
+          if (used() > quota) {
+            if (before === undefined) storage.delete(key);
+            else storage.set(key, before);
+            throw createPluginApiError("too_large", "storage quota exceeded");
+          }
+        }),
+      delete: (key) =>
+        asPromise(() => {
+          need("storage");
+          return storage.delete(key);
+        }),
+      keys: (prefix) =>
+        asPromise(() => {
+          need("storage");
+          return [...storage.keys()].filter((k) => !prefix || k.startsWith(prefix)).sort();
+        }),
+      clear: () =>
+        asPromise(() => {
+          need("storage");
+          storage.clear();
+        }),
+      usage: (): Promise<PluginStorageUsage> =>
+        asPromise(() => {
+          need("storage");
+          return { keys: storage.size, usedBytes: used(), quotaBytes: quota };
+        }),
     },
     http: {
       async fetch(url, request = {}) {
@@ -1212,10 +1261,10 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
           ok: status >= 200 && status < 300,
           headers: res.headers ?? {},
           body,
-          text: async () => body,
-          json: async () => JSON.parse(body),
-          bytes: async () => bytes.slice(),
-          arrayBuffer: async () => bytes.slice().buffer,
+          text: () => asPromise(() => body),
+          json: <T>() => asPromise(() => JSON.parse(body) as T),
+          bytes: () => asPromise(() => bytes.slice()),
+          arrayBuffer: () => asPromise(() => bytes.slice().buffer),
         };
       },
     },
@@ -1280,7 +1329,11 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       return { outcome: "failed", problems: [], error: describeError(error) };
     }
     if (answer === TIMED_OUT) {
-      return { outcome: "timed-out", problems: [], error: `over its ${budget(hook)} ms budget` };
+      return {
+        outcome: "timed-out",
+        problems: [],
+        error: `over its ${String(budget(hook))} ms budget`,
+      };
     }
     const result = (answer ?? undefined) as T | undefined;
     if (result !== undefined && (typeof result !== "object" || Array.isArray(result))) {
@@ -1408,7 +1461,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         writes.push({
           operation: "hook.arrival",
           kind: "organize",
-          input: clone({ messageId: target.id, actions } as unknown as JsonValue),
+          input: clone({ messageId: target.id, actions }),
           result,
         });
       }
@@ -1461,7 +1514,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         contributes?.attachmentPreviews?.find((p) => p.id === name)?.maxBytes ?? MAX_PREVIEW_INPUT,
         MAX_PREVIEW_INPUT,
       );
-      if (bytes.length > max) throw createPluginApiError("too_large", `over ${max} bytes`);
+      if (bytes.length > max) throw createPluginApiError("too_large", `over ${String(max)} bytes`);
       const preview = await renderer(ref, bytes.slice());
       const problems = previewProblems(preview);
       if (problems.length > 0) throw createPluginApiError("invalid_request", problems.join("; "));
@@ -1487,7 +1540,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       const limit = options.jobTimeoutMs ?? JOB_WALL_CLOCK_MS;
       try {
         const done = await withBudget(limit, () => handler(clone(trigger)));
-        if (done === TIMED_OUT) return { outcome: "timeout", error: `over ${limit} ms` };
+        if (done === TIMED_OUT) return { outcome: "timeout", error: `over ${String(limit)} ms` };
         return { outcome: "ok" };
       } catch (error) {
         return { outcome: "error", error: describeError(error) };
@@ -1498,7 +1551,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       if (!handler) throw createPluginApiError("not_found", `MCP tool ${id}`);
       need("mcp.expose");
       const result = await handler(clone(args));
-      return result === undefined ? undefined : clone(result as JsonValue);
+      return result === undefined ? undefined : clone(result);
     },
   };
 }

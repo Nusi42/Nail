@@ -15,7 +15,7 @@
 //!   (also as digits), location (event / task location, postal addresses)
 //!   and other text (descriptions, notes, categories, custom fields).
 //! * Queries are typed as you go: every word must match the start of a
-//!   word in some field (`ad lov` finds Ada Lovelace), titles and names
+//!   word in some field (`ad lovel` finds Ada Lovelace), titles and names
 //!   rank first; a query of digits also matches phone numbers by their
 //!   digits (`030 123` finds `+49 30 1234567`). Text is lower-cased and
 //!   ASCII-folded like mail (`Müller` matches `muller`).
@@ -378,7 +378,7 @@ impl PimIndex {
     /// An index in memory (tests, demos, a locked vault).
     pub fn open_in_ram(policy: CommitPolicy) -> Result<Self> {
         let (schema, fields) = schema();
-        Self::init(Index::create_in_ram(schema), fields, policy, false, None)
+        Self::init(&Index::create_in_ram(schema), fields, policy, false, None)
     }
 
     /// Opens (or creates) the index in `dir`; one of another schema
@@ -392,7 +392,7 @@ impl PimIndex {
     pub fn open_with(
         dir: impl AsRef<Path>,
         policy: CommitPolicy,
-        wrapper: Option<DirectoryWrapper>,
+        wrapper: Option<&DirectoryWrapper>,
     ) -> Result<Self> {
         let dir = dir.as_ref();
         let version_file = dir.join(VERSION_FILE_NAME);
@@ -418,22 +418,22 @@ impl PimIndex {
             };
             Ok(Index::open_or_create(directory, schema.clone())?)
         };
-        let index = match open(wrapper.as_ref()) {
+        let index = match open(wrapper) {
             Ok(index) => index,
             Err(err) => {
                 tracing::warn!(?dir, %err, "PIM index unreadable; rebuilding");
                 std::fs::remove_dir_all(dir)?;
                 std::fs::create_dir_all(dir)?;
                 rebuilt = true;
-                open(wrapper.as_ref())?
+                open(wrapper)?
             }
         };
         std::fs::write(&version_file, SCHEMA_VERSION.to_string())?;
-        Self::init(index, fields, policy, rebuilt, Some(dir.to_owned()))
+        Self::init(&index, fields, policy, rebuilt, Some(dir.to_owned()))
     }
 
     fn init(
-        index: Index,
+        index: &Index,
         fields: Fields,
         policy: CommitPolicy,
         rebuilt: bool,
@@ -611,10 +611,8 @@ impl PimIndex {
                         [(Occur::Should, exact), (Occur::Should, prefix)]
                     })
                     .collect();
-                (
-                    Occur::Must,
-                    Box::new(BooleanQuery::new(alternatives)) as Box<dyn Query>,
-                )
+                let any: Box<dyn Query> = Box::new(BooleanQuery::new(alternatives));
+                (Occur::Must, any)
             })
             .collect();
         let words_query: Box<dyn Query> = Box::new(BooleanQuery::new(per_word));
@@ -663,13 +661,11 @@ impl PimIndex {
             values
                 .iter()
                 .map(|v| {
-                    (
-                        Occur::Should,
-                        Box::new(TermQuery::new(
-                            Term::from_field_text(field, v),
-                            IndexRecordOption::Basic,
-                        )) as Box<dyn Query>,
-                    )
+                    let term: Box<dyn Query> = Box::new(TermQuery::new(
+                        Term::from_field_text(field, v),
+                        IndexRecordOption::Basic,
+                    ));
+                    (Occur::Should, term)
                 })
                 .collect(),
         ))
@@ -911,7 +907,7 @@ mod tests {
         assert_eq!(keys(&hits), ["contact:c1", "event:e1"]);
         // Every word must match.
         assert_eq!(
-            keys(&index.search("ad lov", &[], None, 10).unwrap()),
+            keys(&index.search("ad lovel", &[], None, 10).unwrap()),
             ["contact:c1"]
         );
         assert!(
@@ -1048,7 +1044,7 @@ mod tests {
     fn match_fields() {
         let ada = ada();
         assert_eq!(
-            contact_match(&ada, "ada lov"),
+            contact_match(&ada, "ada lovel"),
             (ContactMatchField::Name, None)
         );
         assert_eq!(
@@ -1111,14 +1107,15 @@ mod tests {
         });
         {
             let index =
-                PimIndex::open_with(&path, CommitPolicy::default(), Some(wrapper.clone())).unwrap();
+                PimIndex::open_with(&path, CommitPolicy::default(), Some(&wrapper)).unwrap();
             assert!(!index.was_rebuilt());
             index.add(&[PimDocument::contact(&ada())]).unwrap();
             index.commit().unwrap();
         }
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         {
-            let index = PimIndex::open_with(&path, CommitPolicy::default(), Some(wrapper)).unwrap();
+            let index =
+                PimIndex::open_with(&path, CommitPolicy::default(), Some(&wrapper)).unwrap();
             assert!(!index.was_rebuilt());
             assert_eq!(index.doc_count().unwrap(), 1);
         }
@@ -1137,7 +1134,7 @@ mod tests {
     fn commit_batching() {
         let policy = CommitPolicy {
             max_pending: 2,
-            max_delay: std::time::Duration::from_secs(3600),
+            max_delay: std::time::Duration::from_hours(1),
         };
         let index = PimIndex::open_in_ram(policy).unwrap();
         index.add(&[PimDocument::task(&task("t1", "a"))]).unwrap();

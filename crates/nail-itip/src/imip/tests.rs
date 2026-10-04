@@ -99,10 +99,14 @@ Content-Disposition: attachment; filename=a.ics\r\n\r\n",
     );
     raw.extend_from_slice(
         b"BEGIN:VCALENDAR\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20261005T070000Z\r\n\
-SUMMARY:Caf\xe9\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+SUMMARY:Cr\xe8me br\xfbl\xe9e\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
     );
     let found = find_itip(&raw).unwrap();
-    assert!(found.text.contains("SUMMARY:Café"), "{}", found.text);
+    assert!(
+        found.text.contains("SUMMARY:Crème brûlée"),
+        "{}",
+        found.text
+    );
 }
 
 fn outgoing(attach: bool) -> OutgoingImip {

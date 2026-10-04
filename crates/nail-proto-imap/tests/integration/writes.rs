@@ -2,9 +2,7 @@
 //! its fallbacks, COPY, expunge, APPEND (UIDPLUS, LITERAL+, limits) and
 //! folder CREATE / RENAME / DELETE.
 
-mod common;
-
-use common::*;
+use crate::common::*;
 use nail_api::{ErrorCode, FlagChange, FolderRole};
 use nail_proto_imap::{
     AppendResult, ExpungeMethod, Flag, ImapError, MoveMethod, StoreMode, UidRange, folder_path,

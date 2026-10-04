@@ -1,4 +1,5 @@
 //! Accounts, folders and messages CRUD.
+#![cfg(test)]
 
 mod common;
 
@@ -266,7 +267,7 @@ fn list_messages_pages_newest_first() {
         ("m-b", "2026-09-29T07:30:00-01:00"), // 08:30Z (newest)
         ("m-c", "2026-09-29T08:15:00Z"),      // 08:15Z
         ("m-d", "2026-09-28T23:59:59.500Z"),  // oldest valid
-        ("m-e", "not a date"),                // unparseable → last
+        ("m-e", "not a date"),                // unparsable → last
         ("m-f", "2026-09-29T08:15:00Z"),      // ties m-c → id desc
     ];
     for (id, date) in dates {

@@ -28,13 +28,18 @@ import { createHash, createPrivateKey, createPublicKey, sign, verify } from "nod
 const ALG_PREHASHED = "ED";
 const ALG_LEGACY = "Ed";
 
+/** @param {Uint8Array} bytes */
 function b64url(bytes) {
   return Buffer.from(bytes).toString("base64url");
 }
 
-/** Decodes Tauri's base64 wrapper; also accepts the plain minisign text. */
+/**
+ * Decodes Tauri's base64 wrapper; also accepts the plain minisign text.
+ *
+ * @param {string} text
+ */
 export function unwrapTauriText(text) {
-  const trimmed = String(text).trim();
+  const trimmed = text.trim();
   if (trimmed.startsWith("untrusted comment:")) return trimmed;
   const decoded = Buffer.from(trimmed, "base64").toString("utf8");
   if (!decoded.startsWith("untrusted comment:")) {
@@ -43,11 +48,16 @@ export function unwrapTauriText(text) {
   return decoded;
 }
 
-/** Tauri's form of a minisign file: base64 of the text. */
+/**
+ * Tauri's form of a minisign file: base64 of the text.
+ *
+ * @param {string} text
+ */
 export function wrapTauriText(text) {
   return Buffer.from(text, "utf8").toString("base64");
 }
 
+/** @param {string} text */
 function lines(text) {
   return text
     .replace(/\r\n/g, "\n")
@@ -55,7 +65,11 @@ function lines(text) {
     .filter((l) => l.length > 0);
 }
 
-/** Parses a public key (Tauri base64 or minisign text) → { keyId, publicKey }. */
+/**
+ * Parses a public key (Tauri base64 or minisign text) → { keyId, publicKey }.
+ *
+ * @param {string} text
+ */
 export function parsePublicKey(text) {
   const [comment, data] = lines(unwrapTauriText(text));
   if (!comment?.startsWith("untrusted comment:") || !data) {
@@ -71,6 +85,8 @@ export function parsePublicKey(text) {
 /**
  * Parses a signature (Tauri base64 or minisign text) →
  * { algorithm, keyId, signature, trustedComment, globalSignature }.
+ *
+ * @param {string} text
  */
 export function parseSignature(text) {
   const [untrusted, data, trusted, global] = lines(unwrapTauriText(text));
@@ -95,8 +111,14 @@ export function parseSignature(text) {
   };
 }
 
-/** The tab-separated `key:value` fields of Tauri's trusted comment. */
+/**
+ * The tab-separated `key:value` fields of Tauri's trusted comment.
+ *
+ * @param {string} trustedComment
+ * @returns {Partial<Record<string, string>>}
+ */
 export function trustedFields(trustedComment) {
+  /** @type {Partial<Record<string, string>>} */
   const fields = {};
   for (const part of trustedComment.split("\t")) {
     const colon = part.indexOf(":");
@@ -105,10 +127,12 @@ export function trustedFields(trustedComment) {
   return fields;
 }
 
+/** @param {Uint8Array} raw */
 function ed25519PublicKey(raw) {
   return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: b64url(raw) }, format: "jwk" });
 }
 
+/** @param {Uint8Array} data */
 function blake2b512(data) {
   return createHash("blake2b512").update(data).digest();
 }
@@ -120,6 +144,8 @@ function blake2b512(data) {
  * With `version`, the signed version (trusted comment) must be present and
  * equal (`requireSignedVersion`). Returns the trusted comment's fields;
  * throws with a reason otherwise.
+ *
+ * @param {{ data: Uint8Array, signature: string, publicKey: string, version?: string }} options
  */
 export function verifySignature({ data, signature, publicKey, version }) {
   const key = parsePublicKey(publicKey);
@@ -148,10 +174,12 @@ export function verifySignature({ data, signature, publicKey, version }) {
   return fields;
 }
 
+/** @param {string} version */
 function stripV(version) {
-  return String(version).trim().replace(/^v/, "");
+  return version.trim().replace(/^v/, "");
 }
 
+/** @param {Uint8Array} bytes */
 function hex(bytes) {
   return Buffer.from(bytes).toString("hex").toUpperCase();
 }
@@ -161,20 +189,28 @@ function hex(bytes) {
  * loopback smoke server only: real keys come from `tauri signer generate`,
  * whose secret key is password-protected). `keyPair` is an Ed25519 pair
  * from `crypto.generateKeyPairSync("ed25519")`.
+ *
+ * @param {{ privateKey: import("node:crypto").KeyObject }} keyPair
+ * @param {Buffer} [keyId]
  */
 export function testKey(keyPair, keyId = Buffer.from("0123456789abcdef", "hex")) {
   const jwk = keyPair.privateKey.export({ format: "jwk" });
-  const raw = Buffer.from(jwk.x, "base64url");
+  const raw = Buffer.from(jwk.x ?? "", "base64url");
   const pubText =
     `untrusted comment: minisign public key: ${hex(keyId)}\n` +
     `${Buffer.concat([Buffer.from(ALG_LEGACY, "latin1"), keyId, raw]).toString("base64")}\n`;
   const privateKey = createPrivateKey({ key: jwk, format: "jwk" });
   return {
     publicKey: wrapTauriText(pubText),
-    /** Signs like `tauri signer sign` (prehashed, Tauri's trusted comment). */
+    /**
+     * Signs like `tauri signer sign` (prehashed, Tauri's trusted comment).
+     *
+     * @param {Uint8Array} data
+     * @param {{ file?: string, version?: string, timestamp?: number }} [options]
+     */
     sign(data, { file = "file", version, timestamp = 0 } = {}) {
       const signature = sign(null, blake2b512(data), privateKey);
-      let trusted = `timestamp:${timestamp}\tfile:${file}`;
+      let trusted = `timestamp:${String(timestamp)}\tfile:${file}`;
       if (version !== undefined) trusted += `\tversion:${version}`;
       const global = sign(
         null,

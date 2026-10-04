@@ -448,6 +448,15 @@ fn expect_multistatus(reply: &Reply, what: &str) -> Result<Multistatus, DavError
     multistatus::parse(&reply.text())
 }
 
+/// A WebDAV method `reqwest` has no constant for (`PROPFIND`, `REPORT`, ...).
+#[expect(
+    clippy::expect_used,
+    reason = "only called with the constant method names of this module, all valid tokens (test `dav_methods_are_valid`)"
+)]
+fn dav_method(name: &'static [u8]) -> Method {
+    Method::from_bytes(name).expect("a valid HTTP method token")
+}
+
 impl DavClient {
     /// `PROPFIND` with `props` at `depth`.
     pub async fn propfind(
@@ -458,7 +467,7 @@ impl DavClient {
     ) -> Result<(Url, Multistatus), DavError> {
         let reply = self
             .send(
-                Method::from_bytes(b"PROPFIND").expect("valid method"),
+                dav_method(b"PROPFIND"),
                 url,
                 Some(depth),
                 &[],
@@ -472,7 +481,7 @@ impl DavClient {
     /// `REPORT` with `body` at `depth`.
     pub async fn report(&self, url: &Url, depth: Depth, body: String) -> Result<Reply, DavError> {
         self.send(
-            Method::from_bytes(b"REPORT").expect("valid method"),
+            dav_method(b"REPORT"),
             url,
             Some(depth),
             &[],
@@ -639,10 +648,10 @@ impl DavClient {
                 CollectionKind::Calendar => "c:calendar-multiget",
                 CollectionKind::AddressBook => "card:addressbook-multiget",
             };
-            let hrefs: String = batch
-                .iter()
-                .map(|h| format!("<d:href>{}</d:href>", escape(h)))
-                .collect();
+            let hrefs: String = batch.iter().fold(String::new(), |mut out, h| {
+                let _ = write!(out, "<d:href>{}</d:href>", escape(h));
+                out
+            });
             let body = format!(
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<{root} {}><d:prop><d:getetag/>{}</d:prop>{hrefs}</{root}>",
                 namespaces(),
@@ -803,7 +812,7 @@ impl DavClient {
         );
         let reply = self
             .send(
-                Method::from_bytes(b"MKCALENDAR").expect("valid method"),
+                dav_method(b"MKCALENDAR"),
                 url,
                 None,
                 &[],
@@ -834,7 +843,7 @@ impl DavClient {
         );
         let reply = self
             .send(
-                Method::from_bytes(b"MKCOL").expect("valid method"),
+                dav_method(b"MKCOL"),
                 url,
                 None,
                 &[],
@@ -875,7 +884,7 @@ impl DavClient {
         );
         let reply = self
             .send(
-                Method::from_bytes(b"PROPPATCH").expect("valid method"),
+                dav_method(b"PROPPATCH"),
                 url,
                 None,
                 &[],
@@ -922,6 +931,13 @@ fn condition_headers(precondition: &Precondition) -> Vec<(HeaderName, String)> {
 mod tests {
     use super::*;
     use crate::xml;
+
+    #[test]
+    fn dav_methods_are_valid() {
+        for name in ["PROPFIND", "REPORT", "MKCALENDAR", "MKCOL", "PROPPATCH"] {
+            assert_eq!(dav_method(name.as_bytes()).as_str(), name);
+        }
+    }
 
     #[test]
     fn utc_stamps() {

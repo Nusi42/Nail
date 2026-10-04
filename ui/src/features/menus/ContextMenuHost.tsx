@@ -34,11 +34,15 @@ export function ContextMenuHost() {
       if (openContextMenu(ui, layout, element, { point })) event.preventDefault();
     };
     document.addEventListener("contextmenu", onContextMenu);
-    return () => document.removeEventListener("contextmenu", onContextMenu);
+    return () => {
+      document.removeEventListener("contextmenu", onContextMenu);
+    };
   }, [ui, layout]);
 
   const close = useCallback(
-    (restoreFocus: boolean) => menuStoreFor(ui).getState().close(restoreFocus),
+    (restoreFocus: boolean) => {
+      menuStoreFor(ui).getState().close(restoreFocus);
+    },
     [ui],
   );
 
@@ -61,12 +65,12 @@ export function ContextMenuHost() {
   if (!open || items.length === 0) return null;
   return (
     <ContextMenu
-      key={`${open.menu.name}-${open.x}-${open.y}`}
+      key={`${open.menu.name}-${String(open.x)}-${String(open.y)}`}
       items={items}
       label={t(`context-menu-label-${open.target.part.replaceAll(".", "-")}`)}
       x={open.x}
       y={open.y}
-      autoFocus
+      focusOnOpen
       onRun={run}
       onClose={close}
     />

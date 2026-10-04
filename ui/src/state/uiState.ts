@@ -66,7 +66,9 @@ export function useSetUiState() {
   return useMutation({
     mutationFn: async ({ key, value }: { key: string; value: JsonValue | null }) =>
       (await client.request({ type: "SetUiState", key, value }, "UiState")).state,
-    onMutate: ({ key, value }) => applyUiStateChange(queryClient, key, value),
+    onMutate: ({ key, value }) => {
+      applyUiStateChange(queryClient, key, value);
+    },
     onSuccess: (state) => queryClient.setQueryData(uiStateKey, state),
   });
 }

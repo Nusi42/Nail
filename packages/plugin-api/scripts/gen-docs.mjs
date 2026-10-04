@@ -326,16 +326,30 @@ function program() {
 }
 
 /**
- * Cleans a doc comment: rustdoc links, line wraps.
+ * Cleans a doc comment: rustdoc links, line wraps, list items (kept apart
+ * with "•" on the one line), example e-mail addresses (as code, so the
+ * Markdown has no bare URLs).
  * @param {string} text
  * @returns {string}
  */
 export function cleanDoc(text) {
-  return text
-    .replace(/\[`([^`\]]+)`\]/g, (_, /** @type {string} */ name) => `\`${name.split("::").pop()}\``)
+  const oneLine = text
+    .replace(
+      /\[`([^`\]]+)`\]/g,
+      (_, /** @type {string} */ name) => `\`${name.split("::").pop() ?? name}\``,
+    )
     .replace(/\{@link ([^}]+)\}/g, "`$1`")
+    .replace(/(^|\n)\s*[*-][ \t]+(?=\S)/g, "$1• ")
     .replace(/\s*\n\s*/g, " ")
     .trim();
+  return oneLine
+    .split("`")
+    .map((part, i) =>
+      i % 2 === 0
+        ? part.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (address) => `\`${address}\``)
+        : part,
+    )
+    .join("`");
 }
 
 /**

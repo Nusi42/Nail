@@ -72,10 +72,10 @@ impl WatchConfig {
             mailbox: mailbox.into(),
             use_idle: true,
             idle_reissue: IDLE_REISSUE,
-            poll_interval: Duration::from_secs(120),
+            poll_interval: Duration::from_mins(2),
             reconnect_min: Duration::from_secs(1),
-            reconnect_max: Duration::from_secs(300),
-            healthy_after: Duration::from_secs(60),
+            reconnect_max: Duration::from_mins(5),
+            healthy_after: Duration::from_mins(1),
         }
     }
 
@@ -183,7 +183,7 @@ impl MailboxWatcher {
     pub async fn stop(mut self) {
         let _ = self.stop.send(true);
         if let Some(task) = self.task.take() {
-            let _ = task.await;
+            drop(task.await);
         }
     }
 }
@@ -204,7 +204,7 @@ impl Drop for MailboxWatcher {
 
 /// Completes when a stop is requested (or the watcher handle is gone).
 async fn stopped(stop: &mut watch::Receiver<bool>) {
-    let _ = stop.wait_for(|stopped| *stopped).await;
+    drop(stop.wait_for(|stopped| *stopped).await);
 }
 
 async fn run(
@@ -249,7 +249,7 @@ async fn run(
                 }
                 match Box::pin(serve(&mut client, mode, &watch, &events, &mut stop)).await {
                     Ok(()) => {
-                        let _ = tokio::time::timeout(config.timeout, client.logout()).await;
+                        drop(tokio::time::timeout(config.timeout, client.logout()).await);
                         return;
                     }
                     Err(err) => {
@@ -324,11 +324,11 @@ mod tests {
         let config = WatchConfig::default();
         assert_eq!(config.mailbox, "INBOX");
         assert!(config.use_idle);
-        assert_eq!(config.idle_reissue, Duration::from_secs(29 * 60));
+        assert_eq!(config.idle_reissue, Duration::from_mins(29));
         let config = WatchConfig::new("Work")
             .with_idle(false)
             .with_poll_interval(Duration::from_secs(5))
-            .with_idle_reissue(Duration::from_secs(60))
+            .with_idle_reissue(Duration::from_mins(1))
             .with_reconnect(Duration::from_secs(10), Duration::from_secs(1));
         assert!(!config.use_idle);
         assert_eq!(config.reconnect_max, Duration::from_secs(10));

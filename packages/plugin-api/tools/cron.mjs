@@ -41,6 +41,7 @@ function number(text, min, max) {
  * @returns {Set<number>}
  */
 function field(text, min, max) {
+  /** @type {Set<number>} */
   const set = new Set();
   for (const part of text.split(",")) {
     const slash = part.indexOf("/");
@@ -105,7 +106,7 @@ function minGap(s) {
  * @returns {CronSchedule}
  */
 export function parseCron(text) {
-  const trimmed = String(text).trim();
+  const trimmed = text.trim();
   const named = { "@hourly": "0 * * * *", "@daily": "0 0 * * *", "@weekly": "0 0 * * 0" };
   let expanded = trimmed;
   if (trimmed.startsWith("@")) {

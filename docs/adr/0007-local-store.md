@@ -37,7 +37,7 @@ the choices made while implementing it.
 - `messages`: every `MessageSummary` field (`from` split into
   `from_name`/`from_email`, `to` as JSON) plus `uid` (unique per folder when
   present), `blob_hash`, `thread_key` and `date_sort` = `unixepoch(date)`
-  (0 when unparseable). Lists order by `date_sort DESC, id DESC` so dates in
+  (0 when unparsable). Lists order by `date_sort DESC, id DESC` so dates in
   different time zones sort by instant and ties are stable.
 - `op_queue(id AUTOINCREMENT, account_id, kind, payload JSON, state,
   attempts, last_error, created_at, updated_at)`.

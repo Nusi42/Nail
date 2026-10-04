@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { buildOutputDir, repoRoot } from "../support/nail";
+import { defined } from "../support/defined";
 
 export { repoRoot };
 
@@ -104,22 +105,26 @@ export async function startServe(dataDir: string, configDir: string): Promise<Pe
     env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
   });
   const url = await new Promise<string>((resolve, reject) => {
-    const lines = createInterface({ input: child.stdout! });
-    const timer = setTimeout(() => reject(new Error("nail serve did not start")), 120_000);
+    const lines = createInterface({ input: defined(child.stdout, "the server's stdout") });
+    const timer = setTimeout(() => {
+      reject(new Error("nail serve did not start"));
+    }, 120_000);
     lines.once("line", (line) => {
       clearTimeout(timer);
       resolve(line.trim());
     });
     child.once("exit", (code) => {
       clearTimeout(timer);
-      reject(new Error(`nail serve exited with ${code}`));
+      reject(new Error(`nail serve exited with ${String(code)}`));
     });
   });
   return {
     url,
     async stop() {
       if (child.exitCode === null) {
-        const exited = new Promise((resolve) => child.once("exit", resolve));
+        const exited = new Promise((resolve) => {
+          child.once("exit", resolve);
+        });
         child.kill();
         await exited;
       }
@@ -132,7 +137,7 @@ export function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const rank = Math.ceil((p / 100) * sorted.length);
-  return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1]!;
+  return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1] ?? 0;
 }
 
 /** The median. */
@@ -194,14 +199,14 @@ export function longRendererTasks(traceJson: string, limitMs = 50): number[] {
   const mainThreads = new Set(
     events
       .filter((e) => e.ph === "M" && e.name === "thread_name" && e.args?.name === "CrRendererMain")
-      .map((e) => `${e.pid}:${e.tid}`),
+      .map((e) => `${String(e.pid)}:${String(e.tid)}`),
   );
   return events
     .filter(
       (e) =>
         e.ph === "X" &&
         (e.name === "RunTask" || e.name === "ThreadControllerImpl::RunTask") &&
-        mainThreads.has(`${e.pid}:${e.tid}`) &&
+        mainThreads.has(`${String(e.pid)}:${String(e.tid)}`) &&
         (e.dur ?? 0) > limitMs * 1000,
     )
     .map((e) => (e.dur ?? 0) / 1000);

@@ -46,7 +46,9 @@ export function main(argv, io = console) {
     if (command === "pack") {
       const result = packPlugin({ dir, out });
       io.log(path.relative(process.cwd(), result.file) || result.file);
-      io.log(`  ${result.files.length} files, ${result.size} bytes, sha256 ${result.sha256}`);
+      io.log(
+        `  ${String(result.files.length)} files, ${String(result.size)} bytes, sha256 ${result.sha256}`,
+      );
       return 0;
     }
   } catch (error) {

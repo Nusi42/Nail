@@ -1,6 +1,7 @@
 //! `rules.kdl`: reading every condition, action, trigger and scope, error
 //! reporting (all errors at once, with positions), the text form of a
 //! single rule and the canonical writer.
+#![cfg(test)]
 
 use nail_api::rules::{
     AddressField, AuthMethod, AuthResult, Comparison, Condition, DateComparison, FolderRef,

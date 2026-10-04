@@ -41,7 +41,7 @@ function Facts({ info }: { info: InstallationInfo }) {
         />
       )}
       <Fact name="architecture" label={t("system-about-architecture")} value={info.architecture} />
-      {channel !== null && channel !== undefined && (
+      {channel !== null && (
         <Fact
           name="channel"
           label={t("system-about-channel")}

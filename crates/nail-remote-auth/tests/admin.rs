@@ -1,9 +1,16 @@
 //! The admin requests the core routes here: passwords, TOTP, pairing
 //! codes.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::*;
+use nail_api::engine::SecretStore as _;
 use nail_api::remote::{
     AuthRequest, AuthResponse, PairingState, RemoteAuditKind, SessionEndReason,
 };
@@ -184,7 +191,6 @@ async fn totp_enrollment_through_admin_requests() {
         panic!("not saved")
     };
     assert!(!user.totp_enabled);
-    use nail_api::engine::SecretStore as _;
     assert!(h.secrets.get(&totp::secret_ref(&ada.id)).unwrap().is_none());
     h.clock.advance(60);
     let reply = browser.password(&h, "ada", PASSWORD, None).await;

@@ -1,11 +1,12 @@
 //! End-to-end search: messages in a store, their text in an index, queries
 //! in the query language.
+#![cfg(test)]
 
 use nail_api::search::{SearchErrorKind, SearchQuery, SearchSort};
 use nail_api::{Account, AccountKind, Address, Flags, Folder, FolderRole, MessageSummary};
 use nail_search::{
-    CommitPolicy, IndexDocument, SearchContext, SearchIndex, SearchScope, VirtualAccountScope,
-    matching_ids, parse_query, run_request, search,
+    CommitPolicy, IndexDocument, PageRequest, SearchContext, SearchIndex, SearchScope,
+    VirtualAccountScope, matching_ids, parse_query, run_request, search,
 };
 use nail_store::{MessageMeta, Store, StoredMessage, SyncedMessage};
 use pretty_assertions::assert_eq;
@@ -130,7 +131,7 @@ fn fixture() -> Fixture {
             from: ("Grandma Müller", "oma@family.example"),
             to: "me@home.example",
             subject: "Grüße aus dem Urlaub",
-            body: "Das Wetter ist schön. Photos attached!",
+            body: "Das Wetter bleibt schön. Photos attached!",
             attachments: &["strand.jpg"],
             date: "2026-09-29T07:00:00Z",
             tags: &["family"],
@@ -328,9 +329,11 @@ fn paging_sorting_and_requests() {
         &f.store,
         &q,
         &SearchScope::default(),
-        SearchSort::Date,
-        0,
-        10,
+        PageRequest {
+            sort: SearchSort::Date,
+            offset: 0,
+            limit: 10,
+        },
         &f.ctx,
     )
     .unwrap();
@@ -347,9 +350,11 @@ fn paging_sorting_and_requests() {
         &f.store,
         &q,
         &SearchScope::default(),
-        SearchSort::Relevance,
-        0,
-        10,
+        PageRequest {
+            sort: SearchSort::Relevance,
+            offset: 0,
+            limit: 10,
+        },
         &f.ctx,
     )
     .unwrap();
@@ -362,9 +367,11 @@ fn paging_sorting_and_requests() {
         &f.store,
         &q,
         &SearchScope::default(),
-        SearchSort::Date,
-        1,
-        2,
+        PageRequest {
+            sort: SearchSort::Date,
+            offset: 1,
+            limit: 2,
+        },
         &f.ctx,
     )
     .unwrap();
@@ -376,9 +383,11 @@ fn paging_sorting_and_requests() {
         &f.store,
         &q,
         &SearchScope::default(),
-        SearchSort::Date,
-        10,
-        2,
+        PageRequest {
+            sort: SearchSort::Date,
+            offset: 10,
+            limit: 2,
+        },
         &f.ctx,
     )
     .unwrap();

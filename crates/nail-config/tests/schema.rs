@@ -3,6 +3,7 @@
 //! The checked-in files `crates/nail-config/schema/*.schema.json` are what
 //! editors and `nail config schema` use. Regenerate them after changing the
 //! file models with `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema`.
+#![cfg(test)]
 
 use std::path::PathBuf;
 

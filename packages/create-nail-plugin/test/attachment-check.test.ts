@@ -17,8 +17,9 @@ import {
   type LoadedPlugin,
   type PreparedExample,
 } from "./helpers";
+import type * as CheckModule from "../../../examples/attachment-check/src/check";
 
-type Check = typeof import("../../../examples/attachment-check/src/check");
+type Check = typeof CheckModule;
 
 let example: PreparedExample;
 let check: Check;
@@ -26,7 +27,9 @@ beforeAll(async () => {
   example = prepareExample("attachment-check");
   check = (await import(pathToFileURL(path.join(example.source, "src", "check.ts")).href)) as Check;
 });
-afterAll(() => example.cleanup());
+afterAll(() => {
+  example.cleanup();
+});
 
 const outgoing = (
   text: string,
@@ -63,7 +66,7 @@ describe("keywords", () => {
     );
     expect(check.findMention("Reattach the cable", keywords)).toBeNull(); // not a word start
     expect(check.findMention("Anbeiß", keywords)).toBeNull(); // not the whole word
-    expect(check.findMention("Die Datei ist anbei.", keywords)).toBe("anbei");
+    expect(check.findMention("Die Datei ist anbei.", keywords)).toBe("anbei"); // spellchecker:disable-line
     expect(check.findMention("", keywords)).toBeNull();
   });
 
@@ -134,7 +137,9 @@ describe("the before-send hook", () => {
       outgoing("Hallo Ada,\nanbei die Zahlen.", { subject: "Zahlen" }),
     );
     expect(run.result?.veto?.reason).toBe(
+      // German veto text. spellchecker:off
       "Sie erwähnen „anbei“, aber es ist nichts angehängt. Hängen Sie die Datei an oder senden Sie die Nachricht trotzdem.",
+      // spellchecker:on
     );
     // English words are not on the German list.
     expect((await host.runBeforeSend(outgoing("Report attached.", { subject: "x" }))).outcome).toBe(
@@ -149,9 +154,8 @@ describe("the before-send hook", () => {
 
   it("adds the user's own words", async () => {
     const host = await load({ settings: { "extra-keywords": "spreadsheet*, PFA" } });
-    expect(
-      (await host.runBeforeSend(outgoing("The spreadsheets are ready", { subject: "x" }))).result,
-    ).toMatchObject({ veto: { reason: expect.stringContaining("“spreadsheets”") } });
+    const run = await host.runBeforeSend(outgoing("The spreadsheets are ready", { subject: "x" }));
+    expect(run.result?.veto?.reason).toContain("“spreadsheets”");
     expect((await host.runBeforeSend(outgoing("pfa", { subject: "x" }))).outcome).toBe("vetoed");
   });
 

@@ -2,6 +2,7 @@
 //! `extends` chains, problems per theme file, the selection in `theme.kdl`,
 //! Follow Windows, density on every theme, and comment-preserving writes of
 //! the selection and the overrides.
+#![cfg(test)]
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -975,7 +976,7 @@ fn the_watcher_hot_reloads_user_themes() {
     let (tx, rx) = mpsc::channel();
     let _watcher = manager
         .watch(Duration::from_millis(50), move |update| {
-            let _ = tx.send(update);
+            tx.send(update).ok();
         })
         .unwrap();
     assert!(config_dir.join("themes").is_dir(), "watch creates themes/");

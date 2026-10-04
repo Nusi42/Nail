@@ -300,6 +300,7 @@ impl Default for WindowSpec {
 
 impl WindowSpec {
     /// This spec with the fields `frame` sets replaced.
+    #[must_use]
     pub fn with_frame(self, frame: &WindowFrame) -> Self {
         Self {
             modal: frame.modal.unwrap_or(self.modal),
@@ -314,6 +315,7 @@ impl WindowSpec {
 
     /// Edges clamped to [`MIN_WINDOW_EDGE`] ..= [`MAX_WINDOW_EDGE`] and the
     /// default size at least the minimum size.
+    #[must_use]
     pub fn normalized(self) -> Self {
         let clamp = |v: u32| v.clamp(MIN_WINDOW_EDGE, MAX_WINDOW_EDGE);
         let min_size = WindowSize::new(clamp(self.min_size.width), clamp(self.min_size.height));
@@ -357,6 +359,7 @@ impl WindowFrame {
     }
 
     /// `other`'s set fields over this frame's.
+    #[must_use]
     pub fn merged(self, other: &Self) -> Self {
         Self {
             modal: other.modal.or(self.modal),

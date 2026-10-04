@@ -324,8 +324,7 @@ pub(crate) async fn update_messages<D: McpData>(
     let folder_name = |id: &FolderId| {
         folders
             .get(id)
-            .map(|f| f.name.clone())
-            .unwrap_or_else(|| id.as_str().to_owned())
+            .map_or_else(|| id.as_str().to_owned(), |f| f.name.clone())
     };
     let mut changes = Vec::new();
     let mut audit_lines = Vec::new();
@@ -484,8 +483,7 @@ pub(crate) async fn delete_messages<D: McpData>(
         .map(|m| {
             folders
                 .get(&m.folder_id)
-                .map(|f| f.name.clone())
-                .unwrap_or_else(|| m.folder_id.as_str().to_owned())
+                .map_or_else(|| m.folder_id.as_str().to_owned(), |f| f.name.clone())
         })
         .collect();
     let after = if a.permanent {

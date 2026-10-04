@@ -171,6 +171,16 @@ pub struct Keyring<'a> {
     cards: Option<&'a dyn nail_pkcs11::KeyResolver>,
 }
 
+impl std::fmt::Debug for Keyring<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Keyring")
+            .field("pbkdf2_iterations", &self.pbkdf2_iterations)
+            .field("now", &self.now)
+            .field("smartcards", &self.cards.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> Keyring<'a> {
     /// A keyring over the store, the OS keychain, the trust anchors and
     /// the process's unlock cache.
@@ -193,6 +203,7 @@ impl<'a> Keyring<'a> {
 
     /// Uses smartcard keys through `cards` (M4c WP122). Without it, keys
     /// whose secret is on a card are [`Error::Unsupported`].
+    #[must_use]
     pub fn with_smartcards(mut self, cards: &'a dyn nail_pkcs11::KeyResolver) -> Self {
         self.cards = Some(cards);
         self
@@ -246,12 +257,14 @@ impl<'a> Keyring<'a> {
 
     /// Uses fewer PBKDF2 iterations for new keys (tests only; the count is
     /// stored with each key, so reading is unaffected).
+    #[must_use]
     pub fn with_pbkdf2_iterations(mut self, iterations: u32) -> Self {
         self.pbkdf2_iterations = iterations.max(1);
         self
     }
 
     /// Validates and expires against a fixed time (tests).
+    #[must_use]
     pub fn at(mut self, now: i64) -> Self {
         self.now = Some(now);
         self
@@ -615,7 +628,7 @@ impl<'a> Keyring<'a> {
             SecretStorage::Passphrase => self
                 .unlocked
                 .get(fingerprint, self.now())
-                .map(|k| k as Arc<dyn PrivateKeyOps>)
+                .map(|k| -> Arc<dyn PrivateKeyOps> { k })
                 .ok_or_else(|| Error::Locked(fingerprint.clone())),
             SecretStorage::Keychain => {
                 if let Some(key) = self.unlocked.get(fingerprint, self.now()) {
@@ -705,7 +718,7 @@ impl<'a> Keyring<'a> {
             {
                 signature.key_id = Some(stored.id.clone());
                 signature.trust = trust_level(&stored);
-                signer.info.key_id = signature.key_id.clone();
+                signer.info.key_id.clone_from(&signature.key_id);
                 signer.info.trust = signature.trust;
             }
         }
@@ -1132,7 +1145,7 @@ mod tests {
         let keyring = Keyring::new(&env.store, &env.secrets, &env.anchors, &cache).at(AT);
         let signer = keyring.signer("ALICE@example.org", None).unwrap();
         assert_eq!(signer.chain, vec![fixture_cert("intermediate-ca.crt")]);
-        let signed = mime::sign_entity(
+        let signed_mail = mime::sign_entity(
             b"Content-Type: text/plain\r\n\r\nx\r\n",
             &signer.signer(),
             mime::SignMode::Detached,
@@ -1140,7 +1153,7 @@ mod tests {
         )
         .unwrap();
         let outcome = keyring
-            .read_message(&signed, Some("alice@example.org"))
+            .read_message(&signed_mail, Some("alice@example.org"))
             .unwrap()
             .unwrap();
         let sig = &outcome.status.signatures[0];

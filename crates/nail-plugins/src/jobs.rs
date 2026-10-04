@@ -17,7 +17,7 @@
 //!   runs once when the plug-in starts.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Datelike, NaiveDateTime, TimeZone, Utc};
@@ -150,6 +150,19 @@ pub(crate) struct JobEntry {
     pub collecting: BTreeSet<PluginEventName>,
 }
 
+/// What a running plug-in that may run jobs needs for them
+/// ([`crate::host::Inner::job_context`]).
+pub(crate) struct JobContext {
+    /// The generation of the running plug-in (a restart counts up).
+    pub(crate) generation: u64,
+    /// Its job table.
+    pub(crate) table: Arc<Mutex<JobTable>>,
+    /// Its CPU meter.
+    pub(crate) cpu: Arc<Mutex<CpuMeter>>,
+    /// Its display name.
+    pub(crate) name: String,
+}
+
 /// The jobs of one plug-in start (rebuilt on every start).
 #[derive(Debug, Default)]
 pub(crate) struct JobTable {
@@ -205,9 +218,14 @@ fn start_run(
     inner: &Arc<Inner>,
     plugin: &PluginId,
     job: &str,
-    trigger: PluginJobTrigger,
+    trigger: &PluginJobTrigger,
 ) -> Result<bool, ApiError> {
-    let (generation, table, cpu, name) = inner.job_context(plugin)?;
+    let JobContext {
+        generation,
+        table,
+        cpu,
+        name,
+    } = inner.job_context(plugin)?;
     let services = Arc::clone(&inner.services);
     let now = services.now();
     let skip = {
@@ -253,7 +271,7 @@ fn start_run(
     let inner2 = Arc::clone(inner);
     let plugin2 = plugin.clone();
     let job2 = job.to_owned();
-    let input = serde_json::to_value(&trigger).unwrap_or_default();
+    let input = serde_json::to_value(trigger).unwrap_or_default();
     inner.handle.spawn(async move {
         let started = Instant::now();
         let call = Invoke::new(Registry::Job, &job2, input);
@@ -310,7 +328,7 @@ fn record(
     job: &str,
     outcome: PluginJobOutcome,
     error: Option<String>,
-    table: &Arc<std::sync::Mutex<JobTable>>,
+    table: &Arc<Mutex<JobTable>>,
 ) {
     let services = Arc::clone(&inner.services);
     let next_run_at = lock(table).jobs.get(job).and_then(|e| e.next).map(unix);
@@ -335,7 +353,12 @@ fn record(
 /// state, runs schedules missed meanwhile once, stores the next runs and
 /// delivers `app.started`.
 pub(crate) async fn activated(inner: Arc<Inner>, plugin: PluginId, generation: u64) {
-    let Ok((current, table, _, _)) = inner.job_context(&plugin) else {
+    let Ok(JobContext {
+        generation: current,
+        table,
+        ..
+    }) = inner.job_context(&plugin)
+    else {
         return;
     };
     {
@@ -379,19 +402,19 @@ pub(crate) async fn activated(inner: Arc<Inner>, plugin: PluginId, generation: u
         jobs.ready = true;
     }
     for (job, next) in updates {
-        let _ = services.set_job_next_run(plugin.clone(), job, next).await;
+        drop(services.set_job_next_run(plugin.clone(), job, next).await);
     }
     for (job, due) in missed {
-        let _ = start_run(
+        drop(start_run(
             &inner,
             &plugin,
             &job,
-            PluginJobTrigger::Schedule {
+            &PluginJobTrigger::Schedule {
                 scheduled_for: rfc3339(due),
             },
-        );
+        ));
     }
-    deliver(&inner, &plugin, PluginEventName::AppStarted, Vec::new());
+    deliver(&inner, &plugin, PluginEventName::AppStarted, &[]);
 }
 
 /// Starts every job whose schedule is due.
@@ -400,7 +423,7 @@ pub(crate) fn run_due(inner: &Arc<Inner>) {
     let services = Arc::clone(&inner.services);
     let local = |t: DateTime<Utc>| services.local_time(t);
     for plugin in inner.background_plugins() {
-        let Ok((_, table, _, _)) = inner.job_context(&plugin) else {
+        let Ok(JobContext { table, .. }) = inner.job_context(&plugin) else {
             continue;
         };
         let due: Vec<(String, DateTime<Utc>)> = {
@@ -422,22 +445,25 @@ pub(crate) fn run_due(inner: &Arc<Inner>) {
             due
         };
         for (job, scheduled) in due {
-            let _ = start_run(
+            drop(start_run(
                 inner,
                 &plugin,
                 &job,
-                PluginJobTrigger::Schedule {
+                &PluginJobTrigger::Schedule {
                     scheduled_for: rfc3339(scheduled),
                 },
-            );
+            ));
         }
     }
 }
 
 /// Collects an event for the jobs of `plugin` that subscribe to it; the
 /// run starts when the collection window closes.
-fn deliver(inner: &Arc<Inner>, plugin: &PluginId, event: PluginEventName, ids: Vec<MessageId>) {
-    let Ok((generation, table, _, _)) = inner.job_context(plugin) else {
+fn deliver(inner: &Arc<Inner>, plugin: &PluginId, event: PluginEventName, ids: &[MessageId]) {
+    let Ok(JobContext {
+        generation, table, ..
+    }) = inner.job_context(plugin)
+    else {
         return;
     };
     let mut flush = Vec::new();
@@ -448,7 +474,7 @@ fn deliver(inner: &Arc<Inner>, plugin: &PluginId, event: PluginEventName, ids: V
                 continue;
             }
             let pending = entry.pending.entry(event).or_default();
-            for id in &ids {
+            for id in ids {
                 if pending.len() < MAX_TRIGGER_MESSAGES && !pending.contains(id) {
                     pending.push(id.clone());
                 }
@@ -475,19 +501,19 @@ fn deliver(inner: &Arc<Inner>, plugin: &PluginId, event: PluginEventName, ids: V
                 entry.pending.remove(&event).unwrap_or_default()
             };
             // A restart meanwhile drops the delivery.
-            if inner.job_context(&plugin).map(|c| c.0).ok() != Some(generation) {
+            if inner.job_context(&plugin).map(|c| c.generation).ok() != Some(generation) {
                 return;
             }
             let ids = inner.readable_ids(&plugin, event, ids).await;
-            let _ = start_run(
+            drop(start_run(
                 &inner,
                 &plugin,
                 &job,
-                PluginJobTrigger::Event {
+                &PluginJobTrigger::Event {
                     event,
                     message_ids: ids,
                 },
-            );
+            ));
         });
     }
 }
@@ -522,7 +548,7 @@ impl PluginHost {
     /// the plug-in is not running or lacks `background`, `conflict` while
     /// the job runs, `rate_limited` over the CPU quota.
     pub fn run_job(&self, plugin: &PluginId, job: &str) -> Result<(), ApiError> {
-        let (_, table, cpu, _) = self.inner().job_context(plugin)?;
+        let JobContext { table, cpu, .. } = self.inner().job_context(plugin)?;
         if lock(&table).jobs.get(job).is_some_and(|e| e.running) {
             return Err(ApiError::new(
                 ErrorCode::Conflict,
@@ -536,7 +562,7 @@ impl PluginHost {
                 "the plug-in used its CPU time for this hour",
             ));
         }
-        if start_run(self.inner(), plugin, job, PluginJobTrigger::Manual)? {
+        if start_run(self.inner(), plugin, job, &PluginJobTrigger::Manual)? {
             Ok(())
         } else {
             Err(ApiError::new(
@@ -551,9 +577,9 @@ impl PluginHost {
     /// [`crate::HostLimits::event_coalesce`]; message ids are passed only to
     /// plug-ins that may read them). `app.started` is delivered by the host
     /// itself when a plug-in starts.
-    pub fn deliver_event(&self, event: PluginEventName, message_ids: Vec<MessageId>) {
+    pub fn deliver_event(&self, event: PluginEventName, message_ids: &[MessageId]) {
         for plugin in self.inner().background_plugins() {
-            deliver(self.inner(), &plugin, event, message_ids.clone());
+            deliver(self.inner(), &plugin, event, message_ids);
         }
     }
 
@@ -569,12 +595,12 @@ impl PluginHost {
         self.inner()
             .job_context(plugin)
             .ok()
-            .is_some_and(|(_, table, _, _)| lock(&table).jobs.get(job).is_some_and(|e| e.running))
+            .is_some_and(|c| lock(&c.table).jobs.get(job).is_some_and(|e| e.running))
     }
 
     /// When a job runs next (RFC 3339 is the caller's business).
     pub fn job_next_run(&self, plugin: &PluginId, job: &str) -> Option<DateTime<Utc>> {
-        let (_, table, _, _) = self.inner().job_context(plugin).ok()?;
+        let JobContext { table, .. } = self.inner().job_context(plugin).ok()?;
         lock(&table).jobs.get(job).and_then(|e| e.next)
     }
 

@@ -35,7 +35,7 @@ export interface DateTimeInputProps {
   day: CalendarDate;
   /** `null` = date only. */
   time: Clock | null;
-  onChange(day: CalendarDate, time: Clock | null): void;
+  onChange: (day: CalendarDate, time: Clock | null) => void;
   /** Field name (`data-field`), e.g. `start`. */
   field: string;
   disabled?: boolean;
@@ -74,7 +74,9 @@ export function DateTimeInput({
       setOpen(false);
     };
     document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+    };
   }, [open]);
 
   const close = () => {
@@ -154,6 +156,7 @@ export function DateTimeInput({
         </div>
       </AriaI18nProvider>
       {open && (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape from any control inside closes the picker dialog.
         <div
           id={popupId}
           role="dialog"
@@ -173,7 +176,9 @@ export function DateTimeInput({
               data-part="pim.datetime.popup.previous"
               aria-label={t("pim-month-previous")}
               title={t("pim-month-previous")}
-              onClick={() => setFocused((f) => f.add({ months: -1 }))}
+              onClick={() => {
+                setFocused((f) => f.add({ months: -1 }));
+              }}
             >
               <Icon name="chevron-left" part="pim.datetime.popup.icon" />
               <span data-part="pim.nav.text">{t("pim-nav-previous-short")}</span>
@@ -183,7 +188,9 @@ export function DateTimeInput({
               data-part="pim.datetime.popup.next"
               aria-label={t("pim-month-next")}
               title={t("pim-month-next")}
-              onClick={() => setFocused((f) => f.add({ months: 1 }))}
+              onClick={() => {
+                setFocused((f) => f.add({ months: 1 }));
+              }}
             >
               <Icon name="chevron-right" part="pim.datetime.popup.icon" />
               <span data-part="pim.nav.text">{t("pim-nav-next-short")}</span>
@@ -200,7 +207,7 @@ export function DateTimeInput({
               onChange(picked, time);
               close();
             }}
-            autoFocus
+            focusOnMount
           />
         </div>
       )}

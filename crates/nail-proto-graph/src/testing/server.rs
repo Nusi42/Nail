@@ -44,7 +44,7 @@ pub(crate) struct Req {
 }
 
 impl Req {
-    pub fn new(
+    pub(super) fn new(
         method: &str,
         path: &str,
         query: &str,
@@ -124,7 +124,7 @@ pub(crate) struct Reply {
 }
 
 impl Reply {
-    pub fn json(status: u16, value: &Value) -> Self {
+    pub(super) fn json(status: u16, value: &Value) -> Self {
         Self {
             status,
             headers: vec![(
@@ -462,7 +462,7 @@ fn mailbox_route(
                 merge(&mut mailbox.automatic_replies, oof);
             }
             if let Some(zone) = body.get("timeZone").and_then(Value::as_str) {
-                mailbox.time_zone = zone.to_owned();
+                zone.clone_into(&mut mailbox.time_zone);
             }
             Ok(Reply::ok(&body))
         }
@@ -676,7 +676,7 @@ fn mailbox_route(
                     m.is_read = read;
                 }
                 if let Some(flag) = body.pointer("/flag/flagStatus").and_then(Value::as_str) {
-                    m.flag = flag.to_owned();
+                    flag.clone_into(&mut m.flag);
                 }
                 if let Some(categories) = body.get("categories").and_then(Value::as_array) {
                     m.categories = categories
@@ -686,7 +686,7 @@ fn mailbox_route(
                         .collect();
                 }
                 if let Some(i) = body.get("inferenceClassification").and_then(Value::as_str) {
-                    m.inference = i.to_owned();
+                    i.clone_into(&mut m.inference);
                 }
                 if let Some(props) = body
                     .get("singleValueExtendedProperties")
@@ -860,7 +860,7 @@ fn mailbox_route(
             let from = req.query("startDateTime").unwrap_or("1900-01-01T00:00:00Z");
             let to = req.query("endDateTime").unwrap_or("2200-01-01T00:00:00Z");
             let value = instances(mailbox, id, &master, from, to);
-            page_list(req, origin, value)
+            Ok(page_list(req, origin, &value))
         }
         (
             "POST",
@@ -927,7 +927,7 @@ fn mailbox_route(
                 })
                 .map(|(_, c)| c.clone())
                 .collect();
-            page_list(req, origin, value)
+            Ok(page_list(req, origin, &value))
         }
         ("POST", ["contacts"]) => {
             let id = mailbox.add_contact(ids, None, req.json()?)?;
@@ -1236,7 +1236,7 @@ fn send_mail(tenant: &mut Tenant, address: &str, req: &Req) -> MockResult<Reply>
 }
 
 /// A list answer paged with `$top` / `odata.maxpagesize` and a skip token.
-fn page_list(req: &Req, origin: &str, value: Vec<Value>) -> MockResult<Reply> {
+fn page_list(req: &Req, origin: &str, value: &[Value]) -> Reply {
     let size = req.page_size();
     let offset: usize = req
         .query("$skiptoken")
@@ -1252,7 +1252,7 @@ fn page_list(req: &Req, origin: &str, value: Vec<Value>) -> MockResult<Reply> {
             &(offset + size).to_string()
         ));
     }
-    Ok(Reply::ok(&out))
+    Reply::ok(&out)
 }
 
 fn link(req: &Req, origin: &str, key: &str, token: &str) -> String {
@@ -1651,7 +1651,7 @@ fn places(tenant: &Tenant, req: &Req, rest: &[&str], origin: &str) -> MockResult
         }
         _ => return Err(MockError::bad("BadRequest", "Unknown place type")),
     };
-    page_list(req, origin, value)
+    Ok(page_list(req, origin, &value))
 }
 
 fn busy_items(tenant: &Tenant, address: &str, from: &str, to: &str) -> Option<Vec<Value>> {
@@ -1799,7 +1799,7 @@ mod tests {
         let dates: Vec<String> =
             occurrence_dates(&weekly, "2026-10-01T00:00:00Z", "2027-01-01T00:00:00Z")
                 .iter()
-                .map(|d| d.to_string())
+                .map(ToString::to_string)
                 .collect();
         assert_eq!(dates, ["2026-10-05", "2026-10-12", "2026-10-19"]);
         let o = occurrence("M", &weekly, "2026-10-12");

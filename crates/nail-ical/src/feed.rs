@@ -67,9 +67,8 @@ pub fn fetch_url(url: &str) -> Option<String> {
         _ => authority,
     };
     match scheme.to_ascii_lowercase().as_str() {
-        "https" | "webcals" => Some(format!("https://{rest}")),
         "webcal" | "http" if is_loopback(host) => Some(format!("http://{rest}")),
-        "webcal" => Some(format!("https://{rest}")),
+        "https" | "webcals" | "webcal" => Some(format!("https://{rest}")),
         _ => None,
     }
 }

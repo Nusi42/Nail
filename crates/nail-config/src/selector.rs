@@ -15,9 +15,9 @@ use crate::l10n::msg;
 
 /// A parsed selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Selector {
+pub(crate) struct Selector {
     /// Target part name.
-    pub selector: String,
+    pub part: String,
     /// Target states.
     pub states: Vec<String>,
     /// Target conditions.
@@ -33,7 +33,7 @@ struct Compound {
 }
 
 /// Parses a part selector. Errors are readable messages.
-pub fn parse_selector(input: &str) -> Result<Selector, LocalizedMessage> {
+pub(crate) fn parse_selector(input: &str) -> Result<Selector, LocalizedMessage> {
     let mut compounds: Vec<Compound> = Vec::new();
     for raw in input.split_whitespace() {
         let prev = compounds.last().map(|c| c.name.as_str());
@@ -43,7 +43,7 @@ pub fn parse_selector(input: &str) -> Result<Selector, LocalizedMessage> {
         .pop()
         .ok_or_else(|| msg("config-selector-empty"))?;
     Ok(Selector {
-        selector: target.name,
+        part: target.name,
         states: target.states,
         conditions: target.conditions,
         ancestors: compounds
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn plain_and_stateful_selectors() {
         let s = parse_selector("message-list.row").unwrap();
-        assert_eq!(s.selector, "message-list.row");
+        assert_eq!(s.part, "message-list.row");
         assert!(s.states.is_empty() && s.conditions.is_empty() && s.ancestors.is_empty());
 
         let s = parse_selector("toolbar.button:hover:focus-visible").unwrap();
@@ -161,13 +161,13 @@ mod tests {
     #[test]
     fn relative_descendants() {
         let s = parse_selector("message-list.row:unread .subject").unwrap();
-        assert_eq!(s.selector, "message-list.row.subject");
+        assert_eq!(s.part, "message-list.row.subject");
         assert_eq!(s.ancestors.len(), 1);
         assert_eq!(s.ancestors[0].selector, "message-list.row");
         assert_eq!(s.ancestors[0].states, ["unread"]);
 
         let s = parse_selector("app[account=\"work\"]  message-list.row .date").unwrap();
-        assert_eq!(s.selector, "message-list.row.date");
+        assert_eq!(s.part, "message-list.row.date");
         assert_eq!(s.ancestors[0].conditions, [cond("account", Some("work"))]);
         assert_eq!(s.ancestors[1].selector, "message-list.row");
     }

@@ -14,7 +14,7 @@
  * The app shell mounts `RemoteLogin` in web mode when `Status` says the
  * browser is not authenticated (WP45).
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type SubmitEvent, type ReactNode } from "react";
 import type {
   AuthFailure,
   AuthPurpose,
@@ -46,8 +46,12 @@ function useCountdown(): [number, (seconds: number) => void] {
   const [left, setLeft] = useState(0);
   useEffect(() => {
     if (left <= 0) return;
-    const timer = setTimeout(() => setLeft((n) => Math.max(0, n - 1)), 1000);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setLeft((n) => Math.max(0, n - 1));
+    }, 1000);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [left]);
   return [left, setLeft];
 }
@@ -139,7 +143,7 @@ function PairForm({
   const attempt = useAttempt();
   const typed = normalizePairingCode(code);
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (attempt.blocked || typed === "") return;
     const answer = await attempt.run(() =>
@@ -188,7 +192,7 @@ function PairForm({
         value={code}
         onChange={setCode}
         autoComplete="one-time-code"
-        autoFocus
+        focusOnMount
         maxLength={16}
       />
       <InputField
@@ -232,7 +236,7 @@ function OfferPasskey({
   const attempt = useAttempt();
   const [added, setAdded] = useState(false);
 
-  const add = async (event: FormEvent) => {
+  const add = async (event: SubmitEvent) => {
     event.preventDefault();
     if (attempt.blocked || name.trim() === "") return;
     const answer = await attempt.run(async () => {
@@ -286,6 +290,7 @@ function OfferPasskey({
             data-part="form.button"
             data-variant="primary"
             data-action="continue"
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- the step's only action takes the focus when the step replaces the previous one.
             autoFocus
             onClick={onDone}
           >
@@ -311,7 +316,7 @@ function OfferPasskey({
         name="passkey-name"
         value={name}
         onChange={setName}
-        autoFocus
+        focusOnMount
         maxLength={64}
       />
       <NoticeLine notice={attempt.notice} wait={attempt.wait} />
@@ -406,6 +411,7 @@ function PasskeyStep({
           data-part="form.button"
           data-variant="primary"
           data-action="passkey"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- the step's main action takes the focus when the step replaces the previous one.
           autoFocus
           disabled={attempt.blocked}
           onClick={() => void signIn()}
@@ -442,7 +448,7 @@ function PasswordStep({
   const attempt = useAttempt();
   const needsTotp = totp !== null;
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (attempt.blocked || name.trim() === "" || password === "") return;
     if (needsTotp && totp.trim() === "") return;
@@ -495,7 +501,7 @@ function PasswordStep({
             onChange={setTotp}
             autoComplete="one-time-code"
             inputMode="numeric"
-            autoFocus
+            focusOnMount
             maxLength={10}
           />
         </>
@@ -507,7 +513,7 @@ function PasswordStep({
             value={name}
             onChange={setName}
             autoComplete="username"
-            autoFocus={userName === null}
+            focusOnMount={userName === null}
             readOnly={userName !== null}
           />
           <InputField
@@ -517,7 +523,7 @@ function PasswordStep({
             value={password}
             onChange={setPassword}
             autoComplete="current-password"
-            autoFocus={userName !== null}
+            focusOnMount={userName !== null}
           />
         </>
       )}
@@ -569,9 +575,19 @@ function SignIn(props: SignInProps) {
     props.passkeyOffered ? "passkey" : "password",
   );
   return method === "passkey" ? (
-    <PasskeyStep {...props} onPassword={() => setMethod("password")} />
+    <PasskeyStep
+      {...props}
+      onPassword={() => {
+        setMethod("password");
+      }}
+    />
   ) : (
-    <PasswordStep {...props} onPasskey={() => setMethod("passkey")} />
+    <PasswordStep
+      {...props}
+      onPasskey={() => {
+        setMethod("passkey");
+      }}
+    />
   );
 }
 
@@ -613,7 +629,9 @@ export function RemoteLogin({ auth, passkeys = browserPasskeys, onLoggedIn }: Re
           setView({ kind: answer.status.paired ? "sign-in" : "pair", status: answer.status });
         }
       })
-      .catch(() => live && setView({ kind: "unreachable" }));
+      .catch(() => {
+        if (live) setView({ kind: "unreachable" });
+      });
     return () => {
       live = false;
     };
@@ -654,9 +672,10 @@ export function RemoteLogin({ auth, passkeys = browserPasskeys, onLoggedIn }: Re
         <PairForm
           auth={auth}
           status={view.status}
-          onPaired={(session) =>
-            offer ? setView({ kind: "offer-passkey", session }) : onLoggedIn(session)
-          }
+          onPaired={(session) => {
+            if (offer) setView({ kind: "offer-passkey", session });
+            else onLoggedIn(session);
+          }}
         />
       );
       break;
@@ -667,7 +686,9 @@ export function RemoteLogin({ auth, passkeys = browserPasskeys, onLoggedIn }: Re
           auth={auth}
           passkeys={passkeys}
           session={view.session}
-          onDone={() => onLoggedIn(view.session)}
+          onDone={() => {
+            onLoggedIn(view.session);
+          }}
         />
       );
       break;
@@ -733,6 +754,7 @@ export function RemoteReauth({
 }: RemoteReauthProps) {
   const t = useT();
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape from any field or button inside cancels the re-authentication.
     <section
       data-part="remote-reauth"
       role="group"

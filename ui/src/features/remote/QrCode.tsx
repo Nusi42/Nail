@@ -12,7 +12,7 @@ export function qrPath(data: string): { size: number; path: string } {
   const parts: string[] = [];
   qr.data.forEach((row, y) => {
     row.forEach((dark, x) => {
-      if (dark) parts.push(`M${x} ${y}h1v1h-1z`);
+      if (dark) parts.push(`M${String(x)} ${String(y)}h1v1h-1z`);
     });
   });
   return { size: qr.size, path: parts.join("") };
@@ -25,7 +25,7 @@ export function QrCode({ data, label }: { data: string; label: string }) {
       data-part="remote-qr"
       role="img"
       aria-label={label}
-      viewBox={`0 0 ${size} ${size}`}
+      viewBox={`0 0 ${String(size)} ${String(size)}`}
       shapeRendering="crispEdges"
     >
       <rect data-part="remote-qr.background" width={size} height={size} />

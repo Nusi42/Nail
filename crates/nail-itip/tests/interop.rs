@@ -2,6 +2,7 @@
 //! Exchange, Apple Calendar and Thunderbird send (`tests/fixtures`, see its
 //! README), taken through the whole flow — find the calendar part, build
 //! the card, apply it, answer, read the answer back on the other side.
+#![cfg(test)]
 
 use chrono::{TimeZone, Utc};
 use chrono_tz::Tz;
@@ -83,9 +84,12 @@ fn now() -> chrono::DateTime<Utc> {
 /// A calendar copy made from an iTIP object (what the core stores).
 fn store(object: &ItipObject, id: &str) -> (CalendarEvent, String) {
     let new = apply::new_event(object).unwrap();
-    let event = new
-        .event
-        .into_event(id.into(), "cal".into(), false, Default::default());
+    let event = new.event.into_event(
+        id.into(),
+        "cal".into(),
+        false,
+        nail_api::pim::PimItemSync::default(),
+    );
     (event, new.text)
 }
 

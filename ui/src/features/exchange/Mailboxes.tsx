@@ -13,7 +13,7 @@
  * - mount point `MailboxFolderBadge`: on a folder-tree row of another
  *   mailbox's root, its kind and (when not synced) its state.
  */
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   ExchangeMailbox,
@@ -71,7 +71,13 @@ export function MailboxList({ node }: WidgetProps) {
     >
       <div data-part="exchange-mailboxes.header">
         <h2 data-part="exchange-mailboxes.title">{t("exchange-mailboxes-title")}</h2>
-        <button type="button" data-part="exchange-mailboxes.new" onClick={() => edit(null)}>
+        <button
+          type="button"
+          data-part="exchange-mailboxes.new"
+          onClick={() => {
+            edit(null);
+          }}
+        >
           <Icon name="plus" part="exchange-mailboxes.icon" />
           <span data-part="exchange-mailboxes.action.text">{t("exchange-mailbox-add")}</span>
         </button>
@@ -79,7 +85,7 @@ export function MailboxList({ node }: WidgetProps) {
       {mailboxes.isError && (
         <Problem message={errorMessageOf(mailboxes.error)} part="exchange-mailboxes.error" />
       )}
-      {mailboxes.data && mailboxes.data.length === 0 && (
+      {mailboxes.data?.length === 0 && (
         <p data-part="exchange-mailboxes.empty">{t("exchange-mailboxes-none")}</p>
       )}
       {mailboxes.data && mailboxes.data.length > 0 && (
@@ -133,7 +139,9 @@ export function MailboxList({ node }: WidgetProps) {
                   data-part="exchange-mailboxes.edit"
                   aria-label={t("exchange-mailbox-edit", { name })}
                   title={t("exchange-mailbox-edit", { name })}
-                  onClick={() => edit(m.settings.address)}
+                  onClick={() => {
+                    edit(m.settings.address);
+                  }}
                 >
                   <Icon name="settings" part="exchange-mailboxes.icon" />
                   <span data-part="exchange-mailboxes.action.text">{t("exchange-edit-short")}</span>
@@ -237,7 +245,7 @@ function MailboxEditor({
   own: string;
   mailbox: ExchangeMailbox | null;
   mailboxes: readonly ExchangeMailbox[];
-  close(): void;
+  close: () => void;
 }) {
   const t = useT();
   const ctx = useWriteContext();
@@ -248,15 +256,16 @@ function MailboxEditor({
   const [name, setName] = useState(mailbox?.settings.name ?? "");
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  const change = (patch: Partial<ExchangeMailboxSettings>) =>
+  const change = (patch: Partial<ExchangeMailboxSettings>) => {
     setSettings({ ...settings, ...patch });
+  };
 
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().editMailbox(null);
     close();
   };
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const next: ExchangeMailboxSettings = {
       ...settings,
@@ -305,7 +314,9 @@ function MailboxEditor({
           readOnly={mailbox !== null}
           aria-invalid={problem !== null}
           autoComplete="off"
-          onChange={(e) => change({ address: e.target.value })}
+          onChange={(e) => {
+            change({ address: e.target.value });
+          }}
         />
       </div>
       <div data-part="form.field" data-field="name">
@@ -317,7 +328,9 @@ function MailboxEditor({
           data-part="form.input"
           value={name}
           aria-describedby={ids.hint}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
         />
         <p id={ids.hint} data-part="form.hint">
           {t("exchange-mailbox-name-hint")}
@@ -331,7 +344,9 @@ function MailboxEditor({
               type="radio"
               name={ids.kind}
               checked={settings.kind === kind}
-              onChange={() => change({ kind })}
+              onChange={() => {
+                change({ kind });
+              }}
             />
             <span data-part="form.check.label">{t(`exchange-mailbox-kind-${kind}-long`)}</span>
           </label>
@@ -345,7 +360,9 @@ function MailboxEditor({
               data-part="form.checkbox"
               type="checkbox"
               checked={settings[key]}
-              onChange={(e) => change({ [key]: e.target.checked })}
+              onChange={(e) => {
+                change({ [key]: e.target.checked });
+              }}
             />
             <span data-part="form.check.label">{t(`exchange-mailbox-show-${key}`)}</span>
           </label>

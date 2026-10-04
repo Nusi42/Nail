@@ -109,7 +109,9 @@ export function KeyManager({ node }: WidgetProps) {
             data-state={tool === k ? "selected" : undefined}
             data-action={`tool-${k}`}
             aria-pressed={tool === k}
-            onClick={() => setTool(tool === k ? null : k)}
+            onClick={() => {
+              setTool(tool === k ? null : k);
+            }}
           >
             {t(`security-tool-${k}`)}
           </button>
@@ -130,7 +132,9 @@ export function KeyManager({ node }: WidgetProps) {
           labelId="security-keys-technology"
           name="key-technology"
           value={technology}
-          onChange={(v) => setTechnology(v as CryptoTechnology | "")}
+          onChange={(v) => {
+            setTechnology(v as CryptoTechnology | "");
+          }}
           choices={[
             { value: "", label: "security-keys-technology-all" },
             ...TECHNOLOGIES.map((tech) => ({ value: tech, label: `security-technology-${tech}` })),
@@ -158,7 +162,9 @@ export function KeyManager({ node }: WidgetProps) {
               key={k.id}
               keyInfo={k}
               active={k.id === current?.id}
-              onSelect={() => setSelected(k.id)}
+              onSelect={() => {
+                setSelected(k.id);
+              }}
             />
           ))}
         </ul>
@@ -167,7 +173,9 @@ export function KeyManager({ node }: WidgetProps) {
         <KeyDetail
           key={`${current.id}:${current.trust}`}
           keyInfo={current}
-          onDeleted={() => setSelected(null)}
+          onDeleted={() => {
+            setSelected(null);
+          }}
         />
       )}
     </section>

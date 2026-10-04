@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { chromium, expect, type Browser, type Page } from "@playwright/test";
 import { buildOutputDir, repoRoot } from "./nail";
+import { defined } from "./defined";
 
 /** The desktop build's output directory (`<build dir>/desktop-target/debug`). */
 function desktopOutput(file: string): string {
@@ -61,7 +62,7 @@ export interface DesktopOptions {
 async function waitForCdp(url: string, child: ChildProcess, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`nail-app exited with ${child.exitCode}`);
+    if (child.exitCode !== null) throw new Error(`nail-app exited with ${String(child.exitCode)}`);
     try {
       const response = await fetch(`${url}/json/version`);
       if (response.ok) return;
@@ -95,11 +96,11 @@ export async function startDesktop(
     env: {
       ...process.env,
       NAIL_LOG: process.env.NAIL_LOG ?? "warn",
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${String(port)}`,
       ...env,
     },
   });
-  const cdpUrl = `http://127.0.0.1:${port}`;
+  const cdpUrl = `http://127.0.0.1:${String(port)}`;
   const exited = new Promise((resolve) => child.once("exit", resolve));
   const stop = async () => {
     if (child.exitCode !== null || child.pid === undefined) return;
@@ -131,7 +132,7 @@ export async function connectDesktop(app: DesktopApp): Promise<{ browser: Browse
   await expect
     .poll(() => browser.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
     .toBeGreaterThan(0);
-  const page = browser.contexts().flatMap((c) => c.pages())[0]!;
+  const page = defined(browser.contexts().flatMap((c) => c.pages())[0], "the app's page");
   // The built UI from the custom protocol, loaded (also in a hidden window).
   await page.waitForURL(/^(tauri:\/\/localhost|https?:\/\/tauri\.localhost)/, {
     timeout: 60_000,

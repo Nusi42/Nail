@@ -176,12 +176,13 @@ pub async fn discover_scheduling(
     let options_target = options_url.unwrap_or(principal);
     let auto_schedule = match client.dav_classes(options_target).await {
         Ok(classes) => classes.iter().any(|c| c == "calendar-auto-schedule"),
-        Err(e @ (DavError::AuthFailed | DavError::Token(_))) => return Err(e),
-        // Transient failures leave the answer unknown (asked again later):
-        // assuming no server scheduling would make Nail mail what the
-        // server also delivers.
+        // Login problems, and transient failures: those leave the answer
+        // unknown (asked again later); assuming no server scheduling would
+        // make Nail mail what the server also delivers.
         Err(
-            e @ (DavError::Network(_)
+            e @ (DavError::AuthFailed
+            | DavError::Token(_)
+            | DavError::Network(_)
             | DavError::Timeout
             | DavError::Tls(_)
             | DavError::RateLimited(_)),
@@ -602,10 +603,9 @@ pub async fn delete_inbox_item(client: &DavClient, item: &InboxItem) -> Result<(
         None => crate::ops::Precondition::None,
     };
     match client.delete(&item.url, &precondition).await {
-        Ok(()) | Err(DavError::NotFound(_)) => Ok(()),
-        // Changed since it was read (the server merged a newer message
-        // into it): keep it for the next pass.
-        Err(DavError::PreconditionFailed) => Ok(()),
+        // Gone already, or changed since it was read (the server merged a
+        // newer message into it): keep the latter for the next pass.
+        Ok(()) | Err(DavError::NotFound(_) | DavError::PreconditionFailed) => Ok(()),
         Err(e) => Err(e),
     }
 }

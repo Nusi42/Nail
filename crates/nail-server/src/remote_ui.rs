@@ -72,16 +72,16 @@ impl RemoteUiHost {
         let task = tokio::spawn(async move {
             let mut running = Running::default();
             let settings = service.remote_ui_settings();
-            let _ = running.apply(&service, &options, &settings, false).await;
+            drop(running.apply(&service, &options, &settings, false).await);
             while let Some(command) = commands.recv().await {
                 match command {
                     RemoteUiCommand::Apply(settings) => {
-                        let _ = running.apply(&service, &options, &settings, false).await;
+                        drop(running.apply(&service, &options, &settings, false).await);
                     }
                     RemoteUiCommand::RegenerateCertificate(reply) => {
                         let settings = service.remote_ui_settings();
                         let result = running.apply(&service, &options, &settings, true).await;
-                        let _ = reply.send(result);
+                        drop(reply.send(result));
                     }
                     other => tracing::debug!(?other, "unknown remote-UI command"),
                 }
@@ -259,7 +259,7 @@ impl Running {
         status.urls = origins.iter().map(|o| format!("{o}/")).collect();
         status.certificate = identity.as_ref().map(|i| i.info().clone());
         service.report_remote_ui(Some(status), sandbox_origin);
-        self.sweeper = Some(service.remote_auth().spawn_sweeper(Duration::from_secs(60)));
+        self.sweeper = Some(service.remote_auth().spawn_sweeper(Duration::from_mins(1)));
         self.server = Some(server);
         tracing::info!(urls = ?origins, "remote UI running");
         Ok(())

@@ -8,28 +8,24 @@ import userEvent from "@testing-library/user-event";
 import type { Confirmation } from "../../api/generated";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
-import {
-  CENTER_DIALOG,
-  ConfirmationCard,
-  handleAgentsEvent,
-  PolicyEditor,
-  requestConfirmation,
-  seedAgentsDemo,
-} from ".";
+import { CENTER_DIALOG, ConfirmationCard, handleAgentsEvent, PolicyEditor } from ".";
+import { requestConfirmation } from "./mock";
+import { seedAgentsDemo } from "./mockSeed";
 import { ConfirmationNotices } from "./ConfirmationNotices";
 import { agentsStoreFor } from "./store";
 import { HISTORY_PAGE } from "./queries";
+import { must } from "../../test/must";
 
 const CLIENT = { kind: "mcp-client", client_id: "mcp-1" } as const;
 
 function wire(env: Env): () => void {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleAgentsEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function cardOf(confirmation: Confirmation): HTMLElement {
@@ -39,7 +35,9 @@ function cardOf(confirmation: Confirmation): HTMLElement {
 }
 
 async function settle(env: Env) {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
 }
 
 describe("confirmation center", () => {
@@ -48,7 +46,7 @@ describe("confirmation center", () => {
     const [send, trash, invite] = seedAgentsDemo(env.transport);
     renderWithProviders(<NodeView node={widget("confirmation-center")} path="t" />, env);
     await settle(env);
-    const sendCard = cardOf(send as Confirmation);
+    const sendCard = cardOf(must(send));
     expect(sendCard).toHaveAttribute("data-risk", "outgoing");
     expect(
       within(sendCard).getByText("AI agent “Claude Desktop” (MCP client)"),
@@ -64,7 +62,7 @@ describe("confirmation center", () => {
     // Outgoing mail may be relaxed per client.
     expect(within(sendCard).getByRole("checkbox")).toBeInTheDocument();
 
-    const trashCard = cardOf(trash as Confirmation);
+    const trashCard = cardOf(must(trash));
     expect(trashCard).toHaveAttribute("data-risk", "destructive");
     expect(within(trashCard).queryByRole("checkbox")).toBeNull();
     expect(
@@ -77,7 +75,7 @@ describe("confirmation center", () => {
     ).toBeInTheDocument();
 
     // A plug-in acting for an agent names both.
-    const inviteCard = cardOf(invite as Confirmation);
+    const inviteCard = cardOf(must(invite));
     expect(within(inviteCard).getByText("Plug-in “Follow-up”")).toBeInTheDocument();
     expect(within(inviteCard).getByText("for the AI agent “Claude Desktop”")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Waiting (3)" })).toHaveAttribute(
@@ -92,7 +90,7 @@ describe("confirmation center", () => {
     const user = userEvent.setup();
     renderWithProviders(<NodeView node={widget("confirmation-center")} path="t" />, env);
     await settle(env);
-    const card = cardOf(send as Confirmation);
+    const card = cardOf(must(send));
     await user.click(within(card).getByRole("checkbox"));
     await user.click(within(card).getByRole("button", { name: "Approve" }));
     await settle(env);
@@ -102,9 +100,9 @@ describe("confirmation center", () => {
     expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).toEqual({
       send: "allow",
     });
-    await waitFor(() =>
-      expect(document.querySelector(`[data-confirmation="${send?.id}"]`)).toBeNull(),
-    );
+    await waitFor(() => {
+      expect(document.querySelector(`[data-confirmation="${must(send).id}"]`)).toBeNull();
+    });
   });
 
   it("denies a permanent delete and shows it in the history", async () => {
@@ -196,7 +194,7 @@ describe("indicator and notices", () => {
     renderWithProviders(<NodeView node={widget("confirmation-indicator")} path="t" />, env);
     await settle(env);
     expect(document.querySelector('[data-part="confirmation-indicator"]')).toBeNull();
-    await act(async () => {
+    act(() => {
       seedAgentsDemo(env.transport);
     });
     const button = await screen.findByRole("button", { name: "3 confirmations waiting" });
@@ -212,7 +210,7 @@ describe("indicator and notices", () => {
     const user = userEvent.setup();
     renderWithProviders(<ConfirmationNotices />, env);
     let send: Confirmation | undefined;
-    await act(async () => {
+    act(() => {
       [send] = seedAgentsDemo(env.transport);
     });
     const notices = screen.getByRole("region", { name: "Waiting for your confirmation" });
@@ -231,7 +229,7 @@ describe("indicator and notices", () => {
       );
     });
     expect(within(notices).getAllByRole("listitem")).toHaveLength(2);
-    const first = within(notices).getAllByRole("listitem")[0] as HTMLElement;
+    const first = must(within(notices).getAllByRole("listitem")[0]);
     await user.click(within(first).getByRole("button", { name: "Review" }));
     expect(env.store.getState().windows).toContain(CENTER_DIALOG);
     expect(agentsStoreFor(env.store).getState().focus).not.toBeNull();

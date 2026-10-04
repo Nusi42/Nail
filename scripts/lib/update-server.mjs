@@ -10,6 +10,7 @@ import { createReadStream, statSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 
+/** @type {Partial<Record<string, string>>} */
 const TYPES = {
   ".json": "application/json",
   ".exe": "application/vnd.microsoft.portable-executable",
@@ -18,11 +19,17 @@ const TYPES = {
   ".zip": "application/zip",
 };
 
-/** The file a URL path names below `root`, or null (traversal, odd paths). */
+/**
+ * The file a URL path names below `root`, or null (traversal, odd paths).
+ *
+ * @param {string} root
+ * @param {string} urlPath
+ * @returns {string | null}
+ */
 export function resolveUnder(root, urlPath) {
   let decoded;
   try {
-    decoded = decodeURIComponent(urlPath.split("?")[0]);
+    decoded = decodeURIComponent(urlPath.split("?")[0] ?? "");
   } catch {
     return null;
   }
@@ -36,25 +43,49 @@ export function resolveUnder(root, urlPath) {
   return file;
 }
 
-/** The server (not listening yet); `log(entry)` gets {method, path, status}. */
-export function createUpdateServer({ root, log = () => {} }) {
+/**
+ * One served request.
+ *
+ * @typedef {{ method: string | undefined, path: string | undefined, status: number }} LogEntry
+ */
+
+/**
+ * The server (not listening yet); `log(entry)` gets {method, path, status}.
+ *
+ * @param {{ root: string, log?: (entry: LogEntry) => void }} options
+ */
+export function createUpdateServer({
+  root,
+  log = () => {
+    /* no-op */
+  },
+}) {
   return createServer((req, res) => {
+    /**
+     * @param {number} status
+     * @param {Record<string, string>} [headers]
+     * @param {string | null} [body]
+     */
     const finish = (status, headers = {}, body = null) => {
       log({ method: req.method, path: req.url, status });
       res.writeHead(status, headers);
       res.end(body);
     };
     if (req.method !== "GET" && req.method !== "HEAD") {
-      return finish(405, { allow: "GET, HEAD" });
+      finish(405, { allow: "GET, HEAD" });
+      return;
     }
     const file = resolveUnder(root, req.url ?? "/");
-    let stat = null;
+    let stat;
     try {
       stat = file ? statSync(file) : null;
     } catch {
       stat = null;
     }
-    if (!stat?.isFile()) return finish(404, { "content-type": "text/plain" }, "not found");
+    if (!file || !stat?.isFile()) {
+      finish(404, { "content-type": "text/plain" }, "not found");
+      return;
+    }
     const headers = {
       "content-type": TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream",
       "content-length": String(stat.size),
@@ -62,15 +93,31 @@ export function createUpdateServer({ root, log = () => {} }) {
     };
     log({ method: req.method, path: req.url, status: 200 });
     res.writeHead(200, headers);
-    if (req.method === "HEAD") return res.end();
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
     createReadStream(file).pipe(res);
   });
 }
 
-/** Starts it on 127.0.0.1:`port` (0 = any free port); resolves the port. */
+/**
+ * Starts it on 127.0.0.1:`port` (0 = any free port); resolves the port.
+ *
+ * @param {import("node:http").Server} server
+ * @param {number} port
+ * @returns {Promise<number>}
+ */
 export function listenLoopback(server, port) {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve(server.address().port));
+    server.listen(port, "127.0.0.1", () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        reject(new Error("the update server is not listening on TCP"));
+        return;
+      }
+      resolve(address.port);
+    });
   });
 }

@@ -45,6 +45,7 @@ import * as windowsMessages from "../features/windows/messages";
 import * as popoutMessages from "../features/popout/messages";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
+import { must } from "../test/must";
 
 /** Each feature slot lists its own message prefixes and runtime ids. */
 const FEATURE_MESSAGES = [
@@ -225,7 +226,7 @@ function templateIds(): TemplateId[] {
         }
         const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
         out.push({
-          where: `${relative(srcDir, source.fileName)}:${line}`,
+          where: `${relative(srcDir, source.fileName)}:${String(line)}`,
           template: node.getText().slice(1, -1),
           pattern: new RegExp(`^${pattern}$`),
           ids,
@@ -262,7 +263,7 @@ function literalIds(): Set<string> {
   for (const file of sources(srcDir)) {
     const text = readFileSync(file, "utf8");
     for (const match of text.matchAll(/["']([a-z][a-z0-9]*(?:-[a-z0-9]+)+)["']/g)) {
-      const id = match[1] as string;
+      const id = must(match[1]);
       if (PREFIXES.some((p) => id.startsWith(p)) && !NOT_MESSAGES.has(id)) ids.add(id);
     }
   }
@@ -385,7 +386,7 @@ describe("English catalog coverage", () => {
     const fromSources = new Set<string>();
     for (const file of sources(srcDir)) {
       for (const match of readFileSync(file, "utf8").matchAll(/data-key-context="([^"]+)"/g)) {
-        fromSources.add(match[1] as string);
+        fromSources.add(must(match[1]));
       }
     }
     const layout = readFileSync(join(repoDir, "defaults/layout.kdl"), "utf8");
@@ -405,7 +406,7 @@ describe("English catalog coverage", () => {
     expect(fromLayout.length).toBeGreaterThan(3);
     expect(fromPlugins.length).toBeGreaterThan(3);
     const unknown = [...fromSources, ...fromLayout, ...fromPlugins].filter(
-      (c) => !contexts.has(c as string),
+      (c) => !contexts.has(must(c)),
     );
     expect(unknown).toEqual([]);
     // No stale entries: every context but `global` is set by some element.

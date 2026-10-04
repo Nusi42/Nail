@@ -45,15 +45,15 @@ every phase change) and the core ends it with `job::finish_report`.
   skipped while reading (only its size is kept). Memory is bounded by the
   largest accepted message (test: 50,000 generated messages through a
   generating reader, a 3 MiB message skipped).
-* Separators: `From ` after an empty line or at the start; without the
+* Separators: "From " after an empty line or at the start; without the
   empty line only when the line carries an `asctime` date.
-* Dialects: `>+From ` lose one `>` (mboxrd; for `>From ` the same as
+* Dialects: ">+From " lose one `>` (mboxrd; for ">From " the same as
   mboxo, the only quoting mboxo writes). mboxo files whose original text
-  had `>From ` lines cannot be told apart — the format is ambiguous;
+  had ">From " lines cannot be told apart — the format is ambiguous;
   exports default to mboxrd, which is reversible. `Content-Length`
   (mboxcl / mboxcl2) is trusted only when the message then ends at an
-  empty line + `From ` line or the end of the file; bodies with unquoted
-  `From ` lines are mboxcl2 (no unquoting), a wrong length falls back to
+  empty line + "From " line or the end of the file; bodies with unquoted
+  "From " lines are mboxcl2 (no unquoting), a wrong length falls back to
   separator mode, a file ending before the length is `truncated` (kept,
   warning), a file ending inside the headers is `truncated` (skipped).
 * Flags: `Status` / `X-Status` / `X-Mozilla-Status` / `X-Mozilla-Keys`.

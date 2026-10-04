@@ -66,7 +66,7 @@ fn attribute(oid: const_oid::ObjectIdentifier, value: Any) -> Result<Attribute> 
     })
 }
 
-/// `signingTime`: UTCTime through 2049, GeneralizedTime after (RFC 5652
+/// `signingTime`: `UTCTime` through 2049, `GeneralizedTime` after (RFC 5652
 /// section 11.3).
 fn signing_time_value(unix: i64) -> Result<Time> {
     let since_epoch = std::time::Duration::from_secs(u64::try_from(unix).unwrap_or(0));
@@ -130,7 +130,7 @@ pub fn sign(
     } else {
         Some(Any::encode_from(&OctetString::new(content)?)?)
     };
-    let signed = SignedData {
+    let signed_data = SignedData {
         version: CmsVersion::V1,
         digest_algorithms: SetOfVec::try_from(vec![hash.algorithm_identifier()])?,
         encap_content_info: EncapsulatedContentInfo {
@@ -143,7 +143,7 @@ pub fn sign(
     };
     Ok(ContentInfo {
         content_type: oids::ID_SIGNED_DATA,
-        content: Any::encode_from(&signed)?,
+        content: Any::encode_from(&signed_data)?,
     }
     .to_der()?)
 }
@@ -160,6 +160,16 @@ pub struct VerifyContext<'a> {
     pub from: Option<&'a str>,
     /// Now (Unix seconds).
     pub now: i64,
+}
+
+impl std::fmt::Debug for VerifyContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VerifyContext")
+            .field("known_certs", &self.known_certs)
+            .field("from", &self.from)
+            .field("now", &self.now)
+            .finish_non_exhaustive()
+    }
 }
 
 /// One checked signature.
@@ -350,31 +360,28 @@ fn check_signature(
     let scheme = crate::keys::SignScheme::resolve(&signer_info.signature_algorithm, Some(hash))
         .map_err(unsupported)?;
     let public = cert.public_key().map_err(unsupported)?;
-    let signed_bytes = match &signer_info.signed_attrs {
-        Some(attrs) => {
-            let attrs = attrs.as_slice();
-            let content_type = attr_value(attrs, oids::ID_CONTENT_TYPE)
-                .and_then(|v| v.decode_as::<const_oid::ObjectIdentifier>().ok());
-            if content_type != Some(econtent_type) {
-                return Err(SignatureState::Invalid);
-            }
-            let digest = attr_value(attrs, oids::ID_MESSAGE_DIGEST)
-                .and_then(|v| v.decode_as::<OctetString>().ok())
-                .ok_or(SignatureState::Invalid)?;
-            if digest.as_bytes() != hash.digest(content).as_slice() {
-                return Err(SignatureState::Invalid);
-            }
-            raw_signed_attrs(raw_value)
-                .ok()
-                .flatten()
-                .ok_or(SignatureState::Error)?
+    let signed_bytes = if let Some(attrs) = &signer_info.signed_attrs {
+        let attrs = attrs.as_slice();
+        let content_type = attr_value(attrs, oids::ID_CONTENT_TYPE)
+            .and_then(|v| v.decode_as::<const_oid::ObjectIdentifier>().ok());
+        if content_type != Some(econtent_type) {
+            return Err(SignatureState::Invalid);
         }
-        None => {
-            if econtent_type != oids::ID_DATA {
-                return Err(SignatureState::Invalid);
-            }
-            content.to_vec()
+        let digest = attr_value(attrs, oids::ID_MESSAGE_DIGEST)
+            .and_then(|v| v.decode_as::<OctetString>().ok())
+            .ok_or(SignatureState::Invalid)?;
+        if digest.as_bytes() != hash.digest(content).as_slice() {
+            return Err(SignatureState::Invalid);
         }
+        raw_signed_attrs(raw_value)
+            .ok()
+            .flatten()
+            .ok_or(SignatureState::Error)?
+    } else {
+        if econtent_type != oids::ID_DATA {
+            return Err(SignatureState::Invalid);
+        }
+        content.to_vec()
     };
     public
         .verify(scheme, &signed_bytes, signer_info.signature.as_bytes())

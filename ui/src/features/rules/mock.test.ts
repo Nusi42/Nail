@@ -1,7 +1,7 @@
-import type { Event as NailEvent, Rule, RuleRun } from "../../api/generated";
+import type { Event as NailEvent, Rule } from "../../api/generated";
 import { createEnv } from "../../test/harness";
 import { newRule } from "./model";
-import type { ExplainedMatch } from "./types";
+import { must } from "../../test/must";
 
 function setup() {
   const env = createEnv();
@@ -106,7 +106,7 @@ describe("rules mock", () => {
       "[rust-announce] Rust 1.97 released",
       "[rust-announce] Rust 1.97 released",
     ]);
-    const match = r.matches[0] as ExplainedMatch;
+    const match = must(r.matches[0]);
     expect(match.actions).toEqual(rustRule().actions);
     expect(match.explanation).toEqual([
       { path: [], matched: true, value: null },
@@ -146,9 +146,9 @@ describe("rules mock", () => {
     expect(ran.op_ids).toHaveLength(2);
     expect(listPosts().every((m) => m.tags.includes("rust"))).toBe(true);
 
-    await vi.waitFor(() =>
-      expect(events.some((e) => e.type === "RuleRunFinished" && e.run.state === "done")).toBe(true),
-    );
+    await vi.waitFor(() => {
+      expect(events.some((e) => e.type === "RuleRunFinished" && e.run.state === "done")).toBe(true);
+    });
     const runs = (
       await client.request({ type: "ListRuleRuns", rule_id: saved.id, limit: 5 }, "RuleRuns")
     ).runs;
@@ -157,9 +157,9 @@ describe("rules mock", () => {
     await client.request({ type: "UndoRuleRun", run_id: ran.id }, "Queued");
     expect(listPosts().every((m) => !m.tags.includes("rust"))).toBe(true);
     expect(listPosts().map((m) => m.folder_id)).toEqual(folders);
-    const after = (
-      await client.request({ type: "ListRuleRuns", rule_id: null, limit: 5 }, "RuleRuns")
-    ).runs[0] as RuleRun;
+    const after = must(
+      (await client.request({ type: "ListRuleRuns", rule_id: null, limit: 5 }, "RuleRuns")).runs[0],
+    );
     expect(after).toMatchObject({ state: "undone", undoable: false });
     await expect(
       client.request({ type: "UndoRuleRun", run_id: ran.id }, "Queued"),
@@ -194,7 +194,9 @@ describe("rules mock", () => {
     expect(data.folders.find((f) => f.id === moved?.folder_id)?.role).toBe("archive");
     // Nothing after `stop` ran.
     expect(moved?.flags.flagged).toBe(flaggedBefore);
-    await vi.waitFor(() => expect(events.some((e) => e.type === "RuleRunFinished")).toBe(true));
+    await vi.waitFor(() => {
+      expect(events.some((e) => e.type === "RuleRunFinished")).toBe(true);
+    });
     await client.request({ type: "UndoRuleRun", run_id: ran.id }, "Queued");
     expect(data.messages.find((m) => m.id === target.id)?.folder_id).toBe(inbox?.id);
   });

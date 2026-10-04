@@ -8,6 +8,8 @@
 //! goes through the core; enabled plug-ins start with the core and a
 //! tampered package is refused.
 
+#![cfg(test)]
+
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -177,7 +179,7 @@ async fn wait_event<T>(
             }
             Ok(Err(broadcast::error::RecvError::Lagged(_))) => {}
             Ok(Err(e)) => panic!("{what}: {e}"),
-            Err(_) => panic!("no {what} within 20 s; saw {seen:#?}"),
+            Err(elapsed) => panic!("no {what} within 20 s ({elapsed}); saw {seen:#?}"),
         }
     }
 }
@@ -809,7 +811,7 @@ async fn dev_folders_load_and_reload() {
 /// The bound of the dev reload waits: only there so a broken watcher fails
 /// instead of hanging; generous because the full workspace suite loads the
 /// machine.
-const RELOAD_WAIT: Duration = Duration::from_secs(120);
+const RELOAD_WAIT: Duration = Duration::from_mins(2);
 
 /// The stored log of the dev plug-in.
 async fn dev_logs(f: &Fixture) -> Vec<PluginLogEntry> {
@@ -847,7 +849,7 @@ async fn wait_reloaded(
             Instant::now() < deadline,
             "{what} did not happen in {RELOAD_WAIT:?}: {plugin:?} {logs:#?}"
         );
-        let _ = tokio::time::timeout(Duration::from_millis(100), reloads.recv()).await;
+        drop(tokio::time::timeout(Duration::from_millis(100), reloads.recv()).await);
     }
 }
 
@@ -1171,7 +1173,11 @@ async fn calendar_read_gives_event_occurrences() {
         .await
     {
         Response::Calendars { calendars } => {
-            calendars.into_iter().find(|c| c.has_events()).unwrap().id
+            calendars
+                .into_iter()
+                .find(nail_api::Calendar::has_events)
+                .unwrap()
+                .id
         }
         other => panic!("{other:?}"),
     };

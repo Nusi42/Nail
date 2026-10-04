@@ -1,6 +1,5 @@
 // Tests of scripts/lib/winget.mjs. Run: node --test scripts/test/
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -12,13 +11,26 @@ import {
   wingetManifests,
   yamlString,
 } from "../lib/winget.mjs";
+import { readJson } from "../lib/json.mjs";
+
+/**
+ * One generated manifest file by its path.
+ *
+ * @param {string} rel
+ */
+function manifestFile(rel) {
+  const text = wingetManifests(pkg)[rel];
+  assert.ok(text, rel);
+  return text;
+}
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const facts = JSON.parse(
-  readFileSync(path.join(repoRoot, "packaging", "winget", "nail.winget.json"), "utf8"),
+const facts = /** @type {import("../lib/winget.mjs").WingetInput} */ (
+  readJson(path.join(repoRoot, "packaging", "winget", "nail.winget.json"))
 );
 const sha = "ab".repeat(32);
-const pkg = {
+// The committed facts are complete (checkPackage proves it in the tests).
+const pkg = /** @type {import("../lib/winget.mjs").WingetPackage} */ ({
   ...facts,
   version: "0.2.0",
   releaseDate: "2026-10-02",
@@ -31,7 +43,7 @@ const pkg = {
       sha256: "CD".repeat(32),
     },
   ],
-};
+});
 
 test("three files in the winget-pkgs layout", () => {
   const files = wingetManifests(pkg);
@@ -48,7 +60,7 @@ test("three files in the winget-pkgs layout", () => {
 });
 
 test("the installer manifest wraps the per-user NSIS setup", () => {
-  const text = wingetManifests(pkg)["manifests/n/Nail/Nail/0.2.0/Nail.Nail.installer.yaml"];
+  const text = manifestFile("manifests/n/Nail/Nail/0.2.0/Nail.Nail.installer.yaml");
   for (const line of [
     "InstallerType: nullsoft",
     "Scope: user",
@@ -73,7 +85,7 @@ test("the installer manifest wraps the per-user NSIS setup", () => {
 });
 
 test("the locale manifest carries the package facts", () => {
-  const text = wingetManifests(pkg)["manifests/n/Nail/Nail/0.2.0/Nail.Nail.locale.en-US.yaml"];
+  const text = manifestFile("manifests/n/Nail/Nail/0.2.0/Nail.Nail.locale.en-US.yaml");
   assert.ok(text.includes("PackageLocale: en-US\n"));
   assert.ok(text.includes("Publisher: 'Nail'\n"));
   assert.ok(text.includes("PackageName: 'Nail'\n"));
@@ -86,15 +98,20 @@ test("the locale manifest carries the package facts", () => {
 });
 
 test("bad package descriptions are refused", () => {
-  const bad = (patch) => () => checkPackage({ ...pkg, ...patch });
+  /** @param {import("../lib/winget.mjs").WingetInput} patch */
+  const bad = (patch) => () => {
+    checkPackage({ ...pkg, ...patch });
+  };
+  const [first] = pkg.installers;
+  assert.ok(first);
   assert.throws(bad({ identifier: "Nail" }), /PackageIdentifier/);
   assert.throws(bad({ version: "1.0" }), /semantic/);
   assert.throws(bad({ license: "" }), /license is required/);
   assert.throws(bad({ installers: [] }), /no installers/);
-  assert.throws(bad({ installers: [{ ...pkg.installers[0], arch: "x86" }] }), /unsupported arch/);
-  assert.throws(bad({ installers: [pkg.installers[0], pkg.installers[0]] }), /two installers/);
-  assert.throws(bad({ installers: [{ ...pkg.installers[0], url: "http://x" }] }), /https/);
-  assert.throws(bad({ installers: [{ ...pkg.installers[0], sha256: "abc" }] }), /SHA-256/);
+  assert.throws(bad({ installers: [{ ...first, arch: "x86" }] }), /unsupported arch/);
+  assert.throws(bad({ installers: [first, first] }), /two installers/);
+  assert.throws(bad({ installers: [{ ...first, url: "http://x" }] }), /https/);
+  assert.throws(bad({ installers: [{ ...first, sha256: "abc" }] }), /SHA-256/);
   assert.throws(bad({ releaseDate: "02.10.2026" }), /YYYY-MM-DD/);
 });
 

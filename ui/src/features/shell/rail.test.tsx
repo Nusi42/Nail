@@ -5,8 +5,9 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ResolvedLayout } from "../../api/generated";
 import { createEnv, renderNode, settleQueries, widget, type Env } from "../../test/harness";
-import { seedAgentsDemo } from "../agents";
+import { seedAgentsDemo } from "../agents/mockSeed";
 import { hostLayout } from "./testing";
+import { must } from "../../test/must";
 
 function renderRail(env: Env, layout: ResolvedLayout, options: Record<string, unknown> = {}) {
   return renderNode(widget("nav-rail", { options }), env, { layout });
@@ -82,7 +83,7 @@ describe("nav-rail", () => {
       .getAllByRole("button")
       .find((b) => b.getAttribute("data-action") === "agents.open-center");
     expect(center?.getAttribute("aria-label")).toMatch(
-      new RegExp(`, ${pending.length} changes waiting for your approval$`),
+      new RegExp(`, ${String(pending.length)} changes waiting for your approval$`),
     );
     expect(center?.querySelector('[data-part="nav-rail.badge"]')?.textContent).toBe(
       String(pending.length),
@@ -118,16 +119,18 @@ describe("nav-rail", () => {
     renderRail(env, hostLayout());
     await settleQueries(env);
     const mail = item(/^Mail/);
-    act(() => mail.focus());
+    act(() => {
+      mail.focus();
+    });
     fireEvent.keyDown(mail, { key: "ArrowDown" });
     expect(document.activeElement).toBe(item(/^Calendar/));
-    fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+    fireEvent.keyDown(must(document.activeElement), { key: "End" });
     expect(document.activeElement).toBe(item(/^Settings/));
-    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" });
+    fireEvent.keyDown(must(document.activeElement), { key: "ArrowDown" });
     expect(document.activeElement).toBe(mail);
     fireEvent.keyDown(mail, { key: "ArrowUp" });
     expect(document.activeElement).toBe(item(/^Settings/));
-    fireEvent.keyDown(document.activeElement as Element, { key: "Home" });
+    fireEvent.keyDown(must(document.activeElement), { key: "Home" });
     expect(document.activeElement).toBe(mail);
     // Other keys are left alone.
     fireEvent.keyDown(mail, { key: "ArrowRight" });
@@ -158,7 +161,9 @@ describe("nav-rail", () => {
     expect(within(rail()).getByRole("img")).toHaveAccessibleName(
       `Account: ${first.name || first.email}`,
     );
-    act(() => env.store.getState().selectAccount(second.id));
+    act(() => {
+      env.store.getState().selectAccount(second.id);
+    });
     expect(within(rail()).getByRole("img")).toHaveAccessibleName(
       `Account: ${second.name || second.email}`,
     );

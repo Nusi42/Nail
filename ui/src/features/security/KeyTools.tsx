@@ -4,7 +4,7 @@
  * certificate store.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageId, errorMessageIdOf, NailError } from "../../api/client";
 import type {
   CryptoKey,
@@ -26,6 +26,7 @@ import {
   looksArmored,
 } from "./model";
 import { securityKeys, useSecuritySettings, useWindowsCertificates } from "./queries";
+import { nonEmpty } from "../../text/empty";
 
 /** Called with the keys a tool added or changed (the manager selects the first). */
 export type OnKeys = (keys: CryptoKey[]) => void;
@@ -88,7 +89,9 @@ function ProtectionFields({
         labelId="security-protection"
         name="protection"
         value={value.kind}
-        onChange={(kind) => onChange({ ...value, kind: kind as "keychain" | "passphrase" })}
+        onChange={(kind) => {
+          onChange({ ...value, kind: kind as "keychain" | "passphrase" });
+        }}
         choices={[
           { value: "keychain", label: "security-protection-keychain" },
           { value: "passphrase", label: "security-protection-passphrase" },
@@ -103,7 +106,9 @@ function ProtectionFields({
             type="password"
             autoComplete="new-password"
             value={value.passphrase}
-            onChange={(passphrase) => onChange({ ...value, passphrase })}
+            onChange={(passphrase) => {
+              onChange({ ...value, passphrase });
+            }}
           />
           <TextField
             labelId="security-protection-confirm"
@@ -111,7 +116,9 @@ function ProtectionFields({
             type="password"
             autoComplete="new-password"
             value={value.confirm}
-            onChange={(confirm) => onChange({ ...value, confirm })}
+            onChange={(confirm) => {
+              onChange({ ...value, confirm });
+            }}
           />
         </>
       )}
@@ -181,7 +188,7 @@ export function ImportTool({ onKeys }: { onKeys: OnKeys }) {
     }
   };
 
-  const importText = async (event: FormEvent) => {
+  const importText = async (event: SubmitEvent) => {
     event.preventDefault();
     if (text.trim() === "" || busy) return;
     if (await run({ type: "ImportKeys", data: text, encoding: "text" })) setText("");
@@ -204,7 +211,7 @@ export function ImportTool({ onKeys }: { onKeys: OnKeys }) {
     );
   };
 
-  const importP12 = async (event: FormEvent) => {
+  const importP12 = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!p12 || busy) return;
     const problem = protectionProblem(protection);
@@ -290,7 +297,9 @@ export function ImportTool({ onKeys }: { onKeys: OnKeys }) {
             type="button"
             data-part="form.button"
             data-action="cancel"
-            onClick={() => setP12(null)}
+            onClick={() => {
+              setP12(null);
+            }}
           >
             {t("security-cancel")}
           </button>
@@ -320,9 +329,9 @@ export function GenerateTool({ onKeys }: { onKeys: OnKeys }) {
   const [created, setCreated] = useState<CryptoKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const chosen = identity || identities[0]?.id || "";
+  const chosen = nonEmpty(identity) ?? identities[0]?.id ?? "";
 
-  const generate = async (event: FormEvent) => {
+  const generate = async (event: SubmitEvent) => {
     event.preventDefault();
     if (chosen === "" || busy) return;
     const problem = protectionProblem(protection);
@@ -374,7 +383,9 @@ export function GenerateTool({ onKeys }: { onKeys: OnKeys }) {
           labelId="security-generate-algorithm"
           name="generate-algorithm"
           value={algorithm}
-          onChange={(v) => setAlgorithm(v as KeyAlgorithm)}
+          onChange={(v) => {
+            setAlgorithm(v as KeyAlgorithm);
+          }}
           choices={[
             { value: "curve25519", label: "security-algorithm-curve25519" },
             { value: "rsa4096", label: "security-algorithm-rsa4096" },
@@ -429,7 +440,7 @@ export function LookupTool({ onKeys }: { onKeys: OnKeys }) {
   const [importedFps, setImportedFps] = useState<string[]>([]);
   const off = settings?.key_lookup === "off";
 
-  const search = async (event: FormEvent) => {
+  const search = async (event: SubmitEvent) => {
     event.preventDefault();
     if (email.trim() === "" || busy || !settings) return;
     setBusy(true);
@@ -587,7 +598,9 @@ export function WindowsStoreTool({ onKeys }: { onKeys: OnKeys }) {
         labelId="security-windows-store"
         name="windows-store"
         value={store}
-        onChange={(v) => setStore(v as WindowsCertStore)}
+        onChange={(v) => {
+          setStore(v as WindowsCertStore);
+        }}
         choices={WINDOWS_STORES.map((s) => ({ value: s, label: `security-windows-store-${s}` }))}
       />
       {unsupported && (

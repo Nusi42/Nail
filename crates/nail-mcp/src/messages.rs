@@ -8,7 +8,7 @@
 //!   English diagnostic the server wrote (no `localized` column yet); this
 //!   module maps every detail it writes back to its message, so the core
 //!   can fill `McpAuditEntry.localized` when it lists the log;
-//! * administration errors (client names), with [`ApiError::localized`];
+//! * administration errors (client names), with `ApiError::localized`;
 //! * starting the server on a fixed port ([`start_error`]);
 //! * the stdio bridge's errors ([`crate::bridge::BridgeError::localized`]),
 //!   which `nail mcp` prints.

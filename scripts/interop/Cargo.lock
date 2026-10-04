@@ -1637,7 +1637,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nail-api"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "indexmap",
  "serde",
@@ -1648,15 +1648,13 @@ dependencies = [
 
 [[package]]
 name = "nail-auth"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "keyring",
  "nail-api",
  "oauth2",
  "reqwest",
  "rustls-platform-verifier",
- "serde",
- "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
@@ -1666,7 +1664,7 @@ dependencies = [
 
 [[package]]
 name = "nail-dav"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "base64 0.23.1",
  "nail-api",
@@ -1682,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "nail-discovery"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "hickory-resolver",
  "nail-api",
@@ -1716,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-imap"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "async-compression",
  "base64 0.23.1",
@@ -1733,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-pop3"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "base64 0.23.1",
  "md-5",
@@ -1747,7 +1745,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-smtp"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "base64 0.23.1",
  "lettre",
@@ -1759,7 +1757,7 @@ dependencies = [
 
 [[package]]
 name = "nail-sieve"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "base64 0.23.1",
  "hex",
@@ -1777,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "nail-testkit"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "async-compression",
  "base64 0.23.1",
@@ -1792,16 +1790,14 @@ dependencies = [
 
 [[package]]
 name = "nail-testkit-net"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "axum",
  "base64 0.23.1",
  "hickory-proto",
  "md-5",
- "nail-api",
  "nail-testkit",
  "quick-xml",
- "serde",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.21",

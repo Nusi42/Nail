@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { files, violations, stale } = checkRepository(root);
 
 for (const v of violations) {
-  console.error(`${v.file}:${v.line}: ${v.kind} (${v.name}): ${v.text}`);
+  console.error(`${v.file}:${String(v.line)}: ${v.kind} (${v.name}): ${v.text}`);
 }
 for (const s of stale) {
   console.error(`stale allowlist entry: ${s.file}: ${s.text}`);
@@ -27,4 +27,4 @@ if (violations.length > 0 || stale.length > 0) {
   );
   process.exit(1);
 }
-console.log(`socket binds: ${files} files checked, loopback only`);
+console.log(`socket binds: ${String(files)} files checked, loopback only`);

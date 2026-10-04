@@ -98,9 +98,9 @@ describe("invitation card", () => {
     const env = setup();
     env.transport.data.features.scheduling.settings.confirm_replies = true;
     const card = await renderCard(env, DEMO_INVITATIONS.newRequest);
-    await waitFor(() =>
-      expect(env.transport.requests.some((r) => r.type === "GetSchedulingSettings")).toBe(true),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "GetSchedulingSettings")).toBe(true);
+    });
     await user.click(within(card).getByRole("button", { name: "Maybe" }));
     expect(await within(card).findByText("Send “Maybe” to Grace Hopper?")).toBeInTheDocument();
     expect(env.transport.requests.some((r) => r.type === "RespondToInvitation")).toBe(false);
@@ -249,9 +249,9 @@ describe("invitation card", () => {
       <NodeView node={widget("invitation-card")} path="t/0" />,
       env,
     );
-    await waitFor(() =>
-      expect(env.transport.requests.filter((r) => r.type === "GetInvitation").length).toBe(2),
-    );
+    await waitFor(() => {
+      expect(env.transport.requests.filter((r) => r.type === "GetInvitation").length).toBe(2);
+    });
     expect(second.container.querySelector('[data-part="invitation"]')).toBeNull();
   });
 });

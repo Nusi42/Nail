@@ -33,8 +33,8 @@ describe("generated user docs", () => {
   it("describe every component of the contract with its value", () => {
     const rust = rustUiDocs();
     expect(Object.keys(rust.descriptions)).toEqual(NODE_TYPES);
-    expect(rust.values["date"]).toMatch(/YYYY-MM-DD/);
-    expect(rust.values["table"]).toMatch(/when `selectable`/);
+    expect(rust.values.date).toMatch(/YYYY-MM-DD/);
+    expect(rust.values.table).toMatch(/when `selectable`/);
     const md = components();
     for (const type of NODE_TYPES) expect(md).toContain(`### \`<${type}>\``);
   });
@@ -42,6 +42,13 @@ describe("generated user docs", () => {
   it("clean rustdoc links and splice between the markers", () => {
     expect(cleanDoc("see [`super::is_plugin_id`]\n and {@link NailApi}")).toBe(
       "see `is_plugin_id` and `NailApi`",
+    );
+    // List items stay apart; example addresses become code (no bare URLs).
+    expect(cleanDoc("Exactly one is set.\n\n* `a` — first;\n- `b` — second.")).toBe(
+      "Exactly one is set. • `a` — first; • `b` — second.",
+    );
+    expect(cleanDoc('e.g. "ada@example.org", not `bob@example.org`')).toBe(
+      'e.g. "`ada@example.org`", not `bob@example.org`',
     );
     expect(splice(`a\n${BEGIN}\nold\n${END}\nb`, "new")).toBe(`a\n${BEGIN}\n\nnew\n\n${END}\nb`);
     expect(() => splice("no markers", "x")).toThrow(/markers/);

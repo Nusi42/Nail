@@ -2,8 +2,8 @@
  * The remote UI's login gate (web mode; ADR 0041). Before the app opens
  * its WebSocket it asks `POST /api/auth` for the browser's status:
  *
- * - no such route (the local, loopback `nail serve`): the app opens as
- *   before, without a login;
+ * - no login on this server (the local, loopback `nail serve` answers
+ *   `204 No Content`; older servers `404`): the app opens without a login;
  * - a valid session: the app opens;
  * - otherwise the login page (`RemoteLogin`: pairing, passkey, password +
  *   code) is shown until the browser has a session.
@@ -13,7 +13,7 @@
  * (see `api/reauth.ts`).
  */
 import { RemoteLogin, remoteAuth, remoteStore, setReauthMethods } from "./features/remote";
-import { AuthTransportError } from "./features/remote/authClient";
+import { AuthTransportError, NO_LOGIN_STATUS } from "./features/remote/authClient";
 
 /** What the gate decided. */
 export type GateState = "checking" | "open" | "login";
@@ -34,8 +34,14 @@ export async function checkRemoteGate(): Promise<GateState> {
     }
     return "login";
   } catch (error) {
-    // No login route: the local UI of `nail serve` (loopback, no login).
-    if (error instanceof AuthTransportError && error.status === 404) return "open";
+    // No login: the local UI of `nail serve` (loopback). Servers before the
+    // `204` answer have no such route at all.
+    if (
+      error instanceof AuthTransportError &&
+      (error.status === NO_LOGIN_STATUS || error.status === 404)
+    ) {
+      return "open";
+    }
     return "login";
   }
 }

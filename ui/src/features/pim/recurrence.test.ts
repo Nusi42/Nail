@@ -11,6 +11,7 @@ import {
   weekdayOf,
   weekdayOrdinal,
 } from "./recurrence";
+import { objectContaining } from "../../test/matchers";
 
 const START: PimTime = { type: "zoned", local: "2026-10-01T09:00:00", tz: "Europe/Berlin" };
 const BASE: Omit<RecurrenceRule, "freq"> = {
@@ -136,7 +137,7 @@ describe("recurrence editor model", () => {
     );
     expect(text).toEqual({
       id: "pim-recurrence-summary",
-      args: expect.objectContaining({
+      args: objectContaining({
         freq: "weekly",
         interval: 2,
         days: "MON, THU",

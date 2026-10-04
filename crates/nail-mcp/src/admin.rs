@@ -66,7 +66,7 @@ pub async fn handle(
 ) -> Result<Response, ApiError> {
     match request {
         Request::ListMcpClients => Ok(Response::McpClients {
-            clients: store.call(|s| s.list_mcp_clients()).await?,
+            clients: store.call(Store::list_mcp_clients).await?,
         }),
         Request::CreateMcpClient { name, grant } => {
             let name = name.trim().to_owned();

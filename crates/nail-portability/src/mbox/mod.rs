@@ -13,6 +13,7 @@ use crate::message::{header_facts, header_fields, header_value};
 use crate::sink::ExportMessage;
 
 /// Writes messages as an mbox file.
+#[derive(Debug)]
 pub struct MboxWriter<W> {
     out: W,
     variant: MboxVariant,

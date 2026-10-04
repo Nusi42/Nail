@@ -84,8 +84,12 @@ export function useDebounced<T>(value: T, ms: number, same: (a: T, b: T) => bool
   const [settled, setSettled] = useState(value);
   useEffect(() => {
     if (same(settled, value)) return;
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setSettled(value);
+    }, ms);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [value, settled, ms, same]);
   return settled;
 }

@@ -17,8 +17,10 @@ export function parseKeywords(list: string): string[] {
 export function ownText(mode: ComposerMode, body: string): string {
   if (mode === "html") {
     const doc = new DOMParser().parseFromString(body, "text/html");
-    doc.querySelectorAll("blockquote, .signature, .forwarded").forEach((el) => el.remove());
-    return doc.body.textContent ?? "";
+    doc.querySelectorAll("blockquote, .signature, .forwarded").forEach((el) => {
+      el.remove();
+    });
+    return doc.body.textContent;
   }
   const lines: string[] = [];
   for (const line of body.split("\n")) {

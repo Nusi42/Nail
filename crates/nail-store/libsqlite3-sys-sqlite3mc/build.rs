@@ -12,10 +12,20 @@ use std::path::Path;
     feature = "bundled-sqlcipher",
     feature = "bundled-sqlcipher-vendored-openssl"
 ))]
-compile_error!("Nail's libsqlite3-sys bundles SQLite3 Multiple Ciphers; SQLCipher is not available (ADR 0095)");
+compile_error!(
+    "Nail's libsqlite3-sys bundles SQLite3 Multiple Ciphers; SQLCipher is not available (ADR 0095)"
+);
 
-#[cfg(any(feature = "buildtime_bindgen", feature = "loadable_extension", feature = "preupdate_hook", feature = "session", feature = "in_gecko"))]
-compile_error!("this feature of libsqlite3-sys is not supported by Nail's SQLite3 Multiple Ciphers build (ADR 0095)");
+#[cfg(any(
+    feature = "buildtime_bindgen",
+    feature = "loadable_extension",
+    feature = "preupdate_hook",
+    feature = "session",
+    feature = "in_gecko"
+))]
+compile_error!(
+    "this feature of libsqlite3-sys is not supported by Nail's SQLite3 Multiple Ciphers build (ADR 0095)"
+);
 
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR");
@@ -60,8 +70,7 @@ fn main() {
     if !windows {
         cfg.define("HAVE_LOCALTIME_R", None);
     }
-    if env::var("CARGO_CFG_TARGET_FEATURE")
-        .is_ok_and(|v| v.split(',').any(|tf| tf == "crt-static"))
+    if env::var("CARGO_CFG_TARGET_FEATURE").is_ok_and(|v| v.split(',').any(|tf| tf == "crt-static"))
         && msvc
     {
         cfg.static_crt(true);
@@ -69,7 +78,11 @@ fn main() {
     if cfg!(feature = "unlock_notify") {
         cfg.define("SQLITE_ENABLE_UNLOCK_NOTIFY", None);
     }
-    for name in ["SQLITE_MAX_VARIABLE_NUMBER", "SQLITE_MAX_EXPR_DEPTH", "SQLITE_MAX_COLUMN"] {
+    for name in [
+        "SQLITE_MAX_VARIABLE_NUMBER",
+        "SQLITE_MAX_EXPR_DEPTH",
+        "SQLITE_MAX_COLUMN",
+    ] {
         println!("cargo:rerun-if-env-changed={name}");
         if let Ok(limit) = env::var(name) {
             cfg.define(name, limit.as_str());

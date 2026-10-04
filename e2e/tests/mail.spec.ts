@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { defined } from "../support/defined";
 
 /** The seeded demo data (nail-testkit corpus) in the shared server. */
 
@@ -31,8 +32,9 @@ test("default three-pane layout renders from data-part attributes", async ({ pag
   // Panes sit side by side, in layout order.
   const boxes = await Promise.all([0, 1, 2].map((i) => panes.nth(i).boundingBox()));
   expect(boxes.every((b) => b !== null && b.width > 100)).toBe(true);
-  expect(boxes[0]!.x).toBeLessThan(boxes[1]!.x);
-  expect(boxes[1]!.x).toBeLessThan(boxes[2]!.x);
+  const [first, second, third] = boxes.map((b) => defined(b, "a pane's box"));
+  expect(first?.x).toBeLessThan(second?.x ?? 0);
+  expect(second?.x).toBeLessThan(third?.x ?? 0);
 
   // Everything is themeable: no inline styles, no class names in the app.
   const styled = await page.locator('[data-part="app"] [style], [data-part="app"] [class]').count();

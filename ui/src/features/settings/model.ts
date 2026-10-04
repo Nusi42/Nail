@@ -115,7 +115,8 @@ export function highlightText(text: string, query: string): TextPiece[] {
   let offset = 0;
   for (const ch of chars) {
     const f = foldText(ch);
-    for (let i = 0; i < f.length; i++) origin.push(offset);
+    // Every UTF-16 unit of the folded text maps back to this character.
+    origin.push(...Array.from({ length: f.length }, () => offset));
     folded += f;
     offset += ch.length;
   }
@@ -140,8 +141,8 @@ export function highlightText(text: string, query: string): TextPiece[] {
   for (let i = 0; i < text.length; i++) {
     const match = marked[i] ?? false;
     const last = pieces[pieces.length - 1];
-    if (last && last.match === match) last.text += text[i];
-    else pieces.push({ text: text[i] ?? "", match });
+    if (last?.match === match) last.text += text.charAt(i);
+    else pieces.push({ text: text.charAt(i), match });
   }
   return pieces;
 }

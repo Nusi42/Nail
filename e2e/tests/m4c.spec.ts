@@ -11,6 +11,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { repoRoot, startNail, tempDir, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
 import { accountSectionNamed, openSettingsTab, showView, viewRegion } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * M4c WP125 (ADRs 0094, 0096, 0099) through the web UI of `nail serve
@@ -155,7 +156,8 @@ async function importWith(
 let server: NailServer;
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 test("an mbox and a Maildir are imported with their flags", async ({ page }) => {
@@ -172,7 +174,7 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   const folders = await localFolders(server);
   const mbox = folders.find((f) => f.path === "Old mail/old-mail");
   expect(mbox, JSON.stringify(folders)).toBeDefined();
-  const imported = await messagesIn(server, mbox!.id);
+  const imported = await messagesIn(server, defined(mbox, "the mbox folder").id);
   expect(imported.find((m) => m.subject === "Read and flagged")?.flags).toMatchObject({
     seen: true,
     flagged: true,
@@ -180,7 +182,7 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   expect(imported.find((m) => m.subject === "Still unread")?.flags.seen).toBe(false);
   const lists = folders.find((f) => f.path.startsWith("Server copy/") && f.name === "Lists");
   expect(lists).toBeDefined();
-  const listMail = await messagesIn(server, lists!.id);
+  const listMail = await messagesIn(server, defined(lists, "the Lists folder").id);
   expect(listMail[0]?.flags).toMatchObject({ seen: true, answered: true });
 
   // The imported mail is in the UI: the Local Folders account and its rows.
@@ -278,7 +280,11 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
     server,
     {
       type: "StartExport",
-      source: { type: "folders", folder_ids: [again!.id], include_subfolders: false },
+      source: {
+        type: "folders",
+        folder_ids: [defined(again, "the folder").id],
+        include_subfolders: false,
+      },
       format: "mbox",
       path: second,
       options: {},
@@ -333,7 +339,7 @@ test("a backup restores into a wiped Nail", async ({ page }) => {
   });
   const restored = (await localFolders(server)).find((f) => f.path === "Archive/old-mail");
   expect(restored).toBeDefined();
-  const mail = await messagesIn(server, restored!.id);
+  const mail = await messagesIn(server, defined(restored, "the restored folder").id);
   expect(mail.map((m) => m.subject).sort()).toEqual(["Read and flagged", "Still unread"]);
 });
 

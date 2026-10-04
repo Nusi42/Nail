@@ -1,5 +1,6 @@
 //! Every error of a file is reported at once (M1b WP24), in file order,
 //! while the first-error functions keep their M1a behaviour.
+#![cfg(test)]
 
 use nail_config::{
     ConfigErrorKind, issues_event, parse_accounts, parse_accounts_all, parse_layout,
@@ -52,7 +53,7 @@ fn every_bad_item_of_a_theme_is_reported() {
 
 #[test]
 fn resolution_errors_are_all_reported_after_a_clean_read() {
-    let text = r##"theme "x" extends="default" {
+    let text = r#"theme "x" extends="default" {
     tokens {
         color "a" "$color.nope"
         color "b" "$color.c"
@@ -63,7 +64,7 @@ fn resolution_errors_are_all_reported_after_a_clean_read() {
         background "$color.also-missing"
     }
 }
-"##;
+"#;
     let errors = parse_theme_all(text, "theme.kdl").unwrap_err();
     let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
     assert_eq!(errors.len(), 4, "{messages:#?}");

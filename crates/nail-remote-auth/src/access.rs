@@ -60,7 +60,7 @@ impl RequestAccess {
     pub fn audited(&self) -> bool {
         !matches!(
             self.access,
-            Access::Session | Access::Scope(McpScope::Read) | Access::Scope(McpScope::Context)
+            Access::Session | Access::Scope(McpScope::Read | McpScope::Context)
         ) && !self.name.starts_with("List")
             && !self.name.starts_with("Get")
     }
@@ -766,7 +766,7 @@ mod plugin_tests {
         let run = required_access(&Request::RespondPluginDialog {
             dialog_id: "d1".into(),
             button: None,
-            values: Default::default(),
+            values: std::collections::BTreeMap::default(),
         });
         assert_eq!(run.access, Access::Scope(McpScope::Read));
         assert!(!run.audited(), "reads are not audited");
@@ -974,7 +974,7 @@ mod m4a_tests {
                 text: None,
                 message_id: None,
             },
-            context: Default::default(),
+            context: nail_api::context::UiContext::default(),
             client_id: None,
         });
         assert_eq!(action.access, Access::Scope(McpScope::Read));
@@ -1032,11 +1032,11 @@ mod m4a_tests {
                     format: ImportFormat::Mbox,
                     path: "C:/x.mbox".into(),
                 },
-                options: Default::default(),
+                options: nail_api::portability::ImportOptions::default(),
             },
             Request::CreateBackup {
                 path: "C:/b.nailbackup".into(),
-                contents: Default::default(),
+                contents: nail_api::backup::BackupContents::default(),
                 passphrase: "correct horse battery".into(),
                 overwrite: false,
             },
@@ -1052,7 +1052,7 @@ mod m4a_tests {
                 overwrite: true,
             },
             Request::CreateDiagnosticsBundle {
-                options: Default::default(),
+                options: nail_api::diagnostics::DiagnosticsOptions::default(),
                 path: "C:/d.zip".into(),
                 overwrite: false,
             },

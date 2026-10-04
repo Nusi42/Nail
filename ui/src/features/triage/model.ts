@@ -125,7 +125,7 @@ export function toRfc3339(date: Date): string {
   const sign = offset >= 0 ? "+" : "-";
   const abs = Math.abs(offset);
   return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
     `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
   );
@@ -134,7 +134,7 @@ export function toRfc3339(date: Date): string {
 /** The value of an `<input type="datetime-local">` for a date. */
 export function toLocalInput(date: Date): string {
   return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     `T${pad(date.getHours())}:${pad(date.getMinutes())}`
   );
 }

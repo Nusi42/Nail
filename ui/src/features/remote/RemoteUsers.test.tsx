@@ -11,13 +11,13 @@ import { remoteStore } from "./state";
 import { createAda } from "./testUtil";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleRemoteEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {
@@ -164,9 +164,9 @@ describe("remote-users", () => {
     await user.selectOptions(access, "no-send");
     await user.click(within(detail).getByRole("checkbox", { name: /Administration/ }));
     await user.click(within(detail).getByRole("button", { name: "Save access" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.remote.users[0]?.grant).toEqual(presetGrant("no-send")),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.remote.users[0]?.grant).toEqual(presetGrant("no-send"));
+    });
   });
 });
 
@@ -207,7 +207,7 @@ describe("pairing, desktop side", () => {
       grant: presetGrant("read-only", { admin: true }),
       ttl_minutes: 5,
     });
-    const shown = within(panel).getByLabelText("Pairing code").textContent ?? "";
+    const shown = within(panel).getByLabelText("Pairing code").textContent;
     expect(shown).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     expect(
       within(panel).getByText(/open https:\/\/nail-desktop.local:4780\/ and enter/),

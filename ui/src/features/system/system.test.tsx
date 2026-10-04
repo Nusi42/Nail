@@ -21,10 +21,8 @@ import {
   handleSystemEvent,
   openProgramDraft,
   programDraftMessage,
-  setDefaultApps,
-  setUpdateState,
-  simulateMapiSendMail,
 } from ".";
+import { setDefaultApps, setUpdateState, simulateMapiSendMail } from "./mock";
 import { AboutNail } from "./AboutNail";
 import { FirstRun, FirstRunGate } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
@@ -38,13 +36,13 @@ afterEach(() => {
 
 /** Forwards the core's events to the feature's handler, like the app. */
 function listen(env: Env): () => void {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleSystemEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function sent(env: Env, type: string) {
@@ -79,7 +77,9 @@ describe("update-settings widget", () => {
     renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
     await user.click(await screen.findByRole("button", { name: "Check now" }));
     expect(await screen.findByRole("button", { name: "Restart to install" })).toBeVisible();
-    await waitFor(() => expect(sent(env, "GetUpdateStatus").length).toBeGreaterThan(1));
+    await waitFor(() => {
+      expect(sent(env, "GetUpdateStatus").length).toBeGreaterThan(1);
+    });
     expect(screen.getByRole("button", { name: "Restart to install" })).toBeVisible();
     expect(screen.queryByText("Checking for updates…")).toBeNull();
     stop();
@@ -142,13 +142,13 @@ describe("update-settings widget", () => {
       await screen.findByRole("combobox", { name: "Update channel" }),
       "beta",
     );
-    await waitFor(() =>
-      expect(env.transport.data.features.system.updateSettings.channel).toBe("beta"),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.system.updateSettings.channel).toBe("beta");
+    });
     await user.click(screen.getByRole("checkbox", { name: /Download updates/ }));
-    await waitFor(() =>
-      expect(env.transport.data.features.system.updateSettings.auto_download).toBe(false),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.system.updateSettings.auto_download).toBe(false);
+    });
     expect(sent(env, "SetUpdateSettings")).toHaveLength(2);
   });
 
@@ -267,7 +267,7 @@ describe("desktop-settings widget", () => {
   it("explains it on the first-run screen too", async () => {
     const env = createEnv();
     env.transport.data.features.system.startWithWindowsManaged = true;
-    renderWithProviders(<FirstRun close={() => {}} />, env);
+    renderWithProviders(<FirstRun close={vi.fn()} />, env);
     const start = await screen.findByRole("checkbox", { name: /Start Nail with Windows/ });
     expect(start).toBeChecked();
     expect(start).toBeDisabled();
@@ -283,14 +283,14 @@ describe("desktop-settings widget", () => {
     const hidden = screen.getByRole("checkbox", { name: /without a window/ });
     expect(hidden).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: "Start Nail with Windows" }));
-    await waitFor(() =>
-      expect(env.transport.data.features.system.desktopSettings.start_with_windows).toBe(true),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.system.desktopSettings.start_with_windows).toBe(true);
+    });
     await waitFor(() => expect(hidden).toBeEnabled());
     await user.click(tray);
-    await waitFor(() =>
-      expect(env.transport.data.features.system.desktopSettings.close_to_tray).toBe(false),
-    );
+    await waitFor(() => {
+      expect(env.transport.data.features.system.desktopSettings.close_to_tray).toBe(false);
+    });
     await user.click(screen.getByRole("checkbox", { name: /nail plugin dev/ }));
     expect(await screen.findByText("Listening on http://127.0.0.1:47811/")).toBeVisible();
     expect(sent(env, "SetDesktopSettings")).toHaveLength(3);
@@ -323,12 +323,12 @@ describe("default-apps widget", () => {
     await user.click(screen.getByRole("button", { name: "Choose in Default apps" }));
     expect(env.transport.data.features.system.calls).toEqual(["open-settings"]);
     expect(screen.getByText("Choose Nail in Windows Settings, then come back here.")).toBeVisible();
-    act(() =>
+    act(() => {
       setDefaultApps(env.transport, (status) => {
         const entry = status.associations.find((a) => a.target === "mailto");
         if (entry) entry.state = "default";
-      }),
-    );
+      });
+    });
     await waitFor(() => expect(mailto).toHaveTextContent("Nail is the default"));
     stop();
   });
@@ -348,7 +348,9 @@ describe("first-run screen", () => {
     const env = createEnv();
     env.transport.data.features.system.firstRun.completed = false;
     renderWithProviders(<FirstRunGate />, env);
-    await waitFor(() => expect(env.store.getState().windows).toContain(FIRST_RUN_DIALOG));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain(FIRST_RUN_DIALOG);
+    });
   });
 
   it("is not offered when completed, without a desktop host or in a remote session", async () => {
@@ -361,7 +363,9 @@ describe("first-run screen", () => {
         remoteStore.getState().setSession({ id: "rsess-1" } as never);
       }
       const { unmount } = renderWithProviders(<FirstRunGate />, env);
-      await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+      await waitFor(() => {
+        expect(env.queryClient.isFetching()).toBe(0);
+      });
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
@@ -375,25 +379,29 @@ describe("first-run screen", () => {
     const env = createEnv();
     env.transport.data.features.system.firstRun.completed = false;
     env.store.getState().openWindow(FIRST_RUN_DIALOG);
-    const close = vi.fn(() => env.store.getState().closeWindow(FIRST_RUN_DIALOG));
+    const close = vi.fn(() => {
+      env.store.getState().closeWindow(FIRST_RUN_DIALOG);
+    });
     const user = userEvent.setup();
     renderWithProviders(<FirstRun close={close} />, env);
     expect(await screen.findByText("E-mail links now: Another app is the default")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Choose in Default apps" }));
     expect(env.transport.data.features.system.calls).toEqual(["open-settings"]);
     await user.click(screen.getByRole("checkbox", { name: /Start Nail with Windows/ }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.data.features.system.desktopSettings).toMatchObject({
         start_with_windows: true,
         start_hidden: true,
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("button", { name: "Import…" })).toBeVisible();
     expect(
       screen.queryByText("The import assistant comes with a later version of Nail."),
     ).toBeNull();
     await user.click(screen.getByRole("button", { name: "Get started" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
     expect(env.transport.data.features.system.firstRun.completed).toBe(true);
     expect(env.store.getState().windows).not.toContain(FIRST_RUN_DIALOG);
   });
@@ -413,7 +421,9 @@ describe("first-run screen", () => {
       env,
     );
     await user.click(await screen.findByRole("button", { name: "Import…" }));
-    await waitFor(() => expect(run).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(run).toHaveBeenCalled();
+    });
     expect(close).toHaveBeenCalled();
     expect(sent(env, "CompleteFirstRun")).toHaveLength(1);
   });
@@ -424,11 +434,15 @@ describe("first-run screen", () => {
     const close = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(<FirstRun close={close} />, env);
-    await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+    await waitFor(() => {
+      expect(env.queryClient.isFetching()).toBe(0);
+    });
     expect(screen.queryByRole("button", { name: "Choose in Default apps" })).toBeNull();
     expect(screen.getByText("Bring your mail along")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Skip" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
   });
 });
 
@@ -471,7 +485,9 @@ describe("mail from other programs (Simple MAPI)", () => {
       env,
     );
     await user.click(screen.getByRole("button", { name: "open" }));
-    await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Quarterly report"));
+    await waitFor(() => {
+      expect(env.store.getState().composer?.subject).toBe("Quarterly report");
+    });
     const composer = env.store.getState().composer;
     expect(composer?.to).toContain("ada@example.org");
     expect(composer?.text.startsWith("See attached.")).toBe(true);

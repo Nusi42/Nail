@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::corpus::Corpus;
 use crate::mock::MockMailServer;
+use crate::num::{f64_of, f64_of_len, usize_of};
 use crate::{BenchError, CorpusSpec, Metric, MetricName};
 
 /// The account the benchmark syncs.
@@ -131,7 +132,7 @@ pub fn percentile(samples: &[f64], p: f64) -> f64 {
     }
     let mut sorted = samples.to_vec();
     sorted.sort_by(f64::total_cmp);
-    let rank = ((p / 100.0) * sorted.len() as f64).ceil() as usize;
+    let rank = usize_of(((p / 100.0) * f64_of_len(sorted.len())).ceil());
     sorted[rank.clamp(1, sorted.len()) - 1]
 }
 
@@ -206,7 +207,7 @@ async fn search(service: &Service, text: &str) -> Result<u32, BenchError> {
                 folder_id: None,
                 offset: 0,
                 limit: 50,
-                sort: Default::default(),
+                sort: nail_api::search::SearchSort::default(),
             },
         })
         .await
@@ -320,7 +321,7 @@ pub async fn run(options: &RunOptions) -> Result<(Vec<Metric>, RunFacts), BenchE
     }
     facts.messages = u64::from(report.new_messages);
     facts.folders = report.folders;
-    facts.sync_messages_per_sec = facts.messages as f64 / initial.as_secs_f64().max(1e-9);
+    facts.sync_messages_per_sec = f64_of(facts.messages) / initial.as_secs_f64().max(1e-9);
     metrics.push(Metric {
         metric: MetricName::InitialSyncSecs,
         value: initial.as_secs_f64(),
@@ -476,7 +477,7 @@ fn imap_settings(ready: &crate::mock::MockReady) -> ImapAccount {
         config: ImapConfig::new("127.0.0.1")
             .with_port(ready.port)
             .with_security(Security::InsecurePlaintext)
-            .with_timeout(Duration::from_secs(120)),
+            .with_timeout(Duration::from_mins(2)),
         credentials: Credentials::new(&ready.username, &ready.password),
     }
 }
@@ -486,6 +487,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the nearest rank is one of the samples, returned exactly"
+    )]
     fn percentiles_use_the_nearest_rank() {
         let samples: Vec<f64> = (1..=100).map(f64::from).collect();
         assert_eq!(percentile(&samples, 95.0), 95.0);

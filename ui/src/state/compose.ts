@@ -45,7 +45,7 @@ export function emptyComposer(): ComposerState {
 }
 
 async function identitiesOf(ctx: ComposeContext, accountId: AccountId | null): Promise<Identity[]> {
-  return ctx.queryClient.fetchQuery({
+  return ctx.queryClient.query({
     queryKey: queryKeys.identities(accountId),
     queryFn: async () =>
       (await ctx.client.request({ type: "ListIdentities", account_id: accountId }, "Identities"))
@@ -129,7 +129,7 @@ export async function startReply(
   messageId: MessageId,
   mode: ReplyMode,
 ): Promise<void> {
-  const message = await ctx.queryClient.fetchQuery({
+  const message = await ctx.queryClient.query({
     queryKey: queryKeys.message(messageId),
     queryFn: async () =>
       (await ctx.client.request({ type: "GetMessage", id: messageId }, "Message")).message,
@@ -246,7 +246,7 @@ export async function saveComposer(ctx: ComposeContext): Promise<DraftId | null>
  */
 export async function sendComposer(ctx: ComposeContext, sendAt: string | null): Promise<boolean> {
   const composer = ctx.store.getState().composer;
-  if (!composer || composer.busy !== null) return false;
+  if (composer?.busy !== null) return false;
   const { draft, invalid } = draftOf(composer);
   if (invalid.length > 0) {
     fail(ctx, "composer-error-invalid-address", { addresses: invalid.join(", ") });

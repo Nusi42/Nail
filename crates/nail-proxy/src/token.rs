@@ -43,10 +43,10 @@ pub const MAX_TOKEN_LEN: usize = 6 * 1024;
 
 /// Default lifetime of resource tokens: a rendered message keeps working
 /// for a working day, then the reader asks the core again.
-pub const DEFAULT_RESOURCE_TTL: Duration = Duration::from_secs(12 * 60 * 60);
+pub const DEFAULT_RESOURCE_TTL: Duration = Duration::from_hours(12);
 /// Default lifetime of render tokens (sandbox documents are loaded right
 /// after the core hands out the URL).
-pub const DEFAULT_RENDER_TTL: Duration = Duration::from_secs(60 * 60);
+pub const DEFAULT_RENDER_TTL: Duration = Duration::from_hours(1);
 
 /// What a token lets its holder do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn tokens_expire() {
-        let s = signer().with_resource_ttl(Duration::from_secs(60));
+        let s = signer().with_resource_ttl(Duration::from_mins(1));
         let token = s
             .sign_resource_at("m-1", "https://img.example.org/a.png", NOW)
             .unwrap();

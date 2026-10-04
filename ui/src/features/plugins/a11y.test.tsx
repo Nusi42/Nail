@@ -20,7 +20,9 @@ import { installFollowUp, must, tick, wireEvents } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(() => tick());
 }
 
@@ -104,7 +106,7 @@ describe("plug-in UI accessibility", () => {
       </>,
       env,
     );
-    act(() =>
+    act(() => {
       env.transport.emit({
         type: "PluginDialogOpened",
         dialog: {
@@ -120,8 +122,8 @@ describe("plug-in UI accessibility", () => {
             ],
           },
         },
-      }),
-    );
+      });
+    });
     await settle(env);
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByRole("dialog").querySelector('[data-part="plugin.dialog"]')).toHaveAttribute(
@@ -164,7 +166,9 @@ describe("plug-in UI accessibility", () => {
         },
       });
     });
-    act(() => crashPlugin(env.transport, "follow-up", "cpu-budget"));
+    act(() => {
+      crashPlugin(env.transport, "follow-up", "cpu-budget");
+    });
     await settle(env);
     expect(await violations(view.container)).toEqual([]);
     unsubscribe();

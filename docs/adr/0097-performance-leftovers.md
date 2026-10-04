@@ -162,13 +162,12 @@ messages / 1.67 GB, sync at about 349 messages per second, data directory
 | scroll-frame-p95-ms | 18.1 | 20 |
 | scroll-long-frames | 0 | 5 |
 
-
 ## Post-M4c (ADR 0101)
 
 The M4c verify measured 348.8 s / 354.6 s initial and 3,343 / 3,339 ms
 incremental on the same benchmark (over budget; the numbers above had no
-real headroom). ADR 0101 profiles the sync and overlaps fetch / blob writes
-+ MIME parsing / store, makes the sync lookups and the flag resync lean and
+real headroom). ADR 0101 profiles the sync and overlaps fetch / blob writes +
+MIME parsing / store, makes the sync lookups and the flag resync lean and
 caches the hot statements. Same machine, two strict runs each, budgets and
 CI tolerance unchanged:
 

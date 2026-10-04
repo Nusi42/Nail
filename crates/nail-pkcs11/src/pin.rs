@@ -150,12 +150,11 @@ mod tests {
             });
             Box::pin(std::future::poll_fn(move |cx| {
                 let mut guard = state.lock().unwrap();
-                match guard.0.take() {
-                    Some(answer) => Poll::Ready(Ok(answer)),
-                    None => {
-                        guard.1 = Some(cx.waker().clone());
-                        Poll::Pending
-                    }
+                if let Some(answer) = guard.0.take() {
+                    Poll::Ready(Ok(answer))
+                } else {
+                    guard.1 = Some(cx.waker().clone());
+                    Poll::Pending
                 }
             }))
         }

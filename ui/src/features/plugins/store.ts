@@ -56,7 +56,7 @@ export interface PendingVeto {
   vetoId: SendVetoId;
   vetoes: PluginSendVeto[];
   /** Settles the send: the outbox entry, or `null` when the user keeps editing. */
-  settle(entry: OutboxEntry | null): void;
+  settle: (entry: OutboxEntry | null) => void;
 }
 
 export interface PluginsState {
@@ -71,19 +71,19 @@ export interface PluginsState {
   /** The send veto shown, if any. */
   veto: PendingVeto | null;
   /** Opens a dialog, or updates the one with the same id. */
-  openDialog(dialog: PluginDialog): void;
-  closeDialog(dialogId: string): void;
+  openDialog: (dialog: PluginDialog) => void;
+  closeDialog: (dialogId: string) => void;
   /** Closes every dialog of a plug-in (it stopped). */
-  closePluginDialogs(pluginId: string): void;
-  pushToast(toast: Toast): void;
-  dismissToast(id: string): void;
-  setInstallMode(mode: InstallMode): void;
+  closePluginDialogs: (pluginId: string) => void;
+  pushToast: (toast: Toast) => void;
+  dismissToast: (id: string) => void;
+  setInstallMode: (mode: InstallMode) => void;
   /** Queues a composer edit. */
-  pushEdit(edit: Omit<PendingEdit, "seq">): void;
+  pushEdit: (edit: Omit<PendingEdit, "seq">) => void;
   /** Takes (removes) the queued edits of a draft, oldest first. */
-  takeEdits(draftId: DraftId): PendingEdit[];
+  takeEdits: (draftId: DraftId) => PendingEdit[];
   /** Shows a send veto (a shown one is settled as "keep editing" first). */
-  showVeto(veto: PendingVeto | null): void;
+  showVeto: (veto: PendingVeto | null) => void;
 }
 
 let editSeq = 0;
@@ -98,28 +98,37 @@ export function createPluginsStore(): StoreApi<PluginsState> {
     edits: [],
     recent: [],
     veto: null,
-    openDialog: (dialog) =>
+    openDialog: (dialog) => {
       set((s) => {
         const index = s.dialogs.findIndex((d) => d.dialog_id === dialog.dialog_id);
         if (index < 0) return { dialogs: [...s.dialogs, dialog] };
         const dialogs = [...s.dialogs];
         dialogs[index] = dialog;
         return { dialogs };
-      }),
-    closeDialog: (dialogId) =>
-      set((s) => ({ dialogs: s.dialogs.filter((d) => d.dialog_id !== dialogId) })),
-    closePluginDialogs: (pluginId) =>
-      set((s) => ({ dialogs: s.dialogs.filter((d) => d.plugin_id !== pluginId) })),
-    pushToast: (toast) =>
+      });
+    },
+    closeDialog: (dialogId) => {
+      set((s) => ({ dialogs: s.dialogs.filter((d) => d.dialog_id !== dialogId) }));
+    },
+    closePluginDialogs: (pluginId) => {
+      set((s) => ({ dialogs: s.dialogs.filter((d) => d.plugin_id !== pluginId) }));
+    },
+    pushToast: (toast) => {
       set((s) => ({
         toasts: [...s.toasts.filter((t) => t.id !== toast.id), toast].slice(-MAX_TOASTS),
-      })),
-    dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-    setInstallMode: (installMode) => set({ installMode }),
-    pushEdit: (edit) =>
+      }));
+    },
+    dismissToast: (id) => {
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    },
+    setInstallMode: (installMode) => {
+      set({ installMode });
+    },
+    pushEdit: (edit) => {
       set((s) => ({
         edits: [...s.edits, { ...edit, seq: ++editSeq }].slice(-MAX_PENDING_EDITS),
-      })),
+      }));
+    },
     takeEdits: (draftId) => {
       const taken = get().edits.filter((e) => e.draftId === draftId);
       if (taken.length > 0) {

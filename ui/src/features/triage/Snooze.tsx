@@ -7,7 +7,7 @@
  * Snoozed folder); the core wakes the message at its time, offline too.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, SnoozedMessage } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
@@ -27,6 +27,7 @@ import {
 import { snooze, unsnooze, useSnoozed } from "./queries";
 import { useTriage } from "./store";
 import { formatDateTime } from "../../i18n/format";
+import { nonEmpty } from "../../text/empty";
 
 /** Name of the snooze picker dialog and of the snoozed-list window. */
 export const SNOOZE_DIALOG = "snooze";
@@ -94,7 +95,7 @@ export function SnoozeDialog({ close }: DialogProps) {
     }
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     const date = fromLocalInput(custom);
     if (date === null) setProblem({ id: "snooze-error-time" });
@@ -142,7 +143,9 @@ export function SnoozeDialog({ close }: DialogProps) {
           type="datetime-local"
           value={custom}
           min={toLocalInput(now)}
-          onChange={(event) => setCustom(event.target.value)}
+          onChange={(event) => {
+            setCustom(event.target.value);
+          }}
         />
       </div>
       <Problem message={problem} />
@@ -164,13 +167,16 @@ function SnoozedItem({
   busy,
 }: {
   item: SnoozedMessage;
-  onWake(): void;
+  onWake: () => void;
   busy: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
   const until = new Date(item.until);
-  const sender = item.message.from?.name || item.message.from?.email || t("snooze-unknown-sender");
+  const sender =
+    nonEmpty(item.message.from?.name) ??
+    nonEmpty(item.message.from?.email) ??
+    t("snooze-unknown-sender");
   return (
     <li data-part="snooze-list.item" data-message={item.message.id}>
       <span data-part="snooze-list.subject">{item.message.subject || t("message-no-subject")}</span>

@@ -307,7 +307,7 @@ impl LayoutEditor {
                 fmt.leading.clone_from(&pad);
                 fmt.trailing.clear();
                 if !fmt.terminator.ends_with('\n') {
-                    fmt.terminator = "\n".to_owned();
+                    "\n".clone_into(&mut fmt.terminator);
                 }
             }
             text.push_str(&node.to_string());
@@ -402,7 +402,7 @@ impl LayoutEditor {
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
         let Some(&(block, index)) = sites.last() else {
-            let text = render::toolbar(name, items, &ToolbarSettings::default(), 1, &style)
+            let text = render::toolbar(name, items, ToolbarSettings::default(), 1, &style)
                 .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             append_rendered(self.body(), 1, &text, &style);
             return Ok(());
@@ -421,7 +421,7 @@ impl LayoutEditor {
         if !multiline {
             // The node is rendered anew: keep its M5b properties.
             let settings = toolbar_settings_of(node);
-            let text = render::toolbar(name, items, &settings, depth, &style)
+            let text = render::toolbar(name, items, settings, depth, &style)
                 .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             replace_rendered(parent, index, &text);
             return Ok(());
@@ -467,7 +467,7 @@ impl LayoutEditor {
                 fmt.leading.insert_str(0, style.nl);
             }
             if !fmt.terminator.contains('\n') && !fmt.trailing.contains('\n') {
-                fmt.terminator = style.nl.to_owned();
+                style.nl.clone_into(&mut fmt.terminator);
             }
             node.set_format(fmt);
         }
@@ -475,7 +475,7 @@ impl LayoutEditor {
         if block.nodes().is_empty() {
             let fmt = block.format().cloned().unwrap_or_default();
             let mut fmt = fmt;
-            fmt.leading = style.nl.to_owned();
+            style.nl.clone_into(&mut fmt.leading);
             fmt.trailing = style.pad(depth);
             block.set_format(fmt);
         }
@@ -612,40 +612,37 @@ impl LayoutEditor {
                 }
             }
         }
-        match action {
-            Some((action, args)) => {
-                let text = render::bind(&key, action, args, 2, &style)
-                    .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
-                if let Some(&(b, i)) = matches.last() {
-                    let block = self.body().nodes_mut()[b].ensure_children();
-                    replace_rendered(block, i, &text);
-                } else {
-                    self.append_binding(&blocks, context, &text);
+        if let Some((action, args)) = action {
+            let text = render::bind(&key, action, args, 2, &style)
+                .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
+            if let Some(&(b, i)) = matches.last() {
+                let block = self.body().nodes_mut()[b].ensure_children();
+                replace_rendered(block, i, &text);
+            } else {
+                self.append_binding(&blocks, context, &text);
+            }
+        } else {
+            let defaults_bind = self.sparse
+                && default_layout()
+                    .keys
+                    .iter()
+                    .any(|k| k.context == context && k.key == key);
+            let mut emptied = Vec::new();
+            for &(b, i) in matches.iter().rev() {
+                let block = self.body().nodes_mut()[b].ensure_children();
+                remove_node(block, i, &style);
+                if block.nodes().is_empty() && !emptied.contains(&b) {
+                    emptied.push(b);
                 }
             }
-            None => {
-                let defaults_bind = self.sparse
-                    && default_layout()
-                        .keys
-                        .iter()
-                        .any(|k| k.context == context && k.key == key);
-                let mut emptied = Vec::new();
-                for &(b, i) in matches.iter().rev() {
-                    let block = self.body().nodes_mut()[b].ensure_children();
-                    remove_node(block, i, &style);
-                    if block.nodes().is_empty() && !emptied.contains(&b) {
-                        emptied.push(b);
-                    }
-                }
-                if defaults_bind {
-                    let text = render::unbind(&key, 2, &style);
-                    self.append_binding(&blocks, context, &text);
-                } else {
-                    // Blocks this removal emptied go too (descending order).
-                    emptied.sort_unstable_by(|a, b| b.cmp(a));
-                    for b in emptied {
-                        remove_node(self.body(), b, &style);
-                    }
+            if defaults_bind {
+                let text = render::unbind(&key, 2, &style);
+                self.append_binding(&blocks, context, &text);
+            } else {
+                // Blocks this removal emptied go too (descending order).
+                emptied.sort_unstable_by(|a, b| b.cmp(a));
+                for b in emptied {
+                    remove_node(self.body(), b, &style);
                 }
             }
         }
@@ -679,15 +676,12 @@ impl LayoutEditor {
             .nodes()
             .iter()
             .rposition(|n| n.name().value() == section && n.entries().is_empty());
-        match last {
-            Some(b) => {
-                let block = self.body().nodes_mut()[b].ensure_children();
-                append_rendered(block, 2, line, &style);
-            }
-            None => {
-                let text = render::section(section, line, 1, &style);
-                append_rendered(self.body(), 1, &text, &style);
-            }
+        if let Some(b) = last {
+            let block = self.body().nodes_mut()[b].ensure_children();
+            append_rendered(block, 2, line, &style);
+        } else {
+            let text = render::section(section, line, 1, &style);
+            append_rendered(self.body(), 1, &text, &style);
         }
     }
 }

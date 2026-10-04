@@ -27,8 +27,11 @@ use zeroize::Zeroizing;
 
 use crate::error::{PortabilityError, Result};
 
+/// Plaintext bytes per chunk, as the header records it.
+const CHUNK_SIZE_U32: u32 = 64 * 1024;
+
 /// Plaintext bytes per chunk.
-pub const CHUNK_SIZE: usize = 64 * 1024;
+pub const CHUNK_SIZE: usize = CHUNK_SIZE_U32 as usize;
 
 /// Poly1305 tag bytes per chunk.
 pub const TAG_SIZE: usize = 16;
@@ -129,6 +132,13 @@ pub struct BackupHeader {
 /// A derived key (wiped when dropped).
 pub struct DerivedKey(Zeroizing<[u8; 32]>);
 
+/// Never prints the key.
+impl std::fmt::Debug for DerivedKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DerivedKey(<redacted>)")
+    }
+}
+
 impl DerivedKey {
     /// Argon2id(passphrase, salt).
     pub fn derive(passphrase: &str, salt: &[u8], params: KdfParams) -> Result<Self> {
@@ -155,13 +165,17 @@ fn nonce(prefix: &[u8; NONCE_PREFIX_SIZE], counter: u32, last: bool) -> XNonce {
 }
 
 /// The bytes before the ciphertext (also the associated data).
-fn prefix_bytes(header: &BackupHeader) -> Vec<u8> {
-    let json = serde_json::to_vec(header).expect("the header serializes");
+fn prefix_bytes(header: &BackupHeader) -> Result<Vec<u8>> {
+    let header_error = |e: &dyn std::fmt::Display| {
+        PortabilityError::io("backup header", io::Error::other(e.to_string()))
+    };
+    let json = serde_json::to_vec(header).map_err(|e| header_error(&e))?;
+    let len = u32::try_from(json.len()).map_err(|e| header_error(&e))?;
     let mut out = Vec::with_capacity(12 + json.len());
     out.extend_from_slice(BACKUP_MAGIC);
-    out.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(&json);
-    out
+    Ok(out)
 }
 
 /// Encrypts into `inner`: writes the prefix at once, then chunks.
@@ -173,6 +187,16 @@ pub struct EncryptingWriter<W: Write> {
     buffer: Zeroizing<Vec<u8>>,
     counter: u32,
     written: u64,
+}
+
+/// Never prints the key or plaintext.
+impl<W: Write> std::fmt::Debug for EncryptingWriter<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EncryptingWriter")
+            .field("chunks", &self.counter)
+            .field("written", &self.written)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<W: Write> EncryptingWriter<W> {
@@ -191,10 +215,10 @@ impl<W: Write> EncryptingWriter<W> {
             salt: hex::encode(salt),
             cipher: CIPHER.to_owned(),
             nonce_prefix: hex::encode(prefix),
-            chunk_size: CHUNK_SIZE as u32,
+            chunk_size: CHUNK_SIZE_U32,
         };
         let key = DerivedKey::derive(passphrase, &salt, params)?;
-        let aad = prefix_bytes(&header);
+        let aad = prefix_bytes(&header)?;
         inner
             .write_all(&aad)
             .map_err(|e| PortabilityError::io("backup header", e))?;
@@ -310,6 +334,17 @@ pub struct DecryptingReader<R: Read + Seek> {
     cached: Option<(u64, Zeroizing<Vec<u8>>)>,
 }
 
+/// Never prints the key or plaintext.
+impl<R: Read + Seek> std::fmt::Debug for DecryptingReader<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecryptingReader")
+            .field("chunks", &self.chunks)
+            .field("plain_len", &self.plain_len)
+            .field("position", &self.position)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<R: Read + Seek> DecryptingReader<R> {
     /// Opens an archive: reads the header, derives the key and decrypts
     /// the first chunk (a wrong passphrase fails here with
@@ -368,10 +403,19 @@ impl<R: Read + Seek> DecryptingReader<R> {
         self.plain_len == 0
     }
 
-    fn load(&mut self, index: u64) -> io::Result<()> {
-        if self.cached.as_ref().is_some_and(|(i, _)| *i == index) {
-            return Ok(());
+    /// The plaintext of chunk `index` (decrypted once, then cached).
+    fn load(&mut self, index: u64) -> io::Result<&[u8]> {
+        if self.cached.as_ref().is_none_or(|(i, _)| *i != index) {
+            let buffer = self.decrypt_chunk(index)?;
+            self.cached = Some((index, buffer));
         }
+        Ok(self
+            .cached
+            .as_ref()
+            .map_or(&[][..], |(_, chunk)| chunk.as_slice()))
+    }
+
+    fn decrypt_chunk(&mut self, index: u64) -> io::Result<Zeroizing<Vec<u8>>> {
         let full = (CHUNK_SIZE + TAG_SIZE) as u64;
         let start = self.data_start + index * full;
         let len = if index + 1 == self.chunks {
@@ -380,7 +424,8 @@ impl<R: Read + Seek> DecryptingReader<R> {
             full
         };
         self.inner.seek(SeekFrom::Start(start))?;
-        let mut buffer = Zeroizing::new(vec![0u8; len as usize]);
+        let len = usize::try_from(len).map_err(|_| io::Error::other("backup chunk too large"))?;
+        let mut buffer = Zeroizing::new(vec![0u8; len]);
         self.inner.read_exact(&mut buffer)?;
         let counter =
             u32::try_from(index).map_err(|_| io::Error::other("chunk counter overflow"))?;
@@ -393,8 +438,7 @@ impl<R: Read + Seek> DecryptingReader<R> {
                     "backup chunk failed authentication",
                 )
             })?;
-        self.cached = Some((index, buffer));
-        Ok(())
+        Ok(buffer)
     }
 }
 
@@ -404,9 +448,9 @@ impl<R: Read + Seek> Read for DecryptingReader<R> {
             return Ok(0);
         }
         let index = self.position / CHUNK_SIZE as u64;
-        let offset = (self.position % CHUNK_SIZE as u64) as usize;
-        self.load(index)?;
-        let chunk = &self.cached.as_ref().expect("loaded").1;
+        let offset = usize::try_from(self.position % CHUNK_SIZE as u64)
+            .map_err(|_| io::Error::other("backup position out of range"))?;
+        let chunk = self.load(index)?;
         let available = chunk.len().saturating_sub(offset);
         let n = available.min(out.len());
         out[..n].copy_from_slice(&chunk[offset..offset + n]);
@@ -464,7 +508,7 @@ mod tests {
             CHUNK_SIZE + 1,
             3 * CHUNK_SIZE + 17,
         ] {
-            let data: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+            let data: Vec<u8> = (0..len).map(|i| u8::try_from(i % 251).unwrap()).collect();
             let bytes = encrypt(&data, "correct horse battery");
             assert!(bytes.starts_with(BACKUP_MAGIC));
             assert_eq!(
@@ -543,7 +587,7 @@ mod tests {
     #[test]
     fn seeking() {
         let data: Vec<u8> = (0..(2 * CHUNK_SIZE + 100))
-            .map(|i| (i % 256) as u8)
+            .map(|i| u8::try_from(i % 256).unwrap())
             .collect();
         let bytes = encrypt(&data, "seek seek seek");
         let (mut reader, header) =

@@ -179,11 +179,8 @@ mod tests {
             let bob = p256::SecretKey::from_pkcs8_pem(&pem_key("bob.key")).unwrap();
             token.add_key(3, &[0x9d], "Bob key", SoftKey::P256(bob), None, true);
             let pins = Arc::new(FixedPin::answers(pins.iter().copied()));
-            let cards = Smartcards::from_modules(
-                vec![Arc::clone(&token) as Arc<dyn Module>],
-                10,
-                Arc::clone(&pins) as Arc<dyn nail_pkcs11::PinPrompter>,
-            );
+            let module: Arc<dyn Module> = token.clone();
+            let cards = Smartcards::from_modules(vec![module], 10, pins.clone());
             Self {
                 store: Store::open_in_memory().unwrap(),
                 secrets: MemorySecretStore::new(),
@@ -230,7 +227,7 @@ mod tests {
 
         // Signing happens on the card (one PIN prompt for the session).
         let signer = keyring.signer("alice@example.org", None).unwrap();
-        let signed = sign_entity(
+        let signed_mail = sign_entity(
             &fixture("content.eml"),
             &signer.signer(),
             SignMode::Detached,
@@ -238,7 +235,7 @@ mod tests {
         )
         .unwrap();
         let outcome = keyring
-            .read_message(&signed, Some("alice@example.org"))
+            .read_message(&signed_mail, Some("alice@example.org"))
             .unwrap()
             .unwrap();
         assert_eq!(outcome.status.signatures[0].state, SignatureState::Valid);
@@ -283,7 +280,7 @@ mod tests {
         assert_eq!(key.smartcard.as_ref(), Some(&key_ref("9d")));
 
         let signer = keyring.signer("bob@example.net", None).unwrap();
-        let signed = sign_entity(
+        let signed_mail = sign_entity(
             &fixture("content.eml"),
             &signer.signer(),
             SignMode::Opaque,
@@ -291,7 +288,7 @@ mod tests {
         )
         .unwrap();
         let outcome = keyring
-            .read_message(&signed, Some("bob@example.net"))
+            .read_message(&signed_mail, Some("bob@example.net"))
             .unwrap()
             .unwrap();
         assert_eq!(outcome.status.signatures[0].state, SignatureState::Valid);
@@ -355,11 +352,8 @@ mod tests {
             Some(fixture_cert("dave.crt").der().to_vec()),
             true,
         );
-        let cards = Smartcards::from_modules(
-            vec![Arc::new(token) as Arc<dyn Module>],
-            0,
-            Arc::clone(&env.pins) as Arc<dyn nail_pkcs11::PinPrompter>,
-        );
+        let module: Arc<dyn Module> = Arc::new(token);
+        let cards = Smartcards::from_modules(vec![module], 0, env.pins.clone());
         let keyring = Keyring::new(&env.store, &env.secrets, &env.anchors, &env.cache)
             .with_smartcards(&cards)
             .at(AT);

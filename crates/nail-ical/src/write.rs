@@ -107,12 +107,12 @@ fn merged(original: Option<&Property>, mut new: Property, managed: &[&str]) -> P
 fn patch_one<T: PartialEq>(
     c: &mut Component,
     name: &str,
-    current: T,
+    current: &T,
     desired: &T,
     managed: &[&str],
     build: impl FnOnce(&T) -> Option<Property>,
 ) -> bool {
-    if current == *desired {
+    if current == desired {
         return false;
     }
     let original = c.property(name).cloned();
@@ -121,9 +121,8 @@ fn patch_one<T: PartialEq>(
     true
 }
 
-fn text_prop(name: &str, text: &Option<String>) -> Option<Property> {
-    text.as_deref()
-        .filter(|t| !t.is_empty())
+fn text_prop(name: &str, text: Option<&str>) -> Option<Property> {
+    text.filter(|t| !t.is_empty())
         .map(|t| Property::text_value(name, t))
 }
 
@@ -167,8 +166,8 @@ impl Zones<'_> {
 
 const TIME_PARAMS: &[&str] = &["VALUE", "TZID"];
 
-fn utc_prop(name: &str, instant: &Option<String>) -> Option<Property> {
-    let instant = time::parse_instant(instant.as_deref()?)?;
+fn utc_prop(name: &str, instant: Option<&str>) -> Option<Property> {
+    let instant = time::parse_instant(instant?)?;
     Some(Property::new(name, time::ical_utc(instant)))
 }
 
@@ -182,9 +181,8 @@ fn read_instant(c: &Component, name: &str) -> Option<String> {
     }
 }
 
-fn normalized_instant(instant: &Option<String>) -> Option<String> {
+fn normalized_instant(instant: Option<&str>) -> Option<String> {
     instant
-        .as_deref()
         .and_then(time::parse_instant)
         .map(time::format_instant)
 }
@@ -192,9 +190,11 @@ fn normalized_instant(instant: &Option<String>) -> Option<String> {
 // ---------------------------------------------------------------------------
 // Shared field patches
 
-fn patch_text(c: &mut Component, name: &str, desired: &Option<String>, managed: &[&str]) -> bool {
+fn patch_text(c: &mut Component, name: &str, desired: Option<&str>, managed: &[&str]) -> bool {
     let current = ical::read_text(c, name);
-    patch_one(c, name, current, desired, managed, |d| text_prop(name, d))
+    patch_one(c, name, &current.as_deref(), &desired, managed, |d| {
+        text_prop(name, *d)
+    })
 }
 
 fn patch_categories(c: &mut Component, desired: &[String]) {
@@ -212,7 +212,7 @@ fn patch_categories(c: &mut Component, desired: &[String]) {
 
 fn patch_visibility(c: &mut Component, desired: Visibility) {
     let current = ical::read_visibility(c);
-    patch_one(c, "CLASS", current, &desired, &[], |v| {
+    patch_one(c, "CLASS", &current, &desired, &[], |v| {
         Some(Property::new(
             "CLASS",
             match v {
@@ -226,7 +226,7 @@ fn patch_visibility(c: &mut Component, desired: Visibility) {
 
 fn patch_priority(c: &mut Component, desired: Option<u8>) {
     let current = ical::read_priority(c);
-    patch_one(c, "PRIORITY", current, &desired, &[], |p| {
+    patch_one(c, "PRIORITY", &current, &desired, &[], |p| {
         p.map(|p| Property::new("PRIORITY", p.to_string()))
     });
 }
@@ -244,7 +244,7 @@ fn alarm_component(alarm: &Alarm, title: &str, original: Option<&Component>) -> 
     patch_one(
         &mut c,
         "ACTION",
-        current.as_ref().map(|a| a.action),
+        &current.as_ref().map(|a| a.action),
         &Some(alarm.action),
         &[],
         |a| a.map(|a| Property::new("ACTION", action(a))),
@@ -252,7 +252,7 @@ fn alarm_component(alarm: &Alarm, title: &str, original: Option<&Component>) -> 
     patch_one(
         &mut c,
         "TRIGGER",
-        current.as_ref().map(|a| a.trigger.clone()),
+        &current.as_ref().map(|a| a.trigger.clone()),
         &Some(alarm.trigger.clone()),
         &["VALUE", "RELATED"],
         |t| {
@@ -284,7 +284,7 @@ fn alarm_component(alarm: &Alarm, title: &str, original: Option<&Component>) -> 
     if current_description != description
         && !(alarm.description.is_none() && current_description.is_some())
     {
-        let new = text_prop("DESCRIPTION", &description);
+        let new = text_prop("DESCRIPTION", description.as_deref());
         let original = c.property("DESCRIPTION").cloned();
         replace(
             &mut c,
@@ -314,12 +314,12 @@ fn alarm_component(alarm: &Alarm, title: &str, original: Option<&Component>) -> 
     }
     let current_uid = ical::read_text(&c, "UID").or_else(|| ical::read_text(&c, "X-WR-ALARMUID"));
     if current_uid != alarm.uid {
-        let new = text_prop("UID", &alarm.uid);
+        let new = text_prop("UID", alarm.uid.as_deref());
         replace(&mut c, &["UID"], new.into_iter().collect());
     }
     let current_ack = read_instant(&c, "ACKNOWLEDGED");
-    if current_ack != normalized_instant(&alarm.acknowledged) {
-        let new = utc_prop("ACKNOWLEDGED", &alarm.acknowledged);
+    if current_ack != normalized_instant(alarm.acknowledged.as_deref()) {
+        let new = utc_prop("ACKNOWLEDGED", alarm.acknowledged.as_deref());
         replace(&mut c, &["ACKNOWLEDGED"], new.into_iter().collect());
     }
     c
@@ -516,7 +516,7 @@ fn patch_recurrence(
     let current: Vec<_> = c
         .properties_named("RRULE")
         .filter_map(|p| recur::parse_rrule(&p.value, start))
-        .filter(|r| r.is_valid())
+        .filter(nail_api::pim::RecurrenceRule::is_valid)
         .collect();
     if current != desired.rules {
         let new = desired
@@ -557,21 +557,21 @@ fn patch_meta(
     c: &mut Component,
     uid: &str,
     sequence: u32,
-    created: &Option<String>,
-    updated: &Option<String>,
+    created: Option<&str>,
+    updated: Option<&str>,
 ) {
     let current_uid = ical::read_text(c, "UID");
-    patch_one(c, "UID", current_uid, &Some(uid.to_owned()), &[], |u| {
-        text_prop("UID", u)
+    patch_one(c, "UID", &current_uid.as_deref(), &Some(uid), &[], |u| {
+        text_prop("UID", *u)
     });
     let current = ical::read_sequence(c);
-    patch_one(c, "SEQUENCE", current, &sequence, &[], |s| {
+    patch_one(c, "SEQUENCE", &current, &sequence, &[], |s| {
         (*s > 0).then(|| Property::new("SEQUENCE", s.to_string()))
     });
     for (name, value) in [("CREATED", created), ("LAST-MODIFIED", updated)] {
         let current = read_instant(c, name);
-        patch_one(c, name, current, &normalized_instant(value), &[], |v| {
-            utc_prop(name, v)
+        patch_one(c, name, &current, &normalized_instant(value), &[], |v| {
+            utc_prop(name, v.as_deref())
         });
     }
 }
@@ -648,17 +648,24 @@ const ATTENDEE_PARAMS: &[&str] = &[
     "DELEGATED-FROM",
 ];
 
-fn patch_people(c: &mut Component, organizer: &Option<Organizer>, attendees: &[Attendee]) {
+fn patch_people(c: &mut Component, organizer: Option<&Organizer>, attendees: &[Attendee]) {
     let current = ical::read_organizer(c);
-    patch_one(c, "ORGANIZER", current, organizer, &["CN"], |o| {
-        o.as_ref().map(|o| {
-            let p = Property::new("ORGANIZER", format!("mailto:{}", o.email));
-            match &o.name {
-                Some(name) => p.with_param("CN", name.clone()),
-                None => p,
-            }
-        })
-    });
+    patch_one(
+        c,
+        "ORGANIZER",
+        &current.as_ref(),
+        &organizer,
+        &["CN"],
+        |o| {
+            o.map(|o| {
+                let p = Property::new("ORGANIZER", format!("mailto:{}", o.email));
+                match &o.name {
+                    Some(name) => p.with_param("CN", name.clone()),
+                    None => p,
+                }
+            })
+        },
+    );
     if ical::read_attendees(c) == attendees {
         return;
     }
@@ -787,7 +794,7 @@ fn patch_event_fields(
     let changed_title = patch_text(
         c,
         "SUMMARY",
-        &Some(fields.title.clone()).filter(|t| !t.is_empty()),
+        Some(fields.title.as_str()).filter(|t| !t.is_empty()),
         &[],
     );
     let _ = changed_title;
@@ -795,19 +802,19 @@ fn patch_event_fields(
     patch_one(
         c,
         "DTSTART",
-        current_start,
+        &current_start,
         &Some(fields.start.clone()),
         TIME_PARAMS,
         |s| s.as_ref().and_then(|s| zones.time_prop("DTSTART", s)),
     );
     patch_end(c, &fields.start, &fields.end, "DTEND", zones, ctx);
-    patch_text(c, "LOCATION", &fields.location, &["ALTREP"]);
-    if patch_text(c, "DESCRIPTION", &fields.description, &["ALTREP"]) {
+    patch_text(c, "LOCATION", fields.location.as_deref(), &["ALTREP"]);
+    if patch_text(c, "DESCRIPTION", fields.description.as_deref(), &["ALTREP"]) {
         // An HTML copy of the old description would contradict the new one.
         replace(c, &["X-ALT-DESC"], Vec::new());
     }
     let status = ical::read_status(c);
-    patch_one(c, "STATUS", status, &fields.status, &[], |s| {
+    patch_one(c, "STATUS", &status, &fields.status, &[], |s| {
         Some(Property::new(
             "STATUS",
             match s {
@@ -831,9 +838,9 @@ fn patch_event_fields(
     patch_visibility(c, fields.visibility);
     patch_priority(c, fields.priority);
     patch_categories(c, &fields.categories);
-    patch_text(c, "COLOR", &fields.color, &[]);
-    patch_text(c, "URL", &fields.url, &[]);
-    patch_people(c, &fields.organizer, &fields.attendees);
+    patch_text(c, "COLOR", fields.color.as_deref(), &[]);
+    patch_text(c, "URL", fields.url.as_deref(), &[]);
+    patch_people(c, fields.organizer.as_ref(), &fields.attendees);
     patch_attachments(c, Some(&fields.attachments), &fields.links, options);
     patch_conferences(c, &fields.conferences);
     patch_alarms(c, &fields.alarms, &fields.title);
@@ -982,8 +989,8 @@ fn master_component(
         &mut c,
         &event.uid,
         event.sequence,
-        &event.created_at,
-        &event.updated_at,
+        event.created_at.as_deref(),
+        event.updated_at.as_deref(),
     );
     patch_event_fields(&mut c, &event.fields, zones, ctx, options);
     patch_recurrence(
@@ -1020,7 +1027,13 @@ fn override_component(
     let created = read_instant(&c, "CREATED");
     let updated = read_instant(&c, "LAST-MODIFIED");
     let sequence = ical::read_sequence(&c).max(event.sequence);
-    patch_meta(&mut c, &event.uid, sequence, &created, &updated);
+    patch_meta(
+        &mut c,
+        &event.uid,
+        sequence,
+        created.as_deref(),
+        updated.as_deref(),
+    );
     if c.property("RECURRENCE-ID").is_none()
         && let Some(p) = zones.time_prop("RECURRENCE-ID", &o.recurrence_id)
     {
@@ -1045,15 +1058,15 @@ fn patch_task_fields(
     patch_text(
         c,
         "SUMMARY",
-        &Some(fields.title.clone()).filter(|t| !t.is_empty()),
+        Some(fields.title.as_str()).filter(|t| !t.is_empty()),
         &[],
     );
-    patch_text(c, "DESCRIPTION", &fields.description, &["ALTREP"]);
+    patch_text(c, "DESCRIPTION", fields.description.as_deref(), &["ALTREP"]);
     let current_start = c.property("DTSTART").and_then(|p| ctx.time(p));
     patch_one(
         c,
         "DTSTART",
-        current_start,
+        &current_start,
         &fields.start,
         TIME_PARAMS,
         |s| s.as_ref().and_then(|s| zones.time_prop("DTSTART", s)),
@@ -1073,7 +1086,7 @@ fn patch_task_fields(
         (_, None) => replace(c, &["DUE", "DURATION"], Vec::new()),
     }
     let status = ical::read_task_status(c);
-    patch_one(c, "STATUS", status, &fields.status, &[], |s| {
+    patch_one(c, "STATUS", &status, &fields.status, &[], |s| {
         Some(Property::new(
             "STATUS",
             match s {
@@ -1091,7 +1104,7 @@ fn patch_task_fields(
     patch_one(
         c,
         "PERCENT-COMPLETE",
-        percent,
+        &percent,
         &fields.percent_complete,
         &[],
         |p| p.map(|p| Property::new("PERCENT-COMPLETE", p.to_string())),
@@ -1101,19 +1114,19 @@ fn patch_task_fields(
     patch_one(
         c,
         "COMPLETED",
-        completed,
-        &normalized_instant(&fields.completed_at),
+        &completed,
+        &normalized_instant(fields.completed_at.as_deref()),
         &[],
-        |v| utc_prop("COMPLETED", v),
+        |v| utc_prop("COMPLETED", v.as_deref()),
     );
     patch_categories(c, &fields.categories);
-    patch_text(c, "LOCATION", &fields.location, &["ALTREP"]);
-    patch_text(c, "URL", &fields.url, &[]);
+    patch_text(c, "LOCATION", fields.location.as_deref(), &["ALTREP"]);
+    patch_text(c, "URL", fields.url.as_deref(), &[]);
     patch_visibility(c, fields.visibility);
     let order = c
         .property("X-APPLE-SORT-ORDER")
         .and_then(|p| p.value.trim().parse::<i64>().ok());
-    patch_one(c, "X-APPLE-SORT-ORDER", order, &fields.order, &[], |o| {
+    patch_one(c, "X-APPLE-SORT-ORDER", &order, &fields.order, &[], |o| {
         o.map(|o| Property::new("X-APPLE-SORT-ORDER", o.to_string()))
     });
     let current_parent = ical::read_parent_uid(c);
@@ -1217,8 +1230,8 @@ fn task_component(
         &mut c,
         &task.uid,
         sequence,
-        &task.created_at,
-        &task.updated_at,
+        task.created_at.as_deref(),
+        task.updated_at.as_deref(),
     );
     patch_task_fields(&mut c, &task.fields, parent_uid, zones, ctx, options);
     if let Some(anchor) = anchor {

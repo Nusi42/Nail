@@ -11,6 +11,10 @@ use crate::error::CardError;
 
 /// A token in a slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors independent PKCS#11 token flags (CKF_LOGIN_REQUIRED, CKF_USER_PIN_COUNT_LOW, ...)"
+)]
 pub struct TokenInfo {
     /// The PKCS#11 slot id.
     pub slot_id: u64,

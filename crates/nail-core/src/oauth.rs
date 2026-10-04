@@ -18,7 +18,7 @@ use nail_api::{ApiError, ErrorCode, OAuthFlowId};
 use nail_auth::{FlowCanceller, ProviderRegistry, TokenManager, TokenSet};
 
 /// How long a finished flow's tokens wait to be claimed.
-pub(crate) const FLOW_TTL: Duration = Duration::from_secs(10 * 60);
+pub(crate) const FLOW_TTL: Duration = Duration::from_mins(10);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -128,7 +128,7 @@ impl std::fmt::Debug for OAuthFlows {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OAuthFlows")
             .field("flows", &lock(&self.flows).len())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -225,7 +225,7 @@ mod tests {
         TokenSet {
             access_token: "at".into(),
             refresh_token: Some("rt".into()),
-            expires_at: Instant::now() + Duration::from_secs(3600),
+            expires_at: Instant::now() + Duration::from_hours(1),
             scopes: vec![],
         }
     }

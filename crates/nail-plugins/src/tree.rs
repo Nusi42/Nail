@@ -99,7 +99,10 @@ pub fn message_ids(nodes: &[PluginUiNode]) -> Vec<MessageId> {
 }
 
 /// Fills `message-list` rows from `found`; ids not in it are dropped.
-pub fn fill_messages(nodes: &mut [PluginUiNode], found: &HashMap<MessageId, PluginMessage>) {
+pub fn fill_messages<S: std::hash::BuildHasher>(
+    nodes: &mut [PluginUiNode],
+    found: &HashMap<MessageId, PluginMessage, S>,
+) {
     walk_mut(nodes, &mut |n| {
         if let PluginUiNode::MessageList {
             message_ids,
@@ -196,8 +199,8 @@ fn value_fits(kind: PluginValueKind, value: &Value) -> bool {
 
 /// The values a UI sent, limited to the tree's input ids and the value
 /// shapes they report; anything else is dropped.
-pub fn clean_values(
-    kinds: &HashMap<String, PluginValueKind>,
+pub fn clean_values<S: std::hash::BuildHasher>(
+    kinds: &HashMap<String, PluginValueKind, S>,
     values: BTreeMap<String, Value>,
 ) -> BTreeMap<String, Value> {
     values

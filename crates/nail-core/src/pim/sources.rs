@@ -16,10 +16,7 @@ use nail_api::{
     Response, SecretRef,
 };
 use nail_store::Store;
-use nail_store::pim::{
-    COLLECTED_BOOK_ID, COLLECTED_BOOK_NAME_ID, InstanceScope, PimItem, PimOperation,
-    PimSourceRecord,
-};
+use nail_store::pim::{COLLECTED_BOOK_ID, COLLECTED_BOOK_NAME_ID, PimOperation, PimSourceRecord};
 
 use super::{forbidden, invalid, new_id, not_found, op_ids};
 use crate::accounts::edit_error;
@@ -292,7 +289,7 @@ impl Service {
         match result {
             Ok(gone) if !gone.is_empty() => {
                 tracing::info!(?gone, "PIM sources removed with their data");
-                self.reindex_pim().await;
+                self.reindex_pim();
                 self.replan_all_reminders().await;
                 self.pim_events([
                     Event::CalendarsChanged,
@@ -319,7 +316,7 @@ impl Service {
 
     async fn list_pim_sources(&self) -> Result<Vec<PimSource>> {
         let config = self.inner.accounts.config();
-        let records = self.inner.store.call(|s| s.pim_sources()).await?;
+        let records = self.inner.store.call(Store::pim_sources).await?;
         let local = PimSourceId::local();
         let mut out = vec![source_view(
             &local,
@@ -370,7 +367,7 @@ impl Service {
                     .manager()
                     .store(&reference, &tokens)
                     .await?;
-                let _ = self.inner.flows.take(flow_id);
+                drop(self.inner.flows.take(flow_id));
             }
             SecretValue::ClientCertificate { .. } => {
                 return Err(
@@ -842,7 +839,7 @@ impl Service {
         if !ops.is_empty() {
             self.wake_pim_source(&source);
         }
-        self.pim_index_remove_collection(&id).await;
+        self.pim_index_remove_collection(&id);
         self.replan_all_reminders().await;
         if calendar {
             self.pim_events([
@@ -962,28 +959,6 @@ impl Service {
             });
         }
         self.wake_pim_source(source);
-    }
-
-    /// Drops the instance cache of a calendar (its zone changed).
-    #[allow(dead_code)]
-    pub(crate) async fn invalidate_calendar_instances(&self, id: CalendarId) -> Result<()> {
-        self.inner
-            .store
-            .call(move |s| s.invalidate_instances(&InstanceScope::Calendar(id)))
-            .await?;
-        Ok(())
-    }
-}
-
-/// A PIM item for the store from parsed parts (the store recomputes the
-/// derived fields when reading).
-#[allow(dead_code)]
-pub(crate) fn is_writable(item: &PimItem) -> bool {
-    match item {
-        PimItem::Event(e) => !e.read_only,
-        PimItem::Task { task, .. } => !task.read_only,
-        PimItem::Contact(c) => !c.read_only,
-        PimItem::Group { group, .. } => !group.read_only,
     }
 }
 

@@ -90,10 +90,9 @@ pub trait CoreAccess: Send + Sync + 'static {
     fn call_plugin_tool(
         &self,
         name: &str,
-        arguments: serde_json::Value,
-        client: nail_api::agents::McpClientRef,
+        _arguments: serde_json::Value,
+        _client: nail_api::agents::McpClientRef,
     ) -> impl Future<Output = Result<serde_json::Value, ApiError>> + Send {
-        let _ = (arguments, client);
         let name = name.to_owned();
         async move { Err(ApiError::not_found(format!("no plug-in tool {name}"))) }
     }
@@ -117,6 +116,12 @@ fn answered(response: Response) -> DataResult<Response> {
 
 /// [`McpData`] for any [`CoreAccess`].
 pub struct CoreData<C>(pub C);
+
+impl<C> std::fmt::Debug for CoreData<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoreData").finish_non_exhaustive()
+    }
+}
 
 fn unexpected(response: Response) -> ApiError {
     match response {

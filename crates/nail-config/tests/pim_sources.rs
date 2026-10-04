@@ -1,6 +1,7 @@
 //! `accounts.kdl` PIM sources (M3a, ADR 0058): `calendar-subscription`,
 //! `caldav` and `carddav` nodes — reading, errors, and the
 //! format-preserving writer.
+#![cfg(test)]
 
 use nail_api::accounts::{AuthConfig, SecretRef};
 use nail_api::pim::{PimSourceConfig, PimSourceKind, PimSourceSettings};

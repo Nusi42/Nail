@@ -27,7 +27,7 @@ use crate::error::Result;
 use crate::service::{Service, lock};
 
 /// How long a preview's entries are what the bundle writes.
-const PREVIEW_TTL: Duration = Duration::from_secs(30 * 60);
+const PREVIEW_TTL: Duration = Duration::from_mins(30);
 
 /// A preview: its options, manifest, entries and when it was made.
 type Preview = (

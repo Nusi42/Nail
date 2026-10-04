@@ -376,7 +376,7 @@ export async function sendRich(
   const window = composerTarget(ctx.store.getState(), options.window);
   const composer = composerOf(ctx.store.getState(), window);
   const rich = richStoreFor(ctx.store, window);
-  if (!composer || composer.busy !== null) return false;
+  if (composer?.busy !== null) return false;
   // The sign / encrypt toggles and the send guard are the focused
   // composer's: sending from a composer focuses it.
   if (isComposerInstance(window)) ctx.store.getState().focusWindow(window);
@@ -583,8 +583,13 @@ export function cancelSwitch(ctx: ComposeContext, window?: string | null): void 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error(`cannot read ${file.name} as a data URL`));
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("read failed"));
+    };
     reader.readAsDataURL(file);
   });
 }

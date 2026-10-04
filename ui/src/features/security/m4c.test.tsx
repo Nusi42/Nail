@@ -18,6 +18,7 @@ import { RECOVERY_CREATE_DIALOG, RecoveryGate } from "./RecoveryKey";
 import { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
 import { handleSecurityEvent } from ".";
 import { closePinPrompt, simulateLostVaultKey, simulatePinRequest } from "./vaultMock";
+import { must } from "../../test/must";
 
 const MODULE = "C:\\Windows\\System32\\opensc-pkcs11.dll";
 
@@ -79,7 +80,9 @@ describe("recovery key", () => {
     expect(await navigator.clipboard.readText()).toBe(key);
     expect(within(dialog).getByRole("button", { name: "Copied" })).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
-    await waitFor(() => expect(print).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(print).toHaveBeenCalled();
+    });
     expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
     await user.click(within(dialog).getByRole("checkbox", { name: /I have written down/ }));
     await user.click(within(dialog).getByRole("button", { name: "Next" }));
@@ -98,9 +101,7 @@ describe("recovery key", () => {
     expect(await within(dialog).findByText("Your recovery key works. Keep it safe.")).toBeVisible();
     // The key is forgotten once it was typed back.
     expect(within(dialog).queryByRole("figure")).toBeNull();
-    await user.click(
-      within(dialog).getAllByRole("button", { name: "Close" }).at(-1) as HTMLElement,
-    );
+    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
     expect(await screen.findByText("Last checked")).toBeVisible();
     expect(screen.queryByText(/Never — check/)).toBeNull();
     stop();
@@ -149,16 +150,14 @@ describe("recovery key", () => {
       within(dialog).getByText("The recovery key contains a character it cannot have."),
     ).toBeVisible();
     await user.clear(input);
-    const typo = (created.key[0] === "A" ? "B" : "A") + created.key.slice(1);
+    const typo = (created.key.startsWith("A") ? "B" : "A") + created.key.slice(1);
     await user.type(input, typo);
     expect(within(dialog).getByText("The recovery key has a typo.")).toBeVisible();
     await user.clear(input);
     await user.type(input, created.key);
     await user.click(within(dialog).getByRole("button", { name: "Check" }));
     expect(await within(dialog).findByText("This recovery key works.")).toBeVisible();
-    await user.click(
-      within(dialog).getAllByRole("button", { name: "Close" }).at(-1) as HTMLElement,
-    );
+    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
     await user.click(screen.getByRole("button", { name: "Remove recovery key" }));
     expect(screen.getByText(/your data is lost if the key/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Remove it" }));
@@ -218,7 +217,9 @@ describe("recovery key", () => {
     const env = createEnv();
     const user = userEvent.setup();
     render(env, null);
-    act(() => env.store.getState().openWindow(RECOVERY_CREATE_DIALOG));
+    act(() => {
+      env.store.getState().openWindow(RECOVERY_CREATE_DIALOG);
+    });
     const dialog = await screen.findByRole("dialog", { name: "Recovery key" });
     await user.click(within(dialog).getByRole("button", { name: "Create recovery key" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
@@ -299,18 +300,20 @@ describe("PIN dialog", () => {
     await user.type(pin, "12");
     expect(within(dialog).getByRole("button", { name: "OK" })).toBeDisabled();
     await user.type(pin, "34{Enter}");
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual(
         expect.objectContaining({ type: "AnswerPinPrompt", pin: "1234" }),
-      ),
-    );
+      );
+    });
     const retry = await screen.findByText("The PIN is wrong.");
     const again = retry.closest("form") as HTMLElement;
     expect(within(again).getByText("2 attempts left.")).toBeVisible();
     expect(within(again).getByLabelText("PIN")).toHaveValue("");
     await user.type(within(again).getByLabelText("PIN"), "123456");
     await user.click(within(again).getByRole("button", { name: "OK" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(env.transport.data.features.vault.prompts).toEqual({});
     stop();
   });
@@ -326,18 +329,22 @@ describe("PIN dialog", () => {
     });
     const dialog = await screen.findByRole("dialog", { name: "Smartcard PIN" });
     expect(within(dialog).getByText("Last attempt: a wrong PIN locks the card.")).toBeVisible();
-    act(() => closePinPrompt(env.transport, prompt.prompt_id, "token-removed"));
+    act(() => {
+      closePinPrompt(env.transport, prompt.prompt_id, "token-removed");
+    });
     expect(await within(dialog).findByText("The card was removed.")).toBeVisible();
-    await user.click(
-      within(dialog).getAllByRole("button", { name: "Close" }).at(-1) as HTMLElement,
-    );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     act(() => {
       prompt = simulatePinRequest(env.transport);
     });
     const next = await screen.findByRole("dialog", { name: "Smartcard PIN" });
     await user.click(within(next).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(env.transport.requests).toContainEqual({
       type: "AnswerPinPrompt",
       prompt_id: prompt.prompt_id,
@@ -357,13 +364,13 @@ describe("PIN dialog", () => {
     });
     const dialog = await screen.findByRole("dialog", { name: "Smartcard PIN" });
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "AnswerPinPrompt",
         prompt_id: prompt.prompt_id,
         pin: null,
-      }),
-    );
+      });
+    });
     stop();
   });
 });

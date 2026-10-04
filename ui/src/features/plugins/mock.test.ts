@@ -4,6 +4,7 @@ import { MockTransport } from "../../api/mock";
 import { PLUGINS_REQUESTS, acceptsSetting, defaultSettingValue, isPluginsRequest } from "./mock";
 import { crashPlugin, followUpManifest, sourceKey } from "./mockHost";
 import { must } from "./testUtil";
+import { stringContaining } from "../../test/matchers";
 
 function followUp(): PluginInfo {
   return {
@@ -267,7 +268,7 @@ describe("plugins mock: host", () => {
     expect(opened).toMatchObject({ plugin_id: "follow-up", client_id: "ui-1" });
     expect(opened.spec.body[0]).toMatchObject({
       type: "text",
-      value: expect.stringContaining(message.subject),
+      value: stringContaining(message.subject),
     });
     expect(
       await t.send({

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { errorMessageId, errorMessageIdOf } from "../api/client";
 import type {
   AccountConfig,
@@ -116,7 +116,7 @@ export function withAccountSignIn(config: AccountConfig, signIn: SignIn): Accoun
     incoming: {
       ...config.incoming,
       server: { ...config.incoming.server, auth: withSignIn(config.incoming.server.auth, signIn) },
-    } as AccountConfig["incoming"],
+    },
     outgoing: config.outgoing && {
       ...config.outgoing,
       server: { ...config.outgoing.server, auth: withSignIn(config.outgoing.server.auth, signIn) },
@@ -273,7 +273,7 @@ export function AccountSetup({ node }: WidgetProps) {
       propose(address, found.candidates);
     });
 
-  const discover = (event: FormEvent) => {
+  const discover = (event: SubmitEvent) => {
     event.preventDefault();
     const address = email.trim();
     if (!isEmail(address)) {
@@ -342,7 +342,7 @@ export function AccountSetup({ node }: WidgetProps) {
       setOAuth(null);
     });
 
-  const test = (event: FormEvent) => {
+  const test = (event: SubmitEvent) => {
     event.preventDefault();
     if (!config) return;
     void run(async () => {
@@ -485,7 +485,9 @@ export function AccountSetup({ node }: WidgetProps) {
                     data-part="account-setup.candidate.radio"
                     name="candidate"
                     checked={index === chosen}
-                    onChange={() => choose(index)}
+                    onChange={() => {
+                      choose(index);
+                    }}
                   />
                   <span data-part="account-setup.candidate.source">
                     {/* A name from an unverified answer could be anything. */}
@@ -494,9 +496,9 @@ export function AccountSetup({ node }: WidgetProps) {
                   </span>
                   <span data-part="account-setup.candidate.servers">
                     {t("setup-candidate-servers", {
-                      incoming: `${c.incoming.server.host}:${c.incoming.server.port}`,
+                      incoming: `${c.incoming.server.host}:${String(c.incoming.server.port)}`,
                       outgoing: c.outgoing
-                        ? `${c.outgoing.server.host}:${c.outgoing.server.port}`
+                        ? `${c.outgoing.server.host}:${String(c.outgoing.server.port)}`
                         : "-",
                     })}
                   </span>
@@ -532,7 +534,9 @@ export function AccountSetup({ node }: WidgetProps) {
               type="button"
               data-part="form.button"
               data-action="edit-servers"
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setEditing(true);
+              }}
             >
               {t("setup-edit-servers")}
             </button>
@@ -541,12 +545,16 @@ export function AccountSetup({ node }: WidgetProps) {
             <>
               <IncomingFields
                 incoming={config.incoming}
-                onChange={(incoming) => setConfig({ ...config, incoming })}
+                onChange={(incoming) => {
+                  setConfig({ ...config, incoming });
+                }}
               />
               {config.outgoing && (
                 <OutgoingFields
                   outgoing={config.outgoing}
-                  onChange={(outgoing) => setConfig({ ...config, outgoing })}
+                  onChange={(outgoing) => {
+                    setConfig({ ...config, outgoing });
+                  }}
                 />
               )}
             </>
@@ -647,7 +655,9 @@ export function AccountSetup({ node }: WidgetProps) {
                     type="button"
                     data-part="form.button"
                     data-action="oauth-start"
-                    onClick={() => setOAuth(null)}
+                    onClick={() => {
+                      setOAuth(null);
+                    }}
                   >
                     {t("setup-oauth-retry")}
                   </button>
@@ -660,7 +670,9 @@ export function AccountSetup({ node }: WidgetProps) {
               type="button"
               data-part="form.button"
               data-action="back"
-              onClick={() => setStep("address")}
+              onClick={() => {
+                setStep("address");
+              }}
             >
               {t("setup-back")}
             </button>
@@ -691,7 +703,9 @@ export function AccountSetup({ node }: WidgetProps) {
               type="button"
               data-part="form.button"
               data-action="back"
-              onClick={() => setStep("servers")}
+              onClick={() => {
+                setStep("servers");
+              }}
             >
               {t("setup-back")}
             </button>

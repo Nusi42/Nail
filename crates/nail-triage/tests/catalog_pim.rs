@@ -1,18 +1,19 @@
 //! Every Fluent id the reminder scheduler produces exists in the English
 //! catalog of PIM texts (`locales/en/core-pim.ftl`), and the German file
 //! exists without definitions.
+#![cfg(test)]
 
 use std::path::PathBuf;
 
 use nail_api::localized::is_message_id;
 use nail_triage::reminders::{FLUENT_IDS, ReminderError};
 
-fn catalog(locale: &str) -> String {
+fn catalog(locale: &str) -> std::io::Result<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../locales")
         .join(locale)
         .join("core-pim.ftl");
-    std::fs::read_to_string(path).unwrap()
+    std::fs::read_to_string(path)
 }
 
 fn defined(text: &str) -> Vec<String> {
@@ -24,7 +25,7 @@ fn defined(text: &str) -> Vec<String> {
 
 #[test]
 fn reminder_ids_exist_in_english() {
-    let en = defined(&catalog("en"));
+    let en = defined(&catalog("en").unwrap());
     for id in FLUENT_IDS {
         assert!(is_message_id(id), "{id}");
         assert!(
@@ -41,5 +42,5 @@ fn reminder_ids_exist_in_english() {
     }
     // The Collected book's name (nail-store) lives there too.
     assert!(en.iter().any(|d| d == "pim-address-book-collected"));
-    assert!(defined(&catalog("de")).is_empty());
+    assert!(defined(&catalog("de").unwrap()).is_empty());
 }

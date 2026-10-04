@@ -196,7 +196,9 @@ impl PluginCatalogs {
         for (name, value) in &message.args {
             match value {
                 MessageArg::Number(n) => args.set(name.as_str(), FluentValue::from(*n)),
-                other => args.set(name.as_str(), FluentValue::from(other.to_string())),
+                other @ MessageArg::Text(_) => {
+                    args.set(name.as_str(), FluentValue::from(other.to_string()));
+                }
             }
         }
         for bundle in self.chain(language) {
@@ -325,7 +327,7 @@ fn make_bundle(tag: &str, text: String) -> Option<Bundle> {
     let mut bundle = Bundle::new_concurrent(vec![langid]);
     bundle.set_use_isolating(false);
     // Duplicate ids keep the first definition.
-    let _ = bundle.add_resource(resource);
+    drop(bundle.add_resource(resource));
     Some(bundle)
 }
 
@@ -377,13 +379,14 @@ mod tests {
     /// A manifest with only `contributes` (not validated: these tests are
     /// about texts).
     fn with_contributes(contributes: serde_json::Value) -> PluginManifest {
-        serde_json::from_value(serde_json::json!({
+        let mut manifest = serde_json::json!({
             "id": "x", "name": "X", "version": "1.0.0", "apiVersion": "1", "main": "index.js",
-            "contributes": contributes,
-        }))
-        .unwrap()
+        });
+        manifest["contributes"] = contributes;
+        serde_json::from_value(manifest).unwrap()
     }
 
+    // German test strings ("Titel") follow. spellchecker:off
     fn m4a_catalogs() -> PluginCatalogs {
         PluginCatalogs::from_sources([
             (
@@ -458,6 +461,7 @@ mod tests {
         assert_eq!(de.contributes.jobs[0].schedule.as_deref(), Some("@hourly"));
         assert_eq!(de.contributes.jobs[1].title, None);
     }
+    // spellchecker:on
 
     #[test]
     fn mcp_tool_description_resolves_and_is_bounded() {

@@ -405,7 +405,7 @@ impl RemoteAuth {
 
     /// Counts a failed credential check, audits it, reports lockouts and
     /// builds the answer.
-    fn credential_failure(&self, failure: Failure<'_>, client: &ClientMeta) -> AuthReply {
+    fn credential_failure(&self, failure: &Failure<'_>, client: &ClientMeta) -> AuthReply {
         let now = self.now();
         let throttle = &self.policy().throttle;
         let lockouts = throttle
@@ -617,12 +617,12 @@ impl RemoteAuth {
             detail,
         };
         let Some(found) = user.as_ref().filter(|_| verified) else {
-            return self.credential_failure(failure("wrong name or password"), client);
+            return self.credential_failure(&failure("wrong name or password"), client);
         };
         if found.id != *asker.user_id() {
             // A device (or session) of another user: the same answer as a
             // wrong password.
-            return self.credential_failure(failure("device of another user"), client);
+            return self.credential_failure(&failure("device of another user"), client);
         }
         if found.disabled {
             self.audit(
@@ -644,16 +644,14 @@ impl RemoteAuth {
                 let Some(code) = totp_code else {
                     return AuthReply::new(AuthResponse::TotpRequired);
                 };
-                let secret = match totp::load_secret(self.inner.secrets.as_ref(), reference) {
-                    Ok(Some(secret)) => secret,
-                    Ok(None) | Err(_) => {
-                        tracing::warn!("the TOTP secret of {} is missing", found.id);
-                        return self.credential_failure(failure("TOTP secret unavailable"), client);
-                    }
+                let Ok(Some(secret)) = totp::load_secret(self.inner.secrets.as_ref(), reference)
+                else {
+                    tracing::warn!("the TOTP secret of {} is missing", found.id);
+                    return self.credential_failure(&failure("TOTP secret unavailable"), client);
                 };
                 let Some(step) = totp::matching_step(&secret, code, now) else {
                     return self.credential_failure(
-                        Failure {
+                        &Failure {
                             method: RemoteAuthMethod::PasswordTotp,
                             ..failure("wrong TOTP code")
                         },
@@ -666,7 +664,7 @@ impl RemoteAuth {
                     .unwrap_or(false)
                 {
                     return self.credential_failure(
-                        Failure {
+                        &Failure {
                             method: RemoteAuthMethod::PasswordTotp,
                             ..failure("TOTP code used before")
                         },
@@ -767,7 +765,7 @@ impl RemoteAuth {
         let failure = passkey_failure;
         let Some(ceremony) = self.take_ceremony(challenge_id) else {
             let reply = self.credential_failure(
-                failure(
+                &failure(
                     "unknown or expired challenge",
                     AuthPurpose::Login,
                     None,
@@ -811,7 +809,7 @@ impl RemoteAuth {
         }
         let Ok(credential_id) = passkey::login_credential_id(credential) else {
             return self.credential_failure(
-                failure("malformed assertion", purpose, None, client),
+                &failure("malformed assertion", purpose, None, client),
                 client,
             );
         };
@@ -822,11 +820,11 @@ impl RemoteAuth {
             .flatten();
         let Some(stored_passkey) = stored_passkey else {
             return self
-                .credential_failure(failure("unknown passkey", purpose, None, client), client);
+                .credential_failure(&failure("unknown passkey", purpose, None, client), client);
         };
         let Ok(user) = self.store().get_remote_user(&stored_passkey.user_id) else {
             return self
-                .credential_failure(failure("unknown passkey", purpose, None, client), client);
+                .credential_failure(&failure("unknown passkey", purpose, None, client), client);
         };
         let verified = StoredCredential::parse(&stored_passkey.credential).and_then(|stored| {
             passkey::finish_login(&rp, login, credential, &credential_id, &stored)
@@ -836,7 +834,7 @@ impl RemoteAuth {
             Err(e) => {
                 tracing::info!("passkey login refused: {e}");
                 return self.credential_failure(
-                    failure("passkey verification failed", purpose, Some(&user), client),
+                    &failure("passkey verification failed", purpose, Some(&user), client),
                     client,
                 );
             }
@@ -854,7 +852,7 @@ impl RemoteAuth {
             .is_some_and(|name| !name.eq_ignore_ascii_case(&user.name));
         if named_other || user.id != *asker.user_id() {
             return self.credential_failure(
-                failure("passkey of another user", purpose, Some(&user), client),
+                &failure("passkey of another user", purpose, Some(&user), client),
                 client,
             );
         }
@@ -911,8 +909,7 @@ impl RemoteAuth {
                 .collect();
             let handle = parsed
                 .first()
-                .map(|(_, s)| s.user_handle.clone())
-                .unwrap_or_else(passkey::new_user_handle);
+                .map_or_else(passkey::new_user_handle, |(_, s)| s.user_handle.clone());
             let refs: Vec<StoredCredentialRef<'_>> = parsed
                 .iter()
                 .map(|(id, stored)| StoredCredentialRef {

@@ -19,7 +19,6 @@ import { applyAppearance } from "./queries";
 import { SystemAppearanceReporter } from "./SystemAppearance";
 
 export {
-  APPEARANCE_REQUESTS,
   BUILTIN_THEMES,
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
@@ -27,8 +26,7 @@ export {
   activeTheme,
   isHexColor,
   overrideIssues,
-  setMockSystemAppearance,
-} from "./mock";
+} from "./model";
 export { AppearanceSettings } from "./AppearanceSettings";
 export { SystemAppearanceReporter, useBrowserAppearance } from "./SystemAppearance";
 export {
@@ -39,7 +37,6 @@ export {
   useSetTheme,
   useSetThemePreferences,
 } from "./queries";
-export { BUILTIN_THEME_FILES, parseThemeFile, resolveMockTheme } from "./themes";
 
 /** Layout widget kinds → components (`appearance-settings`: Settings → Appearance). */
 export const widgets: Feature["widgets"] = {

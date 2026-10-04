@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { startNail, type NailServer } from "../support/nail";
 import { openSettingsTab, showView, viewRegion } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * The read-only MCP server (ADR 0025) started by `nail serve` with the core
@@ -39,7 +40,7 @@ test("an MCP client lists messages only after a grant", async ({ page }) => {
   expect(token).toMatch(/^nail_mcp_/);
 
   // Before a grant: connected, but every read is denied.
-  const mcp = new McpSession(url!, token!);
+  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
   const init = await mcp.open();
   expect(init.result?.serverInfo).toMatchObject({ name: "nail" });
   const denied = await mcp.request("tools/call", {

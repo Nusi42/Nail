@@ -39,11 +39,11 @@ interface BarProps {
   /** The saved draft (`null` before the first save: `ensureDraft` saves it). */
   draftId: DraftId | null;
   /** Saves the draft if needed; returns its id (`null` = could not save). */
-  ensureDraft?(): Promise<DraftId | null>;
+  ensureDraft?: () => Promise<DraftId | null>;
   /** The current selection in the draft's source. */
-  getSelection(): ComposerSelection;
+  getSelection: () => ComposerSelection;
   /** Inserts Markdown at the cursor (Markdown mode only; omit to hide blocks). */
-  onInsert?(markdown: string): void;
+  onInsert?: (markdown: string) => void;
 }
 
 /** The composer's plug-in menus (actions and Markdown blocks). */
@@ -133,8 +133,12 @@ export function ComposerEditNotices({ draftId }: { draftId: DraftId | null }) {
   useEffect(() => {
     if (!latest) return;
     const seq = latest.seq;
-    const timer = setTimeout(() => setHidden(seq), EDIT_NOTICE_MS);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setHidden(seq);
+    }, EDIT_NOTICE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [latest]);
   const shown = latest && latest.seq !== hidden ? latest : null;
   const actor = shown ? attributionMessage(shown.by) : null;

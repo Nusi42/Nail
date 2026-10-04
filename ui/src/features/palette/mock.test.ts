@@ -29,7 +29,7 @@ describe("palette slot (M4c contract)", () => {
       ["a", 2],
       ["b", 1],
     ]);
-    for (let n = 0; n < 30; n++) recent = recordAction(recent, `n.${n}`, "t");
+    for (let n = 0; n < 30; n++) recent = recordAction(recent, `n.${String(n)}`, "t");
     expect(recent.actions).toHaveLength(MAX_RECENT_ACTIONS);
   });
 

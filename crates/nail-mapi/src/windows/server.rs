@@ -25,6 +25,7 @@ use super::client::current_user;
 use super::text::to_wide;
 
 /// A created, not yet connected pipe instance.
+#[derive(Debug)]
 pub struct FakeAppPipe {
     handle: OwnedHandle,
 }
@@ -47,7 +48,7 @@ impl FakeAppPipe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 sddl.as_ptr(),
                 SDDL_REVISION_1,
-                &mut descriptor,
+                &raw mut descriptor,
                 std::ptr::null_mut(),
             )
         };
@@ -55,7 +56,7 @@ impl FakeAppPipe {
             return Err(io::Error::last_os_error());
         }
         let attributes = SECURITY_ATTRIBUTES {
-            nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+            nLength: super::size_u32::<SECURITY_ATTRIBUTES>(),
             lpSecurityDescriptor: descriptor,
             bInheritHandle: 0,
         };
@@ -70,7 +71,7 @@ impl FakeAppPipe {
                 64 * 1024,
                 64 * 1024,
                 0,
-                &attributes,
+                &raw const attributes,
             )
         };
         let error = io::Error::last_os_error();

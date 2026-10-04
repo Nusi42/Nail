@@ -32,6 +32,15 @@ pub struct MessageFields<U, R, F> {
     files: *const F,
 }
 
+impl<U, R, F> std::fmt::Debug for MessageFields<U, R, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MessageFields")
+            .field("recip_count", &self.recip_count)
+            .field("file_count", &self.file_count)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The "A" or "W" flavour of the structures.
 pub trait Abi {
     /// `u8` (ANSI) or `u16` (UTF-16).
@@ -54,8 +63,10 @@ pub trait Abi {
 }
 
 /// `MAPISendMail`: ANSI.
+#[derive(Debug)]
 pub enum Ansi {}
 /// `MAPISendMailW`: UTF-16.
+#[derive(Debug)]
 pub enum Wide {}
 
 impl Abi for Ansi {
@@ -276,13 +287,13 @@ mod tests {
             lpszConversationID: null_mut(),
             flFlags: 0,
             lpOriginator: null_mut(),
-            nRecipCount: recips.len() as u32,
+            nRecipCount: crate::windows::count_u32(recips.len()),
             lpRecips: if recips.is_empty() {
                 null_mut()
             } else {
                 recips.as_mut_ptr()
             },
-            nFileCount: files.len() as u32,
+            nFileCount: crate::windows::count_u32(files.len()),
             lpFiles: if files.is_empty() {
                 null_mut()
             } else {
@@ -328,7 +339,8 @@ mod tests {
             },
         ];
         let msg = wide_message(Some(&subject), Some(&body), &mut recips, &mut files);
-        let m = decode_message::<Wide>(&msg, MAPI_DIALOG, Some("WINWORD.EXE".into())).unwrap();
+        let m = decode_message::<Wide>(&raw const msg, MAPI_DIALOG, Some("WINWORD.EXE".into()))
+            .unwrap();
         assert_eq!(m.subject.as_deref(), Some("Grüße – Q3"));
         assert_eq!(m.body.as_deref(), Some("Line 1\r\nLine 2"));
         assert_eq!(m.recipients.len(), 3, "MAPI_ORIG is dropped");
@@ -384,7 +396,7 @@ mod tests {
             nFileCount: 1,
             lpFiles: files.as_mut_ptr(),
         };
-        let m = decode_message::<Ansi>(&msg, 0, None).unwrap();
+        let m = decode_message::<Ansi>(&raw const msg, 0, None).unwrap();
         assert_eq!(m.subject.as_deref(), Some("Invoice"));
         assert_eq!(m.body, None);
         assert_eq!(m.recipients[0].email().as_deref(), Some("carol@x.example"));
@@ -395,13 +407,18 @@ mod tests {
     #[test]
     fn empty_and_minimal_messages() {
         let msg = wide_message(None, None, &mut [], &mut []);
-        let m = decode_message::<Wide>(&msg, 0xC, None).unwrap();
+        let m = decode_message::<Wide>(&raw const msg, 0xC, None).unwrap();
         assert_eq!(m.subject, None);
         assert!(m.recipients.is_empty() && m.attachments.is_empty());
         assert_eq!(m.ui, MapiUi::Modeless);
         let empty = to_wide("");
         let msg = wide_message(Some(&empty), Some(&empty), &mut [], &mut []);
-        assert_eq!(decode_message::<Wide>(&msg, 0, None).unwrap().subject, None);
+        assert_eq!(
+            decode_message::<Wide>(&raw const msg, 0, None)
+                .unwrap()
+                .subject,
+            None
+        );
     }
 
     #[test]
@@ -420,26 +437,26 @@ mod tests {
         msg.nRecipCount = u32::MAX;
         msg.lpRecips = 0x50 as *mut MapiRecipDescW;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::TooManyRecipients)
         );
         let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nFileCount = (MAX_MAPI_ATTACHMENTS + 1) as u32;
+        msg.nFileCount = u32::try_from(MAX_MAPI_ATTACHMENTS + 1).unwrap();
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::TooManyFiles)
         );
         // Counts without arrays.
         let mut msg = wide_message(None, None, &mut [], &mut []);
         msg.nRecipCount = 2;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::InvalidRecips)
         );
         let mut msg = wide_message(None, None, &mut [], &mut []);
         msg.nFileCount = 1;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::AttachmentNotFound)
         );
         // Arrays at garbage addresses.
@@ -447,28 +464,28 @@ mod tests {
         msg.nRecipCount = 1;
         msg.lpRecips = 0x60 as *mut MapiRecipDescW;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::InvalidRecips)
         );
         let mut msg = wide_message(None, None, &mut [], &mut []);
         msg.nFileCount = 1;
         msg.lpFiles = 0x70 as *mut MapiFileDescW;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::AttachmentNotFound)
         );
         // Garbage strings.
         let mut msg = wide_message(None, None, &mut [], &mut []);
         msg.lpszSubject = 0x80 as *mut u16;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::Failure)
         );
         let mut recips = [wide_recip(MAPI_TO, None, None)];
         recips[0].lpszAddress = 0x90 as *mut u16;
         let msg = wide_message(None, None, &mut recips, &mut []);
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::InvalidRecips)
         );
         // Unknown recipient class.
@@ -476,18 +493,22 @@ mod tests {
         let mut recips = [wide_recip(7, None, Some(&addr))];
         let msg = wide_message(None, None, &mut recips, &mut []);
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::BadRecipType)
         );
         // A file without a path.
         let mut files = [MapiFileDescW::default()];
         let msg = wide_message(None, None, &mut [], &mut files);
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::AttachmentNotFound)
         );
     }
 
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the pointers end exactly at a page boundary, so they are aligned for structures whose size is a multiple of their alignment"
+    )]
     #[test]
     fn structures_running_off_readable_memory() {
         let pages = GuardedPages::new();
@@ -502,7 +523,7 @@ mod tests {
         msg.lpRecips = first;
         msg.nRecipCount = 1;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None)
+            decode_message::<Wide>(&raw const msg, 0, None)
                 .unwrap()
                 .recipients
                 .len(),
@@ -510,7 +531,7 @@ mod tests {
         );
         msg.nRecipCount = 2;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::InvalidRecips)
         );
         // A subject without a terminator before the end of readable memory.
@@ -520,7 +541,7 @@ mod tests {
         let mut msg = wide_message(None, None, &mut [], &mut []);
         msg.lpszSubject = tail;
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::Failure)
         );
         // The message structure itself straddling the boundary.
@@ -537,7 +558,7 @@ mod tests {
         big.push(0);
         let msg = wide_message(None, Some(&big), &mut [], &mut []);
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::TextTooLarge)
         );
         let mut long_name = vec![0x61u16; MAX_FIELD_UNITS + 1];
@@ -545,7 +566,7 @@ mod tests {
         let mut recips = [wide_recip(MAPI_TO, Some(&long_name), None)];
         let msg = wide_message(None, None, &mut recips, &mut []);
         assert_eq!(
-            decode_message::<Wide>(&msg, 0, None),
+            decode_message::<Wide>(&raw const msg, 0, None),
             Err(MapiResult::InvalidRecips)
         );
     }

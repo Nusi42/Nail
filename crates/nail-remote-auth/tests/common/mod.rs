@@ -2,8 +2,6 @@
 //! recorded events, a cookie-keeping [`Browser`] and a software passkey
 //! [`Authenticator`] (Ed25519, "none" attestation).
 
-#![allow(dead_code)]
-
 use std::sync::Arc;
 
 use base64::Engine as _;
@@ -25,12 +23,12 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 /// Start of the test clock (2026-09-29).
-pub const T0: i64 = 1_790_000_000;
-pub const HOST: &str = "nail.local";
-pub const ORIGIN: &str = "https://nail.local:4780";
-pub const PASSWORD: &str = "correct horse battery";
+pub(crate) const T0: i64 = 1_790_000_000;
+pub(crate) const HOST: &str = "nail.local";
+pub(crate) const ORIGIN: &str = "https://nail.local:4780";
+pub(crate) const PASSWORD: &str = "correct horse battery";
 
-pub struct Harness {
+pub(crate) struct Harness {
     pub auth: RemoteAuth,
     pub store: Store,
     pub clock: ManualClock,
@@ -38,7 +36,7 @@ pub struct Harness {
     pub secrets: Arc<MemorySecretStore>,
 }
 
-pub fn fast_policy() -> AuthPolicy {
+pub(crate) fn fast_policy() -> AuthPolicy {
     AuthPolicy {
         password: PasswordPolicy {
             cost: Argon2Cost {
@@ -52,7 +50,7 @@ pub fn fast_policy() -> AuthPolicy {
     }
 }
 
-pub fn config() -> AuthConfig {
+pub(crate) fn config() -> AuthConfig {
     AuthConfig {
         relying_party: Some(RelyingParty::for_port(HOST, 4780).unwrap()),
         origins: vec![ORIGIN.to_owned()],
@@ -61,11 +59,11 @@ pub fn config() -> AuthConfig {
 }
 
 impl Harness {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_policy(fast_policy())
     }
 
-    pub fn with_policy(policy: AuthPolicy) -> Self {
+    pub(crate) fn with_policy(policy: AuthPolicy) -> Self {
         let store = Store::open_in_memory().unwrap();
         let clock = ManualClock::new(T0);
         let events = Arc::new(RecordingSink::new());
@@ -89,12 +87,12 @@ impl Harness {
         }
     }
 
-    pub fn now(&self) -> i64 {
+    pub(crate) fn now(&self) -> i64 {
         self.clock.now()
     }
 
     /// A user with the full preset (optionally admin) and a password.
-    pub async fn user(&self, name: &str, admin: bool) -> RemoteUser {
+    pub(crate) async fn user(&self, name: &str, admin: bool) -> RemoteUser {
         let mut grant = RemoteAccessPreset::Full.grant();
         grant.admin = admin;
         let user = self
@@ -108,7 +106,7 @@ impl Harness {
     }
 
     /// A pairing code for `user`.
-    pub fn code(&self, user: &RemoteUser, grant: Option<&RemoteGrant>) -> String {
+    pub(crate) fn code(&self, user: &RemoteUser, grant: Option<&RemoteGrant>) -> String {
         match self
             .auth
             .create_pairing_code(&user.id, None, grant, None, None)
@@ -120,7 +118,7 @@ impl Harness {
     }
 
     /// A browser paired to `user` (logged in by the pairing).
-    pub async fn paired(&self, user: &RemoteUser, ip: &str) -> Browser {
+    pub(crate) async fn paired(&self, user: &RemoteUser, ip: &str) -> Browser {
         let mut browser = Browser::new(ip);
         let code = self.code(user, None);
         let reply = browser.pair(self, &code, "Phone").await;
@@ -131,11 +129,11 @@ impl Harness {
         browser
     }
 
-    pub fn events(&self) -> Vec<Event> {
+    pub(crate) fn events(&self) -> Vec<Event> {
         self.events.take()
     }
 
-    pub fn audit_kinds(
+    pub(crate) fn audit_kinds(
         &self,
     ) -> Vec<(
         nail_api::remote::RemoteAuditKind,
@@ -159,7 +157,7 @@ impl Default for Harness {
 
 /// A browser: keeps its cookies and CSRF token like a real one would.
 #[derive(Debug, Clone)]
-pub struct Browser {
+pub(crate) struct Browser {
     pub session: Option<String>,
     pub device: Option<String>,
     pub csrf: Option<String>,
@@ -167,7 +165,7 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn new(ip: &str) -> Self {
+    pub(crate) fn new(ip: &str) -> Self {
         Self {
             session: None,
             device: None,
@@ -179,17 +177,19 @@ impl Browser {
         }
     }
 
-    pub fn cookies(&self) -> Cookies {
+    pub(crate) fn cookies(&self) -> Cookies {
         Cookies {
             session: self.session.clone().map(Zeroizing::new),
             device: self.device.clone().map(Zeroizing::new),
         }
     }
 
-    pub fn apply(&mut self, set_cookies: &[String]) {
+    pub(crate) fn apply(&mut self, set_cookies: &[String]) {
         for header in set_cookies {
             let cookie = cookie::Cookie::parse(header.clone()).unwrap();
-            let removed = cookie.max_age().is_some_and(|age| age.is_zero());
+            let removed = cookie
+                .max_age()
+                .is_some_and(cookie::time::SignedDuration::is_zero);
             let value = (!removed).then(|| cookie.value().to_owned());
             match cookie.name() {
                 SESSION_COOKIE => self.session = value,
@@ -201,7 +201,7 @@ impl Browser {
 
     /// Sends a login-protocol request (fetching a CSRF token first when
     /// needed) and keeps the cookies.
-    pub async fn send(&mut self, h: &Harness, request: AuthRequest) -> AuthReply {
+    pub(crate) async fn send(&mut self, h: &Harness, request: AuthRequest) -> AuthReply {
         if self.csrf.is_none() && !matches!(request, AuthRequest::Status) {
             self.status(h).await;
         }
@@ -216,7 +216,7 @@ impl Browser {
         reply
     }
 
-    pub async fn status(&mut self, h: &Harness) -> nail_api::remote::AuthStatus {
+    pub(crate) async fn status(&mut self, h: &Harness) -> nail_api::remote::AuthStatus {
         let reply = h
             .auth
             .handle_auth(AuthRequest::Status, &self.cookies(), &self.client, None)
@@ -231,7 +231,7 @@ impl Browser {
         }
     }
 
-    pub async fn pair(&mut self, h: &Harness, code: &str, name: &str) -> AuthReply {
+    pub(crate) async fn pair(&mut self, h: &Harness, code: &str, name: &str) -> AuthReply {
         let reply = self
             .send(
                 h,
@@ -246,7 +246,7 @@ impl Browser {
         reply
     }
 
-    pub async fn password(
+    pub(crate) async fn password(
         &mut self,
         h: &Harness,
         user: &str,
@@ -265,7 +265,12 @@ impl Browser {
         .await
     }
 
-    pub async fn reauth_password(&mut self, h: &Harness, user: &str, password: &str) -> AuthReply {
+    pub(crate) async fn reauth_password(
+        &mut self,
+        h: &Harness,
+        user: &str,
+        password: &str,
+    ) -> AuthReply {
         self.send(
             h,
             AuthRequest::Password {
@@ -279,21 +284,21 @@ impl Browser {
     }
 
     /// The session this browser holds, resolved like the middleware does.
-    pub fn resolve(&mut self, h: &Harness) -> Option<RemoteSessionCtx> {
+    pub(crate) fn resolve(&mut self, h: &Harness) -> Option<RemoteSessionCtx> {
         let resolved = h.auth.resolve(&self.cookies(), &self.client).ok()?;
         self.apply(&resolved.set_cookie.into_iter().collect::<Vec<_>>());
         Some(resolved.ctx)
     }
 }
 
-pub fn logged_in(reply: &AuthReply) -> RemoteSession {
+pub(crate) fn logged_in(reply: &AuthReply) -> RemoteSession {
     match &reply.response {
         AuthResponse::LoggedIn { session } => session.clone(),
         other => panic!("not logged in: {other:?}"),
     }
 }
 
-pub fn failure(reply: &AuthReply) -> (nail_api::remote::AuthFailure, Option<u32>) {
+pub(crate) fn failure(reply: &AuthReply) -> (nail_api::remote::AuthFailure, Option<u32>) {
     match &reply.response {
         AuthResponse::Failed {
             reason,
@@ -303,11 +308,11 @@ pub fn failure(reply: &AuthReply) -> (nail_api::remote::AuthFailure, Option<u32>
     }
 }
 
-pub fn read_only() -> RemoteGrant {
+pub(crate) fn read_only() -> RemoteGrant {
     RemoteAccessPreset::ReadOnly.grant()
 }
 
-pub fn has_scope(grant: &RemoteGrant, scope: McpScope) -> bool {
+pub(crate) fn has_scope(grant: &RemoteGrant, scope: McpScope) -> bool {
     grant.mail.has(scope)
 }
 
@@ -321,12 +326,13 @@ fn b64(bytes: &[u8]) -> String {
 
 fn cbor_head(major: u8, len: usize) -> Vec<u8> {
     let major = major << 5;
-    match len {
-        0..=23 => vec![major | len as u8],
-        24..=255 => vec![major | 24, len as u8],
-        _ => {
-            let mut v = vec![major | 25];
-            v.extend_from_slice(&(len as u16).to_be_bytes());
+    match u8::try_from(len) {
+        Ok(small @ 0..=23) => vec![major | small],
+        Ok(byte) => vec![major | 0x18, byte],
+        Err(_) => {
+            let mut v = vec![major | 0x19];
+            let len = u16::try_from(len).expect("CBOR test values stay below 64 KiB");
+            v.extend_from_slice(&len.to_be_bytes());
             v
         }
     }
@@ -345,7 +351,7 @@ fn cbor_text(text: &str) -> Vec<u8> {
 }
 
 /// A passkey authenticator with one Ed25519 credential.
-pub struct Authenticator {
+pub(crate) struct Authenticator {
     key: SigningKey,
     pub credential_id: Vec<u8>,
     pub user_handle: Option<String>,
@@ -354,7 +360,7 @@ pub struct Authenticator {
 }
 
 impl Authenticator {
-    pub fn new(seed: u8) -> Self {
+    pub(crate) fn new(seed: u8) -> Self {
         Self {
             key: SigningKey::from_bytes(&[seed; 32]),
             credential_id: vec![seed; 16],
@@ -379,7 +385,7 @@ impl Authenticator {
     }
 
     /// `navigator.credentials.create()` for these creation options.
-    pub fn create(&mut self, options: &serde_json::Value) -> serde_json::Value {
+    pub(crate) fn create(&mut self, options: &serde_json::Value) -> serde_json::Value {
         let challenge = options["challenge"].as_str().unwrap();
         let rp_id = options["rp"]["id"].as_str().unwrap();
         self.user_handle = Some(options["user"]["id"].as_str().unwrap().to_owned());
@@ -387,7 +393,8 @@ impl Authenticator {
         auth_data.push(0x45); // UP | UV | AT
         auth_data.extend_from_slice(&self.counter.to_be_bytes());
         auth_data.extend_from_slice(&[0; 16]);
-        auth_data.extend_from_slice(&(self.credential_id.len() as u16).to_be_bytes());
+        let id_len = u16::try_from(self.credential_id.len()).expect("short credential id");
+        auth_data.extend_from_slice(&id_len.to_be_bytes());
         auth_data.extend_from_slice(&self.credential_id);
         auth_data.extend(self.cose_key());
         let mut attestation = vec![0xA3];
@@ -413,13 +420,17 @@ impl Authenticator {
     }
 
     /// `navigator.credentials.get()` for these request options.
-    pub fn get(&mut self, options: &serde_json::Value) -> serde_json::Value {
+    pub(crate) fn get(&mut self, options: &serde_json::Value) -> serde_json::Value {
         self.counter += 1;
         self.assert_with(options, self.counter)
     }
 
     /// An assertion with an explicit signature counter.
-    pub fn assert_with(&self, options: &serde_json::Value, counter: u32) -> serde_json::Value {
+    pub(crate) fn assert_with(
+        &self,
+        options: &serde_json::Value,
+        counter: u32,
+    ) -> serde_json::Value {
         let challenge = options["challenge"].as_str().unwrap();
         let rp_id = options["rpId"].as_str().unwrap();
         let mut auth_data = Sha256::digest(rp_id.as_bytes()).to_vec();
@@ -445,7 +456,7 @@ impl Authenticator {
     }
 }
 
-pub fn challenge(reply: &AuthReply) -> (String, serde_json::Value) {
+pub(crate) fn challenge(reply: &AuthReply) -> (String, serde_json::Value) {
     match &reply.response {
         AuthResponse::PasskeyChallenge {
             challenge_id,

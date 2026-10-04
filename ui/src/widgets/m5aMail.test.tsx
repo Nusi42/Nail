@@ -3,13 +3,15 @@
  * tag line (hidden in Compact), attachment cards, and the reader column.
  */
 import { vi } from "vitest";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { MessageSummary, ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../test/harness";
 import { colorSlot } from "../theme/skin";
 import { fileType, formatSize } from "./AttachmentCard";
 import { extrasOf, messageTags } from "./MessageList";
+import { must } from "../test/must";
+import { stubProperties } from "../test/stub";
 
 const INBOX = "acc-personal/Inbox";
 const FIRST = `${INBOX}#1`;
@@ -18,7 +20,9 @@ let restoreSizes: () => void;
 beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
-afterEach(() => restoreSizes());
+afterEach(() => {
+  restoreSizes();
+});
 
 function listEnv() {
   return createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
@@ -37,7 +41,7 @@ describe("message list rows (M5a)", () => {
     const env = listEnv();
     const { container } = renderNode(widget("message-list"), env);
     await screen.findAllByRole("option");
-    const first = env.transport.data.messages.find((m) => m.id === FIRST) as MessageSummary;
+    const first = must(env.transport.data.messages.find((m) => m.id === FIRST));
     const unread = row(container, FIRST);
     const avatar = unread.querySelector('[data-part="message-list.row.avatar"]');
     expect(avatar).toHaveAttribute("aria-hidden", "true");
@@ -58,14 +62,14 @@ describe("message list rows (M5a)", () => {
   it("puts account, attachments, flag and labels on the tag line", async () => {
     const env = listEnv();
     const { container } = renderNode(widget("message-list"), env);
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         row(container, FIRST).querySelector('[data-part="tag"][data-kind="account"]'),
-      ).not.toBeNull(),
+      ).not.toBeNull();
+    });
+    const line = must(
+      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
     );
-    const line = row(container, FIRST).querySelector(
-      '[data-part="message-list.row.tag-line"]',
-    ) as HTMLElement;
     const kinds = [...line.querySelectorAll('[data-part="tag"]')].map((t) =>
       t.getAttribute("data-kind"),
     );
@@ -115,29 +119,29 @@ describe("message list rows (M5a)", () => {
     const env = listEnv();
     const compact: ResolvedTheme = { ...defaultTheme(), density: "compact" };
     const { container } = renderNode(widget("message-list"), env, { theme: compact });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
-      ).not.toBeNull(),
-    );
+      ).not.toBeNull();
+    });
     expect(document.documentElement.dataset.nailDensity).toBe("compact");
-    const line = row(container, FIRST).querySelector(
-      '[data-part="message-list.row.tag-line"]',
-    ) as HTMLElement;
+    const line = must(
+      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
+    );
     expect(getComputedStyle(line).display).toBe("none");
   });
 
   it("keeps the tag line in Comfortable", async () => {
     const env = listEnv();
     const { container } = renderNode(widget("message-list"), env);
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
-      ).not.toBeNull(),
+      ).not.toBeNull();
+    });
+    const line = must(
+      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
     );
-    const line = row(container, FIRST).querySelector(
-      '[data-part="message-list.row.tag-line"]',
-    ) as HTMLElement;
     expect(getComputedStyle(line).display).toBe("flex");
   });
 
@@ -182,9 +186,7 @@ describe("attachment cards (M5a)", () => {
     const createObjectURL = vi.fn(() => "blob:mock");
     const revokeObjectURL = vi.fn();
     // jsdom has no object URLs.
-    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
-    URL.createObjectURL = createObjectURL;
-    URL.revokeObjectURL = revokeObjectURL;
+    const restoreUrl = stubProperties(URL, { createObjectURL, revokeObjectURL });
     const clicked: HTMLAnchorElement[] = [];
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
       this: HTMLAnchorElement,
@@ -213,11 +215,12 @@ describe("attachment cards (M5a)", () => {
       expect(env.transport.data.features.attachments.downloaded).toEqual([`${FIRST}#0`]);
       expect(createObjectURL).toHaveBeenCalledTimes(1);
       expect(clicked.map((a) => a.download)).toEqual(["report.pdf"]);
-      await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock"));
+      await waitFor(() => {
+        expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+      });
     } finally {
       click.mockRestore();
-      URL.createObjectURL = original.create;
-      URL.revokeObjectURL = original.revoke;
+      restoreUrl();
     }
     await settleQueries(env);
   });
@@ -231,9 +234,7 @@ describe("attachment cards (M5a)", () => {
     renderNode(widget("message-view"), env);
     const save = await screen.findByRole("button", { name: "Save report.pdf" });
     // Cancelled in the Save dialog: nothing happens.
-    await act(async () => {
-      fireEvent.click(save);
-    });
+    fireEvent.click(save);
     await waitFor(() => expect(save).toBeEnabled());
     expect(screen.queryByRole("status")).toBeNull();
     expect(env.transport.data.features.attachments.saved).toEqual([]);
@@ -255,9 +256,7 @@ describe("attachment cards (M5a)", () => {
         : send(request);
     renderNode(widget("message-view"), env);
     const save = await screen.findByRole("button", { name: "Save report.pdf" });
-    await act(async () => {
-      fireEvent.click(save);
-    });
+    fireEvent.click(save);
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Saving attachments is not available in this version of Nail yet.",
     );

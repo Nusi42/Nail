@@ -151,7 +151,7 @@ impl DnsZone {
         response.metadata.recursion_desired = request.metadata.recursion_desired;
         response.metadata.recursion_available = true;
         response.metadata.authoritative = true;
-        response.queries = request.queries.clone();
+        response.queries.clone_from(&request.queries);
         for query in &request.queries {
             let name = query.name.to_string();
             let fqdn = |host: &str| Name::from_ascii(format!("{}.", key(host))).ok();
@@ -251,7 +251,7 @@ impl MockDnsServer {
                         }
                         let reply = lock(&task_inner.zone).respond(&buf[..n]);
                         if let Some(reply) = reply {
-                            let _ = socket.send_to(&reply, peer).await;
+                            drop(socket.send_to(&reply, peer).await);
                         }
                     }
                 }

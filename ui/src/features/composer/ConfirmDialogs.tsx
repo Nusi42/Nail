@@ -30,11 +30,13 @@ function useComposerOfDialog(name: string) {
  */
 function useSafeFocus() {
   const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => queueMicrotask(() => ref.current?.focus()), []);
+  useEffect(() => {
+    queueMicrotask(() => ref.current?.focus());
+  }, []);
   return ref;
 }
 
-function Gone({ close }: { close(): void }) {
+function Gone({ close }: { close: () => void }) {
   const t = useT();
   return (
     <div data-part="composer.confirm" data-state="empty">

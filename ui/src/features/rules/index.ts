@@ -29,7 +29,9 @@ function selectedSummary(ctx: ActionContext) {
 export const actions: Feature["actions"] = {
   /** Opens the rules window. */
   "rules.open": {
-    run: (ctx) => ctx.store.getState().openWindow(RULES_WINDOW),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(RULES_WINDOW);
+    },
   },
   /** "Create rule from message": a new rule pre-filled from the selected message. */
   "rules.create-from-message": {
@@ -59,7 +61,9 @@ export const windows: NonNullable<Feature["windows"]> = {
 
 /** Handlers for core events. */
 export const events: Feature["events"] = [
-  (event, { queryClient }) => onRulesEvent(event, queryClient),
+  (event, { queryClient }) => {
+    onRulesEvent(event, queryClient);
+  },
 ];
 
 /** Background components mounted once in the app shell. */

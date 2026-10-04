@@ -3,6 +3,8 @@
 //! read-only ICS subscription (`MockHttpServer`) — and reminders firing
 //! at the controlled clock time.
 
+#![cfg(test)]
+
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +25,7 @@ struct Fixture {
     clock: Arc<AdjustableClock>,
 }
 
-async fn start(accounts_kdl: &str, secrets: &[(&str, &str)]) -> Fixture {
+fn start(accounts_kdl: &str, secrets: &[(&str, &str)]) -> Fixture {
     let data = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     std::fs::write(config.path().join("accounts.kdl"), accounts_kdl).unwrap();
@@ -37,11 +39,11 @@ async fn start(accounts_kdl: &str, secrets: &[(&str, &str)]) -> Fixture {
     let mut options = ServiceOptions::new(data.path(), config.path());
     options.watch_config = false;
     options.start_engines = true;
-    options.secrets = Some(store as Arc<dyn SecretStore>);
+    options.secrets = Some(store);
     let mut timing = EngineTiming::fast();
     timing.poll_override = Some(Duration::from_secs(30));
     options.timing = timing;
-    options.clock = Some(Arc::clone(&clock) as Arc<dyn nail_triage::Clock>);
+    options.clock = Some(clock.clone());
     let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
     Fixture {
         service,
@@ -124,8 +126,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
             ("keychain:nail/pim/dav/password", "secret"),
             ("keychain:nail/pim/cards/password", "secret"),
         ],
-    )
-    .await;
+    );
     let service = &f.service;
     // Discovery found the seeded calendars (the holidays one read-only).
     let found = eventually("the DAV calendars", || async {
@@ -289,7 +290,7 @@ async fn wrong_password_is_an_auth_error() {
         "caldav \"dav\" url=\"{}/\" {{\n    auth \"password\" username=\"ada\"\n}}\n",
         dav.base_url()
     );
-    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "wrong")]).await;
+    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "wrong")]);
     let service = &f.service;
     eventually("the auth error", || async {
         let Response::PimSources { sources } = ok(service, Request::ListPimSources).await else {
@@ -324,7 +325,7 @@ async fn ics_subscriptions_are_read_only() {
         "calendar-subscription \"town\" url=\"{}/holidays.ics\" color=\"#cc3333\"\n",
         http.base_url()
     );
-    let f = start(&kdl, &[]).await;
+    let f = start(&kdl, &[]);
     let service = &f.service;
     let calendar = eventually("the feed's calendar", || async {
         calendars(service, "town").await.into_iter().next()
@@ -370,7 +371,7 @@ async fn ics_subscriptions_are_read_only() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn reminders_fire_at_the_clock_time() {
-    let f = start("", &[]).await;
+    let f = start("", &[]);
     let service = &f.service;
     let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
         .unwrap()
@@ -462,7 +463,7 @@ async fn reminders_fire_at_the_clock_time() {
     assert!(reminders.is_empty(), "{reminders:?}");
     let event_id = match &due.target {
         nail_api::pim::ReminderTarget::Event { event_id, .. } => event_id.clone(),
-        other => panic!("{other:?}"),
+        other @ nail_api::pim::ReminderTarget::Task { .. } => panic!("{other:?}"),
     };
     let Response::PimEvent { event } = ok(service, Request::GetEvent { event_id }).await else {
         panic!()
@@ -477,7 +478,7 @@ async fn reminders_fire_at_the_clock_time() {
 /// summary notification.
 #[tokio::test(flavor = "multi_thread")]
 async fn reminder_floods_are_bounded() {
-    let f = start("", &[]).await;
+    let f = start("", &[]);
     let service = &f.service;
     let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
         .unwrap()
@@ -599,7 +600,7 @@ async fn changed_subscriptions_take_effect() {
     );
     let url = format!("http://{}/town.ics", upstream.addr());
     let kdl = format!("calendar-subscription \"town\" url=\"{url}\"\n");
-    let f = start(&kdl, &[]).await;
+    let f = start(&kdl, &[]);
     let service = &f.service;
     let calendar = eventually("the feed's calendar", || async {
         calendars(service, "town").await.into_iter().next()
@@ -734,7 +735,7 @@ async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
         "caldav \"dav\" url=\"{}/\" {{\n    auth \"password\" username=\"ada\"\n}}\n",
         dav.base_url()
     );
-    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "secret")]).await;
+    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "secret")]);
     let service = &f.service;
     let personal = eventually("the personal calendar", || async {
         calendars(service, "dav")

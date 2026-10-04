@@ -1,5 +1,6 @@
 //! Every Fluent id the crate produces exists in the English catalog
 //! (`locales/en/core-triage.ftl`), and the German file exists.
+#![cfg(test)]
 
 use std::path::PathBuf;
 
@@ -7,12 +8,12 @@ use nail_api::localized::is_message_id;
 use nail_triage::FLUENT_IDS;
 use nail_triage::snooze::SnoozeError;
 
-fn catalog(locale: &str) -> String {
+fn catalog(locale: &str) -> std::io::Result<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../locales")
         .join(locale)
         .join("core-triage.ftl");
-    std::fs::read_to_string(path).unwrap()
+    std::fs::read_to_string(path)
 }
 
 fn defined(text: &str) -> Vec<String> {
@@ -24,7 +25,7 @@ fn defined(text: &str) -> Vec<String> {
 
 #[test]
 fn produced_ids_exist_in_english() {
-    let en = defined(&catalog("en"));
+    let en = defined(&catalog("en").unwrap());
     for id in FLUENT_IDS {
         assert!(is_message_id(id), "{id}");
         assert!(
@@ -40,5 +41,5 @@ fn produced_ids_exist_in_english() {
         assert!(FLUENT_IDS.contains(&e.message_id()), "{}", e.message_id());
     }
     // German stays empty for now (per-key English fallback).
-    assert!(defined(&catalog("de")).is_empty());
+    assert!(defined(&catalog("de").unwrap()).is_empty());
 }

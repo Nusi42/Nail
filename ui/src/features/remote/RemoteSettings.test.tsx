@@ -6,13 +6,13 @@ import { handleRemoteEvent } from "./index";
 import { groupFingerprint } from "./model";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleRemoteEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function requestsOf<T extends Request["type"]>(env: Env, type: T) {

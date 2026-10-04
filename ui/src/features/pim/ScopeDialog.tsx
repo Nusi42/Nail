@@ -3,7 +3,7 @@
  * `pim-edit-scope`) for a change of a recurring event made in a view: a
  * dragged or resized occurrence, or a deleted one (`PimState.pendingChange`).
  */
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import type { EditScope, LocalizedMessage } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
@@ -41,7 +41,7 @@ export function ScopeDialog({ close }: DialogProps) {
     );
   }
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     setBusy(true);
     setProblem(null);
@@ -84,7 +84,9 @@ export function ScopeDialog({ close }: DialogProps) {
               name={name}
               value={value}
               checked={scope === value}
-              onChange={() => setScope(value)}
+              onChange={() => {
+                setScope(value);
+              }}
             />
             <span>{t(`pim-scope-${value}`)}</span>
           </label>

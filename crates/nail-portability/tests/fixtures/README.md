@@ -5,7 +5,7 @@
 Not demo mail and not a real profile: every account, address and
 "password" is invented (`example.org`, `example.net`).
 
-```
+```text
 thunderbird/
   profiles.ini, installs.ini            one profile, the install default
   Profiles/x7k2m9qa.default-release/
@@ -29,7 +29,7 @@ thunderbird/
 The text files are written by hand. The two SQLite files are generated
 from the card lists in `tests/thunderbird_profile.rs`:
 
-```
+```sh
 NAIL_REGENERATE_FIXTURES=1 cargo test -p nail-portability --test thunderbird_profile
 ```
 

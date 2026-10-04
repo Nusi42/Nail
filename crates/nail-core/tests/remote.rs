@@ -3,6 +3,8 @@
 //! remote sessions (authorization, grant narrowing) and the remote-UI
 //! host link.
 
+#![cfg(test)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -126,7 +128,11 @@ async fn remote_content_is_blocked_until_allowed_then_proxied() {
     assert!(!shown.remote_content_blocked);
     let html = shown.sanitized_html.unwrap();
     let tokens = proxy_tokens(&html);
-    assert_eq!(tokens.len() as u32, info.resources, "{html}");
+    assert_eq!(
+        u32::try_from(tokens.len()).unwrap(),
+        info.resources,
+        "{html}"
+    );
     assert!(!html.contains("src=\"http"));
 
     // Seeded runs never reach the internet: the proxy verifies the token,
@@ -488,7 +494,7 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
             {
                 break status;
             }
-            _ => continue,
+            _ => {}
         }
     };
     assert_eq!(changed.state, RemoteUiState::Running);
@@ -732,7 +738,7 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
     // The desktop's reply draft is hidden, and cannot be read or sent.
     match service.handle_remote(&plain, Request::ListDrafts).await {
         Response::Drafts { drafts } => {
-            assert!(drafts.iter().all(|d| d.id.as_ref() != Some(&draft_id)))
+            assert!(drafts.iter().all(|d| d.id.as_ref() != Some(&draft_id)));
         }
         other => panic!("{other:?}"),
     }
@@ -785,7 +791,7 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
     .await;
     match service.handle_remote(&trusted, Request::ListDrafts).await {
         Response::Drafts { drafts } => {
-            assert!(drafts.iter().any(|d| d.id.as_ref() == Some(&draft_id)))
+            assert!(drafts.iter().any(|d| d.id.as_ref() == Some(&draft_id)));
         }
         other => panic!("{other:?}"),
     }
@@ -998,7 +1004,7 @@ async fn remote_search_hides_encrypted_mail_while_the_index_holds_decrypted_text
             folder_id: None,
             offset: 0,
             limit: 50,
-            sort: Default::default(),
+            sort: nail_api::search::SearchSort::default(),
         },
     };
     let ids = |response: Response| match response {
@@ -1249,7 +1255,7 @@ async fn m2c_requests_respect_the_grant() {
     for request in [
         Request::GetMcpSettings,
         Request::UpdateNotificationSettings {
-            settings: Default::default(),
+            settings: nail_api::triage::NotificationSettings::default(),
         },
     ] {
         assert!(error_code(&service.handle_remote(&full, request).await).is_some());

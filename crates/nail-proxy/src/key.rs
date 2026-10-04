@@ -73,18 +73,17 @@ impl ProxyKey {
     /// Blocking (keychain calls); call from `spawn_blocking` in async code.
     pub fn load_or_create(secrets: &dyn SecretStore) -> Result<Self, KeyError> {
         let secret = SecretRef(KEY_SECRET_REF.to_owned());
-        match secrets
+        if let Some(text) = secrets
             .get(&secret)
             .map_err(|e| KeyError::Store(e.message))?
         {
-            Some(text) => Self::decode(&text),
-            None => {
-                let key = Self::generate();
-                secrets
-                    .set(&secret, &key.encode())
-                    .map_err(|e| KeyError::Store(e.message))?;
-                Ok(key)
-            }
+            Self::decode(&text)
+        } else {
+            let key = Self::generate();
+            secrets
+                .set(&secret, &key.encode())
+                .map_err(|e| KeyError::Store(e.message))?;
+            Ok(key)
         }
     }
 }

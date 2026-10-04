@@ -78,13 +78,13 @@ describe("sync-folder-policies", () => {
     await user.selectOptions(within(section).getByLabelText("Download"), "default");
     await user.selectOptions(within(section).getByLabelText(/Watch for new mail/), "default");
     await user.click(within(section).getByRole("button", { name: "Save" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "SetFolderSyncPolicy")[1]).toMatchObject({
         bodies: null,
         enabled: null,
         idle: null,
-      }),
-    );
+      });
+    });
     const account = env.transport.data.accountsConfig.accounts.find((a) => a.id === "acc-personal");
     expect(account?.sync.folders).toEqual([]);
   });
@@ -100,12 +100,12 @@ describe("sync-folder-policies", () => {
     renderWithProviders(<SyncFolderDialog />, env);
     await user.selectOptions(await screen.findByLabelText("Download"), "headers-only");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(sent(env, "SetFolderSyncPolicy")[0]).toMatchObject({
         folder_id: INBOX,
         bodies: { mode: "headers-only" },
-      }),
-    );
+      });
+    });
   });
 });
 
@@ -133,18 +133,18 @@ describe("bodies on demand", () => {
       </>,
       env,
     );
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         container.querySelector(`[data-message="${message.id}"][data-state~="headers-only"]`),
-      ).not.toBeNull(),
-    );
+      ).not.toBeNull();
+    });
     const bar = await screen.findByRole("status", { name: "Message download" });
     expect(bar).toHaveTextContent("Only the headers");
     expect(dispatcher(env).isEnabled("sync.download-message")).toBe(true);
     await user.click(within(bar).getByRole("button", { name: "Download full message" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("status", { name: "Message download" })).toBeNull(),
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole("status", { name: "Message download" })).toBeNull();
+    });
     expect(sent(env, "FetchMessageBodies")).toEqual([
       { type: "FetchMessageBodies", message_ids: [message.id] },
     ]);

@@ -290,6 +290,10 @@ pub struct ExchangeLocation {
 
 /// A calendar event (Graph `event`, EWS `CalendarItem`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors independent boolean properties of a server event"
+)]
 pub struct ExchangeEvent {
     /// The server's id.
     pub remote_id: String,

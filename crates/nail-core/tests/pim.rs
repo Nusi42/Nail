@@ -3,6 +3,8 @@
 //! duplicates and merging, imports, search and address autocomplete —
 //! the local source, through `Service::handle` like the UI.
 
+#![cfg(test)]
+
 use nail_api::pim::calendar::Frequency;
 use nail_api::pim::import::PimImportSource;
 use nail_api::pim::{
@@ -93,8 +95,8 @@ fn saved_event(response: Response) -> (CalendarEvent, Option<CalendarEvent>) {
 async fn local_defaults_exist() {
     let (service, _d, _c) = setup();
     let list = calendars(&service).await;
-    assert!(list.iter().any(|c| c.has_events()), "{list:?}");
-    assert!(list.iter().any(|c| c.has_tasks()));
+    assert!(list.iter().any(nail_api::Calendar::has_events), "{list:?}");
+    assert!(list.iter().any(nail_api::Calendar::has_tasks));
     let Response::AddressBooks { address_books } =
         ok(&service, Request::ListAddressBooks { source_id: None }).await
     else {
@@ -852,10 +854,10 @@ async fn mcp_clients_read_calendars_after_a_grant() {
         .await
         .unwrap();
     assert_eq!(result.is_error, Some(true));
-    let _ = (
+    drop((
         full.cancel().await,
         narrow.cancel().await,
         none.cancel().await,
-    );
+    ));
     running.shutdown().await;
 }

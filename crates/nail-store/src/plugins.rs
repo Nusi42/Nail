@@ -85,12 +85,11 @@ pub struct PluginLogLine<'a> {
 fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
-fn json_col<T: serde::de::DeserializeOwned>(idx: usize, text: String) -> rusqlite::Result<T> {
-    serde_json::from_str(&text).map_err(|e| {
+fn json_col<T: serde::de::DeserializeOwned>(idx: usize, text: &str) -> rusqlite::Result<T> {
+    serde_json::from_str(text).map_err(|e| {
         rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
     })
 }
@@ -116,14 +115,14 @@ fn plugin_from_row(row: &Row<'_>) -> rusqlite::Result<PluginRecord> {
     let last_error: Option<String> = row.get(9)?;
     Ok(PluginRecord {
         id: PluginId(row.get(0)?),
-        manifest: json_col(1, row.get(1)?)?,
+        manifest: json_col(1, &row.get::<_, String>(1)?)?,
         source,
         package_sha256: row.get(4)?,
         enabled: row.get(5)?,
         storage_quota: u64::try_from(row.get::<_, i64>(6)?).unwrap_or(0),
         installed_at: row.get(7)?,
         updated_at: row.get(8)?,
-        last_error: last_error.map(|e| json_col(9, e)).transpose()?,
+        last_error: last_error.map(|e| json_col(9, &e)).transpose()?,
     })
 }
 
@@ -637,7 +636,7 @@ fn query_logs(
                 source: PluginLogSource::parse(&source).unwrap_or(PluginLogSource::Host),
                 message: row.get(5)?,
                 localized: localized
-                    .map(|l| json_col::<LocalizedMessage>(6, l))
+                    .map(|l| json_col::<LocalizedMessage>(6, &l))
                     .transpose()?
                     .map(Box::new),
             })
@@ -652,7 +651,7 @@ mod tests {
     use nail_api::ErrorCode;
     use serde_json::json;
 
-    fn manifest(permissions: Value) -> PluginManifest {
+    fn manifest(permissions: &Value) -> PluginManifest {
         PluginManifest::parse(
             json!({
                 "id": "follow-up", "name": "Follow-up", "version": "1.0.0", "apiVersion": "1",
@@ -696,7 +695,7 @@ mod tests {
     #[test]
     fn install_list_enable_remove() {
         let store = Store::open_in_memory().unwrap();
-        let m = manifest(json!(["mail.read", "storage"]));
+        let m = manifest(&json!(["mail.read", "storage"]));
         let record = install(&store, &m, &[PluginGrant::all(PluginPermission::Storage)]);
         assert_eq!(record.id, id());
         assert!(record.enabled);
@@ -723,7 +722,7 @@ mod tests {
     #[test]
     fn grants_are_checked_and_replaced() {
         let store = Store::open_in_memory().unwrap();
-        let m = manifest(json!(["mail.read", "mail.read.body", "storage"]));
+        let m = manifest(&json!(["mail.read", "mail.read.body", "storage"]));
         install(&store, &m, &[]);
         assert!(store.plugin_grants(&id()).unwrap().is_empty());
 
@@ -768,7 +767,7 @@ mod tests {
     #[test]
     fn updates_keep_storage_and_valid_settings() {
         let store = Store::open_in_memory().unwrap();
-        let m = manifest(json!(["storage"]));
+        let m = manifest(&json!(["storage"]));
         install(&store, &m, &[PluginGrant::all(PluginPermission::Storage)]);
         store
             .update_plugin_settings(
@@ -784,7 +783,7 @@ mod tests {
             .unwrap();
 
         // Version 2 drops the `notify` setting and the storage permission.
-        let mut m2 = manifest(json!([]));
+        let mut m2 = manifest(&json!([]));
         m2.version = "2.0.0".into();
         m2.contributes.settings.pop();
         let record = install(&store, &m2, &[]);
@@ -826,7 +825,7 @@ mod tests {
     #[test]
     fn settings_are_validated() {
         let store = Store::open_in_memory().unwrap();
-        install(&store, &manifest(json!([])), &[]);
+        install(&store, &manifest(&json!([])), &[]);
         assert_eq!(
             store.plugin_settings(&id()).unwrap(),
             BTreeMap::from([
@@ -854,7 +853,7 @@ mod tests {
     #[test]
     fn storage_respects_the_quota() {
         let store = Store::open_in_memory().unwrap();
-        install(&store, &manifest(json!(["storage"])), &[]);
+        install(&store, &manifest(&json!(["storage"])), &[]);
         store.set_plugin_quota(&id(), 20).unwrap();
         let usage = store
             .plugin_storage_set(&id(), "a", &json!("12345"))
@@ -919,7 +918,7 @@ mod tests {
         use crate::seal::SealMode;
         use crate::seal::tests::XorCipher;
         let store = Store::open_in_memory().unwrap();
-        install(&store, &manifest(json!(["storage"])), &[]);
+        install(&store, &manifest(&json!(["storage"])), &[]);
         store
             .set_cipher(Some(std::sync::Arc::new(XorCipher)), SealMode::Seal)
             .unwrap();
@@ -972,7 +971,7 @@ mod tests {
     #[test]
     fn logs_are_bounded_and_paged() {
         let store = Store::open_in_memory().unwrap();
-        install(&store, &manifest(json!([])), &[]);
+        install(&store, &manifest(&json!([])), &[]);
         let text = LocalizedMessage::new("plugin-stopped-cpu-budget").arg("plugin", "follow-up");
         let first = store
             .append_plugin_log(&PluginLogLine {

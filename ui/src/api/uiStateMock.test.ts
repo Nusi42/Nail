@@ -36,7 +36,7 @@ describe("UI state (M5b)", () => {
     expect(checkUiStateWrite({}, "Bad", null)).toBe("invalid-key");
     expect(checkUiStateWrite({}, "a.b", "x".repeat(MAX_UI_STATE_VALUE_BYTES))).toBe("too-large");
     const full = Object.fromEntries(
-      Array.from({ length: MAX_UI_STATE_KEYS }, (_v, i) => [`k.k${i}`, i]),
+      Array.from({ length: MAX_UI_STATE_KEYS }, (_v, i) => [`k.k${String(i)}`, i]),
     );
     expect(checkUiStateWrite(full, "new.key", 1)).toBe("too-many-keys");
     expect(checkUiStateWrite(full, "k.k0", 2)).toBeNull();

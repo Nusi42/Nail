@@ -76,7 +76,7 @@ const DB_BATCH: usize = 200;
 /// Files converted between two progress saves.
 const SAVE_EVERY: u64 = 16;
 /// Temporary blob files younger than this may belong to a running write.
-const TEMP_FILE_MIN_AGE: Duration = Duration::from_secs(10 * 60);
+const TEMP_FILE_MIN_AGE: Duration = Duration::from_mins(10);
 
 const PHASES: [VaultPhase; 3] = [VaultPhase::Database, VaultPhase::Blobs, VaultPhase::Index];
 
@@ -235,7 +235,7 @@ impl Vault {
 
     fn install(&self, key: Option<&DataKey>, mode: SealMode) -> Result<(), VaultError> {
         let cipher: Option<Arc<dyn DataCipher>> =
-            key.map(|k| Arc::new(VaultCipher::new(k.clone())) as Arc<dyn DataCipher>);
+            key.map(|k| -> Arc<dyn DataCipher> { Arc::new(VaultCipher::new(k.clone())) });
         self.store.set_cipher(cipher.clone(), mode)?;
         self.blobs.set_cipher(cipher, mode);
         Ok(())
@@ -299,10 +299,9 @@ impl Vault {
     pub fn set_enabled(&self, enabled: bool) -> Result<VaultStatus, VaultError> {
         let mut record = self.store.vault_state()?;
         let target = match (record.state, enabled) {
-            (VaultState::Plain, false) | (VaultState::Encrypted, true) => {
-                return Ok(self.status_of(&record));
-            }
-            (VaultState::Encrypting, true) | (VaultState::Decrypting, false) => {
+            // Already there, or already on the way.
+            (VaultState::Plain | VaultState::Decrypting, false)
+            | (VaultState::Encrypted | VaultState::Encrypting, true) => {
                 return Ok(self.status_of(&record));
             }
             (VaultState::Plain, true) => {
@@ -682,13 +681,15 @@ impl Vault {
             VaultState::Encrypting => (true, true),
             VaultState::Decrypting | VaultState::Plain => (false, true),
         };
-        Ok(Some(Arc::new(move |inner: Box<dyn Directory>| {
-            Box::new(
-                SealedDirectory::new(inner, key.clone())
-                    .seal_writes(seal)
-                    .accept_plain(accept_plain),
-            ) as Box<dyn Directory>
-        })))
+        Ok(Some(Arc::new(
+            move |inner: Box<dyn Directory>| -> Box<dyn Directory> {
+                Box::new(
+                    SealedDirectory::new(inner, key.clone())
+                        .seal_writes(seal)
+                        .accept_plain(accept_plain),
+                )
+            },
+        )))
     }
 }
 
@@ -702,7 +703,10 @@ fn index_files(dir: &Path) -> Result<Vec<String>, VaultError> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".lock") || name == INDEX_VERSION_FILE || name.starts_with(".tmp") {
+        let is_lock = Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("lock"));
+        if is_lock || name == INDEX_VERSION_FILE || name.starts_with(".tmp") {
             continue;
         }
         out.push(name);

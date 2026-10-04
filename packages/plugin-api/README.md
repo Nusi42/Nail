@@ -13,7 +13,7 @@ documentation: `userDocs/en/plugins/`.
 | `@nail/plugin-api/tools` | Node-side: `checkManifest` (all M4a rules), `packPlugin` (`.nailplugin`, deterministic zip), `readZip` / `createZip`, `parseCron` / `nextCronRun` / `cronMatches`, `loadCatalogs` |
 | bin `nail-plugin` | `nail-plugin check [dir]`, `nail-plugin pack [dir] [--out FILE]` |
 
-```
+```sh
 npm test -w packages/plugin-api     # Vitest
 npm run lint -w packages/plugin-api # tsc (also with only the sandbox's globals) + Prettier
 npm run docs -w packages/plugin-api # regenerate the reference parts of userDocs/en/plugins/

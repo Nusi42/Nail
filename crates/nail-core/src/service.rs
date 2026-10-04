@@ -38,7 +38,7 @@ pub const MAX_PAGE_SIZE: u32 = 1000;
 pub const HISTORY_RETENTION_DAYS: i64 = 90;
 
 /// How often old history is purged while the core runs.
-pub const HISTORY_PURGE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+pub const HISTORY_PURGE_INTERVAL: Duration = Duration::from_hours(24);
 
 /// Timing of the background engines (reconnects, send retries). The
 /// defaults suit real servers; tests and demos shorten them.
@@ -77,13 +77,13 @@ impl Default for EngineTiming {
     fn default() -> Self {
         Self {
             reconnect_min: Duration::from_secs(2),
-            reconnect_max: Duration::from_secs(300),
-            send_retry: Duration::from_secs(60),
+            reconnect_max: Duration::from_mins(5),
+            send_retry: Duration::from_mins(1),
             poll_override: None,
-            healthy_after: Duration::from_secs(60),
+            healthy_after: Duration::from_mins(1),
             draft_upload: Duration::from_secs(5),
-            rule_tick: Duration::from_secs(60),
-            snooze_poll: Duration::from_secs(60),
+            rule_tick: Duration::from_mins(1),
+            snooze_poll: Duration::from_mins(1),
             notification_quiet: Duration::from_secs(3),
             notification_max_delay: Duration::from_secs(15),
         }
@@ -111,6 +111,10 @@ impl EngineTiming {
 /// Where a [`Service`] keeps its data, reads its configuration, and how it
 /// reaches the outside world.
 #[derive(Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off switches of an options struct (tests and embedders turn them off one by one), not a state"
+)]
 pub struct ServiceOptions {
     /// Data directory: `nail.sqlite3`, `blobs/` and `search/`.
     pub data_dir: PathBuf,
@@ -404,8 +408,7 @@ impl Service {
         let service = Self::build(store, blobs, config, search, vault, secrets, &options)?;
         // Follow Windows (M5a): the given source, else the platform's (the
         // registry on Windows); applies the OS state before anyone asks.
-        let watch =
-            crate::appearance::watch_system_appearance(&service, options.system_appearance.clone());
+        let watch = crate::appearance::watch_system_appearance(&service, options.system_appearance);
         *lock(&service.inner.appearance_watch) = watch;
         if options.watch_config {
             service.watch_config()?;
@@ -425,18 +428,16 @@ impl Service {
         blobs: BlobStore,
         config: ConfigManager,
         locale: Option<String>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut options = ServiceOptions::new(PathBuf::new(), config.dir().to_owned());
         options.locale = locale;
         let secrets: Arc<dyn SecretStore> = Arc::new(MemorySecretStore::new());
         options.secrets = Some(Arc::clone(&secrets));
         options.trust_anchors = Some(Arc::new(nail_smime::FixedTrustAnchors::new(Vec::new())));
-        let search = SearchIndex::open_in_ram(CommitPolicy::default())
-            .expect("an in-memory search index always opens");
+        let search = SearchIndex::open_in_ram(CommitPolicy::default())?;
         let vault =
             crate::vault::VaultCtl::open(store.clone(), blobs.clone(), None, Arc::clone(&secrets));
         Self::build(store, blobs, config, search, vault, secrets, &options)
-            .expect("building a service from parts does not fail")
     }
 
     fn build(
@@ -631,7 +632,7 @@ impl Service {
     pub fn watch_config(&self) -> Result<()> {
         let events = self.inner.events.clone();
         let watcher = self.inner.config.watch(DEFAULT_DEBOUNCE, move |update| {
-            let _ = events.send(update.to_event());
+            drop(events.send(update.to_event()));
         })?;
         *lock(&self.inner.watcher) = Some(watcher);
         let accounts = crate::watch::AccountsWatcher::start(self)?;
@@ -646,7 +647,7 @@ impl Service {
 
     /// Broadcasts an event to all subscribers.
     pub fn broadcast(&self, event: Event) {
-        let _ = self.inner.events.send(event);
+        drop(self.inner.events.send(event));
     }
 
     /// Error events for the configuration files: the M1a
@@ -753,7 +754,7 @@ impl Service {
     pub async fn mcp_port(&self) -> u16 {
         self.inner
             .store
-            .call(|s| s.mcp_settings())
+            .call(Store::mcp_settings)
             .await
             .ok()
             .and_then(|s| s.port)
@@ -814,13 +815,12 @@ impl Service {
     /// engine sync on it; registered accounts get a pass; accounts without
     /// a server (local) report a finished pass at once.
     pub async fn start_sync(&self, account: Option<AccountId>) -> Result<()> {
-        let accounts = match account {
-            Some(id) => self.expand_account(&id).await?,
-            None => {
-                let mut all = self.inner.engines.accounts();
-                all.extend(self.inner.manual.accounts());
-                all
-            }
+        let accounts = if let Some(id) = account {
+            self.expand_account(&id).await?
+        } else {
+            let mut all = self.inner.engines.accounts();
+            all.extend(self.inner.manual.accounts());
+            all
         };
         for id in accounts {
             if self.inner.engines.request_sync(&id) {
@@ -830,7 +830,7 @@ impl Service {
                 let service = self.clone();
                 tokio::spawn(async move {
                     // Failures are broadcast as `SyncFailed`.
-                    let _ = service.sync_account(&id).await;
+                    drop(service.sync_account(&id).await);
                 });
             } else {
                 self.broadcast(Event::SyncProgress {
@@ -861,7 +861,7 @@ impl Service {
     }
 
     pub(crate) async fn stored_accounts(&self) -> Result<Vec<Account>> {
-        Ok(self.inner.store.call(|s| s.list_accounts()).await?)
+        Ok(self.inner.store.call(Store::list_accounts).await?)
     }
 
     /// The raw bytes of a blob by its hex hash (the `/api/blob` endpoint).
@@ -1080,7 +1080,7 @@ impl Service {
                 draft_id: self.cancel_send(outbox_id).await?,
             },
             Request::ListOutbox => Response::Outbox {
-                entries: self.inner.store.call(|s| s.list_outbox()).await?,
+                entries: self.inner.store.call(Store::list_outbox).await?,
             },
             Request::RetryOp { op_id } => Response::Queued {
                 op_ids: self.retry_op(&op_id).await?,
@@ -1095,7 +1095,7 @@ impl Service {
                 context: self.ui_context(),
             },
             Request::ListSavedSearches => Response::SavedSearches {
-                searches: self.inner.store.call(|s| s.list_saved_searches()).await?,
+                searches: self.inner.store.call(Store::list_saved_searches).await?,
             },
             Request::SaveSavedSearch { search } => Response::SavedSearchSaved {
                 search: self.save_saved_search(search).await?,

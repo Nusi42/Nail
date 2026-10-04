@@ -3,6 +3,8 @@
 //! reports, Local Folders, an account's queue, PIM data, and a backup →
 //! new data directory → restore round trip.
 
+#![cfg(test)]
+
 use std::path::Path;
 use std::time::Duration;
 
@@ -61,7 +63,7 @@ async fn run_job(service: &Service, request: Request) -> JobReport {
 }
 
 async fn wait_report(events: &mut broadcast::Receiver<Event>, job: &JobStatus) -> JobReport {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+    let deadline = tokio::time::Instant::now() + Duration::from_mins(2);
     loop {
         let event = tokio::time::timeout_at(deadline, events.recv())
             .await

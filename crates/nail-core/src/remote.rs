@@ -42,7 +42,7 @@ use crate::error::Result;
 use crate::service::{Service, lock};
 
 /// How long `RegenerateRemoteCertificate` waits for the host.
-const REGENERATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+const REGENERATE_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(1);
 
 /// What the core asks of the remote-UI host (`nail-server`).
 #[derive(Debug)]
@@ -110,7 +110,7 @@ struct BroadcastSink(broadcast::Sender<Event>);
 
 impl EventSink for BroadcastSink {
     fn emit(&self, event: Event) {
-        let _ = self.0.send(event);
+        drop(self.0.send(event));
     }
 }
 
@@ -309,10 +309,9 @@ pub(crate) fn remote_rewriter(
     // The key is only needed (and read) once content is allowed.
     let rewriter = allowed_by
         .and_then(|_| service.inner.remote.signer().cloned())
-        .map(|signer| {
+        .map(|signer| -> nail_mime::ProxyRewriter {
             let message = id.as_str().to_owned();
             Arc::new(move |url: &str| signer.proxy_url(&message, url).ok())
-                as nail_mime::ProxyRewriter
         });
     (allowed_by, rewriter)
 }
@@ -619,7 +618,7 @@ fn check_settings(settings: &RemoteUiSettings) -> Result<()> {
     } else {
         first.error_code()
     };
-    let names: Vec<String> = issues.iter().map(issue_name).collect();
+    let names: Vec<String> = issues.iter().copied().map(issue_name).collect();
     let lock = internet_mode_lock()
         .map(|reason| format!(" (internet mode locked: {})", enum_name(&reason)))
         .unwrap_or_default();
@@ -630,8 +629,8 @@ fn check_settings(settings: &RemoteUiSettings) -> Result<()> {
     .into())
 }
 
-fn issue_name(issue: &RemoteUiSettingsIssue) -> String {
-    enum_name(issue)
+fn issue_name(issue: RemoteUiSettingsIssue) -> String {
+    enum_name(&issue)
 }
 
 fn enum_name<T: serde::Serialize>(value: &T) -> String {

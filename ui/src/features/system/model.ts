@@ -153,11 +153,11 @@ export function compareVersions(a: string, b: string): number {
     const q = ys[i];
     if (p === undefined) return -1;
     if (q === undefined) return 1;
-    const pn = /^\d+$/.test(p) ? Number(p) : null;
+    const pNum = /^\d+$/.test(p) ? Number(p) : null;
     const qn = /^\d+$/.test(q) ? Number(q) : null;
-    if (pn !== null && qn !== null) {
-      if (pn !== qn) return pn - qn;
-    } else if (pn !== null) return -1;
+    if (pNum !== null && qn !== null) {
+      if (pNum !== qn) return pNum - qn;
+    } else if (pNum !== null) return -1;
     else if (qn !== null) return 1;
     else if (p !== q) return p < q ? -1 : 1;
   }

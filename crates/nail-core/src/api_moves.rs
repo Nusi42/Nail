@@ -4,14 +4,14 @@
 //! [`nail_exchange::transfer::transfer`] (copy with the flags into the
 //! target, then remove from the source; a source that is gone is not
 //! copied). Moves between mailboxes of one Exchange account use the
-//! engine's [`ExchangeMailEngine::move_to_mailbox`] in the Exchange
+//! engine's [`ExchangeMailEngine::move_to_mailbox`](nail_api::exchange::engine::ExchangeMailEngine::move_to_mailbox) in the Exchange
 //! executor. Tags (categories / labels) are not carried over.
 
 use std::sync::Arc;
 
 use nail_api::accounts::IncomingServer;
 use nail_api::engine::{EngineError, MailApiEngine};
-use nail_api::exchange::engine::{ExchangeEngine, ExchangeMailEngine};
+use nail_api::exchange::engine::ExchangeEngine;
 use nail_api::{ErrorCode, FolderId, MessageId};
 use nail_exchange::transfer::{ApiMailbox, TransferOutcome};
 
@@ -39,10 +39,10 @@ impl ApiTarget {
             Self::Exchange {
                 engine, mailbox, ..
             } => ApiMailbox::Exchange {
-                engine: engine.as_ref() as &dyn ExchangeMailEngine,
+                engine: engine.as_ref(),
                 mailbox: mailbox.as_deref(),
             },
-            Self::Gmail { engine, .. } => ApiMailbox::Api(engine.as_ref() as &dyn MailApiEngine),
+            Self::Gmail { engine, .. } => ApiMailbox::Api(engine.as_ref()),
         }
     }
 
@@ -83,9 +83,7 @@ pub(crate) async fn api_target(
             let Some(record) = record else {
                 return Ok(None);
             };
-            let engine = crate::exchange::engine_of(service, &config)
-                .await
-                .map_err(engine_err)?;
+            let engine = crate::exchange::engine_of(service, &config).map_err(engine_err)?;
             Some(ApiTarget::Exchange {
                 engine,
                 mailbox: record.mailbox,
@@ -170,6 +168,6 @@ pub(crate) async fn append_raw(
     };
     Ok(match outcome {
         nail_api::engine::WriteOutcome::Done { remote_id } => remote_id,
-        _ => None,
+        nail_api::engine::WriteOutcome::Gone => None,
     })
 }

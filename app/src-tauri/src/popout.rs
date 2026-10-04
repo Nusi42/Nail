@@ -89,6 +89,11 @@ impl Screen {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a rounded, non-negative pixel size; `as` saturates the (impossible) overflow"
+    )]
     fn px(&self, css: u32) -> u32 {
         (f64::from(css) * self.scale()).round() as u32
     }
@@ -107,7 +112,7 @@ fn contains(area: &WindowRect, x: i64, y: i64) -> bool {
 }
 
 fn to_i32(v: i64) -> i32 {
-    v.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+    i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX })
 }
 
 /// Whether the user can grab `rect`'s title bar on `area`: its top strip
@@ -156,75 +161,69 @@ pub fn place_sized(
             .find(|area| grabbable_on(&g.rect, area, strip, min_visible))
             .map(|area| (*g, *area))
     });
-    let (mut geometry, area) = match kept {
-        Some((g, area)) => {
-            let (width, height) = fit(&area, (g.rect.width, g.rect.height));
-            let rect = WindowRect {
+    let (mut geometry, area) = if let Some((g, area)) = kept {
+        let (width, height) = fit(&area, (g.rect.width, g.rect.height));
+        let rect = WindowRect {
+            width,
+            height,
+            ..g.rect
+        };
+        (
+            WindowGeometry {
+                rect,
+                maximized: g.maximized,
+                snap: None,
+            },
+            Some(area),
+        )
+    } else {
+        let size = requested.map_or(default_size, |g| (g.rect.width, g.rect.height));
+        let centre = screen.anchor.map(|a| {
+            (
+                i64::from(a.x) + i64::from(a.width) / 2,
+                i64::from(a.y) + i64::from(a.height) / 2,
+            )
+        });
+        let area = centre
+            .and_then(|(x, y)| {
+                screen
+                    .work_areas
+                    .iter()
+                    .find(|area| contains(area, x, y))
+                    .copied()
+            })
+            .or_else(|| screen.work_areas.first().copied());
+        let rect = if let Some(area) = area {
+            let (width, height) = fit(&area, size);
+            let (cx, cy) = centre.filter(|&(x, y)| contains(&area, x, y)).unwrap_or((
+                i64::from(area.x) + i64::from(area.width) / 2,
+                i64::from(area.y) + i64::from(area.height) / 2,
+            ));
+            let x = (cx - i64::from(width) / 2)
+                .clamp(i64::from(area.x), right(&area) - i64::from(width));
+            let y = (cy - i64::from(height) / 2)
+                .clamp(i64::from(area.y), bottom(&area) - i64::from(height));
+            WindowRect {
+                x: to_i32(x),
+                y: to_i32(y),
                 width,
                 height,
-                ..g.rect
-            };
-            (
-                WindowGeometry {
-                    rect,
-                    maximized: g.maximized,
-                    snap: None,
-                },
-                Some(area),
-            )
-        }
-        None => {
-            let size = requested.map_or(default_size, |g| (g.rect.width, g.rect.height));
-            let centre = screen.anchor.map(|a| {
-                (
-                    i64::from(a.x) + i64::from(a.width) / 2,
-                    i64::from(a.y) + i64::from(a.height) / 2,
-                )
-            });
-            let area = centre
-                .and_then(|(x, y)| {
-                    screen
-                        .work_areas
-                        .iter()
-                        .find(|area| contains(area, x, y))
-                        .copied()
-                })
-                .or_else(|| screen.work_areas.first().copied());
-            let rect = match area {
-                Some(area) => {
-                    let (width, height) = fit(&area, size);
-                    let (cx, cy) = centre.filter(|&(x, y)| contains(&area, x, y)).unwrap_or((
-                        i64::from(area.x) + i64::from(area.width) / 2,
-                        i64::from(area.y) + i64::from(area.height) / 2,
-                    ));
-                    let x = (cx - i64::from(width) / 2)
-                        .clamp(i64::from(area.x), right(&area) - i64::from(width));
-                    let y = (cy - i64::from(height) / 2)
-                        .clamp(i64::from(area.y), bottom(&area) - i64::from(height));
-                    WindowRect {
-                        x: to_i32(x),
-                        y: to_i32(y),
-                        width,
-                        height,
-                    }
-                }
-                // No monitor known: the main window's centre, else a corner.
-                None => {
-                    let (width, height) = size;
-                    let (x, y) = centre.map_or(
-                        (i64::from(min_visible), i64::from(min_visible)),
-                        |(x, y)| (x - i64::from(width) / 2, y - i64::from(height) / 2),
-                    );
-                    WindowRect {
-                        x: to_i32(x),
-                        y: to_i32(y),
-                        width,
-                        height,
-                    }
-                }
-            };
-            (WindowGeometry::at(rect), area)
-        }
+            }
+        } else {
+            // No monitor known: the main window's centre, else a corner.
+            let (width, height) = size;
+            let (x, y) = centre.map_or(
+                (i64::from(min_visible), i64::from(min_visible)),
+                |(x, y)| (x - i64::from(width) / 2, y - i64::from(height) / 2),
+            );
+            WindowRect {
+                x: to_i32(x),
+                y: to_i32(y),
+                width,
+                height,
+            }
+        };
+        (WindowGeometry::at(rect), area)
     };
 
     let offset = i64::from(screen.px(WINDOW_CASCADE_OFFSET));
@@ -450,12 +449,12 @@ impl PopOutManager {
 
     /// The OS windows, once the app runs.
     pub fn bind(&self, windows: Arc<dyn PopOutWindows>) {
-        let _ = self.windows.set(windows);
+        drop(self.windows.set(windows));
     }
 
     /// The core's notifier.
     pub fn attach(&self, notify: DesktopNotifier) {
-        let _ = self.notify.set(notify);
+        drop(self.notify.set(notify));
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Tracked>> {
@@ -664,6 +663,14 @@ pub struct TauriPopOuts<R: tauri::Runtime> {
     webview_dir: Option<std::path::PathBuf>,
 }
 
+impl<R: tauri::Runtime> std::fmt::Debug for TauriPopOuts<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TauriPopOuts")
+            .field("webview_dir", &self.webview_dir)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<R: tauri::Runtime> TauriPopOuts<R> {
     /// Pop-outs of `app` (`webview_dir` = the main window's data folder).
     pub fn new(app: tauri::AppHandle<R>, webview_dir: Option<std::path::PathBuf>) -> Self {
@@ -773,7 +780,7 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
             .and_then(|()| window.show())
             .and_then(|()| window.set_focus());
         if let Err(err) = placed {
-            let _ = window.destroy();
+            drop(window.destroy());
             return Err(err.to_string());
         }
         Ok(())
@@ -815,7 +822,7 @@ pub(crate) mod testing {
     use super::*;
 
     /// One fake OS window.
-    pub struct FakeWindow {
+    pub(crate) struct FakeWindow {
         pub spec: OpenSpec,
         pub seen: Observed,
         pub focus_count: usize,
@@ -823,7 +830,7 @@ pub(crate) mod testing {
 
     /// Records what the manager asks and lets tests play the user.
     #[derive(Default)]
-    pub struct FakeWindows {
+    pub(crate) struct FakeWindows {
         pub screen: Mutex<Option<Screen>>,
         pub windows: Mutex<HashMap<String, FakeWindow>>,
         pub closed: Mutex<Vec<String>>,
@@ -833,7 +840,7 @@ pub(crate) mod testing {
     impl FakeWindows {
         /// One 1920 × 1040 work area (a 40 px taskbar), the main window
         /// at 100,100 1280 × 800, scale 1.
-        pub fn single_monitor() -> Arc<Self> {
+        pub(crate) fn single_monitor() -> Arc<Self> {
             let fake = Self::default();
             *fake.screen.lock().unwrap() = Some(Screen {
                 work_areas: vec![WindowRect {
@@ -855,7 +862,7 @@ pub(crate) mod testing {
 
         /// The user moved / resized / maximized a window (the OS fires
         /// its event).
-        pub fn user_moves(&self, label: &str, rect: WindowRect, maximized: bool) {
+        pub(crate) fn user_moves(&self, label: &str, rect: WindowRect, maximized: bool) {
             let sink = {
                 let mut windows = self.windows.lock().unwrap();
                 let window = windows.get_mut(label).expect("open");
@@ -870,28 +877,28 @@ pub(crate) mod testing {
         }
 
         /// The user clicked a window.
-        pub fn user_focuses(&self, label: &str) {
+        pub(crate) fn user_focuses(&self, label: &str) {
             let sink = Arc::clone(&self.windows.lock().unwrap()[label].spec.sink);
             sink(Signal::Focused);
         }
 
         /// The user clicked a window's close button.
-        pub fn user_closes(&self, label: &str) {
+        pub(crate) fn user_closes(&self, label: &str) {
             let window = self.windows.lock().unwrap().remove(label).expect("open");
             (window.spec.sink)(Signal::Destroyed);
         }
 
-        pub fn labels(&self) -> Vec<String> {
+        pub(crate) fn labels(&self) -> Vec<String> {
             let mut labels: Vec<String> = self.windows.lock().unwrap().keys().cloned().collect();
             labels.sort();
             labels
         }
 
-        pub fn geometry_of(&self, label: &str) -> WindowGeometry {
+        pub(crate) fn geometry_of(&self, label: &str) -> WindowGeometry {
             self.windows.lock().unwrap()[label].spec.geometry
         }
 
-        pub fn title_of(&self, label: &str) -> String {
+        pub(crate) fn title_of(&self, label: &str) -> String {
             self.windows.lock().unwrap()[label].spec.title.clone()
         }
     }
@@ -1054,8 +1061,8 @@ mod tests {
         // A main window hanging off the screen: the pop-out stays on it.
         let screen = two_monitors(Some(rect(1500, 700, 1280, 800)));
         let placed = place(None, &screen, &[]);
-        assert!(placed.rect.x as i64 + placed.rect.width as i64 <= 1920);
-        assert!(placed.rect.y as i64 + placed.rect.height as i64 <= 1040);
+        assert!(i64::from(placed.rect.x) + i64::from(placed.rect.width) <= 1920);
+        assert!(i64::from(placed.rect.y) + i64::from(placed.rect.height) <= 1040);
         // No monitor known (should not happen): over the main window.
         let screen = Screen {
             work_areas: vec![],
@@ -1240,7 +1247,7 @@ mod tests {
     fn manager() -> (Arc<PopOutManager>, Arc<FakeWindows>, Reports) {
         let manager = PopOutManager::new(tokio::runtime::Handle::current());
         let fake = FakeWindows::single_monitor();
-        manager.bind(Arc::clone(&fake) as Arc<dyn PopOutWindows>);
+        manager.bind(fake.clone());
         let reports: Reports = Arc::default();
         let sink = Arc::clone(&reports);
         manager.attach(Arc::new(move |change| {

@@ -84,7 +84,7 @@ export function pluginFences(markdown: string): PluginFence[] {
     let end = -1;
     for (let j = i + 1; j < lines.length; j++) {
       const closing = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(lines[j] ?? "")?.[1];
-      if (closing && closing[0] === marker[0] && closing.length >= marker.length) {
+      if (closing?.startsWith(marker.charAt(0)) && closing.length >= marker.length) {
         end = j;
         break;
       }
@@ -167,10 +167,11 @@ export function ComposerPlugins({
         getSelection={() => selectionOf(mode, body, textarea.current)}
         {...(mode === "markdown"
           ? {
-              onInsert: (markdown: string) =>
+              onInsert: (markdown: string) => {
                 richStoreFor(ctx.store, window).setState({
                   markdown: `${rich.markdown}${rich.markdown && !rich.markdown.endsWith("\n") ? "\n" : ""}${markdown}`,
-                }),
+                });
+              },
             }
           : {})}
       />
@@ -186,7 +187,11 @@ export function PluginBlocks({ markdown }: { markdown: string }) {
   return (
     <div data-part="composer.plugin-blocks">
       {fences.map((fence, i) => (
-        <PluginMarkdownBlock key={`${i}-${fence.info}`} info={fence.info} body={fence.body} />
+        <PluginMarkdownBlock
+          key={`${String(i)}-${fence.info}`}
+          info={fence.info}
+          body={fence.body}
+        />
       ))}
     </div>
   );

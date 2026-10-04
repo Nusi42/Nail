@@ -1,9 +1,7 @@
 //! Messages produced by GnuPG 2.4 and wrapped the way Thunderbird does it
 //! (`corpus/crypto/pgp/`, see its README): Nail must read them.
 
-mod common;
-
-use common::{Env, fixture, subject_and_text};
+use crate::common::{Env, fixture, subject_and_text};
 use nail_api::security::{DecryptionState, HeaderProtection, SignatureState, TrustLevel};
 use pretty_assertions::assert_eq;
 
@@ -49,7 +47,11 @@ fn unknown_signer_is_reported_with_the_issuer_fingerprint() {
     assert_eq!(sig.signer, None);
     // GnuPG writes the issuer fingerprint subpacket.
     let alice = Env::with(&["alice.pub.asc"]);
-    let key = alice.keyring().list(&Default::default()).unwrap().remove(0);
+    let key = alice
+        .keyring()
+        .list(&nail_api::security::KeyFilter::default())
+        .unwrap()
+        .remove(0);
     assert_eq!(sig.fingerprint.as_deref(), Some(key.fingerprint.as_str()));
 }
 
@@ -73,7 +75,12 @@ fn signature_made_before_the_key_expired_stays_valid() {
     assert_eq!(sig.state, SignatureState::Valid);
     assert!(sig.signed_at.as_deref().unwrap().starts_with("2020-06-01"));
     // The key itself is expired now.
-    assert!(env.keyring().list(&Default::default()).unwrap()[0].expired);
+    assert!(
+        env.keyring()
+            .list(&nail_api::security::KeyFilter::default())
+            .unwrap()[0]
+            .expired
+    );
 }
 
 #[test]

@@ -51,7 +51,7 @@ pub struct FlowOptions {
 
 impl FlowOptions {
     /// Default wait for the user.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(10);
 
     /// Options with the default timeout.
     pub fn new(pages: CallbackPages) -> Self {
@@ -221,8 +221,9 @@ async fn respond(stream: &mut TcpStream, status: &str, html: &str) {
         "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{html}",
         html.len()
     );
-    let _ = stream.write_all(response.as_bytes()).await;
-    let _ = stream.shutdown().await;
+    // Best effort: the browser may already have closed the connection.
+    stream.write_all(response.as_bytes()).await.ok();
+    stream.shutdown().await.ok();
 }
 
 /// Reads the request head (up to 16 KiB, 10 s).

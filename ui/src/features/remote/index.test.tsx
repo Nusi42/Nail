@@ -12,13 +12,13 @@ import { MAX_ALERTS, remoteStore } from "./state";
 import { createAda, pairedBrowser } from "./testUtil";
 
 function wireEvents(env: Env) {
-  return env.client.subscribe((event) =>
+  return env.client.subscribe((event) => {
     handleRemoteEvent(event, {
       client: env.client,
       queryClient: env.queryClient,
       store: env.store,
-    }),
-  );
+    });
+  });
 }
 
 function actionContext(env: Env) {
@@ -61,10 +61,10 @@ describe("remote feature slot", () => {
     expect(runtimeIds()).toContain("window-remote-pair");
   });
 
-  it("opens the pairing dialog from the action", () => {
+  it("opens the pairing dialog from the action", async () => {
     const env = createEnv();
     remoteStore.getState().setPairUser("ruser-9");
-    actions["remote.pair"]?.run(actionContext(env), []);
+    await actions["remote.pair"]?.run(actionContext(env), []);
     expect(env.store.getState().windows).toContain(PAIR_DIALOG);
     expect(remoteStore.getState().pairUser).toBeNull();
   });
@@ -146,7 +146,7 @@ describe("security alerts", () => {
           type: "RemoteSecurityAlert",
           alert: {
             kind: "lockout",
-            user_name: i === 0 ? null : `user${i}`,
+            user_name: i === 0 ? null : `user${String(i)}`,
             ip: i === 0 ? "10.0.0.9" : null,
             until: "2026-09-29T12:00:00Z",
           },

@@ -8,7 +8,7 @@
  * shows a link back to it.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type SubmitEvent } from "react";
 import type {
   Calendar,
   LocalizedMessage,
@@ -30,6 +30,7 @@ import { choiceOf, recurrenceOf, type RecurrenceChoice } from "./recurrence";
 import { usePim, type TaskEditorTarget } from "./store";
 import { isDone } from "./TaskList";
 import { localZone, makePimTime, splitPimTime, todayIn, utcString } from "./time";
+import { nonEmpty } from "../../text/empty";
 
 /** Priority choices (iCalendar 1 = highest … 9 = lowest; 0 / none = undefined). */
 export const PRIORITIES = [
@@ -92,7 +93,7 @@ export function TaskEditorDialog({ close }: DialogProps) {
       key={target.mode === "edit" ? target.taskId : `new-${target.parentId ?? ""}`}
       target={target}
       task={task.data ?? null}
-      calendars={calendars.data ?? []}
+      calendars={calendars.data}
       close={close}
     />
   );
@@ -102,7 +103,7 @@ interface EditorProps {
   target: TaskEditorTarget;
   task: Task | null;
   calendars: readonly Calendar[];
-  close(): void;
+  close: () => void;
 }
 
 export function TaskEditor({ target, task, calendars, close }: EditorProps) {
@@ -123,17 +124,14 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
     subtask: useId(),
   };
   const lists = calendars.filter((c) => c.components.includes("task") && !c.read_only);
-  const initialFields = useMemo<TaskFields>(
-    () =>
-      structuredClone(
-        task?.fields ??
-          (target.mode === "new" && target.fields
-            ? { ...target.fields, parent_id: target.parentId ?? target.fields.parent_id }
-            : { ...emptyTaskFields(), parent_id: target.mode === "new" ? target.parentId : null }),
-      ),
-    // Initialized once per editor (keyed by its target).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  // Initialized once per editor (the component is keyed by its target).
+  const [initialFields] = useState<TaskFields>(() =>
+    structuredClone(
+      task?.fields ??
+        (target.mode === "new" && target.fields
+          ? { ...target.fields, parent_id: target.parentId ?? target.fields.parent_id }
+          : { ...emptyTaskFields(), parent_id: target.mode === "new" ? target.parentId : null }),
+    ),
   );
   const [fields, setFields] = useState<TaskFields>(initialFields);
   const [listId, setListId] = useState<string>(
@@ -141,16 +139,17 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
   );
   const [start, setStart] = useState<WhenValue | null>(whenOf(initialFields.start));
   const [due, setDue] = useState<WhenValue | null>(whenOf(initialFields.due));
-  const [recurrence, setRecurrence] = useState<RecurrenceChoice>(() =>
-    initialFields.due || initialFields.start
-      ? choiceOf(task?.recurrence ?? null, (initialFields.due ?? initialFields.start) as PimTime)
-      : { type: "none" },
-  );
+  const [recurrence, setRecurrence] = useState<RecurrenceChoice>(() => {
+    const anchor = initialFields.due ?? initialFields.start;
+    return anchor ? choiceOf(task?.recurrence ?? null, anchor) : { type: "none" };
+  });
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const siblings = useTasks([listId], true);
-  const update = (patch: Partial<TaskFields>) => setFields((f) => ({ ...f, ...patch }));
+  const update = (patch: Partial<TaskFields>) => {
+    setFields((f) => ({ ...f, ...patch }));
+  };
   const readOnly = task?.read_only === true;
 
   // Parents: tasks of the same list that are not this task or below it.
@@ -177,12 +176,12 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
     start: pimTimeOf(start, tz),
     due: pimTimeOf(due, tz),
     description: fields.description?.trim() ? fields.description : null,
-    location: fields.location?.trim() || null,
-    url: fields.url?.trim() || null,
+    location: nonEmpty(fields.location?.trim()) ?? null,
+    url: nonEmpty(fields.url?.trim()) ?? null,
     categories: fields.categories.map((c) => c.trim()).filter(Boolean),
   });
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const next = built();
     if (
@@ -269,7 +268,8 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
 
   const priorityValue =
     PRIORITIES.find(([, v]) => v === fields.priority)?.[0] ?? (fields.priority ? "custom" : "none");
-  const message = fields.links.find((l) => l.type === "message");
+  // Every link of a task is a message link (`TaskLink`).
+  const message = fields.links.at(0);
 
   return (
     <form
@@ -289,7 +289,10 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.title}
             data-part="form.input"
             value={fields.title}
-            onChange={(e) => update({ title: e.target.value })}
+            onChange={(e) => {
+              update({ title: e.target.value });
+            }}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- the editor dialog opens on request; its title field takes the focus (dialog pattern).
             autoFocus
           />
         </div>
@@ -300,7 +303,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
               <button
                 type="button"
                 data-part="form.button"
-                onClick={() => ctx.store.getState().selectMessage(message.message_id)}
+                onClick={() => {
+                  ctx.store.getState().selectMessage(message.message_id);
+                }}
               >
                 {t("pim-linked-message-show")}
               </button>
@@ -315,7 +320,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.list}
             data-part="form.select"
             value={listId}
-            onChange={(e) => setListId(e.target.value)}
+            onChange={(e) => {
+              setListId(e.target.value);
+            }}
           >
             {lists.map((c) => (
               <option key={c.id} value={c.id}>
@@ -332,7 +339,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.parent}
             data-part="form.select"
             value={fields.parent_id ?? ""}
-            onChange={(e) => update({ parent_id: e.target.value === "" ? null : e.target.value })}
+            onChange={(e) => {
+              update({ parent_id: e.target.value === "" ? null : e.target.value });
+            }}
           >
             <option value="">{t("pim-task-no-parent")}</option>
             {parents.map((p) => (
@@ -379,14 +388,14 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             min={0}
             max={100}
             value={fields.percent_complete ?? ""}
-            onChange={(e) =>
+            onChange={(e) => {
               update({
                 percent_complete:
                   e.target.value === ""
                     ? null
                     : Math.min(100, Math.max(0, Math.trunc(Number(e.target.value)) || 0)),
-              })
-            }
+              });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="priority">
@@ -431,7 +440,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
         )}
         <AlarmEditor
           value={fields.alarms}
-          onChange={(alarms) => update({ alarms })}
+          onChange={(alarms) => {
+            update({ alarms });
+          }}
           tz={tz}
           related="end"
         />
@@ -444,7 +455,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.description}
             data-part="form.textarea"
             value={fields.description ?? ""}
-            onChange={(e) => update({ description: e.target.value })}
+            onChange={(e) => {
+              update({ description: e.target.value });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="location">
@@ -455,7 +468,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.location}
             data-part="form.input"
             value={fields.location ?? ""}
-            onChange={(e) => update({ location: e.target.value })}
+            onChange={(e) => {
+              update({ location: e.target.value });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="url">
@@ -467,7 +482,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             data-part="form.input"
             type="url"
             value={fields.url ?? ""}
-            onChange={(e) => update({ url: e.target.value })}
+            onChange={(e) => {
+              update({ url: e.target.value });
+            }}
           />
         </div>
         <div data-part="form.field" data-field="categories">
@@ -478,7 +495,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             id={ids.categories}
             data-part="form.input"
             value={fields.categories.join(", ")}
-            onChange={(e) => update({ categories: e.target.value.split(",") })}
+            onChange={(e) => {
+              update({ categories: e.target.value.split(",") });
+            }}
           />
         </div>
       </fieldset>
@@ -499,7 +518,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
                         ctx,
                         { type: "CompleteTask", task_id: sub.id, completed: !isDone(sub) },
                         "TaskSaved",
-                      ).catch((error: unknown) => setProblem(problemOf(error)))
+                      ).catch((error: unknown) => {
+                        setProblem(problemOf(error));
+                      })
                     }
                   />
                   <span>{sub.fields.title || t("pim-task-untitled")}</span>
@@ -508,7 +529,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
                   type="button"
                   data-part="form.button"
                   aria-label={t("pim-task-open", { title: sub.fields.title })}
-                  onClick={() => ctx.pim.getState().editTask({ mode: "edit", taskId: sub.id })}
+                  onClick={() => {
+                    ctx.pim.getState().editTask({ mode: "edit", taskId: sub.id });
+                  }}
                 >
                   {t("pim-edit")}
                 </button>
@@ -523,7 +546,9 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
               id={ids.subtask}
               data-part="form.input"
               value={subtaskTitle}
-              onChange={(e) => setSubtaskTitle(e.target.value)}
+              onChange={(e) => {
+                setSubtaskTitle(e.target.value);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -594,7 +619,7 @@ function OptionalWhen({
   label: string;
   field: string;
   value: WhenValue | null;
-  onChange(value: WhenValue | null): void;
+  onChange: (value: WhenValue | null) => void;
   tz: string;
 }) {
   const t = useT();
@@ -605,7 +630,9 @@ function OptionalWhen({
         <input
           type="checkbox"
           checked={value !== null}
-          onChange={(e) => onChange(e.target.checked ? { day: todayIn(tz), time: null } : null)}
+          onChange={(e) => {
+            onChange(e.target.checked ? { day: todayIn(tz), time: null } : null);
+          }}
         />
         <span>{t("pim-task-has-date", { field: label })}</span>
       </label>
@@ -615,9 +642,9 @@ function OptionalWhen({
             <input
               type="checkbox"
               checked={value.time !== null}
-              onChange={(e) =>
-                onChange({ ...value, time: e.target.checked ? { hour: 17, minute: 0 } : null })
-              }
+              onChange={(e) => {
+                onChange({ ...value, time: e.target.checked ? { hour: 17, minute: 0 } : null });
+              }}
             />
             <span>{t("pim-task-with-time")}</span>
           </label>
@@ -627,7 +654,9 @@ function OptionalWhen({
             day={value.day}
             time={value.time}
             tz={tz}
-            onChange={(day, time) => onChange({ day, time })}
+            onChange={(day, time) => {
+              onChange({ day, time });
+            }}
           />
         </>
       )}

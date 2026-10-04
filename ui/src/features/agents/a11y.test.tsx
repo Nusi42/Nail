@@ -10,12 +10,15 @@ import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
-import { handleAgentsEvent, PolicyEditor, seedAgentsDemo } from ".";
+import { handleAgentsEvent, PolicyEditor } from ".";
+import { seedAgentsDemo } from "./mockSeed";
 import { ConfirmationCenterDialog } from "./ConfirmationCenter";
 import { ConfirmationNotices } from "./ConfirmationNotices";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
@@ -43,13 +46,13 @@ describe("axe: confirmation center", () => {
 
   it("the dialog and the notices have no violations", async () => {
     const env = createEnv();
-    const stop = env.client.subscribe((event) =>
+    const stop = env.client.subscribe((event) => {
       handleAgentsEvent(event, {
         client: env.client,
         queryClient: env.queryClient,
         store: env.store,
-      }),
-    );
+      });
+    });
     const { container } = renderWithProviders(
       <>
         <ConfirmationCenterDialog />
@@ -57,7 +60,7 @@ describe("axe: confirmation center", () => {
       </>,
       env,
     );
-    await act(async () => {
+    act(() => {
       seedAgentsDemo(env.transport);
     });
     await settle(env);

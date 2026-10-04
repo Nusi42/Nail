@@ -12,11 +12,10 @@ import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import type { Density } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
-import { BUILTIN_THEMES, resolveMockTheme } from "../appearance";
+import { BUILTIN_THEMES } from "../appearance";
+import { resolveMockTheme } from "../appearance/themes";
 import { WindowView } from "../../layout/LayoutRenderer";
 import { compileTheme } from "../../theme/compile";
-import type { ComponentType } from "react";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { dialogs, loadPimEditors } from ".";
@@ -42,10 +41,14 @@ beforeAll(async () => {
   setLocalTimeZone("Europe/Berlin");
   await loadPimEditors();
 }, 60_000);
-afterAll(() => resetLocalTimeZone());
+afterAll(() => {
+  resetLocalTimeZone();
+});
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
@@ -169,7 +172,7 @@ describe("axe: PIM dialogs", () => {
   it.each([...DIALOGS])("dialog %s has no violations", async (name) => {
     const env = createEnv();
     await prepare(env, name);
-    const Dialog = dialogs[name] as ComponentType<DialogProps>;
+    const Dialog = must(dialogs[name]);
     const { container } = renderWithProviders(
       <div role="dialog" aria-label={name}>
         <Dialog name={name} close={() => undefined} />
@@ -185,7 +188,7 @@ describe("axe: PIM dialogs", () => {
     const user = userEvent.setup();
     const env = createEnv();
     await prepare(env, "pim-event-editor");
-    const Dialog = dialogs["pim-event-editor"] as ComponentType<DialogProps>;
+    const Dialog = must(dialogs["pim-event-editor"]);
     const { container } = renderWithProviders(
       <div role="dialog" aria-label={EVENT_LABEL}>
         <Dialog name="pim-event-editor" close={() => undefined} />
@@ -205,7 +208,7 @@ describe("axe: PIM dialogs", () => {
 
   it("the merge dialog's list of duplicates has no violations", async () => {
     const env = createEnv();
-    const Dialog = dialogs["pim-merge-contacts"] as ComponentType<DialogProps>;
+    const Dialog = must(dialogs["pim-merge-contacts"]);
     const { container } = renderWithProviders(
       <div role="dialog" aria-label={MERGE_LABEL}>
         <Dialog name="pim-merge-contacts" close={() => undefined} />
@@ -286,15 +289,11 @@ describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
         { theme },
       );
       await settle(env);
-      await user.click(
-        screen.getAllByRole("button", { name: "Actions for Work" })[0] as HTMLElement,
-      );
+      await user.click(must(screen.getAllByRole("button", { name: "Actions for Work" })[0]));
       expect(screen.getByRole("menu", { name: "Actions for Work" })).toBeInTheDocument();
       expect(await violations(container)).toEqual([]);
       await user.keyboard("{Escape}");
-      await user.click(
-        screen.getAllByRole("button", { name: "Add to On this computer" })[0] as HTMLElement,
-      );
+      await user.click(must(screen.getAllByRole("button", { name: "Add to On this computer" })[0]));
       expect(screen.getByRole("menuitem", { name: "New calendar" })).toBeInTheDocument();
       expect(await violations(container)).toEqual([]);
     },

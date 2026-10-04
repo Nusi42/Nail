@@ -257,14 +257,14 @@ impl ExchangeOptions {
     pub fn issues(&self, server: &ServerEndpoint) -> Vec<ExchangeConfigIssue> {
         let mut out = Vec::new();
         match (self.engine, &server.auth) {
-            (ExchangeEngine::Graph, AuthConfig::OAuth2 { .. }) => {}
-            (ExchangeEngine::Graph, _) => out.push(ExchangeConfigIssue::GraphNeedsOAuth2),
-            (
+            (ExchangeEngine::Graph, AuthConfig::OAuth2 { .. })
+            | (
                 ExchangeEngine::Ews,
                 AuthConfig::OAuth2 { .. }
                 | AuthConfig::Password { .. }
                 | AuthConfig::Windows { .. },
             ) => {}
+            (ExchangeEngine::Graph, _) => out.push(ExchangeConfigIssue::GraphNeedsOAuth2),
             (ExchangeEngine::Ews, _) => out.push(ExchangeConfigIssue::UnsupportedAuth),
         }
         if server.tls == TlsMode::Plaintext && !is_loopback_host(&server.host) {
@@ -648,6 +648,10 @@ pub enum ExchangeMailboxOrigin {
 
 /// What of another mailbox is shown.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent per-mailbox switches (one checkbox each)"
+)]
 pub struct ExchangeMailboxSettings {
     /// The mailbox's address.
     pub address: String,
@@ -1626,7 +1630,7 @@ mod tests {
         nothing.kind = ExchangeMailboxKind::Delegate;
         nothing.mail = false;
         nothing.calendar = false;
-        nothing.name = Some("".into());
+        nothing.name = Some(String::new());
         assert_eq!(
             nothing.issues(own),
             [

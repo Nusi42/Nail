@@ -57,7 +57,9 @@ export function MiniMonth({ node }: WidgetProps) {
           data-field="mini-month-previous"
           aria-label={t("pim-month-previous")}
           title={t("pim-month-previous")}
-          onClick={() => setFocused((f) => f.add({ months: -1 }))}
+          onClick={() => {
+            setFocused((f) => f.add({ months: -1 }));
+          }}
         >
           <Icon name="chevron-left" part="form.button.icon" />
         </button>
@@ -71,7 +73,9 @@ export function MiniMonth({ node }: WidgetProps) {
           data-field="mini-month-next"
           aria-label={t("pim-month-next")}
           title={t("pim-month-next")}
-          onClick={() => setFocused((f) => f.add({ months: 1 }))}
+          onClick={() => {
+            setFocused((f) => f.add({ months: 1 }));
+          }}
         >
           <Icon name="chevron-right" part="form.button.icon" />
         </button>
@@ -86,7 +90,9 @@ export function MiniMonth({ node }: WidgetProps) {
         label={monthName}
         narrow
         onFocusDay={setFocused}
-        onSelect={(day) => pim.getState().setAnchor(dateString(day))}
+        onSelect={(day) => {
+          pim.getState().setAnchor(dateString(day));
+        }}
       />
     </section>
   );

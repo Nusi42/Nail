@@ -303,7 +303,7 @@ mod tests {
     fn stored() -> (Arc<MemorySecretStore>, SecretSource) {
         let secrets = Arc::new(MemorySecretStore::new());
         let source = SecretSource::Stored {
-            secrets: Arc::clone(&secrets) as Arc<dyn SecretStore>,
+            secrets: secrets.clone(),
             tokens: Arc::new(FixedToken),
         };
         (secrets, source)

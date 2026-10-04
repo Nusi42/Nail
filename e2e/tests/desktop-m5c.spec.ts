@@ -15,6 +15,7 @@ import {
   newMessageButton,
   runFromPalette,
 } from "../support/views";
+import { defined } from "../support/defined";
 
 /**
  * M5c on the real desktop app (ADRs 0119, 0121): a composer pops out into
@@ -98,7 +99,7 @@ async function popOutPage(window: string): Promise<Page> {
       { timeout: 60_000 },
     )
     .toBe(true);
-  return found!;
+  return defined(found, "the pop-out page");
 }
 
 async function newComposer(page: Page, subject: string): Promise<string> {
@@ -110,7 +111,7 @@ async function newComposer(page: Page, subject: string): Promise<string> {
   await composer.getByRole("combobox", { name: "From" }).selectOption("ada@example.org");
   await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
   await composer.getByRole("textbox", { name: "Subject" }).fill(subject);
-  return (await composer.getAttribute("data-window"))!;
+  return defined(await composer.getAttribute("data-window"), "the composer's window id");
 }
 
 test("a composer pops out, is sent from its own window, and the window closes", async () => {
@@ -181,7 +182,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await expect(thrownHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Throw away");
   await thrownHost.getByRole("button", { name: "Discard", exact: true }).click();
   const discard = thrown.locator(
-    `[data-part="window"][data-window="composer-discard:${first.split(":")[1]}"]`,
+    `[data-part="window"][data-window="composer-discard:${first.split(":")[1] ?? ""}"]`,
   );
   await expect(discard).toBeVisible();
   await discard.getByRole("button", { name: "Discard", exact: true }).click();
@@ -199,7 +200,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await keptHost.getByRole("textbox", { name: "Message" }).fill("The last words.");
   await shellControl(page, "close-pop-outs");
   const question = kept.locator(
-    `[data-part="window"][data-window="composer-close:${second.split(":")[1]}"]`,
+    `[data-part="window"][data-window="composer-close:${second.split(":")[1] ?? ""}"]`,
   );
   await expect(question).toBeVisible();
   // Still open while it asks.

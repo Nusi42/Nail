@@ -358,7 +358,7 @@ pub struct ComposerEdit {
 }
 
 /// Where a plug-in action was invoked ([`crate::Request::RunPluginAction`];
-/// protocol, snake_case).
+/// protocol, `snake_case`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum PluginActionTarget {

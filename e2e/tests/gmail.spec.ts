@@ -24,7 +24,8 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await server?.stop();
+  // `beforeEach` may have failed before assigning it.
+  await (server as NailServer | undefined)?.stop();
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');

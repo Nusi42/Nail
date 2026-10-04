@@ -280,7 +280,7 @@ impl Reader<'_, '_> {
             .collect();
         let anonymous = pkesks
             .iter()
-            .any(|p| p.id().is_ok_and(|id| id.is_wildcard()));
+            .any(|p| p.id().is_ok_and(pgp::types::KeyId::is_wildcard));
 
         // Own keys the message is encrypted to.
         let mut candidates = Vec::new();
@@ -344,64 +344,63 @@ impl Reader<'_, '_> {
                 }
             }
         }
-        let (mut message, key_id) = match on_card {
-            Some(found) => found,
-            None => {
-                let mut unlocked = Vec::new();
-                let mut locked = Vec::new();
-                for (stored, secret) in candidates {
-                    match self.keyring.try_password(&stored)? {
-                        Some(password) => {
-                            unlocked.push((stored, secret, Password::from(password.as_str())))
-                        }
-                        None => locked.push(stored),
+        let (mut message, key_id) = if let Some(found) = on_card {
+            found
+        } else {
+            let mut unlocked = Vec::new();
+            let mut locked = Vec::new();
+            for (stored, secret) in candidates {
+                match self.keyring.try_password(&stored)? {
+                    Some(password) => {
+                        unlocked.push((stored, secret, Password::from(password.as_str())));
                     }
+                    None => locked.push(stored),
                 }
-                if unlocked.is_empty() {
-                    return Ok(Decrypted {
-                        info: encryption(
-                            DecryptionState::Locked,
-                            locked.first().map(|s| s.id.clone()),
-                            recipients,
-                        ),
-                        plaintext: None,
-                        signatures: Vec::new(),
-                    });
-                }
-                // One key at a time, so the key that worked is known (rPGP's ring
-                // result is overwritten per session key packet).
-                let mut decrypted = None;
-                let mut first = Some(message);
-                for (stored, secret, password) in &unlocked {
-                    let Some(attempt) = first.take().or_else(|| parse_message(data)) else {
-                        break;
-                    };
-                    let ring = TheRing {
-                        secret_keys: vec![secret],
-                        key_passwords: vec![password],
-                        decrypt_options: DecryptionOptions::new().enable_gnupg_aead(),
-                        ..TheRing::default()
-                    };
-                    if let Ok((message, _)) = attempt.decrypt_the_ring(ring, true) {
-                        decrypted = Some((message, stored.id.clone()));
-                        break;
-                    }
-                }
-                let Some(found) = decrypted else {
-                    let state = if locked.is_empty() {
-                        DecryptionState::Failed
-                    } else {
-                        DecryptionState::Locked
-                    };
-                    let key_id = locked.first().map(|s| s.id.clone());
-                    return Ok(Decrypted {
-                        info: encryption(state, key_id, recipients),
-                        plaintext: None,
-                        signatures: Vec::new(),
-                    });
-                };
-                found
             }
+            if unlocked.is_empty() {
+                return Ok(Decrypted {
+                    info: encryption(
+                        DecryptionState::Locked,
+                        locked.first().map(|s| s.id.clone()),
+                        recipients,
+                    ),
+                    plaintext: None,
+                    signatures: Vec::new(),
+                });
+            }
+            // One key at a time, so the key that worked is known (rPGP's ring
+            // result is overwritten per session key packet).
+            let mut decrypted = None;
+            let mut first = Some(message);
+            for (stored, secret, password) in &unlocked {
+                let Some(attempt) = first.take().or_else(|| parse_message(data)) else {
+                    break;
+                };
+                let ring = TheRing {
+                    secret_keys: vec![secret],
+                    key_passwords: vec![password],
+                    decrypt_options: DecryptionOptions::new().enable_gnupg_aead(),
+                    ..TheRing::default()
+                };
+                if let Ok((message, _)) = attempt.decrypt_the_ring(ring, true) {
+                    decrypted = Some((message, stored.id.clone()));
+                    break;
+                }
+            }
+            let Some(found) = decrypted else {
+                let state = if locked.is_empty() {
+                    DecryptionState::Failed
+                } else {
+                    DecryptionState::Locked
+                };
+                let key_id = locked.first().map(|s| s.id.clone());
+                return Ok(Decrypted {
+                    info: encryption(state, key_id, recipients),
+                    plaintext: None,
+                    signatures: Vec::new(),
+                });
+            };
+            found
         };
         let key_id = Some(key_id);
         let failed = |recipients: Vec<String>, key_id: Option<KeyId>| Decrypted {
@@ -689,11 +688,10 @@ impl Reader<'_, '_> {
         if is_signed(&inner_ct) {
             let mut outcome = self.read_signed(outer, &inner, &inner_ct, Some(decrypted.info));
             // The display carries the From the reader shows.
-            let shown = outcome
-                .display
-                .as_deref()
-                .map(|d| displayed_from(&Entity::parse(d), &[]))
-                .unwrap_or_else(|| displayed_from(outer, &[]));
+            let shown = outcome.display.as_deref().map_or_else(
+                || displayed_from(outer, &[]),
+                |d| displayed_from(&Entity::parse(d), &[]),
+            );
             if let Some(status) = &mut outcome.status {
                 let mut signatures = decrypted.signatures;
                 for s in &mut signatures {
@@ -920,22 +918,17 @@ impl Reader<'_, '_> {
                     Some(plain) => out.push_str(&String::from_utf8_lossy(&plain)),
                     None => out.push_str(block),
                 }
-            } else {
-                match CleartextSignedMessage::from_string(block) {
-                    Ok((message, _)) => {
-                        let signed_text = message.signed_text();
-                        for sig in message.signatures() {
-                            found.signatures.push(self.verifier.check(sig, from, |c| {
-                                c.verify_detached(sig, signed_text.as_bytes())
-                            }));
-                        }
-                        out.push_str(&signed_text.replace("\r\n", "\n"));
-                    }
-                    Err(_) => {
-                        found.signatures.push(malformed_signature());
-                        out.push_str(block);
-                    }
+            } else if let Ok((message, _)) = CleartextSignedMessage::from_string(block) {
+                let signed_text = message.signed_text();
+                for sig in message.signatures() {
+                    found.signatures.push(self.verifier.check(sig, from, |c| {
+                        c.verify_detached(sig, signed_text.as_bytes())
+                    }));
                 }
+                out.push_str(&signed_text.replace("\r\n", "\n"));
+            } else {
+                found.signatures.push(malformed_signature());
+                out.push_str(block);
             }
             rest = &rest[end..];
         }

@@ -14,9 +14,9 @@ export interface SyncState {
   fetching: MessageId[];
   /** Messages whose last download failed. */
   failed: MessageId[];
-  setFolder(id: FolderId | null): void;
-  started(ids: readonly MessageId[]): void;
-  finished(fetched: readonly MessageId[], failed: readonly MessageId[]): void;
+  setFolder: (id: FolderId | null) => void;
+  started: (ids: readonly MessageId[]) => void;
+  finished: (fetched: readonly MessageId[], failed: readonly MessageId[]) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<SyncState>>();
@@ -28,17 +28,21 @@ export function syncStoreFor(ui: UiStore): StoreApi<SyncState> {
     folderId: null,
     fetching: [],
     failed: [],
-    setFolder: (folderId) => set({ folderId }),
-    started: (ids) =>
+    setFolder: (folderId) => {
+      set({ folderId });
+    },
+    started: (ids) => {
       set((s) => ({
         fetching: [...new Set([...s.fetching, ...ids])],
         failed: s.failed.filter((id) => !ids.includes(id)),
-      })),
-    finished: (fetched, failed) =>
+      }));
+    },
+    finished: (fetched, failed) => {
       set((s) => ({
         fetching: s.fetching.filter((id) => !fetched.includes(id) && !failed.includes(id)),
         failed: [...new Set([...s.failed.filter((id) => !fetched.includes(id)), ...failed])],
-      })),
+      }));
+    },
   }));
   stores.set(ui, store);
   return store;

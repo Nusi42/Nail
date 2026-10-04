@@ -43,9 +43,13 @@ export const printJobKey = (jobId: string) => ["print", "job", jobId] as const;
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash);
   useEffect(() => {
-    const update = () => setHash(window.location.hash);
+    const update = () => {
+      setHash(window.location.hash);
+    };
     window.addEventListener("hashchange", update);
-    return () => window.removeEventListener("hashchange", update);
+    return () => {
+      window.removeEventListener("hashchange", update);
+    };
   }, []);
   return hash;
 }
@@ -418,7 +422,7 @@ function TargetPrint({ job }: { job: PrintJob }) {
 }
 
 /** The screen-only bar above the page (hidden when printing). */
-function Toolbar({ onPrint, onClose }: { onPrint(): void; onClose(): void }) {
+function Toolbar({ onPrint, onClose }: { onPrint: () => void; onClose: () => void }) {
   const t = useT();
   return (
     <div data-part="print.toolbar" role="toolbar" aria-label={t("print-toolbar")}>
@@ -483,7 +487,9 @@ export function PrintView({ jobId }: { jobId: string }) {
         printNow(closePrintView);
       }
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [job.data, fetching, reported, client, jobId, ui]);
 
   const options = job.data?.options;
@@ -496,7 +502,12 @@ export function PrintView({ jobId }: { jobId: string }) {
       role="document"
       aria-label={t("print-view-label")}
     >
-      <Toolbar onPrint={() => printNow(() => undefined)} onClose={closePrintView} />
+      <Toolbar
+        onPrint={() => {
+          printNow(() => undefined);
+        }}
+        onClose={closePrintView}
+      />
       <div data-part="print.page">
         {job.isError ? (
           <Problem error={job.error} />
@@ -513,10 +524,14 @@ function SheetView({ sheet }: { sheet: ReactNode }) {
   const ui = useUiStoreApi();
   usePrintMode();
   useEffect(() => {
-    const frame = requestAnimationFrame(() =>
-      printNow(() => printStoreFor(ui).getState().setSheet(null)),
-    );
-    return () => cancelAnimationFrame(frame);
+    const frame = requestAnimationFrame(() => {
+      printNow(() => {
+        printStoreFor(ui).getState().setSheet(null);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [ui]);
   return (
     <div data-part="print" data-target="sheet" data-page="a4-portrait">

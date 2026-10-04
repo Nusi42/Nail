@@ -44,7 +44,7 @@ A recovery key is a second way in that only you hold.
 In **Settings → Privacy & data protection**, choose **Create recovery key**. Nail shows it
 **once**, as 56 characters in groups of four, for example:
 
-```
+```text
 K7Q2-M4XA-…-9TPW
 ```
 

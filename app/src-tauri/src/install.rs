@@ -80,6 +80,7 @@ impl UpdateSource {
 
     /// Applies the test variables: a loopback endpoint and its key replace
     /// the configured source. Anything else is ignored (logged).
+    #[must_use]
     pub fn with_test_override(self, endpoint: Option<String>, pubkey: Option<String>) -> Self {
         let (Some(endpoint), Some(pubkey)) = (endpoint, pubkey) else {
             return self;

@@ -1,6 +1,6 @@
-//! MCP (M1b WP23, ADR 0025): the client settings requests (ListMcpClients,
-//! CreateMcpClient, UpdateMcpGrants, RevokeMcpClient, ListMcpAudit,
-//! GetMcpServerInfo) and the running server with the core as its data
+//! MCP (M1b WP23, ADR 0025): the client settings requests (`ListMcpClients`,
+//! `CreateMcpClient`, `UpdateMcpGrants`, `RevokeMcpClient`, `ListMcpAudit`,
+//! `GetMcpServerInfo`) and the running server with the core as its data
 //! provider.
 //!
 //! The server itself lives in `nail-mcp`. [`Service::start_mcp_server`]
@@ -104,7 +104,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
 }
 
 /// The service as the MCP server's data provider.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct McpCore(pub Service);
 
 impl CoreAccess for McpCore {

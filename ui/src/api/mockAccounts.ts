@@ -183,14 +183,14 @@ function deriveId(d: MockData, source: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 48) || "account";
   let id = base;
-  for (let n = 2; idTaken(d, id); n++) id = `${base}-${n}`;
+  for (let n = 2; idTaken(d, id); n++) id = `${base}-${String(n)}`;
   return id;
 }
 
 function validateAccount(config: AccountConfig): string | null {
   if (!EMAIL_RE.test(config.email)) return "invalid email address";
   if (config.incoming.server.host.trim() === "") return "incoming host missing";
-  if (config.outgoing && config.outgoing.server.host.trim() === "") return "outgoing host missing";
+  if (config.outgoing?.server.host.trim() === "") return "outgoing host missing";
   if (config.identities.some((i) => !EMAIL_RE.test(i.email))) return "invalid identity address";
   return null;
 }

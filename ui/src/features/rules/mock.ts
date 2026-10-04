@@ -159,7 +159,7 @@ function saveRule(core: MockCore, rule: Rule, position: number | null): Response
   if (id === "") {
     const base = ruleIdBase(rule.name);
     id = base;
-    for (let n = 2; s.rules.some((r) => r.id === id); n++) id = `${base}-${n}`;
+    for (let n = 2; s.rules.some((r) => r.id === id); n++) id = `${base}-${String(n)}`;
   }
   const saved: Rule = { ...rule, id, name: rule.name.trim() };
   const index = s.rules.findIndex((r) => r.id === id);
@@ -171,8 +171,12 @@ function saveRule(core: MockCore, rule: Rule, position: number | null): Response
     rules.splice(at, 0, saved);
   }
   s.rules = locate(rules);
-  queueMicrotask(() => core.emit({ type: "RulesChanged" }));
-  return { type: "RuleSaved", rule: s.rules.find((r) => r.id === id) as Rule };
+  queueMicrotask(() => {
+    core.emit({ type: "RulesChanged" });
+  });
+  const stored = s.rules.find((r) => r.id === id);
+  if (!stored) return errorResponse("internal", `rule ${id} was not stored`);
+  return { type: "RuleSaved", rule: stored };
 }
 
 /** Messages a rule looks at: a folder, given messages, or its scope (all mail). */
@@ -290,7 +294,7 @@ function runRule(
   const rule = s.rules.find((r) => r.id === ruleId);
   if (!rule) return errorResponse("not_found", `rule ${ruleId} not found`);
   const messages = pool(core, folderId, messageIds);
-  if (!messages) return errorResponse("not_found", `folder ${folderId} not found`);
+  if (!messages) return errorResponse("not_found", `folder ${String(folderId)} not found`);
   const d = core.data;
   const matching = messages.filter((m) => explain(d, rule, m).matched);
   const runId = core.nextId("run-");
@@ -345,7 +349,9 @@ function undoRun(core: MockCore, runId: string): Response {
   }
   run.state = "undone";
   run.undoable = false;
-  queueMicrotask(() => core.emit({ type: "RuleRunFinished", run: { ...run } }));
+  queueMicrotask(() => {
+    core.emit({ type: "RuleRunFinished", run: { ...run } });
+  });
   return { type: "Queued", op_ids: opIds };
 }
 
@@ -361,7 +367,9 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
         return errorResponse("not_found", `rule ${request.rule_id} not found`);
       }
       s.rules = locate(s.rules.filter((r) => r.id !== request.rule_id));
-      queueMicrotask(() => core.emit({ type: "RulesChanged" }));
+      queueMicrotask(() => {
+        core.emit({ type: "RulesChanged" });
+      });
       return { type: "Done" };
     }
     case "ReorderRules": {
@@ -373,8 +381,11 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
       if (!complete) {
         return errorResponse("invalid_request", "the new order must list every rule once");
       }
-      s.rules = locate(ids.map((id) => s.rules.find((r) => r.id === id) as Rule));
-      queueMicrotask(() => core.emit({ type: "RulesChanged" }));
+      const byId = new Map(s.rules.map((r) => [r.id, r]));
+      s.rules = locate(ids.flatMap((id) => byId.get(id) ?? []));
+      queueMicrotask(() => {
+        core.emit({ type: "RulesChanged" });
+      });
       return { type: "Done" };
     }
     case "TestRule": {
@@ -383,7 +394,8 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
         return errorResponse("invalid_request", `condition: invalid regular expression ${bad}`);
       }
       const messages = pool(core, request.folder_id, []);
-      if (!messages) return errorResponse("not_found", `folder ${request.folder_id} not found`);
+      if (!messages)
+        return errorResponse("not_found", `folder ${String(request.folder_id)} not found`);
       const matches: ExplainedMatch[] = [];
       let scanned = 0;
       for (const m of messages) {

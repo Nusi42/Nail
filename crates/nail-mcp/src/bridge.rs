@@ -140,8 +140,8 @@ where
     let mut downstream: AsyncRwTransport<RoleServer, R, W> =
         AsyncRwTransport::new_server(reader, writer);
     let result = pump(&mut downstream, &mut upstream).await;
-    let _ = Transport::<RoleClient>::close(&mut upstream).await;
-    let _ = Transport::<RoleServer>::close(&mut downstream).await;
+    drop(Transport::<RoleClient>::close(&mut upstream).await);
+    drop(Transport::<RoleServer>::close(&mut downstream).await);
     result
 }
 

@@ -117,7 +117,7 @@ overdue confirmations themselves (`expire_confirmations`, then
 
 One audit entry per write when it ends: `allowed` (done), `declined`
 (denied, expired, vetoed), `error` (failed or invalid), `denied` (grant or
-rate limit). The detail is `write ` + JSON: kind, target ids (≤ 50 +
+rate limit). The detail is "write " + JSON: kind, target ids (≤ 50 +
 count), before / after lines **without mailbox content** (flags, folder
 ids, tag names, counts, times, "changed" markers), status, op ids,
 created ids, confirmation id. `mcp_audit.detail` is not sealed, so

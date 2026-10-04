@@ -124,7 +124,7 @@ pub struct PeerPolicy {
 pub(crate) fn peer_allowed(policy: &PeerPolicy, peer: std::net::IpAddr) -> bool {
     let peer = match peer {
         std::net::IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(peer, std::net::IpAddr::V4),
-        v4 => v4,
+        v4 @ std::net::IpAddr::V4(_) => v4,
     };
     if peer.is_loopback() {
         return true;
@@ -161,7 +161,7 @@ impl Incoming {
                     drop(stream);
                     continue;
                 }
-                let _ = stream.set_nodelay(true);
+                drop(stream.set_nodelay(true));
                 match &acceptor {
                     None => {
                         if tx.send((Box::new(stream), peer)).await.is_err() {
@@ -180,7 +180,7 @@ impl Incoming {
                                 .await
                             {
                                 Ok(Ok(tls)) => {
-                                    let _ = tx.send((Box::new(tls), peer)).await;
+                                    drop(tx.send((Box::new(tls), peer)).await);
                                 }
                                 Ok(Err(err)) => {
                                     tracing::debug!(%peer, %err, "TLS handshake failed");

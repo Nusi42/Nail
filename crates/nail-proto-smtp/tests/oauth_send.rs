@@ -2,6 +2,7 @@
 //! `nail-auth` token manager against the mock OAuth server, then send with
 //! XOAUTH2 through `SmtpTransport` to the mock SMTP server, which accepts
 //! exactly the tokens the OAuth server issued.
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::time::Duration;

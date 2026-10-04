@@ -9,6 +9,7 @@ import { createHash, createPrivateKey, generateKeyPairSync, sign } from "node:cr
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { defined } from "./defined";
 
 const KEY_ID = Buffer.from("4e41494c45324531", "hex");
 
@@ -20,7 +21,7 @@ function wrap(text: string): string {
 export function updateKey() {
   const pair = generateKeyPairSync("ed25519");
   const jwk = pair.privateKey.export({ format: "jwk" });
-  const raw = Buffer.from(jwk.x!, "base64url");
+  const raw = Buffer.from(defined(jwk.x, "the key's x"), "base64url");
   const privateKey = createPrivateKey({ key: jwk, format: "jwk" });
   const publicKey = wrap(
     `untrusted comment: minisign public key: ${KEY_ID.toString("hex").toUpperCase()}\n` +
@@ -32,7 +33,7 @@ export function updateKey() {
     sign(data: Buffer, file: string, version: string): string {
       const digest = createHash("blake2b512").update(data).digest();
       const signature = sign(null, digest, privateKey);
-      const trusted = `timestamp:${Math.floor(Date.now() / 1000)}\tfile:${file}\tversion:${version}`;
+      const trusted = `timestamp:${String(Math.floor(Date.now() / 1000))}\tfile:${file}\tversion:${version}`;
       const global = sign(
         null,
         Buffer.concat([signature, Buffer.from(trusted, "utf8")]),
@@ -100,11 +101,16 @@ export async function startUpdateServer(options: {
     }
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
   return {
     base,
     endpoint: `${base}/{{channel}}/latest.json`,
     requests,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise((resolve) =>
+        server.close(() => {
+          resolve();
+        }),
+      ),
   };
 }

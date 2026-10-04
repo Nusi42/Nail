@@ -2,6 +2,12 @@
 //! notifications, panels, mail reads, storage, HTTP, settings, logs, and
 //! the permission gate in front of them.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use std::collections::BTreeMap;
@@ -842,7 +848,7 @@ async fn panels_render_update_and_act() {
         changed.1,
         [PluginUiNode::Text {
             value: "Clicks: 1".into(),
-            style: Default::default()
+            style: nail_api::plugins::ui::PluginTextStyle::default()
         }]
     );
     let err = host

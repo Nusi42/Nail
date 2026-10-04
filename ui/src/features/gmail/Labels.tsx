@@ -83,7 +83,9 @@ export function LabelList({ node }: WidgetProps) {
                     unread: showCounts ? own.unread : 0,
                     pending: own.sync === "pending" ? "yes" : "no",
                   })}
-                  onClick={() => showLabel(store, account.id, own.tag ?? own.name)}
+                  onClick={() => {
+                    showLabel(store, account.id, own.tag ?? own.name);
+                  }}
                 >
                   <LabelSwatch label={own} />
                   <span data-part="label-list.name">{n.name}</span>

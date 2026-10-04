@@ -24,6 +24,7 @@ import {
  * working; `nail plugin dev` loading a folder and reloading it on changes.
  */
 const test = base.extend<{ nail: NailServer }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
   nail: async ({}, use) => {
     const server = await startNail();
     await use(server);
@@ -46,12 +47,6 @@ async function violations(page: Page) {
 /** The settings view at the section of a former settings tab (M5b). */
 function openSettings(page: Page, tab: string): Promise<Locator> {
   return openSettingsTab(page, tab);
-}
-
-async function closeDialog(page: Page, name: string) {
-  const dialog = page.getByRole("dialog", { name });
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
 }
 
 /**
@@ -265,7 +260,7 @@ function devConsole(folder: string, url: string): Console {
     env: { ...process.env, NAIL_LOG: "error", NAIL_LOCALE: "en" },
   });
   const lines: string[] = [];
-  createInterface({ input: child.stdout! }).on("line", (line) => lines.push(line));
+  createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
   return {
     child,
     lines,

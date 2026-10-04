@@ -458,8 +458,7 @@ impl PrivateKeyOps for SoftwareKey {
                 Ok(sig.to_der().as_bytes().to_vec())
             }
             (_, scheme) => Err(Error::Unsupported(format!(
-                "signing with {scheme:?} and {:?}",
-                self
+                "signing with {scheme:?} and {self:?}"
             ))),
         }
     }
@@ -598,10 +597,10 @@ mod tests {
             .unwrap();
         a.public_key().verify(scheme, b"data", &sig).unwrap();
         assert!(b.public_key().verify(scheme, b"data", &sig).is_err());
-        let ab = a.ecdh(&b.public_key().ec_point().unwrap()).unwrap();
-        let ba = b.ecdh(&a.public_key().ec_point().unwrap()).unwrap();
-        assert_eq!(ab, ba);
-        assert_eq!(ab.len(), 32);
+        let secret_of_a = a.ecdh(&b.public_key().ec_point().unwrap()).unwrap();
+        let secret_of_b = b.ecdh(&a.public_key().ec_point().unwrap()).unwrap();
+        assert_eq!(secret_of_a, secret_of_b);
+        assert_eq!(secret_of_a.len(), 32);
 
         let c = SoftwareKey::P384(p384::SecretKey::random(&mut OsRng));
         let scheme = c.public_key().default_scheme();

@@ -259,14 +259,14 @@ pub(crate) fn exchange_parts(
 
 /// The engine of an account: the running one, else a new one (disabled
 /// accounts, the room finder before the first sync).
-pub(crate) async fn engine_of(
+pub(crate) fn engine_of(
     service: &Service,
     account: &AccountConfig,
 ) -> Result<Arc<dyn ExchangeEngine>> {
     if let Some(running) = service.inner.exchange.running(&account.id) {
         return Ok(Arc::clone(&running.engine));
     }
-    setup::engine_for(service, account).await
+    setup::engine_for(service, account)
 }
 
 fn rfc3339(secs: i64) -> Option<String> {
@@ -456,7 +456,11 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             exchange_account(service, &account_id)?;
             let issues = settings.issues();
             if !issues.is_empty() {
-                return Err(invalid("automatic replies", &issues, |i| i.message_id()));
+                return Err(invalid(
+                    "automatic replies",
+                    &issues,
+                    nail_api::exchange::oof::AutomaticRepliesIssue::message_id,
+                ));
             }
             let (_, op_id) = queue(
                 service,
@@ -566,7 +570,12 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
 /// `GetExchangeStatus`.
 async fn status(service: &Service, account_id: &AccountId) -> Result<ExchangeStatus> {
     let account = exchange_account(service, account_id)?;
-    let (server, options) = exchange_parts(&account).expect("an Exchange account");
+    let Some((server, options)) = exchange_parts(&account) else {
+        return Err(ApiError::invalid_request(format!(
+            "account {account_id} is not an Exchange account"
+        ))
+        .into());
+    };
     let id = account_id.clone();
     let (record, folders, pending) = service
         .store()
@@ -650,7 +659,11 @@ async fn save_mailbox(
         issues.push(ExchangeMailboxIssue::Duplicate);
     }
     if !issues.is_empty() {
-        return Err(invalid("mailbox", &issues, |i| i.message_id()));
+        return Err(invalid(
+            "mailbox",
+            &issues,
+            ExchangeMailboxIssue::message_id,
+        ));
     }
     if !add && found.is_none() {
         return Err(ApiError::not_found(format!("mailbox {}", settings.address)).into());
@@ -705,7 +718,11 @@ async fn check_category(
         .await?;
     let issues = nail_exchange::mapping::categories::issues(settings, &others, except);
     if !issues.is_empty() {
-        return Err(invalid("category", &issues, |i| i.message_id()));
+        return Err(invalid(
+            "category",
+            &issues,
+            nail_api::exchange::ExchangeCategoryIssue::message_id,
+        ));
     }
     Ok(())
 }
@@ -833,7 +850,7 @@ async fn room_lists(
     if fetched.is_some() && !refresh {
         return Ok(cached);
     }
-    let engine = engine_of(service, account).await?;
+    let engine = engine_of(service, account)?;
     let lists = match engine.room_lists().await {
         Ok(lists) => lists,
         Err(err) if err.code == ErrorCode::Forbidden => {
@@ -866,7 +883,11 @@ async fn find_rooms(
     let issues =
         nail_api::scheduling::free_busy_issues(&["room@nail.invalid".to_owned()], from, to);
     if !issues.is_empty() {
-        return Err(invalid("range", &issues, |i| i.message_id()));
+        return Err(invalid(
+            "range",
+            &issues,
+            nail_api::scheduling::FreeBusyIssue::message_id,
+        ));
     }
     let id = account.id.clone();
     let key = room_list.map(str::to_owned);
@@ -874,7 +895,7 @@ async fn find_rooms(
         .store()
         .call(move |s| s.exchange_rooms(&id, key.as_deref()))
         .await?;
-    let engine = engine_of(service, account).await?;
+    let engine = engine_of(service, account)?;
     let rooms = if fetched.is_some() && !refresh {
         cached
     } else {

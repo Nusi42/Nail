@@ -85,7 +85,9 @@ export function FocusedTabs({ node }: WidgetProps) {
                   data-focus="all"
                   data-state={allActive ? "selected" : undefined}
                   aria-pressed={allActive}
-                  onClick={() => showFocus(store, account.id, inbox.id, null)}
+                  onClick={() => {
+                    showFocus(store, account.id, inbox.id, null);
+                  }}
                 >
                   {t("exchange-focus-all")}
                 </button>
@@ -99,7 +101,9 @@ export function FocusedTabs({ node }: WidgetProps) {
                   data-focus={focus}
                   data-state={active === focus ? "selected" : undefined}
                   aria-pressed={active === focus}
-                  onClick={() => showFocus(store, account.id, inbox.id, focus)}
+                  onClick={() => {
+                    showFocus(store, account.id, inbox.id, focus);
+                  }}
                 >
                   {t(`exchange-focus-${focus}`)}
                 </button>
@@ -149,7 +153,9 @@ export function FocusMoveButton({ message }: { message: MessageSummary }) {
       type="button"
       data-part="exchange.focus-move"
       data-focus={to}
-      onClick={() => openClassify(store, [message.id], to)}
+      onClick={() => {
+        openClassify(store, [message.id], to);
+      }}
     >
       {t(`exchange-move-to-${to}`)}
     </button>
@@ -207,7 +213,9 @@ export function ClassifyDialog({ close }: DialogProps) {
           data-part="form.checkbox"
           type="checkbox"
           checked={always}
-          onChange={(e) => setAlways(e.target.checked)}
+          onChange={(e) => {
+            setAlways(e.target.checked);
+          }}
         />
         <span data-part="form.check.label">
           {senders.length === 1

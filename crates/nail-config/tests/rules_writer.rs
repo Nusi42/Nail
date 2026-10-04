@@ -1,5 +1,6 @@
 //! `RulesDocument`: edits keep comments, blank lines and formatting of
 //! everything they do not change.
+#![cfg(test)]
 
 use nail_api::RuleId;
 use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextMatch, TextOp};
@@ -335,7 +336,7 @@ fn random_edit_sequences_stay_consistent() {
         seed ^= seed << 13;
         seed ^= seed >> 7;
         seed ^= seed << 17;
-        seed % n
+        usize::try_from(seed % n).unwrap()
     };
     let mut d = doc();
     for step in 0..200 {
@@ -343,21 +344,21 @@ fn random_edit_sequences_stay_consistent() {
         match next(5) {
             0 => {
                 let rule = simple(&format!("Rule {step}"));
-                d.upsert_rule(rule, Some(next(count + 1) as usize)).unwrap();
+                d.upsert_rule(rule, Some(next(count + 1))).unwrap();
             }
             1 if count > 0 => {
-                let id = d.rules()[next(count) as usize].id.clone();
+                let id = d.rules()[next(count)].id.clone();
                 d.remove_rule(&id).unwrap();
             }
             2 if count > 1 => {
                 let mut ids: Vec<RuleId> = d.rules().iter().map(|r| r.id.clone()).collect();
-                let a = next(count) as usize;
-                let b = next(count) as usize;
+                let a = next(count);
+                let b = next(count);
                 ids.swap(a, b);
                 d.reorder(&ids).unwrap();
             }
             3 if count > 0 => {
-                let mut r = d.rules()[next(count) as usize].clone();
+                let mut r = d.rules()[next(count)].clone();
                 r.actions.push(RuleAction::Tag {
                     tag: format!("t{step}"),
                 });
@@ -375,7 +376,7 @@ fn random_edit_sequences_stay_consistent() {
                 d.upsert_rule(r, None).unwrap();
             }
             _ if count > 0 => {
-                let mut r = d.rules()[next(count) as usize].clone();
+                let mut r = d.rules()[next(count)].clone();
                 r.enabled = !r.enabled;
                 d.upsert_rule(r, None).unwrap();
             }

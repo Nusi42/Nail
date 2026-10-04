@@ -73,7 +73,9 @@ export const actions: Feature["actions"] = {
   },
   /** Labels of the selected message. */
   "gmail.apply-labels": {
-    run: (ctx) => ctx.store.getState().openWindow(APPLY_LABELS_DIALOG),
+    run: (ctx) => {
+      ctx.store.getState().openWindow(APPLY_LABELS_DIALOG);
+    },
     enabled: selectedGmail,
   },
   /** `gmail.label-view "Work"`: a label's messages across folders. */

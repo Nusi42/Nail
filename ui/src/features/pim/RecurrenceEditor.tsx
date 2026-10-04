@@ -28,7 +28,7 @@ import { WEEKDAYS, splitPimTime } from "./time";
 
 export interface RecurrenceEditorProps {
   value: RecurrenceChoice;
-  onChange(value: RecurrenceChoice): void;
+  onChange: (value: RecurrenceChoice) => void;
   /** The series' start (the rule's anchor). */
   start: PimTime;
   disabled?: boolean;
@@ -110,7 +110,9 @@ export function RecurrenceEditor({
               value={value.rule.interval}
               min={1}
               max={999}
-              onChange={(interval) => setRule({ interval })}
+              onChange={(interval) => {
+                setRule({ interval });
+              }}
             />
           </div>
 
@@ -148,7 +150,9 @@ export function RecurrenceEditor({
                   type="radio"
                   name={`${ids.freq}-monthly`}
                   checked={value.rule.monthly === "day"}
-                  onChange={() => setRule({ monthly: "day" })}
+                  onChange={() => {
+                    setRule({ monthly: "day" });
+                  }}
                 />
                 <span>{t("pim-recurrence-monthly-day", { day: startDay.day })}</span>
               </label>
@@ -157,7 +161,9 @@ export function RecurrenceEditor({
                   type="radio"
                   name={`${ids.freq}-monthly`}
                   checked={value.rule.monthly === "weekday"}
-                  onChange={() => setRule({ monthly: "weekday" })}
+                  onChange={() => {
+                    setRule({ monthly: "weekday" });
+                  }}
                 />
                 <span>
                   {t("pim-recurrence-monthly-weekday", {
@@ -179,7 +185,9 @@ export function RecurrenceEditor({
                 type="radio"
                 name={`${ids.freq}-end`}
                 checked={value.rule.end.type === "never"}
-                onChange={() => setRule({ end: { type: "never" } })}
+                onChange={() => {
+                  setRule({ end: { type: "never" } });
+                }}
               />
               <span>{t("pim-recurrence-end-never")}</span>
             </label>
@@ -188,7 +196,9 @@ export function RecurrenceEditor({
                 type="radio"
                 name={`${ids.freq}-end`}
                 checked={value.rule.end.type === "count"}
-                onChange={() => setRule({ end: { type: "count", count: 10 } })}
+                onChange={() => {
+                  setRule({ end: { type: "count", count: 10 } });
+                }}
               />
               <span>{t("pim-recurrence-end-count")}</span>
             </label>
@@ -202,7 +212,9 @@ export function RecurrenceEditor({
                   value={value.rule.end.count}
                   min={1}
                   max={9999}
-                  onChange={(count) => setRule({ end: { type: "count", count } })}
+                  onChange={(count) => {
+                    setRule({ end: { type: "count", count } });
+                  }}
                 />
               </div>
             )}
@@ -211,9 +223,9 @@ export function RecurrenceEditor({
                 type="radio"
                 name={`${ids.freq}-end`}
                 checked={value.rule.end.type === "until"}
-                onChange={() =>
-                  setRule({ end: { type: "until", until: startDay.add({ months: 3 }) } })
-                }
+                onChange={() => {
+                  setRule({ end: { type: "until", until: startDay.add({ months: 3 }) } });
+                }}
               />
               <span>{t("pim-recurrence-end-until")}</span>
             </label>
@@ -224,7 +236,9 @@ export function RecurrenceEditor({
                 day={value.rule.end.until}
                 time={null}
                 tz={tz}
-                onChange={(day) => setRule({ end: { type: "until", until: day } })}
+                onChange={(day) => {
+                  setRule({ end: { type: "until", until: day } });
+                }}
               />
             )}
           </fieldset>
@@ -235,7 +249,9 @@ export function RecurrenceEditor({
         <button
           type="button"
           data-part="form.button"
-          onClick={() => onChange({ type: "simple", rule: defaultRule("weekly", startDay) })}
+          onClick={() => {
+            onChange({ type: "simple", rule: defaultRule("weekly", startDay) });
+          }}
         >
           {t("pim-recurrence-replace")}
         </button>

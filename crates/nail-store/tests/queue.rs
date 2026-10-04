@@ -1,4 +1,5 @@
 //! Operation queue: local apply, ordering, retry and crash recovery.
+#![cfg(test)]
 
 mod common;
 

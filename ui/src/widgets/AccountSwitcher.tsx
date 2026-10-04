@@ -62,7 +62,9 @@ export function AccountSwitcher({ node }: WidgetProps) {
                 ? `${account.email} (${stateText})`
                 : (stateText ?? (account.email || undefined))
             }
-            onClick={() => selectAccount(account.id)}
+            onClick={() => {
+              selectAccount(account.id);
+            }}
           >
             <span data-part="account-switcher.item.name">{nameOf(account)}</span>
             {showStatus && status && stateText && (

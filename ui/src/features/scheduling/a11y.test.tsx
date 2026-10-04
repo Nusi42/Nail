@@ -9,8 +9,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
-import type { ComponentType } from "react";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { dialogs, InvitationCard, MeetingPanel } from ".";
@@ -19,9 +17,12 @@ import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
 import { CANCEL_DIALOG, DIALOGS } from "./names";
 import { schedulingStoreFor } from "./store";
 import { localZone, makePimTime, todayIn } from "../pim/time";
+import { must } from "../../test/must";
 
 async function settle(env: Env): Promise<void> {
-  await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+  });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
@@ -159,7 +160,7 @@ describe("axe: attendee picker, meeting panel, dialogs", () => {
             attendees: [newAttendee("katherine@nasa.example", "Katherine Johnson")],
           });
       }
-      const Dialog = dialogs[name] as ComponentType<DialogProps>;
+      const Dialog = must(dialogs[name]);
       const { container } = renderWithProviders(
         <div role="dialog" aria-label={name}>
           <Dialog name={name} close={() => undefined} />

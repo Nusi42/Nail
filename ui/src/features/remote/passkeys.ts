@@ -15,27 +15,31 @@ import {
 
 export interface PasskeyApi {
   /** Whether this browser can use passkeys at all. */
-  supported(): boolean;
+  supported: () => boolean;
   /** Runs an assertion; resolves with `PublicKeyCredential.toJSON()`. */
-  authenticate(options: unknown): Promise<unknown>;
+  authenticate: (options: unknown) => Promise<unknown>;
   /** Runs a registration; resolves with `PublicKeyCredential.toJSON()`. */
-  register(options: unknown): Promise<unknown>;
+  register: (options: unknown) => Promise<unknown>;
 }
 
 /** The server sends `{ publicKey: … }` or the bare options JSON. */
-function unwrap<T>(options: unknown): T {
+function unwrap(options: unknown): unknown {
   if (options !== null && typeof options === "object" && "publicKey" in options) {
-    return (options as { publicKey: T }).publicKey;
+    return options.publicKey;
   }
-  return options as T;
+  return options;
 }
 
 export const browserPasskeys: PasskeyApi = {
   supported: () => browserSupportsWebAuthn(),
   authenticate: (options) =>
-    startAuthentication({ optionsJSON: unwrap<PublicKeyCredentialRequestOptionsJSON>(options) }),
+    startAuthentication({
+      optionsJSON: unwrap(options) as PublicKeyCredentialRequestOptionsJSON,
+    }),
   register: (options) =>
-    startRegistration({ optionsJSON: unwrap<PublicKeyCredentialCreationOptionsJSON>(options) }),
+    startRegistration({
+      optionsJSON: unwrap(options) as PublicKeyCredentialCreationOptionsJSON,
+    }),
 };
 
 /** Why a passkey ceremony did not produce a credential. */

@@ -42,10 +42,10 @@ export function checkTree(nodes: readonly PluginUiNode[], root = "body"): TreeIs
   const visit = (node: PluginUiNode, path: string, depth: number): void => {
     count += 1;
     if (count === MAX_UI_NODES + 1) {
-      issues.push({ path, message: `more than ${MAX_UI_NODES} nodes` });
+      issues.push({ path, message: `more than ${String(MAX_UI_NODES)} nodes` });
     }
     if (depth > MAX_UI_DEPTH) {
-      issues.push({ path, message: `nested deeper than ${MAX_UI_DEPTH}` });
+      issues.push({ path, message: `nested deeper than ${String(MAX_UI_DEPTH)}` });
       return;
     }
     const id = "id" in node ? node.id : undefined;
@@ -66,7 +66,7 @@ export function checkTree(nodes: readonly PluginUiNode[], root = "body"): TreeIs
     switch (node.type) {
       case "select":
         if (node.options.length > MAX_UI_ITEMS) {
-          issues.push({ path, message: `more than ${MAX_UI_ITEMS} options` });
+          issues.push({ path, message: `more than ${String(MAX_UI_ITEMS)} options` });
         }
         for (const value of node.default ?? []) {
           if (!node.options.some((o) => o.value === value)) {
@@ -76,17 +76,20 @@ export function checkTree(nodes: readonly PluginUiNode[], root = "body"): TreeIs
         break;
       case "table":
         if (node.rows.length > MAX_UI_ITEMS) {
-          issues.push({ path, message: `more than ${MAX_UI_ITEMS} rows` });
+          issues.push({ path, message: `more than ${String(MAX_UI_ITEMS)} rows` });
         }
         node.rows.forEach((row, i) => {
           if (row.length !== node.columns.length) {
-            issues.push({ path: `${path}.rows[${i}]`, message: "row length differs from columns" });
+            issues.push({
+              path: `${path}.rows[${String(i)}]`,
+              message: "row length differs from columns",
+            });
           }
         });
         break;
       case "message-list":
         if (node.messageIds.length > MAX_UI_ITEMS) {
-          issues.push({ path, message: `more than ${MAX_UI_ITEMS} messages` });
+          issues.push({ path, message: `more than ${String(MAX_UI_ITEMS)} messages` });
         }
         break;
       case "image": {
@@ -106,12 +109,16 @@ export function checkTree(nodes: readonly PluginUiNode[], root = "body"): TreeIs
         }
         break;
       case "stack":
-        node.children.forEach((child, i) => visit(child, `${path}.children[${i}]`, depth + 1));
+        node.children.forEach((child, i) => {
+          visit(child, `${path}.children[${String(i)}]`, depth + 1);
+        });
         break;
       default:
         break;
     }
   };
-  nodes.forEach((node, i) => visit(node, `${root}[${i}]`, 1));
+  nodes.forEach((node, i) => {
+    visit(node, `${root}[${String(i)}]`, 1);
+  });
   return issues;
 }

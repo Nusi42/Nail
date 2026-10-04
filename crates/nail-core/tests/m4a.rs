@@ -4,6 +4,8 @@
 //! previews, actions and manual job runs of a plug-in that is not running
 //! fail, an unknown veto has nothing to "Send anyway".
 
+#![cfg(test)]
+
 use nail_api::agents::{
     ActionActor, ActionAttribution, ActionKind, ActionPolicyMode, ActionTarget, ActionTargetKind,
     ConfirmationDecision, ConfirmationFilter, ConfirmationState, NewConfirmation,
@@ -367,7 +369,7 @@ async fn plugin_activity_and_host_requests() {
                 message_id: "m1".into(),
                 index: 0,
             },
-            context: Default::default(),
+            context: nail_api::context::UiContext::default(),
             client_id: None,
         },
     ] {

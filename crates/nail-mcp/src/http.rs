@@ -9,7 +9,7 @@
 //! Every request needs `Authorization: Bearer <token>`; the token's SHA-256
 //! is looked up in the store ([`nail_store::hash_mcp_token`]). Unknown or
 //! revoked tokens get `401` and an audit entry (at most
-//! [`DENIED_AUDITS_PER_MINUTE`] a minute; the rest are summed up). The listener binds the IPv4
+//! `DENIED_AUDITS_PER_MINUTE` a minute; the rest are summed up). The listener binds the IPv4
 //! loopback address only; rmcp additionally checks the `Host` header
 //! (DNS rebinding) and refuses browser `Origin`s.
 
@@ -70,6 +70,15 @@ pub struct McpServer<D: McpData> {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     task: Option<tokio::task::JoinHandle<()>>,
     endpoint_file: Option<PathBuf>,
+}
+
+impl<D: McpData> std::fmt::Debug for McpServer<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServer")
+            .field("url", &self.url)
+            .field("endpoint_file", &self.endpoint_file)
+            .finish_non_exhaustive()
+    }
 }
 
 fn bearer(headers: &HeaderMap) -> Option<&str> {
@@ -340,7 +349,7 @@ impl<D: McpData> McpServer<D> {
     pub async fn shutdown(mut self) {
         self.stop();
         if let Some(task) = self.task.take() {
-            let _ = task.await;
+            drop(task.await);
         }
     }
 

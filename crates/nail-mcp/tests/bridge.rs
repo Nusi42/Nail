@@ -1,6 +1,12 @@
 //! `nail mcp --client <name>`: an rmcp stdio client talks through the
 //! bridge to the HTTP server, with the same grants and audit.
 
+#![cfg(test)]
+
+#[expect(
+    dead_code,
+    reason = "the shared test helpers serve several test crates; each uses a subset"
+)]
 mod common;
 
 use common::{create_client, grant, start};
@@ -43,7 +49,7 @@ async fn the_bridge_forwards_stdio_to_the_app() {
             .is_err(),
         "the grant applies through the bridge"
     );
-    let _ = client.cancel().await;
+    drop(client.cancel().await);
     // Closing stdin ends the bridge.
     let ended = tokio::time::timeout(std::time::Duration::from_secs(10), bridge)
         .await
@@ -170,6 +176,6 @@ async fn the_bridge_carries_confirmations_both_ways() {
     assert_eq!(value["status"], "done", "{value}");
     assert_eq!(approving.0.lock().unwrap().len(), 1, "the form was shown");
     assert_eq!(env.data.write_names(), ["SendDraft"]);
-    let _ = client.cancel().await;
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), bridge).await;
+    drop(client.cancel().await);
+    drop(tokio::time::timeout(std::time::Duration::from_secs(10), bridge).await);
 }

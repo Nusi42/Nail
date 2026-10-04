@@ -39,7 +39,7 @@ shared files.
   layout's action definition) and are disabled when the action is.
 - Account avatar: the selected account, or the first real account while
   "All accounts" or a virtual account is selected; `role="img"` with
-  "Account: <name>", the shared `avatar` part inside (avatar palette, High
+  "Account: `<name>`", the shared `avatar` part inside (avatar palette, High
   contrast included). Not interactive: switching accounts stays in the folder
   pane / account switcher.
 
@@ -56,7 +56,7 @@ shared files.
 ### View host (`ViewHost.tsx`)
 
 - Renders the active view's window through the shared `WindowView`, inside a
-  `<section>` region named "<View> view" (`shell-view-region`) — not just the
+  `<section>` region named "`<View>` view" (`shell-view-region`) — not just the
   view's label, because the widgets inside (contact list, task list) already
   use that name and landmarks must be unique (axe `landmark-unique`).
 - **Views stay mounted** once shown (hidden with the `hidden` attribute), so

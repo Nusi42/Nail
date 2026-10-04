@@ -104,7 +104,7 @@ turns the server off.
 **Agents that connect over HTTP** ("Streamable HTTP" transport) use that
 address and send the token as a bearer token:
 
-```
+```http
 Authorization: Bearer nail_mcp_…
 ```
 

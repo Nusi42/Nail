@@ -35,12 +35,14 @@
 //!   fetches for sync policies; moves between mailboxes.
 //! * [`poll`] — adaptive polling ([`PollTimer`], [`FolderPoll`]); Graph
 //!   has no push for a desktop client.
-//! * [`testing`] (feature `testing`) — `MockGraphServer` on 127.0.0.1 with
+//! * `testing` (feature `testing`) — `MockGraphServer` on 127.0.0.1 with
 //!   an in-memory tenant, recorded-style fixtures and mutation helpers.
 //!
 //! Every socket the tests open binds 127.0.0.1 (ADR 0057).
 
 #![warn(missing_docs)]
+
+use std::fmt::Write as _;
 
 pub mod batch;
 pub mod client;
@@ -96,7 +98,7 @@ pub fn path_segment(text: &str) -> String {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'@') {
             out.push(char::from(byte));
         } else {
-            out.push_str(&format!("%{byte:02X}"));
+            let _ = write!(out, "%{byte:02X}");
         }
     }
     out

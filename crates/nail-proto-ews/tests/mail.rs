@@ -1,6 +1,7 @@
 //! The EWS engine against the mock EWS server: server info, versions,
 //! folder hierarchy and items with sync states, MIME, replayed writes,
 //! sending, logins, throttling and streaming notifications.
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -33,7 +34,7 @@ use pretty_assertions::assert_eq;
 fn client(server: &MockEwsServer, auth: EwsAuth) -> EwsClient {
     EwsClient::with_http(
         lane_http(CALL_TIMEOUT).unwrap(),
-        lane_http(Duration::from_secs(120)).unwrap(),
+        lane_http(Duration::from_mins(2)).unwrap(),
         &server.url(),
         auth,
     )
@@ -548,12 +549,12 @@ async fn change_keys_guard_updates() {
     assert!(matches!(err, EwsError::Conflict(_)), "{err:?}");
     let current = server.item(&item.id).unwrap();
     let fresh = ItemRef::with_key(current.id.clone(), Some(current.change_key.clone()));
-    let updated = engine
+    let new_ref = engine
         .client()
         .update_item(None, &fresh, "Message", &updates, "")
         .await
         .unwrap();
-    assert_ne!(updated.change_key, fresh.change_key);
+    assert_ne!(new_ref.change_key, fresh.change_key);
 }
 
 #[tokio::test]

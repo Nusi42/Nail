@@ -1,5 +1,6 @@
 //! OAuth2 flow, refresh and token management against the mock server of
 //! `nail-testkit-net`.
+#![cfg(test)]
 
 use std::sync::Arc;
 use std::time::Duration;

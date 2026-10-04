@@ -1,3 +1,4 @@
+import { chars } from "../../text/chars";
 /**
  * Calendar colours (WP164, ADR 0109): the palette the calendar list's "…"
  * menu and the calendar dialogs offer, which colour values the UI accepts
@@ -67,7 +68,7 @@ export function eventCardDeclarations(color: string | null): Record<string, stri
   const c = color.trim();
   return {
     "border-left-color": c,
-    "background-color": `color-mix(in srgb, ${c} ${EVENT_TINT}%, var(--nail-color-bg))`,
+    "background-color": `color-mix(in srgb, ${c} ${String(EVENT_TINT)}%, var(--nail-color-bg))`,
   };
 }
 
@@ -86,7 +87,9 @@ export function parseHex(hex: string): [number, number, number] | null {
   const h = hex.trim().replace(/^#/, "");
   const full =
     h.length === 3
-      ? [...h].map((c) => c + c).join("")
+      ? chars(h)
+          .map((c) => c + c)
+          .join("")
       : h.length === 6 || h.length === 8
         ? h.slice(0, 6)
         : null;
@@ -100,11 +103,8 @@ export function mixHex(a: string, percent: number, b: string): [number, number, 
   const y = parseHex(b);
   if (!x || !y) throw new Error(`not a hex colour: ${x ? b : a}`);
   const p = percent / 100;
-  return [0, 1, 2].map((i) => (x[i] as number) * p + (y[i] as number) * (1 - p)) as [
-    number,
-    number,
-    number,
-  ];
+  const mix = (u: number, v: number) => u * p + v * (1 - p);
+  return [mix(x[0], y[0]), mix(x[1], y[1]), mix(x[2], y[2])];
 }
 
 /** WCAG relative luminance of an sRGB colour (0–255 channels). */

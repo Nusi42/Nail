@@ -31,7 +31,9 @@ export function Popover({ part, label, data = {}, badge, children }: PopoverProp
       if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+    };
   }, [open]);
 
   const dataAttrs = Object.fromEntries(
@@ -39,6 +41,7 @@ export function Popover({ part, label, data = {}, badge, children }: PopoverProp
   );
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape from the button or the popover inside closes the popover.
     <span
       ref={root}
       data-part={`${part}.anchor`}
@@ -59,7 +62,9 @@ export function Popover({ part, label, data = {}, badge, children }: PopoverProp
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         aria-label={label}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => !o);
+        }}
       >
         {badge}
       </button>

@@ -15,8 +15,8 @@ export interface ReauthState {
   pending: boolean;
   waiters: ((ok: boolean) => void)[];
   /** Resolves `true` after a re-authentication, `false` when cancelled. */
-  request(): Promise<boolean>;
-  finish(ok: boolean): void;
+  request: () => Promise<boolean>;
+  finish: (ok: boolean) => void;
 }
 
 export const reauthStore = createStore<ReauthState>()((set, get) => ({

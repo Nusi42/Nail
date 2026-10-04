@@ -57,7 +57,9 @@ export function TextField({
         required={required}
         autoComplete={autoComplete}
         aria-describedby={hintId ? `${id}-hint` : undefined}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
       {hintId && (
         <span data-part="form.hint" id={`${id}-hint`}>
@@ -87,7 +89,9 @@ export function TextAreaField({
         data-part="form.textarea"
         name={name}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
     </div>
   );
@@ -165,7 +169,9 @@ export function SelectField({
         data-part="form.select"
         name={name}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       >
         {choices.map((c) => (
           <option key={c.value} value={c.value}>
@@ -192,7 +198,9 @@ export function CheckField({
         type="checkbox"
         name={name}
         checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
+        onChange={(event) => {
+          onChange(event.target.checked);
+        }}
       />
       <span data-part="form.check.label">{t(labelId, args)}</span>
     </label>
@@ -333,7 +341,9 @@ export function EndpointFields({
         name={`${name}-host`}
         value={server.host}
         required
-        onChange={(host) => onChange({ ...server, host: host.trim() })}
+        onChange={(host) => {
+          onChange({ ...server, host: host.trim() });
+        }}
       />
       <NumberField
         labelId="server-port"
@@ -341,25 +351,27 @@ export function EndpointFields({
         value={server.port}
         min={1}
         max={65535}
-        onChange={(port) =>
-          onChange({ ...server, port: port ?? defaultPort(protocol, server.tls) })
-        }
+        onChange={(port) => {
+          onChange({ ...server, port: port ?? defaultPort(protocol, server.tls) });
+        }}
       />
       <SelectField
         labelId="server-tls"
         name={`${name}-tls`}
         value={server.tls}
         choices={TLS_CHOICES}
-        onChange={(tls) => onChange(withTls(protocol, server, tls as TlsMode))}
+        onChange={(tls) => {
+          onChange(withTls(protocol, server, tls as TlsMode));
+        }}
       />
       {server.auth.method !== "none" && (
         <TextField
           labelId="server-username"
           name={`${name}-username`}
           value={usernameOf(server.auth)}
-          onChange={(username) =>
-            onChange({ ...server, auth: withUsername(server.auth, username) })
-          }
+          onChange={(username) => {
+            onChange({ ...server, auth: withUsername(server.auth, username) });
+          }}
         />
       )}
     </>
@@ -422,7 +434,9 @@ export function IncomingFields({
         name="incoming"
         protocol={mailProtocolOf(incoming)}
         server={incoming.server}
-        onChange={(server) => onChange({ ...incoming, server } as IncomingServer)}
+        onChange={(server) => {
+          onChange({ ...incoming, server });
+        }}
       />
     </Section>
   );
@@ -442,7 +456,9 @@ export function OutgoingFields({
         name="outgoing"
         protocol="smtp"
         server={outgoing.server}
-        onChange={(server) => onChange({ ...outgoing, server })}
+        onChange={(server) => {
+          onChange({ ...outgoing, server });
+        }}
       />
     </Section>
   );

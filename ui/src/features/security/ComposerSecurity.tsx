@@ -163,7 +163,9 @@ export function ComposerSecurity({
   const effective = choice ?? report?.suggested ?? plainChoice();
   const technology = resolveTechnology(effective, preference, report);
   const block = check.pending || check.isFetching ? null : sendBlock(effective, preference, report);
-  const set = (patch: Partial<SendCrypto>) => onChoice({ ...effective, ...patch });
+  const set = (patch: Partial<SendCrypto>) => {
+    onChoice({ ...effective, ...patch });
+  };
   const missing = (report?.recipients ?? []).filter(
     (r) => recipientState(r, "openpgp") !== "usable",
   );
@@ -182,19 +184,25 @@ export function ComposerSecurity({
           labelId="security-compose-sign"
           name="compose-sign"
           checked={effective.sign}
-          onChange={(sign) => set({ sign })}
+          onChange={(sign) => {
+            set({ sign });
+          }}
         />
         <CheckField
           labelId="security-compose-encrypt"
           name="compose-encrypt"
           checked={effective.encrypt}
-          onChange={(encrypt) => set({ encrypt })}
+          onChange={(encrypt) => {
+            set({ encrypt });
+          }}
         />
         <SelectField
           labelId="security-compose-technology"
           name="compose-technology"
           value={effective.technology ?? ""}
-          onChange={(v) => set({ technology: v === "" ? null : (v as CryptoTechnology) })}
+          onChange={(v) => {
+            set({ technology: v === "" ? null : (v as CryptoTechnology) });
+          }}
           choices={[
             { value: "", label: "security-compose-technology-auto" },
             ...TECHNOLOGIES.map((tech) => ({ value: tech, label: `security-technology-${tech}` })),
@@ -205,7 +213,9 @@ export function ComposerSecurity({
             type="button"
             data-part="form.button"
             data-action="crypto-defaults"
-            onClick={() => onChoice(null)}
+            onClick={() => {
+              onChoice(null);
+            }}
           >
             {t("security-compose-use-defaults")}
           </button>
@@ -241,7 +251,9 @@ export function ComposerSecurity({
             type="button"
             data-part="form.button"
             data-action="lookup-missing"
-            onClick={() => setLookupAsked(true)}
+            onClick={() => {
+              setLookupAsked(true);
+            }}
           >
             {t("security-compose-lookup", { count: missing.length })}
           </button>
@@ -277,13 +289,14 @@ export function ComposerSecurityWidget({ node }: WidgetProps) {
   const preference = (identity?.crypto ?? defaultIdentityCrypto()).technology;
   const open = composer !== null;
   const onReport = useCallback(
-    (r: RecipientKeysReport | null) => composerCryptoStore.getState().setReport(r, preference),
+    (r: RecipientKeysReport | null) => {
+      composerCryptoStore.getState().setReport(r, preference);
+    },
     [preference],
   );
-  const onChoice = useCallback(
-    (c: SendCrypto | null) => composerCryptoStore.getState().setChoice(c),
-    [],
-  );
+  const onChoice = useCallback((c: SendCrypto | null) => {
+    composerCryptoStore.getState().setChoice(c);
+  }, []);
 
   // A closed composer forgets its choice; the next message starts from the defaults.
   useEffect(() => {

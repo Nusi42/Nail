@@ -24,7 +24,9 @@ function at(entry: OutboxEntry, due: number, fn: () => void): void {
   timers.set(
     entry,
     wait > MAX_TIMEOUT_MS
-      ? setTimeout(() => at(entry, due, fn), MAX_TIMEOUT_MS)
+      ? setTimeout(() => {
+          at(entry, due, fn);
+        }, MAX_TIMEOUT_MS)
       : setTimeout(fn, Math.max(0, wait)),
   );
 }
@@ -199,7 +201,9 @@ export function sendDraft(
   };
   d.outbox.push(entry);
   d.outbox.sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
-  at(entry, due, () => deliver(core, entry, draft));
+  at(entry, due, () => {
+    deliver(core, entry, draft);
+  });
   return { type: "SendQueued", entry: { ...entry } };
 }
 

@@ -117,7 +117,7 @@ export function splitQuoted(text: string): BodyPiece[] {
   for (const line of text.split(/\r?\n/)) {
     const quoted = /^\s*>/.test(line);
     const last = pieces[pieces.length - 1];
-    if (last && last.quoted === quoted) last.text += `\n${line}`;
+    if (last?.quoted === quoted) last.text += `\n${line}`;
     else pieces.push({ quoted, text: line });
   }
   return pieces;

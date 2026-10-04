@@ -20,6 +20,7 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use nail_bench::corpus::Corpus;
+use nail_bench::num::f64_of;
 use nail_bench::run::{MockMode, RunOptions};
 use nail_bench::{BenchError, BenchReport, Budgets, CorpusSpec, Metric, merge_metrics};
 
@@ -192,8 +193,8 @@ async fn run(args: RunArgs) -> Result<bool, BenchError> {
             "synced {} messages ({:.0} per second, {:.1} MiB served, data dir {:.1} MiB)",
             facts.messages,
             facts.sync_messages_per_sec,
-            facts.corpus_bytes as f64 / 1_048_576.0,
-            facts.data_dir_bytes as f64 / 1_048_576.0
+            f64_of(facts.corpus_bytes) / 1_048_576.0,
+            f64_of(facts.data_dir_bytes) / 1_048_576.0
         );
         for q in &facts.queries {
             println!(
@@ -207,7 +208,7 @@ async fn run(args: RunArgs) -> Result<bool, BenchError> {
     Ok(args.no_check || report.passed())
 }
 
-fn check(args: CheckArgs) -> Result<bool, BenchError> {
+fn check(args: &CheckArgs) -> Result<bool, BenchError> {
     let budgets = read_budgets(&args.budgets)?;
     let mut lists = Vec::new();
     let mut corpus = None;
@@ -267,7 +268,7 @@ fn corpus(args: &CorpusArgs) -> Result<(), BenchError> {
     println!(
         "{} messages, {:.1} MiB, {} with attachments, {} replies, {} unread",
         stats.messages,
-        stats.bytes as f64 / 1_048_576.0,
+        f64_of(stats.bytes) / 1_048_576.0,
         stats.with_attachment,
         stats.replies,
         stats.unread
@@ -281,13 +282,15 @@ fn corpus(args: &CorpusArgs) -> Result<(), BenchError> {
 fn main() -> ExitCode {
     // Progress on stderr with `NAIL_LOG=info` (stdout carries the results
     // and the mock child's protocol).
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("NAIL_LOG")
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-        )
-        .with_writer(std::io::stderr)
-        .try_init();
+    drop(
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_env("NAIL_LOG")
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+            )
+            .with_writer(std::io::stderr)
+            .try_init(),
+    );
     let cli = Cli::parse();
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -302,7 +305,7 @@ fn main() -> ExitCode {
     let result = match cli.command {
         None => runtime.block_on(run(cli.run)),
         Some(Command::Run(args)) => runtime.block_on(run(args)),
-        Some(Command::Check(args)) => check(args),
+        Some(Command::Check(args)) => check(&args),
         Some(Command::Corpus(args)) => corpus(&args).map(|()| true),
         Some(Command::MockImap { spec }) => serde_json::from_str::<CorpusSpec>(&spec)
             .map_err(BenchError::from)

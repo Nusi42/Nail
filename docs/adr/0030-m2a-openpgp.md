@@ -124,7 +124,7 @@ account opted into indexing decrypted mail (ADR 0029).
   fingerprint; `invalid` for a failed check, a component that may not sign,
   or a signature older than its key; `key-revoked`; `key-expired` when the
   signature was made after the key (or subkey) expired — a signature made
-  before the expiry stays `valid`. `error` for an unparseable signature
+  before the expiry stays `valid`. `error` for an unparsable signature
   part. `signer_matches_from` compares with the protected `From` when there
   is one. *Changed by ADR 0035:* only with the `From` the reader shows
   (protected when marked, else outer; first address).
@@ -201,8 +201,8 @@ message, setup round trip).
   `ExportPublicKey` / `GenerateKey` / `DeleteKey` / `SetKeyTrust` /
   `UnlockKey` → `Keyring`; `LookupKeys` → `discovery::lookup` +
   `mark_known` (with an `HttpClient` over the core's reqwest: HTTPS only,
-  timeouts, 1 MiB cap); `CheckRecipientKeys` → `autocrypt::recipient_status`
-  + `recommend` + `Keyring::own_key_for`; `SendAutocryptSetup` /
+  timeouts, 1 MiB cap); `CheckRecipientKeys` → `autocrypt::recipient_status` +
+  `recommend` + `Keyring::own_key_for`; `SendAutocryptSetup` /
   `ImportAutocryptSetup` → `autocrypt::{new_passcode, create_setup_message,
   import_setup}`. Sending: `with_header` (Autocrypt) then
   `protect_message` with `Keyring::encryption_keys` (+ the own key) and

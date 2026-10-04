@@ -103,7 +103,7 @@ identity with `posting="top"`. **Reply all** includes every recipient
 except your own addresses. Forwards include the original's sender, date,
 subject and recipients, its text, and its attachments.
 
-Your signature is added below a `-- ` line. An identity can have separate
+Your signature is added below a "-- " line (two dashes and a space). An identity can have separate
 HTML and Markdown signatures; otherwise Nail converts the one it has.
 
 ## Drafts

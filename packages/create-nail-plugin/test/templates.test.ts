@@ -23,7 +23,9 @@ import {
 } from "./helpers";
 
 const root = tempDir("nail-templates-");
-afterAll(() => root.cleanup());
+afterAll(() => {
+  root.cleanup();
+});
 
 /** Scaffolds, type-checks, builds and packs a template; returns its folder. */
 function build(template: string): string {
@@ -216,7 +218,7 @@ describe("the attachment template", () => {
         },
       ],
     });
-    const long = Array.from({ length: 50 }, (_, i) => `line ${i}`).join("\n");
+    const long = Array.from({ length: 50 }, (_, i) => `line ${String(i)}`).join("\n");
     const big = await loaded.host.renderPreview("text", { name: "a.log" }, long);
     const stack = big.kind === "tree" ? big.tree[0] : undefined;
     expect(stack?.type === "stack" && stack.children.at(-1)).toEqual({

@@ -42,10 +42,10 @@ export function answerAttachment(core: MockCore, request: AttachmentRequest): Re
   }
   const attachment = body.attachments.find((a) => a.index === request.index);
   if (!attachment) {
-    return { type: "Error", code: "not_found", message: `attachment ${request.index}` };
+    return { type: "Error", code: "not_found", message: `attachment ${String(request.index)}` };
   }
   const state = core.data.features.attachments;
-  const key = `${request.message_id}#${request.index}`;
+  const key = `${request.message_id}#${String(request.index)}`;
   switch (request.type) {
     case "GetMessageAttachment":
       state.downloaded.push(key);

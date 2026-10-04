@@ -1,6 +1,7 @@
 //! Upgrading a database written by the M0 build (schema v1) to the current
 //! schema: data survives, threads are backfilled from the M0 thread keys,
 //! queued operations keep working.
+#![cfg(test)]
 
 use nail_api::{Flags, FolderId, MessageId};
 use nail_store::{

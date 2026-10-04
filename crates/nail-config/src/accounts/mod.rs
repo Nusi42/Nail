@@ -112,19 +112,22 @@ pub fn derive_account_id(hint: &str, taken: impl Fn(&str) -> bool) -> AccountId 
     }
     let slug = slug.trim_matches(['-', '.', '_']).to_owned();
     let mut base: String = slug.chars().take(MAX_ACCOUNT_ID_LEN - 4).collect();
-    base = base.trim_end_matches(['-', '.', '_']).to_owned();
+    base.truncate(base.trim_end_matches(['-', '.', '_']).len());
     if base.is_empty() {
-        base = "account".to_owned();
+        "account".clone_into(&mut base);
     }
     let free = |id: &str| id != AccountId::ALL && !taken(id);
     if free(&base) {
         return AccountId::new(base);
     }
-    (2..)
-        .map(|n| format!("{base}-{n}"))
-        .find(|id| free(id))
-        .map(AccountId::new)
-        .expect("an unbounded range always yields a free id")
+    let mut n: u64 = 2;
+    loop {
+        let id = format!("{base}-{n}");
+        if free(&id) {
+            return AccountId::new(id);
+        }
+        n += 1;
+    }
 }
 
 /// `accounts.kdl` as a document the UI edits.
@@ -180,7 +183,7 @@ impl AccountsDocument {
         let temp = dir.join(format!(".{ACCOUNTS_FILE}.tmp"));
         std::fs::write(&temp, self.text.as_bytes()).map_err(io)?;
         std::fs::rename(&temp, &target).map_err(|e| {
-            let _ = std::fs::remove_file(&temp);
+            crate::backup::remove_temp(&temp);
             io(e)
         })
     }
@@ -222,12 +225,14 @@ impl AccountsDocument {
                     crate::l10n::msg("config-accounts-not-writable"),
                 ));
             }
+            // `reparsed` equals `config`.
             self.text = canonical;
-            self.config = reparsed;
+            self.config = config;
             return Ok(());
         }
+        // `parsed` equals `config`.
         self.text = text;
-        self.config = parsed;
+        self.config = config;
         Ok(())
     }
 

@@ -54,8 +54,9 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
 
   // Encryption at rest on, then a recovery key from the Settings.
   await rpcOk(server, { type: "SetVaultEncryption", enabled: true }, "VaultStatus");
+  const running = server;
   await expect
-    .poll(async () => (await vaultState(server!)).state, { timeout: 60_000 })
+    .poll(async () => (await vaultState(running)).state, { timeout: 60_000 })
     .toBe("encrypted");
   const settings = await openSettingsTab(page, "Recovery key");
   await settings.getByRole("button", { name: "Create recovery key" }).click();
@@ -91,8 +92,10 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   const keychainFile = path.join(dirs.dataDir, "demo-keychain.json");
   const keychain = JSON.parse(readFileSync(keychainFile, "utf8")) as Record<string, string>;
   expect(keychain[vaultFile.key_ref]).toBeDefined();
-  delete keychain[vaultFile.key_ref];
-  writeFileSync(keychainFile, JSON.stringify(keychain));
+  const remaining = Object.fromEntries(
+    Object.entries(keychain).filter(([ref]) => ref !== vaultFile.key_ref),
+  );
+  writeFileSync(keychainFile, JSON.stringify(remaining));
 
   // Nail starts locked and asks for the recovery key by itself.
   server = await startNail({ dirs });
