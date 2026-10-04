@@ -26,7 +26,7 @@ The repo lives in a OneDrive folder. A local, gitignored `.cargo/config.toml` po
 
 ## 3. Repository layout
 
-```
+```text
 Cargo.toml                 # workspace; default-members exclude the Tauri app
 package.json               # npm workspaces: ui, e2e
 crates/
@@ -66,12 +66,14 @@ docs/ (internal)  userDocs/en, userDocs/de (user-facing)
 Gate: the default UI is driven entirely by `defaults/theme.kdl` + `defaults/layout.kdl`; unit and Playwright tests run in CI.
 
 ### WP0 — Scaffold and contract
+
 - Cargo workspace with all crates above (compiling stubs), npm workspaces (`ui`, `e2e`), `rustfmt.toml`, clippy config, ESLint/Prettier, `.github/workflows/ci.yml` skeleton.
 - `nail-api`: domain types (`AccountId`, `Account`, `Folder` with role, `MessageId`, `MessageSummary`, `MessageBody` {text, sanitized_html, attachments}, `Flags`), `ResolvedTheme`, `ResolvedLayout` (opaque JSON trees in M0), `Request`/`Response`/`Event` enums, error type; ts-rs export + staleness test.
 - ADR 0001 (npm workspaces), ADR 0002 (RPC protocol).
 - **Done when:** `cargo test --workspace`, `npm test` pass on the empty skeleton.
 
 ### WP1 — nail-config (theme + layout)
+
 - Parse `theme.kdl` (tokens, modes light/dark, parts with states and data conditions, icons, message section) and `layout.kdl` (windows, containers split/stack/tabs, widgets with options, row templates, actions, keys, toolbars, menus, breakpoints).
 - Sparse files with `extends="default"`: merge onto shipped defaults; token references `$color.accent` resolved.
 - Validation errors with file, line, column and a readable message; invalid file → keep last valid config.
@@ -81,18 +83,21 @@ Gate: the default UI is driven entirely by `defaults/theme.kdl` + `defaults/layo
 - **Tests:** parsing every section, merge semantics, error positions, round-trip of defaults, schema snapshot.
 
 ### WP2 — nail-store
+
 - SQLite schema v1: accounts, folders (role, uidvalidity, uidnext), messages (envelope, flags, thread key, blob hash), op_queue; migrations table.
 - Blob store: put/get by sha256, zstd, dedup.
 - Operation queue: enqueue → apply locally → pending → replayed via a `Replayer` trait → done/failed; survives restart.
 - **Tests:** migrations from empty, CRUD, blob dedup, queue ordering and restart recovery (tempdir).
 
 ### WP3 — nail-mime, nail-proto-imap, nail-testkit
+
 - `nail-mime`: parse raw RFC 5322 into `MessageSummary` + `MessageBody`; HTML sanitized with `ammonia` (no scripts, remote images stripped/flagged).
 - `nail-proto-imap`: connect (implicit TLS / STARTTLS / plaintext-for-tests), LOGIN + AUTHENTICATE PLAIN, CAPABILITY, LIST with SPECIAL-USE roles, EXAMINE, UID FETCH of flags/envelope/BODY.PEEK[], incremental fetch via UIDVALIDITY/UIDNEXT. Read-only.
 - `nail-testkit`: in-process mock IMAP server over a folder of `.eml` files; a corpus of normal, HTML, multipart, malformed and hostile messages; `seed_demo(store)` for the UI.
 - **Tests:** MIME corpus snapshots, sanitizer blocks script/tracking pixels, IMAP client against the mock server (list, fetch, incremental, bad credentials).
 
 ### WP4 — UI renderer
+
 - `NailClient` interface with `TauriTransport`, `WebSocketTransport`, `MockTransport`.
 - Layout engine: resolved layout JSON → React tree via a widget registry; containers `split` (resizable), `stack`, `tabs`; breakpoints by window width.
 - Theme compiler: tokens → CSS custom properties; parts → one generated stylesheet keyed on `[data-part]` + state attributes; light/dark mode switch.
@@ -103,6 +108,7 @@ Gate: the default UI is driven entirely by `defaults/theme.kdl` + `defaults/layo
 - **Tests (Vitest):** layout engine, theme compiler, template language, each widget with MockTransport, i18n fallback, lint rule self-test.
 
 ### WP5 — Core wiring, server, CLI, desktop shell
+
 - `nail-core`: `Service` owning store + config + sync; handles every `Request`; broadcasts `Event`s; sync engine pulls IMAP → store (read-only).
 - `nail-server`: axum on 127.0.0.1; serves `ui/dist`, `/api/ws` (RPC + events), `/api/blob/:hash`.
 - `nail-cli`: `nail serve [--port] [--data-dir] [--seed demo] [--config-dir]`.
@@ -110,11 +116,13 @@ Gate: the default UI is driven entirely by `defaults/theme.kdl` + `defaults/layo
 - **Tests:** Service request handling with testkit, server WebSocket round-trip, CLI arg parsing.
 
 ### WP6 — E2E and CI
+
 - Playwright (`e2e/`): `webServer` runs `nail serve --seed demo` on a free port with a temp data dir.
 - Scenarios: default three-pane layout renders; folders and messages from seed appear; selecting a message shows its body inside a sandboxed iframe; keyboard navigation; editing the theme file hot-reloads a CSS variable; editing the layout file moves a pane; German locale falls back to English strings; axe accessibility scan passes.
 - CI (`windows-latest`): fmt, clippy `-D warnings`, `cargo test`, `npm ci`, lint, Vitest, UI build, Playwright.
 
 ### WP7 — Docs
+
 - `docs/adr/*`, `docs/dev-setup.md` (build, test, run).
 - `userDocs/en/`: getting started, theme reference and layout reference (M0 subset), `userDocs/de/` placeholder.
 
@@ -127,7 +135,8 @@ Status of M0: done (gate passed). M0 follow-ups are folded into the work package
 
 **Status:** M1a and M1b done; the automated gate passed on an independent verify run — `cargo test --workspace` 965 tests, Vitest 416 (stable under CPU load after a timing fix), Playwright 39 scenarios incl. every WP14 and WP25 scenario and the desktop WebView2 smoke test, clippy / fmt / ESLint / tsc / Prettier clean. Review findings fixed (ADR 0028). WP24's toolbar / key binding / column editing UI is deferred (see "M1b follow-ups" below). Next: the human gate (two weeks as the only mail client), which needs the owner tasks below.
 
-**Scope decisions for M1**
+### Scope decisions for M1
+
 - Gmail works in M1 through IMAP + SMTP with OAuth2 (XOAUTH2). The Gmail API engine (decided in the design review) moves to M3, next to the other proprietary-API engine (Exchange); both need OAuth app registration and mock REST servers.
 - The plug-in preview moves to M2, as the design's plug-in section says.
 - OAuth needs registered client ids for Google and Microsoft. Nail reads them from configuration; registering the apps is an owner task (see "Owner tasks"). Tests use a mock OAuth server.
@@ -137,12 +146,14 @@ M1 runs as two waves (two workflows), each with its own review, fix and verify s
 ### Wave M1a — Mail engine
 
 #### WP10 — Contract and accounts config (first, sequential)
+
 - `nail-api`: account configuration types (incoming IMAP/POP3, outgoing SMTP, auth method password / OAuth2 / client certificate, TLS mode, sync policy per folder), `Identity`, `VirtualAccount` (members, folder mapping, default identity, per-domain identity rules), `ThreadSummary`, `SearchQuery` / `SearchHit`, `Draft` (plain-text body in M1a; HTML/Markdown fields reserved for M1b), op results.
 - New requests: `DiscoverAccount{email}`, `TestAccount{config}`, `AddAccount`, `UpdateAccount`, `RemoveAccount`, `ListIdentities`, virtual-account CRUD, `UpdateFlags`, `MoveMessages`, `DeleteMessages`, `ListThreads`, `GetThread`, `Search`, `SaveDraft`, `SendDraft{delay}`, `CancelSend`, `ListOutbox`. New events: `OpStatus`, `SendStatus`, `NewMail`, `AccountStatus` (online / offline / auth error).
 - `accounts.kdl` in the config dir (accounts, identities, virtual accounts; secrets never in the file, only keychain references), parsed in `nail-config` with the same error/position machinery, plus JSON Schema.
 - ADRs: accounts file format, protocol additions.
 
 #### WP11 — IMAP engine, full (parallel)
+
 - IDLE with reconnect and 29-minute re-issue; NOOP polling fallback; IDLE on Inbox by default, other folders configurable.
 - CONDSTORE/QRESYNC: flag changes and expunges (`VANISHED`) since `HIGHESTMODSEQ`; fallback full `UID FETCH 1:* FLAGS` diff when unsupported (*carry-over: sync picks up flag changes and deletions*).
 - Writes: `UID STORE` flags, `MOVE` (fallback `COPY` + `\Deleted` + `UID EXPUNGE`), `APPEND` (drafts, sent copies) with `UIDPLUS` results, folder `CREATE` / `RENAME` / `DELETE`.
@@ -150,19 +161,23 @@ M1 runs as two waves (two workflows), each with its own review, fix and verify s
 - Extend the testkit mock server: IDLE push, MODSEQ / CONDSTORE / QRESYNC, STORE, MOVE, COPY, APPEND, EXPUNGE, UIDPLUS, XOAUTH2, fault injection (drop connection mid-IDLE, slow server).
 
 #### WP12 — Outgoing, POP3, auth, discovery (parallel)
+
 - `nail-proto-smtp`: submission via `lettre` (implicit TLS 465, STARTTLS 587, PLAIN / LOGIN / XOAUTH2), size check, optional DSN; testkit mock SMTP server that records messages.
 - `nail-proto-pop3`: in-house client (STLS, USER/PASS, APOP, SASL PLAIN, CAPA, UIDL, TOP, RETR, DELE, QUIT); leave-on-server policies (delete after N days, delete when deleted locally); testkit mock POP3 server.
 - `nail-auth`: OAuth2 authorization code + PKCE with a loopback redirect, token refresh, provider registry (Google, Microsoft; client ids from configuration); secret storage in the OS keychain (`keyring`) behind a trait, with an in-memory backend for tests.
 - `nail-discovery`: Mozilla ISPDB, `autoconfig.<domain>` and `/.well-known/autoconfig`, RFC 6186 SRV records, Microsoft Autodiscover lookup, common-host guessing; ranked results returned for confirmation. Tests against mock HTTP and DNS layers.
 
 #### WP13 — Store v2, threading, search (parallel)
+
 - Store migration v2: identities, virtual accounts, message tags (IMAP keywords), thread ids, `message_id` / `references` columns, per-folder `highestmodseq`, outbox table.
 - Operation queue fixes (*carry-over*): per-account ordering and passes; sync-side merge that keeps local flags while a pending op for that message exists.
 - Threading: JWZ over Message-ID / In-Reply-To / References with subject fallback; incremental updates; cross-account threads for virtual accounts.
 - `nail-search`: Tantivy index (headers, decoded text, attachment names), incremental add/remove, and the design's query language (`from: to: subject: has:attachment is:unread is:flagged tag: account: folder: before: after: size>`, quotes, AND / OR / NOT, parentheses) with a hand-written parser and precise error positions.
 
 #### WP14 — Integration: accounts, sync, send, virtual accounts, UI
+
 Split in execution: the UI part (WP14-UI) runs in parallel with WP11–WP13 against the WP10 contract and `MockTransport`; the core part and the Playwright scenarios (WP14-core) run afterwards, sequentially.
+
 - `nail-core`: account manager (load/save `accounts.kdl`, keychain), per-account sync engines (IMAP IDLE loop + polling, POP3 schedule), op replayers (IMAP flags/move/delete/append; POP3 delete policies), outbox with undo-send delay and send-later, Sent copy via APPEND (skipped for servers that save it automatically, e.g. Gmail), virtual-account routing (folder mapping by role, Message-ID dedupe, reply identity selection), search and thread requests, `AccountStatus` events.
 - UI: account setup wizard (email → discover → confirm → test → save; password or OAuth), account and identity settings, virtual-account editor, unified inbox (built-in "All accounts" virtual account), thread view, flag / move / delete / archive actions with keybindings, search bar with query-language hints, a minimal plain-text composer (upgraded in M1b), outbox view, account status indicators.
 - Every new string in `locales/en`; every widget themeable; default layout updated.
@@ -172,23 +187,28 @@ Split in execution: the UI part (WP14-UI) runs in parallel with WP11–WP13 agai
 ### Wave M1b — Authoring, rules, agents, customization
 
 #### WP20 — Contract for M1b (first, sequential)
+
 Draft rich bodies (HTML, Markdown source, attachments, inline images, reply/forward context), rules model and requests (list / save / test / run / undo run), MCP client grants and audit entries, config write-back requests (layout patches), merge-dialog requests (preview / apply), UI-context plumbing, saved searches.
 
 #### WP21 — Composer (parallel)
+
 - `nail-compose`: MIME building (`mail-builder`): `multipart/alternative` (text + HTML), `multipart/related` for `cid:` images, attachments, optional `text/markdown` part; Markdown rendering with `comrak` (CommonMark + GFM + footnotes + highlighted code); per-identity mail stylesheet inlined with `css-inline`; outgoing HTML sanitized; HTML → text; reply/forward quoting (HTML blockquote, Markdown `>`), top/bottom posting and localized quote header per identity; signatures (HTML and Markdown variants); templates with variables.
 - UI: TipTap HTML editor (tables, images, links, source view), CodeMirror 6 Markdown editor with side-by-side preview rendered by the core, plain-text mode; mode switching with a lossy-conversion warning; drafts autosave (local + server Drafts); attachment reminder; identity picker; address autocomplete from collected addresses.
 
 #### WP22 — Rules engine (parallel)
+
 - `rules.kdl` (parsed in `nail-config`) and `nail-rules`: triggers (arrival, on send, schedule, manual), nested all / any / not conditions (headers, regex, query language, attachments, size, date, flags/tags, account, auth results, list-id), actions (move, copy, delete, archive, tag, flag, mark read, forward / redirect, reply with template, notify / suppress, stop); dry-run "test rule"; every run goes through the op queue and can be undone as one unit.
 - UI: rule list and visual editor, text view of the same rule, "create rule from message", test-results preview.
 
 #### WP23 — MCP server, read-only (parallel)
+
 - `nail-mcp` with `rmcp`: Streamable HTTP on 127.0.0.1 with per-client bearer tokens; `nail mcp --client <name>` stdio bridge to the running app over a named pipe; the design's resources (accounts, folders, messages incl. raw and attachments, threads, rules, `ui/context`) and read tools (`search_messages`, `get_message`, `get_thread`, `list_folders`, `get_ui_context`); resource subscriptions for new mail and UI context.
 - Grants: new clients have **no access until granted** (decided); per-account scope; separate grants for raw source, attachments, encrypted content and UI context; audit log; message content marked as untrusted data.
 - UI: MCP client settings (create token, grant scopes, revoke, audit log view); an on-screen indicator while an agent reads the UI context.
 - Tests with an MCP client (`rmcp` client) against the server.
 
 #### WP24 — Customization tooling (parallel)
+
 - Inspector: element-picker overlay showing part path, states, matching theme rules and the layout node, with "open file at line".
 - Write-back: split sizes, column order, toolbar order and keybinding edits made in the UI are written into `layout.kdl`, with comments and formatting preserved.
 - Merge dialog for applying a shared theme or layout (per-section keep mine / take theirs, live preview, conflict flags, backup + revert).
@@ -196,12 +216,16 @@ Draft rich bodies (HTML, Markdown source, attachments, inline images, reply/forw
 - Saved searches as smart folders placeable in the layout.
 
 #### WP25 — Integration for M1b (sequential)
+
 Wire everything, update the default layout, write docs (`userDocs/en`: composer, Markdown mail, rules, MCP setup, inspector and customization), and add the Playwright scenarios below.
+
 - **Playwright:** compose and send HTML and Markdown mails (assert the MIME parts received by the mock SMTP server); reply quoting in both modes; draft autosave and restore; a rule moves arriving mail and its run can be undone; test-rule preview; an MCP client lists messages only after a grant; the inspector shows a part path; dragging a divider writes `layout.kdl`; the merge dialog applies a theme; the config error list shows two broken files; **desktop app smoke test over WebView2 CDP** (*carry-over*).
 - *Done (ADR 0027):* all of the above in `e2e/tests/{composer,rules,mcp,customization,desktop,a11y}.spec.ts`. Additions: `ListDrafts` (drafts are continued from the outbox window, which is how "restore" works after a reload), per-identity `posting` / `mail-style` in `accounts.kdl`, "Retry" for failed writes, axe scans of the demo-multi windows. The desktop smoke test runs locally and is gated behind `NAIL_E2E_DESKTOP=1` in CI.
 
 #### M1b follow-ups (deviations and deferrals)
+
 Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted.
+
 - **WP24 editing UI for toolbar order, key bindings and column order** — deferred to M2. The `layout.kdl` write-back for all three exists and is tested (ADR 0026, `ui/src/features/customization/writeBack.ts`); only split sizes are edited from the UI (dragging a divider). Needs a toolbar reorder, a key-binding editor and column reordering in the Customize tab.
 - **`nail mcp` bridge over loopback HTTP instead of a named pipe** — kept (ADR 0025: the pipe would need its own auth; the loopback server already checks tokens, Host and Origin).
 - **Headless start of `nail mcp`** when the app is not running — deferred to M2 (needs a single-instance lock on the data directory; ADR 0025).
@@ -211,6 +235,7 @@ Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted
 - Smaller items from ADR 0027 (right-click menus, alt text of inline images in reopened HTML drafts, lazy-loaded editors, a fixed MCP port setting) — M2 polish.
 
 ### Owner tasks (outside the code)
+
 - Register OAuth apps for Google (Gmail IMAP/SMTP scope) and Microsoft (Outlook.com / Microsoft 365 IMAP/SMTP scopes) and provide the client ids.
 - Provide real test accounts for the manual two-week gate.
 
@@ -220,7 +245,8 @@ Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted
 *Status: M2 automated gate PASSED on the independent M2d verify* — `cargo test --workspace` 1905 tests, Vitest ui 877 + SDK 50 + template 21 (stable over 5 runs, including under CPU load), Playwright 72 scenarios (incl. the desktop smoke test and every wave's scenarios), clippy / fmt / ESLint / tsc / Prettier clean on Windows. Its two findings are fixed post-M2 (`nail plugin dev` reloads a plug-in's catalogs on every hot reload, also when only a locale file changed; host log lines name dev plug-ins by their resolved name). Still unproven until the first CI run on GitHub: the installer smoke job, the desktop smoke job (`NAIL_E2E_DESKTOP=1`), `cargo deny` with advisories and the interop job against real Dovecot / Stalwart servers (offline runs against the mocks pass). Open human gates: the security review sign-off (incl. the plug-in sandbox), the external pentest before internet mode, the owner's decision on the encryption-at-rest default, and OAuth client ids + real test accounts for the M1 two-week gate.
 **Human gates:** (1) a security review of crypto, the HTML sandbox and the remote UI (the design's M2 gate; the agents' security reviews prepare it, a human signs it off); (2) an external penetration test before the remote UI's internet mode can be unlocked — that stays locked in M2.
 
-**Scope decisions for M2**
+### Scope decisions for M2
+
 - **Licences.** Nail is closed source for now, so M2 adds no GPL/LGPL/AGPL dependency, and `cargo-deny` enforces a licence allowlist in CI. Consequence: OpenPGP uses **rPGP** (`pgp` crate, MIT/Apache) instead of Sequoia (LGPL), unless the owner decides otherwise. MPL-2.0 is acceptable (file-level copyleft, unmodified use).
 - **No OpenSSL build dependency** unless an ADR shows there is no pure-Rust or Windows-native alternative (S/MIME: RustCrypto `cms` + Windows certificate store; encryption at rest: evaluated in WP33).
 - **Encryption at rest** is implemented as a setting. Its default (on or off) is still an open owner decision; until then it ships **off**, with the recommendation to turn it on recorded in the UI and docs.
@@ -234,30 +260,37 @@ M2 runs as four waves (four workflows), each shaped like the M1 waves: contract 
 **Status:** WP30–WP35 done (ADRs 0029–0034); automated suites green (cargo, Vitest, Playwright incl. `e2e/tests/security.spec.ts`). Review findings fixed (ADR 0035): Autocrypt keys bound to their header's address with per-address trust, signers bound to the displayed `From`, the MCP `encrypted` gate follows the reader, drafts of mail that goes out encrypted (defaults, Autocrypt) stay off the server and earlier plain copies are removed, `authserv-id` trusted only when configured (new `SuggestAuthservId` + account settings "Sender checks"). Next: independent verify; the M2 human security review gate stays open.
 
 #### WP30 — Contract (sequential)
+
 *Done (ADR 0029):* protocol module `nail_api::security` (+ optional fields on `MessageBody`, `Identity`, `Draft`, `SendDraft`; error codes `locked`, `no_key`, `crypto`), identity `crypto` node in `accounts.kdl`, store v5 with tested accessors (keyring, trust, Autocrypt peers, vault state, message security, settings), stub crates with library smoke tests, slots for WP31–WP34 (incl. `nail-mime` modules and `corpus/crypto/{pgp,smime}`). The core serves the security settings and vault status; other security requests answer `unsupported`, and sign / encrypt on send is refused until WP35.
 Per-message `SecurityStatus` (signed / encrypted / verified, signer identity, key or certificate id, trust level, chain summary, header-protection state); `AuthResults` (DKIM / SPF / DMARC / ARC from `Authentication-Results`); key and certificate management requests (list, import, export public, generate OpenPGP key, delete, set trust, look up by address via WKD / keys.openpgp.org, import PKCS#12, list Windows-store certificates); per-identity crypto settings (default sign / encrypt, preferred technology, Autocrypt prefer-encrypt); compose-time recipient key status; `SendDraft` sign/encrypt options; encryption-at-rest settings and status; stub crates `nail-pgp`, `nail-smime`, `nail-vault` (at-rest encryption).
 
 #### WP31 — OpenPGP and Autocrypt (parallel)
+
 rPGP-based `nail-pgp`: keyring (public keys + secret keys encrypted with a passphrase or a random key kept in the OS keychain), generate (Ed25519/X25519 default, RSA import), import / export, PGP/MIME sign, encrypt, sign+encrypt, decrypt, verify (RFC 3156); inline PGP read-only; header protection for encrypted mail (encrypted subject shown as "..." on the wire); Autocrypt Level 1 (parse headers, peer state, prefer-encrypt, setup message); key discovery via WKD and keys.openpgp.org behind injectable HTTP; trust model (unknown / verified / autocrypt-gossip). Tests with interoperability vectors (messages produced by GnuPG and Thunderbird checked into the corpus).
 *Done (ADR 0030):* rPGP 0.20; GnuPG 2.4 vectors in Thunderbird's MIME layout (`corpus/crypto/pgp/generate.sh`); GnuPG verifies and decrypts Nail's output. Not done: OpenPGP v6 keys / SEIPD v2 output, designated revokers, removing the RFC 9788 legacy-display part.
 
 #### WP32 — S/MIME (parallel)
+
 `nail-smime`: CMS SignedData / EnvelopedData via RustCrypto (`cms`, `x509-cert`, `rsa`, `p256` …); S/MIME 4.0 (RFC 8551) sign (detached `multipart/signed` and opaque), encrypt (AES-GCM / AES-CBC for compatibility), decrypt, verify; certificate import from PKCS#12 and from the Windows certificate store (`windows` crate: CryptoAPI / CNG), chain building and validation against the Windows trust store, expiry and key-usage checks, revocation marked as "not checked" in M2; smartcards (PKCS#11) deferred to M4. Test vectors from OpenSSL-generated fixtures (generated once, checked in).
 *Done (ADR 0031):* RustCrypto `cms` / `x509-cert` 0.2, own chain validation, `p12-keystore`, CNG keys that stay in Windows; OpenSSL 3.5 vectors both ways. Not done: RSA-OAEP output, name / policy constraints (such chains are `invalid`), AIA fetching, S/MIME header protection.
 
 #### WP33 — Data protection (parallel)
+
 `nail-vault` + store/search integration hooks: encryption at rest for the database, blob store and search index (evaluate SQLCipher-compatible options without an OpenSSL build dependency, application-level encryption of blobs with XChaCha20-Poly1305, an encrypted Tantivy `Directory`), key held in the OS keychain, migration between plain and encrypted data with crash safety; decrypted-content indexing policy (off by default, opt-in per account, index then counts as sensitive); `Authentication-Results` parsing in `nail-mime` (DKIM / SPF / DMARC / ARC, trusted-authserv-id per account); link safety analysis (display vs target mismatch, punycode look-alikes, dangerous attachment types) exposed as message warnings.
 *Done (ADR 0032):* SQLCipher rejected (OpenSSL on Windows); sealed columns (`messages.preview`, `drafts.payload`), sealed blobs and an encrypting tantivy `Directory` with XChaCha20-Poly1305, a crash-safe three-phase migration. Subjects, addresses, dates and flags stay plain in SQLite (documented). Follow-up: full-file encryption via SQLite3MultipleCiphers (needs a `libsqlite3-sys` patch), a recovery key for the data key.
 
 #### WP34 — Security UI (parallel)
+
 Key and certificate manager (OpenPGP keys, S/MIME certificates, trust editing, import/export, key lookup), per-identity crypto settings, composer sign/encrypt toggles with live recipient key status, message header security badge with a details popover (signer, key id, trust, chain), auth-results badge, link and attachment warnings in the reader, encryption-at-rest settings with progress, Autocrypt setup message flow.
 *Done (ADR 0033):* seven widgets and a dialog in `ui/src/features/security/`, a full UI mock.
 
 #### WP35 — Integration (sequential)
+
 Core wiring: decrypt/verify on read (never persist decrypted bodies unless the indexing opt-in is on), sign/encrypt on send, Autocrypt headers on outgoing mail and peer-state updates on incoming mail, key lookup when composing, auth results and link warnings in `MessageBody`, at-rest encryption switch with migration, MCP: encrypted content only with the separate grant. **Playwright:** send a signed + encrypted OpenPGP mail between two demo accounts and read it with a valid-signature badge; tampered signature shows as invalid; S/MIME sign and encrypt round trip with a test certificate; Autocrypt enables encryption after one exchange; header protection hides the subject on the wire (assert on the mock SMTP); DKIM/DMARC badge from a seeded `Authentication-Results`; a look-alike link shows a warning; encryption at rest on/off with data intact; MCP cannot read encrypted content without the grant.
 *Done (ADR 0034):* all of the above in `e2e/tests/security.spec.ts` (demo-multi accounts seeded with an OpenPGP key and a test-CA S/MIME certificate each), plus core integration tests (`nail-core/tests/security.rs`). Contract additions: `AccountConfig.authserv_ids` (`authserv-id` in `accounts.kdl`), `AutomaticMail::AutocryptSetup`. Replies to encrypted mail start encrypted; rules never forward or answer encrypted mail; encrypted drafts stay off the server's Drafts folder; Bcc recipients get their own encrypted copy.
 
 #### M2a follow-ups (deviations and deferrals)
+
 - **cargo-deny exception** for RUSTSEC-2023-0071 (`rsa` 0.9, Marvin timing side channel; no fixed release in rPGP's RustCrypto generation; decryption is blinded) — record it when WP44 adds `cargo-deny`.
 - **S/MIME inside `multipart/mixed`** (a list footer after a signed entity) is not unwrapped; S/MIME header protection is neither produced nor read.
 - **Attachments of encrypted mail over MCP** are served from the raw (encrypted) message even with the `encrypted` grant.
@@ -272,30 +305,37 @@ Core wiring: decrypt/verify on read (never persist decrypted bodies unless the i
 **Status:** WP40–WP45 done (ADRs 0036–0041); automated suites green (cargo, Vitest, Playwright incl. `remote.spec.ts`, `remote-content.spec.ts` and the desktop smoke test with a `mailto:` start). Review findings fixed (ADR 0042): every remote request is checked against the grant (exhaustive, incl. drafts, the composer's original message, identities, outbox, operations, rules, remote-content allows, the UI context) with the `encrypted` gate on drafts and searches over decrypted text; remote sockets get only the events their grant covers (admin events only for admins); outside internet mode only local peers may connect and allowed networks must be local; the portable zip ships the UI files and the installed CLI finds them; the global pairing count has a one-hour window and a successful pairing clears it. Next: independent verify; the first CI run of the `installer`, `deny` and `interop` jobs; the M2 human security review gate stays open, internet mode stays locked.
 
 #### WP40 — Contract (sequential)
+
 Remote-UI settings (enabled, bind address, port, TLS mode self-signed/ACME, internet mode locked flag), users and credentials (password hash, TOTP secret, passkeys), sessions and devices, pairing codes, scopes per session, remote-content policy (per message / sender / domain allow-lists), audit entries for logins.
 *Done (ADR 0036):* `nail_api::remote` (settings with shared validation and the internet-mode lock, `RemoteGrant` = MCP grant + `admin`, users / passkeys / devices / sessions / pairing codes / audit / alerts, the `POST /api/auth` login protocol) and `nail_api::remote_content` (allow-lists, `nail-proxy:` URLs, optional `MessageBody.remote_content`); error codes `forbidden`, `reauth_required`, `rate_limited`; store v6 with hashed or keychain-referenced secrets only and tested invariants; the core serves the store-backed requests, the rest answers `unsupported` until WP45. Stub crates `nail-remote-auth`, `nail-proxy` and TLS libraries in `nail-server` with smoke tests. Deviation: passkeys use `webauthn_rp` (pure Rust) because `webauthn-rs` requires OpenSSL.
 
 #### WP41 — Authentication and sessions (parallel)
+
 Passkeys via `webauthn-rs` (MPL-2.0, unmodified), password (Argon2id) + TOTP (`totp-rs`), one-time pairing codes approved on the desktop, device-bound short-lived sessions in `HttpOnly; Secure; SameSite=Strict` cookies with rotation, re-authentication for sensitive actions, per-IP and per-account rate limits with exponential backoff and lockout notification, session list and revoke, new-device alert, audit log. Tests incl. brute-force and replay attempts.
 *Done (ADR 0037):* `nail-remote-auth` on `webauthn_rp` (ADR 0036 deviation), CSRF tokens bound to the device (`x-nail-csrf` response header after pairing), a 7-day throttle window (see follow-ups), the exhaustive `required_access`, axum login route and session middleware.
 
 #### WP42 — Transport and browser hardening (parallel)
+
 TLS 1.3 (1.2 only with forward-secret AEAD) with `rustls`; self-signed certificate generation (`rcgen`) with fingerprint shown for pinning at pairing; ACME (`instant-acme`) wired but only usable in the locked internet mode; HSTS, strict CSP without inline script, Trusted Types, COOP/COEP, `frame-ancestors 'none'`; Origin/Host checks; a separate sandbox origin for mail HTML; the remote-content proxy for desktop and web: signed URLs derived from messages, blocks private / link-local / loopback ranges, size and type limits, never an open proxy; loading remote content per message / sender / domain. Tests incl. SSRF attempts and DNS rebinding.
 *Done (ADR 0038):* `Server::bind_with` (TLS, host names, allowed networks, header profiles, sandbox origin, proxy route, ACME challenges), `nail-proxy` (check-then-pin fetcher with the OS resolver instead of hickory). The `nail-mime` rewriting hook moved to WP45.
 
 #### WP43 — Remote-UI and privacy UI (parallel)
+
 Login (passkey first, password + TOTP fallback), pairing flow on both sides (desktop shows code and fingerprint, browser enters code), sessions and devices management, remote-UI settings on the desktop (enable, bind address, TLS mode, internet mode shown as locked with the reason), "load remote content" bar in the reader with per-sender/domain choices, security audit view.
 *Done (ADR 0039):* six widgets, the pairing dialog, login / re-authentication pages over `POST /api/auth`, alert toasts, full UI mocks (`@simplewebauthn/browser`, `uqr`; both MIT).
 
 #### WP44 — Installer and CI (parallel)
+
 Tauri NSIS installer per the design (per-user by default, WebView2 bootstrapper, `mailto:` / `webcal:` protocol handlers and `.eml` / `.ics` / `.vcf` associations via RegisteredApplications + Capabilities, optional start with Windows, optional `nail` CLI on `PATH`, uninstall keeps data unless the user opts in), portable zip; `cargo-deny` with the licence allowlist and advisories; SBOM (CycloneDX) per build; CI jobs: installer build artifact, desktop smoke test on `windows-latest`, and a Linux interop job running the engine tests against real Dovecot and Stalwart containers (IMAP, POP3, SMTP, ManageSieve).
 *Done (ADR 0040):* NSIS template copy (installs to `%LOCALAPPDATA%\Programs\Nail`), per-user registration hooks, portable zip, `deny.toml` (RUSTSEC-2023-0071 exception), CycloneDX SBOMs, CI jobs `desktop`, `installer`, `deny`, `interop` (`scripts/interop/`, own workspace; ManageSieve deferred to M2c). The advisories check and the interop job have not run yet (no network / Docker locally).
 
 #### WP45 — Integration (sequential)
+
 Wire the remote UI with auth into `nail serve` and the desktop app; migrate existing loopback-only behaviour; **Playwright:** pairing a second browser context with a code; passkey login via Playwright's virtual authenticator; password + TOTP login; brute force triggers backoff; session revoke logs the browser out; remote images blocked, loaded through the proxy after "allow sender", a proxy request to 127.0.0.1 or a private IP is refused; CSP blocks an injected inline script; internet mode cannot be enabled; installer build smoke (install to a temp dir, start, uninstall) in CI.
 *Done (ADR 0041):* `nail_server::RemoteUiHost` runs the remote UI from the core's settings (off by default; TLS + login; the desktop's own UI stays loopback without login), per-request authorization and grant narrowing in the core (`Service::handle_remote`), remote content rewritten through the `nail-mime` hook and served by the proxy (web route, sandbox origin, desktop `nail-proxy` protocol), mail HTML of the remote UI on the sandbox origin (`MessageBody.render_url`), Trusted Types for `srcdoc`, launch requests in the contract (`mailto:` → composer, `.eml` → "Opened files"; single instance), the M2a restart test with encryption at rest, `nail` portable mode. All listed Playwright scenarios pass (`remote.spec.ts`, `remote-content.spec.ts`, `desktop.spec.ts`); the installer smoke runs in CI.
 
 #### M2b follow-ups (deviations and deferrals)
+
 - **Throttle window**: 7 days because the store resets a count after the window from the *first* failure; a v7 change (window from the last failure) would allow hours.
 - **Passkeys** are discoverable-only (no `allowCredentials` for non-resident security keys); `credProtect` is requested, not enforced by the browser (ADR 0041).
 - **Login page** is unstyled (runs before the theme); serve the default theme without a session.
@@ -313,30 +353,37 @@ Wire the remote UI with auth into `nail serve` and the desktop app; migrate exis
 **Status:** WP50–WP55 done (ADRs 0043–0048); review fixes done (ADR 0049: Sieve location and server rules in store v8, renamed / moved / switched-off / deleted scripts removed where they were uploaded, atomic snooze wake + sweep of stranded mail, marked Snoozed folder, one wake notification per account and folder, search paging with capped `from_server` hits and grant-filtered server search, localized audit / import texts, `nail mcp` lock-first, bounded junk training, ManageSieve interop tests, wider a11y scans). Automated suites green (`cargo test --workspace` 1729 tests, Vitest 768, Playwright 65 scenarios incl. `m2c.spec.ts`, the extended `a11y.spec.ts` (all 21 settings tabs, move window, message menu, high-contrast mode; it found and fixed a contrast bug of the selected key's trust badge), the login page scan in `remote.spec.ts` and the desktop smoke test; clippy / fmt / ESLint / tsc / Prettier clean; `cargo deny` not run offline). The M2b follow-ups on render tokens, "load once", the proxy rate limit and audit retention are closed. Next: an independent verify; the interop job against real ManageSieve servers (CI).
 
 #### WP50 — Contract (sequential)
+
 Sieve upload status per rule (server / client / not expressible), vacation settings, junk training requests and classifier status, snooze (until time, wake folder), notification settings (per account / folder / rule, quiet hours), sync policy per folder (full / headers-only / recent N days) and on-demand body fetch, UI context-menu model, toolbar / key / column edit requests, fixed MCP port setting, localized core messages (error codes + Fluent ids + args instead of English text), `RuleFromMessage` request.
 *Done (ADR 0043):* `nail_api::localized` (`LocalizedMessage` = Fluent id + args; an optional `localized` sibling on every English diagnostic of the contract, boxed in `ApiError` / `Response::Error`), `sieve` (ManageSieve settings as the `sieve` node of an IMAP account in `accounts.kdl`, rule placement, account state, vacation with validation), `triage` (junk settings / status / verdicts, snooze, notification settings with overrides and quiet hours, `NotificationRequested`), `sync` (folder sync policy view, `MessageSummary.headers_only`, `FetchMessageBodies`, `SearchResults.server`), `menus` (context menus resolved from `layout.kdl`, UI port `features/menus/resolve.ts`), `reset-toolbar` / `reset-key-binding` layout patches, `McpSettings`, `RuleFromMessage`; store v7 (body state, snoozes, junk classifier with hashed tokens, notification overrides, Sieve state); the core serves the store-backed requests (`SyncSieve`, `PreviewSieveScript`, `MarkJunk`, `(Un)SnoozeMessages` answer `unsupported` until WP55); stub crates `nail-sieve` / `nail-triage`, `fluent-bundle` (nail-config `l10n` slot) and `tauri-plugin-notification` built on Windows MSVC; slots for WP51–WP54 incl. per-producer catalogs `core.ftl` / `core-sieve.ftl` / `core-triage.ftl`. Deviation: sync policies stay in `accounts.kdl`; the store keeps the per-message body state.
 
 #### WP51 — Sieve and vacation (parallel)
+
 Compile Sieve-expressible rules to Sieve (RFC 5228 + fileinto, imap4flags, vacation, regex, variables where supported) with a round-trip test harness; ManageSieve client (RFC 5804: STARTTLS, AUTHENTICATE PLAIN / XOAUTH2, PUTSCRIPT, SETACTIVE, CHECKSCRIPT, capability-aware); mock ManageSieve server in `nail-testkit-net`; vacation replies via Sieve `vacation`.
 *Done (ADR 0044):* `nail-sieve` compiler with per-rule placement and localized reasons (`core-sieve.ftl`), POSIX ERE translation, parser + decompiler round-trip harness, ManageSieve client (STARTTLS without plaintext fallback, PLAIN / XOAUTH2 / OAUTHBEARER, every RFC 5804 command), one managed script per account that never overwrites the user's scripts (previous script recorded and included), vacation with dates via `date` or applied by Nail; `MockSieveServer` + `validate_script`.
 
 #### WP52 — Spam, snooze, notifications (parallel)
+
 Local Bayesian classifier per account (tokenizer over headers + text, trained by "junk / not junk", honours server Junk flags, never auto-deletes); snooze via IMAP keyword + a hidden "Snoozed" folder with local wake timers (works offline, survives restart); new-mail notifications (Tauri notification plugin on desktop, Web Notifications in the remote UI) with per-account / folder / rule settings and quiet hours, which also makes the rules `notify` / `suppress` actions real.
 *Done (ADR 0045):* `nail-triage` (pure logic): tokenizer, Robinson / Fisher classifier with an unsure band and undo, arrival and mark plans that never delete, timer wheel, snooze scheduler (restart catch-up, rebinding by Message-ID), DST-safe local times, notification policy with quiet hours and burst batching; every write returned as a `TriageOp`.
 
 #### WP53 — Engine polish (parallel)
+
 Sync policy `bodies` (headers-only / recent N days) with on-demand body fetch; IMAP `SEARCH` fallback merged into search results for messages without local bodies; a separate replay connection per IMAP account; `text/markdown` alternatives treated as body alternatives in `nail-mime`; Rust-built user-facing strings (config errors, MCP hints, CLI output where user-facing) turned into codes + Fluent ids; fixed MCP port setting; headless `nail mcp` start with a single-instance lock on the data directory; `RuleFromMessage` using the full headers (List-Id).
 *Done (ADR 0046):* `nail_config::l10n` (fluent-bundle over every catalog) and localized `ConfigError` / rule issues / MCP / CLI texts; `BodyFetch`, `fetch_body`, `SearchKey` + `search_messages` in `nail-proto-imap`; store body-state accessors and `DataDirLock`; `nail_search::imap` (query → IMAP key); Markdown alternatives; `configured_port`; headless `nail mcp` (`--config-dir`, `--no-start`, `--mcp-port`); `rule_from_message` in `suggest.rs`.
 
 #### WP54 — UI polish and accessibility (parallel)
+
 Right-click context menus rendered from `layout.kdl`; toolbar-order, key-binding and column-order editors in the Customize tab (using the existing write-back); lazy-loaded TipTap / CodeMirror; inline images in reopened HTML drafts; UI for vacation, junk, snooze, notifications, sync policy; accessibility pass (axe on every window and dialog, full keyboard navigation, focus management, screen-reader labels, a high-contrast theme shipped as an example theme, reduced motion).
 *Done (ADR 0047):* `features/menus` (right-click, Shift+F10 / menu key through `menu.context`), Customize editors (`toolbar-editor`, `key-binding-editor`, `column-editor`), triage / Sieve / sync features and widgets, lazy editor chunks (main chunk ~474 kB), inline images via `GetDraftAttachment`, themed login page, axe in Vitest, `defaults/themes/high-contrast.kdl`, reduced motion.
 
 #### WP55 — Integration (sequential)
+
 Wire all of the above; **Playwright:** a rule shows as "server" and its Sieve script lands on the mock ManageSieve server; vacation reply script uploaded; marking junk trains the classifier and the next similar message lands in Junk; snooze hides a message and it returns at the wake time (clock controlled); a new-mail notification fires and quiet hours suppress it; headers-only folder fetches the body on open; server-side search finds a message without a local body; right-click menu on a message works; rebinding a key writes `layout.kdl` and works; axe clean on every window.
 *Done (ADR 0048):* Sieve upload task (digest of inputs, server rules skipped on arrival, removal when switched off, recompile for vacation dates), junk on arrival and `MarkJunk` (`Store::untrain_junk`), snooze scheduler + wake task + hidden Snoozed folder (created by the first move), notification policy + batching (`NotificationRequested`; OS notifications in the desktop shell, Web Notifications in the browser), headers-only sync + on-demand bodies + trimmed aged bodies, server search fallback, a separate replay connection, localized core messages end to end, desktop MCP port from the settings + data-dir lock, `GetDraftAttachment`, M2b follow-ups (session-bound render tokens, "load once", proxy rate limit, audit retention); an adjustable clock and demo-multi controls (`clock-*`, `sieve-scripts`) for the Playwright scenarios (`m2c.spec.ts`, extended `a11y.spec.ts`, `remote-content.spec.ts`). Status: integrated, all suites green; review fixes in ADR 0049; verify pending.
 
 #### M2c follow-ups (deviations and deferrals)
+
 - **Sieve**: the ManageSieve interop tests exist (ADR 0049; offline against the mock) but have not run against Dovecot Pigeonhole and Stalwart yet (the mock does not execute scripts; `:regex` and capability re-issue after login may differ; the Pigeonhole config is unverified); the status digest is in memory (an account shows `pending` after a restart until the start-up upload; the server rules themselves are in the store); a rule edited while uploads fail runs in its old form on the server; `include :personal` names are written without the `${` escape; a dedicated reason for non-ASCII case-insensitive regexes; per-rule placement badges in the rule manager.
 - **Junk**: unsure verdicts are stored as `junk: false` with a score; `ham_cutoff` is not a user setting; no NFKC normalization of tokens; training rows of v7 keyed by the bare `Message-ID` are not re-keyed.
 - **Snooze**: snoozes are per installation; two Nail installations on one account whose hidden folders share a name return each other's snoozed mail to the Inbox (sweep).
@@ -351,36 +398,43 @@ Wire all of the above; **Playwright:** a rule shows as "server" and its Sieve sc
 **Status:** WP60–WP65 done (ADRs 0050–0055). The plug-in preview runs end to end: packages previewed and installed with the approved hash (kept packed in `<data-dir>/plugins`, verified at every start), one sandboxed QuickJS runtime per plug-in inside the core behind the permission gate, commands in toolbars / menus / keys, dialogs, notifications (OS ones on the desktop, respecting quiet hours), panels, storage, HTTP through the core, placements written to `layout.kdl` through the merge flow, the plug-in manager, `nail plugin dev` with hot reload; M2c carry-overs (turn-bounded UI tests, dates in the UI locale, localized crypto / message-file texts, the a11y sweep, snooze restarts). Suites green (`cargo test --workspace` 1893, Vitest 877 + SDK 49 + template/example 21, Playwright 72 scenarios incl. `plugins.spec.ts`, `a11y-windows.spec.ts` and the desktop smoke test). Reviews done; review fixes (ADR 0056): plug-in search is header-only without `mail.read.body` and never finds encrypted mail while the index holds decrypted text; a disabled / uninstalled plug-in is interrupted at once and runs nothing still queued; every log line a plug-in causes is capped per call and per minute, the core's log queue is bounded; `nail-pgp` problems have their own texts (`pgp-problem-*`); OS notifications name the plug-in first; `nail plugin dev` connect errors localized. Independent verify passed (the M2 automated gate, section 7); its two findings are fixed post-M2.
 
 #### WP60 — Contract (sequential)
+
 Plug-in manifest (id, name, version, apiVersion, main, permissions, contributes: commands, placements, keys, settings schema, locales), permission names for the preview (`mail.read`, `mail.read.body`, `calendar.read` placeholder, `ui.dialogs`, `notifications`, `storage`, `network:<domains>`), declarative UI component set (text, markdown, input, textarea, select, checkbox, date, contact picker, folder picker, message list, table, button, progress, image) as typed trees, plug-in admin requests (install from file/URL, enable, disable, uninstall, list, grants, logs).
 
 *Status:* done — ADR 0050. `nail_api::plugins` (manifest + validation, permissions and grants, component trees with `validate_tree`, dialogs, notifications, command contexts, the plug-in mail view), admin and runtime requests / events (also dev loading, settings, placements, panels), store v9 (plug-ins, grants, settings, KV storage with quotas, logs; sealed at rest), `plugin-panel` layout widget, stub crate `nail-plugins` (rquickjs, zip), slots for WP61–WP63, `packages/*` npm workspaces with generated plug-in types. The core serves the store-backed administration; host requests answer `unsupported` until WP64.
 
 #### WP61 — Plug-in host (parallel)
+
 `nail-plugins`: one QuickJS runtime per plug-in via `rquickjs` (memory limit, interrupt-based CPU budget, no filesystem / process / sockets), permission gate in front of the Client API, API bindings for the preview (`nail.mail` read, `nail.ui.showDialog` / `notify` / `registerCommand`, `nail.storage`, `nail.http.fetch` restricted to declared domains through the core, `nail.settings`, `nail.log`), `.nailplugin` archive format (manifest.json + bundled JS + assets + locales), install / uninstall / enable, `nail plugin dev <folder>` with hot reload and a log console. Tests for isolation, limits and denied permissions.
 
 *Done (ADR 0051):* `PluginHost` (thread + runtime per plug-in, CPU budget per turn, 64 MiB heap, crash isolation), the gate (`mail.read` per account and re-filtered, `mail.read.body` never for encrypted mail, `network:` rules), `prelude.js`, packages kept packed and hash-checked, dev reload, plug-in catalogs.
 
 #### WP62 — Plug-in UI (parallel)
+
 React renderer for the declarative component set (all parts themeable, e.g. `plugin.<id>.*`), plug-in dialogs (modal and non-modal, returning values), toolbar / menu / key placements, plug-in panels as layout widgets (`plugin-panel "<id>.<name>"`), install dialog showing permissions, plug-in manager (enable/disable, grants, logs), placements proposed on install through the merge dialog.
 
 *Done (ADR 0052):* tree renderer (no plug-in HTML; Markdown parsed into elements), modal / non-modal dialogs per `client_id`, plug-in commands as layout actions (`usePluginLayout`), `plugin-panel`, toasts, install dialog with Allow / Deny and account limits, placements step, plug-in manager, mock host.
 
 #### WP63 — SDK and example (parallel)
+
 `@nail/plugin-api` TypeScript package (types generated from the Rust contract, a tiny JSX runtime producing the component trees), a starter template package (`npm create nail-plugin` equivalent inside the repo: `packages/create-nail-plugin`), the design's "Follow up" example plug-in (adapted to read-only: a button + dialog that stores a reminder in plug-in storage and shows a notification), `userDocs/en/plugins/` (getting started, API reference generated from the types, manifest reference, permissions).
 
 *Done (ADR 0053):* `@nail/plugin-api` (generated types, `nail` wrapper, `definePlugin`, JSX runtime, `createTestHost`, `checkManifest` / `packPlugin` / `nail-plugin`), `create-nail-plugin`, the "Follow up" example, `userDocs/en/plugins/` (reference sections generated).
 
 #### WP65 — M2c carry-overs (parallel)
+
 Deterministic full-app UI tests (turn-bounded waits), dates in the UI locale everywhere (`i18n/format.ts`), localized OpenPGP and message-file texts (`core-crypto.ftl`), an axe sweep of every window / tab / dialog in three modes, snooze across restarts.
 
 *Done (ADR 0054).*
 
 #### WP64 — Integration (sequential)
+
 Wire host + UI + SDK; **Playwright:** install the example plug-in (permissions dialog), its toolbar button appears in the reader, clicking opens its dialog, submitting stores data and shows a notification, the placement is written to `layout.kdl`; a plug-in without `mail.read.body` gets a permission error; a runaway plug-in (infinite loop) is stopped and flagged while the UI stays responsive; `nail plugin dev` hot reload works.
 
 *Done (ADR 0055):* `nail-core` `plugin_host.rs` (one host, `PluginServices` over store / search, never decrypted bodies, ordered log writer, crash errors recorded, quiet hours for `system` notifications, dev manifests followed), `plugin_http.rs` (SSRF-safe fetch, also for URL installs), every plug-in request (commands / UI actions answer `Done` at once); `nail-config` placement writer + installed plug-ins in merge conflicts, `plugin-manager` widget, pre-M2d `plugin.<id>.<name>` refused; defaults (Plug-ins settings tab, actions, plug-in theme parts); `nail plugin dev` over `nail serve`'s WebSocket (`ui-endpoint.json`); OS notifications for `system` plug-in notifications; host fix: rejections awaited in the same turn are not logged as unhandled. Playwright `e2e/tests/plugins.spec.ts` (all scenarios above; the example is built by the global setup outside the repo) and the install dialog in `a11y-windows.spec.ts`.
 
 #### M2d follow-ups (deviations and deferrals)
+
 - **`nail plugin dev`** reaches only `nail serve` (its `ui-endpoint.json` / `--url`); the desktop app loads development folders from the plug-in manager (no local endpoint for the CLI yet).
 - **Host limits**: the CPU budget is per turn; an async chain that yields between turns can use many budgets; no cumulative quota or wall-clock limit for promises left pending (only `activate` has 30 s). A stopped runtime is interrupted at once (ADR 0056); API calls it started before the stop still finish in the core (their results are dropped).
 - **Search** (ADR 0056): with decrypted indexing on, plug-in searches leave out every encrypted message, even hits on its headers; header-only search cannot tell `from:` display names from addresses any better than the UI search.
@@ -393,6 +447,7 @@ Wire host + UI + SDK; **Playwright:** install the example plug-in (permissions d
 - **Tests**: the full-app suites other than `App.flows.test.tsx` still use 1 s `findBy*` waits; `cargo deny` advisories need the network (not run).
 
 ### Carried items not in M2
+
 PKCS#11 smartcards (M4), revocation checking for S/MIME (later), DNSSEC-validated SRV and a public-suffix list for discovery (later), atomic cross-account moves (later; current behaviour can duplicate, never loses).
 
 ## 8. Milestone M3 — PIM, Gmail API and Exchange (detailed)
@@ -400,7 +455,8 @@ PKCS#11 smartcards (M4), revocation checking for S/MIME (later), DNSSEC-validate
 **Automated gate:** all suites green, including the Playwright scenarios listed per wave, and the interop CI job extended with a real CalDAV/CardDAV server (Radicale, plus Stalwart's DAV if available) next to Dovecot and Stalwart mail.
 **Human gate (design: "interop suite passes on Dovecot, Stalwart, Radicale, Exchange Online and on-prem"):** the Exchange Online, Exchange Server on-premises and Google parts need real tenants and accounts, so they are owner tasks; the automated suite covers them with recorded fixtures and mock servers.
 
-**Scope decisions for M3**
+### Scope decisions for M3
+
 - Same licence rule as M2 (no GPL/LGPL/AGPL; check every new crate, e.g. iCalendar/vCard parsers).
 - **No non-loopback sockets** (ADR from the firewall fix): every new protocol engine and mock server binds loopback only; DNS goes through the OS resolver.
 - **Push for Graph and Gmail on a desktop client:** both providers deliver push through webhooks / Pub/Sub, which a desktop app cannot receive without a server. M3 uses delta queries / history polling with adaptive intervals (and EWS streaming notifications, which do work from a client). A push relay stays a later option.
@@ -413,31 +469,37 @@ M3 runs as three waves on the existing wave workflow (`.claude/workflows/nail-wa
 ### Wave M3a — Calendar, contacts and tasks (local, ICS, CalDAV/CardDAV)
 
 #### WP70 — Contract (sequential)
+
 Calendar, event (incl. recurrence rules, exceptions, overrides, attendees, alarms, time zones, conferencing links, attachments), contact (vCard 3/4 fields, groups, photos, multiple addresses), task (VTODO: due, priority, status, subtasks, recurrence) models; calendar/contact/task sources (local, ICS subscription, CalDAV, CardDAV); requests: list/create/update/delete for each, expand event instances in a range, search contacts, merge contacts, import `.ics` / `.vcf`, create event / task from email, reminders (snooze, dismiss); events for changes and reminders. Store migration for calendars, events, instances cache, contacts, groups, tasks, sources and sync state. Feature slots for UI.
 
 *Status:* done — ADR 0058. `nail_api::pim` (calendars, events as series with overrides and edit scopes, recurrence, attendees, alarms, time zones, conferencing links, attachments; contacts with vCard 3/4 fields, groups, photos, merge links; tasks; reminders; import; read-only MCP payloads), 52 requests and 9 events, sources in `accounts.kdl` (`calendar-subscription`, `caldav`, `carddav`; read / write / schema in nail-config), store v10, stub crates `nail-ical` (calcard) and `nail-dav`, slots for WP71–WP74. The core answers every PIM request `unsupported` until WP75.
 
 #### WP71 — iCalendar, vCard and recurrence (parallel)
+
 `nail-ical`: parse and serialize iCalendar (RFC 5545) and vCard 3.0/4.0 losslessly (unknown properties kept), recurrence expansion (RRULE, RDATE, EXDATE, RECURRENCE-ID overrides; a maintained crate with an acceptable licence, or our own), time zones (VTIMEZONE + IANA via `chrono-tz`, DST edge cases), floating and all-day events, VALARM computation; ICS feed parsing for subscriptions. Property tests and a corpus of real-world calendar files (Google, Outlook, Apple, Thunderbird exports).
 
 *Status:* done — ADR 0059. `nail-ical` with its own lossless content-line layer and patching writers (calcard only for the Windows zone table and `VTIMEZONE` generation), its own recurrence engine (every `BY*` part, `BYSETPOS`, `BYWEEKNO` / `WKST`; RFC 5545 examples as tests, property-compared with calcard's iterator), instances with overrides and `THISANDFUTURE`, edit scopes, zones (IANA / Windows / CDO / custom `VTIMEZONE` matching), alarms, feeds, import previews; a synthesized corpus of Google / Outlook / Apple / Thunderbird exports.
 
 #### WP72 — CalDAV / CardDAV client (parallel)
+
 `nail-dav`: discovery (well-known URLs, RFC 6764 SRV/TXT through the OS resolver, principal and home sets), PROPFIND, REPORT (calendar-query, calendar-multiget, addressbook-query/multiget), `sync-collection` (RFC 6578) with ctag/etag fallback, conditional PUT/DELETE with ETags, conflict handling (server wins, keep the local copy as a conflict), auth (Basic over TLS, OAuth2 bearer for Google); a mock CalDAV/CardDAV server in `nail-testkit-net`; Radicale added to the interop CI job.
 
-*Status:* done — ADR 0060. `nail-dav` as specified (`DavClient` with Basic over TLS / bearer / OAuth2 with one refresh, https-or-loopback URLs, own redirects; discovery; PROPFIND / REPORTs; `sync_collection` with token reset and ctag / ETag fallback; conditional writes, server wins; MKCALENDAR / MKCOL / PROPPATCH); `MockDavServer` in `nail-testkit-net`; Radicale in `scripts/interop` and the CI job (verified locally against Radicale 3.8.1). Discovery uses SRV + `/.well-known/` only (no TXT), per ADR 0058.
+*Status:* done — ADR 0060. `nail-dav` as specified (`DavClient` with Basic over TLS / bearer / OAuth2 with one refresh, https-or-loopback URLs, own redirects; discovery; PROPFIND / REPORT; `sync_collection` with token reset and ctag / ETag fallback; conditional writes, server wins; MKCALENDAR / MKCOL / PROPPATCH); `MockDavServer` in `nail-testkit-net`; Radicale in `scripts/interop` and the CI job (verified locally against Radicale 3.8.1). Discovery uses SRV + `/.well-known/` only (no TXT), per ADR 0058.
 
 #### WP73 — PIM store, sync engine pieces and reminders (parallel)
+
 Store APIs for all PIM tables, instance cache for fast range queries, PIM search (Tantivy fields for events, contacts, tasks), the reminder scheduler (alarms across time zones and restarts, using the triage scheduler's clock injection), collected-addresses book, duplicate detection and merge with links to sources, address autocomplete ranking from contacts + collected + recent.
 
 *Status:* done — ADR 0061. `nail-store` `src/pim/` (sources, collections, items with the PIM queue in one transaction, sync merge with conflict copies, instance cache in 90-day chunks, contacts / duplicates / merge / Collected book / `suggest_recipients`, reminders), `nail-search` `PimIndex`, `nail-triage` `reminders.rs` (planning across zones and DST, scheduler with restart catch-up, snooze / dismiss). No migration needed.
 
 #### WP74 — PIM UI (parallel)
+
 Calendar views (day, multi-day, week, work week, month, year, agenda, free-time timeline) as layout widgets, mini-month and today's agenda widgets, event editor (recurrence editor incl. "this / this and following / all", attendees, alarms, time zones, secondary zone), contacts list / card / editor / groups / merge dialog, task list widget and editor, drag to reschedule, keyboard navigation; all themeable, all strings in Fluent catalogs, axe clean.
 
 *Status:* done — ADR 0062. `ui/src/features/pim/`: the eight calendar views, mini-month, agenda, `calendar-list`, event editor (React Aria date / time fields in the UI language, recurrence, scopes, attendees, reminders, zones), contacts list / card / editor / groups / merge, task tree and editor, reminder toasts, import and sources dialogs; mock of all 52 requests; `PIM_BASE_CSS`. Not built: drag across empty hours to create, recent mail on the contact card.
 
 #### WP75 — Integration (sequential)
+
 Core wiring (sources, CalDAV/CardDAV sync engines with polling, local calendars, ICS subscriptions, reminders through the notification path, import from launch arguments `.ics` / `.vcf` / `webcal:`, "create event / task from email", address autocomplete in the composer from contacts), MCP read resources/tools for calendars, events, contacts, tasks (with grants), plug-in `calendar.read` permission made real, default layout with a calendar window. **Playwright:** create a recurring event and edit "this and following"; event synced to the mock CalDAV server and a server-side change appears; ICS subscription shows events read-only; reminder fires at the controlled clock time; contact created, synced to mock CardDAV, used in composer autocomplete; duplicate contacts merged; task with subtasks; open a `.ics` file from the launch argument; MCP client lists events after a grant.
 
 *Status:* done — ADR 0063. `nail-core/src/pim/` serves all 52 requests (edit scopes through `nail-ical::edit`, raw text patched on every write, validation incl. zones); source engines per enabled subscription / DAV source (polling, wake on writes and "Sync", backoff while offline, `auth-error`), ICS with conditional GET, CalDAV / CardDAV discovery + sync + PIM queue replay (412 → server wins, conflict copy); reminders on the triage clock through `ReminderDue` and the notification path (quiet hours: no sound); in-memory PIM index; imports (desktop file or upload, update by `UID`); event / task from email; composer autocomplete from contacts + Collected + recent (sent mail fills the Collected book). MCP resources / tools for calendars, events, contacts, tasks with grants; plug-in `calendar.read` (`nail.calendar.events`); `nail serve --launch` (parser moved to `nail_core::launch_args`) and the UI's import / subscribe dialogs for launch requests; default layout with `calendar` / `contacts` / `tasks` windows, toolbar and keys; demo-multi with a mock CalDAV / CardDAV server, ICS feeds and controls. Playwright: `e2e/tests/pim.spec.ts` (all nine scenarios) and the a11y sweep over the PIM windows and dialogs. Contract additions: `EventOverride.this_and_future`, `PluginCalendarEvent`. The automated gate's interop part (Radicale in CI) is configured; the job itself is unproven until the first CI run.
@@ -449,31 +511,37 @@ Core wiring (sources, CalDAV/CardDAV sync engines with polling, local calendars,
 ### Wave M3b — Invitations, scheduling and the Gmail API engine
 
 #### WP80 — Contract (sequential)
+
 iTIP methods and attendee states, invitation card data on messages, scheduling requests (respond, counter, send update, cancel, forward invite), free/busy queries, Gmail account kind and Gmail-specific fields (label ids, thread ids, categories), provider-neutral sync engine trait additions needed by API engines.
 
 *Status:* done — ADR 0065. `nail_api::scheduling` (iTIP methods, the invitation card on `MessageBody.invitation` with role / state / my status / sequence / conflicts / actions / issues, answers with comments, counter-proposals, refresh, forward, organizer send / cancel / decline counter, apply, scheduling settings, free/busy with sources and merged busy periods) and `nail_api::gmail` (the `gmail` account kind in `accounts.kdl`, labels ↔ folders / tags, thread ids, categories, label management); `nail_api::engine` gains `MailApiEngine`, `AdaptivePoll`, `FreeBusyProvider` and `EngineError::retry_after_secs`. 16 requests, 3 events. Store v11 (remote ids, scheduling state, received / sent iTIP messages, Gmail sync state / labels / per-message labels / label queue) with store APIs. Stub crates `nail-itip` and `nail-proto-gmail` (with the loopback mock server under the `testing` feature); slots for WP81–WP84. The core answers every M3b request `unsupported` until WP85; a Gmail account's engine reports `unsupported`.
 
 #### WP81 — iTIP / iMIP (parallel)
+
 `nail-itip`: iTIP (RFC 5546) processing — REQUEST, REPLY, CANCEL, COUNTER, DECLINECOUNTER, REFRESH, ADD; iMIP (RFC 6047) MIME building and parsing; organizer/attendee logic, sequence and DTSTAMP handling, conflict detection against the user's calendars; CalDAV auto-scheduling (RFC 6638) detection so the client does not send duplicate mail when the server schedules.
 
 *Status:* done — ADR 0066. Pure logic over the contract types: `object` (the `METHOD` property wins, each component read on its own with its zones, `SEQUENCE` / `DTSTAMP` / `COMMENT` / `SENT-BY` / `SCHEDULE-AGENT`, message-level issues incl. the attendee-count rules), `card` (role from the identities with the receiving account first, spoofing checks against `From` and `Sender` with `SENT-BY`, state new / current / update / outdated / cancelled / unknown-event / invalid, actions), `apply` (series / occurrence `REQUEST` with `RDATE`s, `ADD`, `CANCEL` incl. `THISANDFUTURE`, per-occurrence `REPLY`, delegation, the user's answer, accepting a `COUNTER`; the user's alarms and colour survive), `build` (every method, no alarms or RFC 6638 parameters, `VTIMEZONE`s kept or generated), `imip` (`find_itip`, `OutgoingImip` = `multipart/alternative` with the calendar part + `invite.ics`), `texts` (new `itip.ftl`), `conflicts`, `server` (RFC 6638 delivery plan, `mark_client_scheduled`); synthesized Google / Outlook / Apple / Thunderbird interop fixtures.
 
 #### WP82 — Gmail API engine (parallel)
+
 `nail-proto-gmail`: OAuth (restricted scopes), `users.messages` list/get (raw MIME) / modify / trash / send, `users.history.list` incremental sync with history-id reset handling, labels ↔ Nail tags and folders, threads, batch requests, quotas with backoff, attachments; adaptive polling (no Pub/Sub, see scope decisions); a mock Gmail REST server in `nail-testkit-net` with recorded-response fixtures.
 
 *Status:* done — ADR 0067. `GmailClient` (reqwest + nail-auth rustls/ring, https or loopback http, OAuth bearer with one refresh on 401, backoff on 429 / rate-limit 403 / 5xx with `Retry-After`, long waits surfaced as `retry_after_secs`, non-idempotent calls never repeated after a 5xx), messages / drafts / history / labels / threads / HTTP batch, media upload above 4 MB; `GmailEngine: MailApiEngine + OutgoingTransport` (full sync with the profile history id, incremental history with `CursorExpired` on 404 and slices, mapping to folders / flags / tags / categories, idempotent writes, `Gone`, sending with the thread id and a `Bcc` header for envelope-only recipients), `PollTimer`; `MockGmailServer` under the `testing` feature (in-memory mailbox, history expiry, injected errors, quota, request log, demo mailbox + recorded answers in `fixtures/`). The mock lives in the engine crate (ADR 0065), not in `nail-testkit-net`.
 
 #### WP83 — Free/busy and scheduling transport (parallel)
+
 CalDAV scheduling (outbox POST for free/busy, schedule-inbox processing), VFREEBUSY building/parsing, free/busy aggregation across the user's own calendars, room/resource placeholders for Exchange (filled in M3c).
 
 *Status:* done — ADR 0068. `nail-dav`: `discover_scheduling` (inbox / outbox, addresses, user type incl. rooms, `calendar-auto-schedule` from OPTIONS, default calendar), free/busy through the outbox (25 recipients per POST, 3.7 / 5.3 left out, 3.8 forbidden), `CalDavFreeBusy` (`FreeBusyProvider`), schedule inbox (`list_inbox` oldest first, `delete_inbox_item`, `process_inbox`), `SCHEDULE-AGENT` / `SCHEDULE-STATUS` helpers, VFREEBUSY build / parse (capped), `own_busy_periods` over expanded instances, a byte-preserving content-line layer. `MockDavServer`: several principals (rooms too), inbox / outbox, free/busy POST answers, switchable auto-scheduling (REQUEST / REPLY / CANCEL delivery, `SCHEDULE-STATUS`, `Schedule-Reply: F`). The store slot `pim/freebusy.rs` stayed a stub (the aggregation needs nothing from the store).
 
 #### WP84 — Invitations and Gmail UI (parallel)
+
 Invitation card in the reader (Accept / Tentative / Decline / Propose new time, conflicts preview, RSVP comment), attendee picker with free/busy timeline, update/cancel flows for organizers, Gmail label management and label-based views, Gmail categories as filterable property.
 
 *Status:* done — ADR 0069. `ui/src/features/scheduling/`: `InvitationCard` (kind, state, spoofing alerts first, time in the viewer's zone, attendees, conflicts, answers with comment / "send my answer" / confirmation, series or one occurrence, propose a new time, forward, apply / refresh / counter actions — only what the core lists), `FreeBusyTimeline` (rows per person, sources, errors, the planned meeting, suggested free slots), `AttendeePicker`, find-a-time dialog, `MeetingPanel` (organizer send / update / cancel, attendee answers), scheduling settings; `ui/src/features/gmail/`: label tree with counts / visibility / pending marks, label views (search on the tag), label editor with Gmail's palette, delete and apply-labels dialogs (`UpdateFlags` tags), category tabs (`category:`), `MessageLabels`; in-memory mocks and demo seeds; axe scans.
 
 #### WP85 — Integration (sequential)
+
 Wire iTIP (incoming invites update calendars, replies update attendee status, outgoing invites via iMIP or server scheduling), Gmail accounts end to end (setup via OAuth with the Gmail API, sync, send, labels, search), free/busy in the event editor. **Playwright:** receive an invitation and accept it (reply on the mock SMTP, event in the calendar); organizer sends an update and the attendee's event changes; cancel removes the event; counter-proposal flow; free/busy shows busy blocks of another demo account on the mock CalDAV server; a Gmail account (mock Gmail server) syncs, applies a label, archives, sends, and picks up a server-side change via history polling.
 
 *Status:* done — ADR 0070 (package ADRs renumbered: 0066 `nail-itip`, 0067 `nail-proto-gmail`, 0068 CalDAV scheduling, 0069 UI). `nail-core/src/scheduling.rs` serves all 12 scheduling requests: cards on `GetMessage` / `GetInvitation` (identities with the receiving account first, the copy by `UID`, stored versions, conflicts from the instance cache, transport), arrival processing in the rule-inbox pipeline per `SchedulingSettings` (never junk, never spoofed), answers / proposals / refresh / forward, applying `REQUEST` / `ADD` / `CANCEL` / `REPLY` / `REFRESH`, organizer `SendInvitations` / `CancelMeeting` / `RespondToCounter`, free/busy (own calendars + CalDAV outbox + unknown); iMIP through the outbox as a prepared message (`AutomaticMail::Itip`, undo send) or — when the CalDAV server schedules (discovery stores `calendar-auto-schedule`) — only the event write, never both; the schedule inbox is read with each CalDAV pass. `nail-core/src/gmail.rs`: the Gmail engine loop (labels, full listing with resume and merge, history deltas, `PollTimer`), op replay as `RemoteWrite`s, the label queue, sending through the API (no Sent copy), `TestAccount`; discovery proposes the Gmail API for `gmail.com` / `googlemail.com` / Google MX (`DiscoverySource::Provider`); summaries carry `gmail` and `category:` is a search / rule field. demo-multi: Gmail account (switched off at first) on the mock Gmail + mock OAuth servers, a second DAV principal `bob`, an organized meeting; controls `gmail-*`, `dav-user-put`. Mounted UI (reader card, Gmail chips, attendee picker + meeting panel in the event editor), theme parts, layout (label list, category tabs, actions, keys). Playwright: `scheduling.spec.ts` (4), `gmail.spec.ts` (1), a11y sweep over the six new dialogs.
@@ -485,31 +553,37 @@ Wire iTIP (incoming invites update calendars, replies update attendee status, ou
 ### Wave M3c — Microsoft Exchange (Graph and EWS)
 
 #### WP90 — Contract (sequential)
+
 Exchange account kind (Online via Graph, on-premises via EWS, IMAP fallback), shared mailboxes and delegate access, categories ↔ tags mapping, Focused Inbox property, server-side inbox rules and automatic replies (out of office) for Exchange, meeting rooms and room lists, Microsoft To Do task lists.
 
 *Status:* done — ADR 0072. `nail_api::exchange` (the `exchange` account kind with engine Graph / EWS, `auth "windows"` (SSPI Negotiate / Kerberos / NTLM), shared / delegate mailboxes as folder trees and collections, categories ↔ tags with Outlook's colours, Focused Inbox on `MessageSummary.exchange` and `focus:` queries, inbox rules with placement, automatic replies, rooms / room lists with availability, To Do lists as task lists of the account's `exchange:<account>` PIM source, Exchange sync status), the engine seams `nail_api::exchange::engine` (`ExchangeEngine` = mail per folder + settings + directory + PIM + free/busy + sending; `NegotiateAuth`) and provider-neutral PIM item shapes (`nail_api::exchange::pim`); 18 requests, 1 event. Store v12 (`pim_sources` rebuilt for the `exchange` kind; cursors per folder / mailbox / collection, remote ids + change keys, mailboxes, categories, automatic replies (sealed), rules, rooms, the Exchange operation queue) with APIs. Stub crates `nail-proto-graph` / `nail-proto-ews` (loopback mock servers under `testing`) and `nail-exchange` (SSPI smoke test, mock Autodiscover); slots for WP91–WP94. The core answers every Exchange request `unsupported` until WP95; an Exchange account's engine reports `unsupported`.
 
 #### WP91 — Microsoft Graph engine (parallel)
+
 `nail-proto-graph`: OAuth (Microsoft identity platform), mail (delta queries per folder, MIME via `$value`, send via MIME, move/flag/categories, attachments), calendar (events + delta, instances, iTIP via Graph's meeting APIs), contacts, To Do tasks, mailbox settings (automatic replies), inbox rules, Focused Inbox, shared mailboxes; throttling (429 + Retry-After), batching; a mock Graph server with recorded fixtures.
 
 *Status:* done — ADR 0073. `GraphClient` (OAuth through the core's token provider with one forced refresh on `401`, `429` / `503` / `504` with `Retry-After`, waits over 30 s surfaced as `rate_limited`, sends / creates / moves / meeting answers never repeated after a `5xx`, paging and delta links refused when they leave the API's origin), `$batch` (20 per call, throttled parts retried), mail (folder hierarchy delta, per-folder message deltas with the `deltaLink` as cursor, MIME, flags / categories, move / copy / trash / delete, attachments, Focused Inbox with sender overrides, folders, sending as base64 MIME with a `Bcc` header for envelope-only recipients, shared mailboxes through `/users/{upn}`), settings (master categories, automatic replies, inbox rules), directory (room lists / rooms, mailbox access, `getSchedule`, `findMeetingTimes`), calendars (one year back / two ahead, series with exceptions, meeting answers, proposals, cancellations, change keys), contacts, To Do (checklists, linked resources), `PollTimer` / `FolderPoll`; `MockGraphServer` with a demo tenant and recorded errors. Graph creates every MIME upload as a draft; category renames replace the category (new id); To Do task ids are `<list>/<task>`; messages above 4 MB are refused (no upload sessions yet).
 
 #### WP92 — EWS engine (parallel)
+
 `nail-proto-ews`: SOAP client (`quick-xml`), Autodiscover (POX + v2 JSON), SSPI Negotiate/NTLM/Kerberos via the `windows` crate, Basic over TLS, OAuth2 for hybrid; `SyncFolderHierarchy` / `SyncFolderItems`, `GetItem` with `MimeContent`, `CreateItem` / `UpdateItem` / `MoveItem` / `DeleteItem`, streaming notifications for push, calendar (CalendarView, meeting responses), contacts, tasks, OOF settings, inbox rules, room lists / rooms, delegates and shared mailboxes; a mock EWS server with recorded fixtures.
 
 *Status:* done — ADR 0074. SOAP over quick-xml (`RequestServerVersion` Exchange2016, one fallback to Exchange2013_SP1), `EwsClient` lanes (one kept-alive HTTP/1.1 connection each; streaming on its own lane) with Basic (keychain re-read after `401`), OAuth2 (one refresh) and the injected `NegotiateAuth` bound to the connection, throttling (`ErrorServerBusy` back-off, `Retry-After`), `SyncFolderHierarchy` / `SyncFolderItems` (sync state as cursor), `MimeContent`, create / update (change keys, `NeverOverwrite` + retry) / move / copy / delete, appends, streaming notifications with reconnect and subscription renewal, calendar (CalendarView, series, meeting answers incl. "don't send"), contacts, tasks, OOF, inbox rules (unsupported ones written back with only `IsEnabled` changed; Outlook client-only rules block changes with `conflict`), the `CategoryList` configuration, rooms, `GetUserAvailability`, `ResolveNames`, `GetDelegate`; `MockEwsServer` (organization, scripted Negotiate, faults, streams, recorded Exchange 2019-style answers). Autodiscover and SSPI are WP93's (ADR 0072); EWS writes need Windows zone ids; on-premises Exchange has no Focused Inbox.
 
 #### WP93 — Exchange common layer (parallel)
+
 Mapping between Exchange concepts and Nail's (categories, Focused Inbox, rules ↔ Nail rules where expressible, OOF ↔ vacation settings, To Do ↔ tasks, rooms in the free/busy picker), account setup via Autodiscover with engine choice (Graph for Exchange Online, EWS for on-premises), migration notes from the design (EWS retirement in Exchange Online).
 
 *Status:* done — ADR 0075. `nail-exchange`: an HTTP layer that checks every redirect before following it, the `401` Negotiate / NTLM / Basic handshake, `SspiNegotiate` (`AcquireCredentialsHandleW` / `InitializeSecurityContextW`, signed-in user or explicit credentials, tested against a real in-process SSPI server on Windows; a live test against Exchange is ignored by design), Autodiscover (v2 JSON, POX, HTTP redirect method, SRV through the OS resolver; credentials only to hosts at or below the address's domain or confirmed ones — `ConfirmRedirect` / `NeedsLogin` otherwise; Graph for Exchange Online, EWS for on-premises, IMAP + SMTP as fallback; automapped mailboxes), the mapping layer (categories ↔ tags with colours, Focused Inbox, Nail rules ↔ inbox rules with placement reasons and digests, automatic replies ↔ vacation, events / recurrences ↔ `RRULE`, To Do ↔ tasks with subtasks, contacts / distribution lists, rooms) and `MockAutodiscoverServer`. The EWS retirement date in Exchange Online (2026-10-01) is from memory: owner task.
 
 #### WP94 — Exchange UI (parallel)
+
 Shared mailboxes and delegate folders in the folder tree, room finder in the event editor, out-of-office editor for Exchange accounts, Exchange rule placement badges, Focused Inbox toggle/view, To Do lists in the task widget.
 
 *Status:* done — ADR 0076. `ui/src/features/exchange/`: account setup parts (kind of account, server review with the redirect confirmation and engine switch, Windows / Basic / OAuth sign-in, options, status), shared / delegate mailboxes (list, add / edit / remove-or-hide, folder-tree badge), categories with Outlook's 25 colours (list, editor, chips), Focused Inbox tabs and the move dialog with "always for this sender", the automatic replies editor and banner, rule placement badges and the `exchange-rules` widget, the room finder for the event editor, To Do lists in the task widget; mock of the 18 requests, `seedExchangeDemo`, `EXCHANGE_BASE_CSS`, axe scans.
 
 #### WP95 — Integration (sequential)
+
 Wire both engines into the core's account manager, sync engines, op replayers, PIM sync and rules; MCP coverage for Exchange data. **Playwright (against the mock Graph and mock EWS servers):** add an Exchange Online account and an on-premises account via Autodiscover; mail sync, flag, move, categories as tags, send; calendar event created and a meeting invitation answered; a shared mailbox appears; out-of-office set and read back; a Nail rule placed as an Exchange inbox rule; room booked through the room finder; To Do task synced. Update the interop job documentation for the owner-run Exchange/Google checks.
 
 *Status:* done — ADR 0077 (package ADRs renumbered: 0073 Graph, 0074 EWS, 0075 common layer, 0076 UI). `nail-core/src/exchange/`: one engine task per Exchange account (Graph `GraphEngine` / EWS `EwsEngine` with Basic, OAuth2 or SSPI Windows sign-in), mail per mailbox (hierarchy and per-folder cursors, expired cursors merged, ids derived from the first server id, other mailboxes under `@<address>`), Graph polling with `PollTimer` / `FolderPoll` and EWS streaming with fallback, replay of the mail queue (flags, categories as tags, moves with the new id, trash / delete, appends) and of the Exchange queue (categories incl. Graph's rename-by-replacement — `update_category` answers the new id —, automatic replies, server rules, Focused Inbox), sending through the engine (the server files the Sent copy), settings sync, Nail rules placed as inbox rules (digests, folder ids translated, arrival rules skip placed ones), the generic vacation reply mapped to automatic replies, the `exchange:<account>` PIM source (calendars, contacts, To Do with checklists as subtasks, PIM queue replay, meetings answered through the meeting API and sent by the server — never iMIP), free/busy and the room finder through the engines; `focus:` in search, the rules' message view and the store filter; `DiscoverAccount` with Exchange Autodiscover (confirm-redirect / needs-login prompts, automapped mailboxes stored on add), `StartOAuth` with the engine's scopes, `TestAccount` through the engine; MCP: messages carry the Exchange data, Exchange calendars name their account for grants. UI: setup / settings mounts, the apply-categories dialog, layout placements, icon sizes; demo-multi with a mock Graph account `exchange` and a mock EWS account `corp` (both switched off at first) and mock Autodiscover (controls `graph-*`, `ews-*`). Tests: core `tests/exchange.rs` (9), `tests/m3c.rs`; Playwright `exchange.spec.ts` (6 scenarios: Exchange Online and on-premises added through Autodiscover; mail sync, flag, move, categories as tags, send; a shared mailbox and automatic replies set and read back; a Nail rule placed as an inbox rule; a room booked, a meeting answered and a To Do task synced). The interop job documentation names the owner-run Exchange / Google checks (docs/dev-setup.md).
@@ -521,6 +595,7 @@ Wire both engines into the core's account manager, sync engines, op replayers, P
 **M3 automated gate:** all suites green on Windows — `cargo test --workspace` (incl. the Exchange core tests; the SSPI live test is ignored by design: it needs a real Exchange server), clippy `-D warnings`, `cargo fmt --check`, Vitest, ESLint / tsc / Prettier, and the full Playwright run including the scenarios of all three waves (`pim.spec.ts`, `scheduling.spec.ts`, `gmail.spec.ts`, `exchange.spec.ts`). The interop CI job (Dovecot, Stalwart, Radicale) is configured; it is unproven until its first CI run. **Human gate:** open — an Exchange Online test tenant, an Exchange Server 2019 / SE (Kerberos / NTLM), and a Google test account with the restricted Gmail scope (owner tasks below).
 
 ### Owner tasks for M3
+
 - An Exchange Online test tenant (Microsoft 365 developer program or similar) and access to an Exchange Server on-premises (2019 / Subscription Edition) for the human interop gate.
 - A Google test account for Gmail API and Google CalDAV/CardDAV, and the Google OAuth client with the restricted Gmail scope.
 
@@ -532,7 +607,8 @@ Wire both engines into the core's account manager, sync engines, op replayers, P
 *M4 automated gate (WP125): PASSED locally* (superseded by the verify above) — all suites green on the integration run (cargo test --workspace, clippy -D warnings, fmt, Vitest, lint, Playwright incl. every M4a–M4c scenario and the desktop smoke tests), the performance budgets hold on the 100k-message benchmark (initial sync 286.4 s / 300, incremental sync 2,732 ms / 3,000, search p95 107.7 ms, list page p95 3.7 ms, cold start 69 ms, peak memory 125 MiB, first render 413 ms, scroll frame p95 18.1 ms, 0 long frames). The installer build and smoke scripts are unchanged since M4b (their script tests pass with the new version, MSI version `1.0.0.1`); they, the elevated MSI smoke test and every CI job (incl. the new `perf` job) have **not run on GitHub yet** — the first green CI run is a human gate in `docs/release-checklist.md`, together with the security review, the signed build, real accounts / hardware and the release update key.
 **Human gates for v1.0** (not blocking the automated gate): security review sign-off of the whole product, the EV code-signing certificate and a signed build, the real-account tests in `docs/backlog.md` as far as the owner wants them before release, and the external pentest only if internet mode is to be unlocked.
 
-**Scope decisions for M4**
+### Scope decisions for M4
+
 - Same rules as before: licence allowlist, no non-loopback sockets (ADR 0057), tests from day 1, docs split.
 - **Writes by agents and plug-ins always go through the operation queue and the audit log**, and every destructive or outgoing action (delete, send, forward, calendar invitations, rule changes) needs a confirmation the user sees in Nail, unless the user relaxed it per client / plug-in for non-destructive actions (drafts, flags, tags). Permanent delete is never auto-confirmed.
 - **Code signing:** the pipeline gets signing steps that run only when a certificate is configured (the EV certificate comes later, decided); unsigned builds stay possible for development.
@@ -544,6 +620,7 @@ M4 runs as three waves on the wave workflow.
 ### Wave M4a — Agents and full extensibility
 
 #### WP100 — Contract (sequential)
+
 MCP write tools and prompts (the design's tool table: `update_messages`, `delete_messages`, `create_draft`, `update_draft`, `send_message`, `create_event`, `update_event`, `respond_to_invite`, `upsert_contact`, `upsert_task`, `create_rule`, `test_rule`; prompts `summarize_thread`, `triage_folder`, `draft_reply`, `prepare_meeting`), confirmation requests/events (pending action with a human-readable summary, approve / deny, per-client "always allow" for non-destructive kinds), per-client rate limits; plug-in permissions for writes and hooks (`mail.organize`, `mail.send`, `calendar.write`, `contacts.write`, `tasks.write`, `hooks.arrival`, `hooks.beforeSend`, `hooks.open`, `composer`, `attachments`, `background`, `mcp.expose`), hook result types (veto with reason, banner, added headers/content), composer extension points (insert / transform text, custom Markdown block renderers), attachment preview and link/attachment action contributions, background job schedules and event subscriptions, `nail.l10n` runtime catalogs, binary bodies for `nail.http.fetch`.
 
 *Status:* done — ADR 0079. `nail_api::agents` (action kinds; policies ask / allow per MCP client or plug-in — destructive kinds always ask, outgoing and rule changes ask by default, drafts / flags / tags / PIM writes run without asking by default; confirmations with attribution, summary, targets, before / after, approve / deny / always allow; elicitation approves only non-destructive kinds), `nail_api::mcp::{tools, prompts}` (tool table incl. `edit_open_draft`, write-tool argument types with JSON Schemas behind the `json-schema` feature, idempotency keys, results; the four prompts) and `McpRateLimits`; plug-in permissions `mail.organize` … `mcp.expose`, `plugins::{hooks, extensions, jobs}` (hook definitions and results, vetoes, banners / badges, composer actions and edits, Markdown blocks, attachment previews (trees or images, never HTML), attachment / link actions, MCP tools, cron schedules, events, limits, activity); 11 requests, 5 events. Store v14 (confirmations and payloads sealed, policies, rate limits, idempotency, job state, hook stats, CPU per minute) with APIs. The core serves confirmations, policies, rate limits and plug-in activity from the store; host-backed requests answer empty / `unsupported` until WP105. Slots: `ui/src/features/agents/` (new), `widgets/agents.rs`, `locales/*/{agents,core-agents,core-mcp}.ftl`; new dependency schemars (rmcp's, MIT), rquickjs `array-buffer`.
@@ -657,7 +734,8 @@ The owner approved the UX proposal, every decision included: a published page, n
 **Automated gate:** all suites green, including the new Playwright scenarios per wave. Visual-regression baselines are regenerated and reviewed for all five themes (Frost, Sage, Graphite, Nocturne, High contrast) in both densities. axe is clean in every theme. No console warnings in tests, as the test setup enforces.
 **Human gate:** the owner looks at the real app (desktop and `nail serve`) and confirms the new look.
 
-**Scope decisions for M5**
+### Scope decisions for M5
+
 - Every structure and style stays expressible in `layout.kdl` / `theme.kdl`. The in-app editors write those files through the existing write-back with comments preserved, and offer undo. Nothing visual is hard-coded in components; they keep emitting `data-part`s.
 - **Font:** Segoe UI Variable, with the system stack as fallback. **Icons:** one set, Lucide (`lucide-react`, ISC licence).
 - **Themes:**
@@ -667,6 +745,7 @@ The owner approved the UX proposal, every decision included: a published page, n
 - **Development ports:** no fixed development ports. The Vite dev server for `tauri dev` picks a free port (preferred default not 5173; `NAIL_DEV_PORT` overrides it) and passes the matching `devUrl` to Tauri. `nail serve` without `--port` falls back to a free port when 4780 is taken; with an explicit `--port` it still fails. This rule goes into `CLAUDE.md`.
 
 ### Wave M5a — Visual foundation (and the port fix)
+
 - **WP150 (contract, sequential):**
   - First, the port fix as a separate commit.
   - Then theme metadata and selection: the theme list, active theme, the light/dark pair for "Follow Windows", density, and the user font-size / radius / accent overrides kept in the user's `theme.kdl` (`extends`).
@@ -687,6 +766,7 @@ The owner approved the UX proposal, every decision included: a published page, n
 Follow-ups / deferrals: `MessageSummary` `attachment_count` / `invitation` / `warning` for the tag line (store migration; M5b); a menu header entry (`MenuItem::Header`; the skin styles `context-menu.header`); make the CI `visual` job blocking after a green hosted run; whether High contrast should ignore the accent override; a `theme.kdl` that no longer resolves on a newly active theme only logs a warning (no `ConfigErrors`); old user files with `mode=` mix palettes (offer migration via the merge dialog, M5b / M5d); composer / rules / merge-dialog text areas still use the monospace face; the owner's look at the real app (human gate). High contrast main toolbar wraps at 1280px and a wrapped reader bar can start with a separator (M5b toolbar overflow); a user theme's preview shows its base palette, not its own overrides (preview tokens in `ThemeInfo`).
 
 ### Wave M5b — Shell and views
+
 - **WP160 (contract):** a view/navigation model (Mail, Calendar, Contacts, Tasks, Settings as views behind a rail), the layout model for views and the rail, toolbar overflow (`more` menus with ranked items, disabled actions hidden), folder-pane sections (Favorites, per account, smart folders only when present), and a settings-page model (grouped sections, search index of setting labels).
 - **WP161 (parallel):** the navigation rail and view switching (keyboard shortcuts, badges for confirmations and unread), and Calendar, Contacts and Tasks as full views using the existing PIM widgets.
 - **WP162 (parallel):** the mail view: grouped folder pane with collapsible account sections and colours; the list header (search with the Ctrl+K hint, title with counts, filter chips All / Unread / Flagged / Attachments); the ranked reader action bar with "More" (shortcuts shown) and the matching right-click menu.
@@ -700,6 +780,7 @@ Post-verify fixes (independent verify of the review fixes): the `write_back` gol
 Follow-ups / deferrals: restoring the remembered view only with a view host (the fallback opens nothing at start); the rail's account avatar is not interactive; the unread badge relies on the "All accounts" virtual account; hidden views stay mounted; the UI state (last view, settings section) is shared between the desktop and remote sessions; `MessageSummary` attachment / invitation / warning fields for the tag line (store migration); favorites that open windows (Snoozed, Outbox) are not marked selected, Flagged / Unread search every folder incl. Trash; the More menu opens at the button's left edge; a content-sized HTML frame needs the core to report the rendered height; widgets on the settings page repeat the section title in their own heading; the remote-access section shows "Pair a device" twice (settings and devices cards); the Ctrl+K search hint stays `/` (Ctrl+K is the palette; the rail has a palette button); the High contrast plain-text reader double-wraps 72-character lines at 1280 px (reflow in M5d); `FindFreeTime` ignores working hours (the UI cuts per day); `PimMenu` duplicates part of the context menu's keyboard model; the owner's look at the real app (human gate).
 
 ### Wave M5c — Window manager
+
 - **WP170 (contract):** dialog/window model (id, modal or not, min size, default size, remembered geometry, maximized and snapped state), a window-state store (per dialog, kept in a UI-state file in the config dir — not `layout.kdl`, which describes structure), and pop-out requests for the desktop.
 - **WP171 (parallel):** the window manager in the UI:
   - move by the title bar, resize from 8 handles, maximize and restore (double-click), snap to the left or right half;
@@ -716,6 +797,7 @@ Follow-ups / deferrals: restoring the remembered view only with a view host (the
 *M5c follow-ups / deferrals:* a `beforeClose` hook in the window layer instead of the composer's session-sync close guard; a time-out for a pop-out page that never answers the OS close request; resize handles outside the frame (they sit over the body's scrollbar); pop-out preparers for the stateful editors so they can opt in; default key bindings for `popout.open` / `popout.return`; snapping to the top edge / quarters; a backwards window cycle (Shift+F6-style, needs "lower window"); per-session geometry for remote browsers; a background composer's sign / encrypt report refreshed without focusing it; the visual `calendar-year` baselines depend on the weekday they were generated (demo events relative to today); a deterministic mock hook for the Exchange move race (ADR 0120); throughput budgets of the 520-message listing tests at very high parallel load.
 
 ### Wave M5d — In-app editors
+
 - **WP180 (contract):** layout-edit operations (move, swap or dock a pane, add or remove a widget, hide or show it, apply a preset, toolbar item moves between the bar and "More") as typed write-back patches; theme-edit operations (set a token, set a part override, duplicate as a new theme, rename, delete user themes); undo history.
 - **WP181 (parallel):** customize-layout mode:
   - pane headers with drag handles, dock and swap targets, and a hide/show eye;
@@ -726,6 +808,23 @@ Follow-ups / deferrals: restoring the remembered view only with a view host (the
 - **WP183 (parallel):** Appearance settings (theme gallery with live previews, "New theme", Follow Windows pair, accent, density, text size, corner radius) and the full theme editor (token groups for colour, type, spacing, radius and motion; per-part overrides; live preview; duplicate / rename / delete; the inspector's "Edit style" jumps to the part).
 - **WP184 (parallel):** write-back engine extensions in nail-config for all new patch kinds, with comment preservation, golden files and conflict handling when the file changed on disk.
 - **WP185 (integration):** wiring, every scenario (swap panes and confirm `layout.kdl`, add a widget, apply a preset, customize a toolbar, change accent and radius and confirm `theme.kdl`, duplicate a theme, undo), docs (`userDocs/en`: appearance, themes, customizing the layout, windows), the M5 gate status in this plan and the memory.
+
+### Quality baseline (Q1) — between M5c and M5d
+
+Requirement: linters and formatters for every kind of file, with 0 warnings and 0 errors, without switching off lints that are usually good (memory `zero-warnings-policy`). Q1 runs as one wave (contract, 4 parallel packages, integrate, reviews, fix, verify) before M5d starts.
+
+**Automated gate:** `npm run check` passes (every step, 0 warnings) and the CI job `quality` is green; every other suite stays green (`cargo test --workspace`, `npm test`, `npm run e2e:only`, the script tests).
+
+#### Scope decisions for Q1
+
+- **The rule:** 0 warnings, 0 errors. Never relax a lint level or `-D warnings`, never switch an ESLint rule off, never commit with `--no-verify`. An unavoidable exception is `#[expect(lint, reason = "…")]` (Rust; `#[allow]` is denied) or `// eslint-disable-next-line rule -- reason`, at the narrowest scope. Fix findings instead of suppressing them.
+- **Rust:** clippy `pedantic` as a group plus `unwrap_used` / `expect_used` (tests exempt), `allow_attributes` and `allow_attributes_without_reason` (deny); rustc `unreachable_pub`, `missing_debug_implementations`, `let_underscore_drop`, `trivial_casts`, `trivial_numeric_casts`, `unused_lifetimes`, `unused_import_braces`; rustdoc lints with `-D warnings`. Only `must_use_candidate`, `missing_errors_doc` and `too_many_lines` are off (ADR 0123 gives the reasons).
+- **TypeScript / JavaScript:** one shared ESLint flat config (`eslint.config.base.js`), typescript-eslint `strictTypeChecked` + `stylisticTypeChecked` with type information for every file, React Hooks and jsx-a11y for the UI, the Nail UI rules, described `eslint-disable` comments only. Every TS / JS file is linted and type-checked (ui, e2e, packages, examples, scripts, the plug-in prelude).
+- **Other files:** taplo (TOML; formatted once in its own commit), markdownlint-cli2 (all Markdown; line length off for prose), typos (spelling), actionlint (workflows), `.editorconfig` with a check script, cargo machete, cargo deny. Tools come from crates.io, npm and PyPI only.
+- **One entry point:** `npm run check`; CI job `quality` runs it and blocks. A pre-commit hook (`.githooks/`, set by `npm install`) checks the staged files in a few seconds.
+- **Packages:** contract (tooling, findings report, ADR 0123), then q-rust-a (nail-core, nail-mcp, nail-plugins, nail-server, nail-cli, nail-mapi, nail-bench, nail-remote-auth, nail-proxy, app/src-tauri), q-rust-b (nail-api, nail-store, nail-config, nail-search, nail-vault, nail-rules, nail-sieve, nail-triage, nail-compose), q-rust-c (every other crate), q-ts-ui (ui, locales) and q-ts-rest (e2e, packages, examples, scripts incl. the interop crate, docs, userDocs, .github, root configs) fix the findings of their directories in parallel. Behaviour does not change; every fix keeps the tests green, and code that a fix restructures gets tests.
+
+*Status:* contract done (ADR 0123). Findings at the contract: clippy 3096, rustdoc 23, ESLint 5918, tsc (Node scripts, prelude) 654, markdownlint 128, typos 79, cargo machete 12; rustfmt, taplo, Prettier, EditorConfig, actionlint and cargo deny clean. Report per crate / lint / area: `%LOCALAPPDATA%/nail-build/q1/findings.md`.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

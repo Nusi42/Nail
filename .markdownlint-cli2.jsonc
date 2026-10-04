@@ -1,0 +1,23 @@
+// markdownlint-cli2 (quality baseline Q1, ADR 0123): every Markdown file in
+// the repository (`npm run lint:md`, part of `npm run check` and the
+// pre-commit hook). Rules: markdownlint's defaults, with these choices:
+{
+  "config": {
+    "default": true,
+    // Line length is off for prose: paragraphs are written one per line or
+    // wrapped by hand, rendered output does not depend on it, and reflowing
+    // ~250 documents would bury real changes in diffs. Code blocks and
+    // tables are not affected by wrapping either way.
+    "MD013": false,
+    // Project memory files (.claude/memory) start with YAML front matter whose
+    // `name` is their title (Claude Code's memory format), not with an H1.
+    "MD041": { "front_matter_title": "^ *(title|name) *[:=]" },
+  },
+  "ignores": [
+    "**/node_modules/**",
+    ".nail-build/**",
+    "**/dist/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+  ],
+}

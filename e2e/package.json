@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "lint": "tsc --noEmit -p . && tsc --noEmit -p perf && tsc --noEmit -p visual && prettier --check .",
-    "install-browsers": "playwright install chromium"
+    "lint": "eslint --max-warnings 0 . && npm run typecheck && prettier --check .",
+    "install-browsers": "playwright install chromium",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p perf && tsc --noEmit -p visual"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

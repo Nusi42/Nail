@@ -13,6 +13,7 @@ is the primary platform. User-facing documentation lives in
 | Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`, `packages/*`); **not** pnpm (ADR 0001) |
 | WebView2 runtime | evergreen | Preinstalled on Windows 11; needed by the desktop app only |
 | Playwright Chromium | matches `@playwright/test` | `npx -w e2e playwright install chromium`, once per machine |
+| Lint tools (Q1, ADR 0123) | taplo-cli 0.10, cargo-machete 0.9, cargo-deny; typos 1.50, actionlint 1.6.25 | `cargo install taplo-cli cargo-machete cargo-deny --locked`; `pip install -r requirements-dev.txt` (Python 3; the scripts directory need not be on PATH, `npm run check` finds it). Everything else comes with `npm ci` |
 
 Docker is not needed. Integration tests use the in-process mock servers from
 `crates/nail-testkit` (IMAP) and `crates/nail-testkit-net` (SMTP, POP3,
@@ -51,12 +52,15 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | What | Command |
 | --- | --- |
 | Rust unit and integration tests | `cargo test --workspace` |
+| Every formatter check and linter, 0 warnings (below) | `npm run check` |
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` |
+| rustdoc lints | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` |
 | Rust formatting | `cargo fmt --all --check` |
 | Socket-bind check (ADR 0057), then UI unit tests (Vitest) incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
 | UI unit tests with their console output, also when piped | `cd ui && npx vitest run --silent=false --reporter=default` (no `stderr \|` block expected) |
 | Socket-bind check only | `npm run check:sockets` |
-| ESLint, TypeScript, Prettier (ui and e2e) | `npm run lint` |
+| ESLint (type-aware, whole repository, `--max-warnings 0`), tsc (every tsconfig), Prettier (whole repository) | `npm run lint` |
+| Markdown, TOML, EditorConfig | `npm run lint:md`, `npm run lint:toml`, `npm run lint:editorconfig` |
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
 | Playwright only (already built) | `npm run e2e:only` |
 | The desktop app for the WebView2 smoke test | `npm run build:desktop` |
@@ -67,6 +71,38 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Merge benchmark reports and check the budgets | `nail-bench check --report A --report B [--tolerant] [--out F]` |
 | The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `%LOCALAPPDATA%/nail-build/perf/<corpus>` |
 | Only the UI perf scenario | `npx playwright test -c e2e/perf/playwright.perf.config.ts` (env `NAIL_PERF_CORPUS`, `NAIL_PERF_WORK`, `NAIL_PERF_TOLERANT`, `NAIL_PERF_FRESH`, `NAIL_BIN`, `NAIL_BENCH_BIN`) |
+
+### Linters and formatters (Q1, ADR 0123)
+
+The rule: **0 warnings, 0 errors.** Never lower a lint level, never switch an
+ESLint rule off, never relax `-D warnings`, never commit with `--no-verify`.
+An unavoidable exception is written at the narrowest scope with its reason:
+`#[expect(lint, reason = "…")]` in Rust (`#[allow]` is rejected by clippy) or
+`// eslint-disable-next-line rule -- reason` in TypeScript / JavaScript.
+
+| Files | Tool | Config | Fix |
+| --- | --- | --- | --- |
+| Rust | rustfmt; clippy (`all` + `pedantic` + restriction picks, `-D warnings`); rustdoc lints | `rustfmt.toml`, `[workspace.lints]` in `Cargo.toml`, `clippy.toml` | `cargo fmt --all`, `cargo clippy --fix` |
+| TS / JS (ui, e2e, packages, examples, scripts, `crates/nail-plugins/src/prelude.js`) | ESLint (typescript-eslint `strictTypeChecked` + `stylisticTypeChecked`, type-aware; React, Hooks, jsx-a11y and the Nail rules in `ui/`), tsc | `eslint.config.base.js`, `eslint.config.js`, `ui/eslint.config.js`, the root `tsconfig.json` (loose Node scripts) | `npx eslint --fix <files>` |
+| TS, JS, JSON, YAML, CSS, HTML | Prettier | `.prettierrc.json`, `.prettierignore` | `npm run format` |
+| TOML | taplo | `taplo.toml` | `taplo fmt` |
+| Markdown | markdownlint-cli2 (line length off for prose) | `.markdownlint-cli2.jsonc` | `npx markdownlint-cli2 --fix "**/*.md"` |
+| Everything | typos | `typos.toml` (add a legitimate word with its reason) | `typos --write-changes` |
+| Workflows | actionlint | — | — |
+| Every text file | EditorConfig check (`scripts/check-editorconfig.mjs`) | `.editorconfig` | your editor |
+| `Cargo.toml` dependencies | cargo machete; cargo deny | `deny.toml` | remove the dependency |
+
+`npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
+`node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
+select some, `--fail-fast` stops at the first failure. Cargo runs with
+`-j $CARGO_BUILD_JOBS` (default 4). `cargo deny` checks advisories only with
+`--advisories` or in CI (the RustSec database comes from the network).
+
+The **pre-commit hook** (`.githooks/pre-commit`, enabled by `npm install` /
+`npm ci` through the `prepare` script, which sets `core.hooksPath`) runs
+rustfmt, Prettier, ESLint, taplo, markdownlint, typos and the EditorConfig
+check on the staged files only, in parallel, in a few seconds. It reads the
+working-tree copy of each staged file, so stage the whole file you fixed.
 
 ### Console output in UI tests
 
@@ -107,13 +143,14 @@ CI (`.github/workflows/ci.yml`) runs these jobs:
 
 | Job | Runner | What |
 | --- | --- | --- |
+| `quality` | `windows-latest` | `npm run check` (every formatter and linter, 0 warnings; tools from crates.io and PyPI); blocking (ADR 0123) |
 | `build-test` | `windows-latest` | build, `cargo test --workspace`, clippy, fmt, Vitest, lint, the Playwright web tests, the script tests |
 | `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke tests (`desktop.spec.ts`, `desktop-m4b.spec.ts`, `desktop-m4c.spec.ts`, `desktop-m5c.spec.ts`) with `NAIL_E2E_DESKTOP=1` |
 | `mapi` | `windows-latest` | `nail-mapi` tests as x86 under WOW64, release builds of `nail_mapi.dll` for x64 / x86 / ARM64, every export checked on the x64 and x86 DLLs (`nail-mapi-harness exports`) |
 | `installer` | `windows-latest` | `node scripts/build-installer.mjs --offline-webview …` (NSIS, MSI, offline-WebView2 NSIS, portable zip, SBOMs, update signatures with a throwaway key), the next patch version as the update, the loopback update server, `installer-smoke.ps1` (install → start → update → start → uninstall), `msi-smoke.ps1` (elevated silent MSI install with properties → start: the app reports msi-managed updates → upgrade → uninstall), winget manifests; uploads everything |
 | `installer-arm64` | `windows-latest` | the ARM64 installers, cross-built (not run: no ARM64 runner) |
 | `deny` | `ubuntu-latest` | `cargo deny check` |
-| `interop` | `ubuntu-latest` | the engines against real Dovecot and Stalwart (below) |
+| `interop` | `ubuntu-latest` | clippy `-D warnings` on the interop crate, then the engines against real Dovecot and Stalwart (below) |
 | `perf` | `windows-latest` | the 100k-message benchmark (`node e2e/perf/run-perf.mjs --corpus standard --tolerant` after release builds of `nail-cli` / `nail-bench` and the UI); uploads `report*.json` and the scroll trace; 60 minutes at most (M4c, ADR 0097) |
 
 `.github/workflows/release.yml` (tags / manual) builds the signed x64 and
@@ -297,7 +334,7 @@ How it works:
 - The browser window is 1280 × 1000 (M5b: the message list under the list
   header shows every row of the demo inboxes). Shared helpers for the M5b
   shell are in `e2e/support/views.ts`: `showView` / `viewRegion` (a view is
-  a region "<View> view" in the view host), `openSettings` (a section of the
+  a region "`<View>` view" in the view host), `openSettings` (a section of the
   settings page) and `openSettingsTab` (the section of a former settings
   tab), `runFromPalette` (actions without a button), `toolbarAction` /
   `readerAction` (a bar's button, else its More menu), `accountSections` /
@@ -364,7 +401,7 @@ saving, the Move dialog) for every built-in theme
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.
 
-```
+```text
 npm run build -w ui && cargo build -p nail-cli   # prerequisites (or NAIL_BIN=<nail.exe>)
 npm run visual             # compare with e2e/visual/baselines/<platform>/, then build the review page
 npm run visual:update      # also write baselines of new / changed screens
@@ -581,7 +618,7 @@ projects on the same machine (plan section 10):
 
 ### Data and config directories
 
-```
+```text
 <data-dir>/nail.sqlite3        metadata (SQLite, WAL; plus -wal/-shm files)
 <data-dir>/blobs/ab/<62 hex>   raw messages, zstd-compressed, addressed by SHA-256
 <config-dir>/theme.kdl         optional; see userDocs/en/theme-reference.md

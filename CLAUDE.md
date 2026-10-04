@@ -17,6 +17,10 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - **Windows first.** macOS, Linux and mobile come later.
 - **No fixed development ports.** Take a free port or fall back to one, so Nail runs next to other projects (`scripts/dev.mjs`: Vite on `NAIL_DEV_PORT` / 5791 / a free port + Tauri `devUrl`; `nail serve` falls back from 4780; tests bind port 0).
 - **No non-loopback sockets.** Never open sockets on non-loopback/unspecified addresses (TCP or UDP), except the user-enabled remote UI listener; use the OS DNS API; tests bind 127.0.0.1 (ADR 0057; `scripts/check-socket-binds.mjs` runs in `npm test`).
+- **Zero warnings (Q1, ADR 0123).** 0 warnings, 0 errors; never relax lint levels or `-D warnings` (no new `allow`
+  in `[workspace.lints]`, no ESLint rule switched off, no `--no-verify`). An unavoidable exception needs
+  `#[expect(lint, reason = "…")]` (Rust; `#[allow]` is denied) / `// eslint-disable-next-line rule -- reason` at the
+  narrowest scope. `npm run check` runs every formatter and linter; the pre-commit hook checks staged files.
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
@@ -30,7 +34,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 
 ## Layout
 
-```
+```text
 crates/nail-api        shared types + Request/Response/Event protocol (ts-rs → ui/src/api/generated);
                        engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only);
                        M1b: rich drafts, rules, mcp, context (UI context), customize (ADR 0022);
@@ -638,14 +642,23 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
                        ADR 0089), check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040);
-                       dev.mjs + tauri.mjs + lib/dev-port.mjs (free dev-server port, Tauri devUrl override)
+                       dev.mjs + tauri.mjs + lib/dev-port.mjs (free dev-server port, Tauri devUrl override);
+                       Q1 (ADR 0123): check.mjs + lib/check-steps.mjs (`npm run check`), pre-commit.mjs +
+                       lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
+                       check-editorconfig.mjs + lib/editorconfig-check.mjs
+Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: typescript-eslint strictTypeChecked +
+                       stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
+                       eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
+                       Node scripts + prelude.js), clippy.toml, [workspace.lints] in Cargo.toml, taplo.toml,
+                       .markdownlint-cli2.jsonc, typos.toml, .editorconfig, requirements-dev.txt (typos,
+                       actionlint), .githooks/
 ```
 
 ## Commands
 
 Full details in `docs/dev-setup.md`; keep both in sync.
 
-```
+```text
 npm ci                                     # npm workspaces: ui, e2e, packages/*
 npm run build                              # ui/dist — required before any `cargo … --workspace` (Tauri embeds it)
 cargo test                                 # default members = all crates except app/src-tauri
@@ -655,7 +668,13 @@ cargo fmt --all --check
 npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`, perf + visual script tests
 cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
-npm run lint                               # ESLint + tsc + Prettier (ui), tsc (e2e, perf, visual) + Prettier (e2e)
+npm run check                              # everything, 0 warnings (ADR 0123): rustfmt, taplo, Prettier, EditorConfig, typos, markdownlint, actionlint, ESLint, tsc, clippy + rustdoc -D warnings, cargo machete, cargo deny
+node scripts/check.mjs --only eslint,tsc   # a subset (--skip, --list, --advisories = cargo deny advisories, on in CI; --fail-fast)
+npm run lint                               # ESLint (whole repo, type-aware, --max-warnings 0) + tsc (every tsconfig) + Prettier (whole repo)
+npm run lint:md / lint:toml / lint:editorconfig   # markdownlint, taplo fmt --check + taplo check, EditorConfig
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps   # rustdoc lints
+cargo machete                              # unused dependencies; typos / actionlint: pip install -r requirements-dev.txt
+taplo fmt                                  # format TOML (cargo install taplo-cli --locked)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run build:desktop                      # nail-app (custom-protocol + test-overrides) + DLL / harness for the desktop smoke tests, own target dir
@@ -960,7 +979,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   main window is `nav-rail` + `view-host` (plus config errors / status bar); the M5a panes live in `window "mail"`
   (grouped folder-tree, list-header first in the list pane); no main toolbar (palette, folder pane, rail instead);
   settings window = `settings-page` (+ section `calendar` with `pim-settings`); `pim.*.open` / `settings.open` alias
-  `view.show`. E2E: views are regions "<View> view", Settings sections via the page nav (`e2e/support/views.ts`),
+  `view.show`. E2E: views are regions "`<View>` view", Settings sections via the page nav (`e2e/support/views.ts`),
   window 1280 × 1000, the last view survives reloads (switch to Mail first). Split `auto` = content width.
   Pre-rail user layouts keep their main window (views open as windows) and get the new default offered once through
   the merge dialog. `ThemeInfo.preview` (a theme's own colours for the gallery); the UI negotiates browser languages

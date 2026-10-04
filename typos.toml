@@ -1,0 +1,48 @@
+# typos (spell checker for code, docs and configs; quality baseline Q1,
+# ADR 0123). `typos` = check, `typos --write-changes` = fix. Part of
+# `npm run check` and the pre-commit hook. Add a word below only when it is
+# legitimate (a protocol token, a name, test data) and say why.
+
+[files]
+extend-exclude = [
+    # Lock files, binary or byte-exact test data, generated code.
+    "Cargo.lock",
+    "package-lock.json",
+    "*.png",
+    "*.eml",
+    "*.asc",
+    "*.key",
+    "*.crt",
+    "*.p12",
+    "*.sig",
+    "*.msf",
+    "*.sqlite",
+    "*.dat",
+    "crates/nail-testkit/corpus/",
+    "crates/*/tests/fixtures/",
+    "e2e/visual/baselines/",
+    "ui/src/api/generated/",
+    "packages/plugin-api/src/generated/",
+    "crates/nail-store/libsqlite3-sys-sqlite3mc/bindings/",
+    # insta snapshots: recorded output of the (byte-exact) mail corpus.
+    "*.snap",
+    # German text: typos only knows English.
+    "locales/de/",
+    "**/locales/de.ftl",
+]
+
+[default.extend-words]
+# Protocol and format tokens.
+HELO = "HELO"                     # SMTP greeting command (RFC 5321)
+helo = "helo"
+UNAUTHENTICATE = "UNAUTHENTICATE" # IMAP command (RFC 8437)
+FPR = "FPR"                       # GnuPG colon-listing record type (fingerprint)
+fpr = "fpr"
+EDE = "EDE"                       # 3DES-EDE (encrypt-decrypt-encrypt)
+cose = "cose"                     # COSE keys (WebAuthn, RFC 9052)
+paeth = "paeth"                   # PNG Paeth filter
+FLE = "FLE"                       # Windows time zone "FLE Standard Time"
+SEH = "SEH"                       # Windows structured exception handling
+THRID = "THRID"                   # Gmail IMAP attribute X-GM-THRID
+alikes = "alikes"                 # "look-alikes" (typos splits hyphenated words)
+Cpy = "Cpy"                       # NSIS StrCpy instruction

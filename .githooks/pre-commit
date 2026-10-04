@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fast checks on the staged files (scripts/pre-commit.mjs, ADR 0123).
+# Never bypass with --no-verify: fix the finding instead.
+exec node scripts/pre-commit.mjs

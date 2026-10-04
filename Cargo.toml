@@ -416,18 +416,53 @@ tauri-plugin-single-instance = "2.5.1"
 tempfile = "3.27"
 pretty_assertions = "1.4"
 
+# Lints (quality baseline Q1, ADR 0123). Zero warnings: CI and `npm run check`
+# run clippy and rustdoc with `-D warnings`. Never relax a level here; an
+# unavoidable exception is `#[expect(lint, reason = "...")]` at the narrowest
+# scope (`allow` attributes are denied below).
 [workspace.lints.rust]
 unsafe_code = "deny"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unused_qualifications = "warn"
+unused_lifetimes = "warn"
+let_underscore_drop = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_import_braces = "warn"
+unreachable_pub = "warn"
+missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# The only pedantic lints switched off (pure style for this codebase; ADR 0123):
+# - must_use_candidate: would put #[must_use] on ~2000 plain getters and
+#   constructors; #[must_use] is added by hand where ignoring a value is a bug.
+# - missing_errors_doc: internal, unpublished crates; every error is a typed
+#   enum whose variants are documented where they are defined.
+# - too_many_lines: a line count, not a defect; protocol state machines,
+#   request dispatchers and table-driven tests are long by nature.
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+too_many_lines = "allow"
+# Pedantic, kept explicit from before Q1.
+large_futures = "warn"
+# Restriction lints switched on.
 dbg_macro = "warn"
 todo = "warn"
 unimplemented = "warn"
-large_futures = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+# Nursery lints switched on.
 needless_pass_by_ref_mut = "warn"
+
+[workspace.lints.rustdoc]
+# `cargo doc --workspace --no-deps` runs with RUSTDOCFLAGS="-D warnings"; the
+# default rustdoc lints (broken links, invalid HTML, bare URLs, ...) are warn.
+private_intra_doc_links = "warn"
+unescaped_backticks = "warn"
 
 [profile.dev]
 # Keep debug builds reasonably fast while still debuggable.

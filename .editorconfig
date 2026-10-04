@@ -1,0 +1,38 @@
+# EditorConfig (quality baseline Q1, ADR 0123): https://editorconfig.org
+# `node scripts/check-editorconfig.mjs` checks charset, line endings, final
+# newline, trailing whitespace and the indentation style (part of
+# `npm run check` and the pre-commit hook); widths are the formatters' job.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# rustfmt, taplo (4 spaces); KDL defaults, Python, PowerShell, NSIS, WiX.
+[*.{rs,toml,kdl,py,ps1,nsh,nsi,wxs,wxi}]
+indent_size = 4
+
+# Byte-exact test data: MIME messages and snapshots (CRLF on purpose,
+# trailing spaces are content), calendar / contact files (CRLF by RFC),
+# certificates, keys, and recorded third-party files.
+[*.{eml,snap,ics,vcf,asc,key,pub,crt,pem,sig,txt}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+
+[{crates/nail-testkit/corpus/**,crates/*/tests/fixtures/**,crates/*/tests/corpus/**,crates/*/tests/golden/**,e2e/visual/baselines/**}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+
+# Generated, then formatted by Prettier.
+[{ui/src/api/generated/**,packages/plugin-api/src/generated/**}]
+trim_trailing_whitespace = unset

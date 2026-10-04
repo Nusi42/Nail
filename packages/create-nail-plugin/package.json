@@ -19,7 +19,8 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "lint": "tsc -p . && prettier --check ."
+    "lint": "eslint --max-warnings 0 . && npm run typecheck && prettier --check .",
+    "typecheck": "tsc -p . && tsc -p template && tsc -p templates"
   },
   "dependencies": {
     "@nail/plugin-api": "*"

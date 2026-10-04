@@ -25,9 +25,10 @@
   },
   "scripts": {
     "test": "vitest run",
-    "lint": "tsc -p . && tsc -p tsconfig.sandbox.json && prettier --check .",
+    "lint": "eslint --max-warnings 0 . && npm run typecheck && prettier --check .",
     "docs": "node scripts/gen-docs.mjs",
-    "docs:check": "node scripts/gen-docs.mjs --check"
+    "docs:check": "node scripts/gen-docs.mjs --check",
+    "typecheck": "tsc -p . && tsc -p tsconfig.sandbox.json"
   },
   "peerDependencies": {
     "esbuild": ">=0.25"

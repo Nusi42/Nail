@@ -6,14 +6,14 @@ Sep 29, 2026 · Living version: a published page, not linked here
 
 Nail is an email and PIM client for desktop and mobile whose entire UI is defined by two user-editable files, and whose data is fully available to AI agents over MCP. It covers everything a mainstream client does (Thunderbird, Outlook, Apple Mail), plus four distinguishing features.
 
-**Distinguishing features**
+### Distinguishing features
 
 1. **Total UI customization.** One theme file (every visual property) and one layout file (every structural property). The built-in UI is itself just the default pair of files; nothing is hard-coded.
 2. **HTML and Markdown authoring.** A WYSIWYG HTML editor and a Markdown editor, both first-class, with clean multipart output.
 3. **MCP-native.** Every piece of mail, calendar and contact data is exposed as MCP resources and tools, with scoped permissions.
 4. **Virtual accounts.** Any set of accounts can be merged into one virtual account with unified folders, threads and search.
 
-**Goals**
+### Goals
 
 - Standards-complete mail (IMAP, POP3, SMTP, OpenPGP, S/MIME, OAuth2) plus Microsoft Exchange, both on-premises and Exchange Online.
 - Calendar, contacts and tasks over CalDAV/CardDAV, with iTIP invitations.
@@ -21,7 +21,7 @@ Nail is an email and PIM client for desktop and mobile whose entire UI is define
 - Fast and offline-capable: local store, instant search, background sync.
 - Windows first, then macOS, Linux, Android and iOS, from one Rust core and one React renderer.
 
-**Non-goals for v1**
+### Non-goals for v1
 
 - A hosted web service. Browser and mobile access come from the user's own Nail instance or the native apps.
 - Exchange ActiveSync (EWS and Microsoft Graph already cover Exchange).
@@ -53,7 +53,7 @@ flowchart TB
 
 The desktop window, a remote browser and MCP agents all go through the same client API, so each one sees the same data and the same rules.
 
-**Components**
+### Components
 
 - **nail-core (Rust library).** Protocol engines, sync engine, local store, search index, crypto, rules engine, MIME parsing and building. Has no UI dependencies, so it is testable headless.
 - **Tauri 2 shell (Rust).** Hosts nail-core in-process and exposes it to the UI as typed IPC commands (request/response) and events (push: new mail, sync progress, reminders). Keeps running in the system tray when the window closes, so sync, filters, reminders and MCP keep working.
@@ -62,13 +62,13 @@ The desktop window, a remote browser and MCP agents all go through the same clie
 - **MCP server (Rust, in nail-core).** Serves Streamable HTTP on localhost. A small `nail mcp` binary bridges stdio clients to the running app over a local socket (named pipe on Windows).
 - **Config watcher.** Watches the theme and layout files, validates on change, hot-reloads the UI. An invalid file shows an error overlay and keeps the last valid version.
 
-**Boundaries**
+### Boundaries
 
 - IPC types are defined once in Rust and generated for TypeScript (for example with `specta` or `ts-rs`), so the two sides cannot drift.
 - Long operations (sync, search, send) are async on a Tokio runtime and report progress as events.
 - Every write goes through one operation queue. The UI, filters and MCP tools all use the same path, so undo, offline replay and audit logging work the same for each.
 
-**Remote UI (web server mode)**
+### Remote UI (web server mode)
 
 The app can serve its UI over HTTP, so a browser on another device sees the same client it would see in the desktop window. This works because the React renderer is transport-agnostic.
 
@@ -79,7 +79,7 @@ The app can serve its UI over HTTP, so a browser on another device sees the same
 - **Security.** Off by default. Binds to localhost unless configured otherwise, and requires TLS for any non-loopback address. Login uses a password or passkey, and new devices are paired by a one-time code shown in the desktop app. Sessions can be listed and revoked, and they carry the same scopes as MCP clients (read-only, no-send, full).
 - **Native-only features degrade gracefully.** OS notifications become Web Notifications. Drag-and-drop from the file system works through the browser. Local file paths and smartcard (PKCS#11) signing stay on the host.
 
-**Remote UI security (LAN first, internet later)**
+### Remote UI security (LAN first, internet later)
 
 In v1 the remote UI is served on the LAN only, but it is built to the standard of internet exposure from day one. The internet option stays locked until an external penetration test has passed.
 
@@ -95,7 +95,7 @@ In v1 the remote UI is served on the LAN only, but it is built to the standard o
 - **Internet mode checklist.** Security review and pentest passed, and all of the above enforced. The docs recommend an extra layer in front (WireGuard / Tailscale, or a reverse proxy with its own authentication), with optional IP allowlists.
 - **Memory safety and dependency hygiene** come from Rust, the fuzzing suite and dependency auditing (see Testing & quality).
 
-**Mobile (Android and iOS)**
+### Mobile (Android and iOS)
 
 Phones and tablets get Nail two ways: the remote UI installed as a PWA, and native apps built from the same core and renderer with Tauri 2's mobile targets.
 
@@ -128,7 +128,7 @@ Each account is a bundle of incoming mail (IMAP or POP3), outgoing mail (SMTP), 
 | Contacts | CardDAV (RFC 6352) | vCard 3.0 and 4.0 |
 | Sieve | ManageSieve (RFC 5804) | Server-side filters and vacation replies |
 
-**Microsoft Exchange**
+### Microsoft Exchange
 
 Exchange is a first-class account type with its own engine behind the same core interfaces, so it works with virtual accounts, filters, search and MCP like any other account.
 
@@ -145,7 +145,7 @@ Exchange is a first-class account type with its own engine behind the same core 
 - Shared mailboxes and delegate access are supported as extra folder trees under the account.
 - Microsoft has announced the retirement of EWS in Exchange Online, so Graph is the only path there. Check the current timeline before building. (This is from memory, not a checked source.)
 
-**Gmail**
+### Gmail
 
 Gmail accounts use the Gmail API rather than IMAP. The API is free to use within per-user quotas, and it gives native labels, native threads and cheap incremental sync.
 
@@ -155,7 +155,7 @@ Gmail accounts use the Gmail API rather than IMAP. The API is free to use within
 - Google Calendar and Contacts use CalDAV / CardDAV for now. IMAP remains available as a fallback.
 - The quota and verification details are from memory; confirm them against Google's current terms before implementing.
 
-**Account behaviour**
+### Account behaviour
 
 - POP3 accounts deliver into local folders; IMAP accounts mirror the server. Both can be members of a virtual account.
 - Each account has sync policies per folder: full bodies, headers only, or bodies for the last N days.
@@ -167,14 +167,14 @@ Gmail accounts use the Gmail API rather than IMAP. The API is free to use within
 
 A virtual account is a named, user-defined merge of real accounts. It appears in the UI as one account while every message stays owned by its real source. Merging is optional and non-destructive: removing a virtual account changes nothing on any server.
 
-**Folder mapping**
+### Folder mapping
 
 - Folders with a known role (Inbox, Sent, Drafts, Archive, Junk, Trash) merge automatically by IMAP SPECIAL-USE role, or by name heuristics when the server does not advertise roles.
 - Users can map any other folders by hand, for example `Receipts` = `work/Receipts` + `personal/Bills`.
 - Unmapped folders appear under a per-account subtree inside the virtual account, so nothing is hidden.
 - A real account can belong to several virtual accounts, for example "Everything" and "Work".
 
-**Behaviour**
+### Behaviour
 
 | Operation | What happens in a virtual account |
 | --- | --- |
@@ -193,21 +193,21 @@ The source account shows as a badge on each message. The layout file decides whe
 
 Everything the UI or MCP reads comes from a local store, so the client is fast and fully usable offline. Servers are synchronized in the background.
 
-**Local store**
+### Local store
 
 - **Metadata:** SQLite in WAL mode. Holds accounts, folders, messages (envelope, flags, tags, thread id, sync state), events, contacts, rules and the operation queue.
 - **Message bodies:** raw RFC 5322 files in a content-addressed blob store, zstd-compressed and deduplicated by hash.
 - **Search index:** Tantivy full-text index over headers, decoded body text and attachment names. Optional text extraction from PDF and Office attachments.
 - **Encryption at rest (optional):** SQLCipher for the database, with blobs encrypted under a key held in the OS keychain.
 
-**Sync engine**
+### Sync engine
 
 - IMAP uses QRESYNC/CONDSTORE for incremental sync and IDLE for push. Without IDLE (or for folders past the connection limit), it polls on an interval set per account.
 - POP3 downloads on an interval and tracks UIDL to avoid duplicates.
 - **Offline operation queue:** each user action (flag, move, delete, send) is applied locally at once, then queued and replayed to the server. Conflicts resolve server-wins for flags. For moves, a message the server has since deleted is kept locally in a Recovered folder.
 - An outbox holds unsent mail, so undo send and send later are just delayed queue entries.
 
-**Threading and search**
+### Threading and search
 
 - Threads are built with the JWZ algorithm (Message-ID, In-Reply-To, References), plus a subject fallback, and Gmail thread ids when available.
 - Search query language: `from:` `to:` `subject:` `has:attachment` `is:unread` `tag:` `account:` `folder:` `before:` `after:` `size>` plus free text and boolean operators. The same language is used in the UI, saved searches, filters and MCP.
@@ -226,13 +226,13 @@ The composer has three modes: HTML (WYSIWYG), Markdown (source with live preview
 | Markdown | Code editor (CodeMirror 6) with side-by-side or toggle preview. CommonMark + GFM (tables, task lists, strikethrough, autolinks), footnotes, syntax-highlighted code blocks | `multipart/alternative`: the Markdown source as `text/plain` (readable as is) + rendered `text/html`. Optional extra `text/markdown` part (RFC 7763) |
 | Plain text | Plain editor | `text/plain; format=flowed` (RFC 3676) |
 
-**Rendering and safety**
+### Rendering and safety
 
 - Markdown is rendered in the Rust core (comrak), so the preview, the sent HTML and the MCP draft tools produce identical output.
 - Outgoing HTML is styled by a **mail stylesheet** set per identity (fonts, colours, code-block theme). Nail inlines it into `style` attributes, because many clients strip `<style>` blocks. This is separate from the UI theme: it styles what recipients see, not Nail itself.
 - HTML is sanitized on the way in (pasted content, replies) and on the way out, using an allowlist (ammonia).
 
-**Switching and quoting**
+### Switching and quoting
 
 - Markdown → HTML is lossless. HTML → Markdown is best-effort and warns before dropping formatting it cannot express.
 - Replying to HTML in Markdown mode quotes the original as converted `>` blocks. Replying in HTML mode keeps the original HTML as a styled blockquote.
@@ -253,14 +253,14 @@ Nail supports both end-to-end standards (OpenPGP and S/MIME) for signing, encryp
 | Protected headers | Header protection for encrypted mail | Subject is encrypted and shown as "..." on the wire |
 | Sender authenticity | DKIM, SPF, DMARC from `Authentication-Results`; BIMI optional | Result shown as a badge; the layout file places it |
 
-**Reading mail safely**
+### Reading mail safely
 
 - HTML renders in a sandboxed iframe with scripts, forms and plugins disabled.
 - Remote content (images, fonts, CSS) is blocked by default and loaded through the core's proxy once allowed, so the sender never sees your IP address. Allow per message, per sender or per domain.
 - Links show their real target on hover. Mismatched display/target links, punycode lookalike domains and suspicious attachment types are flagged.
 - Read receipts (MDN) are off by default and never sent without asking.
 
-**Keys and secrets**
+### Keys and secrets
 
 - Private keys and passwords live in the OS keychain or on a smartcard, never in plain files.
 - Decrypted content is not indexed by default. You can opt in per account, and the index then counts as sensitive (encrypted at rest).
@@ -278,14 +278,14 @@ Filters are ordered rules of the form trigger → conditions → actions. The Ru
 | Conditions | Any header (exact, contains, regex); body text; the search query language; attachment present / type / name; size; date; tags and flags; sender in address book or group; signed / encrypted / verification result; DKIM / SPF / DMARC result; list-id. Combined with all / any / not, nestable |
 | Actions | Move, copy, delete, archive, tag, flag, mark read, set colour, snooze, forward, redirect, reply with template, add sender to a contact group, create a calendar event from an invite, notify (or suppress notification), run an external command (opt-in), stop processing |
 
-**Authoring**
+### Authoring
 
 - A visual rule editor, plus a text form in a `rules` file (same config language as theme and layout) for people who prefer editing by hand.
 - "Test rule" runs it against existing mail and shows the matches before you save.
 - "Create rule from message" pre-fills conditions from the selected mail.
 - Every rule action goes through the operation queue, so filtering can be undone per run.
 
-**Server-side execution**
+### Server-side execution
 
 - **IMAP servers with ManageSieve:** rules that only use Sieve-expressible conditions and actions compile to a Sieve script (RFC 5228 plus fileinto, imap4flags, vacation, regex). Nail marks each rule as "server" or "client".
 - **Exchange:** rules map to Exchange inbox rules through Graph or EWS where the semantics match.
@@ -311,7 +311,7 @@ rule "Newsletters" trigger="arrival" scope="virtual:Everything" {
 
 Calendar, contacts and tasks share the local store, sync engine, operation queue and MCP surface with mail. They are views and widgets like any other, so the layout file places them.
 
-**Calendar**
+### Calendar
 
 - **Sources:** CalDAV, Exchange (Graph / EWS), read-only ICS/webcal subscriptions, and local calendars. Each calendar has its own colour, visibility and default reminders.
 - **Views:** day, multi-day, week, work week, month, year, agenda and a timeline of free time. Mini-month and today's agenda are available as widgets for the mail view.
@@ -319,14 +319,14 @@ Calendar, contacts and tasks share the local store, sync engine, operation queue
 - **Time zones:** IANA zones with per-event zones, a secondary zone display, and correct DST handling for recurring events.
 - **Reminders:** VALARM, delivered as OS notifications, or Web Notifications in the remote UI. Snooze and dismiss sync across devices where the server supports it.
 
-**Invitations and scheduling**
+### Invitations and scheduling
 
 - Incoming invites (iMIP, RFC 6047) render inline in the message with Accept / Tentative / Decline / Propose new time, and a preview of conflicts.
 - Outgoing invites and updates follow iTIP (RFC 5546). They use CalDAV auto-scheduling (RFC 6638) when the server offers it, otherwise iMIP mail.
 - Free/busy lookup comes from CalDAV scheduling or Exchange. Exchange accounts also get room lookup and delegate calendars.
 - "Create event from email" pre-fills title, attendees and a link back to the message.
 
-**Contacts**
+### Contacts
 
 - vCard 3.0 and 4.0 over CardDAV or Exchange, plus local address books.
 - Groups and distribution lists, photos, multiple addresses per person, and custom fields.
@@ -334,7 +334,7 @@ Calendar, contacts and tasks share the local store, sync engine, operation queue
 - Duplicate detection and merge across all books, with each merged contact still linked to its sources.
 - A contact view shows recent mail and upcoming meetings with that person.
 
-**Tasks**
+### Tasks
 
 - VTODO over CalDAV, and Microsoft To Do via Graph for Exchange Online.
 - Due dates, priorities, subtasks and recurrence. "Create task from email" keeps a link to the message.
@@ -344,7 +344,7 @@ Calendar, contacts and tasks share the local store, sync engine, operation queue
 
 Every visual property of Nail lives in `theme.kdl` and every structural property in `layout.kdl`. The React components hard-code neither styling nor arrangement. The UI you see on first launch is simply the shipped default pair of files.
 
-**Principles**
+### Principles
 
 - **Two files, two concerns.** The theme answers "how does it look" (colours, type, spacing, icons, motion). The layout answers "what is where, and what does it do" (panes, widgets, columns, toolbars, menus, keybindings).
 - **Every element is addressable.** Each rendered element carries a stable part name, for example `message-list.row.subject` or `composer.toolbar.button`. A generated reference lists every part, state, property, widget and action.
@@ -353,7 +353,7 @@ Every visual property of Nail lives in `theme.kdl` and every structural property
 - **Safe by construction.** Both files are declarative data: no JavaScript, no network access. That keeps them safe to share and safe to serve to the remote web UI.
 - **Inspector.** A shortcut toggles an element picker. Clicking any element shows its part path, its states, the theme rules that apply and the layout node that placed it, with a jump to the exact line in the file.
 
-**Theme file**
+### Theme file
 
 | Section | Controls |
 | --- | --- |
@@ -383,7 +383,7 @@ theme "Nord Dense" extends="default" {
 }
 ```
 
-**Layout file**
+### Layout file
 
 | Section | Controls |
 | --- | --- |
@@ -425,7 +425,7 @@ layout "Three pane" extends="default" {
 }
 ```
 
-**How it runs**
+### How it runs
 
 1. The Rust core parses both files into typed structures (serde + a format-preserving KDL parser), validates them against the schema, and resolves `extends` and tokens.
 2. The resolved theme compiles to CSS custom properties plus one generated stylesheet keyed on `[data-part]` attributes. The resolved layout is sent to the renderer as a JSON tree.
@@ -433,7 +433,7 @@ layout "Three pane" extends="default" {
 4. On file change, only the diff is re-applied, so panes keep their scroll position and selection.
 5. The same JSON Schema (generated from the Rust types) powers autocomplete and validation in Nail's built-in file editor and in external editors.
 
-**Applying someone else's theme or layout: the merge dialog**
+### Applying someone else's theme or layout: the merge dialog
 
 Applying a shared theme or layout file never silently overwrites your own. Nail opens a merge dialog first.
 
@@ -446,7 +446,7 @@ Applying a shared theme or layout file never silently overwrites your own. Nail 
 
 Sharing is manual at first: people exchange the files directly. A gallery for themes, layouts and plug-ins comes later.
 
-**Languages**
+### Languages
 
 The UI supports multiple languages from M0. English ships complete. German ships as an empty catalog with the same structure, to be filled later. Any key missing in the selected language falls back to English, per key.
 
@@ -461,7 +461,7 @@ The UI supports multiple languages from M0. English ships complete. German ships
 
 Nail exposes all of its data (every message with headers, bodies, raw source and attachments, plus folders, threads, tags, calendars, events, contacts, tasks and rules) through a built-in MCP server. Reading is broad; writing is scoped and confirmed.
 
-**Transport**
+### Transport
 
 - Streamable HTTP on `127.0.0.1`, authenticated with a per-client bearer token issued in Settings → MCP clients.
 - stdio via `nail mcp --client <name>`, which forwards to the running app over a local socket. If the app is not running, it starts the core headless.
@@ -483,7 +483,7 @@ Nail exposes all of its data (every message with headers, bodies, raw source and
 | `nail://rules` | Filter rules in their text form |
 | `nail://ui/context` | What the user has in front of them now: the message open in the reader (id, thread id, selected text) and the open composer draft (id, recipients, subject, body, cursor position). Subscribable: resources/updated fires when focus changes or the draft is edited |
 
-**Tools**
+### Tools
 
 | Tool | Scope | Purpose |
 | --- | --- | --- |
@@ -501,7 +501,7 @@ Nail exposes all of its data (every message with headers, bodies, raw source and
 
 **Prompts:** `summarize_thread`, `triage_folder`, `draft_reply`, `prepare_meeting` (event + related mail + attendees).
 
-**Permissions and safety**
+### Permissions and safety
 
 - Each MCP client (and each remote-UI session) has a grant: scopes, allowed accounts or virtual accounts, and optional folder exclusions. A new client starts with no access at all until the user grants it, either at first connection or in Settings.
 - Encrypted content, raw source and attachment bytes are separate opt-in grants.
@@ -525,14 +525,14 @@ flowchart LR
 
 Every plug-in call passes the permission gate before it reaches the Client API. The renderer receives only component trees, never plug-in code.
 
-**Key decisions**
+### Key decisions
 
 - **Runtime: QuickJS embedded via `rquickjs`.** It is small and has no JIT, so it runs on every target including iOS. It supports per-plug-in memory limits and interrupt handlers for CPU time budgets. It is slower than V8, which is fine for glue code. Plug-ins get no Node or browser APIs; authors bundle dependencies with esbuild or Vite.
 - **One API, one permission model.** Plug-ins call the same Client API as the UI and MCP. Every write goes through the operation queue, so plug-in actions are undoable and appear in the audit log.
 - **Declarative UI.** Plug-ins describe buttons, panels and dialogs as component trees from a fixed set (text, Markdown, input, select, date, contact picker, folder picker, message list, table, button, progress, image). A small JSX runtime lets authors write that as JSX. For UI the fixed set cannot express, a `webview` panel runs plug-in HTML in a sandboxed iframe. It receives the theme tokens as CSS variables and talks to its plug-in over a message bridge, and it needs its own permission.
 - **The layout file stays the truth.** Plug-in commands and widgets get namespaced ids (`plugin.<id>.<name>`) that `layout.kdl` references exactly like built-ins. A plug-in's suggested placements are written into the layout file on install, after the user confirms. Plug-in parts (`plugin.<id>.*`) get default styles that sit below the user's `theme.kdl`, so the user's theme always wins.
 
-**Extension points**
+### Extension points
 
 | Extension point | What a plug-in can do |
 | --- | --- |
@@ -549,7 +549,7 @@ Every plug-in call passes the permission gate before it reaches the Client API. 
 
 Every extension point in this table is in scope for v1, including composer and attachment extensions. Custom account types (new protocols) are not a v1 extension point. They need access to the sync engine and are better done in Rust.
 
-**Permissions and sandbox**
+### Permissions and sandbox
 
 - The manifest declares permissions and the install dialog shows them: `mail.read`, `mail.read.body`, `mail.read.encrypted`, `mail.organize`, `mail.send`, `calendar.read` / `write`, `contacts.read` / `write`, `tasks.read` / `write`, `hooks.arrival`, `hooks.beforeSend`, `ui.webview`, `network:<domains>`, `mcp.expose`. Dialogs, commands and plug-in storage need no permission.
 - Grants can be limited to specific accounts or virtual accounts, and revoked at any time.
@@ -557,7 +557,7 @@ Every extension point in this table is in scope for v1, including composer and a
 - Each hook call has a time budget. A plug-in that throws or times out is skipped and flagged; it can never silently block delivery or sending.
 - A before-send veto always names the plug-in and offers "Send anyway".
 
-**Packaging and development**
+### Packaging and development
 
 - A plug-in is a `.nailplugin` archive: `manifest.json`, the bundled JS, and assets. It installs from a file or URL. For now plug-ins are installed manually. A curated registry with signed, reviewed plug-ins comes later, next to the gallery for themes and layouts.
 - Types ship as `@nail/plugin-api` (generated from the same Rust types as IPC and MCP), with a starter template (`npm create nail-plugin`).
@@ -661,7 +661,7 @@ The core is Rust, the UI is TypeScript + React, and they are joined by Tauri 2. 
 | MIME | `mail-parser`, `mail-builder` | Robust against malformed real-world mail |
 | TLS, OAuth2, secrets | `rustls` + platform verifier, `oauth2`, `keyring` | Secrets in the OS keychain |
 | OpenPGP / S/MIME | `sequoia-openpgp`; CMS via `openssl` | S/MIME support in pure Rust is thinner; OpenSSL is the safe path |
-| Store and search | `rusqlite` (with SQLCipher), `tantivy`, `zstd` |  |
+| Store and search | `rusqlite` (with SQLCipher), `tantivy`, `zstd` | |
 | Markdown, sanitizing, CSS inlining | `comrak`, `ammonia`, `css-inline` | All in the core, so desktop, web UI and MCP output match |
 | Config | `kdl` (format-preserving), `serde`, `schemars` | JSON Schema generated for editor autocomplete |
 | Web UI server and MCP | `axum` + WebSockets, `rmcp` | Share one HTTP stack |
@@ -672,7 +672,7 @@ The core is Rust, the UI is TypeScript + React, and they are joined by Tauri 2. 
 
 **Repository layout (Cargo + pnpm workspace):** `crates/nail-core`, `crates/nail-proto-*` (one per protocol), `crates/nail-mcp`, `crates/nail-server`, `crates/nail-cli`, `app/src-tauri`, `ui/` (React), `defaults/theme.kdl`, `defaults/layout.kdl`, `schema/`.
 
-**Documentation folders:**
+### Documentation folders
 
 - `docs/` holds internal material: this design document, architecture decision records (ADRs), protocol notes, the test strategy and release checklists.
 - `userDocs/` holds documentation for users: the user guide, the theme and layout reference (generated from the JSON Schema), the plug-in API reference (generated from `@nail/plugin-api`), the MCP reference and the remote UI security guide. It is split by language (`userDocs/en/`, with `userDocs/de/` empty for now) and follows the same English fallback as the UI.
@@ -696,13 +696,14 @@ Unit tests and Playwright end-to-end tests are part of the implementation from t
 | Accessibility | `@axe-core/playwright` in the end-to-end suite | Labels, focus order and contrast on every screen |
 | Security checks | `cargo-deny` (licences, advisories), `cargo-audit`, `npm audit`, SBOM per release | Vulnerable or wrongly licensed dependencies block the build |
 
-**Rules**
+### Rules
 
 - A shared test-data corpus of real-world, malformed and hostile mail (bad encodings, broken MIME, tracking pixels, phishing links) feeds unit, fuzz and end-to-end tests.
 - A lint rule forbids inline styles and hard-coded class names in React components. Styling must come from theme parts, so "everything is customizable" stays true and is tested.
+- **Zero warnings (quality baseline Q1, ADR 0123).** Every kind of file has a formatter or linter: rustfmt and clippy (`pedantic` included) and rustdoc for Rust, type-aware ESLint (typescript-eslint strict + stylistic, React Hooks, jsx-a11y) and tsc for every TypeScript / JavaScript file, Prettier, taplo for TOML, markdownlint, typos, actionlint, an EditorConfig check, cargo machete and cargo deny. All of it runs as `npm run check` in a blocking CI job, and on staged files in a pre-commit hook. Warnings are fixed, not silenced; an unavoidable exception names its lint and its reason.
 - Every bug fix lands with a test that failed before the fix.
 - Coverage is reported per crate and package. The goal is a trend, not a hard number, except for parsers and the permission gate, which need full branch coverage.
-- CI order on every pull request: lint → unit → contract → integration → Playwright (web) → Playwright (packaged Windows app, on the main branch and release builds).
+- CI order on every pull request: lint (`npm run check`) → unit → contract → integration → Playwright (web) → Playwright (packaged Windows app, on the main branch and release builds).
 
 ## Windows installer & distribution
 
@@ -717,7 +718,7 @@ Nail ships two signed installers built from one CI pipeline by the Tauri 2 bundl
 
 Each package ships for x64 and ARM64. Supported systems are Windows 10 22H2 and Windows 11.
 
-**What the installer sets up**
+### What the installer sets up
 
 - The app, plus the `nail` CLI, which can optionally go on `PATH` so that `nail mcp` and `nail serve` work from any terminal. Start menu shortcut, optional desktop shortcut.
 - **WebView2 runtime:** Windows 11 includes it. The installer embeds the WebView2 bootstrapper and installs the runtime only if it is missing. An offline variant bundles the full runtime for air-gapped machines.
@@ -727,14 +728,14 @@ Each package ships for x64 and ARM64. Supported systems are Windows 10 22H2 and 
 - **Simple MAPI provider:** Nail registers as the system's Simple MAPI mail client. "Send to → Mail recipient" in Explorer, "Send as attachment" in Office and other apps' "email this" then open Nail's composer with the file attached. It is implemented as a small Rust DLL exporting `MAPISendMail` / `MAPISendMailW`, which forwards to the running app over the local socket. It ships in x64, x86 (for 32-bit Office) and ARM64 builds. Registration lives under `HKLM\Software\Clients\Mail`, so the per-user installer asks for elevation only for this optional component. Confirm the registration details against current Windows docs.
 - **No firewall changes at install.** Windows asks only when the user enables the remote UI on a non-loopback address.
 
-**Signing and updates**
+### Signing and updates
 
 - The installer, MSI and every binary are Authenticode-signed and timestamped. Unsigned builds trigger SmartScreen warnings and antivirus false positives.
 - Signing uses an EV certificate, added later; early dogfooding builds stay unsigned. EV no longer grants instant SmartScreen reputation, so warnings fade as downloads build reputation (from memory; verify).
 - The Tauri updater checks a signed update manifest; that update key is separate from the Authenticode certificate. Updates come from GitHub Releases or a static host, with stable and beta channels.
 - Upgrades keep all data. The first run after an update backs up the database, then migrates the store schema.
 
-**Uninstall and silent deployment**
+### Uninstall and silent deployment
 
 - Uninstall removes the app but keeps user data by default: settings, `theme.kdl`, `layout.kdl` and rules in `%APPDATA%\Nail`; store, index and logs in `%LOCALAPPDATA%\Nail`. A checkbox "Also delete my mail data and settings" removes those and the stored credentials in Windows Credential Manager.
 - Silent installs: `Nail-setup.exe /S`, or `msiexec /i Nail.msi /qn AUTOSTART=0 ADDTOPATH=1`. The MSI property names here are illustrative.
@@ -778,9 +779,9 @@ Mobile: the PWA path works as soon as the remote UI ships. Native Android and iO
 - [x] **License and distribution:** open source (which license), and code-signing for Windows (cloud signing service or an EV certificate on a hardware token) and macOS. Should Windows also get a Simple MAPI provider, so that "Send to → Mail recipient" and Office's "Send as attachment" open Nail? Decided: closed source at first, likely LGPL later; EV code signing later; Simple MAPI provider yes.
 - [ ] **Name:** "Nail" is the working name. Proposals are below; each needs a trademark search and a native-speaker check before adoption.
 
-* [x] **Plug-in priorities:** which extension points matter most for v1? This draft proposes commands, UI contributions, dialogs and mail hooks first, and composer and attachment extensions later. Decided: all extension points in v1, including composer and attachments.
-* [x] **Plug-in distribution:** files and URLs only, or a curated registry with signed plug-ins and review? Decided: manual install now; a curated registry later.
-* [x] **Plug-ins on iOS:** App Store rules restrict downloaded executable code. Should plug-ins be off on iOS, or limited to a bundled, reviewed set? Decided: iOS later; plug-ins off on iOS until then.
+- [x] **Plug-in priorities:** which extension points matter most for v1? This draft proposes commands, UI contributions, dialogs and mail hooks first, and composer and attachment extensions later. Decided: all extension points in v1, including composer and attachments.
+- [x] **Plug-in distribution:** files and URLs only, or a curated registry with signed plug-ins and review? Decided: manual install now; a curated registry later.
+- [x] **Plug-ins on iOS:** App Store rules restrict downloaded executable code. Should plug-ins be off on iOS, or limited to a bundled, reviewed set? Decided: iOS later; plug-ins off on iOS until then.
 
 **Name proposals** (Nail stays the working name until one is chosen)
 

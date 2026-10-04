@@ -1,5 +1,44 @@
-# Tests may unwrap/expect freely; production code should propagate errors.
+# clippy configuration (quality baseline Q1, ADR 0123).
+# Tests may unwrap/expect freely; production code should propagate errors
+# (`unwrap_used` / `expect_used` are warn in the workspace lints).
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-dbg-in-tests = true
 allow-print-in-tests = true
+# Proper names that `doc_markdown` would otherwise want in backticks. ".."
+# keeps clippy's built-in list (GitHub, JavaScript, OAuth, ...).
+doc-valid-idents = [
+    "..",
+    "CalConnect",
+    "CalDAV",
+    "CalendarServer",
+    "CardDAV",
+    "CommonMark",
+    "CryptoAPI",
+    "EdDSA",
+    "ETag",
+    "ETags",
+    "GnuPG",
+    "IMAP4rev1",
+    "ManageSieve",
+    "NCrypt",
+    "NetBIOS",
+    "OAuth2",
+    "OneDrive",
+    "OpenPGP",
+    "OpenSC",
+    "ProgId",
+    "QuickJS",
+    "RustCrypto",
+    "SoftHSM",
+    "SpamBayes",
+    "SQLCipher",
+    "SQLite",
+    "SQLite3",
+    "WebAuthn",
+    "WebDAV",
+    "WebSockets",
+    "WebView",
+    "WebView2",
+    "WiX",
+]

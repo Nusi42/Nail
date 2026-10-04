@@ -85,6 +85,46 @@ jobs:
           path: .nail-build/e2e/
           retention-days: 14
 
+  # Quality baseline (Q1, ADR 0123): every formatter check and linter with
+  # zero warnings (`npm run check`: rustfmt, taplo, Prettier, EditorConfig,
+  # typos, markdownlint, actionlint, ESLint, tsc, clippy and rustdoc with
+  # -D warnings, cargo machete, cargo deny incl. advisories). Blocking.
+  quality:
+    name: Quality baseline (npm run check)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      # Tools from the package registries only (crates.io, PyPI).
+      - name: Lint tools
+        run: |
+          cargo install taplo-cli cargo-machete cargo-deny --locked
+          pip install -r requirements-dev.txt
+
+      - name: npm ci
+        run: npm ci
+
+      # The Tauri shell embeds ui/dist at compile time (clippy, rustdoc).
+      - name: Build UI
+        run: npm run build
+
+      - name: npm run check
+        run: npm run check
+
   # The desktop smoke test (e2e/tests/desktop.spec.ts) drives the real
   # nail-app.exe over WebView2 (preinstalled on windows-latest).
   desktop:
@@ -511,6 +551,8 @@ jobs:
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       # The interop crate is its own workspace; pin it to the main lock file.
       - name: Lock file
@@ -520,6 +562,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: scripts/interop
+
+      # Not part of the main workspace, so `npm run check` does not lint it.
+      - name: clippy (interop crate)
+        run: cargo clippy --manifest-path scripts/interop/Cargo.toml --all-targets -- -D warnings
 
       - name: Interop tests
         run: cargo test --manifest-path scripts/interop/Cargo.toml -- --test-threads=1

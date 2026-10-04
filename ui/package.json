@@ -10,7 +10,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . && tsc -b && prettier --check ."
+    "lint": "eslint --max-warnings 0 . && tsc -b && prettier --check ."
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

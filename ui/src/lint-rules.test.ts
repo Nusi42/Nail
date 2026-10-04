@@ -7,7 +7,22 @@ const uiRoot = fileURLToPath(new URL("..", import.meta.url));
 let eslint: ESLint;
 
 beforeAll(async () => {
-  eslint = new ESLint({ cwd: uiRoot });
+  // The fixtures are linted as text under file names that do not exist on
+  // disk, so the type-aware project service needs them in its default
+  // project (typed like src/ through tsconfig.app.json).
+  eslint = new ESLint({
+    cwd: uiRoot,
+    overrideConfig: {
+      languageOptions: {
+        parserOptions: {
+          projectService: {
+            allowDefaultProject: ["src/LintFixture.tsx", "src/Warmup.tsx"],
+            defaultProject: "tsconfig.app.json",
+          },
+        },
+      },
+    },
+  });
   // Warm up: loading the TypeScript parser and plugins takes a few seconds.
   await eslint.lintText("export {};\n", { filePath: "src/Warmup.tsx" });
 }, 60_000);
@@ -61,6 +76,28 @@ describe("project lint rules", () => {
       "dangerouslySetInnerHTML",
       "export const A = (p: { h: string }) => <div dangerouslySetInnerHTML={{ __html: p.h }} />;\n",
       "react/no-danger",
+    ],
+    // Quality baseline (ADR 0123): jsx-a11y, type-aware strict rules and
+    // described, rule-specific eslint-disable comments.
+    [
+      "image without alt text",
+      "export const A = (p: { src: string }) => <img src={p.src} />;\n",
+      "jsx-a11y/alt-text",
+    ],
+    [
+      "floating promise",
+      "export function f(p: () => Promise<void>) {\n  p();\n}\n",
+      "@typescript-eslint/no-floating-promises",
+    ],
+    [
+      "eslint-disable without a reason",
+      "// eslint-disable-next-line @typescript-eslint/no-floating-promises\nexport function f(p: () => Promise<void>) {\n  p();\n}\n",
+      "@eslint-community/eslint-comments/require-description",
+    ],
+    [
+      "blanket eslint-disable",
+      "/* eslint-disable */\nexport const a = 1;\n",
+      "@eslint-community/eslint-comments/no-unlimited-disable",
     ],
   ])("rejects %s", async (_name, code, rule) => {
     expect(await lint(code)).toContain(rule);

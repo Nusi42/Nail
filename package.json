@@ -18,7 +18,14 @@
     "build": "npm run build -w ui",
     "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs && node --test e2e/visual/scripts.test.mjs \"e2e/visual/lib/*.test.ts\" \"scripts/visual-review/*.test.mjs\"",
     "check:sockets": "node scripts/check-socket-binds.mjs",
-    "lint": "npm run lint --workspaces --if-present",
+    "prepare": "node scripts/install-hooks.mjs",
+    "check": "node scripts/check.mjs",
+    "lint": "npm run lint:eslint && npm run lint:types && npm run format:check",
+    "lint:eslint": "eslint --max-warnings 0 .",
+    "lint:types": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json && tsc -p examples/attachment-check && tsc -p examples/csv-preview && tsc -p examples/follow-up",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "lint:toml": "taplo fmt --check && taplo check --no-schema",
+    "lint:editorconfig": "node scripts/check-editorconfig.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run build:desktop && npm run test -w e2e",
@@ -32,13 +39,31 @@
     "visual:selftest": "node e2e/visual/selftest.mjs"
   },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.12.0",
+    "@types/eslint-plugin-jsx-a11y": "^6.10.1",
     "cross-env": "^10.1.0",
+    "editorconfig": "^3.0.2",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "markdownlint-cli2": "^0.23.3",
     "prettier": "^3.9.9",
-    "eslint": "^10.11.0"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0"
   },
   "overrides": {
     "eslint-plugin-react": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
+    "@types/eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
   }

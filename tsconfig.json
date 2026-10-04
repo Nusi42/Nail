@@ -1,0 +1,31 @@
+{
+  // Type information for the Node scripts and configs that no package
+  // tsconfig includes (scripts/, e2e and example build scripts, root
+  // configs). ESLint's project service walks up to this file for them;
+  // `npm run lint` type-checks it (ADR 0123).
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "allowJs": true,
+    "checkJs": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "*.js",
+    "*.mjs",
+    "scripts/**/*.mjs",
+    "e2e/**/*.mjs",
+    "examples/*/scripts/*.mjs",
+    "packages/*/scripts/*.mjs",
+    "packages/create-nail-plugin/template/scripts/*.mjs",
+    "packages/plugin-api/tools/index.mjs",
+    "crates/nail-plugins/src/prelude.js"
+  ],
+  "exclude": ["**/node_modules", "**/dist"]
+}

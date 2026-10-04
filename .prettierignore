@@ -14,3 +14,7 @@ userDocs/
 locales/
 *.md
 package-lock.json
+# WiX sources (XML): Prettier reads *.wxs as WeChat script.
+*.wxs
+# Workflow-harness scripts (Claude Code workflow runtime), not product code.
+.claude/
