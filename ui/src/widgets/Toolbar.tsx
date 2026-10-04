@@ -230,6 +230,9 @@ function px(value: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** How long a jump back to the previous width counts as a measuring flip (ms). */
+const FLIP_MS = 250;
+
 /** Measures the rendered items and fits them into the bar. */
 function measure(root: HTMLElement, items: readonly ToolbarItem[]): Fit {
   const style = getComputedStyle(root);
@@ -290,22 +293,34 @@ export function Toolbar({ node }: WidgetProps) {
     let last = el.clientWidth;
     let previous: number | null = null;
     let changedAt = 0;
+    let recheck: ReturnType<typeof setTimeout> | undefined;
+    const refit = (width: number) => {
+      previous = last;
+      last = width;
+      changedAt = performance.now();
+      setFit(null);
+      setWidthTick((n) => n + 1);
+    };
     const observer = new ResizeObserver(() => {
       const width = el.clientWidth;
       if (width === last) return;
       // A bar whose width follows its content (a flex item without a set
       // width) would flip between the measuring and the fitted width: a
-      // jump straight back to the previous width is ignored.
-      const now = performance.now();
-      if (width === previous && now - changedAt < 250) return;
-      previous = last;
-      last = width;
-      changedAt = now;
-      setFit(null);
-      setWidthTick((n) => n + 1);
+      // jump straight back to the previous width is ignored. A window made
+      // wider and quickly narrower again (P1) is no flip, though: when the
+      // bar still overflows once the moment has passed, it fits again.
+      if (width === previous && performance.now() - changedAt < FLIP_MS) {
+        clearTimeout(recheck);
+        recheck = setTimeout(() => {
+          if (el.isConnected && el.scrollWidth > el.clientWidth + 1) refit(el.clientWidth);
+        }, FLIP_MS);
+        return;
+      }
+      refit(width);
     });
     observer.observe(el);
     return () => {
+      clearTimeout(recheck);
       observer.disconnect();
     };
   }, []);

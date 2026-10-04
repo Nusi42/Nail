@@ -280,9 +280,16 @@ message {
 | `font-family` | Font of the reading pane |
 | `text-font-family` | Font of plain-text mail |
 | `font-size`, `line-height` | Text size and spacing (a plain number for `font-size` is pixels) |
-| `max-width` | Maximum width of the text column, e.g. `"72ch"` or `"none"` |
+| `max-width` | Maximum width of the text column, e.g. `"72ch"` or `"none"`; mail with its own layout (a style sheet, layout tables or its own background) keeps its width |
 | `quote-colors` | Colours of quote levels 1, 2, 3, … (repeated for deeper levels) |
-| `html-dark-mode` | How HTML mail looks in dark mode: `off` (as sent), `invert`, `smart` (recolour, keep hues) |
+| `html-dark-mode` | How HTML mail looks in dark mode: `off` (as sent), `invert`, `smart` (plain mail takes the theme's colours; mail with its own design keeps its colours on a light page) |
+
+HTML mail is shown as its sender designed it: its style sheets, colours and
+inline pictures are kept (Nail removes everything that runs code or loads
+from the internet). Pictures from the internet stay blocked until you allow
+them in the remote content bar; until then, and for pictures that cannot be
+shown, the reader shows the picture's description in a dashed frame. A long
+message scrolls inside the reading pane while its headers stay in place.
 
 ## Sounds
 

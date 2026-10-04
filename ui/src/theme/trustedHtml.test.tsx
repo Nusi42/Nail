@@ -13,7 +13,7 @@ describe("remote content in the reader document", () => {
     expect(doc).not.toContain("nail-proxy:");
     expect(doc).toContain(readerCsp("https://nail.local:4780"));
     expect(readerCsp("https://nail.local:4780")).toContain(
-      "img-src data: cid: https://nail.local:4780;",
+      "img-src data: https://nail.local:4780;",
     );
   });
 

@@ -33,8 +33,15 @@
  * primary one and the "More" button (`toolbar.more`); the grouped folder
  * pane (`folder-tree.compose`, `.section*`, `.favorite`, `.smart-folder`,
  * account dots); the list header (`list-header.*`, filter chips); the focus
- * ring on the active list row; a reader that scrolls as a whole with the
- * HTML body at least half a window high.
+ * ring on the active list row.
+ *
+ * P1 (WP190): the HTML body's frame fills the rest of the reader and scrolls
+ * the mail itself (one scroll area: the frame cannot report its height
+ * without scripts); designed mail (`message-view.body[data-state~=
+ * "designed"]`) widens the column to a newsletter's usual 600–700 px. The
+ * reader's stack is a size container (`nail-reader`): below 640 px the column
+ * and the banners above it use the pane's padding instead of the wide margins,
+ * and header values wrap in their own column next to the labels.
  *
  * Everything sits on the 4 px grid (`space.*`); panes share `space.pane`.
  */
@@ -379,6 +386,7 @@ const READER_SLOTS = [
 ] as const;
 
 const READER = `${p("message-view")} { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable both-edges; background-color: ${T.bg}; }
+${p("stack")}:has(> ${p("message-view")}) { container: nail-reader / inline-size; }
 ${ps(...READER_SLOTS)} {
   box-sizing: border-box; width: min(68ch, 100% - 2 * ${T.xxl}); margin-inline: auto; margin-block-start: ${T.sm};
   font-family: ${T.fontUi};
@@ -390,10 +398,16 @@ ${p("message-view.column")} {
 }
 ${p("message-view.header")} { display: grid; gap: ${T.xs}; padding: 0; border: none; }
 ${p("message-view.header.subject")} { margin: 0 0 ${T.xs}; font-family: ${T.fontDisplay}; font-size: ${T.title}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
-${p("message-view.header.field")} { font-size: ${T.small}; color: ${T.muted}; }
-${p("message-view.header.label")} { min-width: calc(4 * ${T.lg}); }
+${p("message-view.header.field")} { display: grid; grid-template-columns: calc(4 * ${T.lg}) minmax(0, 1fr); column-gap: ${T.sm}; font-size: ${T.small}; color: ${T.muted}; }
+${p("message-view.header.label")} { min-width: 0; }
+${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("message-view.text")} { max-width: 68ch; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
-${p("message-view.body")} { flex: 1 1 auto; min-height: max(calc(16 * ${T.lg}), 50vh); border: none; background-color: ${T.bg}; }
+${p("message-view.body")} { flex: 1 1 auto; width: 100%; min-height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
+${p("message-view.column")}:has(> ${p("message-view.body")}[data-state~="designed"]) { max-width: calc(45 * ${T.lg} + 2 * ${T.xxl}); }
+@container nail-reader (max-width: 640px) {
+  ${p("message-view.column")} { padding: ${T.lg} ${T.pane} 0; }
+  ${ps(...READER_SLOTS)} { width: calc(100% - 2 * ${T.pane}); }
+}
 ${p("message-view.attachments")} { display: flex; flex-wrap: wrap; gap: ${T.sm}; margin: 0; padding: 0; list-style: none; }
 ${p("attachment-card")} {
   display: grid; grid-template-columns: calc(${T.control} + ${T.xs}) minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};

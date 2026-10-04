@@ -26,8 +26,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     },
     "id": "m1",
     "remote_content_blocked": true,
-    "sanitized_html": "<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\">\n<tbody><tr><td style=\"font-family: Georgia, serif; color: #2d4a22; padding: 16px\">\n<h1>Autumn is here</h1>\n<img width=\"560\" alt=\"Pumpkins\">\n<p>Time to plant garlic and tulip bulbs. Read our\n<a href=\"https://garden-weekly.example/r/abc123?to=bulbs\" rel=\"noopener noreferrer\">bulb guide</a>.</p>\n<p style=\"color: #555\">Leaf of the week.</p>\n</td></tr>\n</tbody></table>\n<img alt=\"\" width=\"1\" height=\"1\">",
-    "text": "Autumn is here Time to plant garlic and tulip bulbs. Read our bulb guide.\nLeaf of the week."
+    "sanitized_html": "<style>\nbody { background-color: #f4f1e8 }\n</style><table width=\"600\" cellpadding=\"0\" cellspacing=\"0\">\n<tbody><tr><td style=\"font-family: Georgia, serif; color: #2d4a22; padding: 16px\">\n<h1>Autumn is here</h1>\n<img width=\"560\" alt=\"Pumpkins\">\n<p>Time to plant garlic and tulip bulbs. Read our\n<a href=\"https://garden-weekly.example/r/abc123?to=bulbs\" rel=\"noopener noreferrer\">bulb guide</a>.</p>\n<p style=\"color: #555\">Leaf of the week.</p>\n</td></tr>\n</tbody></table>\n<img alt=\"\" width=\"1\" height=\"1\">",
+    "text": "Autumn is here\nTime to plant garlic and tulip bulbs. Read our bulb guide.\nLeaf of the week."
   },
   "summary": {
     "account_id": "a1",

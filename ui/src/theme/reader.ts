@@ -4,8 +4,16 @@
  * The iframe has `sandbox=""` (no scripts, opaque origin) and the document
  * carries its own Content-Security-Policy: nothing may be loaded except inline
  * styles, `data:` images/fonts and — for remote content the user allowed —
- * the core's proxy. The core's sanitizer removes remote content or, when
- * allowed, rewrites it to signed `nail-proxy:<token>` URLs (ADR 0038),
+ * the core's proxy. Inline (`cid:`) images arrive as `data:` URLs: the core
+ * resolves them when it builds the body (P1 WP190), because a `srcdoc`
+ * document also inherits the page's policy, which allows no `cid:`.
+ *
+ * The mail's own style sheets come first in the body (the core keeps them,
+ * filtered); the reader's rules below give way to them: colours sit at zero
+ * specificity (`:where`), and the reading width and the dark-mode handling
+ * apply only to mail without its own design (`DESIGNED`).
+ *
+ * The core's sanitizer removes remote content or, when allowed, rewrites it to signed `nail-proxy:<token>` URLs (ADR 0038),
  * which this module points at the transport's proxy: `/api/proxy/<token>`
  * in the browser, the `nail-proxy` protocol in the desktop app.
  */
@@ -20,12 +28,12 @@ export const PROXY_PATH = "/api/proxy/";
 
 /** CSP of the reader document (nothing remote). */
 export const READER_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:; font-src data:; form-action 'none'; base-uri 'none'";
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
 
 /** CSP of the reader document that may load through the proxy at `origin`. */
 export function readerCsp(proxyOrigin: string | null): string {
   if (proxyOrigin === null) return READER_CSP;
-  return `default-src 'none'; style-src 'unsafe-inline'; img-src data: cid: ${proxyOrigin}; font-src data: ${proxyOrigin}; form-action 'none'; base-uri 'none'`;
+  return `default-src 'none'; style-src 'unsafe-inline'; img-src data: ${proxyOrigin}; font-src data: ${proxyOrigin}; form-action 'none'; base-uri 'none'`;
 }
 
 /**
@@ -51,6 +59,20 @@ function safe(value: string, fallback: string): string {
   return isSafeValue(value) ? value : fallback;
 }
 
+/**
+ * Inside the reader document: what marks mail that brings its own design —
+ * a style sheet (the core places it first in the body), layout tables or
+ * its own backgrounds. Such mail keeps its width and colours.
+ */
+const DESIGNED = ":has(> style, table, [bgcolor], [background], [style*='background'])";
+
+/** The same test on the sanitized HTML, for the frame's surroundings. */
+export function isDesignedMail(sanitizedHtml: string): boolean {
+  return /<style[\s>]|<table[\s>]|\s(bgcolor|background)=|style="[^"]*background/i.test(
+    sanitizedHtml,
+  );
+}
+
 /** Reader stylesheet for `mode`, with all token references resolved. */
 export function readerCss(theme: ResolvedTheme, mode: string): string {
   const r = (value: string, fallback: string) =>
@@ -58,14 +80,28 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
   const m = theme.message;
   const fg = r("var(--nail-color-fg)", "CanvasText");
   const bg = r("var(--nail-color-bg)", "Canvas");
+  const muted = r("var(--nail-color-fg-muted)", "GrayText");
+  const subtle = r("var(--nail-color-bg-subtle)", "Canvas");
   const accent = r("var(--nail-color-accent)", "LinkText");
   const dark = mode === "dark" || mode === "high-contrast";
   const rules = [
     `:root { color-scheme: ${dark ? "dark" : "light"}; }`,
-    `body { margin: 0; padding: 0 0 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; color: ${fg}; background: ${bg}; overflow-wrap: anywhere; }`,
-    `body > * { max-width: ${r(m.max_width, "none")}; }`,
-    `a { color: ${accent}; }`,
-    `img { max-width: 100%; height: auto; }`,
+    `body { margin: 0; padding: 0 0 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; overflow-wrap: anywhere; }`,
+    // Colours at zero specificity: the mail's own rules always win.
+    `:where(body) { color: ${fg}; background-color: ${bg}; }`,
+    `:where(a) { color: ${accent}; }`,
+    // The reading width only for mail without its own layout.
+    `body:not(${DESIGNED}) > * { max-width: ${r(m.max_width, "none")}; }`,
+    `img { max-width: 100%; }`,
+    // Without a source (blocked, missing) an image keeps its width / height attributes as a placeholder box.
+    `img[src] { height: auto; }`,
+    // Blocked, missing or failed images: their alt text in a quiet frame
+    // instead of the browser's broken-image icon (Chromium draws ::after
+    // only for images that did not load).
+    `img:not([src])[alt]:not([alt=""]) { outline: 1px dashed ${muted}; outline-offset: -1px; color: ${muted}; font-size: 0.85em; }`,
+    `img[alt] { position: relative; }`,
+    `img[alt]::after { content: attr(alt); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2px; box-sizing: border-box; border: 1px dashed ${muted}; font-size: 0.85em; line-height: 1.2; text-align: center; color: ${muted}; background-color: ${subtle}; }`,
+    `img[alt=""]::after { border: none; background-color: transparent; }`,
     `pre, code { font-family: ${r(m.text_font_family, "monospace")}; white-space: pre-wrap; }`,
   ];
   m.quote_colors.forEach((color, index) => {
@@ -79,7 +115,14 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
       "html { filter: invert(1) hue-rotate(180deg); } img { filter: invert(1) hue-rotate(180deg); }",
     );
   } else if (dark && m.html_dark_mode === "smart") {
-    rules.push(`body * { background-color: transparent !important; color: ${fg} !important; }`);
+    // Plain mail takes the theme's colours; designed mail keeps its own on a
+    // light "paper", as its author drew it.
+    rules.push(
+      `body:not(${DESIGNED}) * { background-color: transparent !important; color: ${fg} !important; }`,
+      `:root:has(> body${DESIGNED}) { color-scheme: light; }`,
+      `:where(body${DESIGNED}) { color: #1f1f1f; background-color: #ffffff; }`,
+      `:where(body${DESIGNED} a) { color: LinkText; }`,
+    );
   }
   return rules.join("\n");
 }
