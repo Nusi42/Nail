@@ -1,8 +1,10 @@
 # Rust
 /target/
 **/target/
-# Local cargo config (points target-dir outside OneDrive)
+# Local cargo config; in the master it names the refusing rustc wrapper
+# (`node scripts/work-folders.mjs guard-master`)
 /.cargo/config.toml
+/.cargo/master-guard.cmd
 # Node
 node_modules/
 ui/dist/

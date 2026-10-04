@@ -18,16 +18,14 @@
  * NAIL_MAPI_APP. Installer builds (scripts/build-installer.mjs) never do.
  */
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const base =
-  process.env.NAIL_BUILD_DIR ??
-  (process.env.LOCALAPPDATA
-    ? path.join(process.env.LOCALAPPDATA, "nail-build")
-    : path.join(tmpdir(), "nail-build"));
+assertWorkFolder("npm run build:desktop", repoRoot);
+const base = process.env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
 const targetDir = path.join(base, "desktop-target");
 
 execFileSync(

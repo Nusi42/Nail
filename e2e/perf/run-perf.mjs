@@ -12,16 +12,16 @@
  * Needs `cargo build --release -p nail-cli -p nail-bench` and
  * `npm run build -w ui` first (binaries: NAIL_BIN / NAIL_BENCH_BIN or
  * cargo's release directory). Output goes to the build directory
- * (`%LOCALAPPDATA%/nail-build/perf/<corpus>`, NAIL_BUILD_DIR), never the
- * repository.
+ * (`<checkout>/.nail-build/perf/<corpus>`, NAIL_BUILD_DIR), never tracked
+ * files.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseJson } from "../../scripts/lib/json.mjs";
+import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -45,10 +45,7 @@ export function parseArgs(argv) {
 }
 
 function buildDir() {
-  if (process.env.NAIL_BUILD_DIR) return process.env.NAIL_BUILD_DIR;
-  return process.env.LOCALAPPDATA
-    ? path.join(process.env.LOCALAPPDATA, "nail-build")
-    : path.join(tmpdir(), "nail-build");
+  return process.env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
 }
 
 /**
@@ -93,6 +90,7 @@ function run(command, args, env = {}) {
 }
 
 function main() {
+  assertWorkFolder("node e2e/perf/run-perf.mjs");
   const options = parseArgs(process.argv.slice(2));
   const work = path.join(buildDir(), "perf", options.corpus);
   const bench = release("nail-bench", "NAIL_BENCH_BIN");

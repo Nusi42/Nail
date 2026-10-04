@@ -28,7 +28,7 @@ use proptest::prelude::*;
 
 /// `cases` cases, many rejects allowed (the
 /// calcard comparison skips rules it rejects), and no regression files
-/// written into the source tree (the repository lives in OneDrive).
+/// written into the source tree.
 fn config(cases: u32) -> ProptestConfig {
     ProptestConfig {
         max_global_rejects: 1_000_000,

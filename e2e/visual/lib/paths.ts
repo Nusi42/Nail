@@ -1,26 +1,27 @@
 /**
- * Where the visual harness writes (never into the repository): the output
+ * Where the visual harness writes (never into tracked files): the output
  * root `<build dir>/visual/` (`NAIL_VISUAL_RESULTS`, else `NAIL_BUILD_DIR`
- * or `%LOCALAPPDATA%\nail-build`), with `manifest/`, `actual/`,
+ * or the checkout's gitignored `.nail-build`), with `manifest/`, `actual/`,
  * `test-results/`, `report/` and the review page in `review/`.
  * scripts/visual-review/generate.mjs uses the same defaults.
  */
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** The checkout this harness belongs to. */
+export const repoRoot = path.resolve(here, "..", "..", "..");
 
 /** The checked-in baselines (`NAIL_VISUAL_BASELINES` overrides), per platform below it. */
 export function baselinesRoot(env: NodeJS.ProcessEnv = process.env): string {
   if (env.NAIL_VISUAL_BASELINES) return path.resolve(env.NAIL_VISUAL_BASELINES);
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "baselines");
+  return path.resolve(here, "..", "baselines");
 }
 
 /** The base build directory, as `e2e/support/nail.ts` `buildOutputDir` computes it. */
 export function buildBase(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.NAIL_BUILD_DIR) return env.NAIL_BUILD_DIR;
-  return env.LOCALAPPDATA
-    ? path.join(env.LOCALAPPDATA, "nail-build")
-    : path.join(tmpdir(), "nail-build");
+  return env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
 }
 
 /** The harness's output root. */

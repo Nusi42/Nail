@@ -24,8 +24,11 @@ import {
   pickDevPort,
   writeTauriDevConfig,
 } from "./lib/dev-port.mjs";
+import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+assertWorkFolder("npm run dev");
 const uiDir = path.join(root, "ui");
 
 async function main() {

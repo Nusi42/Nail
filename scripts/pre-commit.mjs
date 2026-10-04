@@ -13,8 +13,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pythonScriptDirs, resolveArgs, resolveTool } from "./lib/check-steps.mjs";
 import { chunkFiles, hookChecks, parseStaged } from "./lib/staged.mjs";
+import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// The master only receives pushes and fast-forward merges, never commits.
+assertWorkFolder("git commit");
 
 const staged = parseStaged(
   execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], {

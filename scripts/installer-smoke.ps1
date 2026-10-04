@@ -85,7 +85,7 @@ function Machine-Mapi-Dll {
 }
 
 if (-not $Installer) {
-  $base = if ($env:NAIL_BUILD_DIR) { $env:NAIL_BUILD_DIR } else { Join-Path $env:LOCALAPPDATA 'nail-build' }
+  $base = if ($env:NAIL_BUILD_DIR) { $env:NAIL_BUILD_DIR } else { Join-Path $PSScriptRoot '..\.nail-build' }
   $Installer = Get-ChildItem (Join-Path $base 'dist') -Filter 'Nail_*-setup.exe' |
     Where-Object { $_.Name -notlike '*-offline-setup.exe' } |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName

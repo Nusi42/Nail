@@ -13,6 +13,7 @@ import {
   parseArgs,
   readManifest,
   renderHtml,
+  repoRoot,
   STATUSES,
   summarize,
 } from "./generate.mjs";
@@ -52,9 +53,9 @@ function writeEntries(dir, entries) {
   });
 }
 
-test("arguments default to the build directory, never the repository", () => {
+test("arguments default to the checkout's build directory, never tracked files", () => {
   const options = parseArgs([], { LOCALAPPDATA: "C:\\Users\\x\\AppData\\Local" });
-  assert.equal(options.results, path.join("C:\\Users\\x\\AppData\\Local", "nail-build", "visual"));
+  assert.equal(options.results, path.join(repoRoot, ".nail-build", "visual"));
   assert.equal(options.out, path.join(options.results, "review"));
   assert.ok(options.baselines.endsWith(path.join("e2e", "visual", "baselines", process.platform)));
   const env = { NAIL_BUILD_DIR: "/b", NAIL_VISUAL_BASELINES: "/base" };

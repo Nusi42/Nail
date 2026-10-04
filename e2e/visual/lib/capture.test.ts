@@ -11,7 +11,7 @@ import {
   writeManifestEntry,
   type ManifestEntry,
 } from "./capture.ts";
-import { actualDir, buildBase, manifestDir, resultsDir } from "./paths.ts";
+import { actualDir, buildBase, manifestDir, repoRoot, resultsDir } from "./paths.ts";
 
 function shooter(frames: string[]) {
   let i = 0;
@@ -100,11 +100,11 @@ test("comparison outcomes map to statuses", () => {
   assert.equal(comparisonStatus(true, false), "changed");
 });
 
-test("output goes to the build directory, never the repository", () => {
+test("output goes to the checkout's build directory, never tracked files", () => {
   const env = { LOCALAPPDATA: path.join("C:", "Users", "x", "AppData", "Local") };
-  assert.equal(buildBase(env), path.join(env.LOCALAPPDATA, "nail-build"));
-  assert.equal(resultsDir(env), path.join(env.LOCALAPPDATA, "nail-build", "visual"));
+  assert.equal(buildBase(env), path.join(repoRoot, ".nail-build"));
+  assert.equal(resultsDir(env), path.join(repoRoot, ".nail-build", "visual"));
   assert.equal(manifestDir({ NAIL_BUILD_DIR: "/b" }), path.join("/b", "visual", "manifest"));
   assert.equal(actualDir({ NAIL_VISUAL_RESULTS: "/r" }), path.join("/r", "actual"));
-  assert.equal(buildBase({}), path.join(tmpdir(), "nail-build"));
+  assert.equal(buildBase({ NAIL_BUILD_DIR: "/b" }), "/b");
 });

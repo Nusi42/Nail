@@ -31,8 +31,8 @@ if (!process.env.NAIL_E2E_DATA || !process.env.NAIL_E2E_CONFIG) {
 // directories above) unless NAIL_E2E_PORT pins one.
 process.env.NAIL_E2E_PORT ??= String(freePort());
 const port = Number(process.env.NAIL_E2E_PORT);
-// Traces, screenshots and the HTML report stay out of the (OneDrive-synced)
-// repository, next to cargo's target directory.
+// Traces, screenshots and the HTML report go to the checkout's gitignored
+// .nail-build/e2e (buildOutputDir), never into tracked files.
 const outputRoot = buildOutputDir("e2e");
 const quote = (s: string) => `"${s}"`;
 

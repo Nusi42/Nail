@@ -8,8 +8,8 @@
  * manifest the review page is built from.
  *
  * Output (screenshots, manifest, Playwright results, the review page) goes
- * to `<build dir>/visual/` (`NAIL_BUILD_DIR`, default
- * `%LOCALAPPDATA%\nail-build`), never into the repository; only reviewed
+ * to `<build dir>/visual/` (`NAIL_BUILD_DIR`, default the checkout's
+ * gitignored `.nail-build`), never into tracked files; only reviewed
  * baselines live in `e2e/visual/baselines/`.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";

@@ -6,9 +6,15 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - How and in which order: `docs/plan.md` (milestones M0–M5, work packages, gates).
 - Decisions and deviations: `docs/adr/NNNN-title.md`.
 - Project memory: `.claude/memory/` (see "Memory" below).
+- Where to work: the work folders, never the master (see "Work folders" below).
 
 ## Non-negotiable rules
 
+- **Work folders (ADR 0132).** `<master>` is the master repository: it only receives
+  pushes and `git merge --ff-only work-1`. Never edit, build, test, run, install or commit anything there (the npm entry
+  points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work in `<work root>\nail-work-1`
+  (branch `work-1`, the lead) or, for a parallel package, `nail-work-<N>` (branch `work-<N>`, reset to `origin/work-1`, push the
+  branch when done). New folder: `node scripts/work-folders.mjs create <n>`. Details: `docs/dev-setup.md` "Work folders".
 - **Tests from day 1.** Every change ships with unit tests; every user-visible behaviour with a Playwright scenario. Never report work as done while any suite is red or tests were skipped.
 - **Docs split.** Internal docs → `docs/`. User-facing manuals and references → `userDocs/<lang>/` (`en` written, `de` empty for now).
 - **Languages.** No literal user-visible strings in React or Rust. Strings live in Fluent catalogs `locales/en/*.ftl` (complete) and `locales/de/*.ftl` (same files, empty). Missing keys fall back to English per key.
@@ -37,7 +43,9 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 ## Tooling facts
 
 - Rust 1.97 (MSVC), Node 26 + npm 11. **npm workspaces, not pnpm** (pnpm is not installed). No docker locally: integration tests use in-process mock servers from `crates/nail-testkit`.
-- The repo lives in OneDrive. Build output must stay outside it: a local, gitignored `.cargo/config.toml` sets `target-dir` to `%LOCALAPPDATA%\nail-build\target`. When running several cargo processes in parallel, give each its own `CARGO_TARGET_DIR`.
+- Work folders live outside OneDrive (ADR 0132): Cargo builds into the folder's `target/`, test and build output goes to its
+  gitignored `.nail-build/` (`NAIL_BUILD_DIR` overrides; the development update key stays in `%LOCALAPPDATA%\nail-build\keys`).
+  When running several cargo processes in one folder, give each its own `CARGO_TARGET_DIR` under `.nail-build/`.
 - Config files are KDL v2.
 - SQLite is SQLite3 Multiple Ciphers (M4c, ADR 0095) through the root `[patch.crates-io]` stand-in
   `crates/nail-store/libsqlite3-sys-sqlite3mc`; the first build compiles its amalgamation (about 80 s in debug).
@@ -640,7 +648,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/vault-recovery.spec.ts (startNail({dirs}) restarts on the same directories, the demo
                        keychain file loses the data key), tests/desktop-m4c.spec.ts (Save as PDF); perf/ (M4c WP123, ADR 0097: budgets.json,
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
-                       = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>));
+                       = Rust run → Playwright → check; reports in <checkout>/.nail-build/perf/<corpus>));
                        tests/m5a.spec.ts (themes, density, Follow Windows via `system-appearance`, user themes,
                        attachment download); tests/m5b-contract.spec.ts (fallback: view shortcuts open the views' windows
                        with a pre-rail layout, palette); tests/m5b.spec.ts (rail / views / badges / remembered view, More,
@@ -682,7 +690,9 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        dev.mjs + tauri.mjs + lib/dev-port.mjs (free dev-server port, Tauri devUrl override);
                        Q1 (ADR 0123): check.mjs + lib/check-steps.mjs (`npm run check`), pre-commit.mjs +
                        lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
-                       check-editorconfig.mjs + lib/editorconfig-check.mjs
+                       check-editorconfig.mjs + lib/editorconfig-check.mjs;
+                       work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
+                       assertWorkFolder refuses development commands inside OneDrive)
 Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: typescript-eslint strictTypeChecked +
                        stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
                        eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
@@ -1046,8 +1056,8 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `POST /api/auth` with `204` (`nail_api::remote::NO_LOGIN_STATUS`); `SearchIndex::open_with` / `PimIndex::open_with`
   borrow the wrapper; the Vite build splits the initial code into `vendor`, `vendor-ui`, `catalogs`, `default-theme`
   and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
-  notice is off (`checks.bundlerTimings`). `node_modules` in OneDrive is a reparse point: Vite configs that import a
-  symlinked workspace package need `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`).
+  notice is off (`checks.bundlerTimings`). Vite configs that import a symlinked workspace package keep
+  `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`; needed for checkouts inside OneDrive).
 - M5d contract: ADR 0131 (layout edits = new `LayoutPatch` kinds through `UpdateLayout` (+ `base_revision`); `hidden=`
   on layout nodes; `presets` section with four default mail presets; actions `layout.customize` / `toolbar.customize`,
   `menu "context:toolbar"`; theme edits `EditTheme` / `DuplicateTheme` / `RenameTheme` / `DeleteTheme` /
@@ -1088,7 +1098,8 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
 
 ## Git
 
-- Branch `main`. Commit only when asked, or as part of an agreed workflow stage.
+- `main` lives in the master and moves only by fast-forward to `work-1` after a green verify. Work folders commit on their
+  own `work-<N>` branch. Commit only when asked, or as part of an agreed workflow stage.
 - End commit messages with the Co-Authored-By / Claude-Session lines required by the session.
 
 ## Memory

@@ -19,21 +19,41 @@ Docker is not needed. Integration tests use the in-process mock servers from
 `crates/nail-testkit` (IMAP) and `crates/nail-testkit-net` (SMTP, POP3,
 OAuth2, HTTP, DNS; M1a).
 
-### Keep build output out of OneDrive
+### Work folders (ADR 0132)
 
-The repository lives in a OneDrive folder. Cargo's `target/` directory must
-not be synced, so create a local, gitignored `.cargo/config.toml`:
+`<master>` is the **master repository**. It
+holds `main`, receives pushes and fast-forward merges, and nothing is built,
+tested, run, installed or committed there (releases included). All work
+happens in clones outside OneDrive, with `origin` pointing to the master:
 
-```toml
-[build]
-target-dir = "C:/Users/<you>/AppData/Local/nail-build/target"
+| Folder | Branch | Use |
+| --- | --- | --- |
+| `<work root>\nail-work-1` | `work-1` | the lead: contracts, integration, reviews, fixes, verification, releases |
+| `nail-work-2`, `nail-work-3`, … | `work-2`, `work-3`, … | one per parallel work package |
+
+```sh
+node scripts/work-folders.mjs create 6        # from a work folder: clone the master into nail-work-6 (branch work-6), npm ci
+git fetch origin && git reset --hard origin/work-1   # a package folder starts from the contract (clean tree first)
+git push --force-with-lease origin work-3       # a package is done; the integrator merges origin/work-3 into work-1
+git -C <master> merge --ff-only work-1   # main moves only after a green verify
+node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuses every build
 ```
 
-When several cargo processes run in parallel (for example several agents),
-give each its own `CARGO_TARGET_DIR`.
+Guards: `npm run dev` / `check` / `test` / `visual` / `tauri` /
+`build:desktop`, the perf runner, the installer build, `npm ci`'s `prepare`
+and the pre-commit hook refuse inside any OneDrive folder
+(`scripts/lib/work-folder.mjs`). In the master, a local `.cargo/config.toml`
+names a refusing `rustc-wrapper`. `create` also writes the folder's
+`.claude/settings.local.json`, so Claude Code's memory stays in the checkout
+(`.claude/memory`). Start Claude Code sessions in `nail-work-1`.
 
-Playwright output also goes to `%LOCALAPPDATA%\nail-build\`. The one
-exception is `ui/dist` (gitignored, about 1 MB), see ADR 0011.
+Cargo builds into each work folder's `target/`. Give parallel cargo
+processes in one folder their own `CARGO_TARGET_DIR` (under `.nail-build/`).
+
+Build and test output (Playwright, visual, perf, the desktop test build,
+installers) goes to the checkout's gitignored `.nail-build/`
+(`NAIL_BUILD_DIR` overrides the base); the development update key stays in
+`%LOCALAPPDATA%\nail-build\keys`, outside every work folder.
 
 ## Install and build
 
@@ -69,7 +89,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
 | The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages; `--tolerant` = CI tolerance 1.5, `--no-check`, `--in-process`, `--work-dir DIR`) |
 | Merge benchmark reports and check the budgets | `nail-bench check --report A --report B [--tolerant] [--out F]` |
-| The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `%LOCALAPPDATA%/nail-build/perf/<corpus>` |
+| The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `.nail-build/perf/<corpus>` |
 | Only the UI perf scenario | `npx playwright test -c e2e/perf/playwright.perf.config.ts` (env `NAIL_PERF_CORPUS`, `NAIL_PERF_WORK`, `NAIL_PERF_TOLERANT`, `NAIL_PERF_FRESH`, `NAIL_BIN`, `NAIL_BENCH_BIN`) |
 
 ### Linters and formatters (Q1, ADR 0123)
@@ -135,12 +155,14 @@ Builds and platforms (ADR 0130):
 - Clap help text is the doc comment, printed verbatim. Do not put backticks
   in it; name environment variables in an `about` / `help` attribute.
 
-On a checkout inside OneDrive, `node_modules` is a cloud-file reparse
-point. Vite cannot canonicalize symlinked workspace packages there ("Failed
-to resolve import", or Node loading a package's `.ts` sources natively), so
-the Vite configs that need it set `resolve.preserveSymlinks: true`
-(`ui/vite.config.ts`, `packages/create-nail-plugin/vitest.config.ts`).
-Excluding `node_modules` from OneDrive sync fixes it at the source.
+The Vite configs that import a symlinked workspace package set
+`resolve.preserveSymlinks: true` (`ui/vite.config.ts`,
+`packages/create-nail-plugin/vitest.config.ts`). It dates from checkouts
+inside OneDrive, where `node_modules` is a cloud-file reparse point that
+Vite cannot canonicalize ("Failed to resolve import", or Node loading a
+package's `.ts` sources natively). Work folders are outside OneDrive
+(ADR 0132), but the setting stays harmless and keeps other checkouts
+working.
 
 | Files | Tool | Config | Fix |
 | --- | --- | --- | --- |
@@ -378,7 +400,7 @@ How it works:
   `chromium.connectOverCDP` (`e2e/support/desktop.ts`). The app is built by
   `npm run build:desktop` (`e2e/scripts/build-desktop.mjs`: `nail-app` with
   `tauri/custom-protocol`, so it serves the embedded `ui/dist`) into its own
-  target directory, `%LOCALAPPDATA%\nail-build\desktop-target`, so the
+  target directory, `.nail-build/desktop-target`, so the
   feature does not force rebuilds of the shared target directory. The same
   build enables the test-only cargo features `nail-app/test-overrides` and
   `nail-mapi/test-overrides`: only then do the app and the DLL honour
@@ -392,7 +414,7 @@ How it works:
 - The global setup (`e2e/support/global-setup.ts`) builds the example
   plug-ins (`follow-up`, `attachment-check`, `csv-preview`) once (esbuild +
   `@nail/plugin-api/tools`' `packPlugin`, `buildExample` in
-  `e2e/support/plugins.ts`) into `%LOCALAPPDATA%\nail-build\e2e\plugins\`
+  `e2e/support/plugins.ts`) into `.nail-build/e2e/plugins/`
   and hands the package paths to the workers (`NAIL_E2E_EXAMPLE_<NAME>`,
   read with `examplePackage(name)`).
 - The browser window is 1280 × 1000 (M5b: the message list under the list
@@ -417,9 +439,9 @@ How it works:
   …"). Remembered geometry lives in the server's config dir
   (`window-state.json`), so scenarios that move windows start their own
   server (`startNail`).
-- Traces, screenshots and the CI HTML report go to
-  `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
-  `NAIL_BUILD_DIR` overrides the base), not into the repository.
+- Traces, screenshots and the CI HTML report go to the checkout's
+  gitignored `.nail-build/e2e/` (`NAIL_BUILD_DIR` overrides the base), not
+  into tracked files.
 
 | File | Covers |
 | --- | --- |
@@ -474,7 +496,7 @@ npm run visual:selftest    # end-to-end self-test of the harness with temporary 
 ```
 
 - The review page is `<build dir>/visual/review/index.html`
-  (`%LOCALAPPDATA%\nail-build\visual\review\index.html` locally): baseline,
+  (`.nail-build/visual/review/index.html` in the checkout): baseline,
   actual and difference side by side, filterable by status, skipped variants
   with their reasons. Open the file; nothing is served.
 - Baselines are per platform because fonts differ; `win32` is the

@@ -8,7 +8,11 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertWorkFolder } from "./lib/work-folder.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+assertWorkFolder("npm run tauri");
 const [command, ...rest] = process.argv.slice(2);
 
 const args =

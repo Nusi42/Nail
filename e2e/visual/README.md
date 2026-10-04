@@ -31,8 +31,8 @@ Arguments after `--` go to Playwright, e.g.
 workers: `NAIL_VISUAL_WORKERS` (default 2; each worker runs its own server).
 
 The review page lands in `<build dir>/visual/review/index.html`
-(`%LOCALAPPDATA%\nail-build\visual\review\index.html` locally,
-`.nail-build/visual/review/` in CI): baseline, actual and difference side by
+(`.nail-build/visual/review/index.html` in the checkout, unless
+`NAIL_BUILD_DIR` says otherwise): baseline, actual and difference side by
 side per screen, filterable by status (changed, new, error, passed, captured,
 skipped). Open the file in a browser; nothing is served.
 

@@ -20,6 +20,8 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
@@ -61,6 +63,7 @@ export function playwrightArgs(options) {
 }
 
 async function main() {
+  assertWorkFolder("npm run visual");
   const options = parseArgs(process.argv.slice(2));
   // The Playwright CLI through node itself (no shell for `npx.cmd`).
   const cli = path.join(repoRoot, "node_modules", "@playwright", "test", "cli.js");

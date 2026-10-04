@@ -16,18 +16,31 @@ import path from "node:path";
 /** @typedef {Partial<Record<string, string>>} Env */
 
 /**
- * Base directory for build output, never inside the repository (it lives in
- * OneDrive): `NAIL_BUILD_DIR`, else `%LOCALAPPDATA%\nail-build`, else
- * `<tmp>/nail-build`. Same rule as e2e/support/nail.ts.
+ * Base directory for build output: `NAIL_BUILD_DIR`, else the checkout's own
+ * gitignored `.nail-build/` (work folders live outside OneDrive, and each
+ * builds into its own directory). Same rule as e2e/support/nail.ts.
+ *
+ * @param {Env} env
+ * @param {string} repoRoot
+ * @returns {string}
+ */
+export function buildBase(env, repoRoot) {
+  if (env.NAIL_BUILD_DIR) return env.NAIL_BUILD_DIR;
+  return path.join(repoRoot, ".nail-build");
+}
+
+/**
+ * Where local signing keys live (the development update key): outside every
+ * checkout, so a `git clean` or a reset of a work folder never deletes them —
+ * `%LOCALAPPDATA%\nail-build\keys`, else `<tmp>/nail-build/keys`.
  *
  * @param {Env} env
  * @param {string} tmp
  * @returns {string}
  */
-export function buildBase(env, tmp) {
-  if (env.NAIL_BUILD_DIR) return env.NAIL_BUILD_DIR;
-  if (env.LOCALAPPDATA) return path.join(env.LOCALAPPDATA, "nail-build");
-  return path.join(tmp, "nail-build");
+export function keysDir(env, tmp) {
+  if (env.LOCALAPPDATA) return path.join(env.LOCALAPPDATA, "nail-build", "keys");
+  return path.join(tmp, "nail-build", "keys");
 }
 
 /**
@@ -39,8 +52,8 @@ export function buildBase(env, tmp) {
 export function assertOutsideRepo(dir, repoRoot) {
   const rel = path.relative(path.resolve(repoRoot), path.resolve(dir));
   const inside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-  // `.nail-build/` in the checkout is the one exception: CI runners have no
-  // OneDrive, and the directory is gitignored.
+  // `.nail-build/` in the checkout is the one exception: the default build
+  // directory, gitignored.
   if (inside && !rel.split(/[\\/]/)[0]?.startsWith(".nail-build")) {
     throw new Error(`build output must stay outside the repository: ${dir}`);
   }

@@ -39,9 +39,8 @@ Permission: `attachments`.
 ## Building and packing
 
 The build scripts write into the example's own folder (`dist/index.js`,
-`dist/<name>.nailplugin`). The repository lives in OneDrive, where build
-output must not go, so **copy the example out of the repository first**
-and build the copy:
+`dist/<name>.nailplugin`). Keep the checkout free of build output, so
+**copy the example out of the repository first** and build the copy:
 
 ```sh
 cp -r examples/<name> <dir>/<name>     # any folder outside the repository

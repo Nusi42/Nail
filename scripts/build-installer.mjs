@@ -14,7 +14,7 @@
  * Usage: node scripts/build-installer.mjs [options] (see scripts/lib/build.mjs
  * `parseArgs`, or scripts/README.md).
  *
- * Output goes to <build dir>/dist, never into the repository (OneDrive);
+ * Output goes to <build dir>/dist (the gitignored .nail-build), never into tracked files;
  * the cargo target directory defaults to <build dir>/installer-target.
  * The Tauri bundler downloads NSIS, WiX 3.14 and the WebView2 installers
  * into %LOCALAPPDATA%\tauri on first use.
@@ -53,6 +53,7 @@ import {
   assertOutsideRepo,
   buildBase,
   checksumLines,
+  keysDir,
   installerConfigOverlay,
   isOverlay,
   listFiles,
@@ -69,6 +70,7 @@ import { readJson } from "./lib/json.mjs";
 import { findSigntool, signingFromEnv, signtoolArgs, tauriSigning } from "./lib/sign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { writeSboms } from "./sbom.mjs";
+import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const shell = process.platform === "win32";
@@ -139,11 +141,13 @@ function installedTargets() {
 }
 
 function main() {
+  // Releases are built in a work folder on a `main` commit, never in the master.
+  assertWorkFolder("node scripts/build-installer.mjs");
   if (process.platform !== "win32") {
     throw new Error("the Windows installers are built on Windows");
   }
   const options = parseArgs(process.argv.slice(2), { arch: tauriArch(process.arch) });
-  const base = buildBase(process.env, tmpdir());
+  const base = buildBase(process.env, repoRoot);
   const targetDir = path.resolve(options.targetDir ?? path.join(base, "installer-target"));
   const outDir = path.resolve(options.outDir ?? path.join(base, "dist"));
   assertOutsideRepo(targetDir, repoRoot);
@@ -194,7 +198,7 @@ function main() {
   /** @type {{ pubkey: string } | null} */
   let updaterKey;
   if (options.devUpdaterKey) {
-    const dev = devKeyPaths({ base, repoRoot });
+    const dev = devKeyPaths({ keysDir: keysDir(process.env, tmpdir()), repoRoot });
     if (!existsSync(dev.privateKey)) {
       throw new Error(
         `no development update key at ${dev.privateKey}; run node scripts/updater-key.mjs`,

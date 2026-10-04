@@ -12,7 +12,7 @@ node scripts/visual-review/generate.mjs [--results <dir>] [--out <dir>] [--basel
 ```
 
 - `--results`: the harness output (default `<build dir>/visual`, i.e.
-  `NAIL_VISUAL_RESULTS`, else `NAIL_BUILD_DIR` or `%LOCALAPPDATA%\nail-build`);
+  `NAIL_VISUAL_RESULTS`, else `NAIL_BUILD_DIR` or the checkout's `.nail-build`);
   the manifest is read from `<results>/manifest/*.json`.
 - `--out`: where the page goes (default `<results>/review`): `index.html`,
   the images it shows (copied into `images/`, so the page is a complete

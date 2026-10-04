@@ -47,16 +47,12 @@ export function freePort(): number {
 }
 
 /**
- * A directory for build and test output outside the repository (which may
- * be synced by OneDrive): `%LOCALAPPDATA%/nail-build/<name>` on Windows,
- * else `<tmp>/nail-build/<name>`. `NAIL_BUILD_DIR` overrides the base.
+ * A directory for build and test output: `<checkout>/.nail-build/<name>`
+ * (gitignored; each work folder has its own). `NAIL_BUILD_DIR` overrides the
+ * base.
  */
 export function buildOutputDir(name: string): string {
-  const base =
-    process.env.NAIL_BUILD_DIR ??
-    (process.env.LOCALAPPDATA
-      ? path.join(process.env.LOCALAPPDATA, "nail-build")
-      : path.join(tmpdir(), "nail-build"));
+  const base = process.env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
   return path.join(base, name);
 }
 

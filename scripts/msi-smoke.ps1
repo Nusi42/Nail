@@ -75,7 +75,7 @@ if (-not $identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrat
   Fail 'needs an elevated shell (per-machine install)'
 }
 if (-not $Msi) {
-  $base = if ($env:NAIL_BUILD_DIR) { $env:NAIL_BUILD_DIR } else { Join-Path $env:LOCALAPPDATA 'nail-build' }
+  $base = if ($env:NAIL_BUILD_DIR) { $env:NAIL_BUILD_DIR } else { Join-Path $PSScriptRoot '..\.nail-build' }
   $Msi = Get-ChildItem (Join-Path $base 'dist') -Filter 'Nail_*_en-US.msi' |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
   if (-not $Msi) { Fail "no MSI in $base\dist; run node scripts/build-installer.mjs" }

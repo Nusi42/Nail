@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertOutsideRepo, buildBase } from "./lib/build.mjs";
+import { assertOutsideRepo, keysDir } from "./lib/build.mjs";
 import { verifySignature } from "./lib/minisign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 
@@ -46,8 +46,8 @@ function npx(args, env = process.env) {
 
 function main() {
   const generate = process.argv.includes("--generate");
-  const base = buildBase(process.env, tmpdir());
-  const paths = devKeyPaths({ base, repoRoot });
+  const keys = keysDir(process.env, tmpdir());
+  const paths = devKeyPaths({ keysDir: keys, repoRoot });
   assertOutsideRepo(paths.privateKey, repoRoot);
   const password = process.env.NAIL_DEV_UPDATER_KEY_PASSWORD ?? "";
 
@@ -66,7 +66,7 @@ function main() {
     throw new Error(`no development key at ${paths.privateKey}; run with --generate`);
   }
   // Sign a probe and check it against the committed public key.
-  const probe = path.join(base, "keys", "probe.txt");
+  const probe = path.join(keys, "probe.txt");
   writeFileSync(probe, `nail updater key probe ${String(Date.now())}\n`);
   try {
     npx([

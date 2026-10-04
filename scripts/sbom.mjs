@@ -12,7 +12,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -100,7 +99,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const i = argv.indexOf(name);
     return i >= 0 ? argv[i + 1] : undefined;
   };
-  const outDir = option("--out") ?? path.join(buildBase(process.env, tmpdir()), "dist");
+  const outDir = option("--out") ?? path.join(buildBase(process.env, repoRoot), "dist");
   const result = writeSboms({ outDir, target: option("--target") });
   console.log(
     `SBOM: ${result.rustFile} (${String(result.crates)} crates), ${result.uiFile} (${String(result.npm)} packages)`,

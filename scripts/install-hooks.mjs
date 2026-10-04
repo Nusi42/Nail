@@ -6,7 +6,12 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertWorkFolder } from "./lib/work-folder.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// `npm ci` in the master would fill OneDrive with node_modules.
+assertWorkFolder("npm install / npm ci");
 try {
   execFileSync("git", ["rev-parse", "--git-dir"], { cwd: root, stdio: "ignore" });
 } catch {

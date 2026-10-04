@@ -10,8 +10,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { checkRepository } from "./lib/socket-binds.mjs";
+import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+assertWorkFolder("npm test");
 const { files, violations, stale } = checkRepository(root);
 
 for (const v of violations) {

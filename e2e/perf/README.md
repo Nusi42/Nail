@@ -31,5 +31,5 @@ and `npm run build -w ui`.
 Metric names are `nail_bench::MetricName` (kebab-case in the JSON); every
 one has exactly one budget (a test in nail-bench checks it). `ci-tolerance`
 multiplies every budget in CI (shared runners). Corpora, data, reports and
-traces go to `%LOCALAPPDATA%/nail-build/perf/<corpus>` (`NAIL_BUILD_DIR`,
-`NAIL_PERF_WORK`), never into the repo.
+traces go to `<checkout>/.nail-build/perf/<corpus>` (gitignored;
+`NAIL_BUILD_DIR`, `NAIL_PERF_WORK`), never into tracked files.

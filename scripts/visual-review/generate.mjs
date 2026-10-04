@@ -25,7 +25,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,10 +78,7 @@ const SCREEN_ORDER = [
  * @param {Env} [env]
  */
 export function buildBase(env = process.env) {
-  if (env.NAIL_BUILD_DIR) return env.NAIL_BUILD_DIR;
-  return env.LOCALAPPDATA
-    ? path.join(env.LOCALAPPDATA, "nail-build")
-    : path.join(tmpdir(), "nail-build");
+  return env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
 }
 
 /**

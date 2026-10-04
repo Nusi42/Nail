@@ -12,8 +12,8 @@
 //! `run` leaves the synced data in `<work-dir>/data` (the Playwright perf
 //! scenarios open it with `nail serve`) and writes the report to
 //! `<work-dir>/report-rust.json` unless `--report` says otherwise. The work
-//! directory defaults to `%LOCALAPPDATA%/nail-build/perf/<corpus>`, never
-//! the repository. The exit code is 1 when a budget is exceeded.
+//! directory defaults to `<checkout>/.nail-build/perf/<corpus>` (gitignored),
+//! never tracked files. The exit code is 1 when a budget is exceeded.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -114,14 +114,12 @@ fn spec_of(name: &str, messages: Option<u64>) -> Result<CorpusSpec, BenchError> 
     Ok(spec)
 }
 
-/// `%LOCALAPPDATA%/nail-build` (or `NAIL_BUILD_DIR`, or the temp dir).
+/// `NAIL_BUILD_DIR`, else the checkout's gitignored `.nail-build` (each work
+/// folder has its own).
 fn build_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("NAIL_BUILD_DIR") {
-        return PathBuf::from(dir);
-    }
-    std::env::var_os("LOCALAPPDATA").map_or_else(
-        || std::env::temp_dir().join("nail-build"),
-        |d| PathBuf::from(d).join("nail-build"),
+    std::env::var_os("NAIL_BUILD_DIR").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.nail-build"),
+        PathBuf::from,
     )
 }
 

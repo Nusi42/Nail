@@ -21,8 +21,11 @@ import {
   selectSteps,
   summarize,
 } from "./lib/check-steps.mjs";
+import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+assertWorkFolder("npm run check");
 
 let options;
 try {

@@ -12,6 +12,7 @@ import {
   combineOverlays,
   installerConfigOverlay,
   isLoopbackUrl,
+  keysDir,
   listFiles,
   mapiArchs,
   mapiResourcePath,
@@ -24,10 +25,18 @@ import {
   updaterPluginConfig,
 } from "../lib/build.mjs";
 
-test("build output goes to NAIL_BUILD_DIR, LOCALAPPDATA or tmp", () => {
-  assert.equal(buildBase({ NAIL_BUILD_DIR: "X", LOCALAPPDATA: "L" }, "T"), "X");
-  assert.equal(buildBase({ LOCALAPPDATA: "L" }, "T"), path.join("L", "nail-build"));
-  assert.equal(buildBase({}, "T"), path.join("T", "nail-build"));
+test("build output goes to NAIL_BUILD_DIR, else the checkout's .nail-build", () => {
+  assert.equal(buildBase({ NAIL_BUILD_DIR: "X", LOCALAPPDATA: "L" }, "R"), "X");
+  assert.equal(buildBase({ LOCALAPPDATA: "L" }, "R"), path.join("R", ".nail-build"));
+  assert.equal(buildBase({}, "R"), path.join("R", ".nail-build"));
+});
+
+test("signing keys stay outside every checkout", () => {
+  assert.equal(
+    keysDir({ NAIL_BUILD_DIR: "X", LOCALAPPDATA: "L" }, "T"),
+    path.join("L", "nail-build", "keys"),
+  );
+  assert.equal(keysDir({}, "T"), path.join("T", "nail-build", "keys"));
 });
 
 test("output inside the repository is refused, except .nail-build", () => {
