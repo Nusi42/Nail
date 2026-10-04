@@ -13,7 +13,7 @@ export const meta = {
 
 const A = args
 // Master repository and work folders (docs/dev-setup.md "Work folders",
-// ADR 0132; the same flow as another project's ADR-0024): the master checkout only
+// ADR 0132): the master checkout only
 // receives pushes and fast-forward merges. The lead stages (contract,
 // integrate, reviews, fix, verify) work in nail-work-<lead> on work-<lead>; after
 // each green lead stage main is fast-forwarded to work-<lead> (FF below), so

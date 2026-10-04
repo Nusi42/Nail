@@ -14,8 +14,8 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   pushes and `git merge --ff-only work-1`. Never edit, build, test, run, install or commit anything there (the npm entry
   points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work in `<work root>\nail-work-1`
   (branch `work-1`, the lead) or, for a parallel package, `nail-work-<N>` (branch `work-<N>`, reset to `origin/main`, push the
-  branch when done; never push to `main`). New folder: `node scripts/work-folders.mjs create <n>`. Same setup as another project;
-  details: `docs/dev-setup.md` "Work folders". Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and
+  branch when done; never push to `main`). New folder: `node scripts/work-folders.mjs create <n>`.
+  Details: `docs/dev-setup.md` "Work folders". Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and
   the Claude Code post-edit hook (per-file checks on each edited file; fix what it reports).
 - **Tests from day 1.** Every change ships with unit tests; every user-visible behaviour with a Playwright scenario. Never report work as done while any suite is red or tests were skipped.
 - **Docs split.** Internal docs → `docs/`. User-facing manuals and references → `userDocs/<lang>/` (`en` written, `de` empty for now).
@@ -1124,7 +1124,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
 
 ## If you are the lead (the main session)
 
-The owner starts Claude Code in the master folder `<master>`, as for another project. That folder
+The owner starts Claude Code in the master folder `<master>`. That folder
 is only the launch point: drive the work folders by absolute path (`git -C`, `cd` in each command), and edit, build,
 test and commit only there; in the master run nothing but `git merge --ff-only work-1`. A new session picks up the work
 like this:

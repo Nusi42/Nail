@@ -5,7 +5,7 @@ disjoint directories → integration → two reviews → fix → independent ver
 Every milestone since M2 has used it.
 
 Agents work in the work folders, never in the master
-(ADR 0132, docs/dev-setup.md "Work folders"; the same flow as another project):
+(ADR 0132, docs/dev-setup.md "Work folders"):
 the lead stages (contract, integration, reviews, fix, verify) in
 `nail-work-1` on `work-1`, parallel package *i* in `nail-work-<N>` on
 `work-<N>`. After each green lead stage (contract, integration, fix) the

@@ -9,10 +9,10 @@ moved Cargo's `target/` to `%LOCALAPPDATA%\nail-build\target`, and test
 output went to `%LOCALAPPDATA%\nail-build`. `node_modules` and `ui/dist`
 still sat in OneDrive. That caused the reparse-point workarounds for Vite
 (ADR 0129), and all parallel agents shared one checkout and one npm tree.
-The owner keeps their other projects as a master repository in OneDrive with
+The maintainer keeps their projects as a master repository in OneDrive with
 clones in `<work root>\<project>.winN`, each on its own
-branch `work-<N>` (for example another project). They asked for the same here: the
-OneDrive folder is the master and is never used for development.
+branch `work-<N>`, and required the same here: the master folder is the
+master and is never used for development.
 
 ## Decisions
 
@@ -30,21 +30,18 @@ OneDrive folder is the master and is never used for development.
   - `main` moves only by `git merge --ff-only work-1` in the master, after
     each green lead stage (contract, integration, fixes), so `main` is
     always green. This is the only write ever made in the master.
-- **Same as another project** (its ADR-0024, the owner's wish): master, `work-1`
-  lead, `work-2+` builders from `main`, merges into `work-1`, fast-forward of
-  `main`, a committed `.cargo/config.toml` that includes the ignored
+- **Process:** master, `work-1` lead, `work-2+` builders from `main`,
+  merges into `work-1`, fast-forward of `main`, a committed `.cargo/config.toml` that includes the ignored
   `config.local.toml`, a pre-push check, and a Claude Code post-edit hook
   (`.claude/settings.json`) that runs the per-file checks on every edited
   file and hands findings back to the agent (exit code 2, at most 20
-  lines). Nail keeps its own wave workflow, commit style and Opus builders.
-- **Two deliberate differences from another project.** another project's post-edit hook
-  skips when the *session* folder lies in OneDrive, so it never runs (its
-  lead session runs in the master). Nail's hook finds the checkout from
-  the *edited file* (the nearest folder with `.git` and
-  `scripts/lib/run-checks.mjs`), runs that work folder's own checks, and
-  skips only files inside OneDrive. another project's Git hooks need lefthook,
-  which is not installed there; Nail's (`.githooks/`, set by `npm ci`) are
-  active in every work folder.
+  lines). Waves run with Nail's wave workflow.
+- **The post-edit hook decides by the edited file.** The lead session
+  runs in the master, so the session folder always lies in OneDrive. The
+  hook therefore finds the checkout from the *edited file* (the nearest
+  folder with `.git` and `scripts/lib/run-checks.mjs`), runs that work
+  folder's own checks, and skips only files inside OneDrive. The Git hooks
+  (`.githooks/`, set by `npm ci`) are active in every work folder.
 - **Build output stays in each work folder:** Cargo's default `target/`,
   and the default build base is the checkout's gitignored `.nail-build/`
   (Playwright, visual, perf, the desktop test build, installers;

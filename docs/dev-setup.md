@@ -24,8 +24,7 @@ OAuth2, HTTP, DNS; M1a).
 `<master>` is the **master repository**. It
 holds `main`, receives pushes and fast-forward merges, and nothing is built,
 tested, run, installed or committed there (releases included). All work
-happens in clones outside OneDrive, with `origin` pointing to the master.
-It is the same setup as another project's (its ADR-0024):
+happens in clones outside OneDrive, with `origin` pointing to the master:
 
 | Folder | Branch | Use |
 | --- | --- | --- |
@@ -56,7 +55,7 @@ and the Git hooks refuse inside any OneDrive folder
 names a refusing `rustc-wrapper`. `create` also writes the folder's
 `.claude/settings.local.json`, so Claude Code's memory stays in the checkout
 (`.claude/memory`). The owner's Claude Code session runs in the master
-folder, as another project's does, and is only the launch point: it drives the work
+folder and is only the launch point: it drives the work
 folders by absolute path, and every edit, build, test and commit happens
 there.
 
