@@ -3,11 +3,12 @@
 // scripts that do the work. Run: node --test scripts/test/
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { editedFile, relativeTo } from "../post-edit.mjs";
+import { checkoutOf, editedFile, relativeTo } from "../post-edit.mjs";
 import { parseJson } from "../lib/json.mjs";
 import { MAX_REPORT_LINES, shortReport } from "../lib/run-checks.mjs";
 
@@ -21,7 +22,7 @@ test("the Git hooks run the pre-commit checks and `npm run check` before a push"
   assert.match(read(".githooks/pre-push"), /^exec node scripts\/check\.mjs$/m);
 });
 
-test("the Claude Code post-edit hook skips OneDrive and runs scripts/post-edit.mjs", () => {
+test("the Claude Code post-edit hook runs scripts/post-edit.mjs of the session folder", () => {
   /** @typedef {{ type: string, command: string }} Hook */
   const settings = /** @type {{ hooks: { PostToolUse: { matcher: string, hooks: Hook[] }[] } }} */ (
     parseJson(read(".claude/settings.json"))
@@ -32,8 +33,8 @@ test("the Claude Code post-edit hook skips OneDrive and runs scripts/post-edit.m
   const [hook] = entry.hooks;
   assert.ok(hook);
   assert.equal(hook.type, "command");
-  assert.match(hook.command, /^case "\$CLAUDE_PROJECT_DIR" in \*OneDrive\*\) exit 0;; esac; /);
-  assert.match(hook.command, /cd "\$CLAUDE_PROJECT_DIR" && node scripts\/post-edit\.mjs$/);
+  // The session runs in the master; the script finds the work folder itself.
+  assert.equal(hook.command, 'node "$CLAUDE_PROJECT_DIR/scripts/post-edit.mjs"');
 });
 
 test("cargo reads machine-specific settings from the ignored config.local.toml", () => {
@@ -53,6 +54,24 @@ test("the post-edit hook reads the edited file from the tool call", () => {
   assert.equal(editedFile('{"tool_input":{"command":"ls"}}'), undefined);
   assert.equal(editedFile('{"tool_name":"Bash"}'), undefined);
   assert.equal(editedFile("null"), undefined);
+});
+
+test("the checkout of an edited file is the nearest folder with .git and the check runner", () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "nail-post-edit-"));
+  try {
+    const work = path.join(base, "nail-work-3");
+    fs.mkdirSync(path.join(work, ".git"), { recursive: true });
+    fs.mkdirSync(path.join(work, "scripts", "lib"), { recursive: true });
+    fs.writeFileSync(path.join(work, "scripts", "lib", "run-checks.mjs"), "");
+    fs.mkdirSync(path.join(work, "ui", "src"), { recursive: true });
+    assert.equal(checkoutOf(path.join(work, "ui", "src", "a.ts")), work);
+    assert.equal(checkoutOf(path.join(work, "a.md")), work);
+    // A plain git repository without Nail's runner is not a Nail checkout.
+    fs.mkdirSync(path.join(base, "other", ".git"), { recursive: true });
+    assert.equal(checkoutOf(path.join(base, "other", "x.ts")), undefined);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
 });
 
 test("only files inside the checkout are checked, with / separators", () => {

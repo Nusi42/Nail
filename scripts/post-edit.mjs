@@ -4,18 +4,25 @@
 // edited. Claude Code passes the tool call as JSON on stdin
 // (`tool_input.file_path`, or `notebook_path` for notebooks). On a finding
 // the short report goes to stderr with exit code 2, which Claude Code feeds
-// back to the agent. The hook command skips the master itself.
+// back to the agent.
+//
+// The lead session runs in the master and its agents edit files in
+// the work folders, so the checkout to check is found from the edited file,
+// not from the session's folder, and that checkout's own checks run (its
+// scripts/lib/run-checks.mjs and node_modules). Files inside OneDrive are
+// never checked: nothing runs in the master.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseJson } from "./lib/json.mjs";
-import { runChecks, shortReport } from "./lib/run-checks.mjs";
+import { isInOneDrive } from "./lib/work-folder.mjs";
 
 /** Exit code that makes Claude Code show stderr to the agent. */
 const FEEDBACK_EXIT_CODE = 2;
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/** The shared check runner, relative to a checkout's root. */
+const RUNNER = path.join("scripts", "lib", "run-checks.mjs");
 
 /**
  * The edited file named by the hook input, if any.
@@ -37,6 +44,23 @@ export function editedFile(stdin) {
 }
 
 /**
+ * The Nail checkout that contains `file` (the nearest folder above it with
+ * `.git` and the check runner), or `undefined`.
+ *
+ * @param {string} file an absolute path
+ * @returns {string | undefined}
+ */
+export function checkoutOf(file) {
+  let dir = path.dirname(path.resolve(file));
+  for (;;) {
+    if (fs.existsSync(path.join(dir, ".git")) && fs.existsSync(path.join(dir, RUNNER))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/**
  * The repository-relative path (`/` separators) of `file`, or `undefined`
  * when it lies outside `base`.
  *
@@ -51,12 +75,20 @@ export function relativeTo(base, file) {
 }
 
 async function main() {
-  const file = editedFile(fs.readFileSync(0, "utf8"));
-  const rel = file === undefined ? undefined : relativeTo(root, file);
-  if (rel === undefined || !fs.existsSync(path.join(root, rel))) return;
-  const results = await runChecks(root, [rel]);
+  const named = editedFile(fs.readFileSync(0, "utf8"));
+  if (named === undefined) return;
+  const file = path.resolve(named);
+  if (!fs.existsSync(file) || isInOneDrive(file)) return;
+  const root = checkoutOf(file);
+  const rel = root === undefined ? undefined : relativeTo(root, file);
+  if (root === undefined || rel === undefined) return;
+  // The work folder's own runner (its version may differ from this copy's).
+  /** @type {unknown} */
+  const loaded = await import(pathToFileURL(path.join(root, RUNNER)).href);
+  const runner = /** @type {typeof import("./lib/run-checks.mjs")} */ (loaded);
+  const results = await runner.runChecks(root, [rel]);
   if (results.every((r) => r.code === 0)) return;
-  console.error(shortReport(results));
+  console.error(runner.shortReport(results));
   process.exitCode = FEEDBACK_EXIT_CODE;
 }
 

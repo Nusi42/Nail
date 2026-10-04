@@ -34,10 +34,17 @@ OneDrive folder is the master and is never used for development.
   lead, `work-2+` builders from `main`, merges into `work-1`, fast-forward of
   `main`, a committed `.cargo/config.toml` that includes the ignored
   `config.local.toml`, a pre-push check, and a Claude Code post-edit hook
-  (`.claude/settings.json`, skipped inside OneDrive) that runs the
-  per-file checks on every edited file and hands findings back to the
-  agent (exit code 2, at most 20 lines). Nail keeps its own wave
-  workflow, commit style and Opus builders.
+  (`.claude/settings.json`) that runs the per-file checks on every edited
+  file and hands findings back to the agent (exit code 2, at most 20
+  lines). Nail keeps its own wave workflow, commit style and Opus builders.
+- **Two deliberate differences from another project.** another project's post-edit hook
+  skips when the *session* folder lies in OneDrive, so it never runs (its
+  lead session runs in the master). Nail's hook finds the checkout from
+  the *edited file* (the nearest folder with `.git` and
+  `scripts/lib/run-checks.mjs`), runs that work folder's own checks, and
+  skips only files inside OneDrive. another project's Git hooks need lefthook,
+  which is not installed there; Nail's (`.githooks/`, set by `npm ci`) are
+  active in every work folder.
 - **Build output stays in each work folder:** Cargo's default `target/`,
   and the default build base is the checkout's gitignored `.nail-build/`
   (Playwright, visual, perf, the desktop test build, installers;

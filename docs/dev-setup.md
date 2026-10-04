@@ -44,8 +44,9 @@ node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuse
 passed. Hooks in every work folder: pre-commit = the fast per-file checks,
 pre-push = `npm run check` (`.githooks/`), and Claude Code's post-edit hook
 runs the per-file checks on every file an agent edits
-(`.claude/settings.json` → `scripts/post-edit.mjs`; findings go back to
-the agent; skipped inside OneDrive).
+(`.claude/settings.json` → `scripts/post-edit.mjs`, which finds the work
+folder from the edited file and runs that folder's checks; findings go back
+to the agent; files inside OneDrive are skipped).
 
 Guards: `npm run dev` / `check` / `test` / `visual` / `tauri` /
 `build:desktop`, the perf runner, the installer build, `npm ci`'s `prepare`
