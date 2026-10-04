@@ -15,13 +15,21 @@
  * Widths are measured, never assumed: when the items or the bar's width
  * change, every item is rendered once (before paint) and measured, then
  * the fit is applied.
+ *
+ * M5d (WP182, ADR 0131): a right-click on the bar (or Shift+F10 / the menu
+ * key on one of its buttons) opens the layout's `menu "context:toolbar"`;
+ * its actions run for this toolbar (Customize toolbar opens the toolbar
+ * customizer, `../features/toolbar-editor`). While the customizer of a bar
+ * is open, the bar carries `data-customizing`.
  */
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { JsonValue, ResolvedMenuEntry, ToolbarItem } from "../api/generated";
 import { useActions } from "../actions/ActionsProvider";
+import { comboFromEvent } from "../actions/keys";
 import { keyLabel } from "../features/menus";
 import { ContextMenu } from "../features/menus/ContextMenu";
 import { ariaShortcut } from "../features/menus/keyLabels";
+import { customizerWindow } from "../features/toolbar-editor/ids";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
 import { fitToolbar, normalizeSeparators, shownToolbarItems } from "../layout/overflow";
@@ -32,7 +40,10 @@ import {
   bindingOf,
   displayOf,
   moreMenuEntries,
+  opensContextMenu,
+  toolbarContextMenu,
   toolbarKeyContext,
+  toolbarMenuArgs,
   toolbarSettingsOf,
   tooltipMessage,
   wrapEdges,
@@ -197,6 +208,17 @@ function MoreButton({ index, labelOverride, icon, entries, measuring }: MoreProp
   );
 }
 
+/** The toolbar's own right-click menu while it is open. */
+interface OpenToolbarMenu {
+  items: ResolvedMenuEntry[];
+  x: number;
+  y: number;
+  /** Opened with the keyboard. */
+  keyboard: boolean;
+  /** Where focus goes back to when the menu closes. */
+  returnFocus: HTMLElement | null;
+}
+
 /** What the measuring pass decided: shown indices and the moved ones. */
 interface Fit {
   visible: number[];
@@ -237,6 +259,9 @@ export function Toolbar({ node }: WidgetProps) {
   const wraps = settings.overflow === "wrap";
   const root = useRef<HTMLDivElement>(null);
   const [keyContext, setKeyContext] = useState("global");
+  const { dispatch } = useActions();
+  const customizing = useUi((s) => s.windows.includes(customizerWindow(name)));
+  const [menu, setMenu] = useState<OpenToolbarMenu | null>(null);
 
   // What the bar shows; a change measures again.
   const signature = JSON.stringify(shown);
@@ -300,6 +325,45 @@ export function Toolbar({ node }: WidgetProps) {
     });
   });
 
+  /** Opens the toolbar's own menu; `false` when the layout has none. */
+  const openMenu = (point: { x: number; y: number } | null, from: Element | null): boolean => {
+    const items = toolbarContextMenu(layout, keyContext);
+    if (items === null) return false;
+    const rect = (from ?? root.current)?.getBoundingClientRect();
+    const active = document.activeElement;
+    setMenu({
+      items,
+      x: Math.round(point?.x ?? rect?.left ?? 0),
+      y: Math.round(point?.y ?? rect?.bottom ?? 0),
+      keyboard: point === null,
+      returnFocus: active instanceof HTMLElement && active !== document.body ? active : null,
+    });
+    return true;
+  };
+  const onContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return;
+    // A keyboard-invoked event (the menu key) has no pointer position.
+    const keyboard = event.clientX === 0 && event.clientY === 0 && event.button !== 2;
+    const target = event.target instanceof Element ? event.target : null;
+    if (openMenu(keyboard ? null : { x: event.clientX, y: event.clientY }, target)) {
+      event.preventDefault();
+    }
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Shift+F10 (a `menu.context` binding) on one of the bar's buttons.
+    if (opensContextMenu(layout, comboFromEvent(event))) {
+      const target = event.target instanceof Element ? event.target : null;
+      if (openMenu(null, target)) event.preventDefault();
+      return;
+    }
+    onToolbarKeyDown(event);
+  };
+  const closeMenu = (restoreFocus: boolean) => {
+    const back = menu?.returnFocus ?? null;
+    setMenu(null);
+    if (restoreFocus && back?.isConnected) back.focus();
+  };
+
   const all = shown.map((_item, i) => i);
   const indices = wraps ? normalizeSeparators(shown, all) : (current?.visible ?? all);
   const overflow = current?.overflow ?? [];
@@ -308,53 +372,79 @@ export function Toolbar({ node }: WidgetProps) {
   const autoMore = ownMore < 0 && (measuring || overflow.length > 0);
 
   return (
-    <div
-      ref={root}
-      data-part="toolbar"
-      data-toolbar={name}
-      data-node-id={node.id ?? undefined}
-      data-overflow={wraps ? "wrap" : "more"}
-      data-state={measuring ? "measuring" : undefined}
-      role="toolbar"
-      aria-label={node.label ? label(node.label) : t("toolbar-label")}
-      onKeyDown={onToolbarKeyDown}
-    >
-      {indices.map((index) => {
-        const item = shown[index];
-        switch (item?.type) {
-          case "action":
-            return <ToolbarButton key={index} item={item} index={index} keyContext={keyContext} />;
-          case "spacer":
-            return <span key={index} data-part="toolbar.spacer" data-item={index} />;
-          case "separator":
-            return (
-              <span key={index} data-part="toolbar.separator" data-item={index} role="separator" />
-            );
-          case "more":
-            // Its own entries or overflow to show (or being measured).
-            return entries.length > 0 || measuring ? (
-              <MoreButton
-                key={index}
-                index={index}
-                labelOverride={item.label}
-                icon={item.icon}
-                entries={entries}
-                measuring={measuring}
-              />
-            ) : null;
-          default:
-            return null;
-        }
-      })}
-      {autoMore && (
-        <MoreButton
-          index={null}
-          labelOverride={null}
-          icon={null}
-          entries={entries}
-          measuring={measuring}
+    <>
+      <div
+        ref={root}
+        data-part="toolbar"
+        data-toolbar={name}
+        data-node-id={node.id ?? undefined}
+        data-overflow={wraps ? "wrap" : "more"}
+        data-state={measuring ? "measuring" : undefined}
+        data-customizing={customizing ? "" : undefined}
+        role="toolbar"
+        aria-label={node.label ? label(node.label) : t("toolbar-label")}
+        onKeyDown={onKeyDown}
+        onContextMenu={onContextMenu}
+      >
+        {indices.map((index) => {
+          const item = shown[index];
+          switch (item?.type) {
+            case "action":
+              return (
+                <ToolbarButton key={index} item={item} index={index} keyContext={keyContext} />
+              );
+            case "spacer":
+              return <span key={index} data-part="toolbar.spacer" data-item={index} />;
+            case "separator":
+              return (
+                <span
+                  key={index}
+                  data-part="toolbar.separator"
+                  data-item={index}
+                  role="separator"
+                />
+              );
+            case "more":
+              // Its own entries or overflow to show (or being measured).
+              return entries.length > 0 || measuring ? (
+                <MoreButton
+                  key={index}
+                  index={index}
+                  labelOverride={item.label}
+                  icon={item.icon}
+                  entries={entries}
+                  measuring={measuring}
+                />
+              ) : null;
+            default:
+              return null;
+          }
+        })}
+        {autoMore && (
+          <MoreButton
+            index={null}
+            labelOverride={null}
+            icon={null}
+            entries={entries}
+            measuring={measuring}
+          />
+        )}
+      </div>
+      {menu && (
+        <ContextMenu
+          items={menu.items}
+          label={t("toolbar-editor-menu-label")}
+          x={menu.x}
+          y={menu.y}
+          focusOnOpen
+          onRun={(action, args) => {
+            // The action may open a window that takes focus.
+            closeMenu(false);
+            void dispatch(action, toolbarMenuArgs(name, args));
+          }}
+          onClose={closeMenu}
         />
       )}
-    </div>
+    </>
   );
 }

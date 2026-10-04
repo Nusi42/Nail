@@ -5,12 +5,13 @@
  * (`../customization/mock.ts`), which also records the undo entry and
  * announces `ConfigChanged`.
  *
- * Slot of WP182: until it lands every patch answers `MOCK_NOT_READY` (the
- * customization mock turns it into `unsupported` / `edit-issue-not-ready`,
- * like the contract's core).
+ * A toolbar the layout does not have, an empty slot or an item that cannot
+ * go where it is sent answers an error message (the customization mock
+ * answers it as `invalid_request`, like the core's
+ * `edit-issue-toolbar-slot-invalid`).
  */
 import type { LayoutPatch, ResolvedLayout } from "../../api/generated";
-import { MOCK_NOT_READY } from "../../api/editHistoryMock";
+import { ToolbarEditError, applyToolbarEdit } from "./model";
 
 /** The ops this module applies. */
 export const TOOLBAR_EDIT_OPS = [
@@ -29,7 +30,16 @@ export function isToolbarEditPatch(patch: LayoutPatch): patch is ToolbarEditPatc
  * Applies one patch to `layout` (in place); answers an error message, or
  * `null` when it was applied.
  */
-export const applyToolbarEditPatch: (
+export function applyToolbarEditPatch(
   layout: ResolvedLayout,
   patch: ToolbarEditPatch,
-) => string | null = () => MOCK_NOT_READY;
+): string | null {
+  if (!Object.hasOwn(layout.toolbars, patch.toolbar)) return `no toolbar ${patch.toolbar}`;
+  try {
+    layout.toolbars[patch.toolbar] = applyToolbarEdit(layout.toolbars[patch.toolbar] ?? [], patch);
+    return null;
+  } catch (error) {
+    if (error instanceof ToolbarEditError) return error.message;
+    throw error;
+  }
+}
