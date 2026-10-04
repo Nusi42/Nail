@@ -1,0 +1,3 @@
+# Machine-specific settings go into .cargo/config.local.toml (ignored by Git, ADR 0132).
+# In the master it names a rustc wrapper that refuses every build.
+include = [{ path = "config.local.toml", optional = true }]

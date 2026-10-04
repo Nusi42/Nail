@@ -1,0 +1,5 @@
+#!/bin/sh
+# Everything `npm run check` checks, before a branch reaches the master
+# (scripts/check.mjs, ADRs 0123 and 0132). It refuses inside the OneDrive
+# master. Never bypass with --no-verify: fix the finding instead.
+exec node scripts/check.mjs

@@ -12,11 +12,13 @@ export const meta = {
 }
 
 const A = args
-// Master repository and work folders (docs/dev-setup.md "Work folders"): the
-// OneDrive checkout only receives pushes and fast-forward merges. The lead
-// stages (contract, integrate, reviews, fix, verify) work in nail-work-<lead>
-// on work-<lead>; parallel package i works in nail-work-<lead+1+i> on its branch
-// (or in b.folder).
+// Master repository and work folders (docs/dev-setup.md "Work folders",
+// ADR 0132; the same flow as another project's ADR-0024): the master checkout only
+// receives pushes and fast-forward merges. The lead stages (contract,
+// integrate, reviews, fix, verify) work in nail-work-<lead> on work-<lead>; after
+// each green lead stage main is fast-forwarded to work-<lead> (FF below), so
+// main is always green. Parallel package i resets nail-work-<lead+1+i> (or
+// b.folder) to main, works on its branch and pushes it.
 const MASTER = '<master>'
 const WORK = 'C:\\Users\\<user>\\<work root>'
 const LEAD = A.lead || 1
@@ -25,6 +27,8 @@ const posix = p => p.replace(/^([A-Za-z]):/, (m, d) => '/' + d.toLowerCase()).re
 const REPO = folder(LEAD)
 const LEAD_BRANCH = `WIN${LEAD}`
 const slotOf = (b, i) => b.folder || LEAD + 1 + i
+// The last step of every green lead stage that commits.
+const FF = `then fast-forward the master: \`git push origin ${LEAD_BRANCH} && git -C ${posix(MASTER)} merge --ff-only ${LEAD_BRANCH}\` (the only write ever made in the master; if it fails, report it and stop — never edit files there)`
 const OPTS = { model: 'opus', effort: 'medium' }
 const TRAILER = `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: a published page, not linked here`
@@ -63,7 +67,7 @@ const contract = await agent(`${COMMON}
 YOUR WORK FOLDER: ${REPO} (branch ${LEAD_BRANCH}). Start with \`git fetch origin\` and fast-forward to origin/${LEAD_BRANCH} if it moved; the tree must be clean (else stop and report).
 YOUR TASK: ${A.contract}
 You are the only agent running now; four agents start after you in parallel, each in its own work folder, and build against what you create. Besides the contract, prepare collision-free slots for them: stub crates (compiling, trivial passing test, added to the workspace, likely deps declared in [workspace.dependencies] and verified to build on Windows MSVC with acceptable licences), UI feature folders ui/src/features/<name>/index.ts registered centrally, locale files locales/en/<name>.ftl + empty locales/de/<name>.ftl, empty modules in shared crates where a parallel package needs one. Parallel package slots needed: ${A.slots}.
-Write an ADR for the contract. Update CLAUDE.md layout/commands if they change. Run the full suite (npm run build, cargo fmt --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, npm run lint, npm test, npm run e2e:only). Commit "${A.wave}: contract and slots" ending with the trailer below, then \`git push origin ${LEAD_BRANCH}\` (the parallel packages start from it):
+Write an ADR for the contract. Update CLAUDE.md layout/commands if they change. Run the full suite (npm run build, cargo fmt --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, npm run lint, npm test, npm run e2e:only). Commit "${A.wave}: contract and slots" ending with the trailer below; ${FF}. The parallel packages start from main:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} contract`, phase: 'Contract', schema: RESULT })
 
 // args.acceptContract: resume past a contract stage whose only red test was
@@ -75,7 +79,7 @@ if (!contract || (!contract.allTestsPass && !A.acceptContract)) {
 
 const RULES = (key, dirs, npm, n) => `
 YOUR WORK FOLDER: ${folder(n)} (branch WIN${n}). Four agents work at the same time, each in its own work folder.
-- Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch WIN${n} && git reset --hard origin/${LEAD_BRANCH}\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
+- Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch WIN${n} && git reset --hard origin/main\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
 - Finish: commit your work on WIN${n} ("${A.wave}: ${key}", trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin WIN${n}\`. The integrator merges WIN${n} into ${LEAD_BRANCH}. No other git writes.
 ${TRAILER}
 - You own ONLY: ${dirs}. Do not edit anything else (not crates/nail-api, not crates/nail-core, not shared registries, defaults/*.kdl, nail-api fixtures, root Cargo.toml/package.json, or other agents' files). Register UI only through your feature's index.ts; strings only in your own locale file. Everything else goes into apiRequests with exact details for the integrator.
@@ -112,7 +116,7 @@ ${buildReport}
 1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit "${A.wave}: parallel packages" (trailer below).
 2. ${A.integrate}
 3. Update userDocs/en, docs/dev-setup.md, CLAUDE.md, and docs/plan.md (status line for this wave, follow-ups/deferrals). Add a memory file .claude/memory/${A.memoryName}.md (frontmatter name/description/metadata.type project; what was integrated, pitfalls) and a line in .claude/memory/MEMORY.md.
-4. Full run incl. npm run e2e. Commit "${A.wave}: integration and e2e" with the trailer below, then \`git push origin ${LEAD_BRANCH}\`:
+4. Full run incl. npm run e2e. Commit "${A.wave}: integration and e2e" with the trailer below; ${FF}:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} integrate`, phase: 'Integrate', schema: RESULT })
 
 const FINDINGS = {
@@ -142,7 +146,7 @@ log(`Review: ${must.length} critical/high/medium, ${lows.length} low`)
 phase('Fix')
 const fix = await agent(`${COMMON}
 
-YOUR TASK: fix the review findings for ${A.wave} in ${REPO} (branch ${LEAD_BRANCH}). For each: confirm it is real (else explain and skip), fix it, add a regression test. Run the full suite (npm run build, cargo fmt --check, clippy -D warnings, cargo test --workspace, npm run lint, npm test — twice, to catch flaky tests — and npm run e2e). Update docs/plan.md status and the wave's memory file if findings change them. Commit "${A.wave}: fix review findings" with the trailer below, then \`git push origin ${LEAD_BRANCH}\`:
+YOUR TASK: fix the review findings for ${A.wave} in ${REPO} (branch ${LEAD_BRANCH}). For each: confirm it is real (else explain and skip), fix it, add a regression test. Run the full suite (npm run build, cargo fmt --check, clippy -D warnings, cargo test --workspace, npm run lint, npm test — twice, to catch flaky tests — and npm run e2e). Update docs/plan.md status and the wave's memory file if findings change them. Commit "${A.wave}: fix review findings" with the trailer below; ${FF}:
 ${TRAILER}
 
 MUST-FIX:
@@ -166,7 +170,7 @@ const verify = await agent(`${COMMON}
 YOUR TASK: independent final verification of ${A.wave} in ${REPO} (read-only; do not modify tracked files; do not commit). Use CARGO_TARGET_DIR=${posix(REPO)}/.nail-build/target-verify-${A.key}.
 Run from scratch: npm ci (or npm install if a dev server locks files — say so); npm run build; cargo fmt --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace; npm run lint; npm test (run it twice); npm run e2e; cargo build -p nail-app.
 Then: ${A.verify}
-Also check docs/CLAUDE.md/plan/memory updated, git status clean, ${LEAD_BRANCH} pushed (origin/${LEAD_BRANCH} = HEAD), and list commits since ${A.since}. Evidence for each check. (The lead fast-forwards the master's main to ${LEAD_BRANCH} after reading your verdict; you do not.)`, { ...OPTS, label: `verify ${A.wave}`, phase: 'Verify', schema: GATE })
+Also check docs/CLAUDE.md/plan/memory updated, git status clean, ${LEAD_BRANCH} pushed and the master's main fast-forwarded to it (origin/${LEAD_BRANCH} = origin/main = HEAD), and list commits since ${A.since}. Evidence for each check.`, { ...OPTS, label: `verify ${A.wave}`, phase: 'Verify', schema: GATE })
 
 return {
   wave: A.wave,

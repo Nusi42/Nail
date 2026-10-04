@@ -13,8 +13,10 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - **Work folders (ADR 0132).** `<master>` is the master repository: it only receives
   pushes and `git merge --ff-only work-1`. Never edit, build, test, run, install or commit anything there (the npm entry
   points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work in `<work root>\nail-work-1`
-  (branch `work-1`, the lead) or, for a parallel package, `nail-work-<N>` (branch `work-<N>`, reset to `origin/work-1`, push the
-  branch when done). New folder: `node scripts/work-folders.mjs create <n>`. Details: `docs/dev-setup.md` "Work folders".
+  (branch `work-1`, the lead) or, for a parallel package, `nail-work-<N>` (branch `work-<N>`, reset to `origin/main`, push the
+  branch when done; never push to `main`). New folder: `node scripts/work-folders.mjs create <n>`. Same setup as another project;
+  details: `docs/dev-setup.md` "Work folders". Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and
+  the Claude Code post-edit hook (per-file checks on each edited file; fix what it reports).
 - **Tests from day 1.** Every change ships with unit tests; every user-visible behaviour with a Playwright scenario. Never report work as done while any suite is red or tests were skipped.
 - **Docs split.** Internal docs → `docs/`. User-facing manuals and references → `userDocs/<lang>/` (`en` written, `de` empty for now).
 - **Languages.** No literal user-visible strings in React or Rust. Strings live in Fluent catalogs `locales/en/*.ftl` (complete) and `locales/de/*.ftl` (same files, empty). Missing keys fall back to English per key.
@@ -707,7 +709,8 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
                        check-editorconfig.mjs + lib/editorconfig-check.mjs;
                        work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
-                       assertWorkFolder refuses development commands inside OneDrive)
+                       assertWorkFolder refuses development commands inside OneDrive); post-edit.mjs (the Claude Code
+                       post-edit hook of .claude/settings.json) + lib/run-checks.mjs (per-file checks, shared with pre-commit.mjs)
 Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: typescript-eslint strictTypeChecked +
                        stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
                        eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
@@ -1119,10 +1122,29 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   (the repo is LF, `.gitattributes`); the `nail-compose` golden `.eml` files are CRLF on purpose.
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
+## If you are the lead (the main session)
+
+The owner starts Claude Code in the master folder `<master>`, as for another project. That folder
+is only the launch point: drive the work folders by absolute path (`git -C`, `cd` in each command), and edit, build,
+test and commit only there; in the master run nothing but `git merge --ff-only work-1`. A new session picks up the work
+like this:
+
+1. Read `.claude/memory/next-steps.md` (the current wave and what comes next) and the wave's status line in
+   `docs/plan.md`.
+2. `git fetch` in `nail-work-1`, then check the package branches: `git log --oneline main..origin/work-<N>`. Agents belong
+   to the session that started them: a package with commits on its branch and no running agent is finished or
+   half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent finish it.
+3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`): packages in `nail-work-2` and up, reset to
+   `main`; reviewers with a fresh context; merge into `work-1`, full suite, push `work-1`,
+   `git -C <master> merge --ff-only work-1`.
+4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
+   their results.
+5. The owner reviews proposals and milestone results as HTML pages (artifacts); keep replies short.
+
 ## Git
 
-- `main` lives in the master and moves only by fast-forward to `work-1` after a green verify. Work folders commit on their
-  own `work-<N>` branch. Commit only when asked, or as part of an agreed workflow stage.
+- `main` lives in the master and moves only by fast-forward to `work-1` after a green lead stage. Work folders commit on
+  their own `work-<N>` branch. Commit only when asked, or as part of an agreed workflow stage.
 - End commit messages with the Co-Authored-By / Claude-Session lines required by the session.
 
 ## Memory

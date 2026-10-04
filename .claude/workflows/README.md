@@ -5,12 +5,14 @@ disjoint directories → integration → two reviews → fix → independent ver
 Every milestone since M2 has used it.
 
 Agents work in the work folders, never in the master
-(ADR 0132, docs/dev-setup.md "Work folders"): the lead stages (contract,
-integration, reviews, fix, verify) in `nail-work-1` on `work-1`, parallel
-package *i* in `nail-work-<N>` on `work-<N>`. Each package resets its folder
-to the contract (`origin/work-1`), commits and pushes its branch; the
-integrator merges the branches into `work-1`. After the verify stage passed,
-the lead fast-forwards the master: `git -C <master> merge --ff-only work-1`.
+(ADR 0132, docs/dev-setup.md "Work folders"; the same flow as another project):
+the lead stages (contract, integration, reviews, fix, verify) in
+`nail-work-1` on `work-1`, parallel package *i* in `nail-work-<N>` on
+`work-<N>`. After each green lead stage (contract, integration, fix) the
+stage pushes `work-1` and fast-forwards the master's `main`
+(`git -C <master> merge --ff-only work-1`). Each package resets its folder
+to `origin/main` (= the contract), commits and pushes its branch; the
+integrator merges the branches into `work-1`.
 
 ## Starting a wave
 
