@@ -1,4 +1,4 @@
-# ADR 0133: the layout editor (M5d WP181)
+# ADR 0133: The layout editor (M5d WP181)
 
 Status: accepted · 2026-10-04 · M5d WP181
 

@@ -20,6 +20,8 @@ notify-debouncer-mini.workspace = true
 # Localized messages rendered in Rust (src/l10n.rs, M2c WP53).
 fluent-bundle.workspace = true
 unic-langid.workspace = true
+# Theme ids from names without accents (M5d, ADR 0137).
+unicode-normalization = "0.1.25"
 
 [dev-dependencies]
 tempfile.workspace = true

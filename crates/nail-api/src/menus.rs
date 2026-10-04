@@ -74,6 +74,12 @@ pub const CONTEXT_MENU_PARTS: &[ContextMenuPart] = &[
         part: "calendar-list.calendar",
         key_context: "calendar",
     },
+    // M5d (ADR 0137): the View menu on the navigation rail (Customize
+    // layout, Edit theme).
+    ContextMenuPart {
+        part: "nav-rail",
+        key_context: "global",
+    },
 ];
 
 /// The key context of a part's context menu (`"global"` for parts not in

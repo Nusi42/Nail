@@ -468,6 +468,11 @@ left out. Parts with a context menu:
 | `folder-tree.account` | An account's heading in the folder pane | global |
 | `composer` | The composer outside its text fields | `composer` |
 | `calendar-list.calendar` | A calendar in the calendar list (its "…" button) | `calendar` |
+| `nav-rail` | The navigation rail (the default menu is the View menu: Customize layout, Edit theme, the command palette) | global |
+
+Toolbars have a right-click menu too, `menu "context:toolbar"` (by default
+**Customize toolbar**); its actions get the toolbar's name as their argument
+when the item names none.
 
 Text fields keep the usual Cut / Copy / Paste menu. Each entry shows the
 action's label and icon (or the item's `label` / `icon`) and the key bound

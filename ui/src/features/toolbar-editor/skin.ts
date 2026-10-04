@@ -65,8 +65,8 @@ const T = {
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 1px;`;
 
 const FRAME = `${p(CUSTOMIZER_PART)} {
-  display: flex; flex-direction: column; gap: ${T.md}; min-height: 100%; padding: ${T.md};
-  color: ${T.fg};
+  display: flex; flex-direction: column; gap: ${T.md}; height: 100%; min-height: 0; padding: ${T.md};
+  box-sizing: border-box; color: ${T.fg};
 }
 ${p(CUSTOMIZER_PART)}[aria-busy="true"] ${c("list")} { cursor: progress; }
 ${c("header")} { display: flex; flex-wrap: wrap; align-items: end; gap: ${T.sm} ${T.lg}; }
@@ -75,8 +75,10 @@ ${c("body")} {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: ${T.lg};
   flex: 1; min-height: 0;
 }
-@media (max-width: 640px) { ${c("body")} { grid-template-columns: minmax(0, 1fr); } }
-${c("areas")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; }
+@media (max-width: 640px) { ${c("body")} { grid-template-columns: minmax(0, 1fr); overflow: auto; } }
+${c("areas")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; min-height: 0; }
+${c("area")}[data-area="more"] { flex: 1; }
+${c("area")} > ${c("list")}[data-orientation="vertical"] { flex: 1; min-height: calc(3 * ${T.control}); }
 ${c("area")}, ${c("palette")} { display: flex; flex-direction: column; gap: ${T.xs}; min-width: 0; min-height: 0; }
 ${c("heading")} {
   margin: 0; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.04em;

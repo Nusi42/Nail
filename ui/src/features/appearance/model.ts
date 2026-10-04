@@ -68,22 +68,26 @@ export function activeTheme(
 /** The longest theme name the core accepts (`edit-issue-invalid-theme-name`). */
 export const THEME_NAME_MAX = 64;
 
-/** A theme id (file stem): lowercase kebab, as the core derives it from a name. */
+/** A theme id (file stem): lowercase kebab starting with a letter (`nail_api::appearance::is_theme_id`). */
 export function isThemeId(id: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= THEME_NAME_MAX;
+  return /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(id) && id.length <= THEME_NAME_MAX;
 }
 
-/** The id the core derives from a theme name (`My Ocean!` → `my-ocean`; nothing usable → `theme`). */
+/**
+ * The id the core derives from a theme name (`id_from_name` in
+ * `crates/nail-config/src/theme_edit.rs`): `My Ocean!` → `my-ocean`,
+ * `Café` → `cafe`, `2024` → `theme-2024`, nothing usable → `theme`; room
+ * is left for a `-<n>` suffix.
+ */
 export function themeIdFromName(name: string): string {
-  const id = name
+  let id = name
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, THEME_NAME_MAX)
-    .replace(/-+$/, "");
-  return id === "" ? "theme" : id;
+    .replace(/^-+|-+$/g, "");
+  if (!/^[a-z]/.test(id)) id = id === "" ? "theme" : `theme-${id}`;
+  return id.slice(0, THEME_NAME_MAX - 4).replace(/-+$/, "");
 }
 
 /** Whether a name is one the core accepts. */

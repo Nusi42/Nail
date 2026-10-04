@@ -4,7 +4,9 @@
  * menu, the composer, the settings page, the calendar's week, month, year,
  * agenda and free-time views, the Contacts and Tasks views, the main window
  * and the calendar at 1024 px (M5b review), a context menu, HTML and
- * attachment messages, a dialog and a modal confirmation (M5c). Each starts from a freshly
+ * attachment messages, a dialog and a modal confirmation (M5c), and the M5d
+ * editors (customize layout, the toolbar customizer, Settings → Appearance,
+ * the theme editor). Each starts from a freshly
  * loaded main window (so one screen never leaks state into the next) and
  * ends with the screen open and its content present; `support.ts` then
  * settles and captures it.
@@ -134,6 +136,21 @@ async function selectMessage(page: Page, subject: string) {
   await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(subject);
 }
 
+/** Runs an action from the command palette (Ctrl+K) by searching for `query`. */
+async function openFromPalette(page: Page, query: string, option: string) {
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(async () => {
+    if (!(await palette.isVisible())) await page.keyboard.press("Control+k");
+    await expect(palette).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await palette.getByRole("combobox").fill(query);
+  await palette
+    .getByRole("option", { name: new RegExp(`^${option}`) })
+    .first()
+    .click();
+  await expect(palette).toBeHidden();
+}
+
 async function selectSample(page: Page) {
   await selectMessage(page, SAMPLE_MESSAGE);
 }
@@ -171,6 +188,12 @@ export const SCREENS: readonly Screen[] = [
     title: "Settings",
     async open(page) {
       const settings = await showView(page, "Settings");
+      // The page remembers its last section (UI state, shared by the
+      // variants of one worker): the appearance screen leaves Appearance.
+      await settings
+        .getByRole("navigation", { name: "Settings sections", exact: true })
+        .getByRole("button", { name: "Accounts", exact: true })
+        .click();
       await expect(settings.locator('[data-part="settings-page.title"]')).toHaveText("Accounts");
     },
   },
@@ -334,6 +357,61 @@ export const SCREENS: readonly Screen[] = [
       const confirm = layoutWindow(page, "mail-delete-permanently");
       await expect(confirm).toBeVisible();
       await expect(page.locator('[data-part="window-scrim"]')).toBeVisible();
+    },
+  },
+  // M5d: the in-app editors (nothing is written: no screen changes a file).
+  {
+    id: "layout-editor",
+    title: "Customize layout, a pane picked up (drop targets, presets, palette)",
+    // No message selected: the list's header row would scroll it by a
+    // timing-dependent amount to keep the selected row visible.
+    async open(page) {
+      await openFromPalette(page, "customize layout", "Customize layout");
+      const editor = page.getByRole("region", { name: "Customizing layout: Mail" });
+      await expect(editor).toBeVisible();
+      await editor.getByRole("button", { name: "Move Folders", exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: "Swap Folders with Message", exact: true }),
+      ).toBeVisible();
+    },
+  },
+  {
+    id: "toolbar-customizer",
+    title: "Customize toolbar (bar, More menu, available actions)",
+    async open(page) {
+      await selectSample(page);
+      await page
+        .getByRole("toolbar", { name: "Message actions" })
+        .getByRole("button", { name: "Reply", exact: true })
+        .click({ button: "right" });
+      await page.getByRole("menu").getByRole("menuitem", { name: "Customize toolbar" }).click();
+      const customizer = page.locator('[data-part="window"][data-window^="toolbar-customizer"]');
+      await expect(customizer.getByRole("listbox", { name: "Available actions" })).toBeVisible();
+      await expect(customizer.getByRole("option", { name: /^Reply all/ })).toBeVisible();
+    },
+  },
+  {
+    id: "appearance",
+    title: "Settings → Appearance (gallery, New theme / Edit theme, density, sliders)",
+    async open(page) {
+      const settings = await showView(page, "Settings");
+      await settings
+        .getByRole("navigation", { name: "Settings sections", exact: true })
+        .getByRole("button", { name: "Appearance", exact: true })
+        .click();
+      await expect(settings.getByRole("radiogroup", { name: "Themes" })).toBeVisible();
+    },
+  },
+  {
+    id: "theme-editor",
+    title: "Theme editor on the theme in use (tokens, live preview)",
+    async open(page) {
+      await openFromPalette(page, "edit theme", "Edit theme");
+      const editor = layoutWindow(page, "theme-editor");
+      await expect(editor.getByRole("tablist", { name: "Theme sections" })).toBeVisible();
+      await expect(
+        editor.getByRole("textbox", { name: "Value of color.accent", exact: true }),
+      ).toBeVisible();
     },
   },
 ];

@@ -15,6 +15,7 @@ export const DOM_PARTS: Readonly<Record<string, string>> = {
   "folder-tree.item": "folder-tree.folder",
   "folder-tree.account": "folder-tree.account",
   composer: "composer",
+  "nav-rail": "nav-rail",
 };
 
 /** The thing a context menu acts on. */

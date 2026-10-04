@@ -476,13 +476,16 @@ How it works:
 | `e2e/tests/m5c.spec.ts` | `--seed demo` / `demo-multi` (M5c): the window manager — move by the title bar, resize from each edge and corner down to the minimum size, snap left / right (preview, coming loose), maximize by double-click and button, keyboard move / resize (arrows, Alt+F7 / Alt+F8 with Enter / Escape), geometry remembered across a reload (`window-state.json`) and Reset window positions, two composers side by side (one sent, the other kept), a confirmation blocking only its composer and "Delete permanently?" blocking only the main window, Escape |
 | `e2e/tests/desktop-m5c.spec.ts` | the desktop app (M5c): a composer pops out into its own OS window (`nail_test_shell("pop-outs")`), is sent there and the OS window closes; a popped-out composer returns to the main window with what was typed |
 | `e2e/tests/m5a.spec.ts` | `--seed demo-multi` (M5a): the five themes picked in Settings → Appearance and written to `theme.kdl` (Follow Windows off), the accent override and "Use theme defaults", Compact density across themes (tag line hidden, smaller rows, `data-nail-density`), Follow Windows driven by `system-appearance` (Graphite, High contrast, another pair), a user theme added to `themes/` while running and a broken one listed, an attachment card's Save downloading the file |
+| `e2e/tests/m5d.spec.ts` | `--seed demo` (M5d): Customize layout from the rail's View menu (swap Folders and Message, confirm `layout.kdl`, Undo to no file, hide / show), a Mini month added and the Reader below / Focus presets applied, Reset to default, the Window layout card; the reader toolbar customized (Forward into More with `M`, Undo, Reply all dragged into More, Reset to default); accent and corner radius written to `theme.kdl` and undone; New theme "Ocean Café" → `themes/ocean-cafe.kdl`, a token edited in the theme editor (applied to the page), Undo, Duplicate as new theme; `layout.kdl` changed on disk → Undo refuses, "Undo anyway" backs the hand edit up |
 
 ### Visual regression (M5a, ADR 0106)
 
-Screenshots of ten screens (the main window with the rail and a message,
-the reader's More menu, the composer, the settings page, the calendar week
-view, a context menu, an HTML message, attachment cards before and after
-saving, the Move dialog) for every built-in theme
+Screenshots of 22 screens (the main window with the rail and a message,
+the reader's More menu, the composer, the settings page, the calendar views,
+Contacts and Tasks, a context menu, an HTML message, attachment cards before
+and after saving, the Move dialog, a modal confirmation, and — M5d —
+customize-layout mode, the toolbar customizer, Settings → Appearance and the
+theme editor; `e2e/visual/screens.ts`) for every built-in theme
 (Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.

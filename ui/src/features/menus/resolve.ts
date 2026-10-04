@@ -34,6 +34,8 @@ export const CONTEXT_MENU_PARTS: Readonly<Record<string, string>> = {
   composer: "composer",
   // M5b: the "…" menu of a calendar in the calendar list.
   "calendar-list.calendar": "calendar",
+  // M5d: the View menu on the navigation rail.
+  "nav-rail": "global",
 };
 
 /** `context:<part>`. */

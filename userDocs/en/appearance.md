@@ -16,6 +16,10 @@ touching a file. Open **Settings → Appearance**.
 Click a theme in the gallery to use it. That switches **Follow Windows**
 off: Nail keeps the theme you picked whatever Windows does.
 
+**New theme** makes a theme of your own from a copy of another, and **Edit
+theme** opens the theme editor with every colour, size and part style and a
+live preview; see [Your own themes and the theme editor](themes.md).
+
 Every theme meets the WCAG contrast guidelines: at least 4.5:1 for text and
 3:1 for outlines and indicators (7:1 for everything in High contrast). Nail
 checks this automatically for each theme.
@@ -52,16 +56,29 @@ invitation and label chips). Density applies to every theme.
 
 ## Text size, corner radius and accent colour
 
-- **Text size** (11–20 px, default 14): the body text. Labels, headings and
-  titles grow and shrink with it. In Compact, text is 1 px smaller.
-- **Corner radius** (0–20 px, default 10): buttons and cards. Inputs, menus
-  and windows follow in proportion; 0 gives square corners.
+- **Text size** (slider, 11–20 px, default 14): the body text. Labels,
+  headings and titles grow and shrink with it. In Compact, text is 1 px
+  smaller.
+- **Corner radius** (slider, 0–20 px, default 10): buttons and cards.
+  Inputs, menus and windows follow in proportion; 0 gives square corners.
 - **Accent colour** (`#rgb` or `#rrggbb`): buttons, links, the unread dot,
   focus rings, selections and pressed chips. It applies to the light and the
-  dark theme alike.
+  dark theme alike. Type it and click **Apply**, or use the colour picker
+  beside the field.
 
-Leave a field empty to use the theme's own value. Nail refuses values
-outside the ranges and says why.
+The sliders and the colour picker apply as you move them; Nail writes the
+value once you pause for a moment. Until you set one, a slider shows the
+theme's own value ("14 px (theme default)"). **Use theme defaults** clears
+all three. Nail refuses values outside the ranges and says why.
+
+## Undo
+
+**Undo** and **Redo** at the top of the Appearance page take back the last
+choices — a theme, Follow Windows and its pair, density, the accent, text
+size or corner radius — one at a time; the button says which ("Undo Choose
+theme"). The theme editor shares this history. It lasts until Nail quits.
+If `theme.kdl` was changed outside Nail in the meantime, Undo offers **Undo
+anyway**, which copies the current file to `backups/` first.
 
 ## Where the choice is kept
 
@@ -127,5 +144,8 @@ file named like a built-in theme (`frost.kdl` and so on — rename it). If the
 theme you chose stops working, Nail uses Frost (light) or Graphite (dark)
 until it is fixed.
 
-The [theme reference](theme-reference.md) lists every token and part a
-theme can change.
+The easiest way to make one is **New theme** on the Appearance page; the
+theme editor then changes it for you. See
+[Your own themes and the theme editor](themes.md). The
+[theme reference](theme-reference.md) lists every token and part a theme can
+change.

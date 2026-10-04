@@ -7,6 +7,9 @@ import { ContextMenuHost } from "./ContextMenuHost";
 import { ariaShortcut, chordText, keyLabel } from "./keyLabels";
 import { contextTarget, menuStoreFor } from "./store";
 import { findContextTarget, isTextInput } from "./targets";
+import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
+import { normalizeLayout } from "../../api/normalize";
+import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
 import { must } from "../../test/must";
 
 const INBOX = "acc-personal/Inbox";
@@ -115,6 +118,23 @@ describe("context targets", () => {
     expect(findContextTarget(document.getElementById("text"))).toBeNull();
     expect(isTextInput(document.getElementById("box"))).toBe(false);
     expect(findContextTarget(document.body)).toBeNull();
+    document.body.innerHTML = "";
+  });
+
+  it("gives the navigation rail its View menu (M5d)", () => {
+    document.body.innerHTML = `
+      <nav data-part="nav-rail"><button id="mail" data-part="nav-rail.item">Mail</button></nav>`;
+    expect(findContextTarget(document.getElementById("mail"))?.part).toBe("nav-rail");
+    expect(keyContextOf("nav-rail")).toBe("global");
+    const layout = normalizeLayout(defaultLayoutJson);
+    const menu = must(resolveMenu(layout, contextMenuName("nav-rail"), "global"));
+    expect(menu.items.map((e) => (e.type === "action" ? e.action : e.type))).toEqual([
+      "header",
+      "layout.customize",
+      "theme.edit",
+      "separator",
+      "palette.open",
+    ]);
     document.body.innerHTML = "";
   });
 });

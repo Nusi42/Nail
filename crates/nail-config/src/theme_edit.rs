@@ -36,6 +36,8 @@ use nail_api::editing::{
     ThemeTokenValue, ValueOrigin, config_revision, is_theme_name,
 };
 use nail_api::{ApiError, ConfigFile, ErrorCode, LocalizedMessage};
+use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::char::is_combining_mark;
 
 use crate::accounts::write::quote;
 use crate::appearance_edit::ThemeEditor;
@@ -524,12 +526,14 @@ pub(crate) fn apply_theme_patches(
     editor.finish(file)
 }
 
-/// A theme id from a display name: lowercase ASCII letters and digits,
+/// A theme id from a display name: accents dropped (NFKD without combining
+/// marks, so `Café` is `cafe`), lowercase ASCII letters and digits,
 /// everything else a dash; `theme-` in front when it does not start with a
-/// letter.
+/// letter. The UI derives the same id (`themeIdFromName` in
+/// `ui/src/features/appearance/model.ts`).
 fn id_from_name(name: &str) -> String {
     let mut id = String::new();
-    for c in name.trim().chars() {
+    for c in name.trim().nfkd().filter(|c| !is_combining_mark(*c)) {
         if c.is_ascii_alphanumeric() {
             id.push(c.to_ascii_lowercase());
         } else if !id.is_empty() && !id.ends_with('-') {
@@ -1031,7 +1035,8 @@ mod tests {
         assert_eq!(id_from_name("My Theme"), "my-theme");
         assert_eq!(id_from_name("  Ocean -- Blue!  "), "ocean-blue");
         assert_eq!(id_from_name("2024"), "theme-2024");
-        assert_eq!(id_from_name("Über"), "ber");
+        assert_eq!(id_from_name("Über Café"), "uber-cafe");
+        assert_eq!(id_from_name("Ωmega"), "mega");
         assert_eq!(id_from_name("!!!"), "theme");
         let long = id_from_name(&"a".repeat(200));
         assert!(long.len() <= MAX_THEME_ID_CHARS - 4);

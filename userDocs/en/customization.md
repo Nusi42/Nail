@@ -35,6 +35,9 @@ For the element the panel shows:
 | Theme rules | Every rule of the active theme that styles the element, with its declarations and the file and line it comes from. Rules that only apply while hovering or focused say so. |
 | Layout node | The widget or container that placed the element: its kind and id, the window, the breakpoint and its position in the tree, and — for widgets — the line in `layout.kdl`. |
 
+**Edit style** opens the [theme editor](themes.md) on the theme in use, on
+its **Parts** tab at the element's part, and stops picking.
+
 **Open in editor** opens the file at that line in your editor. Nail uses
 the editor named in the environment variable `NAIL_EDITOR`, `VISUAL` or
 `EDITOR` (in that order), for example `code`, `notepad++`, `nvim` or
@@ -78,6 +81,16 @@ Nail writes toolbar contents and order, key bindings (removing a default
 binding writes `unbind "<key>"`) and the column order of a list
 (`columns="…"` on `message-list`) the same careful way, with the editors
 below.
+
+## Customize layout and the toolbar customizer
+
+To rearrange panes, apply a preset (Three panes, Reader below, Wide reader,
+Focus), add widgets or move toolbar buttons between the bar and its **More**
+menu with the mouse or the keyboard, use **Customize layout** (right-click
+the navigation rail, the command palette or Settings → Layout & toolbars) and
+**Customize toolbar** (right-click a toolbar). Both write `layout.kdl` the
+same careful way and can undo every step; see
+[Customizing the layout and the toolbars](customizing-the-layout.md).
 
 ## Editing toolbars, shortcuts and columns
 

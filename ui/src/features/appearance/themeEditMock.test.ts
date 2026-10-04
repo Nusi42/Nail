@@ -28,6 +28,8 @@ describe("theme ids and selectors", () => {
     expect(themeIdFromName("My Ocean!")).toBe("my-ocean");
     expect(themeIdFromName("  Crème brûlée ")).toBe("creme-brulee");
     expect(themeIdFromName("???")).toBe("theme");
+    expect(themeIdFromName("2024")).toBe("theme-2024");
+    expect(themeIdFromName("a".repeat(200))).toHaveLength(60);
   });
 
   it("parses and writes part selectors", () => {

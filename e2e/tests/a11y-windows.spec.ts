@@ -96,6 +96,13 @@ const FEATURE_DIALOGS = [
   // M5c: modal confirmations of the mail view and the composer.
   "mail-delete-permanently",
   "composer-discard",
+  // M5d: the toolbar customizer and the theme editor with its dialogs (the
+  // customize-layout mode is scanned too, it is no window of its own).
+  "toolbar-customizer",
+  "theme-editor",
+  "theme-new",
+  "theme-rename",
+  "theme-delete",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -409,6 +416,60 @@ for (const mode of MODES) {
       await settings.getByRole("button", { name: "Install a plug-in…" }).click();
       await sweep.scanWindow("plugin-install");
       await sweep.close("plugin-install");
+      // M5d: the toolbar customizer (right-click a toolbar).
+      await showView(page, "Mail");
+      await rows.filter({ hasText: "Welcome to Nail" }).click();
+      await actions.getByRole("button", { name: "Reply", exact: true }).click({ button: "right" });
+      await expect(page.getByRole("menu", { name: "Toolbar" })).toBeVisible();
+      await sweep.scan("toolbar context menu");
+      await page.getByRole("menuitem", { name: "Customize toolbar" }).click();
+      await expect(
+        sweep.window("toolbar-customizer").getByRole("listbox", { name: "Available actions" }),
+      ).toBeVisible();
+      await sweep.scanWindow("toolbar-customizer");
+      await sweep.close("toolbar-customizer");
+      // M5d: customize-layout mode from the rail's View menu, also while a
+      // pane is picked up (the drop targets).
+      await page
+        .getByRole("navigation", { name: "Sections", exact: true })
+        .click({ button: "right", position: { x: 20, y: 300 } });
+      const viewMenu = page.getByRole("menu", { name: "View" });
+      await expect(viewMenu).toBeVisible();
+      await sweep.scan("View menu (navigation rail)");
+      await viewMenu.getByRole("menuitem", { name: "Customize layout" }).click();
+      const layoutEditor = page.getByRole("region", { name: "Customizing layout: Mail" });
+      await expect(layoutEditor).toBeVisible();
+      await sweep.scan("customize layout");
+      await layoutEditor.getByRole("button", { name: "Move Folders", exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: "Swap Folders with Message", exact: true }),
+      ).toBeVisible();
+      await sweep.scan("customize layout (moving a pane)");
+      await page.keyboard.press("Escape");
+      await layoutEditor.getByRole("button", { name: "Done" }).click();
+      await expect(layoutEditor).toBeHidden();
+      // M5d: New theme, the theme editor, Rename and Delete (last: it adds a
+      // user theme; it is not put to use).
+      await openSettings(page, "Appearance");
+      await settings.getByRole("button", { name: "New theme" }).click();
+      await sweep.scanWindow("theme-new");
+      const newTheme = sweep.window("theme-new");
+      await newTheme.getByRole("textbox", { name: "Name" }).fill("Sweep");
+      await newTheme.getByRole("checkbox", { name: "Use the new theme now" }).uncheck();
+      await newTheme.getByRole("button", { name: "Create" }).click();
+      const themeEditor = sweep.window("theme-editor");
+      await expect(themeEditor.getByLabel("Theme", { exact: true })).toHaveValue("sweep");
+      await sweep.scanWindow("theme-editor", "theme editor (colours)");
+      await themeEditor.getByRole("tab", { name: "Parts" }).click();
+      await sweep.scan("theme editor (parts)");
+      await themeEditor.getByRole("button", { name: "Rename" }).click();
+      await sweep.scanWindow("theme-rename");
+      await sweep.close("theme-rename");
+      await themeEditor.getByRole("button", { name: "Delete" }).click();
+      await sweep.scanWindow("theme-delete");
+      await sweep.close("theme-delete");
+      await sweep.close("theme-editor");
+
       // M3b: the demo Gmail account, switched on here (labels, categories,
       // the label dialogs).
       await openSettings(page, "Accounts");

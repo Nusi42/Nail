@@ -12,6 +12,7 @@ app-name = Nail
 layout-pane-folders = Folders
 layout-pane-messages = Messages
 layout-pane-message = Message
+layout-menu-view = View
 toolbar-main = Main toolbar
 toolbar-customize = Customization
 settings-tab-accounts = Accounts

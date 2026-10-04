@@ -16,6 +16,9 @@
   "ignores": [
     "**/node_modules/**",
     ".nail-build/**",
+    // Cargo output inside a work folder (ADR 0132): rustdoc copies licence
+    // files there.
+    "**/target/**",
     "**/dist/**",
     "**/test-results/**",
     "**/playwright-report/**",

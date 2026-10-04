@@ -63,8 +63,10 @@ access share the desktop's positions, fitted to their own page.
 ## Which windows block the rest of Nail
 
 Almost no window does. The composer, Settings, filter rules, the plug-in
-manager, the calendar and contact editors and the other tool windows let you
-keep working everywhere else.
+manager, the calendar and contact editors, the toolbar customizer, the theme
+editor and the other tool windows let you keep working everywhere else. You
+can keep the theme editor open beside the mail view and watch your changes
+apply, or customize several toolbars at once (one window per toolbar).
 
 Only short questions that must be answered first are **modal**, and they
 block only the place they came from:
@@ -75,8 +77,8 @@ block only the place they came from:
   It is dimmed until you answer. The main window and other windows keep
   working.
 - Questions from the main window — **Delete permanently?**, removing a
-  calendar or a label — dim the main window until you answer. Other open
-  windows, such as a composer, keep working.
+  calendar or a label, **Delete theme?** — dim the main window until you
+  answer. Other open windows, such as a composer, keep working.
 
 A question about one window opens over that window and stays in front of
 it; click another window and that window comes in front of both. A question

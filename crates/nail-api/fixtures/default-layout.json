@@ -1073,6 +1073,18 @@
       "alias_of": null,
       "args": []
     },
+    "theme.edit": {
+      "label": "@appearance.action.edit-theme",
+      "icon": "palette",
+      "alias_of": null,
+      "args": []
+    },
+    "theme.new": {
+      "label": "@appearance.action.new-theme",
+      "icon": "plus",
+      "alias_of": null,
+      "args": []
+    },
     "security.autocrypt.import": {
       "label": "@security.action.autocrypt-import",
       "icon": "key-round",
@@ -2742,6 +2754,36 @@
         "icon": "user-round"
       }
     ],
+    "context:nav-rail": [
+      {
+        "type": "header",
+        "label": "@layout.menu.view"
+      },
+      {
+        "type": "action",
+        "action": "layout.customize",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "theme.edit",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "palette.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
     "context:toolbar": [
       {
         "type": "action",
@@ -3129,6 +3171,7 @@
               "auto",
               "auto",
               "auto",
+              "auto",
               "auto"
             ],
             "children": [
@@ -3137,6 +3180,15 @@
                 "id": "page-layout-editor",
                 "label": null,
                 "kind": "layout-editor-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-toolbar-editor-settings",
+                "label": null,
+                "kind": "toolbar-editor-settings",
                 "options": {},
                 "rows": [],
                 "source": null

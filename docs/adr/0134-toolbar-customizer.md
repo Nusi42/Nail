@@ -1,4 +1,4 @@
-# ADR 0132 (WP182): Toolbar customizer
+# ADR 0134: Toolbar customizer (M5d WP182)
 
 Status: accepted · 2026-10-04 · M5d WP182 (the integrator renumbers)
 

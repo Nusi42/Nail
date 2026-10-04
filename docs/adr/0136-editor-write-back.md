@@ -1,4 +1,4 @@
-# ADR 0133 (WP184): write-back of the M5d editor patches and theme operations
+# ADR 0136: Write-back of the M5d editor patches and theme operations (M5d WP184)
 
 Status: accepted · 2026-10-04 · M5d WP184 (the integrator renumbers)
 

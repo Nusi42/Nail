@@ -252,6 +252,9 @@ layout "default" {
         // M5d: the layout editor and the toolbar customizer.
         action "layout.customize" label="@layout-editor.action.customize" icon="layout-dashboard"
         action "toolbar.customize" label="@toolbar-editor.action.customize" icon="settings-2"
+        // M5d: the theme editor and New theme (Settings → Appearance).
+        action "theme.edit"       label="@appearance.action.edit-theme" icon="palette"
+        action "theme.new"        label="@appearance.action.new-theme" icon="plus"
         action "security.autocrypt.import" label="@security.action.autocrypt-import" icon="key-round"
         action "remote.pair"      label="@remote.action.pair" icon="smartphone"
         action "remote.content.allow" label="@remote.action.load-content" icon="image"
@@ -415,6 +418,7 @@ layout "default" {
                 // M5d: the views' layout (Customize layout, presets, Reset to
                 // default).
                 layout-editor-settings id="page-layout-editor"
+                toolbar-editor-settings id="page-toolbar-editor-settings"
                 toolbar id="page-customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 // Named apart from the Configuration errors window it opens.
                 config-errors id="page-config-errors" label="@settings.config-errors"
@@ -703,6 +707,14 @@ layout "default" {
         item "settings.section" "accounts" label="@settings.section.accounts" icon="user-round"
     }
 
+    // Right-click on the navigation rail (M5d): the View menu.
+    menu "context:nav-rail" {
+        header "@layout.menu.view"
+        item "layout.customize"
+        item "theme.edit"
+        separator
+        item "palette.open"
+    }
     // Right-click on any toolbar (M5d): customize that toolbar.
     menu "context:toolbar" {
         item "toolbar.customize"

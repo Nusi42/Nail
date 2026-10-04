@@ -1,6 +1,6 @@
-# ADR 0133: WP183 — Appearance settings and the theme editor
+# ADR 0135: Appearance settings and the theme editor (M5d WP183)
 
-Status: accepted · 2026-10-04 · M5d WP183 (package of ADR 0131; the integrator renumbers)
+Status: accepted · 2026-10-04 · M5d WP183 (package of ADR 0131)
 
 ## Context
 

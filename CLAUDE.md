@@ -137,7 +137,8 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        more, ThemeEditTarget user / theme, ThemePatch set-token / set-part-property / reset-part,
                        ThemeDetails + ValueOrigin, HistoryScope layout / appearance, EditKind, EditIssue, EditEntry /
                        EditHistory, config_revision = FNV-1a 64); LayoutPatch move-pane / swap-panes / add-widget /
-                       remove-node / set-hidden / apply-preset / reset-window / move- / add- / remove-toolbar-item
+                       remove-node / set-hidden / apply-preset / reset-window / move- / add- / remove-toolbar-item;
+                       M5d integration (ADR 0137): EditIssue::NotReady removed; menus.rs context part `nav-rail` (View menu)
                        (+ kind / kind_of); LayoutNode.hidden (is_hidden, at_path), LayoutPreset + PresetNode =
                        ResolvedLayout.presets; UpdateLayout.base_revision; GetEditHistory / UndoEdit / RedoEdit →
                        EditHistory, EditHistoryChanged; GetThemeDetails, EditTheme, DuplicateTheme / RenameTheme →
@@ -190,6 +191,12 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        update_layout_checked base revision); slots of WP184: layout_edit.rs (the M5d patches, routed
                        from write_back.rs) and theme_edit.rs (theme_details / edit_theme / duplicate / rename /
                        delete_theme); tests/m5d_contract.rs
+                       M5d (ADR 0136 WP184): layout_edit.rs (move / swap / dock / add / remove / hide, presets, reset-window,
+                       toolbar bar<->More; marker properties `__nail_edit_*` never reach the file), theme_edit.rs (EditTheme
+                       tokens / modes / parts, Duplicate / Rename (selection and extending themes follow) / Delete (fallback
+                       by kind), GetThemeDetails origins, id_from_name = NFKD without marks like the UI's themeIdFromName),
+                       kdl_edit detach / put / reindent / replace_with / set_arg; golden files
+                       tests/golden/{layout_edit,theme_edit} (NAIL_UPDATE_GOLDEN=1)
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -611,9 +618,15 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        M5d (ADR 0131): state/editHistory.ts (useEditHistory / useEditHistoryStep, App.tsx applies
                        EditHistoryChanged), layout/LayoutChrome.ts (LayoutChromeContext showHidden / renderNode around
                        every rendered node, nodeRefOfPath; the renderer skips `hidden` nodes), api/editHistoryMock.ts
-                       (mock histories, simulateExternalEdit, MOCK_NOT_READY); slots features/layout-editor (WP181,
-                       mock.ts applyLayoutEditPatch), features/toolbar-editor (WP182, mock.ts applyToolbarEditPatch),
-                       features/appearance themeEditMock.ts + `theme-editor` widget (WP183);
+                       (mock histories, simulateExternalEdit); features/layout-editor (WP181, ADR 0133: customize mode =
+                       LayoutChrome per window, pane headers / drop targets / palette / presets, keyboard pick-up, store.ts
+                       startEditing, SettingsCard `layout-editor-settings`, mock.ts applyLayoutEditPatch, LAYOUT_EDITOR_SKIN_CSS),
+                       features/toolbar-editor (WP182, ADR 0134: right-click → `toolbar-customizer:<toolbar>` window (lazily
+                       loaded, like the palette), model.ts placement rules, Settings card `toolbar-editor-settings`, mock.ts
+                       applyToolbarEditPatch, TOOLBAR_CUSTOMIZER_SKIN_CSS), features/appearance (WP183, ADR 0135: sliders /
+                       colour picker / undo on the page, theme editor window `theme-editor` + `theme-new` / `theme-rename` /
+                       `theme-delete`, themeEditMock.ts, APPEARANCE_SKIN_CSS); features/palette/infos.ts (paletteInfos /
+                       pluginTitles shared with the customizer); the three skins are in theme/compile.ts (ADR 0137);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -654,6 +667,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        with a pre-rail layout, palette); tests/m5b.spec.ts (rail / views / badges / remembered view, More,
                        chips, settings search, calendar menu, dates in a German browser, layout offer, remote dark mode);
                        tests/m5c.spec.ts (window manager scenarios) + tests/desktop-m5c.spec.ts (pop-out composer);
+                       tests/m5d.spec.ts (in-app editors: layout.kdl / theme.kdl / themes/*.kdl, undo, conflicts);
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
@@ -679,7 +693,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        UI-state issues), shell.ftl (WP161), settings.ftl (WP163); M5c: core-windows.ftl (contract ids: snap
                        halves, instances, window-state / pop-out issues, pop-out changes), windows.ftl (WP171), popout.ftl
                        (WP173); M5d: core-editors.ftl (contract ids: history scopes, edit kinds, edit issues, preset names,
-                       config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182); every file is embedded in
+                       config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182), appearance.ftl (WP183
+                       theme editor); every file is embedded in
                        nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
@@ -737,7 +752,7 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
-npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 18 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 22 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
 npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
@@ -1068,6 +1083,14 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   WP184. Slots: WP181 `features/layout-editor/` + `layout/LayoutRenderer.tsx` / `LayoutChrome.ts` + the settings-page
   placement in `defaults/layout.kdl`; WP182 `features/toolbar-editor/` + `widgets/Toolbar.tsx` / `toolbarModel.ts`;
   WP183 `features/appearance/` + the inspector's "Edit style"; WP184 `crates/nail-config/`.
+- M5d integration (ADR 0137; packages ADRs 0133 layout editor, 0134 toolbar customizer, 0135 appearance + theme editor,
+  0136 write-back): every patch and theme operation is served (no `edit-issue-not-ready`). Mounts: the View menu =
+  right-click on the navigation rail (`menu "context:nav-rail"`, context part `nav-rail`), the command palette
+  (`layout.customize`, `toolbar.customize`, `theme.edit`, `theme.new`), Settings → Layout & toolbars
+  (`layout-editor-settings`, `toolbar-editor-settings`) and → Appearance, right-click on a toolbar. Theme ids from
+  names: NFKD without combining marks, `theme-` before a non-letter start, ≤ 60 chars — core and UI alike. A first
+  `UpdateLayout` creates `layout.kdl`, so undoing it removes the file. E2E: `m5d.spec.ts`; the a11y window sweep
+  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 in all).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,
