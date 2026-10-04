@@ -54,7 +54,10 @@ and the Git hooks refuse inside any OneDrive folder
 (included by the committed `.cargo/config.toml`)
 names a refusing `rustc-wrapper`. `create` also writes the folder's
 `.claude/settings.local.json`, so Claude Code's memory stays in the checkout
-(`.claude/memory`). Start Claude Code sessions in `nail-work-1`.
+(`.claude/memory`). The owner's Claude Code session runs in the master
+folder, as another project's does, and is only the launch point: it drives the work
+folders by absolute path, and every edit, build, test and commit happens
+there.
 
 Cargo builds into each work folder's `target/`. Give parallel cargo
 processes in one folder their own `CARGO_TARGET_DIR` (under `.nail-build/`).

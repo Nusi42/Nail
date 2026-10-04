@@ -1101,7 +1101,10 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
 
 ## If you are the lead (the main session)
 
-A new session starts in `<work root>\nail-work-1` and picks up the work like this:
+The owner starts Claude Code in the master folder `<master>`, as for another project. That folder
+is only the launch point: drive the work folders by absolute path (`git -C`, `cd` in each command), and edit, build,
+test and commit only there; in the master run nothing but `git merge --ff-only work-1`. A new session picks up the work
+like this:
 
 1. Read `.claude/memory/next-steps.md` (the current wave and what comes next) and the wave's status line in
    `docs/plan.md`.
