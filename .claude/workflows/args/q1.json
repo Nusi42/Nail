@@ -1,0 +1,54 @@
+{
+  "acceptContract": true,
+  "wave": "Q1",
+  "key": "q1",
+  "since": "4125e39",
+  "memoryName": "q1-status",
+  "planRef": "the 'Quality baseline (Q1)' section of docs/plan.md and ADR 0123 (docs/adr/0123-q1-quality-baseline.md); the policy is in .claude/memory/zero-warnings-policy.md: linters and formatters for every kind of file, 0 warnings and 0 errors, without disabling good lints or compiler warnings",
+  "contract": "Q1 contract — ALREADY DONE (commits 220f4fb, 4ef0583, 3414ab6): strict tooling, `npm run check`, CI job, pre-commit hook, findings report. Resume past it with acceptContract=true; the lint findings it leaves red are what the parallel packages fix.",
+  "slots": "q-rust-a owns crates/nail-core, nail-mcp, nail-plugins, nail-server, nail-cli, nail-mapi, nail-bench, nail-remote-auth, nail-proxy and app/src-tauri; q-rust-b owns crates/nail-api, nail-store, nail-config, nail-search, nail-vault, nail-rules, nail-sieve, nail-triage, nail-compose; q-rust-c owns every other crate; q-ts-ui owns ui/ and locales/; q-ts-rest owns e2e/, packages/, examples/, scripts/, docs/, userDocs/, .github/, root config files except Cargo.toml and package.json",
+  "build": [
+    {
+      "key": "q-rust-a",
+      "dirs": "crates/nail-core, crates/nail-mcp, crates/nail-plugins, crates/nail-server, crates/nail-cli, crates/nail-mapi, crates/nail-bench, crates/nail-remote-auth, crates/nail-proxy, app/src-tauri",
+      "npm": false,
+      "prompt": "Q1 Rust group A — make your crates produce 0 warnings and 0 errors under the new lint configuration (cargo clippy -p <crate> --all-targets -j 4 -- -D warnings; cargo doc -p <crate> --no-deps with RUSTDOCFLAGS=-D warnings), fixing the code properly (parameter structs, error handling instead of unwrap/expect in non-test code, casts, docs per the ADR policy). Replace EVERY #[allow(...)] / #![allow(...)] with a real fix or #[expect(lint, reason = \"…\")]. Also fix the LNK4199 linker warning in the nail-app test build. Keep all tests green. Never change lint levels — list disagreements in apiRequests with evidence."
+    },
+    {
+      "key": "q-rust-b",
+      "dirs": "crates/nail-api, crates/nail-store, crates/nail-config, crates/nail-search, crates/nail-vault, crates/nail-rules, crates/nail-sieve, crates/nail-triage, crates/nail-compose",
+      "npm": false,
+      "prompt": "Q1 Rust group B — same goal and rules as group A for your crates. nail-api generates TypeScript bindings (ts-rs): if public types change, run `npm run gen:api` and note it in apiRequests."
+    },
+    {
+      "key": "q-rust-c",
+      "dirs": "every crate not in groups A and B (nail-proto-*, nail-portability, nail-ical, nail-exchange, nail-pgp, nail-smime, nail-pkcs11, nail-testkit, nail-testkit-net, nail-dav, nail-itip, nail-mime, nail-discovery, nail-auth)",
+      "npm": false,
+      "prompt": "Q1 Rust group C — same goal and rules as group A for your crates. The testkit crates' crate-level dead_code allows must become real usage, cfg(test)/feature gating or targeted expects with reasons; unsafe_code exceptions need #[expect(unsafe_code, reason = \"…\")] on the smallest scope plus SAFETY comments."
+    },
+    {
+      "key": "q-ts-ui",
+      "dirs": "ui/, locales/",
+      "npm": false,
+      "prompt": "Q1 UI — make `npm run lint -w ui` pass with 0 warnings (type-aware strict + stylistic + react-hooks + jsx-a11y, --max-warnings 0, tsc, Prettier) by fixing the code properly; fix all react-hooks/exhaustive-deps disables properly; remove the Vite build warnings; stop the web-mode console error from the /api/auth probe. Keep Vitest green with 0 `stderr |` blocks."
+    },
+    {
+      "key": "q-ts-rest",
+      "dirs": "e2e/, packages/, examples/, scripts/, docs/, userDocs/, .github/, root config files except Cargo.toml and package.json",
+      "npm": false,
+      "prompt": "Q1 rest — ESLint (type-aware strict, --max-warnings 0), tsc and Prettier for e2e/, packages/*, examples/*, scripts/**/*.mjs; markdownlint for docs/ and userDocs/; typos; actionlint; editorconfig. Fix the files, never blanket-disable rules. Keep the script and package tests green."
+    }
+  ],
+  "integrate": "Q1 integration: `npm run check` fully green with 0 warnings and 0 errors; no #[allow( left in crates/ and app/; no eslint-disable without `-- reason`; no @ts-ignore/@ts-expect-error without a reason; the pre-commit hook fast; the CI check job blocking; build outputs without warnings; the full suite (cargo test --workspace -j 4, npm test, npm run e2e, npm run visual) green. Document in docs/dev-setup.md, CLAUDE.md, an ADR, the plan status and memory.",
+  "reviews": [
+    {
+      "key": "q1-suppression-audit",
+      "lens": "audit every remaining suppression and lint-level change; judge each reason; check that no good lint was turned off, that -D warnings / --max-warnings 0 are enforced in npm run check, CI and the hook, and that no test was weakened to get green."
+    },
+    {
+      "key": "q1-correctness",
+      "lens": "behavioural regressions from the mass refactor: changed error handling, mixed-up arguments in parameter structs, numeric changes from cast fixes, react-hooks dependency fixes causing loops or stale data, a11y fixes changing keyboard behaviour, broken docs links, changed CI semantics."
+    }
+  ],
+  "verify": "Independent verification: `npm run check` from a clean state with 0 warnings and 0 errors; suppression counts; pre-commit hook timing; cargo build and npm run build without warnings; the full suite green; CI check job blocking."
+}

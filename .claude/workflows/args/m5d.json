@@ -1,0 +1,47 @@
+{
+  "wave": "M5d",
+  "key": "m5d",
+  "since": "<commit at the start of M5d — fill in from git log>",
+  "memoryName": "m5d-status",
+  "planRef": "section 10 (M5), especially its \"Scope decisions\" and \"Wave M5d\" WP180-WP185; the approved proposal is at a published page, not linked here (its 'Layout editor' and 'Theme editor' sections show the intended look); read .claude/memory/m5c-status.md and q1-status.md for open points and the zero-warnings rules",
+  "contract": "WP180 — contract for wave M5d exactly as in docs/plan.md section 10: layout-edit operations as typed write-back patches (move / swap / dock a pane, add or remove a widget, hide / show, apply a preset, toolbar item moves between the bar and \"More\"), theme-edit operations (set a token, set a part override, duplicate as a new theme, rename, delete user themes), an undo history for both, and conflict handling when the file changed on disk. Requests and events for all of it. Prepare collision-free slots.",
+  "slots": "WP181 owns a new ui/src/features/layout-editor (customize-layout mode) + locales layout-editor.ftl; WP182 owns a new ui/src/features/toolbar-editor + locales toolbar-editor.ftl; WP183 owns ui/src/features/appearance (Appearance settings and the theme editor) + locales appearance.ftl; WP184 owns crates/nail-config (write-back engine extensions)",
+  "build": [
+    {
+      "key": "wp181-layout",
+      "dirs": "ui/src/features/layout-editor/ (new), locales/en/layout-editor.ftl, locales/de/layout-editor.ftl",
+      "npm": false,
+      "prompt": "WP181 — customize-layout mode exactly as in docs/plan.md section 10 and the proposal: pane headers with drag handles, dock and swap targets, a hide/show eye, the widget palette (\"Add to layout\") and presets (Three panes, Reader below, Wide reader, Focus), Undo, Reset to default and Done, a full keyboard alternative for every drag operation. Every change goes through the contract's write-back patches (layout.kdl keeps the user's comments). Themeable via parts, axe-clean in all five themes, Vitest tests, 0 lint warnings."
+    },
+    {
+      "key": "wp182-toolbar",
+      "dirs": "ui/src/features/toolbar-editor/ (new), locales/en/toolbar-editor.ftl, locales/de/toolbar-editor.ftl",
+      "npm": false,
+      "prompt": "WP182 — toolbar customizer exactly as in docs/plan.md section 10: right-click a toolbar → Customize; drag buttons between the bar, its \"More\" menu and a palette of available actions (plug-in actions included), with keyboard alternatives, Undo and Reset. Changes go through the contract's write-back patches. Themeable, axe-clean in all five themes, Vitest tests, 0 lint warnings."
+    },
+    {
+      "key": "wp183-appearance",
+      "dirs": "ui/src/features/appearance/, locales/en/appearance.ftl, locales/de/appearance.ftl",
+      "npm": false,
+      "prompt": "WP183 — Appearance settings and the full theme editor exactly as in docs/plan.md section 10 and the proposal: theme gallery with live previews, New theme, the Follow Windows light/dark pair, accent, density, text size and corner radius; the theme editor with token groups (colour, type, spacing, radius, motion), per-part overrides, live preview, duplicate / rename / delete for user themes; the inspector's \"Edit style\" jumps to the part. Changes go through the contract's theme-edit operations (theme.kdl keeps comments). Themeable, axe-clean in all five themes, Vitest tests, 0 lint warnings."
+    },
+    {
+      "key": "wp184-writeback",
+      "dirs": "crates/nail-config",
+      "npm": false,
+      "prompt": "WP184 — write-back engine extensions in nail-config for every new layout- and theme-edit patch kind from the contract: comment and formatting preservation, golden-file tests per patch kind, undo snapshots, and conflict detection when the file changed on disk since the UI read it (report a conflict instead of overwriting). 0 clippy warnings under the Q1 lint rules (no #[allow]; #[expect(..., reason)] only where unavoidable)."
+    }
+  ],
+  "integrate": "WP185 exactly as in docs/plan.md section 10: wire everything (core requests for the edit operations and undo, events), mount the editors (View menu, command palette, Settings → Layout & toolbars and Appearance), and every scenario: swap panes and confirm layout.kdl, add a widget, apply a preset, customize a toolbar, change accent and radius and confirm theme.kdl, duplicate a theme, undo, a conflict when the file changed on disk. Regenerate and review the visual baselines. Docs (userDocs/en: appearance, themes, customizing the layout, windows), the M5 automated gate status in docs/plan.md section 10, and the memory. `npm run check` must be green with 0 warnings.",
+  "reviews": [
+    {
+      "key": "m5d-quality",
+      "lens": "UX quality of the in-app editors against the approved proposal: discoverability (how a user finds Customize layout, toolbar customizing and the theme editor), drag-and-drop feel and drop targets, keyboard alternatives, undo reliability, live preview correctness, that every change lands in layout.kdl / theme.kdl with comments kept, that a broken edit can never leave the app unusable (reset path), visual consistency in all five themes; report concrete defects with steps."
+    },
+    {
+      "key": "m5d-conformance",
+      "lens": "conformance with docs/plan.md section 10 WP180-WP185, CLAUDE.md and the zero-warnings policy: every deliverable present and wired, every scenario present and asserting real outcomes (file contents after edits), write-back goldens per patch kind, conflict handling tested, `npm run check` green with 0 warnings and no new suppressions without reasons, 0 stderr blocks in the UI tests, visual baselines updated, ADR numbering, docs/plan/memory updated incl. the M5 gate status."
+    }
+  ],
+  "verify": "spot-check live against nail serve --seed demo-multi (free port): enter Customize layout, swap two panes, add a widget, apply a preset, undo, and confirm layout.kdl (comments kept); customize the reader toolbar; in Appearance change accent, density, text size and radius, duplicate a theme and edit a token, and confirm theme.kdl; edit layout.kdl on disk while the editor is open and confirm the conflict handling. Take screenshots of the editors in all five themes and look at them yourself. Run `npm run check` (0 warnings), the full test suite, e2e and visual. Confirm no new Windows firewall rules for the verify target dir and that the M5 automated gate in plan section 10 is met across M5a-M5d; the remaining human gate is the owner looking at the real app."
+}
