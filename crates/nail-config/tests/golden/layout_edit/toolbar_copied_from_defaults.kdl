@@ -1,0 +1,29 @@
+// Changes made in Nail. See the layout reference in the user documentation.
+layout "custom" extends="default" {
+    toolbar "reader" hide-disabled=#true {
+        item "mail.reply-all" rank=2
+        item "mail.forward" rank=3
+        separator
+        item "mail.archive" rank=4 display="icon"
+        item "mail.delete" rank=5 display="icon"
+        item "mail.move" rank=6 display="icon"
+        item "mail.toggle-flag" rank=7 display="icon"
+        item "snooze.open" rank=8 display="icon"
+        spacer
+        more {
+            header "@toolbar.group.message"
+            item "mail.toggle-read"
+            item "junk.mark"
+            item "gmail.apply-labels"
+            item "exchange.apply-categories"
+            item "exchange.classify"
+            item "security.autocrypt.import"
+            item "print.message"
+            separator
+            header "@toolbar.group.turn-into"
+            item "calendar.event-from-message"
+            item "tasks.from-message"
+            item "rules.create-from-message"
+        }
+    }
+}

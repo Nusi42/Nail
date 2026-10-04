@@ -431,6 +431,33 @@ impl ThemeCatalog {
         self.lookup(id).and_then(|i| self.entries[i].merged.clone())
     }
 
+    /// The theme's own file as read (not merged; `None` for an unknown id
+    /// or a file that does not parse).
+    pub(crate) fn own_file(&self, id: &str) -> Option<&ThemeFile> {
+        self.lookup(id).and_then(|i| self.entries[i].file.as_ref())
+    }
+
+    /// The theme's own file and those of the themes it extends, nearest
+    /// first, without the base (a chain that cannot be followed ends where
+    /// it breaks; a cycle ends before the repeated theme).
+    pub(crate) fn chain(&self, id: &str) -> Vec<&ThemeFile> {
+        let mut out: Vec<&ThemeFile> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        let mut next = Some(id.to_owned());
+        while let Some(current) = next.take() {
+            if current == DEFAULT_BASE || seen.contains(&current) {
+                break;
+            }
+            let Some(file) = self.own_file(&current) else {
+                break;
+            };
+            next.clone_from(&file.extends);
+            seen.push(current);
+            out.push(file);
+        }
+        out
+    }
+
     /// Resolves a usable theme on its own (`None` for an unknown or
     /// unusable one).
     pub fn resolve(&self, id: &str) -> Option<ResolvedTheme> {

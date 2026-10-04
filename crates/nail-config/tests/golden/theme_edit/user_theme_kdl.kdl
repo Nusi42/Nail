@@ -1,0 +1,10 @@
+// My overrides.
+theme "custom" extends="sage" {
+    // nothing yet
+    tokens {
+        color "accent" "#c2255c"
+    }
+    part "app" {
+        font-size 15
+    }
+}

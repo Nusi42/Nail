@@ -1,0 +1,47 @@
+// Nail built-in theme: Sage (light).
+//
+// Soft green-grey neutrals with a green accent.
+// Colours only: spacing, type, corners, elevation and density come from
+// the base theme (defaults/theme.kdl). Pick it in Settings → Appearance.
+// See userDocs/en/theme-reference.md for every token.
+//
+// The palette is the approved M5 proposal's. The accent, tertiary text and
+// the state colours are a little darker than the proposal's swatches so
+// every text passes WCAG AA (4.5:1) on every surface, the selection
+// included; the contrast test (crates/nail-config/tests/theme_contrast.rs)
+// checks each pair. `print=` is the print view (white paper, black text).
+
+theme "My Sage" extends="default" mode="light" {
+    tokens {
+        // Surfaces.
+        color "bg"            "#fbfcfa" print="#ffffff"
+        color "bg-subtle"     "#f2f5f0" print="#ffffff"
+        color "bg-raised"     "#e2e8df" print="#ffffff"
+        color "canvas"        "#ecf0ea" print="#ffffff"
+        color "rail"          "#dfe6dc" print="#ffffff"
+
+        // Text.
+        color "fg"            "#1b241d" print="#000000"
+        color "fg-muted"      "#59685d" print="#444444"
+        color "fg-subtle"     "#5b675e" print="#555555"
+
+        // Lines.
+        color "border"        "#d6ded2" print="#999999"
+        color "border-strong" "#7c857b" print="#767676"
+
+        // Accent; the soft accent and the selection derive from it.
+        color "accent"        "#2c7153"
+        color "accent-fg"     "#ffffff"
+        color "accent-soft"   "color-mix(in srgb, $color.accent 14%, $color.bg)"
+        color "selection"     "color-mix(in srgb, $color.accent 16%, $color.bg)"
+        color "selection-fg"  "$color.fg"
+        color "unread"        "$color.accent"
+        color "focus-ring"    "$color.accent"
+
+        // States.
+        color "danger"        "#ae3e4c"
+        color "flagged"       "$color.danger"
+        color "warning"       "#845d1e"
+        color "success"       "#2c7153"
+    }
+}

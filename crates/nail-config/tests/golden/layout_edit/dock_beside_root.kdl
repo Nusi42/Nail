@@ -1,0 +1,43 @@
+// My mail window, tuned by hand.
+layout "Mine" extends="default" {
+    window "mail" {
+        split "vertical" sizes="1fr 1fr" {
+            // Folders | list | reader.
+            split "horizontal" id="panes" \
+                sizes="240px 1fr" /* tuned */ \
+                min-sizes="200px 300px" {
+                // The folder pane.
+                stack id="sidebar" sizes="1fr auto" {
+                    folder-tree id="folders" show-unread=#true // unread counts
+                    label-list id="gmail-labels"
+                }
+
+                // Messages.
+                stack id="list-pane" sizes="auto 1fr" {
+                    list-header id="list-header"
+                    message-list id="list" page-size=50 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                    }
+                }
+            }
+            // The reader with its toolbar.
+            stack id="reader" sizes="auto 1fr" {
+                toolbar id="reader-toolbar" toolbar="reader"
+                message-view id="message" headers="from to date"
+            }
+        }
+    }
+
+    // Reader buttons.
+    toolbar "reader" {
+        item "mail.reply" // most used
+        item "mail.forward" rank=1
+
+        // Rarely.
+        item "mail.delete"
+        more {
+            item "mail.archive" label="Archive it"
+        }
+    }
+}

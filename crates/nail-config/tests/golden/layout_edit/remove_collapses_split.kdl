@@ -1,0 +1,7 @@
+layout "Two" extends="default" {
+    window "mail" {
+        // Only two panes.
+        // The reader.
+        message-view id="message"
+    }
+}

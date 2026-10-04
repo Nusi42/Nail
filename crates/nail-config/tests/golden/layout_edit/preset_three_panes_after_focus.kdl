@@ -1,0 +1,90 @@
+// Changes made in Nail. See the layout reference in the user documentation.
+layout "custom" extends="default" {
+    breakpoint min-width=900 {
+        window "mail" {
+            split "horizontal" id="panes" sizes="260px 1fr 1.4fr" {
+                stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
+                    // New message, Favorites (the Outbox only while mail waits
+                    // there), one section per account (with its colour), smart
+                    // folders once you saved a search.
+                    folder-tree id="folders" show-unread=#true \
+                        sections="favorites accounts smart-folders" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
+                        collapsible=#true account-colors=#true
+                    // Gmail accounts: labels as views (nothing for other accounts).
+                    label-list id="gmail-labels"
+                    // Exchange accounts: shared / delegate mailboxes and the
+                    // master category list (nothing for other accounts).
+                    exchange-mailboxes id="exchange-mailboxes"
+                    exchange-categories id="exchange-categories"
+                }
+                stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto auto 1fr" {
+                    // Search, the folder's title with counts, filter chips.
+                    list-header id="list-header"
+                    // While automatic replies (out of office) of an Exchange
+                    // account are on: a banner with Turn off / Edit.
+                    automatic-replies-banner id="automatic-replies"
+                    // Gmail inbox categories (nothing for other accounts).
+                    category-tabs id="gmail-categories"
+                    // Exchange Focused Inbox tabs (nothing for other accounts).
+                    focused-tabs id="exchange-focused"
+                    message-list id="list" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                        row "{preview}"
+                    }
+                }
+                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                    toolbar id="reader-toolbar" toolbar="reader"
+                    thread-view id="thread" expand="none"
+                    // Signature / encryption and sender check badges, then
+                    // warnings about deceptive links and risky attachments.
+                    security-message id="message-security"
+                    security-warnings id="message-warnings"
+                    // Remote images stay blocked until you allow them.
+                    remote-content id="message-remote-content"
+                    // Junk verdict with "Not junk"; a body that is not
+                    // stored yet with "Download full message".
+                    junk-verdict id="message-junk"
+                    sync-message-body id="message-body-status"
+                    message-view id="message" headers="from to cc date"
+                }
+            }
+        }
+    }
+    breakpoint max-width=899 {
+        window "mail" {
+            tabs id="panes" active=1 {
+                stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
+                    folder-tree id="folders" show-unread=#true \
+                        sections="favorites accounts smart-folders" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
+                        collapsible=#true account-colors=#true
+                    label-list id="gmail-labels"
+                    exchange-mailboxes id="exchange-mailboxes"
+                    exchange-categories id="exchange-categories"
+                }
+                stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto auto 1fr" {
+                    list-header id="list-header" counts=#false
+                    automatic-replies-banner id="automatic-replies"
+                    category-tabs id="gmail-categories"
+                    focused-tabs id="exchange-focused"
+                    message-list id="list" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                    }
+                }
+                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                    toolbar id="reader-toolbar" toolbar="reader"
+                    thread-view id="thread" expand="none"
+                    security-message id="message-security"
+                    security-warnings id="message-warnings"
+                    remote-content id="message-remote-content"
+                    junk-verdict id="message-junk"
+                    sync-message-body id="message-body-status"
+                    message-view id="message" headers="from date"
+                }
+            }
+        }
+    }
+}
