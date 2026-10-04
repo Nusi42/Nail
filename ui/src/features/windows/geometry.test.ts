@@ -20,6 +20,7 @@ import {
   initialGeometry,
   insidePage,
   isArrowKey,
+  fitsPage,
   keepOnPage,
   keyboardMove,
   keyboardResize,
@@ -162,6 +163,29 @@ describe("window geometry (M5c WP171)", () => {
       width: 600,
       height: 400,
     });
+  });
+
+  it("keeps a window placed wholly on the page wholly on a page that shrank (P1)", () => {
+    const rect = { x: 500, y: 250, width: 700, height: 500 };
+    expect(fitsPage(rect, page)).toBe(true);
+    expect(fitsPage({ ...rect, x: 900 }, page)).toBe(false);
+    expect(fitsPage({ ...rect, x: -1 }, page)).toBe(false);
+    const small = { width: 1000, height: 600 };
+    expect(shownRect(normal(rect), min, small, true)).toEqual({
+      x: 300,
+      y: 100,
+      width: 700,
+      height: 500,
+    });
+    // Smaller than the window: it shrinks to the page and fills it.
+    expect(shownRect(normal(rect), min, { width: 500, height: 400 }, true)).toEqual({
+      x: 0,
+      y: 0,
+      width: 500,
+      height: 400,
+    });
+    // The page grows again: the remembered place is back.
+    expect(shownRect(normal(rect), min, page, true)).toEqual(rect);
   });
 
   it("moves within the page", () => {

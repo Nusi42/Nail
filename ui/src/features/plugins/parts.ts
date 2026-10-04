@@ -140,6 +140,12 @@ export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog"] { display: flex; fle
 [data-part="plugin-extension-menu.list"] { position: absolute; z-index: 120; min-width: 100%; list-style: none; margin: 0; padding: 0; }
 [data-part="plugin-extension-menu.item"] { display: flex; width: 100%; align-items: center; text-align: start; }
 [data-part="plugin-preview.body"] { overflow: auto; max-width: 100%; }
+[data-part="plugin-manager.toolbar"] { display: flex; flex-wrap: wrap; align-items: center; }
+[data-part="plugin-install.source"] { display: flex; flex-direction: column; gap: var(--nail-space-md); min-width: 0; }
+[data-part="plugin-install.kinds"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nail-space-xs) var(--nail-space-lg); min-width: 0; margin: 0; padding: var(--nail-space-sm) var(--nail-space-md); border: 1px solid var(--nail-color-border); border-radius: var(--nail-radius-md); }
+[data-part="plugin-install.kinds.legend"] { padding: 0 var(--nail-space-xs); }
+[data-part="plugin-install.kind"] { display: inline-flex; align-items: center; gap: var(--nail-space-xs); min-height: var(--nail-size-control); }
+[data-part="plugin-install.actions"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nail-space-sm); }
 [data-part="plugin-banners"], [data-part="plugin-badges"], [data-part="plugin-veto.list"], [data-part="plugin-activity.job-list"],
 [data-part="plugin.notifications.list"], [data-part="plugin.message-list"], [data-part="plugin.contact-picker.list"], [data-part="plugin-permissions"], [data-part="plugin-permissions.account-list"], [data-part="plugin-manager.list"], [data-part="plugin-placements.items"], [data-part="plugin-placements.conflicts"], [data-part="plugin-logs.list"], [data-part="plugin-install.issue-list"], [data-part="plugin-install.contributions"] { list-style: none; margin: 0; padding: 0; }
 `;

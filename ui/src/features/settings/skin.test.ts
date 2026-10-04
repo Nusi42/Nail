@@ -7,7 +7,8 @@ import type { ResolvedTheme } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { compileTheme } from "../../theme/compile";
 import { SKIN_CSS } from "../../theme/skin";
-import { SETTINGS_SKIN_CSS } from "./skin";
+import { FIELDS_NARROW, SETTINGS_SKIN_CSS } from "./skin";
+import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 
 /** The CSS blocks as [selectors, body]. */
 const blocks = () =>
@@ -91,12 +92,38 @@ describe("settings page skin", () => {
   });
 
   it("lays out card rows with the label on the left and the control on the right", () => {
+    // P1: one control column per card (every control starts at the same left
+    // edge and is as wide as the column), the label centred beside a control
+    // without a hint.
     expect(SETTINGS_SKIN_CSS).toMatch(
-      /\[data-part="settings-page.card"\] \[data-part="form.field"\] \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/,
+      /\[data-part="settings-page.card"\] \[data-part="form.field"\] \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, calc\(16 \* var\(--nail-space-lg\)\)\)/,
     );
     expect(SETTINGS_SKIN_CSS).toMatch(
-      /\[data-part="form.field"\] > \[data-part="form.input"\][^{]*\{[^}]*grid-column: 2/,
+      /\[data-part="form.field"\] > \[data-part="form.input"\][^{]*\{[^}]*grid-column: 2;[^}]*width: 100%/,
     );
+    expect(SETTINGS_SKIN_CSS).toMatch(
+      /\[data-part="form.field"\]:not\(:has\(> \[data-part="form.hint"\]\)\) > \[data-part="form.label"\] \{ align-self: center; \}/,
+    );
+  });
+
+  it("stacks card rows in a narrow card and pads less on a narrow page (P1)", () => {
+    // Each card is the container its rows measure, not the viewport.
+    expect(SETTINGS_SKIN_CSS).toContain(`container: ${FIELDS_CONTAINER} / inline-size;`);
+    // A widget on a card neither pads again nor scrolls on its own (the page
+    // scrolls; a scrolling widget would be a scroll region without focus).
+    expect(SETTINGS_SKIN_CSS).toContain(
+      `[data-part="settings-page.card"] > [data-part] { min-width: 0; padding: 0; overflow: visible; }`,
+    );
+    const narrow = SETTINGS_SKIN_CSS.slice(
+      SETTINGS_SKIN_CSS.indexOf(`@container ${FIELDS_CONTAINER} (max-width: ${FIELDS_NARROW})`),
+    );
+    expect(narrow).toMatch(
+      /\[data-part="settings-page.card"\] \[data-part="form.field"\] \{ grid-template-columns: minmax\(0, 1fr\);/,
+    );
+    expect(SETTINGS_SKIN_CSS).toContain(
+      `[data-part="settings-page.content"] { container: nail-settings-content / inline-size; }`,
+    );
+    expect(SETTINGS_SKIN_CSS).toMatch(/@container nail-settings-content \(max-width: 40rem\)/);
   });
 
   it("keeps the Density control at its natural width and fills its selection in High contrast", () => {

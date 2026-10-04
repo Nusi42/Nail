@@ -62,8 +62,10 @@ describe("composer skin", () => {
     const css = COMPOSER_SKIN_CSS;
     // The footer (reminder, error, send time, actions) sticks together:
     // nothing about sending scrolls under it (M5c review).
+    // P1: it reaches into the composer's bottom padding (and fills it), so no
+    // text scrolls by below it.
     expect(css).toMatch(
-      /\[data-part="composer"\] > \[data-part="composer\.footer"\] \{[^}]*position: sticky; bottom: 0;/,
+      /\[data-part="composer"\] > \[data-part="composer\.footer"\] \{[^}]*position: sticky; bottom: calc\(-1 \* var\(--nail-space-md\)\);[^}]*padding-block: var\(--nail-space-sm\) var\(--nail-space-md\);/,
     );
     expect(css).toContain(
       `[data-part="composer"] [data-part="composer.actions"] { flex-wrap: wrap; }`,

@@ -44,6 +44,7 @@ import {
   isArrowKey,
   keyboardMove,
   keyboardResize,
+  fitsPage,
   moveRect,
   looseRect,
   normal,
@@ -216,7 +217,12 @@ export function WindowFrame({
     [flush],
   );
 
-  const shown = shownRect(geometry, min, viewport);
+  // The page the geometry was placed on (P1): a window placed wholly on the
+  // page stays wholly on it when the page shrinks (`shownRect`).
+  const [placement, setPlacement] = useState({ geometry, viewport });
+  if (placement.geometry !== geometry) setPlacement({ geometry, viewport });
+  const placedOnPage = fitsPage(geometry.rect, placement.viewport);
+  const shown = shownRect(geometry, min, viewport, placedOnPage);
   const shownRef = useRef(shown);
   useLayoutEffect(() => {
     shownRef.current = shown;
@@ -285,7 +291,7 @@ export function WindowFrame({
   }, []);
 
   /** The window restored at its shown place (keyboard steps start there). */
-  const restoredShown = () => shownRect(normal(geometry.rect), min, viewport);
+  const restoredShown = () => shownRect(normal(geometry.rect), min, viewport, placedOnPage);
 
   // ---- Pointer: move and resize ----
   const startDrag = (

@@ -213,16 +213,37 @@ export function maximizedRect(viewport: Viewport): WindowRect {
   return { x: 0, y: 0, width: viewport.width, height: viewport.height };
 }
 
-/** The rectangle a window is shown at. */
+/** Whether `rect` lies wholly on a page of size `viewport`. */
+export function fitsPage(rect: WindowRect, viewport: Viewport): boolean {
+  return (
+    rect.x >= 0 &&
+    rect.y >= 0 &&
+    rect.x + rect.width <= viewport.width &&
+    rect.y + rect.height <= viewport.height
+  );
+}
+
+/**
+ * The rectangle a window is shown at.
+ *
+ * `placedOnPage` (P1 WP191): the window lay wholly on the page when it was
+ * placed (opened, moved or resized). Such a window stays wholly on a page
+ * that shrinks — moved in from the right and bottom edges as far as needed,
+ * so its title bar and buttons stay reachable — and gets its old place back
+ * when the page grows again. A window the user dragged partly off the page
+ * keeps only `WINDOW_MIN_VISIBLE` pixels on it, as before.
+ */
 export function shownRect(
   geometry: WindowGeometry,
   min: WindowSize,
   viewport: Viewport,
+  placedOnPage = false,
 ): WindowRect {
   if (geometry.maximized) return maximizedRect(viewport);
   if (geometry.snap !== null) return snapRect(geometry.snap, min, viewport);
   const size = fitSize(geometry.rect, min, viewport);
-  return keepOnPage({ x: geometry.rect.x, y: geometry.rect.y, ...size }, viewport);
+  const rect = { x: geometry.rect.x, y: geometry.rect.y, ...size };
+  return placedOnPage ? insidePage(rect, viewport) : keepOnPage(rect, viewport);
 }
 
 /** A normal geometry at `rect`. */

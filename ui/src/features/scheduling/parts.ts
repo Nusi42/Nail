@@ -33,5 +33,13 @@ export const SCHEDULING_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; marg
 [data-part="freebusy.busy"][data-kind="busy"] { z-index: 2; }
 [data-part="freebusy.busy"][data-kind="unavailable"] { z-index: 3; }
 [data-part="freebusy.meeting"] { z-index: 4; }
+[data-part="freebusy.row"] > [data-part="freebusy.person"] { grid-column: 1; grid-row: 1; min-width: 0; }
+[data-part="freebusy.row"] > [data-part="freebusy.source"] { grid-column: 1; grid-row: 2; min-width: 0; }
+[data-part="freebusy.row"] > [data-part="freebusy.error"] { grid-column: 1; min-width: 0; }
+[data-part="freebusy.row"] > [data-part="freebusy.track"] { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
+[data-part="freebusy.previous"], [data-part="freebusy.next"] { display: inline-flex; align-items: center; gap: var(--nail-space-xxs); min-height: var(--nail-size-control); padding: 0 var(--nail-space-sm); border: 1px solid var(--nail-color-border); border-radius: var(--nail-radius-md); font: inherit; color: var(--nail-color-fg); background-color: var(--nail-color-bg); }
+[data-part="freebusy.previous"]:hover, [data-part="freebusy.next"]:hover { background-color: var(--nail-color-bg-subtle); }
+[data-part="freebusy.previous"]:focus-visible, [data-part="freebusy.next"]:focus-visible { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 2px; }
+[data-part="freebusy.nav.icon"] { flex: 0 0 auto; width: var(--nail-size-icon); height: var(--nail-size-icon); }
 [data-part="scheduling.scope"], [data-part="scheduling.meeting.recipients"], [data-part="scheduling.cancel.scopes"], [data-part="scheduling.settings.switches"], [data-part="scheduling.attendees"] { margin: 0; min-width: 0; }
 `;
