@@ -75,6 +75,9 @@ function create(n, install) {
     // `prepare` points core.hooksPath at .githooks.
     // One command string: npm is a batch file on Windows, which needs a shell.
     execSync("npm ci --no-audit --no-fund", { cwd: target, stdio: "inherit" });
+    // ui/dist: the Tauri shell embeds it, so `cargo … --workspace` (and the
+    // pre-push `npm run check`) needs it in a fresh folder.
+    execSync("npm run build", { cwd: target, stdio: "inherit" });
   } else {
     git(target, ["config", "core.hooksPath", ".githooks"]);
   }
