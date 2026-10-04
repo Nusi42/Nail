@@ -15,7 +15,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,7 +46,7 @@ function npx(args, env = process.env) {
 
 function main() {
   const generate = process.argv.includes("--generate");
-  const keys = keysDir(process.env, tmpdir());
+  const keys = keysDir(process.env, homedir());
   const paths = devKeyPaths({ keysDir: keys, repoRoot });
   assertOutsideRepo(paths.privateKey, repoRoot);
   const password = process.env.NAIL_DEV_UPDATER_KEY_PASSWORD ?? "";

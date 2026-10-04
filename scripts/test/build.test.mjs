@@ -31,12 +31,13 @@ test("build output goes to NAIL_BUILD_DIR, else the checkout's .nail-build", () 
   assert.equal(buildBase({}, "R"), path.join("R", ".nail-build"));
 });
 
-test("signing keys stay outside every checkout", () => {
+test("signing keys live in a development-secrets folder outside every checkout", () => {
   assert.equal(
-    keysDir({ NAIL_BUILD_DIR: "X", LOCALAPPDATA: "L" }, "T"),
-    path.join("L", "nail-build", "keys"),
+    keysDir({ NAIL_BUILD_DIR: "X", LOCALAPPDATA: "L" }, "H"),
+    path.join("L", "nail-dev", "keys"),
   );
-  assert.equal(keysDir({}, "T"), path.join("T", "nail-build", "keys"));
+  assert.equal(keysDir({}, "H"), path.join("H", ".nail-dev", "keys"));
+  assert.equal(keysDir({ NAIL_KEYS_DIR: "K", LOCALAPPDATA: "L" }, "H"), "K");
 });
 
 test("output inside the repository is refused, except .nail-build", () => {

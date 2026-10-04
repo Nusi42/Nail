@@ -50,7 +50,9 @@ OneDrive folder is the master and is never used for development.
   (Playwright, visual, perf, the desktop test build, installers;
   `NAIL_BUILD_DIR` still overrides). Parallel work folders never share a
   build directory. The development update key stays in
-  `%LOCALAPPDATA%\nail-build\keys`, so a `git clean` of a work folder
+  `%LOCALAPPDATA%\nail-dev\keys` (a development-secrets folder, moved
+  there from the retired `%LOCALAPPDATA%\nail-build`; `NAIL_KEYS_DIR`
+  overrides), so a `git clean` of a work folder
   cannot delete it.
 - **Guards:**
   - `scripts/lib/work-folder.mjs` `assertWorkFolder` refuses inside any

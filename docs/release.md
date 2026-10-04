@@ -11,7 +11,7 @@ from the Authenticode certificate.
 
 - **Never commit a private key.** Only public halves are in the repository.
 - **Development key**: `node scripts/updater-key.mjs --generate` writes the
-  private key to `%LOCALAPPDATA%\nail-build\keys\nail-updater-dev.key`
+  private key to `%LOCALAPPDATA%\nail-dev\keys\nail-updater-dev.key`
   (empty password) and its public half to `packaging/updater/dev.pub`;
   `node scripts/updater-key.mjs` checks the pair. Builds with
   `--dev-updater-key` embed `dev.pub` and sign with the local key. Such

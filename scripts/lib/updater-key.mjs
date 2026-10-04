@@ -1,7 +1,7 @@
 /**
  * Where the development update key lives (plan M4b WP112; key handling in
  * docs/release.md). The private key never enters the repository: it
- * is generated into `%LOCALAPPDATA%\nail-build\keys` (outside every work
+ * is generated into `%LOCALAPPDATA%\nail-dev\keys` (outside every work
  * folder; scripts/lib/build.mjs keysDir), and only its public half is committed
  * as packaging/updater/dev.pub, so development builds and the loopback
  * smoke test can be checked by anyone. Release builds use the release key

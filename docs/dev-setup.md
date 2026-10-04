@@ -69,7 +69,7 @@ includes.
 Build and test output (Playwright, visual, perf, the desktop test build,
 installers) goes to the checkout's gitignored `.nail-build/`
 (`NAIL_BUILD_DIR` overrides the base); the development update key stays in
-`%LOCALAPPDATA%\nail-build\keys`, outside every work folder.
+`%LOCALAPPDATA%\nail-dev\keys`, outside every work folder.
 
 ## Install and build
 
@@ -275,7 +275,7 @@ powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install
 node scripts/update-manifest.mjs --version V --channel stable --artifacts DIR --download-base URL --out DIR   # <channel>/latest.json, signatures checked first
 node scripts/update-server.mjs --root DIR [--port N]   # loopback update server (127.0.0.1 only)
 node scripts/update-check.mjs …                   # checks an endpoint and a download like the app does
-node scripts/updater-key.mjs                      # the development update key (%LOCALAPPDATA%\nail-build\keys; only packaging/updater/dev.pub is committed)
+node scripts/updater-key.mjs                      # the development update key (%LOCALAPPDATA%\nail-dev\keys; only packaging/updater/dev.pub is committed)
 node scripts/winget-manifest.mjs --version V --artifacts DIR --installer-url-template T --out DIR
 node scripts/sbom.mjs                             # CycloneDX SBOMs of the Rust and npm dependencies
 ```

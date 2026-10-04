@@ -123,7 +123,7 @@ thumbprint path.
   before writing. Stable releases also refresh `beta` unless the beta is
   newer; pre-releases go to beta only. Notes are Markdown text, ≤ 64 KiB.
 - **Key handling**: the development key's private half lives in
-  `%LOCALAPPDATA%\nail-build\keys` (`scripts/updater-key.mjs`), only
+  `%LOCALAPPDATA%\nail-build\keys` (since ADR 0132: `%LOCALAPPDATA%\nail-dev\keys`; `scripts/updater-key.mjs`), only
   `packaging/updater/dev.pub` is committed; CI smoke runs use a throwaway
   key; the release key exists only as secrets (+ offline backup).
   Details in `docs/release.md`.

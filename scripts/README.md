@@ -3,7 +3,7 @@
 Build and release helpers (plan M2b WP44, M4b WP112; ADRs 0040,
 0089). None of them writes build output into tracked files: output goes
 to the checkout's gitignored `.nail-build/` or `NAIL_BUILD_DIR`; the
-development update key lives in `%LOCALAPPDATA%\nail-build\keys`, outside
+development update key lives in `%LOCALAPPDATA%\nail-dev\keys`, outside
 every work folder.
 
 | Script | What |

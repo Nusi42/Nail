@@ -30,17 +30,20 @@ export function buildBase(env, repoRoot) {
 }
 
 /**
- * Where local signing keys live (the development update key): outside every
+ * Where local signing keys live (the development update key): a folder for
+ * development secrets, separate from build output and outside every
  * checkout, so a `git clean` or a reset of a work folder never deletes them —
- * `%LOCALAPPDATA%\nail-build\keys`, else `<tmp>/nail-build/keys`.
+ * `NAIL_KEYS_DIR`, else `%LOCALAPPDATA%\nail-dev\keys` (machine-local, not
+ * roaming), else `<home>/.nail-dev/keys`.
  *
  * @param {Env} env
- * @param {string} tmp
+ * @param {string} home the user's home directory
  * @returns {string}
  */
-export function keysDir(env, tmp) {
-  if (env.LOCALAPPDATA) return path.join(env.LOCALAPPDATA, "nail-build", "keys");
-  return path.join(tmp, "nail-build", "keys");
+export function keysDir(env, home) {
+  if (env.NAIL_KEYS_DIR) return env.NAIL_KEYS_DIR;
+  if (env.LOCALAPPDATA) return path.join(env.LOCALAPPDATA, "nail-dev", "keys");
+  return path.join(home, ".nail-dev", "keys");
 }
 
 /**

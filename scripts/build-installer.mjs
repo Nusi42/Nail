@@ -44,7 +44,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -198,7 +198,7 @@ function main() {
   /** @type {{ pubkey: string } | null} */
   let updaterKey;
   if (options.devUpdaterKey) {
-    const dev = devKeyPaths({ keysDir: keysDir(process.env, tmpdir()), repoRoot });
+    const dev = devKeyPaths({ keysDir: keysDir(process.env, homedir()), repoRoot });
     if (!existsSync(dev.privateKey)) {
       throw new Error(
         `no development update key at ${dev.privateKey}; run node scripts/updater-key.mjs`,
