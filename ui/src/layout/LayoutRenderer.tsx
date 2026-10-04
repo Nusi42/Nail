@@ -5,7 +5,9 @@
  *
  * M5d (ADR 0131): hidden nodes (`hidden=#true`) are skipped, and every node
  * goes through the layout chrome (`./LayoutChrome.ts`), which the layout
- * editor uses to draw its pane headers in customize mode.
+ * editor uses to draw its pane headers in customize mode. A chrome
+ * registered for a window (`setWindowChrome`, WP181) is provided around that
+ * window and may frame it (`renderWindow`).
  */
 import {
   Fragment,
@@ -30,7 +32,14 @@ import {
   selectBreakpointIndex,
   trackForSize,
 } from "./engine";
-import { nodeRefOfPath, rendersNode, useLayoutChrome } from "./LayoutChrome";
+import {
+  LayoutChromeContext,
+  chromeForWindow,
+  nodeRefOfPath,
+  rendersNode,
+  useLayoutChrome,
+  useWindowChrome,
+} from "./LayoutChrome";
 import { useWindowWidth } from "./useWindowWidth";
 import { useWidgetRegistry, type WidgetNode } from "./widgetRegistry";
 
@@ -49,10 +58,13 @@ function nodeKeyOf(node: LayoutNode, path: string): string {
 function useVisibleChildren(children: readonly LayoutNode[]) {
   const hidden = useUi((s) => s.hiddenNodes);
   const chrome = useLayoutChrome();
-  return children
-    .map((child, index) => ({ child, index }))
-    .filter(({ child }) => child.id === null || !hidden.includes(child.id))
-    .filter(({ child }) => rendersNode(child, chrome));
+  return (
+    children
+      .map((child, index) => ({ child, index }))
+      // Customize mode shows the panes `view.toggle` hid for now, too.
+      .filter(({ child }) => chrome.showHidden || child.id === null || !hidden.includes(child.id))
+      .filter(({ child }) => rendersNode(child, chrome))
+  );
 }
 
 export interface WindowViewProps {
@@ -65,6 +77,9 @@ export interface WindowViewProps {
 export function WindowView({ layout, name = "main" }: WindowViewProps) {
   const t = useT();
   const width = useWindowWidth();
+  const inherited = useLayoutChrome();
+  const registered = useWindowChrome(name);
+  const chrome = chromeForWindow(name, registered, inherited);
   const breakpoints = layout.windows[name] ?? [];
   const index = selectBreakpointIndex(breakpoints, width);
   const breakpoint = breakpoints[index];
@@ -72,7 +87,13 @@ export function WindowView({ layout, name = "main" }: WindowViewProps) {
     return <div data-part="layout.missing">{t("layout-missing-window", { name })}</div>;
   }
   const path = `${name}/${String(index)}`;
-  return <NodeView key={path} node={breakpoint.root} path={path} />;
+  const tree = <NodeView key={path} node={breakpoint.root} path={path} />;
+  const content = chrome.renderWindow ? chrome.renderWindow(name, index, tree) : tree;
+  return chrome === inherited ? (
+    content
+  ) : (
+    <LayoutChromeContext.Provider value={chrome}>{content}</LayoutChromeContext.Provider>
+  );
 }
 
 interface NodeViewProps {
@@ -123,6 +144,8 @@ function StackView({ node, path }: { node: StackNode; path: string }) {
   const geom = useId();
   const visible = useVisibleChildren(node.children);
   const tracks = visible.map(({ child, index }) => {
+    // A hidden child the chrome still shows (customize mode) is a header only.
+    if (child.hidden === true) return "auto";
     const size = node.sizes[index];
     return trackForSize(size && isValidSize(size) ? size : defaultStackSize(child));
   });
@@ -223,7 +246,10 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
   const horizontal = node.orientation === "horizontal";
 
   const allSizes = node.children.map((_, i) => stored?.[i] ?? node.sizes[i] ?? "1fr");
-  const visibleSizes = visible.map(({ index }) => allSizes[index] ?? "1fr");
+  // A hidden child the chrome still shows (customize mode) is a header only.
+  const visibleSizes = visible.map(({ child, index }) =>
+    child.hidden === true ? "auto" : (allSizes[index] ?? "1fr"),
+  );
 
   const measure = () =>
     visible.map(({ index }) => {
@@ -319,8 +345,8 @@ function SplitView({ node, path }: { node: SplitNode; path: string }) {
         key={child.id ?? `pane-${String(index)}`}
         geom={`${geom}-${String(index)}`}
         flex={flexForSize(visibleSizes[i])}
-        min={node.min_sizes[index]}
-        max={node.max_sizes[index]}
+        min={child.hidden === true ? null : node.min_sizes[index]}
+        max={child.hidden === true ? null : node.max_sizes[index]}
         horizontal={horizontal}
         child={child}
         path={`${path}/${String(index)}`}

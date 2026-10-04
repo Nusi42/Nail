@@ -412,6 +412,9 @@ layout "default" {
                 appearance-settings id="page-appearance"
             }
             section "layout" label="@settings.section.layout" icon="layout-panel-left" {
+                // M5d: the views' layout (Customize layout, presets, Reset to
+                // default).
+                layout-editor-settings id="page-layout-editor"
                 toolbar id="page-customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 // Named apart from the Configuration errors window it opens.
                 config-errors id="page-config-errors" label="@settings.config-errors"

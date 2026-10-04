@@ -21,7 +21,14 @@
  *   `LayoutChromeContext` — `showHidden` and `renderNode` wrap every node
  *   with its `LayoutNodeRef`; this feature provides it in customize mode).
  * - The mock core applies this feature's patches through `./mock.ts`
- *   (`applyLayoutEditPatch`, called by the customization mock).
+ *   (`applyLayoutEditPatch`, called by the customization mock; never
+ *   re-exported here, so the mock stays out of the app bundle).
+ *
+ * Modules: `model.ts` (panes, drop zones, patches, presets, the palette),
+ * `store.ts` (the session), `chrome.tsx` (the layout chrome), `Pane.tsx`,
+ * `EditorFrame.tsx`, `Palette.tsx`, `dnd.ts` (pointer dragging),
+ * `SettingsCard.tsx` (`layout-editor-settings`), `start.ts`,
+ * `useLayoutEdit.ts`, `skin.ts` (`LAYOUT_EDITOR_SKIN_CSS`), `messages.ts`.
  *
  * WP181 owns this directory, `../../layout/LayoutRenderer.tsx` +
  * `../../layout/LayoutChrome.ts`, the placement of the widget
@@ -35,30 +42,61 @@
  */
 import type { ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
+import { editorChrome } from "./chrome";
+import { LayoutEditorSettings } from "./SettingsCard";
+import { customizeTarget, startCustomizing } from "./start";
+import { editorStore, setChromeFactory, stopEditing } from "./store";
+
+export { LAYOUT_EDITOR_SKIN_CSS } from "./skin";
+export { startCustomizing, customizeTarget } from "./start";
+export { startEditing, stopEditing, useEditor } from "./store";
+
+setChromeFactory(editorChrome);
 
 /** Opens customize-layout mode (`defaults/layout.kdl` `actions`). */
 export const LAYOUT_CUSTOMIZE_ACTION = "layout.customize";
-
-/** The settings card (`layout-editor-settings`); WP181 replaces this placeholder. */
-function LayoutEditorSettings(): null {
-  return null;
-}
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {
   "layout-editor-settings": LayoutEditorSettings,
 };
 
-/** Action ids → handlers. Until WP181 lands the action cannot run. */
+/**
+ * Action ids → handlers: `layout.customize` customizes the shown view's
+ * window (again: Done).
+ */
 export const actions: Feature["actions"] = {
   [LAYOUT_CUSTOMIZE_ACTION]: {
-    run: () => undefined,
-    enabled: () => false,
+    run: (ctx) => {
+      if (editorStore.getState().window !== null) stopEditing();
+      else startCustomizing(ctx.store, ctx.layout);
+    },
+    enabled: (ctx) =>
+      editorStore.getState().window !== null || customizeTarget(ctx.layout, ctx.store) !== null,
   },
 };
 
 /** Command-palette descriptions. */
-export const actionInfo: Readonly<Record<string, ActionInfo>> = {};
+export const actionInfo: Readonly<Record<string, ActionInfo>> = {
+  [LAYOUT_CUSTOMIZE_ACTION]: {
+    title: "layout-editor-action-customize",
+    keywords: "layout-editor-action-customize-keywords",
+  },
+};
+
+/** The settings page's search index. */
+export const settings: NonNullable<Feature["settings"]> = {
+  "layout-editor-settings": {
+    labels: [
+      "layout-editor-settings-title",
+      "layout-editor-settings-window",
+      "layout-editor-action-customize",
+      "layout-editor-reset",
+      "layout-editor-presets",
+    ],
+    keywords: "layout-editor-settings-keywords",
+  },
+};
 
 /** Dialogs by name. */
 export const dialogs: Feature["dialogs"] = {};

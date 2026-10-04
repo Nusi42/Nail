@@ -102,8 +102,8 @@ describe("edit history (M5d)", () => {
 
   it("leaves the editors' patches to their packages (not ready in the contract)", async () => {
     const env = createEnv();
+    // The layout editor's patches are served (WP181: features/layout-editor/mock.ts).
     for (const patch of [
-      { op: "set-hidden", node: { window: "mail", breakpoint: 0, path: [0] }, hidden: true },
       { op: "remove-toolbar-item", toolbar: "reader", from: { area: "bar", index: 0 } },
     ] satisfies LayoutPatch[]) {
       expect(await env.client.call({ type: "UpdateLayout", patches: [patch] })).toMatchObject({

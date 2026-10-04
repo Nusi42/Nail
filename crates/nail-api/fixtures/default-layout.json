@@ -3128,9 +3128,19 @@
               "auto",
               "auto",
               "auto",
+              "auto",
               "auto"
             ],
             "children": [
+              {
+                "type": "widget",
+                "id": "page-layout-editor",
+                "label": null,
+                "kind": "layout-editor-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
               {
                 "type": "widget",
                 "id": "page-customize-toolbar",
