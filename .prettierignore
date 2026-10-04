@@ -8,7 +8,12 @@ playwright-report/
 test-results/
 app/src-tauri/gen/
 app/src-tauri/icons/
-crates/
+# Generated or byte-exact data in the crates (fixtures, schemas, corpora);
+# hand-written code there (crates/nail-plugins/src/prelude.js) is formatted.
+crates/**/fixtures/
+crates/**/corpus/
+crates/*/schema/
+crates/*/tests/
 docs/
 userDocs/
 locales/

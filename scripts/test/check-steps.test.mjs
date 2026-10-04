@@ -228,3 +228,26 @@ test("the pre-commit hook runs the staged checks and is executable in git", () =
   assert.match(hook, /^#!\/bin\/sh\n/);
   assert.match(hook, /node scripts\/pre-commit\.mjs/);
 });
+
+test(".prettierignore skips generated crate data but formats hand-written crate code (Q1 review)", async () => {
+  const prettier = await import("prettier");
+  const ignorePath = path.join(root, ".prettierignore");
+  /** @param {string} file */
+  const ignored = async (file) =>
+    (await prettier.getFileInfo(path.join(root, file), { ignorePath })).ignored;
+  assert.equal(await ignored("crates/nail-plugins/src/prelude.js"), false);
+  assert.equal(await ignored("crates/nail-api/fixtures/default-theme.json"), true);
+  assert.equal(await ignored("crates/nail-proto-gmail/fixtures/responses/x.json"), true);
+  assert.equal(await ignored("crates/nail-config/schema/theme.schema.json"), true);
+  assert.equal(await ignored("ui/src/main.tsx"), false);
+});
+
+test("the Vite build fails on warnings (Q1 review, ADR 0130)", () => {
+  const config = fs.readFileSync(path.join(root, "ui", "vite.config.ts"), "utf8");
+  assert.match(config, /strictBuild\(\)/);
+  // Relative imports carry their extension: Vite warns about the config
+  // otherwise, before the strict logger exists.
+  for (const m of config.matchAll(/from "(\.[^"]*)"/g)) assert.match(m[1] ?? "", /\.ts$/);
+  assert.match(config, /customLogger: strict\.logger/);
+  assert.match(config, /strict\.plugin/);
+});

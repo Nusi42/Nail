@@ -681,7 +681,12 @@
         sync("activated", {});
         return;
       }
-      run("activate", (c) => activate.call(current, c), [ctx], () => sync("activated", {}));
+      run(
+        "activate",
+        (c) => activate.call(current, c),
+        [ctx],
+        () => sync("activated", {}),
+      );
     }
 
     /**

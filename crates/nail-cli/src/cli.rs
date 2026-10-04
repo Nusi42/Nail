@@ -21,9 +21,11 @@ pub(crate) struct Cli {
 pub(crate) enum Command {
     /// Run the core headless and serve the web UI on localhost.
     Serve(ServeArgs),
-    /// Connect a stdio MCP client to Nail (forwards to its MCP server on
-    /// 127.0.0.1); starts Nail headless when it is not running. The
-    /// client's token is read from $`NAIL_MCP_TOKEN`.
+    // Help text as an attribute, not a doc comment: clap prints it verbatim,
+    // and the environment variable's name must not get rustdoc backticks.
+    #[command(
+        about = "Connect a stdio MCP client to Nail (forwards to its MCP server on 127.0.0.1); starts Nail headless when it is not running. The client's token is read from $NAIL_MCP_TOKEN"
+    )]
     Mcp(McpArgs),
     /// Plug-in tools (M2d).
     Plugin {
@@ -92,9 +94,12 @@ pub(crate) struct ServeArgs {
     /// Config directory (theme.kdl, layout.kdl). Default: %APPDATA%\Nail.
     #[arg(long, value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
-    /// Directory of the built UI (ui/dist). Default: $`NAIL_UI_DIR`, `ui`
-    /// next to the executable, or the repository's ui/dist.
-    #[arg(long, value_name = "DIR")]
+    // Help text as an attribute (see `Command::Mcp`).
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Directory of the built UI (ui/dist). Default: $NAIL_UI_DIR, ui next to the executable, or the repository's ui/dist"
+    )]
     pub ui_dir: Option<PathBuf>,
     /// Load demo data before serving. Without --data-dir / --config-dir,
     /// a seeded run uses temporary directories (removed on exit), never
@@ -119,12 +124,17 @@ pub(crate) struct ServeArgs {
     #[arg(long)]
     pub no_mcp: bool,
     /// What to open, as the desktop app does when Windows starts it with a
-    /// file or link: an `.ics`, `.vcf` or `.eml` file, a `mailto:` or
-    /// `webcal:` link (repeatable). The UI takes them at start.
+    /// file or link: an .ics, .vcf or .eml file, a mailto: or webcal: link
+    /// (repeatable). The UI takes them at start.
     #[arg(long, value_name = "FILE_OR_LINK")]
     pub launch: Vec<String>,
-    /// More log output (-v debug, -vv trace). `NAIL_LOG` overrides.
-    #[arg(short, long, action = clap::ArgAction::Count)]
+    // Help text as an attribute (see `Command::Mcp`).
+    #[arg(
+        short,
+        long,
+        action = clap::ArgAction::Count,
+        help = "More log output (-v debug, -vv trace). NAIL_LOG overrides"
+    )]
     pub verbose: u8,
 }
 
@@ -174,6 +184,27 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// Clap prints doc comments as help text verbatim (no Markdown), so
+    /// no help screen may show rustdoc backticks.
+    #[test]
+    fn help_text_has_no_markdown_backticks() {
+        fn walk(command: &mut clap::Command, path: &str, out: &mut Vec<String>) {
+            let help = command.render_long_help().to_string();
+            if help.contains('`') {
+                out.push(format!("{path}:\n{help}"));
+            }
+            for sub in command.get_subcommands_mut() {
+                let path = format!("{path} {}", sub.get_name());
+                walk(sub, &path, out);
+            }
+        }
+        let mut command = Cli::command();
+        command.build();
+        let mut found = Vec::new();
+        walk(&mut command, "nail", &mut found);
+        assert!(found.is_empty(), "{}", found.join("\n\n"));
     }
 
     #[test]

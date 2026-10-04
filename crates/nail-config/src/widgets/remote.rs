@@ -3,12 +3,7 @@
 //! security audit view, the reader's "load remote content" bar and the
 //! privacy allow-lists. Rendered by `ui/src/features/remote/`.
 
-use super::WidgetSpec;
-#[expect(
-    unused_imports,
-    reason = "the table's helpers stay imported for the package that adds widgets (ADR 0022)"
-)]
-use super::{OptionType, future_widget, widget};
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature (none takes options).
 ///

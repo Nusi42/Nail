@@ -179,21 +179,34 @@ export class WebSocketTransport implements Transport {
       console.warn("nail: ignoring non-text WebSocket frame");
       return;
     }
-    let message: ServerMessage;
+    let parsed: unknown;
     try {
-      message = JSON.parse(data) as ServerMessage;
+      parsed = JSON.parse(data);
     } catch {
       console.warn("nail: ignoring malformed WebSocket frame");
       return;
     }
-    if (message.kind === "response") {
-      const pending = this.inFlight.get(message.id);
-      if (pending) {
-        this.inFlight.delete(message.id);
-        pending.resolve(message.response);
+    if (typeof parsed !== "object" || parsed === null) {
+      console.warn("nail: ignoring malformed WebSocket frame");
+      return;
+    }
+    const message = parsed as ServerMessage;
+    // The frame is unvalidated JSON: a newer server (version skew) may send a
+    // kind this UI does not know, and a malformed frame may have none.
+    switch (message.kind) {
+      case "response": {
+        const pending = this.inFlight.get(message.id);
+        if (pending) {
+          this.inFlight.delete(message.id);
+          pending.resolve(message.response);
+        }
+        break;
       }
-    } else {
-      this.events.emit(message.event);
+      case "event":
+        this.events.emit(message.event);
+        break;
+      default:
+        console.warn("nail: ignoring WebSocket frame of unknown kind");
     }
   }
 

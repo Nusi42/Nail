@@ -4,12 +4,7 @@
 //! auth-results badges, reader warnings, encryption-at-rest settings and
 //! the Autocrypt setup flow. Rendered by `ui/src/features/security/`.
 
-use super::WidgetSpec;
-#[expect(
-    unused_imports,
-    reason = "the table's helpers stay imported for the package that adds widgets (ADR 0022)"
-)]
-use super::{OptionType, widget};
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature (none takes options).
 ///

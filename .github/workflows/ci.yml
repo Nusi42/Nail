@@ -125,6 +125,28 @@ jobs:
       - name: npm run check
         run: npm run check
 
+  # The non-Windows `cfg` branches (Q1 review, ADR 0130): `quality` runs on
+  # Windows, so clippy never compiles them there. Every crate with such a
+  # branch, linted on Linux with the same workspace lints and -D warnings.
+  # nail-app (WebKitGTK on Linux) and nail-mapi (a Windows DLL) are
+  # Windows-only and stay out. Blocking.
+  quality-linux:
+    name: Quality baseline (clippy, non-Windows cfg branches)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: clippy (non-Windows branches)
+        run: cargo clippy --locked -p nail-core -p nail-discovery -p nail-exchange -p nail-smime -p nail-server -p nail-config -p nail-bench --all-targets -- -D warnings
+
   # The desktop smoke test (e2e/tests/desktop.spec.ts) drives the real
   # nail-app.exe over WebView2 (preinstalled on windows-latest).
   desktop:

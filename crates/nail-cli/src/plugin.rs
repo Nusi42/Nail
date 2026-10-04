@@ -47,7 +47,7 @@ pub(crate) struct PluginDevArgs {
     /// The plug-in folder (holding manifest.json).
     #[arg(value_name = "FOLDER")]
     pub folder: PathBuf,
-    /// The running Nail's URL (as `nail serve` prints it). Default: read
+    /// The running Nail's URL (as "nail serve" prints it). Default: read
     /// from the data directory (ui-endpoint.json).
     #[arg(long, value_name = "URL")]
     pub url: Option<String>,

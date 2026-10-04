@@ -147,6 +147,30 @@ describe("WebSocketTransport", () => {
     warn.mockRestore();
   });
 
+  it("ignores frames of an unknown kind and non-object frames", async () => {
+    const transport = create();
+    const socket = latest();
+    socket.open();
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+    const events: NailEvent[] = [];
+    const listener = vi.fn((e: NailEvent) => events.push(e));
+    transport.onEvent(listener);
+    socket.push(JSON.stringify({ kind: "future-frame", payload: { x: 1 } }));
+    socket.push(JSON.stringify({ event: { type: "MailChanged", folder_ids: ["f1"] } }));
+    socket.push("null");
+    socket.push("42");
+    expect(listener).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(4);
+    warn.mockRestore();
+    // The transport still works after the odd frames.
+    const result = transport.send({ type: "ListAccounts" });
+    const id = must(socket.sent[0]).id;
+    socket.push({ kind: "response", id, response: { type: "Accounts", accounts: [] } });
+    await expect(result).resolves.toEqual({ type: "Accounts", accounts: [] });
+    socket.push({ kind: "event", event: { type: "MailChanged", folder_ids: ["f2"] } });
+    expect(events).toEqual([{ type: "MailChanged", folder_ids: ["f2"] }]);
+  });
+
   it("fails in-flight requests on disconnect and reconnects with backoff", async () => {
     const transport = create();
     const statuses: ConnectionStatus[] = [];

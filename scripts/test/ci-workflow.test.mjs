@@ -85,3 +85,51 @@ test("the quality job runs npm run check and blocks (ADR 0123)", () => {
     /cargo clippy --manifest-path scripts\/interop\/Cargo.toml --all-targets -- -D warnings/,
   );
 });
+
+/**
+ * The text of one job of ci.yml (up to the next job).
+ *
+ * @param {string} ci
+ * @param {string} name
+ */
+function job(ci, name) {
+  const start = ci.indexOf(`\n  ${name}:\n`);
+  assert.ok(start > 0, `a ${name} job`);
+  const next = ci.slice(start + 1).search(/\n {2}[a-z][\w-]*:\n/);
+  return next < 0 ? ci.slice(start) : ci.slice(start, start + 1 + next);
+}
+
+/**
+ * Every `.rs` file below a directory.
+ *
+ * @param {string} dir
+ */
+function rustFiles(dir) {
+  return readdirSync(new URL(dir, root), { recursive: true, encoding: "utf8" })
+    .filter((name) => name.endsWith(".rs"))
+    .map((name) => `${dir}${name.replaceAll("\\", "/")}`);
+}
+
+test("a Linux job lints every crate with a non-Windows cfg branch (Q1 review, ADR 0130)", () => {
+  const ci = read(".github/workflows/ci.yml");
+  const linux = job(ci, "quality-linux");
+  assert.match(linux, /runs-on: ubuntu-latest/);
+  assert.doesNotMatch(linux, /continue-on-error/);
+  const run = linux.split(/\r?\n/).find((l) => /^\s*run: cargo clippy /.test(l));
+  assert.ok(run, "the job runs clippy");
+  assert.match(run, /--all-targets -- -D warnings$/);
+  const linted = [...run.matchAll(/-p (\S+)/g)].map((m) => m[1]);
+  // The Windows-only crate under crates/: the Simple MAPI DLL (the desktop
+  // shell lives in app/src-tauri).
+  const windowsOnly = new Set(["nail-mapi"]);
+  const crates = readdirSync(new URL("crates/", root)).filter((name) => !windowsOnly.has(name));
+  const needed = crates.filter((name) =>
+    rustFiles(`crates/${name}/src/`).some((file) =>
+      /cfg\((?:not\(windows\)|unix|not\(target_os)/.test(read(file)),
+    ),
+  );
+  assert.ok(needed.includes("nail-discovery"), needed.join(", "));
+  for (const name of needed) {
+    assert.ok(linted.includes(name), `${name} has a non-Windows branch but is not linted on Linux`);
+  }
+});

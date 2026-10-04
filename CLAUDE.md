@@ -28,7 +28,9 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   deliberately misspelled text sits behind `spellchecker:disable-line` / `spellchecker:off` … `on` markers. UI:
   `must()` in tests instead of `!`, `charCount` / `nonEmpty` / `hasText` (`ui/src/text`); scripts: `readJson` /
   `parseJson` (`scripts/lib/json.mjs`), `defined()` in e2e. Feature barrels (`features/*/index.ts`) never re-export
-  mock modules: the mock core must stay out of the app bundle (`npm run build` prints no warnings).
+  mock modules: the mock core must stay out of the app bundle (`npm run build` fails on any Vite / Rolldown
+  warning, `ui/build/strictBuild.ts`). Non-Windows `cfg` branches are linted by CI's `quality-linux` job (ADR 0130);
+  clap help text has no backticks.
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 

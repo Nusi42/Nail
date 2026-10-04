@@ -135,5 +135,7 @@ smallest item:
   clean too: without `--no-deps`, `cargo clippy -p <crate>` also lints
   them.
 - The non-Windows branches (`nail-discovery`, `nail-exchange` SSPI stubs)
-  could not be compiled here (no Linux target installed); CI's Linux job
-  covers them.
+  could not be compiled here (no Linux target installed). Correction (Q1
+  review, ADR 0130): at the time no CI job linted them, because the interop
+  job's clippy covers only the interop crate. The `quality-linux` job added
+  by ADR 0130 lints them now.

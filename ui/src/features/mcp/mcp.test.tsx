@@ -88,14 +88,24 @@ describe("mcp-clients", () => {
     const form = await screen.findByRole("form", { name: "Access of Agent" });
     const save = within(form).getByRole("button", { name: "Save access" });
     expect(save).toBeDisabled();
+    // Found by label (getByRole over this large form is several times slower
+    // in jsdom), then checked to be a checkbox in the accessibility tree.
+    const checkbox = (name: string | RegExp) => {
+      const element = within(form).getByLabelText(name);
+      expect(element).toHaveRole("checkbox");
+      return element;
+    };
 
-    await user.click(within(form).getByLabelText("Original message source"));
-    await user.click(within(form).getByLabelText("Read mail"));
-    await user.click(within(form).getByLabelText("Work (ada@work.example)"));
+    await user.click(checkbox("Original message source"));
+    await user.click(checkbox("Read mail"));
+    await user.click(checkbox("Work (ada@work.example)"));
     // Folders of the granted account can be hidden.
     const folders = await within(form).findByText(/^Work/, { selector: "summary" });
     await user.click(folders);
     const hide = await within(form).findAllByLabelText(/^Hide /);
+    for (const element of hide) {
+      expect(element).toHaveRole("checkbox");
+    }
     await user.click(must(hide[0]));
     expect(save).toBeEnabled();
     await user.click(save);
@@ -115,7 +125,7 @@ describe("mcp-clients", () => {
     expect(screen.queryByText(/This client has no access/)).not.toBeInTheDocument();
 
     // All accounts replaces the account list.
-    await user.click(within(form).getByLabelText(/All accounts/));
+    await user.click(checkbox(/All accounts/));
     expect(within(form).queryByLabelText("Work (ada@work.example)")).not.toBeInTheDocument();
   });
 

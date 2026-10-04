@@ -1,11 +1,6 @@
 //! Widgets of M1b WP23 (MCP, ADR 0025).
 
-use super::WidgetSpec;
-#[expect(
-    unused_imports,
-    reason = "the table's helpers stay imported for the package that adds widgets (ADR 0022)"
-)]
-use super::{OptionType, future_widget, widget};
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature.
 ///

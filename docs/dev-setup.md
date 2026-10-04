@@ -122,6 +122,19 @@ Habits of the Rust lints (ADRs 0124–0126, 0129):
   `#[expect(clippy::float_cmp, reason = "…")]` on the test.
 - Types that hold secrets get a manual `Debug` that hides them.
 
+Builds and platforms (ADR 0130):
+
+- `vite build` (`npm run build`) fails on any warning: `ui/build/strictBuild.ts`
+  records what Vite and Rolldown warn about and fails the build after
+  listing it. Fix the cause (for example a barrel that pulls the mock core
+  back in), and never raise `chunkSizeWarningLimit`.
+- rustc warnings are enforced through clippy `-D warnings`. Code under
+  `cfg(not(windows))` is linted by CI's `quality-linux` job (ubuntu), not on
+  Windows. A crate that gains such a branch belongs in that job's `-p` list
+  (`scripts/test/ci-workflow.test.mjs` checks it).
+- Clap help text is the doc comment, printed verbatim. Do not put backticks
+  in it; name environment variables in an `about` / `help` attribute.
+
 On a checkout inside OneDrive, `node_modules` is a cloud-file reparse
 point. Vite cannot canonicalize symlinked workspace packages there ("Failed
 to resolve import", or Node loading a package's `.ts` sources natively), so

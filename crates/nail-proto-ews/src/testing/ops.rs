@@ -257,31 +257,33 @@ pub(crate) fn handle(
         zone: zone_id.as_deref().and_then(zones::zone),
     };
     let result = match name.as_str() {
-        "GetFolder" => get_folder(state, op),
-        "SyncFolderHierarchy" => sync_folder_hierarchy(state, op),
-        "SyncFolderItems" => sync_folder_items(state, op),
-        "GetItem" => get_item(state, op),
-        "CreateItem" => create_item(state, op, &ctx),
-        "UpdateItem" => update_item(state, op, &ctx),
-        "MoveItem" | "CopyItem" => move_or_copy(state, op, name == "CopyItem"),
-        "DeleteItem" => delete_item(state, op),
-        "FindItem" => find_item(state, op),
-        "Subscribe" => subscribe(state, op),
-        "Unsubscribe" => unsubscribe(state, op),
+        "GetFolder" => Ok(get_folder(state, op)),
+        "SyncFolderHierarchy" => Ok(sync_folder_hierarchy(state, op)),
+        "SyncFolderItems" => Ok(sync_folder_items(state, op)),
+        "GetItem" => Ok(get_item(state, op)),
+        "CreateItem" => Ok(create_item(state, op, &ctx)),
+        "UpdateItem" => Ok(update_item(state, op, &ctx)),
+        "MoveItem" | "CopyItem" => Ok(move_or_copy(state, op, name == "CopyItem")),
+        "DeleteItem" => Ok(delete_item(state, op)),
+        "FindItem" => Ok(find_item(state, op)),
+        "Subscribe" => Ok(subscribe(state, op)),
+        "Unsubscribe" => Ok(unsubscribe(state, op)),
         "GetStreamingEvents" => get_streaming_events(state, op),
-        "GetUserOofSettingsRequest" => get_oof(state, op),
-        "SetUserOofSettingsRequest" => set_oof(state, op),
-        "GetInboxRules" => get_inbox_rules(state),
-        "UpdateInboxRules" => update_inbox_rules(state, op),
-        "GetUserConfiguration" => get_user_configuration(state, op),
-        "UpdateUserConfiguration" | "CreateUserConfiguration" => {
-            put_user_configuration(state, op, name == "CreateUserConfiguration")
-        }
-        "GetRoomLists" => get_room_lists(state),
-        "GetRooms" => get_rooms(state, op),
-        "GetUserAvailabilityRequest" => get_user_availability(state, op),
-        "ResolveNames" => resolve_names(state, op),
-        "GetDelegate" => get_delegate(state),
+        "GetUserOofSettingsRequest" => Ok(get_oof(state, op)),
+        "SetUserOofSettingsRequest" => Ok(set_oof(state, op)),
+        "GetInboxRules" => Ok(get_inbox_rules(state)),
+        "UpdateInboxRules" => Ok(update_inbox_rules(state, op)),
+        "GetUserConfiguration" => Ok(get_user_configuration(state, op)),
+        "UpdateUserConfiguration" | "CreateUserConfiguration" => Ok(put_user_configuration(
+            state,
+            op,
+            name == "CreateUserConfiguration",
+        )),
+        "GetRoomLists" => Ok(get_room_lists(state)),
+        "GetRooms" => Ok(get_rooms(state, op)),
+        "GetUserAvailabilityRequest" => Ok(get_user_availability(state, op)),
+        "ResolveNames" => Ok(resolve_names(state, op)),
+        "GetDelegate" => Ok(get_delegate(state)),
         other => Err(Outcome::Soap(
             StatusCode::INTERNAL_SERVER_ERROR,
             fault(
@@ -372,11 +374,7 @@ fn folder_xml(state: &State, m: usize, f: usize) -> String {
     )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_folder(state: &State, op: &Element) -> OpResult {
+fn get_folder(state: &State, op: &Element) -> String {
     let mut out = Vec::new();
     for reference in op
         .child("FolderIds")
@@ -391,14 +389,10 @@ fn get_folder(state: &State, op: &Element) -> OpResult {
             Err(code) => error_message("GetFolder", code, error_text(code)),
         });
     }
-    Ok(messages("GetFolder", &out))
+    messages("GetFolder", &out)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
+fn sync_folder_hierarchy(state: &mut State, op: &Element) -> String {
     const OP: &str = "SyncFolderHierarchy";
     let target = op
         .child("SyncFolderId")
@@ -411,17 +405,17 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
         });
     let (m, root) = match resolve_folder(state, &target) {
         Ok(found) => found,
-        Err(code) => return Ok(messages(OP, &[error_message(OP, code, error_text(code))])),
+        Err(code) => return messages(OP, &[error_message(OP, code, error_text(code))]),
     };
     if state.mailboxes[m].access != Access::Full {
-        return Ok(messages(
+        return messages(
             OP,
             &[error_message(
                 OP,
                 "ErrorAccessDenied",
                 error_text("ErrorAccessDenied"),
             )],
-        ));
+        );
     }
     let root_id = state.mailboxes[m].folders[root].id.clone();
     let known: HashMap<String, String> = match op.child_text("SyncState") {
@@ -429,14 +423,14 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
         Some(token) => match state.hierarchy_states.get(token) {
             Some((r, known)) if *r == root_id => known.clone(),
             _ => {
-                return Ok(messages(
+                return messages(
                     OP,
                     &[error_message(
                         OP,
                         "ErrorInvalidSyncStateData",
                         error_text("ErrorInvalidSyncStateData"),
                     )],
-                ));
+                );
             }
         },
     };
@@ -481,7 +475,7 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
     }
     let token = state.new_id("H4sIHierarchy");
     state.hierarchy_states.insert(token.clone(), (root_id, now));
-    Ok(messages(
+    messages(
         OP,
         &[ok_message(
             OP,
@@ -489,24 +483,17 @@ fn sync_folder_hierarchy(state: &mut State, op: &Element) -> OpResult {
                 "<m:SyncState>{token}</m:SyncState><m:IncludesLastFolderInRange>true</m:IncludesLastFolderInRange><m:Changes>{changes}</m:Changes>"
             ),
         )],
-    ))
+    )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
+fn sync_folder_items(state: &mut State, op: &Element) -> String {
     const OP: &str = "SyncFolderItems";
     let Some(target) = op.child("SyncFolderId").and_then(|s| s.children.first()) else {
-        return Ok(messages(
-            OP,
-            &[error_message(OP, "ErrorInvalidRequest", "no folder")],
-        ));
+        return messages(OP, &[error_message(OP, "ErrorInvalidRequest", "no folder")]);
     };
     let (m, f) = match resolve_folder(state, target) {
         Ok(found) => found,
-        Err(code) => return Ok(messages(OP, &[error_message(OP, code, error_text(code))])),
+        Err(code) => return messages(OP, &[error_message(OP, code, error_text(code))]),
     };
     let folder_id = state.mailboxes[m].folders[f].id.clone();
     let mut snapshot = match op.child_text("SyncState") {
@@ -517,14 +504,14 @@ fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
         Some(token) => match state.sync_states.get(token) {
             Some(s) if s.folder == folder_id => s.clone(),
             _ => {
-                return Ok(messages(
+                return messages(
                     OP,
                     &[error_message(
                         OP,
                         "ErrorInvalidSyncStateData",
                         error_text("ErrorInvalidSyncStateData"),
                     )],
-                ));
+                );
             }
         },
     };
@@ -590,7 +577,7 @@ fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
     }
     let token = state.new_id("H4sIItems");
     state.sync_states.insert(token.clone(), snapshot);
-    Ok(messages(
+    messages(
         OP,
         &[ok_message(
             OP,
@@ -598,7 +585,7 @@ fn sync_folder_items(state: &mut State, op: &Element) -> OpResult {
                 "<m:SyncState>{token}</m:SyncState><m:IncludesLastItemInRange>{complete}</m:IncludesLastItemInRange><m:Changes>{changes}</m:Changes>"
             ),
         )],
-    ))
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -671,11 +658,7 @@ fn occurrence_item(master: &MockItem, index: u32) -> Option<MockItem> {
     Some(item)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_item(state: &State, op: &Element) -> OpResult {
+fn get_item(state: &State, op: &Element) -> String {
     let mime = op
         .path(&["ItemShape", "IncludeMimeContent"])
         .is_some_and(|m| m.text.trim() == "true");
@@ -709,7 +692,7 @@ fn get_item(state: &State, op: &Element) -> OpResult {
             Err(code) => error_message("GetItem", code, error_text(code)),
         });
     }
-    Ok(messages("GetItem", &out))
+    messages("GetItem", &out)
 }
 
 /// The transport headers of a received message (none for sent mail and
@@ -838,11 +821,7 @@ fn send_meeting(state: &mut State, m: usize, i: usize, kind: &str) {
     }
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn create_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
+fn create_item(state: &mut State, op: &Element, ctx: &Ctx) -> String {
     const OP: &str = "CreateItem";
     let disposition = op.attr("MessageDisposition").unwrap_or("SaveOnly");
     let send_invitations = op.attr("SendMeetingInvitations").unwrap_or("SendToNone");
@@ -870,7 +849,7 @@ fn create_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
             Err(code) => error_message(OP, code, error_text(code)),
         });
     }
-    Ok(messages(OP, &out))
+    messages(OP, &out)
 }
 
 fn default_folder(state: &State, m: usize, name: &str) -> Option<String> {
@@ -1215,11 +1194,7 @@ fn apply_update(props: &mut Element, update: &Element) {
     }
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn update_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
+fn update_item(state: &mut State, op: &Element, ctx: &Ctx) -> String {
     const OP: &str = "UpdateItem";
     let conflict = op.attr("ConflictResolution").unwrap_or("AutoResolve");
     let send = op
@@ -1260,7 +1235,7 @@ fn update_item(state: &mut State, op: &Element, ctx: &Ctx) -> OpResult {
             Err(code) => error_message(OP, code, error_text(code)),
         });
     }
-    Ok(messages(OP, &out))
+    messages(OP, &out)
 }
 
 fn apply_item_change(
@@ -1363,26 +1338,19 @@ pub(crate) fn move_item(
     Ok(new_id)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> OpResult {
+fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> String {
     let name = if copy { "CopyItem" } else { "MoveItem" };
     let target = op.child("ToFolderId").and_then(|t| t.children.first());
     let folder = match target.map(|t| resolve_folder(state, t)) {
         Some(Ok((m, f))) => state.mailboxes[m].folders[f].id.clone(),
         Some(Err(code)) => {
-            return Ok(messages(
-                name,
-                &[error_message(name, code, error_text(code))],
-            ));
+            return messages(name, &[error_message(name, code, error_text(code))]);
         }
         None => {
-            return Ok(messages(
+            return messages(
                 name,
                 &[error_message(name, "ErrorInvalidRequest", "no folder")],
-            ));
+            );
         }
     };
     let mut out = Vec::new();
@@ -1408,14 +1376,10 @@ fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> OpResult {
             Err(code) => error_message(name, code, error_text(code)),
         });
     }
-    Ok(messages(name, &out))
+    messages(name, &out)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn delete_item(state: &mut State, op: &Element) -> OpResult {
+fn delete_item(state: &mut State, op: &Element) -> String {
     const OP: &str = "DeleteItem";
     let delete_type = op.attr("DeleteType").unwrap_or("HardDelete").to_owned();
     let cancellations = op
@@ -1467,24 +1431,17 @@ fn delete_item(state: &mut State, op: &Element) -> OpResult {
             Err(code) => error_message(OP, code, error_text(code)),
         });
     }
-    Ok(messages(OP, &out))
+    messages(OP, &out)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn find_item(state: &State, op: &Element) -> OpResult {
+fn find_item(state: &State, op: &Element) -> String {
     const OP: &str = "FindItem";
     let Some(reference) = op.child("ParentFolderIds").and_then(|p| p.children.first()) else {
-        return Ok(messages(
-            OP,
-            &[error_message(OP, "ErrorInvalidRequest", "no folder")],
-        ));
+        return messages(OP, &[error_message(OP, "ErrorInvalidRequest", "no folder")]);
     };
     let (m, f) = match resolve_folder(state, reference) {
         Ok(found) => found,
-        Err(code) => return Ok(messages(OP, &[error_message(OP, code, error_text(code))])),
+        Err(code) => return messages(OP, &[error_message(OP, code, error_text(code))]),
     };
     let folder = state.mailboxes[m].folders[f].id.clone();
     let mut found: Vec<String> = Vec::new();
@@ -1559,7 +1516,7 @@ fn find_item(state: &State, op: &Element) -> OpResult {
             }
         }
     }
-    Ok(messages(
+    messages(
         OP,
         &[ok_message(
             OP,
@@ -1569,27 +1526,23 @@ fn find_item(state: &State, op: &Element) -> OpResult {
                 found.concat()
             ),
         )],
-    ))
+    )
 }
 
 // ---------------------------------------------------------------------------
 // Notifications
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn subscribe(state: &mut State, op: &Element) -> OpResult {
+fn subscribe(state: &mut State, op: &Element) -> String {
     const OP: &str = "Subscribe";
     let Some(request) = op.child("StreamingSubscriptionRequest") else {
-        return Ok(messages(
+        return messages(
             OP,
             &[error_message(
                 OP,
                 "ErrorInvalidSubscriptionRequest",
                 "only streaming",
             )],
-        ));
+        );
     };
     let mut folders = std::collections::HashSet::new();
     let mut mailbox = None;
@@ -1603,7 +1556,7 @@ fn subscribe(state: &mut State, op: &Element) -> OpResult {
                 mailbox = Some(state.mailboxes[m].address.clone());
                 folders.insert(state.mailboxes[m].folders[f].id.clone());
             }
-            Err(code) => return Ok(messages(OP, &[error_message(OP, code, error_text(code))])),
+            Err(code) => return messages(OP, &[error_message(OP, code, error_text(code))]),
         }
     }
     let id = state.new_id("SUBjWVhNTUFDSE");
@@ -1616,20 +1569,13 @@ fn subscribe(state: &mut State, op: &Element) -> OpResult {
             notify: Arc::new(tokio::sync::Notify::new()),
         },
     );
-    Ok(messages(
-        OP,
-        &[ok_message(OP, &el("m:SubscriptionId", &id))],
-    ))
+    messages(OP, &[ok_message(OP, &el("m:SubscriptionId", &id))])
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn unsubscribe(state: &mut State, op: &Element) -> OpResult {
+fn unsubscribe(state: &mut State, op: &Element) -> String {
     const OP: &str = "Unsubscribe";
     let id = op.child_text("SubscriptionId").unwrap_or_default();
-    Ok(messages(
+    messages(
         OP,
         &[if state.subscriptions.remove(id).is_some() {
             ok_message(OP, "")
@@ -1640,7 +1586,7 @@ fn unsubscribe(state: &mut State, op: &Element) -> OpResult {
                 error_text("ErrorSubscriptionNotFound"),
             )
         }],
-    ))
+    )
 }
 
 fn missing_subscriptions(op_ids: &[String]) -> String {
@@ -1801,21 +1747,12 @@ fn availability_response(op: &str, class_ok: bool, code: &str, inner: &str) -> S
     )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_oof(state: &State, op: &Element) -> OpResult {
+fn get_oof(state: &State, op: &Element) -> String {
     let address = op
         .path(&["Mailbox", "Address"])
         .map(|a| a.text.trim().to_ascii_lowercase());
     if address.as_deref() != Some(state.own.as_str()) {
-        return Ok(availability_response(
-            "GetUserOofSettings",
-            false,
-            "ErrorAccessDenied",
-            "",
-        ));
+        return availability_response("GetUserOofSettings", false, "ErrorAccessDenied", "");
     }
     let oof = &state.oof;
     let duration = oof
@@ -1836,49 +1773,25 @@ fn get_oof(state: &State, op: &Element) -> OpResult {
         el("Message", &oof.internal),
         el("Message", &oof.external)
     );
-    Ok(availability_response(
-        "GetUserOofSettings",
-        true,
-        "NoError",
-        &inner,
-    ))
+    availability_response("GetUserOofSettings", true, "NoError", &inner)
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn set_oof(state: &mut State, op: &Element) -> OpResult {
+fn set_oof(state: &mut State, op: &Element) -> String {
     let address = op
         .path(&["Mailbox", "Address"])
         .map(|a| a.text.trim().to_ascii_lowercase());
     if address.as_deref() != Some(state.own.as_str()) {
-        return Ok(availability_response(
-            "SetUserOofSettings",
-            false,
-            "ErrorAccessDenied",
-            "",
-        ));
+        return availability_response("SetUserOofSettings", false, "ErrorAccessDenied", "");
     }
     let Some(settings) = op.child("UserOofSettings") else {
-        return Ok(availability_response(
-            "SetUserOofSettings",
-            false,
-            "ErrorInvalidRequest",
-            "",
-        ));
+        return availability_response("SetUserOofSettings", false, "ErrorInvalidRequest", "");
     };
     let state_value = settings
         .child_text("OofState")
         .unwrap_or("Disabled")
         .to_owned();
     if state_value == "Scheduled" && settings.child("Duration").is_none() {
-        return Ok(availability_response(
-            "SetUserOofSettings",
-            false,
-            "ErrorOofDurationInvalid",
-            "",
-        ));
+        return availability_response("SetUserOofSettings", false, "ErrorOofDurationInvalid", "");
     }
     state.oof = super::Oof {
         state: state_value,
@@ -1901,24 +1814,15 @@ fn set_oof(state: &mut State, op: &Element) -> OpResult {
             .map(|m| m.text.clone())
             .unwrap_or_default(),
     };
-    Ok(availability_response(
-        "SetUserOofSettings",
-        true,
-        "NoError",
-        "",
-    ))
+    availability_response("SetUserOofSettings", true, "NoError", "")
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_inbox_rules(state: &State) -> OpResult {
+fn get_inbox_rules(state: &State) -> String {
     let rules: String = state.rules.iter().map(|r| r.to_xml(Some("t"))).collect();
-    Ok(format!(
+    format!(
         r#"<m:GetInboxRulesResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:OutlookRuleBlobExists>{}</m:OutlookRuleBlobExists><m:InboxRules>{rules}</m:InboxRules></m:GetInboxRulesResponse>"#,
         state.outlook_rule_blob
-    ))
+    )
 }
 
 fn rules_error(code: &str, index: usize, message: &str) -> String {
@@ -1929,17 +1833,13 @@ fn rules_error(code: &str, index: usize, message: &str) -> String {
     )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
+fn update_inbox_rules(state: &mut State, op: &Element) -> String {
     let remove_blob = op.child_bool("RemoveOutlookRuleBlob").unwrap_or(false);
     if state.outlook_rule_blob && !remove_blob {
-        return Ok(format!(
+        return format!(
             r#"<m:UpdateInboxRulesResponse ResponseClass="Error"><m:MessageText>{}</m:MessageText><m:ResponseCode>ErrorOutlookRuleBlobExists</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:UpdateInboxRulesResponse>"#,
             "Outlook rules exist. Set RemoveOutlookRuleBlob to true to overwrite them."
-        ));
+        );
     }
     if remove_blob {
         state.outlook_rule_blob = false;
@@ -1958,11 +1858,11 @@ fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
                     continue;
                 };
                 if rule.child("Actions").is_none_or(|a| a.children.is_empty()) {
-                    return Ok(rules_error(
+                    return rules_error(
                         "ErrorInboxRulesValidationError",
                         index,
                         "A rule needs an action.",
-                    ));
+                    );
                 }
                 let id = state.new_id("AQAAAJ5R");
                 rule.children.retain(|c| c.name != "RuleId");
@@ -1985,11 +1885,11 @@ fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
                     .iter_mut()
                     .find(|r| r.child_text("RuleId") == Some(id))
                 else {
-                    return Ok(rules_error(
+                    return rules_error(
                         "ErrorInboxRulesValidationError",
                         index,
                         "The rule was not found.",
-                    ));
+                    );
                 };
                 let mut rule = rule.clone();
                 for name in ["IsNotSupported", "IsInError"] {
@@ -2004,11 +1904,11 @@ fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
                 let before = rules.len();
                 rules.retain(|r| r.child_text("RuleId") != Some(id));
                 if rules.len() == before {
-                    return Ok(rules_error(
+                    return rules_error(
                         "ErrorInboxRulesValidationError",
                         index,
                         "The rule was not found.",
-                    ));
+                    );
                 }
             }
             _ => {}
@@ -2016,14 +1916,10 @@ fn update_inbox_rules(state: &mut State, op: &Element) -> OpResult {
     }
     rules.sort_by_key(|r| r.child_number::<u32>("Priority").unwrap_or(1));
     state.rules = rules;
-    Ok(r#"<m:UpdateInboxRulesResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode></m:UpdateInboxRulesResponse>"#.to_owned())
+    r#"<m:UpdateInboxRulesResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode></m:UpdateInboxRulesResponse>"#.to_owned()
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_user_configuration(state: &State, op: &Element) -> OpResult {
+fn get_user_configuration(state: &State, op: &Element) -> String {
     const OP: &str = "GetUserConfiguration";
     let name = op
         .child("UserConfigurationName")
@@ -2031,7 +1927,7 @@ fn get_user_configuration(state: &State, op: &Element) -> OpResult {
     match (name, &state.categories) {
         (Some("CategoryList"), Some(document)) => {
             let data = base64::engine::general_purpose::STANDARD.encode(document);
-            Ok(messages(
+            messages(
                 OP,
                 &[ok_message(
                     OP,
@@ -2039,24 +1935,20 @@ fn get_user_configuration(state: &State, op: &Element) -> OpResult {
                         r#"<m:UserConfiguration><t:UserConfigurationName Name="CategoryList"><t:DistinguishedFolderId Id="calendar"/></t:UserConfigurationName><t:XmlData>{data}</t:XmlData></m:UserConfiguration>"#
                     ),
                 )],
-            ))
+            )
         }
-        _ => Ok(messages(
+        _ => messages(
             OP,
             &[error_message(
                 OP,
                 "ErrorItemNotFound",
                 error_text("ErrorItemNotFound"),
             )],
-        )),
+        ),
     }
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpResult {
+fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> String {
     let name = if create {
         "CreateUserConfiguration"
     } else {
@@ -2068,14 +1960,14 @@ fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpRe
         .and_then(|n| n.attr("Name"))
         == Some("CategoryList");
     if !is_categories {
-        return Ok(messages(
+        return messages(
             name,
             &[error_message(
                 name,
                 "ErrorItemNotFound",
                 error_text("ErrorItemNotFound"),
             )],
-        ));
+        );
     }
     if create == state.categories.is_some() {
         let code = if create {
@@ -2083,10 +1975,7 @@ fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpRe
         } else {
             "ErrorItemNotFound"
         };
-        return Ok(messages(
-            name,
-            &[error_message(name, code, error_text(code))],
-        ));
+        return messages(name, &[error_message(name, code, error_text(code))]);
     }
     let data = config
         .and_then(|c| c.child_text("XmlData"))
@@ -2095,29 +1984,25 @@ fn put_user_configuration(state: &mut State, op: &Element, create: bool) -> OpRe
     match data {
         Some(document) if xml::parse(&document).is_ok() => {
             state.categories = Some(document);
-            Ok(messages(name, &[ok_message(name, "")]))
+            messages(name, &[ok_message(name, "")])
         }
-        _ => Ok(messages(
+        _ => messages(
             name,
             &[error_message(
                 name,
                 "ErrorInvalidRequest",
                 "invalid XmlData",
             )],
-        )),
+        ),
     }
 }
 
 // ---------------------------------------------------------------------------
 // Directory
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_room_lists(state: &State) -> OpResult {
+fn get_room_lists(state: &State) -> String {
     if state.rooms_denied {
-        return Ok(r#"<m:GetRoomListsResponse ResponseClass="Error"><m:MessageText>Access is denied.</m:MessageText><m:ResponseCode>ErrorAccessDenied</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomListsResponse>"#.to_owned());
+        return r#"<m:GetRoomListsResponse ResponseClass="Error"><m:MessageText>Access is denied.</m:MessageText><m:ResponseCode>ErrorAccessDenied</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomListsResponse>"#.to_owned();
     }
     let lists: String = state
         .room_lists
@@ -2131,25 +2016,21 @@ fn get_room_lists(state: &State) -> OpResult {
             );
             out
         });
-    Ok(format!(
+    format!(
         r#"<m:GetRoomListsResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:RoomLists>{lists}</m:RoomLists></m:GetRoomListsResponse>"#
-    ))
+    )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_rooms(state: &State, op: &Element) -> OpResult {
+fn get_rooms(state: &State, op: &Element) -> String {
     let list = op
         .path(&["RoomList", "EmailAddress"])
         .map(|e| e.text.trim().to_ascii_lowercase())
         .unwrap_or_default();
     if state.rooms_denied {
-        return Ok(r#"<m:GetRoomsResponse ResponseClass="Error"><m:MessageText>Access is denied.</m:MessageText><m:ResponseCode>ErrorAccessDenied</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomsResponse>"#.to_owned());
+        return r#"<m:GetRoomsResponse ResponseClass="Error"><m:MessageText>Access is denied.</m:MessageText><m:ResponseCode>ErrorAccessDenied</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomsResponse>"#.to_owned();
     }
     let Some((_, _, rooms)) = state.room_lists.iter().find(|(a, _, _)| *a == list) else {
-        return Ok(r#"<m:GetRoomsResponse ResponseClass="Error"><m:MessageText>No results were found.</m:MessageText><m:ResponseCode>ErrorNameResolutionNoResults</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomsResponse>"#.to_owned());
+        return r#"<m:GetRoomsResponse ResponseClass="Error"><m:MessageText>No results were found.</m:MessageText><m:ResponseCode>ErrorNameResolutionNoResults</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey></m:GetRoomsResponse>"#.to_owned();
     };
     let rooms: String = rooms
         .iter()
@@ -2162,9 +2043,9 @@ fn get_rooms(state: &State, op: &Element) -> OpResult {
             );
             out
         });
-    Ok(format!(
+    format!(
         r#"<m:GetRoomsResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:Rooms>{rooms}</m:Rooms></m:GetRoomsResponse>"#
-    ))
+    )
 }
 
 fn known_address(state: &State, address: &str) -> bool {
@@ -2177,11 +2058,7 @@ fn known_address(state: &State, address: &str) -> bool {
             .any(|(_, _, rooms)| rooms.iter().any(|(a, _)| a == address))
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_user_availability(state: &State, op: &Element) -> OpResult {
+fn get_user_availability(state: &State, op: &Element) -> String {
     let window = op.path(&["FreeBusyViewOptions", "TimeWindow"]);
     let from = window
         .and_then(|w| w.child_text("StartTime"))
@@ -2249,16 +2126,12 @@ fn get_user_availability(state: &State, op: &Element) -> OpResult {
             r#"<FreeBusyResponse><ResponseMessage ResponseClass="Success"><ResponseCode>NoError</ResponseCode></ResponseMessage><FreeBusyView><FreeBusyViewType xmlns="{TYPES_NS}">FreeBusy</FreeBusyViewType><CalendarEventArray xmlns="{TYPES_NS}">{events}</CalendarEventArray></FreeBusyView></FreeBusyResponse>"#
         );
     }
-    Ok(format!(
+    format!(
         r#"<GetUserAvailabilityResponse xmlns="{MESSAGES_NS}"><FreeBusyResponseArray>{responses}</FreeBusyResponseArray></GetUserAvailabilityResponse>"#
-    ))
+    )
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn resolve_names(state: &State, op: &Element) -> OpResult {
+fn resolve_names(state: &State, op: &Element) -> String {
     const OP: &str = "ResolveNames";
     let entry = op
         .child_text("UnresolvedEntry")
@@ -2279,14 +2152,14 @@ fn resolve_names(state: &State, op: &Element) -> OpResult {
         .collect();
     people.dedup();
     if people.is_empty() {
-        return Ok(messages(
+        return messages(
             OP,
             &[error_message(
                 OP,
                 "ErrorNameResolutionNoResults",
                 "No results were found.",
             )],
-        ));
+        );
     }
     let resolutions: String = people
         .iter()
@@ -2312,14 +2185,10 @@ fn resolve_names(state: &State, op: &Element) -> OpResult {
             ),
         )
     };
-    Ok(messages(OP, &[message]))
+    messages(OP, &[message])
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "an operation handler: the dispatcher takes every handler's result as `OpResult`"
-)]
-fn get_delegate(state: &State) -> OpResult {
+fn get_delegate(state: &State) -> String {
     let users: String = state
         .delegates
         .iter()
@@ -2333,7 +2202,81 @@ fn get_delegate(state: &State) -> OpResult {
             );
             out
         });
-    Ok(format!(
+    format!(
         r#"<m:GetDelegateResponse ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:ResponseMessages>{users}</m:ResponseMessages><m:DeliverMeetingRequests>DelegatesAndMe</m:DeliverMeetingRequests></m:GetDelegateResponse>"#
-    ))
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(operation: &str) -> String {
+        format!(
+            concat!(
+                r#"<s:Envelope xmlns:s="{soap}" xmlns:m="{messages}" xmlns:t="{types}">"#,
+                r#"<s:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></s:Header>"#,
+                "<s:Body>{operation}</s:Body></s:Envelope>"
+            ),
+            soap = SOAP_NS,
+            messages = MESSAGES_NS,
+            types = TYPES_NS,
+            operation = operation,
+        )
+    }
+
+    fn call(state: &mut State, operation: &str) -> Outcome {
+        let peer = SocketAddr::from(([127, 0, 0, 1], 1));
+        handle(state, peer, &HeaderMap::new(), &request(operation))
+    }
+
+    /// The handlers return their body directly; the dispatcher wraps it in
+    /// the SOAP envelope with status 200.
+    #[test]
+    fn infallible_handlers_answer_inside_an_envelope() {
+        let mut state = fixtures::organization();
+        for operation in [
+            "<m:GetInboxRules/>",
+            "<m:GetRoomLists/>",
+            "<m:GetDelegate/>",
+            r#"<m:GetUserConfiguration><m:UserConfigurationName Name="CategoryList"/></m:GetUserConfiguration>"#,
+        ] {
+            match call(&mut state, operation) {
+                Outcome::Soap(status, document) => {
+                    assert_eq!(status, StatusCode::OK, "{operation}");
+                    assert!(document.contains("<s:Body"), "{operation}: {document}");
+                    assert!(document.contains("Response"), "{operation}: {document}");
+                }
+                _ => panic!("{operation}: not a SOAP answer"),
+            }
+        }
+    }
+
+    /// An error inside an infallible handler is a response message, not a
+    /// fault: the envelope still has status 200.
+    #[test]
+    fn handler_errors_are_response_messages() {
+        let mut state = fixtures::organization();
+        let operation = r#"<m:UpdateUserConfiguration><m:UserConfiguration><t:UserConfigurationName Name="Other"/></m:UserConfiguration></m:UpdateUserConfiguration>"#;
+        match call(&mut state, operation) {
+            Outcome::Soap(status, document) => {
+                assert_eq!(status, StatusCode::OK);
+                assert!(document.contains("ErrorItemNotFound"), "{document}");
+            }
+            _ => panic!("not a SOAP answer"),
+        }
+    }
+
+    /// Unknown operations stay a fault with status 500.
+    #[test]
+    fn unknown_operations_are_faults() {
+        let mut state = fixtures::organization();
+        match call(&mut state, "<m:NoSuchOperation/>") {
+            Outcome::Soap(status, document) => {
+                assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+                assert!(document.contains("NoSuchOperation"), "{document}");
+            }
+            _ => panic!("not a SOAP answer"),
+        }
+    }
 }

@@ -59,7 +59,8 @@ pub(crate) enum OptionType {
 /// A widget kind known to the layout.
 pub(crate) struct WidgetSpec {
     pub(crate) kind: &'static str,
-    /// `None`: the widget is not implemented yet; any options are accepted.
+    /// `None`: any options are accepted (an untyped contract slot; no table
+    /// keeps one between waves, see `every_widget_has_typed_options`).
     pub(crate) options: Option<&'static [(&'static str, OptionType)]>,
     /// Required options.
     pub(crate) required: &'static [&'static str],
@@ -78,19 +79,6 @@ pub(crate) const fn widget(
         kind,
         options: Some(options),
         required,
-        rows,
-    }
-}
-
-/// A widget that is not implemented yet (any options are accepted): the
-/// slots of a wave's contract until its UI package types them (M3c: the
-/// Exchange widgets, WP94). Unused between waves.
-#[expect(dead_code, reason = "unused between waves (see above)")]
-pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
-    WidgetSpec {
-        kind,
-        options: None,
-        required: &[],
         rows,
     }
 }
@@ -153,5 +141,14 @@ mod tests {
         assert!(find("toolbar").is_some_and(|w| w.required == ["toolbar"]));
         assert!(find("calendar").is_some());
         assert!(find("nope").is_none());
+    }
+
+    /// Every registered widget types its options: no table keeps an
+    /// untyped placeholder slot between waves.
+    #[test]
+    fn every_widget_has_typed_options() {
+        for spec in all() {
+            assert!(spec.options.is_some(), "{} has typed options", spec.kind);
+        }
     }
 }
