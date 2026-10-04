@@ -1,0 +1,27 @@
+// My paper theme.
+theme "Paper" extends="frost" {
+    tokens {
+        // The accent I like.
+        color "accent" "#3b5bdb" dark="#91a7ff" // blue
+        radius "md" 6
+    }
+
+    modes {
+        dark {
+            color "bg" "#101113"
+        }
+    }
+
+    // Unread rows stand out.
+    part "message-list.row:unread" {
+        font-weight 600
+        color "$color.accent" // same as the accent
+        background-color "$color.accent-soft"
+    }
+    part "message-list.row" {
+        padding "4 8"
+    }
+    part "folder-tree.item" {
+        border-radius 4
+    }
+}

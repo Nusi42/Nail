@@ -125,17 +125,17 @@ fn is_named(node: &KdlNode, name: &str) -> bool {
 }
 
 /// A `theme.kdl` document being edited.
-struct ThemeEditor {
+pub(crate) struct ThemeEditor {
     doc: KdlDocument,
     root: usize,
-    style: Style,
+    pub(crate) style: Style,
 }
 
 impl ThemeEditor {
     /// Starts editing; the current file must be a valid theme file (it may
     /// still fail to resolve onto a theme: the selection is how that gets
     /// fixed, so only reading errors refuse the edit).
-    fn open(current: Option<&str>, file: &str) -> Result<Self, EditError> {
+    pub(crate) fn open(current: Option<&str>, file: &str) -> Result<Self, EditError> {
         let text = current.unwrap_or(crate::merge::NEW_THEME);
         ThemeFile::parse_all(text, file).map_err(EditError::Config)?;
         let doc = KdlDocument::parse_v2(text)
@@ -152,13 +152,13 @@ impl ThemeEditor {
         })
     }
 
-    fn root_mut(&mut self) -> &mut KdlNode {
+    pub(crate) fn root_mut(&mut self) -> &mut KdlNode {
         &mut self.doc.nodes_mut()[self.root]
     }
 
     /// The children of `theme` (created when the node has none), one per
     /// line so added or replaced lines read well.
-    fn body(&mut self) -> &mut KdlDocument {
+    pub(crate) fn body(&mut self) -> &mut KdlDocument {
         let style = self.style.clone();
         let root = self.root_mut();
         if root.children().is_none()
@@ -279,7 +279,7 @@ impl ThemeEditor {
     }
 
     /// The new text; it must still be a valid theme file.
-    fn finish(self, file: &str) -> Result<String, EditError> {
+    pub(crate) fn finish(self, file: &str) -> Result<String, EditError> {
         let out = to_text(&self.doc, &self.style);
         if let Err(errors) = ThemeFile::parse_all(&out, file) {
             return Err(EditError::Invalid(

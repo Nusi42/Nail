@@ -24,6 +24,7 @@ use crate::kdl_edit::{
 use crate::kdl_util::is_kebab;
 use crate::l10n::msg;
 use crate::layout::normalize_key;
+use crate::layout_edit;
 use crate::render;
 use crate::{DEFAULT_LAYOUT_KDL, LayoutFile, default_layout, parse_layout_all};
 
@@ -38,8 +39,7 @@ pub enum EditError {
     /// The request does not fit the file (unknown window, wrong number of
     /// sizes, …).
     Invalid(LocalizedMessage),
-    /// The operation is not implemented yet (M5d contract stubs,
-    /// `edit-issue-not-ready`): `unsupported`.
+    /// The operation is not supported by this build: `unsupported`.
     Unsupported(LocalizedMessage),
 }
 
@@ -119,7 +119,8 @@ pub fn apply_layout_patches(
 pub(crate) struct LayoutEditor {
     doc: KdlDocument,
     root: usize,
-    sparse: bool,
+    /// Whether the file extends the defaults (`extends="default"`).
+    pub(crate) sparse: bool,
     pub(crate) style: Style,
 }
 
@@ -157,6 +158,11 @@ impl LayoutEditor {
 
     /// The edited text.
     pub(crate) fn finish(self) -> String {
+        self.text()
+    }
+
+    /// The text as edited so far.
+    pub(crate) fn text(&self) -> String {
         to_text(&self.doc, &self.style)
     }
 
@@ -173,16 +179,24 @@ impl LayoutEditor {
         match patch {
             // M5d (ADR 0131): the layout editor's and toolbar customizer's
             // patches (WP184, `layout_edit.rs`).
-            LayoutPatch::MovePane { .. }
-            | LayoutPatch::SwapPanes { .. }
-            | LayoutPatch::AddWidget { .. }
-            | LayoutPatch::RemoveNode { .. }
-            | LayoutPatch::SetHidden { .. }
-            | LayoutPatch::ApplyPreset { .. }
-            | LayoutPatch::ResetWindow { .. }
-            | LayoutPatch::MoveToolbarItem { .. }
-            | LayoutPatch::AddToolbarItem { .. }
-            | LayoutPatch::RemoveToolbarItem { .. } => crate::layout_edit::apply(self, patch),
+            LayoutPatch::MovePane { node, to } => layout_edit::move_pane(self, node, to),
+            LayoutPatch::SwapPanes { a, b } => layout_edit::swap_panes(self, a, b),
+            LayoutPatch::AddWidget { widget, to } => layout_edit::add_widget(self, widget, to),
+            LayoutPatch::RemoveNode { node } => layout_edit::remove_node(self, node),
+            LayoutPatch::SetHidden { node, hidden } => layout_edit::set_hidden(self, node, *hidden),
+            LayoutPatch::ApplyPreset { preset, target } => {
+                layout_edit::apply_preset(self, preset, target)
+            }
+            LayoutPatch::ResetWindow { window } => layout_edit::reset_window(self, window),
+            LayoutPatch::MoveToolbarItem { toolbar, from, to } => {
+                layout_edit::move_toolbar_item(self, toolbar, *from, *to)
+            }
+            LayoutPatch::AddToolbarItem { toolbar, item, to } => {
+                layout_edit::add_toolbar_item(self, toolbar, item, *to)
+            }
+            LayoutPatch::RemoveToolbarItem { toolbar, from } => {
+                layout_edit::remove_toolbar_item(self, toolbar, *from)
+            }
             LayoutPatch::SplitSizes { node, sizes } => {
                 for size in sizes {
                     if size.is_empty() || size.contains(char::is_whitespace) {
@@ -297,6 +311,18 @@ impl LayoutEditor {
         if !self.sparse {
             return Err(invalid(msg("config-edit-no-window").arg("name", name)));
         }
+        let text = self
+            .default_window_text(name)?
+            .ok_or_else(|| invalid(msg("config-edit-no-window").arg("name", name)))?;
+        let style = self.style.clone();
+        append_rendered(self.body(), 1, &text, &style);
+        Ok(())
+    }
+
+    /// The default layout's definitions of a window as top-level nodes of
+    /// this file (indented for depth 1, in its line-ending style); `None`
+    /// when the defaults do not have the window.
+    pub(crate) fn default_window_text(&self, name: &str) -> Result<Option<String>, EditError> {
         let defaults = KdlDocument::parse_v2(DEFAULT_LAYOUT_KDL).map_err(|e| {
             invalid(msg("config-edit-default-invalid").arg("detail", e.to_string()))
         })?;
@@ -305,7 +331,7 @@ impl LayoutEditor {
             .ok_or_else(|| invalid(msg("config-edit-default-empty")))?;
         let sites = Self::window_sites(default_body, name);
         if sites.is_empty() {
-            return Err(invalid(msg("config-edit-no-window").arg("name", name)));
+            return Ok(None);
         }
         let pad = self.style.pad(1);
         let mut text = String::new();
@@ -335,9 +361,7 @@ impl LayoutEditor {
         if self.style.nl == "\r\n" {
             text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         }
-        let style = self.style.clone();
-        append_rendered(self.body(), 1, &text, &style);
-        Ok(())
+        Ok(Some(text))
     }
 
     /// The node a [`LayoutNodeRef`] addresses, copying the window from the

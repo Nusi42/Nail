@@ -1,0 +1,20 @@
+// My paper theme.
+theme "Newsprint" extends="frost" {
+    tokens {
+        // The accent I like.
+        color "accent" "#3b5bdb" dark="#91a7ff" // blue
+        radius "md" 6
+    }
+
+    modes {
+        dark {
+            color "bg" "#101113"
+        }
+    }
+
+    // Unread rows stand out.
+    part "message-list.row:unread" {
+        font-weight "700"
+        color "$color.accent" // same as the accent
+    }
+}

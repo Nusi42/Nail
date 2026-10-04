@@ -1,0 +1,13 @@
+// My paper theme.
+theme "Paper" extends="frost" {
+    tokens {
+        // The accent I like.
+        color "accent" "#3b5bdb" // blue
+    }
+
+    // Unread rows stand out.
+    part "message-list.row:unread" {
+        font-weight "700"
+        color "$color.accent" // same as the accent
+    }
+}

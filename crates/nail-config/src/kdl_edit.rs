@@ -135,10 +135,35 @@ pub(crate) fn set_first_arg(node: &mut KdlNode, value: KdlValue) {
     }
 }
 
+/// Sets the positional argument `index` (0-based), keeping its formatting;
+/// a missing one is appended after the last argument.
+pub(crate) fn set_arg(node: &mut KdlNode, index: usize, value: KdlValue) {
+    let text = value_text(&value);
+    if let Some(entry) = node
+        .entries_mut()
+        .iter_mut()
+        .filter(|e| e.name().is_none())
+        .nth(index)
+    {
+        entry.set_value(value);
+        if let Some(format) = entry.format_mut() {
+            format.value_repr = text;
+        }
+        return;
+    }
+    let after = node
+        .entries()
+        .iter()
+        .rposition(|e| e.name().is_none())
+        .map_or(0, |i| i + 1);
+    node.entries_mut()
+        .insert(after, formatted(KdlEntry::new(value), text));
+}
+
 // `kdl` has no `get_or_insert` for formats; `set_format` right before
 // makes the `expect` infallible.
 #[expect(clippy::expect_used, reason = "the format was set on the line before")]
-fn node_format(node: &mut KdlNode) -> &mut KdlNodeFormat {
+pub(crate) fn node_format(node: &mut KdlNode) -> &mut KdlNodeFormat {
     if node.format().is_none() {
         node.set_format(KdlNodeFormat::default());
     }
@@ -260,17 +285,28 @@ pub(crate) fn remove_node(block: &mut KdlDocument, index: usize, style: &Style) 
         .unwrap_or_default();
     let (keep, _) = split_leading(&leading);
     let mut keep = keep.to_owned();
-    if index == 0 && leading.starts_with('\n') && !keep.starts_with('\n') {
+    if index == 0 && strip_break(&leading).is_some() && strip_break(&keep).is_none() {
         keep.insert_str(0, style.nl);
     }
     if let Some(next) = block.nodes_mut().get_mut(index) {
         let fmt = node_format(next);
-        let next_leading = if index == 0 && fmt.leading.starts_with('\n') && keep.contains('\n') {
-            // The line break after `{` is already in `keep`.
-            fmt.leading.trim_start_matches(['\r', '\n']).to_owned()
-        } else {
-            std::mem::take(&mut fmt.leading)
-        };
+        // A blank line above the removed node (a later node's leading text
+        // starts with a line break) separates what follows from what is
+        // above unless the next node has one of its own.
+        if index > 0
+            && keep.is_empty()
+            && strip_break(&leading).is_some()
+            && strip_break(&fmt.leading).is_none()
+        {
+            keep.push_str(style.nl);
+        }
+        let next_leading =
+            if index == 0 && strip_break(&fmt.leading).is_some() && keep.contains('\n') {
+                // The line break after `{` is already in `keep`.
+                fmt.leading.trim_start_matches(['\r', '\n']).to_owned()
+            } else {
+                std::mem::take(&mut fmt.leading)
+            };
         fmt.leading = format!("{keep}{next_leading}");
     } else if block.nodes().is_empty() {
         let fmt = doc_format(block);
@@ -287,6 +323,176 @@ pub(crate) fn remove_node(block: &mut KdlDocument, index: usize, style: &Style) 
             fmt.trailing = format!("{kept}{}", fmt.trailing.trim_start_matches([' ', '\t']));
         }
     }
+}
+
+/// Strips one line break (`\n` or `\r\n`) from the start of `text`.
+fn strip_break(text: &str) -> Option<&str> {
+    text.strip_prefix("\r\n")
+        .or_else(|| text.strip_prefix('\n'))
+}
+
+/// Makes a node end its line: a `;` terminator or a node followed by
+/// another on the same line gets a line break.
+fn end_line(node: &mut KdlNode, style: &Style) {
+    let fmt = node_format(node);
+    if fmt.terminator.contains('\n') {
+        if fmt.trailing.trim().is_empty() {
+            fmt.trailing.clear();
+        }
+        return;
+    }
+    if fmt.trailing.contains('\n') {
+        return;
+    }
+    if fmt.terminator == ";" {
+        fmt.terminator.clear();
+    }
+    fmt.before_terminator = fmt.before_terminator.trim_end().to_owned();
+    fmt.trailing = format!("{}{}", fmt.trailing.trim_end(), style.nl);
+}
+
+/// A copy of a node as it would be moved elsewhere: the comment block
+/// directly above it goes along (its leading text is then that comment
+/// block plus its indentation, without line breaks in front); it ends its
+/// line.
+pub(crate) fn extracted(node: &KdlNode, style: &Style) -> KdlNode {
+    let mut node = node.clone();
+    let leading = node.format().map(|f| f.leading.clone()).unwrap_or_default();
+    let (_, attached) = split_leading(&leading);
+    let attached = attached.trim_start_matches(['\r', '\n']).to_owned();
+    node_format(&mut node).leading = attached;
+    end_line(&mut node, style);
+    node
+}
+
+/// Takes the node at `index` out of `block` (children at `depth`) for
+/// moving it elsewhere ([`extracted`]); comments separated from it by a
+/// blank line stay ([`remove_node`]).
+pub(crate) fn detach(
+    block: &mut KdlDocument,
+    index: usize,
+    depth: usize,
+    style: &Style,
+) -> KdlNode {
+    ensure_multiline(block, depth, style);
+    let node = extracted(&block.nodes()[index], style);
+    remove_node(block, index, style);
+    node
+}
+
+/// Inserts a detached node ([`detach`], [`reindent`]: leading text without
+/// line breaks in front, indented for `depth`) into `block` (children at
+/// `depth`) at `index` (clamped to the end).
+pub(crate) fn put(
+    block: &mut KdlDocument,
+    index: usize,
+    mut node: KdlNode,
+    depth: usize,
+    style: &Style,
+) {
+    ensure_multiline(block, depth, style);
+    end_line(&mut node, style);
+    let count = block.nodes().len();
+    if count == 0 {
+        // An empty block's leading text runs up to `}`: the indentation of
+        // the closing brace moves behind the new node.
+        let fmt = doc_format(block);
+        if let Some(last) = fmt.leading.rfind('\n') {
+            let closing = fmt.leading.split_off(last + 1);
+            fmt.trailing.insert_str(0, &closing);
+        }
+    }
+    let index = index.min(count);
+    let doc_breaks = block.format().is_some_and(|f| f.leading.contains('\n'));
+    if index == 0 && !doc_breaks {
+        // The line break after `{` lives in the first child's leading text:
+        // it moves to the new first node.
+        if let Some(first) = block.nodes_mut().first_mut() {
+            let fmt = node_format(first);
+            if let Some(rest) = strip_break(&fmt.leading) {
+                fmt.leading = rest.to_owned();
+            }
+        }
+        node_format(&mut node).leading.insert_str(0, style.nl);
+    }
+    block.nodes_mut().insert(index, node);
+}
+
+/// Replaces the node at `index` with a detached node. The old node's
+/// leading text stays in front of the new one: only what is separated from
+/// it by a blank line (`keep_comments` false: the comments directly above
+/// the old node go with it), or all of it (`keep_comments` true).
+pub(crate) fn replace_with(
+    block: &mut KdlDocument,
+    index: usize,
+    mut node: KdlNode,
+    keep_comments: bool,
+    style: &Style,
+) {
+    let old = block.nodes()[index]
+        .format()
+        .map(|f| f.leading.clone())
+        .unwrap_or_default();
+    let mut prefix = if keep_comments {
+        old.rfind('\n')
+            .map_or_else(String::new, |i| old[..=i].to_owned())
+    } else {
+        split_leading(&old).0.to_owned()
+    };
+    if prefix.is_empty() && strip_break(&old).is_some() {
+        prefix.push_str(style.nl);
+    }
+    end_line(&mut node, style);
+    node_format(&mut node).leading.insert_str(0, &prefix);
+    block.nodes_mut()[index] = node;
+}
+
+/// Parses text holding exactly one node (with comments and indentation in
+/// front). `None` when it is not valid KDL.
+pub(crate) fn parse_one(text: &str) -> Option<KdlNode> {
+    let doc = KdlDocument::parse_v2(text).ok()?;
+    let [node] = doc.nodes() else {
+        return None;
+    };
+    let mut node = node.clone();
+    if let Some(lead) = doc.format().map(|f| f.leading.clone())
+        && !lead.is_empty()
+    {
+        node_format(&mut node).leading.insert_str(0, &lead);
+    }
+    Some(node)
+}
+
+/// A detached node moved from nesting depth `from` to `to`: every line of
+/// it (comments above it, its children, the closing brace) is indented by
+/// the difference. `None` when the result does not parse (a multi-line
+/// string the indentation change would alter).
+pub(crate) fn reindent(node: &KdlNode, from: usize, to: usize, style: &Style) -> Option<KdlNode> {
+    if from == to {
+        return Some(node.clone());
+    }
+    let text = node.to_string();
+    let add = style.pad(to.saturating_sub(from));
+    let cut = style.pad(from.saturating_sub(to));
+    let mut out = String::with_capacity(text.len() + 64);
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches(['\r', '\n']);
+        let end = &line[body.len()..];
+        if body.trim().is_empty() {
+            out.push_str(end);
+            continue;
+        }
+        if to > from {
+            out.push_str(&add);
+            out.push_str(body);
+        } else if let Some(rest) = body.strip_prefix(cut.as_str()) {
+            out.push_str(rest);
+        } else {
+            out.push_str(body.trim_start_matches([' ', '\t']));
+        }
+        out.push_str(end);
+    }
+    parse_one(&out)
 }
 
 /// Renders a document back to text, ending with a line break.
@@ -468,5 +674,131 @@ mod tests {
         assert!(same_node(&a.nodes()[0], &b.nodes()[0]));
         let c = doc("item \"a.c\"");
         assert!(!same_node(&a.nodes()[0], &c.nodes()[0]));
+    }
+
+    #[test]
+    fn detached_nodes_take_their_comments_and_move_between_depths() {
+        let style = Style::default();
+        let mut d =
+            doc("a {\n    // kept\n\n    // about x\n    x {\n        y // why\n    }\n    z\n}\n");
+        let x = detach(block(&mut d), 0, 1, &style);
+        assert_eq!(d.to_string(), "a {\n    // kept\n\n    z\n}\n");
+        assert_eq!(
+            x.to_string(),
+            "    // about x\n    x {\n        y // why\n    }\n"
+        );
+        let deeper = reindent(&x, 1, 3, &style).unwrap();
+        assert_eq!(
+            deeper.to_string(),
+            "            // about x\n            x {\n                y // why\n            }\n"
+        );
+        let back = reindent(&deeper, 3, 1, &style).unwrap();
+        assert_eq!(back.to_string(), x.to_string());
+        // At the front, behind the comments that stayed, and at the end.
+        put(block(&mut d), 0, x.clone(), 1, &style);
+        assert_eq!(
+            d.to_string(),
+            "a {\n    // about x\n    x {\n        y // why\n    }\n    // kept\n\n    z\n}\n"
+        );
+        let mut e = doc("a {\n    z\n}\n");
+        put(block(&mut e), 9, x, 1, &style);
+        assert_eq!(
+            e.to_string(),
+            "a {\n    z\n    // about x\n    x {\n        y // why\n    }\n}\n"
+        );
+    }
+
+    #[test]
+    fn putting_into_empty_and_inline_blocks() {
+        let style = Style::default();
+        let node = || parse_one("    b\n").unwrap();
+        for (text, expected) in [
+            ("a {\n}\n", "a {\n    b\n}\n"),
+            ("a {}\n", "a {\n    b\n}\n"),
+            ("x {\n    a {\n    }\n}\n", ""),
+            ("a { c; }\n", "a {\n    b\n    c;\n}\n"),
+        ] {
+            if expected.is_empty() {
+                // An empty nested block: the closing brace keeps its indentation.
+                let mut d = doc(text);
+                let inner = &mut block(&mut d).nodes_mut()[0];
+                put(
+                    inner.children_mut().as_mut().unwrap(),
+                    0,
+                    parse_one("        b\n").unwrap(),
+                    2,
+                    &style,
+                );
+                assert_eq!(d.to_string(), "x {\n    a {\n        b\n    }\n}\n");
+                continue;
+            }
+            let mut d = doc(text);
+            put(block(&mut d), 0, node(), 1, &style);
+            let out = d.to_string();
+            assert!(KdlDocument::parse_v2(&out).is_ok(), "{out}");
+            if expected.contains("c;") {
+                assert!(out.starts_with("a {\n    b\n"), "{out}");
+            } else {
+                assert_eq!(out, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn replacing_keeps_the_slot_or_all_comments() {
+        let style = Style::default();
+        let new = || parse_one("    // new\n    n\n").unwrap();
+        let text = "a {\n    // section\n\n    // old\n    o\n    p\n}\n";
+        let mut d = doc(text);
+        replace_with(block(&mut d), 0, new(), false, &style);
+        assert_eq!(
+            d.to_string(),
+            "a {\n    // section\n\n    // new\n    n\n    p\n}\n"
+        );
+        let mut d = doc(text);
+        replace_with(block(&mut d), 0, new(), true, &style);
+        assert_eq!(
+            d.to_string(),
+            "a {\n    // section\n\n    // old\n    // new\n    n\n    p\n}\n"
+        );
+    }
+
+    #[test]
+    fn crlf_blocks_keep_their_line_breaks() {
+        let style = Style {
+            indent: "\t".into(),
+            nl: "\r\n",
+        };
+        let mut d = doc("a {\r\n\tx\r\n\ty\r\n}\r\n");
+        let x = detach(block(&mut d), 0, 1, &style);
+        assert_eq!(d.to_string(), "a {\r\n\ty\r\n}\r\n");
+        put(block(&mut d), 1, x, 1, &style);
+        assert_eq!(d.to_string(), "a {\r\n\ty\r\n\tx\r\n}\r\n");
+    }
+
+    #[test]
+    fn a_blank_line_above_a_removed_node_stays() {
+        let style = Style::default();
+        let mut d = doc("a {\n    x\n\n    // about y\n    y\n    z\n}\n");
+        remove_node(block(&mut d), 1, &style);
+        assert_eq!(d.to_string(), "a {\n    x\n\n    z\n}\n");
+        // The next node has its own blank line: no second one.
+        let mut d = doc("a {\n    x\n\n    y\n\n    z\n}\n");
+        remove_node(block(&mut d), 1, &style);
+        assert_eq!(d.to_string(), "a {\n    x\n\n    z\n}\n");
+    }
+
+    #[test]
+    fn arguments_are_set_in_place_or_added() {
+        let mut d = doc("color \"bg\" \"#fff\" /* base */ dark=\"#000\"\n");
+        let node = &mut d.nodes_mut()[0];
+        set_arg(node, 1, KdlValue::String("#eee".into()));
+        assert_eq!(
+            d.to_string(),
+            "color \"bg\" \"#eee\" /* base */ dark=\"#000\"\n"
+        );
+        let mut d = doc("color \"bg\" dark=\"#000\"\n");
+        set_arg(&mut d.nodes_mut()[0], 1, KdlValue::Integer(4));
+        assert_eq!(d.to_string(), "color \"bg\" 4 dark=\"#000\"\n");
     }
 }

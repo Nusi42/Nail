@@ -1,0 +1,14 @@
+// My mail window, tuned by hand.
+layout "Mine" extends="default" {
+    // Reader buttons.
+    toolbar "reader" {
+        item "mail.reply" // most used
+        item "mail.forward" rank=1
+
+        // Rarely.
+        item "mail.delete"
+        more {
+            item "mail.archive" label="Archive it"
+        }
+    }
+}
