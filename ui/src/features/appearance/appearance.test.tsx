@@ -274,18 +274,16 @@ describe("appearance-settings widget", () => {
   it("validates and applies the overrides", async () => {
     const env = createEnv();
     renderNode(widget("appearance-settings"), env);
-    const size = await screen.findByLabelText("Text size in pixels (11–20)");
-    fireEvent.change(size, { target: { value: "40" } });
+    const accent = await screen.findByRole("textbox", { name: "Accent colour" });
+    fireEvent.change(accent, { target: { value: "blue" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Choose a text size between 11 and 20 pixels.",
+      "Enter the accent colour as a hex colour, for example #3b5bdb.",
     );
-    fireEvent.change(size, { target: { value: "15" } });
-    fireEvent.change(screen.getByLabelText("Accent colour"), { target: { value: "#2e7d5b" } });
+    fireEvent.change(accent, { target: { value: "#2e7d5b" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => {
       expect(env.transport.data.features.appearance.settings.overrides).toEqual({
-        font_size: 15,
         accent: "#2e7d5b",
       });
     });
@@ -294,6 +292,37 @@ describe("appearance-settings widget", () => {
       expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
     });
     await settleQueries(env);
+  });
+
+  it("applies the text size and corner radius sliders live, after a pause", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const env = createEnv();
+      renderNode(widget("appearance-settings"), env);
+      const size = await screen.findByRole("slider", { name: "Text size" });
+      // No override yet: the theme's own value, marked as the default.
+      expect(size).toHaveValue("14");
+      expect(screen.getByText("14 px (theme default)")).toBeInTheDocument();
+      fireEvent.change(size, { target: { value: "16" } });
+      fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
+        target: { value: "4" },
+      });
+      expect(screen.getByText("16 px")).toBeInTheDocument();
+      // Nothing written while the user is still moving the sliders.
+      expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await waitFor(() => {
+        expect(env.transport.data.features.appearance.settings.overrides).toEqual({
+          font_size: 16,
+          radius: 4,
+        });
+      });
+      await settleQueries(env);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("explains when the core cannot change themes yet", async () => {

@@ -64,3 +64,46 @@ export function activeTheme(
   const kind = themes.find((t) => t.id === settings.theme)?.kind;
   return pick(settings.theme, kind === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME);
 }
+
+/** The longest theme name the core accepts (`edit-issue-invalid-theme-name`). */
+export const THEME_NAME_MAX = 64;
+
+/** A theme id (file stem): lowercase kebab, as the core derives it from a name. */
+export function isThemeId(id: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= THEME_NAME_MAX;
+}
+
+/** The id the core derives from a theme name (`My Ocean!` → `my-ocean`; nothing usable → `theme`). */
+export function themeIdFromName(name: string): string {
+  const id = name
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, THEME_NAME_MAX)
+    .replace(/-+$/, "");
+  return id === "" ? "theme" : id;
+}
+
+/** Whether a name is one the core accepts. */
+export function isThemeName(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed !== "" && trimmed.length <= THEME_NAME_MAX;
+}
+
+/**
+ * How to make `theme` the one in use without losing Follow Windows: with
+ * Follow Windows on, a light or dark theme takes its half of the pair
+ * (`SetThemePreferences`); otherwise — and for high-contrast themes — it is
+ * picked as the fixed theme (`SetTheme`).
+ */
+export function themeChangeFor(
+  settings: AppearanceSettings,
+  theme: Pick<ThemeInfo, "id" | "kind">,
+): { kind: "set-theme"; themeId: string } | { kind: "pair"; half: "light" | "dark" } {
+  if (settings.follow_system && theme.kind !== "high-contrast") {
+    return { kind: "pair", half: theme.kind };
+  }
+  return { kind: "set-theme", themeId: theme.id };
+}
