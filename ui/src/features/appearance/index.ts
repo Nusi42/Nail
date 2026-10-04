@@ -34,7 +34,9 @@ import {
   openNewTheme,
   openThemeEditor,
 } from "./editorStore";
-import { applyAppearance } from "./queries";
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from "./model";
+import { appearanceKeys, applyAppearance, preferencesOf } from "./queries";
+import type { Appearance } from "../../api/generated";
 import { SystemAppearanceReporter } from "./SystemAppearance";
 import { DeleteThemeDialog, NewThemeDialog, RenameThemeDialog } from "./ThemeDialogs";
 import { ThemeEditorDialog, ThemeEditorWidget } from "./ThemeEditor";
@@ -75,6 +77,12 @@ export {
 /** The theme editor's actions. */
 export const THEME_EDIT_ACTION = "theme.edit";
 export const THEME_NEW_ACTION = "theme.new";
+/**
+ * Back to the built-in look (ADR 0138): Follow Windows with the default
+ * pair and no overrides; the density and the theme files stay. A way out
+ * of an unreadable theme that needs only Ctrl+K and typing; undoable.
+ */
+export const THEME_RESET_ACTION = "theme.reset";
 
 /**
  * Layout widget kinds → components (`appearance-settings`: Settings →
@@ -98,6 +106,26 @@ export const actions: Feature["actions"] = {
       openNewTheme(ctx.store);
     },
   },
+  /** Built-in themes, Follow Windows, no overrides. */
+  [THEME_RESET_ACTION]: {
+    run: async (ctx) => {
+      const current = (await ctx.client.request({ type: "ListThemes" }, "Themes")).appearance;
+      const answer = await ctx.client.request(
+        {
+          type: "SetThemePreferences",
+          preferences: {
+            ...preferencesOf(current),
+            follow_system: true,
+            light: DEFAULT_LIGHT_THEME,
+            dark: DEFAULT_DARK_THEME,
+            overrides: {},
+          },
+        },
+        "Themes",
+      );
+      ctx.queryClient.setQueryData<Appearance>(appearanceKeys.themes, answer.appearance);
+    },
+  },
 };
 /** Command-palette descriptions (with their icons). */
 export const actionInfo: Readonly<Record<string, ActionInfo>> = {
@@ -110,6 +138,11 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     title: "appearance-action-new-theme",
     keywords: "appearance-action-new-theme-keywords",
     icon: "plus",
+  },
+  [THEME_RESET_ACTION]: {
+    title: "appearance-action-reset",
+    keywords: "appearance-action-reset-keywords",
+    icon: "rotate-ccw",
   },
 };
 /** Dialog names → components. */

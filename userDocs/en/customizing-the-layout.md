@@ -32,12 +32,18 @@ pane shows its drop targets:
 | Target | What happens |
 | --- | --- |
 | **Left**, **Right**, **Above**, **Below** | The pane is docked on that side of the target pane. |
-| **Swap here** | The two panes change places (and sizes). |
+| **Swap here** | The two panes change places; each keeps its own width and limits. |
 | **Add here** | A widget from the palette goes into that pane (below its content). |
 
 Nail writes the change as soon as you drop. In the mail view, for example,
 **Swap here** on the reader puts the folders on the right and the reader on
 the left.
+
+A pane keeps its size, its minimum and maximum size and whether it can be
+collapsed when it moves within its row (or column) or into another row of
+panes: the folder pane stays narrow wherever it goes. Docked above or below
+a pane of a row, it starts with an equal share of the new column. Presets
+keep each pane's minimum and maximum size too.
 
 ### With the keyboard
 
@@ -89,9 +95,11 @@ it again with its pane header's **Remove**.
 ### Undo, Reset to default and changes outside Nail
 
 - **Undo** and **Redo** step through your changes; their tooltip says what
-  they undo ("Undo: Swap panes"). The history also holds changes made from
-  other places that write `layout.kdl` — dividers you dragged, the toolbar
-  customizer, the merge dialog — and lasts until Nail quits.
+  they undo ("Undo: Swap panes"). `Ctrl+Z` and `Ctrl+Y` (or
+  `Ctrl+Shift+Z`) do the same while the focus is in the editor. The history
+  also holds changes made from other places that write `layout.kdl` —
+  dividers you dragged, the toolbar customizer, the merge dialog — and lasts
+  until Nail quits.
 - **Reset to default** puts the whole view back to the default layout (all
   of its breakpoints). Your other windows stay as they are.
 - If `layout.kdl` was changed outside Nail since the editor last read it (in

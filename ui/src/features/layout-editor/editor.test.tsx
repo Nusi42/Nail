@@ -26,6 +26,7 @@ import { render } from "@testing-library/react";
 import { must } from "../../test/must";
 import { LAYOUT_EDITOR_SKIN_CSS, actions, widgets } from "./index";
 import { resetEditor, startEditing, editorStore } from "./store";
+import { CustomizeViewWatcher } from "./ViewWatcher";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -196,6 +197,53 @@ describe("customize-layout mode", () => {
     fireEvent.click(redo);
     await waitFor(() => {
       expect(paneIds(env)).toEqual(["reader", "list-pane", "sidebar"]);
+    });
+    await settleQueries(env);
+  });
+
+  // Review finding (ADR 0138): a double-click on Undo undoes one entry.
+  it("undoes one entry per double-click, and with Ctrl+Z / Ctrl+Y", async () => {
+    const env = createEnv();
+    await customize(env);
+    const hidden = () =>
+      mailRoot(env).type === "widget"
+        ? 0
+        : (mailRoot(env) as Extract<LayoutNode, { children: unknown }>).children.filter(
+            (c) => c.hidden === true,
+          ).length;
+    fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+    await waitFor(() => {
+      expect(hidden()).toBe(1);
+    });
+    fireEvent.click(within(pane("Messages")).getByRole("button", { name: "Hide Messages" }));
+    await waitFor(() => {
+      expect(hidden()).toBe(2);
+    });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    await waitFor(() => {
+      expect(undo).toBeEnabled();
+    });
+    fireEvent.click(undo);
+    fireEvent.click(undo);
+    await waitFor(() => {
+      expect(hidden()).toBe(1);
+    });
+    await settleQueries(env);
+    expect(hidden()).toBe(1);
+    // The keyboard: Ctrl+Z undoes the other one, Ctrl+Y redoes it.
+    await waitFor(() => {
+      expect(undo).toBeEnabled();
+    });
+    fireEvent.keyDown(editor(), { key: "z", ctrlKey: true });
+    await waitFor(() => {
+      expect(hidden()).toBe(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Redo" })).toBeEnabled();
+    });
+    fireEvent.keyDown(editor(), { key: "y", ctrlKey: true });
+    await waitFor(() => {
+      expect(hidden()).toBe(1);
     });
     await settleQueries(env);
   });
@@ -451,6 +499,68 @@ describe("layout.customize and the settings card", () => {
       await action.run(ctx, []);
     });
     expect(editorStore.getState().window).toBeNull();
+    await settleQueries(env);
+  });
+
+  // Review finding (ADR 0138): a session of a view the user left must not
+  // swallow the next "Customize layout".
+  it("customizes the shown view even while another view's session runs", async () => {
+    const env = createEnv();
+    renderMail(env);
+    await settleQueries(env);
+    const action = must(actions["layout.customize"]);
+    const ctx = {
+      client: env.client,
+      store: env.store,
+      queryClient: env.queryClient,
+      layout: env.transport.data.layout,
+      t: (id: string) => id,
+      locale: "en",
+    };
+    act(() => {
+      env.store.getState().setActiveView("mail");
+      startEditing("mail");
+    });
+    act(() => {
+      env.store.getState().setActiveView("calendar");
+    });
+    await act(async () => {
+      await action.run(ctx, []);
+    });
+    expect(editorStore.getState().window).toBe("calendar");
+    expect(env.store.getState().activeView).toBe("calendar");
+    // Again on the same view: Done.
+    await act(async () => {
+      await action.run(ctx, []);
+    });
+    expect(editorStore.getState().window).toBeNull();
+    await settleQueries(env);
+  });
+
+  it("ends customize mode when the user switches to another view", async () => {
+    const env = createEnv({ state: { activeView: "mail" } });
+    render(
+      <Live env={env}>
+        {(layout) => (
+          <>
+            <CustomizeViewWatcher />
+            <WindowView layout={layout} name="mail" />
+          </>
+        )}
+      </Live>,
+    );
+    await settleQueries(env);
+    act(() => {
+      startEditing("mail");
+    });
+    await screen.findByRole("region", { name: "Customizing layout: Mail" });
+    act(() => {
+      env.store.getState().setActiveView("calendar");
+    });
+    await waitFor(() => {
+      expect(editorStore.getState().window).toBeNull();
+    });
+    expect(screen.queryByRole("region", { name: /Customizing layout/ })).toBeNull();
     await settleQueries(env);
   });
 

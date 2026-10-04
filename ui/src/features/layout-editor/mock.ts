@@ -11,10 +11,14 @@
  *   wrapped in a new split `1fr 1fr`;
  * - a container left without children is removed, a split left with one
  *   child is replaced by it;
- * - a swap keeps each slot's size and limits;
+ * - a node that moves or swaps between containers of the same kind (stack
+ *   to stack, split to split of the same orientation) takes its size and
+ *   limits along (ADR 0138), else the slots keep theirs / new entries are
+ *   `1fr` without limits;
  * - a preset arranges the panes it names in its containers; the
  *   breakpoint's other panes stay, hidden, after the preset's tree in a
- *   stack at the root.
+ *   stack at the root; a pane in a preset split keeps its limits from a
+ *   split of the same orientation (its current one, else the default's).
  *
  * Errors are answered as the `edit-issue-*` id of the problem.
  */
@@ -52,7 +56,12 @@ type Container = Exclude<LayoutNode, { type: "widget" }>;
 
 /** A slot of a container: what a child keeps when it moves along. */
 interface Slot {
+  /** `stack`, `split-horizontal`, `split-vertical`, `tabs`. */
+  kind: string;
   size: string | undefined;
+  min: string | null | undefined;
+  max: string | null | undefined;
+  collapsible: boolean | undefined;
 }
 
 class PatchError extends Error {}
@@ -89,8 +98,41 @@ function parentOf(
   return null;
 }
 
+function kindOf(parent: Container): string {
+  return parent.type === "split" ? `split-${parent.orientation}` : parent.type;
+}
+
+/** The entry of child `index` in a list that has one entry per child. */
+function entryOf<T>(parent: Container, list: readonly T[], index: number): T | undefined {
+  return list.length === parent.children.length ? list[index] : undefined;
+}
+
 function slotOf(parent: Container, index: number): Slot {
-  return { size: parent.type === "tabs" ? undefined : parent.sizes[index] };
+  return {
+    kind: kindOf(parent),
+    size: parent.type === "tabs" ? undefined : entryOf(parent, parent.sizes, index),
+    min: parent.type === "split" ? entryOf(parent, parent.min_sizes, index) : undefined,
+    max: parent.type === "split" ? entryOf(parent, parent.max_sizes, index) : undefined,
+    collapsible: parent.type === "split" ? entryOf(parent, parent.collapsible, index) : undefined,
+  };
+}
+
+/** Writes a slot's entries at `index` (lists that have one entry per child). */
+function setSlot(parent: Container, index: number, slot: Slot): void {
+  const count = parent.children.length;
+  if (parent.type !== "tabs" && parent.sizes.length === count && slot.size !== undefined) {
+    parent.sizes[index] = slot.size;
+  }
+  if (parent.type !== "split") return;
+  if (parent.min_sizes.length === count && slot.min !== undefined) {
+    parent.min_sizes[index] = slot.min;
+  }
+  if (parent.max_sizes.length === count && slot.max !== undefined) {
+    parent.max_sizes[index] = slot.max;
+  }
+  if (parent.collapsible.length === count && slot.collapsible !== undefined) {
+    parent.collapsible[index] = slot.collapsible;
+  }
 }
 
 /** Removes child `index` with its slot entries. */
@@ -112,13 +154,16 @@ function insertChild(parent: Container, index: number, child: LayoutNode, slot?:
   const at = Math.max(0, Math.min(index, count));
   parent.children.splice(at, 0, child);
   if (count === 0) return;
+  const carried = slot?.kind === kindOf(parent) ? slot : undefined;
   if (parent.type !== "tabs" && parent.sizes.length === count) {
-    parent.sizes.splice(at, 0, slot?.size ?? "1fr");
+    parent.sizes.splice(at, 0, carried?.size ?? "1fr");
   }
   if (parent.type === "split") {
-    if (parent.min_sizes.length === count) parent.min_sizes.splice(at, 0, null);
-    if (parent.max_sizes.length === count) parent.max_sizes.splice(at, 0, null);
-    if (parent.collapsible.length === count) parent.collapsible.splice(at, 0, false);
+    if (parent.min_sizes.length === count) parent.min_sizes.splice(at, 0, carried?.min ?? null);
+    if (parent.max_sizes.length === count) parent.max_sizes.splice(at, 0, carried?.max ?? null);
+    if (parent.collapsible.length === count) {
+      parent.collapsible.splice(at, 0, carried?.collapsible ?? false);
+    }
   }
 }
 
@@ -224,6 +269,13 @@ function swapPanes(layout: ResolvedLayout, a: LayoutNodeRef, b: LayoutNodeRef): 
   const nodeB = resolve(layout, b);
   const at = parentOf(root, nodeA) ?? fail("edit-issue-invalid-placement");
   const bt = parentOf(root, nodeB) ?? fail("edit-issue-invalid-placement");
+  // Same container kind: each takes its own entries along (ADR 0138).
+  if (kindOf(at.parent) === kindOf(bt.parent)) {
+    const slotA = slotOf(at.parent, at.index);
+    const slotB = slotOf(bt.parent, bt.index);
+    setSlot(at.parent, at.index, slotB);
+    setSlot(bt.parent, bt.index, slotA);
+  }
   at.parent.children[at.index] = nodeB;
   bt.parent.children[bt.index] = nodeA;
 }
@@ -282,6 +334,21 @@ function applyPreset(layout: ResolvedLayout, id: string, target: LayoutNodeRef):
   for (const pane of named) if (!ids.has(pane)) fail("edit-issue-preset-pane-missing");
   const taken = new Map<string, LayoutNode>();
   const rest: LayoutNode[] = [];
+  // Per pane id its slots: the current tree first, then the defaults.
+  const limits = new Map<string, Slot[]>();
+  const noteSlots = (node: LayoutNode) => {
+    if (node.type === "widget") return;
+    for (const [index, child] of node.children.entries()) {
+      if (child.id !== null && named.has(child.id)) {
+        limits.set(child.id, [...(limits.get(child.id) ?? []), slotOf(node, index)]);
+      }
+      noteSlots(child);
+    }
+  };
+  noteSlots(root);
+  for (const breakpoint of normalizeLayout(defaultLayoutJson).windows[target.window] ?? []) {
+    noteSlots(breakpoint.root);
+  }
   // Named panes are taken whole; containers holding one are dissolved;
   // everything else is an unnamed pane that stays, hidden.
   const collect = (node: LayoutNode, isRoot: boolean) => {
@@ -307,8 +374,21 @@ function applyPreset(layout: ResolvedLayout, id: string, target: LayoutNodeRef):
       }
       case "split": {
         const split = newSplit(node.orientation, node.children.map(build));
-        if (split.type === "split" && node.sizes.length === node.children.length) {
-          split.sizes = [...node.sizes];
+        if (split.type !== "split") return split;
+        if (node.sizes.length === node.children.length) split.sizes = [...node.sizes];
+        const kind = `split-${node.orientation}`;
+        const slots = node.children.map((child) =>
+          child.type === "pane" ? (limits.get(child.id) ?? []).filter((s) => s.kind === kind) : [],
+        );
+        const pick = <T>(get: (s: Slot) => T | undefined): (T | undefined)[] =>
+          slots.map((list) => list.map(get).find((v) => v !== undefined));
+        const min = pick((s) => s.min);
+        const max = pick((s) => s.max);
+        const collapsible = pick((s) => s.collapsible);
+        if (min.some((v) => v !== undefined)) split.min_sizes = min.map((v) => v ?? null);
+        if (max.some((v) => v !== undefined)) split.max_sizes = max.map((v) => v ?? null);
+        if (collapsible.some((v) => v !== undefined)) {
+          split.collapsible = collapsible.map((v) => v ?? false);
         }
         return split;
       }

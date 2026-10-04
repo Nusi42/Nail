@@ -55,7 +55,9 @@ none.
   `1fr` / `none` / `none` / `false` (stack: `auto` for bar-like widgets) for
   an arriving one; only lists the file writes are touched. A move inside its
   own container carries its entries along; a swap leaves them with the slots
-  (ADR 0131: each node takes the other's size). `tabs active=` follows its tab.
+  (ADR 0131: each node takes the other's size; changed by ADR 0138: entries
+  travel with a node between containers of the same kind). `tabs active=`
+  follows its tab.
 - Tidying: an emptied container goes, a split left with one child is replaced
   by it (comments of both stay); removing or emptying the window's root is
   `edit-issue-invalid-placement`. Moves across windows or breakpoints are

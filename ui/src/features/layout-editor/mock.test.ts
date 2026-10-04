@@ -45,12 +45,15 @@ describe("layout editor mock patches", () => {
     expect(isLayoutEditPatch({ op: "reset-toolbar", toolbar: "reader" })).toBe(false);
   });
 
-  it("swaps panes and keeps each slot's size", () => {
+  it("swaps panes and each takes its own size and limits along", () => {
     const l = layout();
     expect(apply(l, { op: "swap-panes", a: ref([0]), b: ref([2]) })).toBeNull();
     const r = root(l);
     expect(shape(r)).toBe("panes(reader,list-pane,sidebar)");
-    expect(r.type === "split" && r.sizes).toEqual(["260px", "1fr", "1.4fr"]);
+    expect(r.type === "split" && r.sizes).toEqual(["1.4fr", "1fr", "260px"]);
+    expect(r.type === "split" && r.min_sizes).toEqual(["320px", "300px", "200px"]);
+    expect(r.type === "split" && r.max_sizes).toEqual([null, null, "480px"]);
+    expect(r.type === "split" && r.collapsible).toEqual([true, false, true]);
     expect(apply(l, { op: "swap-panes", a: ref([0]), b: ref([0, 1]) })).toBe(
       "edit-issue-invalid-placement",
     );
@@ -69,6 +72,8 @@ describe("layout editor mock patches", () => {
     expect(shape(root(l))).toBe("panes(list-pane,reader,sidebar)");
     const r = root(l);
     expect(r.type === "split" && r.sizes).toEqual(["1fr", "1.4fr", "260px"]);
+    expect(r.type === "split" && r.max_sizes).toEqual([null, null, "480px"]);
+    expect(r.type === "split" && r.collapsible).toEqual([false, true, true]);
     // Below the reader (now at 1): a vertical split wraps it.
     expect(
       apply(l, {
@@ -197,12 +202,19 @@ describe("layout editor mock patches", () => {
     const preset = (id: string) => apply(l, { op: "apply-preset", preset: id, target: ref([]) });
     expect(preset("reader-below")).toBeNull();
     expect(shape(root(l))).toBe("split-h(sidebar,split-v(list-pane,reader))");
+    // The folder pane keeps its limits; the vertical split gets none.
+    const below = root(l);
+    expect(below.type === "split" && below.max_sizes).toEqual(["480px", null]);
+    const column = must(nodeAt(below, [1]));
+    expect(column.type === "split" && column.min_sizes).toEqual([]);
     expect(preset("focus")).toBeNull();
     expect(shape(root(l))).toBe("stack(reader,sidebar!,list-pane!)");
     expect(preset("three-panes")).toBeNull();
     expect(shape(root(l))).toBe("split-h(sidebar,list-pane,reader)");
     const r = root(l);
     expect(r.type === "split" && r.sizes).toEqual(["260px", "1fr", "1.4fr"]);
+    expect(r.type === "split" && r.min_sizes).toEqual(["200px", "300px", "320px"]);
+    expect(r.type === "split" && r.collapsible).toEqual([true, false, true]);
     expect(preset("nope")).toBe("edit-issue-unknown-preset");
     expect(apply(l, { op: "remove-node", node: ref([2]) })).toBeNull();
     expect(preset("focus")).toBe("edit-issue-preset-pane-missing");

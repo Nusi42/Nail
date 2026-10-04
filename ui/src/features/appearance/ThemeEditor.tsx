@@ -9,7 +9,7 @@
  */
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { errorMessageOf, NailError } from "../../api/client";
-import type { ThemeInfo } from "../../api/generated";
+import type { Appearance, ThemeInfo } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useUiStoreApi } from "../../state/uiStore";
@@ -31,10 +31,20 @@ import {
 } from "./editorStore";
 import { HistoryButtons } from "./HistoryButtons";
 import { PartEditor } from "./PartEditor";
-import { useAppearance } from "./queries";
+import { contrastProblems } from "./contrast";
+import { preferencesOf, useAppearance, useSetThemePreferences } from "./queries";
 import { ThemePreview } from "./ThemePreview";
 import { TokenList } from "./TokenList";
-import { TOKEN_GROUPS, TOKEN_MODES, type TokenGroup } from "./tokens";
+import {
+  OVERRIDE_TOKENS,
+  TOKEN_GROUPS,
+  TOKEN_MODES,
+  overrideTokens,
+  resolveTokenValues,
+  withOverrides,
+  type OverriddenToken,
+  type TokenGroup,
+} from "./tokens";
 import { useThemeEdits } from "./useThemeEdits";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -109,9 +119,12 @@ function EditorBody({
   theme,
   active,
   focus,
+  appearance,
 }: {
   theme: ThemeInfo;
   active: boolean;
+  /** The user's appearance (its overrides win over every theme). */
+  appearance: Appearance;
   /** The part "Edit style" asked for, else `null`. */
   focus: string | null;
 }) {
@@ -124,6 +137,7 @@ function EditorBody({
   const edits = useThemeEdits(theme.id);
   const pick = useUseTheme();
   const duplicate = useDuplicateTheme();
+  const setPreferences = useSetThemePreferences();
   const [tab, setTab] = useState<Tab>(focus === null ? "color" : "parts");
   const [mode, setMode] = useState<string | null>(null);
   const name = nameOf(theme);
@@ -144,6 +158,19 @@ function EditorBody({
   const failure = edits.failure;
   const conflict = failure instanceof NailError && failure.code === "conflict";
   const busy = pick.isPending || duplicate.isPending;
+  // The Appearance overrides win over the theme: the preview and the
+  // contrast check show what the app will really wear (ADR 0138).
+  const overrides = overrideTokens(appearance.settings.overrides);
+  const shownDrafts = withOverrides(edits.drafts, overrides, mode);
+  const problem = contrastProblems(resolveTokenValues(d.tokens, mode, shownDrafts))[0];
+  const clearOverride = (token: string) => {
+    if (!Object.hasOwn(OVERRIDE_TOKENS, token)) return;
+    const field = OVERRIDE_TOKENS[token as OverriddenToken];
+    const next = Object.fromEntries(
+      Object.entries(appearance.settings.overrides).filter(([key]) => key !== field),
+    );
+    setPreferences.mutate({ ...preferencesOf(appearance), overrides: next });
+  };
 
   const duplicateAsNew = () => {
     duplicate.mutate(
@@ -219,6 +246,21 @@ function EditorBody({
           {t("theme-editor-builtin-notice")}
         </p>
       )}
+      {problem && (
+        <p data-part="theme-editor.notice" data-tone="warning" role="status">
+          {t("theme-editor-contrast-warning", {
+            fg: problem.fg,
+            bg: problem.bg,
+            ratio: problem.ratio.toFixed(1),
+            needed: problem.needed.toFixed(1),
+          })}
+        </p>
+      )}
+      {setPreferences.error && (
+        <p data-part="form.error" role="alert">
+          {t(errorMessageOf(setPreferences.error).id, errorMessageOf(setPreferences.error).args)}
+        </p>
+      )}
       {duplicate.error && (
         <p data-part="form.error" role="alert">
           {t(errorMessageOf(duplicate.error).id, errorMessageOf(duplicate.error).args)}
@@ -280,11 +322,13 @@ function EditorBody({
                 mode={mode}
                 editable={editable}
                 edits={edits}
+                overrides={overrides}
+                onClearOverride={clearOverride}
               />
             </>
           )}
         </div>
-        <ThemePreview tokens={d.tokens} mode={mode} drafts={edits.drafts} name={name} />
+        <ThemePreview tokens={d.tokens} mode={mode} drafts={shownDrafts} name={name} />
       </div>
     </>
   );
@@ -361,6 +405,7 @@ export function ThemeEditorView() {
           theme={theme}
           active={theme.id === a.active}
           focus={part}
+          appearance={a}
         />
       ) : (
         <p data-part="theme-editor.empty">{t("theme-editor-no-theme")}</p>

@@ -9,7 +9,49 @@
  *
  * Pure, and part of the app bundle (no mock code).
  */
-import type { ThemePartRule, ThemeTokenValue } from "../../api/generated";
+import type { ThemeOverrides, ThemePartRule, ThemeTokenValue } from "../../api/generated";
+
+/**
+ * The Appearance page's overrides by the token they replace (the user's
+ * `theme.kdl` `tokens`; they win over every theme, ADR 0102).
+ */
+export const OVERRIDE_TOKENS = {
+  "color.accent": "accent",
+  "font-size.body": "font_size",
+  "radius.md": "radius",
+} as const satisfies Readonly<Record<string, keyof ThemeOverrides>>;
+
+export type OverriddenToken = keyof typeof OVERRIDE_TOKENS;
+
+/** The overrides as token values by `category.name`. */
+export function overrideTokens(overrides: ThemeOverrides): Map<OverriddenToken, string> {
+  const out = new Map<OverriddenToken, string>();
+  for (const [token, field] of Object.entries(OVERRIDE_TOKENS) as [
+    OverriddenToken,
+    keyof ThemeOverrides,
+  ][]) {
+    const value = overrides[field];
+    if (value !== undefined) out.set(token, String(value));
+  }
+  return out;
+}
+
+/**
+ * Drafts with the overrides laid over them (for the preview and the
+ * contrast check: what the app will really show, ADR 0138).
+ */
+export function withOverrides(
+  drafts: ReadonlyMap<string, string | null>,
+  overrides: ReadonlyMap<string, string>,
+  mode: string | null,
+): Map<string, string | null> {
+  const out = new Map(drafts);
+  for (const [token, value] of overrides) {
+    out.set(token, value);
+    if (mode !== null) out.set(`${token}@${mode}`, value);
+  }
+  return out;
+}
 
 /** The editor's token groups, in tab order. */
 export const TOKEN_GROUPS = ["color", "type", "spacing", "radius", "motion", "other"] as const;

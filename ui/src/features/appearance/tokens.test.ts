@@ -13,11 +13,13 @@ import {
   hasModeValue,
   isPartSelector,
   isPropertyName,
+  overrideTokens,
   partEntries,
   pickerColor,
   pixels,
   resolveTokenValues,
   selectorMatches,
+  withOverrides,
   selectorPart,
   tokenGroup,
   valueIn,
@@ -140,6 +142,23 @@ describe("resolving a theme for the preview", () => {
     expect(styles.list?.["background-color"]).toBe("#ffffff");
     expect(styles.snippet?.["font-size"]).toBe("calc(14px * 12.5 / 14)");
     expect(styles.frame?.["background-color"]).toBe("var(--nail-color-canvas)");
+  });
+
+  // Review finding (ADR 0138): the preview shows the Appearance overrides,
+  // which win over the theme in every mode.
+  it("lays the Appearance overrides over the drafts for the preview", () => {
+    const overrides = overrideTokens({ accent: "#aa3366", font_size: 16 });
+    expect([...overrides]).toEqual([
+      ["color.accent", "#aa3366"],
+      ["font-size.body", "16"],
+    ]);
+    const drafts = new Map([["color.accent", "#2255ff"]]);
+    const base = resolveTokenValues(tokens, null, withOverrides(drafts, overrides, null));
+    expect(base.get("color.accent")).toBe("#aa3366");
+    expect(previewStyles(base).primary?.["background-color"]).toBe("#aa3366");
+    const dark = resolveTokenValues(tokens, "dark", withOverrides(drafts, overrides, "dark"));
+    expect(dark.get("color.accent")).toBe("#aa3366");
+    expect(overrideTokens({})).toEqual(new Map());
   });
 });
 

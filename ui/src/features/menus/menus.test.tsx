@@ -132,6 +132,8 @@ describe("context targets", () => {
       "header",
       "layout.customize",
       "theme.edit",
+      // M5d review (ADR 0138): the way back from an unreadable theme.
+      "theme.reset",
       "separator",
       "palette.open",
     ]);

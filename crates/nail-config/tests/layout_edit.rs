@@ -165,7 +165,7 @@ layout "Mine" extends="default" {
 // Panes
 
 #[test]
-fn swapping_two_panes_keeps_their_comments_and_the_slot_sizes() {
+fn swapping_two_panes_keeps_their_comments_and_their_own_sizes() {
     let out = apply(
         Some(MAIL),
         &[LayoutPatch::SwapPanes {
@@ -178,9 +178,9 @@ fn swapping_two_panes_keeps_their_comments_and_the_slot_sizes() {
         mail_shape(&out),
         "panes[reader[reader-toolbar message] list-pane[list-header list] sidebar[folders gmail-labels]]"
     );
-    // The slots keep their sizes: the reader now has the first one.
+    // Each pane takes its own size and limits along (ADR 0138).
     let root = &resolved(&out).windows["mail"][0].root;
-    assert_eq!(sizes_of(root), ["240px", "1fr", "1.4fr"]);
+    assert_eq!(sizes_of(root), ["1.4fr", "1fr", "240px"]);
     // Swapping back restores the file byte for byte.
     let back = apply(
         Some(&out),
@@ -224,9 +224,10 @@ fn moving_a_widget_into_another_stack_updates_both_size_lists() {
         "panes[sidebar[folders] list-pane[list-header list] reader[reader-toolbar gmail-labels message]]"
     );
     assert_eq!(sizes_of(root.at_path(&[0]).unwrap()), ["1fr"]);
+    // Stack to stack: the label list keeps its `auto` height.
     assert_eq!(
         sizes_of(root.at_path(&[2]).unwrap()),
-        ["auto", "1fr", "1fr"]
+        ["auto", "auto", "1fr"]
     );
 }
 
@@ -302,14 +303,163 @@ fn docking_along_the_split_goes_into_the_parent_split() {
         shape(root),
         "panes[list-pane[list-header list] reader[reader-toolbar message] sidebar[folders gmail-labels]]"
     );
-    // A new child of a split gets `1fr` and no minimum.
-    assert_eq!(sizes_of(root), ["1fr", "1.4fr", "1fr"]);
+    // Within its own split the folder pane keeps its width and minimum.
+    assert_eq!(sizes_of(root), ["1fr", "1.4fr", "240px"]);
     let LayoutNode::Split { min_sizes, .. } = root else {
         panic!("expected the split");
     };
     assert_eq!(
         min_sizes,
-        &[Some("300px".to_owned()), Some("320px".to_owned()), None]
+        &[
+            Some("300px".to_owned()),
+            Some("320px".to_owned()),
+            Some("200px".to_owned())
+        ]
+    );
+}
+
+/// The split's per-child lists as `(size, min, max, collapsible)` per child.
+fn limits(node: &LayoutNode) -> Vec<(String, Option<String>, Option<String>, bool)> {
+    let LayoutNode::Split {
+        sizes,
+        min_sizes,
+        max_sizes,
+        collapsible,
+        ..
+    } = node
+    else {
+        panic!("expected a split: {node:?}");
+    };
+    (0..sizes.len())
+        .map(|i| {
+            (
+                sizes[i].clone(),
+                min_sizes.get(i).cloned().flatten(),
+                max_sizes.get(i).cloned().flatten(),
+                collapsible.get(i).copied().unwrap_or(false),
+            )
+        })
+        .collect()
+}
+
+fn pane(
+    size: &str,
+    min: Option<&str>,
+    max: Option<&str>,
+    collapsible: bool,
+) -> (String, Option<String>, Option<String>, bool) {
+    (
+        size.into(),
+        min.map(Into::into),
+        max.map(Into::into),
+        collapsible,
+    )
+}
+
+/// Review finding (ADR 0138): swapping Folders with Message in the default
+/// mail view must not give the reader the folder pane's 260–480 px slot.
+#[test]
+fn swapping_default_panes_carries_their_widths_and_limits() {
+    let folders = pane("260px", Some("200px"), Some("480px"), true);
+    let list = pane("1fr", Some("300px"), None, false);
+    let reader = pane("1.4fr", Some("320px"), None, true);
+    let root = |text: &str| resolved(text).windows["mail"][0].root.clone();
+    assert_eq!(
+        limits(&root(DEFAULT_LAYOUT_KDL)),
+        [folders.clone(), list.clone(), reader.clone()]
+    );
+
+    let swapped = apply(
+        None,
+        &[LayoutPatch::SwapPanes {
+            a: mail(&[0]),
+            b: mail(&[2]),
+        }],
+    );
+    let tree = root(&swapped);
+    assert_eq!(shape(&tree).split('[').nth(1), Some("reader"));
+    assert_eq!(
+        limits(&tree),
+        [reader.clone(), list.clone(), folders.clone()]
+    );
+
+    // Docking Folders right of Message (same split) keeps them too.
+    let docked = apply(
+        None,
+        &[LayoutPatch::MovePane {
+            node: mail(&[0]),
+            to: beside(mail(&[2]), DockSide::Right),
+        }],
+    );
+    assert_eq!(
+        limits(&root(&docked)),
+        [list.clone(), reader.clone(), folders.clone()]
+    );
+
+    // Docking Folders left of Messages from the right end brings it back.
+    let back = apply(
+        Some(&docked),
+        &[LayoutPatch::MovePane {
+            node: mail(&[2]),
+            to: beside(mail(&[0]), DockSide::Left),
+        }],
+    );
+    assert_eq!(limits(&root(&back)), [folders, list, reader]);
+}
+
+/// Swapping nodes of containers of different kinds leaves the entries with
+/// the slots (a stack's height is no split width).
+#[test]
+fn swapping_across_container_kinds_keeps_the_slot_entries() {
+    let out = apply(
+        Some(MAIL),
+        &[LayoutPatch::SwapPanes {
+            a: mail(&[0, 0]),
+            b: mail(&[2]),
+        }],
+    );
+    let root = &resolved(&out).windows["mail"][0].root;
+    assert_eq!(sizes_of(root), ["240px", "1fr", "1.4fr"]);
+    assert_eq!(sizes_of(root.at_path(&[0]).unwrap()), ["1fr", "auto"]);
+}
+
+/// Presets keep each pane's limits (review finding, ADR 0138), also after a
+/// preset that put the pane into a split of the other orientation.
+#[test]
+fn presets_keep_the_pane_limits() {
+    let below = apply(
+        None,
+        &[LayoutPatch::ApplyPreset {
+            preset: "reader-below".into(),
+            target: mail(&[]),
+        }],
+    );
+    let root = &resolved(&below).windows["mail"][0].root;
+    assert_eq!(
+        limits(root),
+        [
+            pane("260px", Some("200px"), Some("480px"), true),
+            pane("1fr", None, None, false)
+        ]
+    );
+    // The vertical split gets no horizontal limits.
+    assert_eq!(
+        limits(root.at_path(&[1]).unwrap()),
+        [
+            pane("1fr", None, None, false),
+            pane("1.2fr", None, None, false)
+        ]
+    );
+    let three = apply(
+        Some(&below),
+        &[LayoutPatch::ApplyPreset {
+            preset: "three-panes".into(),
+            target: mail(&[]),
+        }],
+    );
+    assert_eq!(
+        limits(&resolved(&three).windows["mail"][0].root),
+        limits(&default_layout().windows["mail"][0].root)
     );
 }
 

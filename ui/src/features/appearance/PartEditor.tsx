@@ -60,6 +60,12 @@ function PropertyValue({
 }) {
   const t = useT();
   const [text, setText] = useState(value);
+  // A new saved value replaces the text (the field keeps the focus).
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setText(value);
+  }
   const commit = () => {
     const next = text.trim();
     if (next === value || next === "") {
@@ -78,6 +84,8 @@ function PropertyValue({
       type="text"
       data-part="form.input"
       data-field="property-value"
+      // Nothing typed: Ctrl+Z / Ctrl+Y undo / redo the theme (ADR 0138).
+      data-history-keys={text === value ? "" : undefined}
       aria-label={t("theme-editor-property-value", { property })}
       spellCheck={false}
       value={text}
@@ -135,7 +143,6 @@ function RuleView({
                   {own && editable ? (
                     <>
                       <PropertyValue
-                        key={shown}
                         selector={selector}
                         property={property}
                         value={shown}

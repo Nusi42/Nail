@@ -19,7 +19,7 @@ layout "Mine" extends="default" {
                 }
             }
             // The reader with its toolbar.
-            stack id="reader" sizes="auto 1fr 1fr" {
+            stack id="reader" sizes="auto auto 1fr" {
                 toolbar id="reader-toolbar" toolbar="reader"
                 label-list id="gmail-labels"
                 message-view id="message" headers="from to date"

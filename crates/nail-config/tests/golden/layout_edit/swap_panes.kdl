@@ -3,8 +3,8 @@ layout "Mine" extends="default" {
     window "mail" {
         // Folders | list | reader.
         split "horizontal" id="panes" \
-            sizes="240px 1fr 1.4fr" /* tuned */ \
-            min-sizes="200px 300px 320px" {
+            sizes="1.4fr 1fr 240px" /* tuned */ \
+            min-sizes="320px 300px 200px" {
             // The reader with its toolbar.
             stack id="reader" sizes="auto 1fr" {
                 toolbar id="reader-toolbar" toolbar="reader"

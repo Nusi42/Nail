@@ -76,7 +76,12 @@ all three. Nail refuses values outside the ranges and says why.
 **Undo** and **Redo** at the top of the Appearance page take back the last
 choices — a theme, Follow Windows and its pair, density, the accent, text
 size or corner radius — one at a time; the button says which ("Undo Choose
-theme"). The theme editor shares this history. It lasts until Nail quits.
+theme"). `Ctrl+Z` and `Ctrl+Y` work too while the focus is on the page. A
+slider or colour change that is still waiting to be written is written first
+and then undone, so Undo right after moving a slider takes that move back.
+The theme editor shares this history. It lasts until Nail quits. **Reset
+appearance** in the command palette (`Ctrl+K`) goes back to the built-in
+themes in one step.
 If `theme.kdl` was changed outside Nail in the meantime, Undo offers **Undo
 anyway**, which copies the current file to `backups/` first.
 

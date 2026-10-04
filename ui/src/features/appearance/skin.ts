@@ -27,6 +27,7 @@ const T = {
   border: "var(--nail-color-border)",
   line: "var(--nail-color-border-strong, var(--nail-color-border))",
   accent: "var(--nail-color-accent)",
+  warning: "var(--nail-color-warning)",
   accentSoft:
     "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
   selection: "var(--nail-color-selection)",
@@ -74,6 +75,7 @@ ${e("header")} > ${p("form.section.title")} { flex-basis: 100%; margin: 0; }
 ${e("actions")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; }
 ${e("status")} { margin-inline-start: auto; font-size: ${T.small}; color: ${T.muted}; }
 ${e("notice")} { margin: 0; padding: ${T.sm} ${T.md}; border-radius: ${T.rMd}; background-color: ${T.accentSoft}; color: ${T.fg}; }
+${e("notice")}[data-tone="warning"] { border: 1px solid ${T.warning}; background-color: color-mix(in srgb, ${T.warning} 14%, ${T.bg}); }
 ${e("body")} { display: grid; grid-template-columns: minmax(calc(10 * ${T.lg}), auto) minmax(0, 1fr) minmax(calc(16 * ${T.lg}), 1fr); gap: ${T.lg}; align-items: start; min-height: 0; }
 ${e("body")} > ${p("tabs.tab-list")} { display: flex; flex-direction: column; gap: ${T.xxs}; border: 0; }
 ${e("body")} > ${p("tabs.tab-list")} > ${p("tabs.tab")} { justify-content: flex-start; text-align: start; }

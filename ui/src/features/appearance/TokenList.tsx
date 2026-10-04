@@ -30,6 +30,10 @@ interface RowProps {
   edits: ThemeEdits;
   /** The token resolved to CSS (for the colour picker of `$refs`). */
   resolved: string | undefined;
+  /** The Appearance override that wins over this token, if any. */
+  override: string | undefined;
+  /** Removes that override. */
+  onClearOverride: () => void;
 }
 
 /** The value text field: commits on Enter or when it loses the focus. */
@@ -47,6 +51,13 @@ function ValueField({
   onCommit: (value: string) => void;
 }) {
   const [text, setText] = useState(initial);
+  // A new saved value (a write, Undo) replaces the text; the field stays
+  // (and keeps the focus) instead of being mounted anew.
+  const [seen, setSeen] = useState(initial);
+  if (seen !== initial) {
+    setSeen(initial);
+    setText(initial);
+  }
   const commit = () => {
     if (text !== initial) onCommit(text);
   };
@@ -55,6 +66,8 @@ function ValueField({
       type="text"
       data-part="form.input"
       data-field="token-value"
+      // Nothing typed: Ctrl+Z / Ctrl+Y undo / redo the theme (ADR 0138).
+      data-history-keys={text === initial ? "" : undefined}
       aria-label={label}
       spellCheck={false}
       value={text}
@@ -78,7 +91,7 @@ function ValueField({
   );
 }
 
-function TokenRow({ token, mode, editable, edits, resolved }: RowProps) {
+function TokenRow({ token, mode, editable, edits, resolved, override, onClearOverride }: RowProps) {
   const t = useT();
   const id = tokenId(token.category, token.name);
   const key = draftKey(token.category, token.name, mode);
@@ -106,6 +119,19 @@ function TokenRow({ token, mode, editable, edits, resolved }: RowProps) {
       <span data-part="theme-editor.token.text">
         <code data-part="theme-editor.token.name">{id}</code>
         <Tag text={t(`theme-editor-origin-${token.origin}`)} kind="origin" />
+        {override !== undefined && (
+          <>
+            <Tag text={t("theme-editor-overridden", { value: override })} kind="override" />
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="ghost"
+              onClick={onClearOverride}
+            >
+              {t("theme-editor-clear-override")}
+            </button>
+          </>
+        )}
       </span>
       <span data-part="theme-editor.token.controls">
         {token.category === "color" && (
@@ -121,7 +147,6 @@ function TokenRow({ token, mode, editable, edits, resolved }: RowProps) {
           />
         )}
         <ValueField
-          key={shown}
           initial={shown}
           placeholder={placeholder}
           label={t("theme-editor-token-value", { token: id })}
@@ -161,12 +186,18 @@ export function TokenList({
   mode,
   editable,
   edits,
+  overrides = new Map(),
+  onClearOverride = () => undefined,
 }: {
   tokens: readonly ThemeTokenValue[];
   group: TokenGroup;
   mode: string | null;
   editable: boolean;
   edits: ThemeEdits;
+  /** Appearance overrides by token id (they win over the theme). */
+  overrides?: ReadonlyMap<string, string>;
+  /** Removes the override of a token id. */
+  onClearOverride?: (token: string) => void;
 }) {
   const t = useT();
   const searchId = useId();
@@ -206,6 +237,10 @@ export function TokenList({
               editable={editable}
               edits={edits}
               resolved={resolved.get(tokenId(token.category, token.name))}
+              override={overrides.get(tokenId(token.category, token.name))}
+              onClearOverride={() => {
+                onClearOverride(tokenId(token.category, token.name));
+              }}
             />
           ))}
         </ul>

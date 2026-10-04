@@ -21,7 +21,13 @@ import {
 } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
-import { nextRedo, nextUndo, useEditHistory } from "../../state/editHistory";
+import {
+  historyKey,
+  isTextField,
+  nextRedo,
+  nextUndo,
+  useEditHistory,
+} from "../../state/editHistory";
 import { Icon } from "../../widgets/Icon";
 import { TARGET_PART } from "./dnd";
 import { Palette } from "./Palette";
@@ -78,6 +84,13 @@ export function EditorFrame({ window, breakpoint, children }: EditorFrameProps) 
   }, [moving, dragging]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Ctrl+Z / Ctrl+Y: Undo / Redo (ADR 0138).
+    const direction = event.defaultPrevented ? null : historyKey(event);
+    if (direction !== null && !isTextField(event.target)) {
+      event.preventDefault();
+      if (!busy && (direction === "undo" ? undo : redo) !== null) step(direction);
+      return;
+    }
     if (event.key !== "Escape" || event.defaultPrevented) return;
     event.preventDefault();
     event.stopPropagation();

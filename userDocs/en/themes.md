@@ -77,11 +77,34 @@ On the right, a small mail window shows the theme's colours and sizes,
 including changes you have not saved yet. Part rules show in the app itself
 while the theme is in use.
 
+The accent, text size and corner radius you set on the Appearance page win
+over every theme. A token they replace is marked **Overridden in
+Appearance** with the value in use, and the preview shows that value; **Clear
+override** removes the Appearance setting so the theme's own value applies.
+
+### Hard-to-read colours
+
+When text no longer stands out from its background (for example white text
+on a white background), the editor warns at once and names the colours and
+their contrast. Nail still saves the change, so you can go on to the next
+colour. To go back:
+
+- press `Ctrl+Z` (also right after pressing `Enter` in the value field), or
+  use **Undo**;
+- or open the command palette (`Ctrl+K`), type "reset appearance" and press
+  `Enter`: **Reset appearance** switches back to the built-in themes (Follow
+  Windows with Frost and Graphite) and removes the accent, text size and
+  corner radius settings. Your theme files stay as they are, and **Undo**
+  takes the reset back. The command is also in the navigation rail's
+  right-click menu.
+
 ### Saving and undo
 
 There is no Save button: the editor writes the theme file shortly after you
 stop typing (all changes of one pause together) and when you close the
-window. Each write is one step for **Undo**, labelled "Undo Edit theme". The
+window. Each write is one step for **Undo** (`Ctrl+Z`; **Redo**: `Ctrl+Y`),
+labelled "Undo Edit theme". A change that is still waiting to be written when
+you undo is written first and then undone. The
 same history holds the choices on the Appearance page (theme, Follow Windows,
 density, accent, text size, corner radius), so **Undo** there and in the
 editor go back through all of them. The history lasts until Nail quits.

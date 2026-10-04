@@ -255,6 +255,7 @@ layout "default" {
         // M5d: the theme editor and New theme (Settings → Appearance).
         action "theme.edit"       label="@appearance.action.edit-theme" icon="palette"
         action "theme.new"        label="@appearance.action.new-theme" icon="plus"
+        action "theme.reset"      label="@appearance.action.reset" icon="rotate-ccw"
         action "security.autocrypt.import" label="@security.action.autocrypt-import" icon="key-round"
         action "remote.pair"      label="@remote.action.pair" icon="smartphone"
         action "remote.content.allow" label="@remote.action.load-content" icon="image"
@@ -712,6 +713,8 @@ layout "default" {
         header "@layout.menu.view"
         item "layout.customize"
         item "theme.edit"
+        // Back to the built-in themes (the way out of an unreadable theme).
+        item "theme.reset"
         separator
         item "palette.open"
     }

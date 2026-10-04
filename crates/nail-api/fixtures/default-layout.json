@@ -1085,6 +1085,12 @@
       "alias_of": null,
       "args": []
     },
+    "theme.reset": {
+      "label": "@appearance.action.reset",
+      "icon": "rotate-ccw",
+      "alias_of": null,
+      "args": []
+    },
     "security.autocrypt.import": {
       "label": "@security.action.autocrypt-import",
       "icon": "key-round",
@@ -2769,6 +2775,13 @@
       {
         "type": "action",
         "action": "theme.edit",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "theme.reset",
         "args": [],
         "label": null,
         "icon": null

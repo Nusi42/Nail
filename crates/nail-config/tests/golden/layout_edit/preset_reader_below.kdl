@@ -2,7 +2,7 @@
 layout "custom" extends="default" {
     breakpoint min-width=900 {
         window "mail" {
-            split "horizontal" id="panes" sizes="260px 1fr" {
+            split "horizontal" id="panes" sizes="260px 1fr" min-sizes="200px none" max-sizes="480px none" collapsible="true false" {
                 stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
                     // New message, Favorites (the Outbox only while mail waits
                     // there), one section per account (with its colour), smart

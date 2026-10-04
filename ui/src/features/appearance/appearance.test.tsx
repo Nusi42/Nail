@@ -12,6 +12,8 @@ import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } 
 import { overridesOf } from "./AppearanceSettings";
 import { must } from "../../test/must";
 import { stubProperties } from "../../test/stub";
+import { mockEditHistory } from "../../api/editHistoryMock";
+import { applyEditHistory } from "../../state/editHistory";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -319,6 +321,47 @@ describe("appearance-settings widget", () => {
           radius: 4,
         });
       });
+      await settleQueries(env);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Review finding (ADR 0138): Undo right after a slider move undoes that
+  // move; the delayed write must not put the undone value back afterwards.
+  it("writes a waiting slider change before Undo, then undoes it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const env = createEnv();
+      env.transport.onEvent((event) => {
+        if (event.type === "EditHistoryChanged") {
+          applyEditHistory(env.queryClient, event.history);
+        }
+      });
+      renderNode(widget("appearance-settings"), env);
+      const accent = await screen.findByRole("textbox", { name: "Accent colour" });
+      fireEvent.change(accent, { target: { value: "#aa3366" } });
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+      const undo = await screen.findByRole("button", { name: /^Undo / });
+      await waitFor(() => {
+        expect(undo).toBeEnabled();
+      });
+      fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
+        target: { value: "12" },
+      });
+      // Undo before the pause is over.
+      fireEvent.click(undo);
+      await waitFor(() => {
+        expect(mockEditHistory(env.transport, "appearance").redo).toHaveLength(1);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      // The radius is undone, the accent stays, and Redo is still there.
+      expect(env.transport.data.features.appearance.settings.overrides).toEqual({
+        accent: "#aa3366",
+      });
+      expect(mockEditHistory(env.transport, "appearance").redo).toHaveLength(1);
       await settleQueries(env);
     } finally {
       vi.useRealTimers();

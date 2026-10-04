@@ -15,8 +15,14 @@
 //!   `collapsible`) and a stack's `sizes` lose the entry of a child that
 //!   leaves and get one for a child that arrives (`1fr`, `none`, `none`,
 //!   `false`; in a stack `auto` for bar-like widgets, else `1fr`). A node
-//!   moved within its own container keeps its entries. Lists that are not
-//!   written stay unwritten. A `tabs` node's `active` follows its tab.
+//!   that moves (or swaps) between containers of the same kind — within its
+//!   own container, stack to stack, split to split of the same orientation —
+//!   carries its own entries along (ADR 0138: a swapped folder pane keeps
+//!   its width and limits). Lists that are not written stay unwritten. A
+//!   `tabs` node's `active` follows its tab.
+//! * A preset writes its own `sizes`; a pane it places in a split keeps its
+//!   `min-sizes` / `max-sizes` / `collapsible` from a split of the same
+//!   orientation (its current one, else the default layout's).
 //! * A container left without children is removed; a split left with one
 //!   child is replaced by that child (the split's comments stay above it).
 //!   The window's root is never removed.
@@ -181,6 +187,44 @@ fn with_sizes<S: AsRef<str>>(mut header: String, sizes: &[S]) -> String {
 
 /// The per-child list entries a node took out of its container.
 type Entries = Vec<(String, String)>;
+
+/// The kind of container whose per-child list entries a node carries when
+/// it moves: entries only travel between containers of the same kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ListKind {
+    Stack,
+    Split(Orientation),
+}
+
+fn list_kind(node: &KdlNode) -> Option<ListKind> {
+    match node.name().value() {
+        "stack" => Some(ListKind::Stack),
+        "split" => Some(ListKind::Split(orientation_of(node))),
+        _ => None,
+    }
+}
+
+/// A list property with one entry per child (`None` when absent or out of
+/// step with the children).
+fn full_list(node: &KdlNode, key: &str) -> Option<Vec<String>> {
+    list_prop(node, key).filter(|items| items.len() == child_count(node))
+}
+
+/// The entries a node takes along, and the kind of container it left.
+#[derive(Debug, Clone, Copy)]
+struct Carried<'a> {
+    entries: &'a Entries,
+    from: Option<ListKind>,
+}
+
+/// `header key="…"` with the values.
+fn with_list(mut header: String, key: &str, values: &[String]) -> String {
+    header.push(' ');
+    header.push_str(key);
+    header.push('=');
+    header.push_str(&quote(&values.join(" ")));
+    header
+}
 
 // ---------------------------------------------------------------------------
 // One window breakpoint
@@ -365,15 +409,16 @@ impl Tree<'_> {
     }
 
     /// Puts a detached node (indented for `from`) into the container at
-    /// `parent` at `index` (clamped). `carried` = the entries it had in this
-    /// same container (a move within it), else new entries are written.
+    /// `parent` at `index` (clamped). `carried` = the entries it had in its
+    /// old container, used when that was of the same [`ListKind`]; else new
+    /// entries are written.
     fn insert(
         &mut self,
         parent: &[usize],
         index: usize,
         node: &KdlNode,
         from: usize,
-        carried: Option<&Entries>,
+        carried: Option<Carried<'_>>,
     ) -> Result<(), EditError> {
         let depth = self.depth_of(parent) + 1;
         let style = self.style.clone();
@@ -383,6 +428,10 @@ impl Tree<'_> {
         let count = child_count(container);
         let index = index.min(count);
         let name = container.name().value().to_owned();
+        let kind_here = list_kind(container);
+        let carried = carried
+            .filter(|c| c.from.is_some() && c.from == kind_here)
+            .map(|c| c.entries);
         match name.as_str() {
             "split" | "stack" => {
                 for &(key, default) in CHILD_LISTS {
@@ -416,6 +465,41 @@ impl Tree<'_> {
         }
         put(block_of(container), index, node, depth, &style);
         Ok(())
+    }
+
+    /// Swaps the per-child list entries of two nodes whose containers are
+    /// of the same [`ListKind`] (nothing otherwise).
+    fn swap_entries(&mut self, a: &[usize], b: &[usize]) -> Result<(), EditError> {
+        let (&ia, pa) = a.split_last().ok_or_else(bad_placement)?;
+        let (&ib, pb) = b.split_last().ok_or_else(bad_placement)?;
+        let ka = self.get(pa).and_then(list_kind);
+        if ka.is_none() || ka != self.get(pb).and_then(list_kind) {
+            return Ok(());
+        }
+        for &(key, _) in CHILD_LISTS {
+            let la = self.get(pa).and_then(|n| full_list(n, key));
+            if pa == pb {
+                if let Some(mut items) = la {
+                    items.swap(ia, ib);
+                    set_list(self.at(pa)?, key, &items);
+                }
+                continue;
+            }
+            let lb = self.get(pb).and_then(|n| full_list(n, key));
+            if let (Some(mut la), Some(mut lb)) = (la, lb) {
+                std::mem::swap(&mut la[ia], &mut lb[ib]);
+                set_list(self.at(pa)?, key, &la);
+                set_list(self.at(pb)?, key, &lb);
+            }
+        }
+        Ok(())
+    }
+
+    /// The `min-sizes` / `max-sizes` / `collapsible` entries of the node at
+    /// `path` in its container, with that container's kind.
+    fn limits_of(&self, path: &[usize]) -> Option<(ListKind, Entries)> {
+        let (&index, parent) = path.split_last()?;
+        limits_in(self.get(parent)?, index)
     }
 
     /// Removes containers a change left empty and replaces a split left
@@ -456,7 +540,7 @@ impl Tree<'_> {
         from: usize,
         target: &[usize],
         placement: &LayoutPlacement,
-        carried: Option<&Entries>,
+        carried: Option<Carried<'_>>,
     ) -> Result<(), EditError> {
         match placement {
             LayoutPlacement::Into { index, .. } => {
@@ -473,7 +557,7 @@ impl Tree<'_> {
                     && orientation_of(parent_node) == side.orientation()
                 {
                     let index = if side.before() { t_index } else { t_index + 1 };
-                    return self.insert(parent, index, node, from, None);
+                    return self.insert(parent, index, node, from, carried);
                 }
                 // Wrap the target in a new split holding both.
                 let depth = self.depth_of(target);
@@ -590,20 +674,25 @@ pub(crate) fn move_pane(
         // into a widget.
         return Err(bad_placement());
     }
-    let same_parent = into && target == parent;
     let parent = parent.to_vec();
+    let source_kind = tree.get(&parent).and_then(list_kind);
     tree.mark(&target, MARK_TARGET)?;
     tree.mark(&parent, MARK_SOURCE)?;
     let from = tree.depth_of(&source);
     let (moved, entries) = tree.take(&parent, index)?;
     let target = tree.unmark(MARK_TARGET)?;
-    tree.place(&moved, from, &target, to, same_parent.then_some(&entries))?;
+    let carried = Carried {
+        entries: &entries,
+        from: source_kind,
+    };
+    tree.place(&moved, from, &target, to, Some(carried))?;
     let old_parent = tree.unmark(MARK_SOURCE)?;
     tree.tidy(&old_parent)
 }
 
-/// `swap-panes`: the two nodes trade places (each takes the other's slot,
-/// with that slot's split size and limits).
+/// `swap-panes`: the two nodes trade places; each takes its own split size
+/// and limits along when both containers are of the same [`ListKind`]
+/// (ADR 0138), else the slots keep theirs.
 pub(crate) fn swap_panes(
     editor: &mut LayoutEditor,
     a: &LayoutNodeRef,
@@ -620,6 +709,7 @@ pub(crate) fn swap_panes(
     if pa.starts_with(&pb) || pb.starts_with(&pa) {
         return Err(bad_placement());
     }
+    tree.swap_entries(&pa, &pb)?;
     let style = tree.style.clone();
     let (da, db) = (tree.depth_of(&pa), tree.depth_of(&pb));
     let na = extracted(tree.get(&pa).ok_or_else(bad_placement)?, &style);
@@ -789,6 +879,10 @@ pub(crate) fn apply_preset(
         .ok_or_else(|| {
             EditError::Invalid(issue(EditIssue::UnknownPreset).arg("preset", preset_id))
         })?;
+    let defaults = editor
+        .default_window_text(&target.window)?
+        .map(|text| parse_rendered(&text))
+        .unwrap_or_default();
     let win = Win::open(editor, target)?;
     let tree = win.tree(editor);
     let style = tree.style.clone();
@@ -823,8 +917,15 @@ pub(crate) fn apply_preset(
         Ok((node, tree.depth_of(path)))
     };
     let mut panes: HashMap<String, (KdlNode, usize)> = HashMap::new();
+    let mut limits = Limits::new();
     for (id, path) in &named {
         panes.insert(id.clone(), copy(path, false)?);
+        if let Some(found) = tree.limits_of(path) {
+            limits.entry(id.clone()).or_default().push(found);
+        }
+    }
+    for (id, found) in default_limits(&defaults, &named) {
+        limits.entry(id).or_default().push(found);
     }
     let mut hidden = Vec::new();
     for path in &left_out {
@@ -842,10 +943,18 @@ pub(crate) fn apply_preset(
             root_depth,
             root_id.as_deref(),
             &mut panes,
+            &limits,
             &style,
         )?
     } else {
-        let arranged = build_preset(&preset.root, root_depth + 1, None, &mut panes, &style)?;
+        let arranged = build_preset(
+            &preset.root,
+            root_depth + 1,
+            None,
+            &mut panes,
+            &limits,
+            &style,
+        )?;
         let mut children = vec![arranged];
         let mut sizes = vec!["1fr"];
         for (node, depth) in hidden {
@@ -887,6 +996,66 @@ fn collect_left_out(
     }
 }
 
+/// Per pane id the limits it had (current tree first, then the defaults).
+type Limits = HashMap<String, Vec<(ListKind, Entries)>>;
+
+/// The limit lists a pane carries into a preset's split (sizes come from
+/// the preset).
+const LIMIT_LISTS: &[(&str, &str)] = &[
+    ("min-sizes", "none"),
+    ("max-sizes", "none"),
+    ("collapsible", "false"),
+];
+
+/// The limit entries of child `index` of a container, with its kind.
+fn limits_in(container: &KdlNode, index: usize) -> Option<(ListKind, Entries)> {
+    let kind = list_kind(container)?;
+    let entries: Entries = LIMIT_LISTS
+        .iter()
+        .filter_map(|&(key, _)| {
+            let items = full_list(container, key)?;
+            Some((key.to_owned(), items.get(index)?.clone()))
+        })
+        .collect();
+    Some((kind, entries))
+}
+
+/// The limits the default layout gives the named panes (every breakpoint
+/// of the window; the first found per kind wins).
+fn default_limits(
+    defaults: &[KdlNode],
+    named: &[(String, Vec<usize>)],
+) -> Vec<(String, (ListKind, Entries))> {
+    fn walk(node: &KdlNode, wanted: &[&str], out: &mut Vec<(String, (ListKind, Entries))>) {
+        if !is_container(node) && node.name().value() != "window" {
+            return;
+        }
+        for (index, child) in kids(node).iter().enumerate() {
+            if let Some(id) = str_prop(child, "id")
+                && wanted.contains(&id)
+                && let Some(found) = limits_in(node, index)
+            {
+                out.push((id.to_owned(), found));
+            }
+            walk(child, wanted, out);
+        }
+    }
+    let wanted: Vec<&str> = named.iter().map(|(id, _)| id.as_str()).collect();
+    let mut out = Vec::new();
+    for top in defaults {
+        match top.name().value() {
+            "window" => walk(top, &wanted, &mut out),
+            "breakpoint" => {
+                for window in kids(top) {
+                    walk(window, &wanted, &mut out);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// A preset's arrangement as a node at `depth`, its panes taken out of
 /// `panes` (the config checks that each is named once).
 fn build_preset(
@@ -894,6 +1063,7 @@ fn build_preset(
     depth: usize,
     id: Option<&str>,
     panes: &mut HashMap<String, (KdlNode, usize)>,
+    limits: &Limits,
     style: &Style,
 ) -> Result<KdlNode, EditError> {
     let (header, children) = match preset {
@@ -907,7 +1077,36 @@ fn build_preset(
             children,
         } => {
             let split = format!("split {}", quote(orientation_name(*orientation)));
-            (with_sizes(with_id(split, id), sizes), children)
+            let mut header = with_sizes(with_id(split, id), sizes);
+            let kind = ListKind::Split(*orientation);
+            for &(key, default) in LIMIT_LISTS {
+                let values: Vec<Option<String>> = children
+                    .iter()
+                    .map(|child| {
+                        let PresetNode::Pane { id: pane } = child else {
+                            return None;
+                        };
+                        limits
+                            .get(pane)?
+                            .iter()
+                            .filter(|(k, _)| *k == kind)
+                            .find_map(|(_, entries)| {
+                                entries
+                                    .iter()
+                                    .find(|(k, _)| k == key)
+                                    .map(|(_, v)| v.clone())
+                            })
+                    })
+                    .collect();
+                if values.iter().any(Option::is_some) {
+                    let values: Vec<String> = values
+                        .into_iter()
+                        .map(|v| v.unwrap_or_else(|| default.to_owned()))
+                        .collect();
+                    header = with_list(header, key, &values);
+                }
+            }
+            (header, children)
         }
         PresetNode::Stack { sizes, children } => {
             (with_sizes(with_id("stack".to_owned(), id), sizes), children)
@@ -916,7 +1115,7 @@ fn build_preset(
     };
     let mut built = Vec::with_capacity(children.len());
     for child in children {
-        built.push(build_preset(child, depth + 1, None, panes, style)?);
+        built.push(build_preset(child, depth + 1, None, panes, limits, style)?);
     }
     container(&header, depth, built, style)
 }

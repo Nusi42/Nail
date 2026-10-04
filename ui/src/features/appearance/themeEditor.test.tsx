@@ -126,6 +126,29 @@ describe("theme editor registrations", () => {
     void must(appRegistry.actions["theme.new"]).run(ctx, []);
     expect(env.store.getState().windows).toContain(THEME_NEW_DIALOG);
   });
+
+  // Review finding (ADR 0138): a way back from an unreadable theme that
+  // needs only the palette.
+  it("resets the appearance to the built-in themes through theme.reset", async () => {
+    const env = createEnv();
+    const id = await userTheme(env);
+    await env.client.request({ type: "SetTheme", theme_id: id }, "Themes");
+    const settings = env.transport.data.features.appearance.settings;
+    expect(settings.theme).toBe(id);
+    expect(appRegistry.actionInfo["theme.reset"]?.icon).toBe("rotate-ccw");
+    const ctx = {
+      store: env.store,
+      client: env.client,
+      queryClient: env.queryClient,
+    } as unknown as Parameters<NonNullable<(typeof appRegistry.actions)["theme.reset"]>["run"]>[0];
+    await act(async () => {
+      await must(appRegistry.actions["theme.reset"]).run(ctx, []);
+    });
+    const after = env.transport.data.features.appearance.settings;
+    expect(after.follow_system).toBe(true);
+    expect([after.light, after.dark]).toEqual(["frost", "graphite"]);
+    expect(after.overrides).toEqual({});
+  });
 });
 
 describe("theme editor", () => {
@@ -384,6 +407,121 @@ describe("theme editor", () => {
           name: "Value of color.accent",
         }),
       ).toHaveValue("#00aa00");
+    });
+    await settleQueries(env);
+  });
+
+  // Review finding (ADR 0138): a picker change still waiting for its write
+  // must not come back after Undo, and Undo must not undo an older entry.
+  it("writes a waiting picker change before Undo, then undoes that change", async () => {
+    const env = createEnv();
+    const id = await userTheme(env);
+    showEditor(env, id);
+    const row = await tokenRow("color.accent");
+    const field = within(row).getByRole("textbox", { name: "Value of color.accent" });
+    fireEvent.change(field, { target: { value: "#00aa00" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    const undo = await screen.findByRole("button", { name: "Undo Edit theme" });
+    const before = mockEditHistory(env.transport, "appearance").undo.length;
+    // A long pause: the picker's change is still waiting when Undo is clicked.
+    setThemeEditDelay(60_000);
+    fireEvent.change(within(row).getByLabelText("Pick a colour for color.accent"), {
+      target: { value: "#ff0000" },
+    });
+    fireEvent.click(undo);
+    await waitFor(() => {
+      const history = mockEditHistory(env.transport, "appearance");
+      // The picker change was written, then undone; the first edit stays.
+      expect(history.redo).toHaveLength(1);
+      expect(history.undo).toHaveLength(before);
+    });
+    await waitFor(async () => {
+      expect(
+        within(await tokenRow("color.accent")).getByRole("textbox", {
+          name: "Value of color.accent",
+        }),
+      ).toHaveValue("#00aa00");
+    });
+    await settleQueries(env);
+  });
+
+  // Review finding (ADR 0138): unreadable text is warned about at once, and
+  // Ctrl+Z (no readable button needed) takes the edit back.
+  it("warns about unreadable text and undoes with Ctrl+Z", async () => {
+    const env = createEnv();
+    const id = await userTheme(env);
+    showEditor(env, id);
+    expect(screen.queryByText(/Hard to read/)).toBeNull();
+    const field = within(await tokenRow("color.fg")).getByRole("textbox", {
+      name: "Value of color.fg",
+    });
+    fireEvent.change(field, { target: { value: "#ffffff" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    const warning = await screen.findByText(/Hard to read: color\.fg on color\.bg/);
+    expect(warning).toHaveTextContent("Ctrl+Z");
+    expect(warning).toHaveTextContent("Reset appearance");
+    await screen.findByRole("button", { name: "Undo Edit theme" });
+    // Ctrl+Z in a text field is the field's own text undo ...
+    const before = mockEditHistory(env.transport, "appearance").undo.length;
+    fireEvent.keyDown(screen.getByLabelText("Find a setting"), { key: "z", ctrlKey: true });
+    expect(mockEditHistory(env.transport, "appearance").undo).toHaveLength(before);
+    // ... and so it is in a value field while something is typed there ...
+    const typed = within(await tokenRow("color.border")).getByRole("textbox", {
+      name: "Value of color.border",
+    });
+    fireEvent.change(typed, { target: { value: "#123" } });
+    fireEvent.keyDown(typed, { key: "z", ctrlKey: true });
+    expect(mockEditHistory(env.transport, "appearance").undo).toHaveLength(before);
+    fireEvent.keyDown(typed, { key: "Escape" });
+    // ... but in the edited field, holding its saved value, Ctrl+Z undoes
+    // the edit (the field kept its place: no remount).
+    const fg = within(await tokenRow("color.fg")).getByRole("textbox", {
+      name: "Value of color.fg",
+    });
+    expect(fg).toBe(field);
+    expect(fg).toHaveAttribute("data-history-keys");
+    fireEvent.keyDown(fg, { key: "z", ctrlKey: true });
+    await waitFor(() => {
+      expect(screen.queryByText(/Hard to read/)).toBeNull();
+    });
+    expect(mockEditHistory(env.transport, "appearance").redo).toHaveLength(1);
+    // Ctrl+Y redoes it.
+    fireEvent.keyDown(screen.getByRole("region", { name: "Theme editor" }), {
+      key: "y",
+      ctrlKey: true,
+    });
+    expect(await screen.findByText(/Hard to read/)).toBeInTheDocument();
+    await settleQueries(env);
+  });
+
+  // Review finding (ADR 0138): an Appearance override wins over the theme;
+  // the editor says so, previews it and can clear it.
+  it("shows and clears an Appearance override of a token", async () => {
+    const env = createEnv();
+    const id = await userTheme(env);
+    const appearance = (await env.client.request({ type: "ListThemes" }, "Themes")).appearance;
+    await env.client.request(
+      {
+        type: "SetThemePreferences",
+        preferences: {
+          follow_system: appearance.settings.follow_system,
+          light: appearance.settings.light,
+          dark: appearance.settings.dark,
+          density: appearance.settings.density,
+          overrides: { accent: "#aa3366", radius: 9 },
+        },
+      },
+      "Themes",
+    );
+    showEditor(env, id);
+    const row = await tokenRow("color.accent");
+    expect(within(row).getByText("Overridden in Appearance: #aa3366")).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Clear override" }));
+    await waitFor(() => {
+      expect(env.transport.data.features.appearance.settings.overrides).toEqual({ radius: 9 });
+    });
+    await waitFor(async () => {
+      expect(within(await tokenRow("color.accent")).queryByText(/Overridden/)).toBeNull();
     });
     await settleQueries(env);
   });

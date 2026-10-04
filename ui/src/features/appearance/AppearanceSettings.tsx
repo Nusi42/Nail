@@ -33,6 +33,7 @@ import { preferencesOf, useAppearance, useSetTheme, useSetThemePreferences } fro
 import { useThemeName } from "./ThemeEditor";
 import { previewColors } from "./themes";
 import { pickerColor, pixels } from "./tokens";
+import { registerPendingWrite } from "./pendingWrites";
 import { themeEditDelay } from "./useThemeEdits";
 
 /** Colours of a theme's preview (rail, list, accent, text). */
@@ -230,7 +231,8 @@ function OverridesForm({
 }: {
   appearance: Appearance;
   busy: boolean;
-  onApply: (overrides: ThemeOverrides) => void;
+  /** Writes the overrides; resolves once written (or failed). */
+  onApply: (overrides: ThemeOverrides) => Promise<void>;
 }) {
   const t = useT();
   const id = useId();
@@ -242,6 +244,11 @@ function OverridesForm({
   const [waiting, setWaiting] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The latest draft and write call, for a delayed write or a flush.
+  const latest = useRef({ draft, onApply });
+  useEffect(() => {
+    latest.current = { draft, onApply };
+  });
   // Saved elsewhere (undo, another window): show it unless a change waits.
   if (seen !== savedKey && !waiting) {
     setSeen(savedKey);
@@ -253,13 +260,13 @@ function OverridesForm({
     },
     [],
   );
-  const apply = (overrides: ThemeOverrides | null) => {
+  const apply = (overrides: ThemeOverrides | null): Promise<void> => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
     setWaiting(false);
     if (overrides === null) {
       setProblem({ id: "appearance-overrides-not-a-number" });
-      return;
+      return Promise.resolve();
     }
     const issue = overrideIssues(overrides)[0];
     if (issue) {
@@ -268,11 +275,25 @@ function OverridesForm({
         id: `theme-overrides-issue-${issue}`,
         args: { min: range[0], max: range[1] },
       });
-      return;
+      return Promise.resolve();
     }
     setProblem(null);
-    onApply(overrides);
+    return latest.current.onApply(overrides);
   };
+  const applyRef = useRef(apply);
+  useEffect(() => {
+    applyRef.current = apply;
+  });
+  // Undo / Redo write a waiting change first (ADR 0138).
+  useEffect(
+    () =>
+      registerPendingWrite(() =>
+        timer.current === null
+          ? Promise.resolve()
+          : applyRef.current(overridesOf(latest.current.draft)),
+      ),
+    [],
+  );
   /** A slider or the colour picker moved: show it, apply it after a pause. */
   const live = (key: keyof OverrideDraft) => (value: string) => {
     const next = { ...draft, [key]: value };
@@ -280,7 +301,7 @@ function OverridesForm({
     setWaiting(true);
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      apply(overridesOf(next));
+      void applyRef.current(overridesOf(next));
     }, themeEditDelay());
   };
   const fontSize = pixels(theme.tokens["font-size"]?.body) ?? FONT_SIZE_RANGE[0];
@@ -295,7 +316,7 @@ function OverridesForm({
       aria-labelledby={`${id}-title`}
       onSubmit={(event) => {
         event.preventDefault();
-        apply(overridesOf(draft));
+        void apply(overridesOf(draft));
       }}
     >
       <h3 data-part="card.title" id={`${id}-title`}>
@@ -361,7 +382,7 @@ function OverridesForm({
           disabled={busy}
           onClick={() => {
             setDraft(draftOf({}));
-            apply({});
+            void apply({});
           }}
         >
           {t("appearance-overrides-reset")}
@@ -515,8 +536,9 @@ export function AppearanceSettings({ node }: WidgetProps) {
           <OverridesForm
             appearance={a}
             busy={busy}
-            onApply={(overrides) => {
-              update({ overrides });
+            onApply={async (overrides) => {
+              // The error shows below (`setPreferences.error`).
+              await setPreferences.mutateAsync({ ...prefs, overrides }).catch(() => undefined);
             }}
           />
         </section>

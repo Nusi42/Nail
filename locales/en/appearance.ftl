@@ -60,6 +60,10 @@ appearance-action-edit-theme = Edit theme
 appearance-action-edit-theme-keywords = theme editor colours colors tokens style parts appearance customize
 appearance-action-new-theme = New theme
 appearance-action-new-theme-keywords = create theme duplicate copy appearance
+# Palette action (M5d review): back to the built-in themes (Follow Windows,
+# no overrides) — the way out of an unreadable theme.
+appearance-action-reset = Reset appearance
+appearance-action-reset-keywords = default built-in theme restore unreadable contrast colours colors appearance
 
 ## Theme editor (M5d WP183)
 
@@ -90,6 +94,12 @@ theme-editor-duplicate = Duplicate as new theme
 theme-editor-rename = Rename
 theme-editor-delete = Delete
 theme-editor-saving = Saving…
+# The edited colours make text hard to read (M5d review). $fg / $bg are
+# token names (color.fg), $ratio / $needed contrast ratios (4.5).
+theme-editor-contrast-warning = Hard to read: { $fg } on { $bg } has a contrast of only { $ratio }:1 (text needs at least { $needed }:1). Undo with Ctrl+Z, or run “Reset appearance” from the command palette (Ctrl+K).
+# A token the Appearance page overrides for every theme; $value = the override.
+theme-editor-overridden = Overridden in Appearance: { $value }
+theme-editor-clear-override = Clear override
 theme-editor-builtin-notice = This is a built-in theme, so it cannot be changed. Duplicate it to edit your own copy; the original stays as it is.
 theme-editor-reload = Reload the theme
 # $name (string) — the theme that is copied

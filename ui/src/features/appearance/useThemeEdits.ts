@@ -5,12 +5,15 @@
  * entry. Writes never overlap: changes made while one is on its way go in
  * the next, with the revision that write left (`base_revision`), so a
  * theme file changed on disk answers `conflict` instead of being
- * overwritten. Pending changes are written when the editor closes.
+ * overwritten. Pending changes are written when the editor closes, and
+ * before Undo / Redo (`./pendingWrites.ts`, ADR 0138); `flush` resolves
+ * only once everything, including a write already on its way, is written.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ThemeDetails, ThemeEditTarget, ThemePatch } from "../../api/generated";
 import { themeEditorKeys, useEditTheme } from "./editorQueries";
+import { registerPendingWrite } from "./pendingWrites";
 
 let commitDelay = 400;
 
@@ -47,47 +50,68 @@ export function useThemeEdits(themeId: string | null): ThemeEdits {
   const [failure, setFailure] = useState<unknown>(null);
   const pending = useRef(new Map<string, ThemePatch>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flying = useRef(false);
+  /** The write on its way, if any. */
+  const flight = useRef<Promise<void> | null>(null);
   const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  /** Writes one batch of the pending changes. */
+  const write = useCallback(
+    async (id: string, batch: Map<string, ThemePatch>) => {
+      const target: ThemeEditTarget = { kind: "theme", theme_id: id };
+      // The revision the last answer left (read now, not at render time).
+      const revision = queryClient.getQueryData<ThemeDetails>(
+        themeEditorKeys.detailsOf(id),
+      )?.revision;
+      try {
+        await edit.mutateAsync({
+          target,
+          patches: [...batch.values()],
+          ...(revision === undefined ? {} : { baseRevision: revision }),
+        });
+        setFailure(null);
+      } catch (error) {
+        setFailure(error);
+      } finally {
+        setDrafts((current) => {
+          const next = new Map(current);
+          for (const key of batch.keys()) if (!pending.current.has(key)) next.delete(key);
+          return next;
+        });
+      }
+    },
+    [edit, queryClient],
+  );
 
   const flush = useCallback(async () => {
     if (timer.current !== null) {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    if (themeId === null || flying.current || pending.current.size === 0) return;
-    const batch = new Map(pending.current);
-    pending.current.clear();
-    flying.current = true;
-    const target: ThemeEditTarget = { kind: "theme", theme_id: themeId };
-    // The revision the last answer left (read now, not at render time).
-    const revision = queryClient.getQueryData<ThemeDetails>(
-      themeEditorKeys.detailsOf(themeId),
-    )?.revision;
-    try {
-      await edit.mutateAsync({
-        target,
-        patches: [...batch.values()],
-        ...(revision === undefined ? {} : { baseRevision: revision }),
+    if (themeId === null) return;
+    // Writes never overlap: wait for the one on its way, then write the rest.
+    for (;;) {
+      if (flight.current !== null) {
+        await flight.current;
+        continue;
+      }
+      if (pending.current.size === 0) break;
+      const batch = new Map(pending.current);
+      pending.current.clear();
+      const run = write(themeId, batch).finally(() => {
+        flight.current = null;
       });
-      setFailure(null);
-    } catch (error) {
-      setFailure(error);
-    } finally {
-      flying.current = false;
-      setDrafts((current) => {
-        const next = new Map(current);
-        for (const key of batch.keys()) if (!pending.current.has(key)) next.delete(key);
-        return next;
-      });
-      if (pending.current.size > 0) void flushRef.current();
-      else setSaving(false);
+      flight.current = run;
+      await run;
     }
-  }, [edit, queryClient, themeId]);
+    setSaving(false);
+  }, [themeId, write]);
 
   useEffect(() => {
     flushRef.current = flush;
   }, [flush]);
+
+  // Undo / Redo write what waits first (ADR 0138).
+  useEffect(() => registerPendingWrite(() => flushRef.current()), []);
 
   // Another theme, or the editor closes: write what is pending.
   useEffect(

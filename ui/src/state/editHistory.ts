@@ -46,6 +46,36 @@ export function applyEditHistory(queryClient: QueryClient, history: EditHistory)
 }
 
 /** The next entry Undo / Redo would take, `null` when there is none. */
+/**
+ * The history direction of a key press: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z
+ * redo (`null` for anything else). The editors' keyboard way back (M5d
+ * review, ADR 0138).
+ */
+export function historyKey(
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">,
+): "undo" | "redo" | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+  const key = event.key.toLowerCase();
+  if (key === "z") return event.shiftKey ? "redo" : "undo";
+  if (key === "y" && !event.shiftKey) return "redo";
+  return null;
+}
+
+/**
+ * Whether the element keeps its own text undo (Ctrl+Z stays the field's).
+ * A field marked `data-history-keys` (an editor's value field holding its
+ * saved value, nothing typed) leaves Ctrl+Z to the history.
+ */
+export function isTextField(target: EventTarget | null): boolean {
+  if (target instanceof HTMLElement && target.hasAttribute("data-history-keys")) return false;
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
+  return (
+    target instanceof HTMLInputElement &&
+    ["text", "search", "url", "email", "number", "password", "tel"].includes(target.type)
+  );
+}
+
 export function nextUndo(history: EditHistory | undefined) {
   return history?.undo.at(-1) ?? null;
 }

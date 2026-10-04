@@ -46,6 +46,7 @@ import { editorChrome } from "./chrome";
 import { LayoutEditorSettings } from "./SettingsCard";
 import { customizeTarget, startCustomizing } from "./start";
 import { editorStore, setChromeFactory, stopEditing } from "./store";
+import { CustomizeViewWatcher } from "./ViewWatcher";
 
 export { LAYOUT_EDITOR_SKIN_CSS } from "./skin";
 export { startCustomizing, customizeTarget } from "./start";
@@ -63,12 +64,14 @@ export const widgets: Feature["widgets"] = {
 
 /**
  * Action ids → handlers: `layout.customize` customizes the shown view's
- * window (again: Done).
+ * window (again on the same window: Done; on another one: that window,
+ * ADR 0138).
  */
 export const actions: Feature["actions"] = {
   [LAYOUT_CUSTOMIZE_ACTION]: {
     run: (ctx) => {
-      if (editorStore.getState().window !== null) stopEditing();
+      const editing = editorStore.getState().window;
+      if (editing !== null && editing === customizeTarget(ctx.layout, ctx.store)) stopEditing();
       else startCustomizing(ctx.store, ctx.layout);
     },
     enabled: (ctx) =>
@@ -108,4 +111,4 @@ export const windows: NonNullable<Feature["windows"]> = {};
 export const events: Feature["events"] = [];
 
 /** Background components. */
-export const effects: Feature["effects"] = [];
+export const effects: Feature["effects"] = [CustomizeViewWatcher];

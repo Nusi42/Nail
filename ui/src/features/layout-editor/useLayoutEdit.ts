@@ -46,15 +46,24 @@ export function useLayoutEdit(): (
   );
 }
 
-/** Undo / Redo of the layout history, with "Undo anyway" after a conflict. */
+/**
+ * Undo / Redo of the layout history, with "Undo anyway" after a conflict.
+ * A step marks the session busy until it is answered, and a step asked for
+ * while busy is ignored — a double-click undoes one entry (ADR 0138).
+ */
 export function useLayoutStep(): (direction: "undo" | "redo", force?: boolean) => void {
   const step = useEditHistoryStep("layout");
   const { mutate } = step;
   return useCallback(
     (direction, force = false) => {
+      if (editorStore.getState().busy) return;
+      editorStore.setState({ busy: true });
       mutate(
         { direction, force },
         {
+          onSettled: () => {
+            editorStore.setState({ busy: false });
+          },
           onSuccess: () => {
             setMessage({
               kind: "status",

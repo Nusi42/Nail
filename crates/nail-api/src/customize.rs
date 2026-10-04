@@ -160,7 +160,9 @@ pub enum LayoutPatch {
 
     // --- M5d (ADR 0131): the layout editor and the toolbar customizer ---
     /// Move a node (a pane with everything in it) to another place: into a
-    /// container, or docked beside a node ([`LayoutPlacement`]). A container
+    /// container, or docked beside a node ([`LayoutPlacement`]). Into a
+    /// container of the kind it left (its own, a stack, a split of the same
+    /// orientation) it keeps its size and limits. A container
     /// left with no children is removed; a split left with one child is
     /// replaced by that child. `invalid_request` with
     /// [`EditIssue::InvalidPlacement`] for a move into the node itself, its
@@ -171,8 +173,10 @@ pub enum LayoutPatch {
         /// Where it goes (references the tree before the move).
         to: LayoutPlacement,
     },
-    /// Swap two nodes (with their subtrees); each takes the other's place,
-    /// split size and limits. Neither may contain the other.
+    /// Swap two nodes (with their subtrees); each takes the other's place
+    /// and keeps its own split size and limits when both containers are of
+    /// the same kind (stacks, or splits of one orientation), else takes
+    /// the slot's. Neither may contain the other.
     SwapPanes {
         /// One node.
         a: LayoutNodeRef,
@@ -207,7 +211,8 @@ pub enum LayoutPatch {
     },
     /// Apply a preset of the layout's `presets` section to a window
     /// breakpoint: the panes it names (by node id) are arranged in the
-    /// preset's containers with its sizes; panes of the breakpoint the preset
+    /// preset's containers with its sizes (each keeping its limits from a
+    /// split of the same orientation); panes of the breakpoint the preset
     /// does not name stay, hidden, after the preset's tree in a stack at the
     /// root. `invalid_request` with [`EditIssue::UnknownPreset`] /
     /// [`EditIssue::PresetPaneMissing`].

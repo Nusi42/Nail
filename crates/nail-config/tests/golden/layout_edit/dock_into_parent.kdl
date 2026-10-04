@@ -3,8 +3,8 @@ layout "Mine" extends="default" {
     window "mail" {
         // Folders | list | reader.
         split "horizontal" id="panes" \
-            sizes="1fr 1.4fr 1fr" /* tuned */ \
-            min-sizes="300px 320px none" {
+            sizes="1fr 1.4fr 240px" /* tuned */ \
+            min-sizes="300px 320px 200px" {
             // Messages.
             stack id="list-pane" sizes="auto 1fr" {
                 list-header id="list-header"
