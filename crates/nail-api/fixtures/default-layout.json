@@ -1061,6 +1061,18 @@
       "alias_of": null,
       "args": []
     },
+    "layout.customize": {
+      "label": "@layout-editor.action.customize",
+      "icon": "layout-dashboard",
+      "alias_of": null,
+      "args": []
+    },
+    "toolbar.customize": {
+      "label": "@toolbar-editor.action.customize",
+      "icon": "settings-2",
+      "alias_of": null,
+      "args": []
+    },
     "security.autocrypt.import": {
       "label": "@security.action.autocrypt-import",
       "icon": "key-round",
@@ -2729,6 +2741,15 @@
         "label": "@settings.section.accounts",
         "icon": "user-round"
       }
+    ],
+    "context:toolbar": [
+      {
+        "type": "action",
+        "action": "toolbar.customize",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
     ]
   },
   "toolbar_settings": {
@@ -3527,5 +3548,108 @@
       "pop_out": true,
       "instances": null
     }
-  }
+  },
+  "presets": [
+    {
+      "id": "three-panes",
+      "window": "mail",
+      "label": "@layout.preset.three-panes",
+      "icon": "columns-3",
+      "root": {
+        "type": "split",
+        "orientation": "horizontal",
+        "sizes": [
+          "260px",
+          "1fr",
+          "1.4fr"
+        ],
+        "children": [
+          {
+            "type": "pane",
+            "id": "sidebar"
+          },
+          {
+            "type": "pane",
+            "id": "list-pane"
+          },
+          {
+            "type": "pane",
+            "id": "reader"
+          }
+        ]
+      }
+    },
+    {
+      "id": "reader-below",
+      "window": "mail",
+      "label": "@layout.preset.reader-below",
+      "icon": "rows-2",
+      "root": {
+        "type": "split",
+        "orientation": "horizontal",
+        "sizes": [
+          "260px",
+          "1fr"
+        ],
+        "children": [
+          {
+            "type": "pane",
+            "id": "sidebar"
+          },
+          {
+            "type": "split",
+            "orientation": "vertical",
+            "sizes": [
+              "1fr",
+              "1.2fr"
+            ],
+            "children": [
+              {
+                "type": "pane",
+                "id": "list-pane"
+              },
+              {
+                "type": "pane",
+                "id": "reader"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "wide-reader",
+      "window": "mail",
+      "label": "@layout.preset.wide-reader",
+      "icon": "panel-left",
+      "root": {
+        "type": "split",
+        "orientation": "horizontal",
+        "sizes": [
+          "1fr",
+          "2fr"
+        ],
+        "children": [
+          {
+            "type": "pane",
+            "id": "list-pane"
+          },
+          {
+            "type": "pane",
+            "id": "reader"
+          }
+        ]
+      }
+    },
+    {
+      "id": "focus",
+      "window": "mail",
+      "label": "@layout.preset.focus",
+      "icon": "square",
+      "root": {
+        "type": "pane",
+        "id": "reader"
+      }
+    }
+  ]
 }

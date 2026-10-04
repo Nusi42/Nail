@@ -8,6 +8,7 @@
 //! `accounts.kdl` and `rules.kdl` are re-read by the core's own watchers
 //! after a revert.
 
+use nail_api::editing::HistoryScope;
 use nail_api::{ApiError, ConfigFile, Request, Response};
 use nail_config::ConfigUpdate;
 
@@ -17,6 +18,15 @@ use crate::service::Service;
 fn broadcast(service: &Service, updates: &[ConfigUpdate]) {
     for update in updates {
         service.broadcast(update.to_event());
+    }
+}
+
+/// The undo history of a theme / layout write (M5d).
+fn broadcast_file_history(service: &Service, file: ConfigFile) {
+    match file {
+        ConfigFile::Layout => crate::editing::broadcast_history(service, HistoryScope::Layout),
+        ConfigFile::Theme => crate::editing::broadcast_history(service, HistoryScope::Appearance),
+        ConfigFile::Accounts | ConfigFile::Rules => {}
     }
 }
 
@@ -34,9 +44,13 @@ fn handle_blocking(
     request: Request,
 ) -> Result<Response> {
     Ok(match request {
-        Request::UpdateLayout { patches } => {
-            let updates = config.update_layout(&patches)?;
+        Request::UpdateLayout {
+            patches,
+            base_revision,
+        } => {
+            let updates = config.update_layout_checked(&patches, base_revision.as_deref())?;
             broadcast(service, &updates);
+            crate::editing::broadcast_history(service, HistoryScope::Layout);
             Response::Done
         }
         Request::PreviewConfigMerge { file, incoming } => Response::ConfigMergePreview {
@@ -62,6 +76,7 @@ fn handle_blocking(
         } => {
             let (backup, updates) = config.apply_merge(file, &incoming, &choices, default)?;
             broadcast(service, &updates);
+            broadcast_file_history(service, file);
             Response::ConfigMergeApplied { backup }
         }
         Request::ListConfigBackups { file } => Response::ConfigBackups {
@@ -70,6 +85,7 @@ fn handle_blocking(
         Request::RevertConfig { file, backup_id } => {
             let updates = config.revert(file, backup_id.as_ref())?;
             broadcast(service, &updates);
+            broadcast_file_history(service, file);
             if file == ConfigFile::Accounts {
                 // Without a watcher (tests, `--no-watch`) apply it here.
                 service.reload_accounts_file();

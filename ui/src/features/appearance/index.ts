@@ -38,9 +38,16 @@ export {
   useSetThemePreferences,
 } from "./queries";
 
+/** The full theme editor (`theme-editor`); WP183 replaces this placeholder. */
+function ThemeEditorPlaceholder(): null {
+  return null;
+}
+
 /** Layout widget kinds → components (`appearance-settings`: Settings → Appearance). */
 export const widgets: Feature["widgets"] = {
   "appearance-settings": AppearanceSettings,
+  // M5d (ADR 0131): the theme editor (WP183 replaces this placeholder).
+  "theme-editor": ThemeEditorPlaceholder,
 };
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {};

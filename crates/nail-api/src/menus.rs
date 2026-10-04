@@ -306,6 +306,7 @@ mod tests {
             rail: vec![],
             settings: vec![],
             window_frames: IndexMap::new(),
+            presets: vec![],
         }
     }
 

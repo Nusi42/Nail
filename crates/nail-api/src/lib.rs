@@ -99,6 +99,12 @@
 //!   instances, modal / resizable / sizes / pop-out / instances, the
 //!   `layout.kdl` window frame), remembered window state
 //!   (`window-state.json`) and desktop pop-out windows.
+//! * M5d (ADR 0131): [`editing`] — the in-app editors: the layout editor's
+//!   and toolbar customizer's write-back patches (move / swap / dock panes,
+//!   add / remove widgets, hide / show, presets, toolbar items between the
+//!   bar and "More"), theme edits (tokens, part overrides, duplicate /
+//!   rename / delete user themes), the undo history of both and change
+//!   detection for files edited on disk.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -128,6 +134,7 @@ pub mod customize;
 pub mod desktop;
 pub mod diagnostics;
 pub mod domain;
+pub mod editing;
 pub mod engine;
 pub mod error;
 pub mod exchange;
@@ -177,9 +184,9 @@ pub use compose::{
 };
 pub use config::SourceLocation;
 pub use config::layout::{
-    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, MenuItem, Orientation,
-    RailItem, ResolvedLayout, SettingsGroup, SettingsSection, ToolbarItem, ToolbarOverflow,
-    ToolbarSettings, ViewDef,
+    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LayoutPreset,
+    MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout, SettingsGroup, SettingsSection,
+    ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
 };
 pub use config::theme::{
     AncestorSelector, HtmlDarkMode, Icon, MessageDisplay, PartCondition, PartRule, RawCss,
@@ -418,6 +425,11 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     windows::PopOutIssue::export_all(&cfg)?;
     windows::PopOutOpen::export_all(&cfg)?;
     windows::PopOutReport::export_all(&cfg)?;
+    // M5d (ADR 0131): editor types the UI names directly.
+    editing::EditIssue::export_all(&cfg)?;
+    editing::EditKind::export_all(&cfg)?;
+    editing::DockSide::export_all(&cfg)?;
+    editing::ValueOrigin::export_all(&cfg)?;
 
     write_index(out_dir)
 }

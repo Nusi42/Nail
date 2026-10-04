@@ -61,6 +61,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-dav.ftl"),
     ),
     (
+        "core-editors.ftl",
+        include_str!("../../../locales/en/core-editors.ftl"),
+    ),
+    (
         "core-desktop.ftl",
         include_str!("../../../locales/en/core-desktop.ftl"),
     ),
@@ -135,6 +139,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("gmail.ftl", include_str!("../../../locales/en/gmail.ftl")),
     ("itip.ftl", include_str!("../../../locales/en/itip.ftl")),
+    (
+        "layout-editor.ftl",
+        include_str!("../../../locales/en/layout-editor.ftl"),
+    ),
     ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
     (
@@ -170,6 +178,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ("sieve.ftl", include_str!("../../../locales/en/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/en/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/en/system.ftl")),
+    (
+        "toolbar-editor.ftl",
+        include_str!("../../../locales/en/toolbar-editor.ftl"),
+    ),
     ("triage.ftl", include_str!("../../../locales/en/triage.ftl")),
     (
         "windows.ftl",
@@ -212,6 +224,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "core-dav.ftl",
         include_str!("../../../locales/de/core-dav.ftl"),
+    ),
+    (
+        "core-editors.ftl",
+        include_str!("../../../locales/de/core-editors.ftl"),
     ),
     (
         "core-desktop.ftl",
@@ -288,6 +304,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ),
     ("gmail.ftl", include_str!("../../../locales/de/gmail.ftl")),
     ("itip.ftl", include_str!("../../../locales/de/itip.ftl")),
+    (
+        "layout-editor.ftl",
+        include_str!("../../../locales/de/layout-editor.ftl"),
+    ),
     ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
     (
@@ -323,6 +343,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ("sieve.ftl", include_str!("../../../locales/de/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/de/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/de/system.ftl")),
+    (
+        "toolbar-editor.ftl",
+        include_str!("../../../locales/de/toolbar-editor.ftl"),
+    ),
     ("triage.ftl", include_str!("../../../locales/de/triage.ftl")),
     (
         "windows.ftl",

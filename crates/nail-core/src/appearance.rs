@@ -54,6 +54,13 @@ fn send_all(events: &broadcast::Sender<Event>, updates: &[ConfigUpdate]) {
     }
 }
 
+/// The appearance undo history after a write (M5d, ADR 0131).
+fn send_history(config: &ConfigManager, events: &broadcast::Sender<Event>) {
+    drop(events.send(Event::EditHistoryChanged {
+        history: config.edit_history(nail_api::editing::HistoryScope::Appearance),
+    }));
+}
+
 /// `ListThemes`, `SetTheme`, `SetThemePreferences`, `ReportSystemAppearance`.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     if let Request::ReportSystemAppearance { system } = request {
@@ -90,11 +97,13 @@ fn handle_blocking(
         Request::SetTheme { theme_id } => {
             let (appearance, updates) = config.set_theme(&theme_id)?;
             send_all(events, &updates);
+            send_history(config, events);
             appearance
         }
         Request::SetThemePreferences { preferences } => {
             let (appearance, updates) = config.set_theme_preferences(&preferences)?;
             send_all(events, &updates);
+            send_history(config, events);
             appearance
         }
         other => {
@@ -567,7 +576,12 @@ mod tests {
         assert!(
             matches!(
                 events.as_slice(),
-                [Event::ThemeChanged { .. }, Event::ConfigChanged { .. }]
+                [
+                    Event::ThemeChanged { .. },
+                    Event::ConfigChanged { .. },
+                    // M5d: the write is an undo entry of the appearance history.
+                    Event::EditHistoryChanged { history }
+                ] if history.undo.len() == 1
             ),
             "{events:?}"
         );

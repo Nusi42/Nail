@@ -2,6 +2,7 @@
 import type { ActionDef } from "./ActionDef";
 import type { Breakpoint } from "./Breakpoint";
 import type { KeyBinding } from "./KeyBinding";
+import type { LayoutPreset } from "./LayoutPreset";
 import type { MenuItem } from "./MenuItem";
 import type { RailItem } from "./RailItem";
 import type { SettingsGroup } from "./SettingsGroup";
@@ -68,4 +69,8 @@ settings: Array<SettingsGroup>,
  * `size=`, `min-size=`, `modal=`, `resizable=`, `pop-out=`,
  * `instances=`) by window name; only windows that set one.
  */
-window_frames: { [key in string]: WindowFrame }, };
+window_frames: { [key in string]: WindowFrame }, 
+/**
+ * The layout presets (M5d, ADR 0131), in definition order.
+ */
+presets: Array<LayoutPreset>, };

@@ -30,6 +30,7 @@ import {
   useFolders,
   type AppConfig,
 } from "./state/queries";
+import { applyEditHistory } from "./state/editHistory";
 import { applyUiStateChange } from "./state/uiState";
 import { applyPopOuts, applyWindowStateChange } from "./state/windowState";
 import { parsePopOutRoute } from "./state/windows";
@@ -237,6 +238,10 @@ function useCoreEvents(): void {
           break;
         case "PopOutChanged":
           applyPopOuts(queryClient, event.pop_outs);
+          break;
+        // M5d (ADR 0131): the editors' undo histories.
+        case "EditHistoryChanged":
+          applyEditHistory(queryClient, event.history);
           break;
         case "ConfigError":
           ui().setConfigError({

@@ -7,6 +7,10 @@
  * - Saved searches work like in the core.
  * - `UpdateLayout` applies the patches to the mock's resolved layout and
  *   announces it with `ConfigChanged` (the real core writes `layout.kdl`).
+ *   M5d (ADR 0131): it checks `base_revision`, records the write in the
+ *   `layout` undo history (`../../api/editHistoryMock.ts`) and leaves the
+ *   layout editor's / toolbar customizer's patches to their feature mocks
+ *   (`../layout-editor/mock.ts`, `../toolbar-editor/mock.ts`).
  * - The merge requests understand a small subset of KDL, enough for demos
  *   and tests: the file's name, `tokens { <category> "<name>" "<value>" }`
  *   lines of a theme and `keys context="…" { bind "<key>" "<action>" }`
@@ -19,6 +23,7 @@ import type {
   ConfigFile,
   ConfigIssue,
   ConfigMergePreview,
+  EditKind,
   KeyBinding,
   LayoutNode,
   LayoutPatch,
@@ -37,6 +42,14 @@ import { errorResponse, type MockCore } from "../../api/mockMail";
 import { mockConfigTheme } from "../appearance/mock";
 import { normalizeLayout } from "../../api/normalize";
 import { parseQuery } from "../../api/mockSearch";
+import {
+  MOCK_NOT_READY,
+  checkMockBaseRevision,
+  recordMockEdit,
+  registerMockHistoryScope,
+} from "../../api/editHistoryMock";
+import { applyLayoutEditPatch, isLayoutEditPatch } from "../layout-editor/mock";
+import { applyToolbarEditPatch, isToolbarEditPatch } from "../toolbar-editor/mock";
 
 /** The requests this feature answers. */
 export const CUSTOMIZATION_REQUESTS = [
@@ -142,6 +155,9 @@ function defaultLayout(): ResolvedLayout {
 
 /** Applies one patch to a layout; returns an error message or `null`. */
 export function applyPatch(layout: ResolvedLayout, patch: LayoutPatch): string | null {
+  // M5d: the layout editor's and the toolbar customizer's patches.
+  if (isLayoutEditPatch(patch)) return applyLayoutEditPatch(layout, patch);
+  if (isToolbarEditPatch(patch)) return applyToolbarEditPatch(layout, patch);
   switch (patch.op) {
     case "split-sizes":
     case "column-order": {
@@ -198,15 +214,46 @@ export function applyPatch(layout: ResolvedLayout, patch: LayoutPatch): string |
   }
 }
 
-function updateLayout(core: MockCore, patches: readonly LayoutPatch[]): Response {
+/** `LayoutPatch::kind_of`: the undo entry's kind of an `UpdateLayout`. */
+export function editKindOf(patches: readonly LayoutPatch[]): EditKind {
+  const [first, ...rest] = patches;
+  return first !== undefined && rest.every((p) => p.op === first.op) ? first.op : "layout-edits";
+}
+
+// The `layout` undo history covers the resolved layout.
+registerMockHistoryScope("layout", {
+  snapshot: (core) => structuredClone(core.data.layout),
+  restore: (core, snapshot) => {
+    core.data.layout = snapshot as ResolvedLayout;
+    announce(core);
+  },
+});
+
+function updateLayout(
+  core: MockCore,
+  patches: readonly LayoutPatch[],
+  baseRevision: string | null | undefined,
+): Response {
+  const stale = checkMockBaseRevision(core, "layout", baseRevision);
+  if (stale) return stale;
+  const before = structuredClone(core.data.layout);
   const next = structuredClone(core.data.layout);
   for (const patch of patches) {
     const problem = applyPatch(next, patch);
+    if (problem === MOCK_NOT_READY) {
+      return {
+        type: "Error",
+        code: "unsupported",
+        message: `${patch.op} is not available yet`,
+        localized: { id: MOCK_NOT_READY },
+      };
+    }
     if (problem) return errorResponse("invalid_request", problem);
   }
   state(core).layoutPatches.push(...structuredClone(patches));
   core.data.layout = next;
   announce(core);
+  recordMockEdit(core, "layout", editKindOf(patches), before);
   return { type: "Done" };
 }
 
@@ -410,7 +457,7 @@ export function answerCustomization(core: MockCore, request: CustomizationReques
       return { type: "Done" };
     }
     case "UpdateLayout":
-      return updateLayout(core, request.patches);
+      return updateLayout(core, request.patches, request.base_revision);
     case "PreviewConfigMerge": {
       if (request.file !== "theme" && request.file !== "layout") {
         return errorResponse("invalid_request", `${request.file}.kdl cannot be merged`);

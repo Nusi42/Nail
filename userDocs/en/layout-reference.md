@@ -130,6 +130,19 @@ Where you moved or resized a window is remembered separately (in
 Every node can have an `id` (lowercase words, unique within one window
 tree) and a `label`.
 
+Any node, container or widget, can be hidden with `hidden=#true`: it keeps
+its place and options, but Nail does not show it, and its neighbours take
+its space. Remove the property (or set `hidden=#false`) to show it again.
+
+```kdl
+split "horizontal" id="panes" sizes="260px 1fr" {
+    stack id="sidebar" hidden=#true {
+        folder-tree id="folders"
+    }
+    message-list id="list"
+}
+```
+
 ### `split`
 
 Panes next to each other (`"horizontal"`, the default) or on top of each
@@ -576,6 +589,32 @@ Group and section ids are unique on the page, and so are the `id`s of the
 widgets in it. A section with several widgets shows them top to bottom;
 `keywords=` adds search words. The default layout has the groups General,
 Look & feel, Security and Extensions.
+
+## Layout presets
+
+The `presets` section lists ready-made pane arrangements that **Customize
+layout** offers for a window. A preset names the window it arranges and
+the panes of that window by their `id` (`pane "<id>"`), inside `split`,
+`stack` and `tabs` containers with their sizes:
+
+```kdl
+presets {
+    preset "reader-below" window="mail" label="@layout.preset.reader-below" icon="rows-2" {
+        split "horizontal" sizes="260px 1fr" {
+            pane "sidebar"
+            split "vertical" sizes="1fr 1.2fr" {
+                pane "list-pane"
+                pane "reader"
+            }
+        }
+    }
+}
+```
+
+Applying a preset rearranges those panes, everything inside them included;
+panes it does not name stay in the window, hidden. The default layout has
+Three panes, Reader below, Wide reader and Focus for the mail view. A
+`presets` section in your own file replaces the default presets as a whole.
 
 ## Error messages
 

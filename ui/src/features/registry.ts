@@ -20,6 +20,7 @@ import * as customization from "./customization";
 import * as exchange from "./exchange";
 import * as gmail from "./gmail";
 import * as launch from "./launch";
+import * as layoutEditor from "./layout-editor";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
 import * as palette from "./palette";
@@ -37,6 +38,7 @@ import * as shell from "./shell";
 import * as sieve from "./sieve";
 import * as sync from "./sync";
 import * as system from "./system";
+import * as toolbarEditor from "./toolbar-editor";
 import * as triage from "./triage";
 import * as windows from "./windows";
 import type { Feature } from "./types";
@@ -73,6 +75,10 @@ export const features: Readonly<Record<string, Feature>> = {
   // M5c (ADR 0116): the window manager (WP171) and desktop pop-outs (WP173).
   windows,
   popout,
+  // M5d (ADR 0131): the layout editor (WP181) and the toolbar customizer
+  // (WP182); Appearance and the theme editor (WP183) live in `appearance`.
+  layoutEditor,
+  toolbarEditor,
 };
 
 /** The merged registries. */

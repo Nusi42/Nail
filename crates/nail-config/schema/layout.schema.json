@@ -41,6 +41,17 @@
       "description": "Layout name (`layout \"<name>\"`).",
       "type": "string"
     },
+    "presets": {
+      "description": "`presets { preset \"<id>\" window=\"<window>\" label=… icon=… {\n<arrangement> } }` (M5d, ADR 0131): pane arrangements the layout\neditor offers; replaces the base's presets as a whole.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "default": null,
+      "items": {
+        "$ref": "#/$defs/PresetSchema"
+      }
+    },
     "rail": {
       "description": "`rail { view \"<id>\"; item \"<action>\" badge=…; spacer; separator }`\n(M5b); replaces the base's rail.",
       "type": [
@@ -362,6 +373,13 @@
                 "null"
               ]
             },
+            "hidden": {
+              "description": "Hidden (M5d): the renderer skips the node.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "id": {
               "description": "Stable node id.",
               "type": [
@@ -436,6 +454,13 @@
                 "$ref": "#/$defs/NodeSchema"
               }
             },
+            "hidden": {
+              "description": "Hidden (M5d): the renderer skips the node.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "id": {
               "description": "Stable node id.",
               "type": [
@@ -487,6 +512,13 @@
                 "$ref": "#/$defs/NodeSchema"
               }
             },
+            "hidden": {
+              "description": "Hidden (M5d): the renderer skips the node.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "id": {
               "description": "Stable node id.",
               "type": [
@@ -515,6 +547,13 @@
           "description": "A widget: `<kind> id=… label=… <option>=<value>… { row \"<template>\" }`.",
           "type": "object",
           "properties": {
+            "hidden": {
+              "description": "Hidden (M5d): the renderer skips the node.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "id": {
               "description": "Stable node id.",
               "type": [
@@ -572,6 +611,154 @@
           "type": "string",
           "const": "vertical"
         }
+      ]
+    },
+    "PresetNodeSchema": {
+      "description": "A node of a preset's arrangement (M5d).",
+      "oneOf": [
+        {
+          "description": "`split \"horizontal\"|\"vertical\" sizes=\"…\" { … }`.",
+          "type": "object",
+          "properties": {
+            "children": {
+              "description": "Children.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PresetNodeSchema"
+              }
+            },
+            "orientation": {
+              "description": "Direction.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OrientationSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sizes": {
+              "description": "One CSS track size per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "split"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "`stack sizes=\"…\" { … }`.",
+          "type": "object",
+          "properties": {
+            "children": {
+              "description": "Children.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PresetNodeSchema"
+              }
+            },
+            "sizes": {
+              "description": "One CSS track size per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "stack"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "`tabs { … }`.",
+          "type": "object",
+          "properties": {
+            "children": {
+              "description": "Children.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PresetNodeSchema"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "tabs"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "`pane \"<node id>\"`: a pane of the window.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The pane's node id.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pane"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        }
+      ]
+    },
+    "PresetSchema": {
+      "description": "`preset \"<id>\" window=\"<window>\" label=… icon=… { <arrangement> }` of the\n`presets` section (M5d).",
+      "type": "object",
+      "properties": {
+        "icon": {
+          "description": "Lucide icon name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Preset id.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Label: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "The arrangement's root.",
+          "$ref": "#/$defs/PresetNodeSchema"
+        },
+        "window": {
+          "description": "The window it arranges.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "window",
+        "root"
       ]
     },
     "RailItemSchema": {

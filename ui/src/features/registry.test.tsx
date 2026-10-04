@@ -32,7 +32,7 @@ const TEST_DIALOG_TITLE = "window-test-dialog = Test dialog";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b … M5b and M5c slots and contains every built-in", () => {
+  it("has the M1b … M5c and M5d slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
@@ -61,6 +61,8 @@ describe("feature registry", () => {
       "mailWidgets",
       "windows",
       "popout",
+      "layoutEditor",
+      "toolbarEditor",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);

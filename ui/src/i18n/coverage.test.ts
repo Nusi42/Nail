@@ -140,6 +140,10 @@ const NOT_MESSAGES = new Set([
   "virtual-account-editor",
   "virtual-editor",
   "launch-notice",
+  // M5d (ADR 0131): editor widget kinds and an `EditKind` value.
+  "layout-editor-settings",
+  "toolbar-editor-settings",
+  "layout-edits",
   ...FEATURE_MESSAGES.flatMap((m) => m.notMessages),
 ]);
 

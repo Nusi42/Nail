@@ -67,6 +67,8 @@ pub(crate) enum NodeSchema {
         collapsible: Option<String>,
         /// Whether dividers can be dragged (default true).
         resizable: Option<bool>,
+        /// Hidden (M5d): the renderer skips the node.
+        hidden: Option<bool>,
         /// Child nodes.
         children: Vec<NodeSchema>,
     },
@@ -78,6 +80,8 @@ pub(crate) enum NodeSchema {
         label: Option<String>,
         /// One CSS track size per child.
         sizes: Option<String>,
+        /// Hidden (M5d): the renderer skips the node.
+        hidden: Option<bool>,
         /// Child nodes.
         children: Vec<NodeSchema>,
     },
@@ -89,6 +93,8 @@ pub(crate) enum NodeSchema {
         label: Option<String>,
         /// Index of the initially active tab.
         active: Option<u32>,
+        /// Hidden (M5d): the renderer skips the node.
+        hidden: Option<bool>,
         /// Child nodes, one per tab.
         children: Vec<NodeSchema>,
     },
@@ -108,6 +114,8 @@ pub(crate) enum NodeSchema {
         /// Row templates, e.g. `"{from.name}  {date | relative}"`.
         #[serde(default)]
         rows: Vec<String>,
+        /// Hidden (M5d): the renderer skips the node.
+        hidden: Option<bool>,
     },
 }
 
@@ -339,5 +347,53 @@ pub(crate) enum MenuItemSchema {
     Header {
         /// Label.
         label: String,
+    },
+}
+
+/// `preset "<id>" window="<window>" label=… icon=… { <arrangement> }` of the
+/// `presets` section (M5d).
+#[derive(JsonSchema)]
+pub(crate) struct PresetSchema {
+    /// Preset id.
+    id: String,
+    /// The window it arranges.
+    window: String,
+    /// Label: literal text or `@message.id`.
+    label: Option<String>,
+    /// Lucide icon name.
+    icon: Option<String>,
+    /// The arrangement's root.
+    root: PresetNodeSchema,
+}
+
+/// A node of a preset's arrangement (M5d).
+#[derive(JsonSchema)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum PresetNodeSchema {
+    /// `split "horizontal"|"vertical" sizes="…" { … }`.
+    Split {
+        /// Direction.
+        orientation: Option<OrientationSchema>,
+        /// One CSS track size per child.
+        sizes: Option<String>,
+        /// Children.
+        children: Vec<PresetNodeSchema>,
+    },
+    /// `stack sizes="…" { … }`.
+    Stack {
+        /// One CSS track size per child.
+        sizes: Option<String>,
+        /// Children.
+        children: Vec<PresetNodeSchema>,
+    },
+    /// `tabs { … }`.
+    Tabs {
+        /// Children.
+        children: Vec<PresetNodeSchema>,
+    },
+    /// `pane "<node id>"`: a pane of the window.
+    Pane {
+        /// The pane's node id.
+        id: String,
     },
 }

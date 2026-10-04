@@ -50,6 +50,15 @@ impl Line {
         }
     }
 
+    /// `hidden=#true` on a hidden layout node (M5d); nothing when shown.
+    fn hidden(self, hidden: bool) -> Self {
+        if hidden {
+            self.prop("hidden", "#true")
+        } else {
+            self
+        }
+    }
+
     /// Positional JSON arguments; `None` when one is an array or object.
     fn json_args(mut self, args: &[Value]) -> Option<Self> {
         for arg in args {
@@ -97,6 +106,7 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             max_sizes,
             collapsible,
             resizable,
+            hidden,
             children: kids,
         } => {
             let orientation = match orientation {
@@ -128,12 +138,13 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             if !resizable {
                 line = line.prop("resizable", "#false");
             }
-            line.block(depth, style, &children(kids)?)
+            line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
         LayoutNode::Stack {
             id,
             label,
             sizes,
+            hidden,
             children: kids,
         } => {
             let mut line = Line::new("stack")
@@ -142,12 +153,13 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             if !sizes.is_empty() {
                 line = line.prop("sizes", &quote(&joined(sizes)));
             }
-            line.block(depth, style, &children(kids)?)
+            line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
         LayoutNode::Tabs {
             id,
             label,
             active,
+            hidden,
             children: kids,
         } => {
             let mut line = Line::new("tabs")
@@ -156,7 +168,7 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             if *active != 0 {
                 line = line.prop("active", &active.to_string());
             }
-            line.block(depth, style, &children(kids)?)
+            line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
         LayoutNode::Widget {
             id,
@@ -164,6 +176,7 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             kind,
             options,
             rows,
+            hidden,
             ..
         } => {
             let mut line = Line::new(kind)
@@ -172,6 +185,7 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             for (key, value) in options {
                 line = line.prop(key, &json_text(value)?);
             }
+            line = line.hidden(*hidden);
             if rows.is_empty() {
                 line.end(depth, style)
             } else {
@@ -466,6 +480,23 @@ pub(crate) fn section(name: &str, lines: &str, depth: usize, style: &Style) -> S
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn hidden_nodes_render_with_the_property_m5d() {
+        let style = Style::default();
+        let node: LayoutNode = serde_json::from_value(json!({
+            "type": "stack", "hidden": true,
+            "children": [
+                {"type": "widget", "kind": "folder-tree", "hidden": true},
+                {"type": "tabs", "children": [{"type": "widget", "kind": "message-list"}]}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            layout_node(&node, 0, &style).unwrap(),
+            "stack hidden=#true {\n    folder-tree hidden=#true\n    tabs {\n        message-list\n    }\n}\n"
+        );
+    }
 
     #[test]
     fn layout_items_render_canonically() {

@@ -158,6 +158,8 @@ pub(crate) struct Inner {
     pub(crate) writing: Mutex<()>,
     /// The installed plug-ins' commands and panels (merge conflicts).
     pub(crate) plugins: Mutex<crate::plugins::InstalledPlugins>,
+    /// The editors' undo histories (M5d, ADR 0131).
+    pub(crate) history: Mutex<crate::edit_history::Histories>,
 }
 
 /// What [`ConfigManager`] last read from a configuration file.
@@ -259,6 +261,7 @@ impl ConfigManager {
                 }),
                 writing: Mutex::new(()),
                 plugins: Mutex::new(crate::plugins::InstalledPlugins::default()),
+                history: Mutex::new(crate::edit_history::Histories::default()),
             }),
         };
         for update in manager.reload_themes() {

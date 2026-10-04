@@ -67,9 +67,14 @@ describe("appearance slot (M5a contract)", () => {
       type: "Themes",
       appearance: { active: "nocturne", settings: { follow_system: false } },
     });
-    // ThemeChanged, then ConfigChanged with the newly resolved theme (like the core).
-    expect(events.map((e) => e.type).slice(-2)).toEqual(["ThemeChanged", "ConfigChanged"]);
-    expect(events.at(-1)).toMatchObject({ type: "ConfigChanged", theme: { mode: "dark" } });
+    // ThemeChanged, then ConfigChanged with the newly resolved theme (like the
+    // core), then the appearance undo history (M5d).
+    expect(events.map((e) => e.type).slice(-3)).toEqual([
+      "ThemeChanged",
+      "ConfigChanged",
+      "EditHistoryChanged",
+    ]);
+    expect(events.at(-2)).toMatchObject({ type: "ConfigChanged", theme: { mode: "dark" } });
     expect(await t.send({ type: "SetTheme", theme_id: "nope" })).toMatchObject({
       type: "Error",
       code: "invalid_request",

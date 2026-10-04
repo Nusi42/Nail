@@ -1,5 +1,16 @@
+import type { Virtualizer } from "@tanstack/react-virtual";
 import { describe, expect, it } from "vitest";
-import { exactRowSize } from "./MessageList";
+import { exactRowSize as measure } from "./MessageList";
+
+/** A virtualizer with an empty size cache (only what the fallback reads). */
+const instance = {
+  options: { horizontal: false, useCachedMeasurements: false, getItemKey: (i: number) => i },
+  indexFromElement: () => 0,
+  itemSizeCache: new Map<number, number>(),
+} as unknown as Virtualizer<HTMLDivElement, Element>;
+
+const exactRowSize = (element: Element, entry: ResizeObserverEntry | undefined) =>
+  measure(element, entry, instance);
 
 /** A row element whose layout box is `height` px tall (jsdom has no layout). */
 function rowOf(height: number): HTMLElement {
@@ -25,5 +36,11 @@ describe("exactRowSize (Q1 leftover: deterministic list scrolling)", () => {
   it("falls back to the layout box when the entry has no border box", () => {
     const empty = { borderBoxSize: [] } as unknown as ResizeObserverEntry;
     expect(exactRowSize(rowOf(98.5), empty)).toBe(98.5);
+  });
+
+  it("uses TanStack's measuring without a layout (offsetHeight)", () => {
+    const row = rowOf(0);
+    Object.defineProperty(row, "offsetHeight", { value: 84 });
+    expect(exactRowSize(row, undefined)).toBe(84);
   });
 });

@@ -180,6 +180,16 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::ReturnPopOut { .. } => ("ReturnPopOut", DesktopOnly),
         Request::ClosePopOut { .. } => ("ClosePopOut", DesktopOnly),
         Request::FocusPopOut { .. } => ("FocusPopOut", DesktopOnly),
+        // M5d: the editors' undo histories and theme details are the
+        // session's to read; every edit writes the desktop's files.
+        Request::GetEditHistory { .. } => ("GetEditHistory", Session),
+        Request::UndoEdit { .. } => ("UndoEdit", Admin),
+        Request::RedoEdit { .. } => ("RedoEdit", Admin),
+        Request::GetThemeDetails { .. } => ("GetThemeDetails", Session),
+        Request::EditTheme { .. } => ("EditTheme", Admin),
+        Request::DuplicateTheme { .. } => ("DuplicateTheme", Admin),
+        Request::RenameTheme { .. } => ("RenameTheme", Admin),
+        Request::DeleteTheme { .. } => ("DeleteTheme", Admin),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),

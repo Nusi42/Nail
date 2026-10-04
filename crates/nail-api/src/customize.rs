@@ -14,12 +14,19 @@
 //!   the live preview; [`crate::Request::ApplyConfigMerge`] writes the
 //!   result after backing the old file up; [`crate::Request::RevertConfig`]
 //!   restores a backup.
+//! * M5d (ADR 0131): the layout editor's and the toolbar customizer's
+//!   patches ([`LayoutPatch::MovePane`] … [`LayoutPatch::RemoveToolbarItem`];
+//!   [`crate::editing`] has their parts, the theme edits and the undo
+//!   history).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
 use crate::config::layout::ToolbarItem;
+#[cfg(doc)]
+use crate::editing::EditIssue;
+use crate::editing::{EditKind, LayoutPlacement, NewToolbarItem, NewWidget, ToolbarSlot};
 use crate::ids::ConfigBackupId;
 use crate::localized::LocalizedMessage;
 
@@ -150,6 +157,137 @@ pub enum LayoutPatch {
         /// Key sequence.
         key: String,
     },
+
+    // --- M5d (ADR 0131): the layout editor and the toolbar customizer ---
+    /// Move a node (a pane with everything in it) to another place: into a
+    /// container, or docked beside a node ([`LayoutPlacement`]). A container
+    /// left with no children is removed; a split left with one child is
+    /// replaced by that child. `invalid_request` with
+    /// [`EditIssue::InvalidPlacement`] for a move into the node itself, its
+    /// descendant or a widget, or of the window's root.
+    MovePane {
+        /// The node to move.
+        node: LayoutNodeRef,
+        /// Where it goes (references the tree before the move).
+        to: LayoutPlacement,
+    },
+    /// Swap two nodes (with their subtrees); each takes the other's place,
+    /// split size and limits. Neither may contain the other.
+    SwapPanes {
+        /// One node.
+        a: LayoutNodeRef,
+        /// The other node.
+        b: LayoutNodeRef,
+    },
+    /// Add a widget from the palette. `invalid_request` with
+    /// [`EditIssue::UnknownWidget`] for an unknown kind, the config's option
+    /// errors for invalid options.
+    AddWidget {
+        /// The widget.
+        widget: NewWidget,
+        /// Where it goes.
+        to: LayoutPlacement,
+    },
+    /// Remove a node with its subtree (not the window's root). Containers
+    /// left empty or a split left with one child are tidied as in
+    /// [`Self::MovePane`].
+    RemoveNode {
+        /// The node.
+        node: LayoutNodeRef,
+    },
+    /// Hide or show a node: writes or removes `hidden=#true` on it
+    /// ([`crate::config::layout::LayoutNode::is_hidden`]). Hidden nodes keep
+    /// their place and options; the renderer skips them (the layout editor
+    /// shows them dimmed with a "show" eye).
+    SetHidden {
+        /// The node.
+        node: LayoutNodeRef,
+        /// Hide (`true`) or show (`false`).
+        hidden: bool,
+    },
+    /// Apply a preset of the layout's `presets` section to a window
+    /// breakpoint: the panes it names (by node id) are arranged in the
+    /// preset's containers with its sizes; panes of the breakpoint the preset
+    /// does not name stay, hidden, after the preset's tree in a stack at the
+    /// root. `invalid_request` with [`EditIssue::UnknownPreset`] /
+    /// [`EditIssue::PresetPaneMissing`].
+    ApplyPreset {
+        /// The preset id, e.g. `reader-below`.
+        preset: String,
+        /// The window breakpoint the preset is applied to (`path` ignored).
+        target: LayoutNodeRef,
+    },
+    /// Restore one window (every breakpoint) to the default layout's
+    /// version: removed from a sparse file, replaced by the default in a full
+    /// one. A window the defaults do not have is removed.
+    ResetWindow {
+        /// The window name.
+        window: String,
+    },
+    /// Move a toolbar item within the bar, within "More", or between them
+    /// (an action becomes a menu item in "More" and a toolbar item on the
+    /// bar; overrides such as `label` / `icon` move along, `rank` / `display`
+    /// only exist on the bar). A toolbar only in the defaults is copied into
+    /// the file first. `invalid_request` with [`EditIssue::ToolbarSlotInvalid`].
+    MoveToolbarItem {
+        /// The toolbar name.
+        toolbar: String,
+        /// Where the item is.
+        from: ToolbarSlot,
+        /// Where it goes (indexes after removing it from `from`).
+        to: ToolbarSlot,
+    },
+    /// Put an item from the customizer's palette on a toolbar.
+    AddToolbarItem {
+        /// The toolbar name.
+        toolbar: String,
+        /// The item (an action, separator or spacer; no `more` item).
+        item: NewToolbarItem,
+        /// Where it goes.
+        to: ToolbarSlot,
+    },
+    /// Take an item off a toolbar (the bar or "More").
+    RemoveToolbarItem {
+        /// The toolbar name.
+        toolbar: String,
+        /// Where the item is.
+        from: ToolbarSlot,
+    },
+}
+
+impl LayoutPatch {
+    /// The history kind of this patch (the label of its undo entry).
+    pub fn kind(&self) -> EditKind {
+        match self {
+            Self::SplitSizes { .. } => EditKind::SplitSizes,
+            Self::ColumnOrder { .. } => EditKind::ColumnOrder,
+            Self::ToolbarOrder { .. } => EditKind::ToolbarOrder,
+            Self::AddKeyBinding { .. } => EditKind::AddKeyBinding,
+            Self::RemoveKeyBinding { .. } => EditKind::RemoveKeyBinding,
+            Self::ResetToolbar { .. } => EditKind::ResetToolbar,
+            Self::ResetKeyBinding { .. } => EditKind::ResetKeyBinding,
+            Self::MovePane { .. } => EditKind::MovePane,
+            Self::SwapPanes { .. } => EditKind::SwapPanes,
+            Self::AddWidget { .. } => EditKind::AddWidget,
+            Self::RemoveNode { .. } => EditKind::RemoveNode,
+            Self::SetHidden { .. } => EditKind::SetHidden,
+            Self::ApplyPreset { .. } => EditKind::ApplyPreset,
+            Self::ResetWindow { .. } => EditKind::ResetWindow,
+            Self::MoveToolbarItem { .. } => EditKind::MoveToolbarItem,
+            Self::AddToolbarItem { .. } => EditKind::AddToolbarItem,
+            Self::RemoveToolbarItem { .. } => EditKind::RemoveToolbarItem,
+        }
+    }
+
+    /// The history kind of an `UpdateLayout` with these patches: the one
+    /// patch's kind, the common kind of several patches of one kind (e.g.
+    /// several divider moves), else [`EditKind::LayoutEdits`].
+    pub fn kind_of(patches: &[LayoutPatch]) -> EditKind {
+        match patches.split_first() {
+            Some((first, rest)) if rest.iter().all(|p| p.kind() == first.kind()) => first.kind(),
+            _ => EditKind::LayoutEdits,
+        }
+    }
 }
 
 /// A section of a theme or layout, as grouped by the merge dialog.
@@ -348,5 +486,42 @@ mod tests {
         .unwrap();
         assert!(matches!(reset, LayoutPatch::ResetKeyBinding { .. }));
         assert_eq!(MergeTake::default(), MergeTake::Mine);
+    }
+
+    #[test]
+    fn m5d_patches() {
+        let hide: LayoutPatch = serde_json::from_value(json!({
+            "op": "set-hidden",
+            "node": {"window": "mail", "breakpoint": 0, "path": [0]},
+            "hidden": true
+        }))
+        .unwrap();
+        assert_eq!(hide.kind(), EditKind::SetHidden);
+        let moved: LayoutPatch = serde_json::from_value(json!({
+            "op": "move-toolbar-item",
+            "toolbar": "reader",
+            "from": {"area": "bar", "index": 3},
+            "to": {"area": "more", "index": 0}
+        }))
+        .unwrap();
+        assert_eq!(moved.kind(), EditKind::MoveToolbarItem);
+        let preset = LayoutPatch::ApplyPreset {
+            preset: "focus".into(),
+            target: LayoutNodeRef {
+                window: "mail".into(),
+                breakpoint: 0,
+                path: vec![],
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&preset).unwrap()["op"],
+            json!("apply-preset")
+        );
+        assert_eq!(LayoutPatch::kind_of(&[]), EditKind::LayoutEdits);
+        assert_eq!(
+            LayoutPatch::kind_of(&[preset.clone(), preset.clone()]),
+            EditKind::ApplyPreset
+        );
+        assert_eq!(LayoutPatch::kind_of(&[preset, hide]), EditKind::LayoutEdits);
     }
 }

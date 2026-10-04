@@ -125,6 +125,15 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        open_pop_out / close_pop_out / focus_pop_out, DesktopChange::PopOut (no longer Copy);
                        M5c review (ADR 0122): pop_out is opt-in (DEFAULT_WINDOW_SPEC.pop_out = false, layout.kdl
                        `pop-out=#true`), PopOutWindow / PopOutOpen size + min_size (pop_out_sizes)
+                       M5d (ADR 0131): editing.rs (LayoutPlacement into / beside + DockSide, NewWidget, ToolbarSlot bar /
+                       more, ThemeEditTarget user / theme, ThemePatch set-token / set-part-property / reset-part,
+                       ThemeDetails + ValueOrigin, HistoryScope layout / appearance, EditKind, EditIssue, EditEntry /
+                       EditHistory, config_revision = FNV-1a 64); LayoutPatch move-pane / swap-panes / add-widget /
+                       remove-node / set-hidden / apply-preset / reset-window / move- / add- / remove-toolbar-item
+                       (+ kind / kind_of); LayoutNode.hidden (is_hidden, at_path), LayoutPreset + PresetNode =
+                       ResolvedLayout.presets; UpdateLayout.base_revision; GetEditHistory / UndoEdit / RedoEdit →
+                       EditHistory, EditHistoryChanged; GetThemeDetails, EditTheme, DuplicateTheme / RenameTheme →
+                       ThemeSaved, DeleteTheme
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -166,6 +175,13 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        instances= (LayoutFile.window_frames, merged field by field; render / merge / write-back keep them);
                        window_state.rs (ConfigManager::window_states / set_window_state / update_window_state /
                        reset_window_states, atomic `window-state.json`); tests/m5c_windows.rs
+                       M5d (ADR 0131): `hidden=` on every layout node, `presets` section (preset / split / stack / tabs /
+                       pane; replaces the base as a whole; panes a breakpoint lacks are no error), widgets/editors.rs
+                       (layout-editor-settings, toolbar-editor-settings, theme-editor); edit_history.rs (undo history
+                       per HistoryScope recorded by every theme / layout write, undo / redo with conflict check + force,
+                       update_layout_checked base revision); slots of WP184: layout_edit.rs (the M5d patches, routed
+                       from write_back.rs) and theme_edit.rs (theme_details / edit_theme / duplicate / rename /
+                       delete_theme); tests/m5d_contract.rs
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -440,6 +456,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        per session in remote_access.rs)
                        M5c (ADR 0116): windows.rs (window-state requests, pop-out list Inner.pop_outs, PopOutWindow /
                        Return / Close / Focus through the DesktopHost, DesktopChange::PopOut reports keep the geometry per kind)
+                       M5d (ADR 0131): editing.rs (GetEditHistory / UndoEdit / RedoEdit, the theme editor's requests;
+                       broadcast_history after every theme / layout write; the watcher sends EditHistoryChanged when the
+                       files change on disk)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -581,6 +600,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        hooks, model, parts POPOUT_BASE_CSS); widgets/DeletePermanently.tsx; features/plugins/windows.ts
                        (plug-in dialogs `plugin-dialog|modal-<size>:<key>`, `plugin-send-veto`);
                        features/remote/ReauthWindow.tsx (`remote-reauth`); src/m5c.test.tsx (every window);
+                       M5d (ADR 0131): state/editHistory.ts (useEditHistory / useEditHistoryStep, App.tsx applies
+                       EditHistoryChanged), layout/LayoutChrome.ts (LayoutChromeContext showHidden / renderNode around
+                       every rendered node, nodeRefOfPath; the renderer skips `hidden` nodes), api/editHistoryMock.ts
+                       (mock histories, simulateExternalEdit, MOCK_NOT_READY); slots features/layout-editor (WP181,
+                       mock.ts applyLayoutEditPatch), features/toolbar-editor (WP182, mock.ts applyToolbarEditPatch),
+                       features/appearance themeEditMock.ts + `theme-editor` widget (WP183);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -645,7 +670,9 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        group headings, settings groups / default sections, list filters, favorites, folder sections,
                        UI-state issues), shell.ftl (WP161), settings.ftl (WP163); M5c: core-windows.ftl (contract ids: snap
                        halves, instances, window-state / pop-out issues, pop-out changes), windows.ftl (WP171), popout.ftl
-                       (WP173); every file is embedded in nail-config l10n.rs
+                       (WP173); M5d: core-editors.ftl (contract ids: history scopes, edit kinds, edit issues, preset names,
+                       config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182); every file is embedded in
+                       nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
@@ -1021,6 +1048,16 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
   notice is off (`checks.bundlerTimings`). `node_modules` in OneDrive is a reparse point: Vite configs that import a
   symlinked workspace package need `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`).
+- M5d contract: ADR 0131 (layout edits = new `LayoutPatch` kinds through `UpdateLayout` (+ `base_revision`); `hidden=`
+  on layout nodes; `presets` section with four default mail presets; actions `layout.customize` / `toolbar.customize`,
+  `menu "context:toolbar"`; theme edits `EditTheme` / `DuplicateTheme` / `RenameTheme` / `DeleteTheme` /
+  `GetThemeDetails` on user themes and the user's `theme.kdl`; undo history per scope `layout` / `appearance` in
+  nail-config (every write of those files, 50 entries, in memory), `GetEditHistory` / `UndoEdit` / `RedoEdit`,
+  `EditHistoryChanged`; conflicts = the file's revision changed on disk → `conflict` / `edit-issue-conflict`, undo
+  `force` backs up first). The new patches and theme operations answer `unsupported` / `edit-issue-not-ready` until
+  WP184. Slots: WP181 `features/layout-editor/` + `layout/LayoutRenderer.tsx` / `LayoutChrome.ts` + the settings-page
+  placement in `defaults/layout.kdl`; WP182 `features/toolbar-editor/` + `widgets/Toolbar.tsx` / `toolbarModel.ts`;
+  WP183 `features/appearance/` + the inspector's "Edit style"; WP184 `crates/nail-config/`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

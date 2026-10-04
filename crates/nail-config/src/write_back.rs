@@ -38,6 +38,9 @@ pub enum EditError {
     /// The request does not fit the file (unknown window, wrong number of
     /// sizes, …).
     Invalid(LocalizedMessage),
+    /// The operation is not implemented yet (M5d contract stubs,
+    /// `edit-issue-not-ready`): `unsupported`.
+    Unsupported(LocalizedMessage),
 }
 
 impl std::fmt::Display for EditError {
@@ -51,7 +54,9 @@ impl std::fmt::Display for EditError {
                 }
                 Ok(())
             }
-            Self::Invalid(message) => f.write_str(&crate::l10n::english(message)),
+            Self::Invalid(message) | Self::Unsupported(message) => {
+                f.write_str(&crate::l10n::english(message))
+            }
         }
     }
 }
@@ -70,6 +75,9 @@ impl From<EditError> for ApiError {
             }
             EditError::Invalid(message) => {
                 ApiError::invalid_request(error.to_string()).with_localized(message.clone())
+            }
+            EditError::Unsupported(message) => {
+                ApiError::unsupported(error.to_string()).with_localized(message.clone())
             }
         }
     }
@@ -163,6 +171,18 @@ impl LayoutEditor {
 
     fn apply(&mut self, patch: &LayoutPatch) -> Result<(), EditError> {
         match patch {
+            // M5d (ADR 0131): the layout editor's and toolbar customizer's
+            // patches (WP184, `layout_edit.rs`).
+            LayoutPatch::MovePane { .. }
+            | LayoutPatch::SwapPanes { .. }
+            | LayoutPatch::AddWidget { .. }
+            | LayoutPatch::RemoveNode { .. }
+            | LayoutPatch::SetHidden { .. }
+            | LayoutPatch::ApplyPreset { .. }
+            | LayoutPatch::ResetWindow { .. }
+            | LayoutPatch::MoveToolbarItem { .. }
+            | LayoutPatch::AddToolbarItem { .. }
+            | LayoutPatch::RemoveToolbarItem { .. } => crate::layout_edit::apply(self, patch),
             LayoutPatch::SplitSizes { node, sizes } => {
                 for size in sizes {
                     if size.is_empty() || size.contains(char::is_whitespace) {

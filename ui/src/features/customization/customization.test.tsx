@@ -152,7 +152,8 @@ describe("mock core", () => {
     });
     expect(layout.keys.some((k) => k.context === "list" && k.key === "j")).toBe(false);
     expect(layout.toolbars.reader).toEqual([{ type: "spacer" }]);
-    expect(events).toEqual(["ConfigChanged"]);
+    // The new layout, then its undo entry (M5d).
+    expect(events).toEqual(["ConfigChanged", "EditHistoryChanged"]);
     expect(env.transport.data.features.customization.layoutPatches).toHaveLength(5);
 
     const bad = await call(env, {

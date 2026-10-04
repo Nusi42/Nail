@@ -16,6 +16,9 @@ export const notMessages: readonly string[] = [
   "appearance-settings",
   "theme-card",
   "theme-gallery",
+  // M5d (ADR 0131): the theme editor's widget kind and an `EditIssue` value.
+  "theme-editor",
+  "theme-not-found",
   // Lucide icon names (e.g. `layout-panel-left`) share prefixes with message ids.
   ...Object.keys(LUCIDE_ICONS),
 ];

@@ -16,7 +16,8 @@
 //! [`portability`] those of M4c (import / export, backup, diagnostics;
 //! WP124, ADR 0094; recovery key and smartcards are in [`security`]),
 //! [`shell`] those of M5b (navigation rail, view host, settings page, list
-//! header; ADR 0109). The
+//! header; ADR 0109), [`editors`] those of M5d (layout editor, toolbar
+//! customizer and theme editor; ADR 0131). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -24,6 +25,7 @@ mod agents;
 mod composer;
 mod core;
 mod customization;
+mod editors;
 mod exchange;
 mod gmail;
 mod mcp;
@@ -104,6 +106,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     system::WIDGETS,
     portability::WIDGETS,
     shell::WIDGETS,
+    editors::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

@@ -15,9 +15,11 @@ import type {
   ItemDisplay,
   KeyBinding,
   LayoutNode,
+  LayoutPreset,
   MenuItem,
   PartCondition,
   PartRule,
+  PresetNode,
   RailItem,
   ResolvedLayout,
   ResolvedTheme,
@@ -149,7 +151,13 @@ function jsonArray(value: unknown): ActionDef["args"] {
 
 /** Completes one layout node (recursively). */
 export function normalizeNode(raw: unknown): LayoutNode {
-  const n = obj(raw);
+  const node = normalizeNodeFields(obj(raw));
+  // M5d: `hidden` stays absent unless set (like the core's JSON).
+  if (obj(raw).hidden === true) node.hidden = true;
+  return node;
+}
+
+function normalizeNodeFields(n: Loose): LayoutNode {
   const id = strOrNull(n.id);
   const label = strOrNull(n.label);
   const children = () => arr(n.children).map(normalizeNode);
@@ -280,6 +288,38 @@ function menuItem(value: unknown): MenuItem {
   };
 }
 
+/** A preset's arrangement (M5d, ADR 0131). */
+function presetNode(value: unknown): PresetNode {
+  const n = obj(value);
+  const children = () => arr(n.children).map(presetNode);
+  switch (n.type) {
+    case "split":
+      return {
+        type: "split",
+        orientation: n.orientation === "vertical" ? "vertical" : "horizontal",
+        sizes: arr(n.sizes).map((s) => str(s, "1fr")),
+        children: children(),
+      };
+    case "stack":
+      return { type: "stack", sizes: arr(n.sizes).map((s) => str(s, "1fr")), children: children() };
+    case "tabs":
+      return { type: "tabs", children: children() };
+    default:
+      return { type: "pane", id: str(n.id, "") };
+  }
+}
+
+function preset(value: unknown): LayoutPreset {
+  const p = obj(value);
+  return {
+    id: str(p.id, ""),
+    window: str(p.window, ""),
+    label: strOrNull(p.label),
+    icon: strOrNull(p.icon),
+    root: presetNode(p.root),
+  };
+}
+
 /** Completes a resolved layout. */
 export function normalizeLayout(raw: unknown): ResolvedLayout {
   const l = obj(raw);
@@ -331,6 +371,8 @@ export function normalizeLayout(raw: unknown): ResolvedLayout {
     settings: arr(l.settings).map(settingsGroup),
     // M5c (ADR 0116): window-model properties of `window` nodes.
     window_frames: mapValues(l.window_frames, windowFrame),
+    // M5d (ADR 0131): the layout editor's presets.
+    presets: arr(l.presets).map(preset),
   };
   for (const [name, raw] of Object.entries(obj(l.toolbar_settings))) {
     if (!Object.hasOwn(layout.toolbar_settings, name)) continue;

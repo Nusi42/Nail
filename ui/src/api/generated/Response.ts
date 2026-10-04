@@ -33,6 +33,7 @@ import type { Draft } from "./Draft";
 import type { DraftAttachment } from "./DraftAttachment";
 import type { DraftId } from "./DraftId";
 import type { DuplicateGroup } from "./DuplicateGroup";
+import type { EditHistory } from "./EditHistory";
 import type { ErrorCode } from "./ErrorCode";
 import type { EventFields } from "./EventFields";
 import type { EventInstance } from "./EventInstance";
@@ -129,6 +130,7 @@ import type { SmartcardToken } from "./SmartcardToken";
 import type { SnoozedMessage } from "./SnoozedMessage";
 import type { Task } from "./Task";
 import type { TaskFields } from "./TaskFields";
+import type { ThemeDetails } from "./ThemeDetails";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
@@ -1170,7 +1172,23 @@ states: { [key in string]: WindowState }, } | { "type": "PopOuts",
 /**
  * Open pop-outs, in opening order.
  */
-pop_outs: Array<PopOut>, } | { "type": "Error", 
+pop_outs: Array<PopOut>, } | { "type": "EditHistory", 
+/**
+ * The history.
+ */
+history: EditHistory, } | { "type": "ThemeDetails", 
+/**
+ * The theme's tokens and part rules.
+ */
+details: ThemeDetails, } | { "type": "ThemeSaved", 
+/**
+ * The theme id.
+ */
+theme_id: string, 
+/**
+ * Themes, selection, active theme, OS state.
+ */
+appearance: Appearance, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

@@ -8,9 +8,9 @@ use kdl::{KdlEntry, KdlNode};
 use nail_api::views::{NAV_RAIL_WIDGET, SETTINGS_PAGE_WIDGET, VIEW_HOST_WIDGET};
 use nail_api::windows::{WindowFrame, WindowInstances, WindowSize};
 use nail_api::{
-    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LocalizedMessage,
-    MenuItem, Orientation, RailItem, ResolvedLayout, SettingsGroup, SettingsSection,
-    SourceLocation, ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
+    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LayoutPreset,
+    LocalizedMessage, MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout, SettingsGroup,
+    SettingsSection, SourceLocation, ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
 };
 use schemars::JsonSchema;
 use serde_json::{Map, Value};
@@ -23,8 +23,8 @@ use crate::kdl_util::{
 };
 use crate::l10n::msg;
 use crate::schema::{
-    ActionSchema, BreakpointSchema, MenuItemSchema, RailItemSchema, SettingsGroupSchema,
-    ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema, WindowFrameSchema,
+    ActionSchema, BreakpointSchema, MenuItemSchema, PresetSchema, RailItemSchema,
+    SettingsGroupSchema, ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema, WindowFrameSchema,
 };
 use crate::theme::{read_extends, single_root};
 use crate::widgets::{self, OptionType};
@@ -115,6 +115,12 @@ pub struct LayoutFile {
     #[schemars(with = "IndexMap<String, WindowFrameSchema>")]
     #[serde(default, rename = "window-frames")]
     pub window_frames: IndexMap<String, WindowFrame>,
+    /// `presets { preset "<id>" window="<window>" label=… icon=… {
+    /// <arrangement> } }` (M5d, ADR 0131): pane arrangements the layout
+    /// editor offers; replaces the base's presets as a whole.
+    #[schemars(with = "Option<Vec<PresetSchema>>")]
+    #[serde(default)]
+    pub presets: Option<Vec<LayoutPreset>>,
 }
 
 /// A `bind` or `unbind` entry.
@@ -197,6 +203,9 @@ impl LayoutFile {
         if overlay.settings_page.is_some() {
             self.settings_page = overlay.settings_page;
         }
+        if overlay.presets.is_some() {
+            self.presets = overlay.presets;
+        }
         self
     }
 }
@@ -229,6 +238,7 @@ impl LayoutReader<'_, '_> {
             rail: None,
             settings_page: None,
             window_frames: IndexMap::new(),
+            presets: None,
         };
         for child in children(node) {
             e.ok(self.section(&mut file, child));
@@ -275,6 +285,7 @@ impl LayoutReader<'_, '_> {
             "views" => self.views(file, child)?,
             "rail" => self.rail(file, child)?,
             "settings-page" => self.settings_page(file, child)?,
+            "presets" => self.presets(file, child)?,
             other => {
                 return Err(src.node_err(
                     child,
@@ -455,6 +466,22 @@ impl LayoutReader<'_, '_> {
         Ok((id, label))
     }
 
+    /// `hidden=#true|#false` on any node (M5d, ADR 0131); absent = shown.
+    fn hidden(&self, node: &KdlNode) -> Result<bool, ConfigError> {
+        let src = self.src;
+        match node.entry("hidden") {
+            None => Ok(false),
+            Some(entry) => entry.value().as_bool().ok_or_else(|| {
+                src.entry_err(
+                    entry,
+                    msg("config-expected-bool")
+                        .arg("what", "hidden")
+                        .arg("found", describe(entry.value())),
+                )
+            }),
+        }
+    }
+
     fn label(&self, label: &str, entry: &KdlEntry) -> Result<String, ConfigError> {
         if let Some(id) = label.strip_prefix('@') {
             let valid = id.starts_with(|c: char| c.is_ascii_alphabetic())
@@ -486,6 +513,7 @@ impl LayoutReader<'_, '_> {
                         "max-sizes",
                         "collapsible",
                         "resizable",
+                        "hidden",
                     ],
                 )?;
                 check_max_args(src, node, 1)?;
@@ -551,11 +579,12 @@ impl LayoutReader<'_, '_> {
                     max_sizes,
                     collapsible,
                     resizable,
+                    hidden: self.hidden(node)?,
                     children,
                 })
             }
             "stack" => {
-                check_props(src, node, &["id", "label", "sizes"])?;
+                check_props(src, node, &["id", "label", "sizes", "hidden"])?;
                 check_max_args(src, node, 0)?;
                 let (id, label) = self.id_label(node)?;
                 let children = self.children(node)?;
@@ -566,11 +595,12 @@ impl LayoutReader<'_, '_> {
                     id,
                     label,
                     sizes,
+                    hidden: self.hidden(node)?,
                     children,
                 })
             }
             "tabs" => {
-                check_props(src, node, &["id", "label", "active"])?;
+                check_props(src, node, &["id", "label", "active", "hidden"])?;
                 check_max_args(src, node, 0)?;
                 let (id, label) = self.id_label(node)?;
                 let children = self.children(node)?;
@@ -587,6 +617,7 @@ impl LayoutReader<'_, '_> {
                     id,
                     label,
                     active,
+                    hidden: self.hidden(node)?,
                     children,
                 })
             }
@@ -685,7 +716,7 @@ impl LayoutReader<'_, '_> {
             options.insert("panel".to_owned(), Value::from(panel));
         }
         for (key, entry) in k::props(node) {
-            if key == "id" || key == "label" {
+            if key == "id" || key == "label" || key == "hidden" {
                 continue;
             }
             if let Some(allowed) = spec.and_then(|s| s.options) {
@@ -761,6 +792,7 @@ impl LayoutReader<'_, '_> {
             options,
             rows,
             source: Some(src.node_loc(node)),
+            hidden: self.hidden(node)?,
         })
     }
 
@@ -1066,6 +1098,139 @@ impl LayoutReader<'_, '_> {
         Ok(())
     }
 
+    /// `presets { preset "<id>" window="<window>" label=… icon=… {
+    /// <arrangement> } }` (M5d).
+    fn presets(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        self.once(node, file.presets.is_some())?;
+        self.block(node)?;
+        let mut presets: Vec<LayoutPreset> = Vec::new();
+        for item in children(node) {
+            if let Some(preset) = self.errors.ok(self
+                .expect(item, "preset", "presets")
+                .and_then(|()| self.preset(item)))
+            {
+                if presets.iter().any(|p| p.id == preset.id) {
+                    self.errors.push(src.node_err(
+                        item,
+                        msg("config-preset-duplicate").arg("preset", preset.id.as_str()),
+                    ));
+                    continue;
+                }
+                presets.push(preset);
+            }
+        }
+        file.presets = Some(presets);
+        Ok(())
+    }
+
+    fn preset(&self, node: &KdlNode) -> Result<LayoutPreset, ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["window", "label", "icon"])?;
+        check_max_args(src, node, 1)?;
+        let (id, entry) = arg_str(src, node, 0)?;
+        if !is_kebab(id) {
+            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
+        }
+        let Some((window, _)) = prop_str(src, node, "window")? else {
+            return Err(src.node_err(node, msg("config-preset-window-missing").arg("preset", id)));
+        };
+        let label = self.label_prop(node, "label")?;
+        let icon = self.icon_prop(node, "icon")?;
+        let nodes = children(node);
+        let [root] = nodes else {
+            return Err(src.node_err(node, msg("config-preset-one-root").arg("preset", id)));
+        };
+        let root = self.preset_node(root)?;
+        let mut seen: Vec<&str> = Vec::new();
+        for pane in root.pane_ids() {
+            if seen.contains(&pane) {
+                return Err(src.node_err(
+                    node,
+                    msg("config-preset-pane-twice")
+                        .arg("preset", id)
+                        .arg("pane", pane),
+                ));
+            }
+            seen.push(pane);
+        }
+        Ok(LayoutPreset {
+            id: id.to_owned(),
+            window: window.to_owned(),
+            label,
+            icon,
+            root,
+        })
+    }
+
+    fn preset_node(&self, node: &KdlNode) -> Result<PresetNode, ConfigError> {
+        let src = self.src;
+        let kids = |node: &KdlNode| -> Result<Vec<PresetNode>, ConfigError> {
+            let nodes = children(node);
+            if nodes.is_empty() {
+                return Err(
+                    src.node_err(node, msg("config-needs-child").arg("node", k::name(node)))
+                );
+            }
+            nodes.iter().map(|n| self.preset_node(n)).collect()
+        };
+        match k::name(node) {
+            "split" => {
+                check_props(src, node, &["sizes"])?;
+                check_max_args(src, node, 1)?;
+                let orientation = match args(node).first() {
+                    None => Orientation::Horizontal,
+                    Some(entry) => match k::entry_str(src, entry, "`orientation`")? {
+                        "horizontal" => Orientation::Horizontal,
+                        "vertical" => Orientation::Vertical,
+                        other => {
+                            return Err(src.entry_err(
+                                entry,
+                                msg("config-orientation-unknown").arg("found", other),
+                            ));
+                        }
+                    },
+                };
+                let children = kids(node)?;
+                let sizes = self
+                    .list(node, "sizes", children.len())?
+                    .unwrap_or_default();
+                Ok(PresetNode::Split {
+                    orientation,
+                    sizes,
+                    children,
+                })
+            }
+            "stack" => {
+                check_props(src, node, &["sizes"])?;
+                check_max_args(src, node, 0)?;
+                let children = kids(node)?;
+                let sizes = self
+                    .list(node, "sizes", children.len())?
+                    .unwrap_or_default();
+                Ok(PresetNode::Stack { sizes, children })
+            }
+            "tabs" => {
+                check_props(src, node, &[])?;
+                check_max_args(src, node, 0)?;
+                Ok(PresetNode::Tabs {
+                    children: kids(node)?,
+                })
+            }
+            "pane" => {
+                check_props(src, node, &[])?;
+                check_max_args(src, node, 1)?;
+                check_no_children(src, node)?;
+                let (id, entry) = arg_str(src, node, 0)?;
+                if !is_kebab(id) {
+                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
+                }
+                Ok(PresetNode::Pane { id: id.to_owned() })
+            }
+            other => Err(src.node_err(node, msg("config-preset-node-unknown").arg("node", other))),
+        }
+    }
+
     /// `views default="<id>" { view "<id>" label=… icon=… window=… badge=… }`.
     fn views(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
         let src = self.src;
@@ -1282,6 +1447,7 @@ impl LayoutReader<'_, '_> {
                 id: None,
                 label: None,
                 sizes: vec!["auto".to_owned(); nodes.len()],
+                hidden: false,
                 children: nodes,
             }
         };
@@ -1587,6 +1753,8 @@ impl LayoutFile {
         let views = self.views.clone().unwrap_or_default();
         let rail = self.rail.clone().unwrap_or_default();
         self.check_shell(&views, &rail, &settings_page, &mut errors);
+        let presets = self.presets.clone().unwrap_or_default();
+        self.check_presets(&presets, &mut errors);
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -1644,7 +1812,27 @@ impl LayoutFile {
                 .filter(|(name, frame)| self.windows.contains_key(*name) && !frame.is_empty())
                 .map(|(name, frame)| (name.clone(), *frame))
                 .collect(),
+            presets,
         })
+    }
+
+    /// M5d check: a preset arranges an existing window. Panes it names that
+    /// a breakpoint lacks are not an error (a user file may replace the
+    /// window the default presets were written for): `ApplyPreset` refuses
+    /// such a breakpoint with `edit-issue-preset-pane-missing`, and the
+    /// layout editor offers only presets whose panes the breakpoint has.
+    fn check_presets(&self, presets: &[LayoutPreset], errors: &mut Vec<ConfigError>) {
+        let loc = &self.name.loc;
+        for preset in presets {
+            if !self.windows.contains_key(&preset.window) {
+                errors.push(ConfigError::invalid(
+                    loc,
+                    msg("config-preset-window-unknown")
+                        .arg("preset", preset.id.as_str())
+                        .arg("window", preset.window.as_str()),
+                ));
+            }
+        }
     }
 
     /// M5b checks: a view shows an existing window that does not itself

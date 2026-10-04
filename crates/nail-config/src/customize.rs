@@ -13,7 +13,10 @@ use nail_api::appearance::{self, Appearance, ThemeOverridesIssue, ThemePreferenc
 use nail_api::customize::{ConfigBackup, ConfigMergePreview, MergeChoice, MergeTake};
 use nail_api::{ApiError, ConfigBackupId, ConfigFile, ErrorCode, LayoutPatch, LocalizedMessage};
 
+use nail_api::editing::{EditKind, HistoryScope};
+
 use crate::backup;
+use crate::edit_history::{FileChange, scope_of};
 use crate::error::ConfigError;
 use crate::l10n::msg;
 use crate::manager::{ConfigKind, ConfigManager, ConfigUpdate};
@@ -48,7 +51,7 @@ impl ConfigManager {
         backup::read_optional(&self.file_path(file)).map_err(|e| io_error(file, &e))
     }
 
-    fn lock_writes(&self) -> std::sync::MutexGuard<'_, ()> {
+    pub(crate) fn lock_writes(&self) -> std::sync::MutexGuard<'_, ()> {
         self.inner
             .writing
             .lock()
@@ -57,7 +60,7 @@ impl ConfigManager {
 
     /// Re-reads a file after a write (theme and layout; the core's own
     /// watchers handle `accounts.kdl` and `rules.kdl`).
-    fn updates_after_write(&self, file: ConfigFile) -> Vec<ConfigUpdate> {
+    pub(crate) fn updates_after_write(&self, file: ConfigFile) -> Vec<ConfigUpdate> {
         ConfigKind::from_file(file).map_or_else(Vec::new, |kind| self.reload_updates(kind))
     }
 
@@ -66,14 +69,33 @@ impl ConfigManager {
     /// changed). `config` when the file on disk is invalid,
     /// `invalid_request` when a patch does not fit.
     pub fn update_layout(&self, patches: &[LayoutPatch]) -> Result<Vec<ConfigUpdate>, ApiError> {
+        self.update_layout_checked(patches, None)
+    }
+
+    /// [`Self::update_layout`] with the revision of `layout.kdl` the editor
+    /// saw (M5d): `conflict` (`edit-issue-conflict`) when the file changed
+    /// since. The write is one entry of the `layout` undo history.
+    pub fn update_layout_checked(
+        &self,
+        patches: &[LayoutPatch],
+        base_revision: Option<&str>,
+    ) -> Result<Vec<ConfigUpdate>, ApiError> {
         let _guard = self.lock_writes();
         let file = ConfigFile::Layout;
         let current = self.read_file(file)?;
+        Self::check_base_revision(file.file_name(), base_revision, current.as_deref())?;
         let text = write_back::apply_layout_patches(current.as_deref(), patches, file.file_name())?;
         if current.as_deref() == Some(text.as_str()) {
             return Ok(Vec::new());
         }
         backup::write_atomic(&self.file_path(file), &text).map_err(|e| io_error(file, &e))?;
+        let kind = LayoutPatch::kind_of(patches);
+        self.record_edit(
+            HistoryScope::Layout,
+            kind,
+            Self::plain_label(kind),
+            vec![FileChange::new(file.file_name(), current, Some(text))],
+        );
         Ok(self.updates_after_write(file))
     }
 
@@ -166,6 +188,12 @@ impl ConfigManager {
         let saved = backup::take(self.dir(), file).map_err(|e| io_error(file, &e))?;
         backup::write_atomic(&self.file_path(file), &outcome.text)
             .map_err(|e| io_error(file, &e))?;
+        self.record_edit(
+            scope_of(file.file_name()),
+            EditKind::Merge,
+            Self::plain_label(EditKind::Merge),
+            vec![FileChange::new(file.file_name(), mine, Some(outcome.text))],
+        );
         Ok((saved, self.updates_after_write(file)))
     }
 
@@ -202,6 +230,7 @@ impl ConfigManager {
         backup_id: Option<&ConfigBackupId>,
     ) -> Result<Vec<ConfigUpdate>, ApiError> {
         let _guard = self.lock_writes();
+        let before = self.read_file(file)?;
         let restored =
             backup::restore(self.dir(), file, backup_id).map_err(|e| io_error(file, &e))?;
         if restored.is_none() {
@@ -214,6 +243,15 @@ impl ConfigManager {
             return Err(
                 ApiError::new(ErrorCode::NotFound, crate::l10n::english(&localized))
                     .with_localized(localized),
+            );
+        }
+        if matches!(file, ConfigFile::Theme | ConfigFile::Layout) {
+            let after = self.read_file(file)?;
+            self.record_edit(
+                scope_of(file.file_name()),
+                EditKind::Revert,
+                Self::plain_label(EditKind::Revert),
+                vec![FileChange::new(file.file_name(), before, after)],
             );
         }
         Ok(self.updates_after_write(file))
@@ -303,7 +341,7 @@ impl ConfigManager {
         let file = ConfigFile::Theme;
         let current = self.read_file(file)?;
         let text = crate::apply_theme_selection(current.as_deref(), theme_id, file.file_name())?;
-        updates.extend(self.write_theme(current.as_deref(), &text, &catalog)?);
+        updates.extend(self.write_theme(current, &text, &catalog, EditKind::SetTheme)?);
         Ok((self.appearance(), updates))
     }
 
@@ -330,21 +368,28 @@ impl ConfigManager {
         let current = self.read_file(file)?;
         let text =
             crate::apply_theme_preferences(current.as_deref(), preferences, file.file_name())?;
-        updates.extend(self.write_theme(current.as_deref(), &text, &catalog)?);
+        updates.extend(self.write_theme(
+            current,
+            &text,
+            &catalog,
+            EditKind::SetThemePreferences,
+        )?);
         Ok((self.appearance(), updates))
     }
 
     /// Writes a new `theme.kdl` produced by a selection edit: refused when
     /// it would not resolve; the previous file is backed up; nothing is
-    /// written when the text did not change.
+    /// written when the text did not change. The write is one entry of the
+    /// `appearance` undo history (M5d).
     fn write_theme(
         &self,
-        current: Option<&str>,
+        current: Option<String>,
         text: &str,
         catalog: &ThemeCatalog,
+        kind: EditKind,
     ) -> Result<Vec<ConfigUpdate>, ApiError> {
         let file = ConfigFile::Theme;
-        if current == Some(text) {
+        if current.as_deref() == Some(text) {
             return Ok(Vec::new());
         }
         let parsed = ThemeFile::parse_all(text, file.file_name()).map_err(EditError::Config)?;
@@ -359,6 +404,16 @@ impl ConfigManager {
         }
         backup::take(self.dir(), file).map_err(|e| io_error(file, &e))?;
         backup::write_atomic(&self.file_path(file), text).map_err(|e| io_error(file, &e))?;
+        self.record_edit(
+            HistoryScope::Appearance,
+            kind,
+            Self::plain_label(kind),
+            vec![FileChange::new(
+                file.file_name(),
+                current,
+                Some(text.to_owned()),
+            )],
+        );
         Ok(self.updates_after_write(file))
     }
 }

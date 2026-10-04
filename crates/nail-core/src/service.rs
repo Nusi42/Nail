@@ -631,8 +631,23 @@ impl Service {
     /// Calling it again restarts it.
     pub fn watch_config(&self) -> Result<()> {
         let events = self.inner.events.clone();
+        let config = self.inner.config.clone();
         let watcher = self.inner.config.watch(DEFAULT_DEBOUNCE, move |update| {
             drop(events.send(update.to_event()));
+            // M5d: a file changed on disk (after its `ConfigChanged`, or its
+            // errors); the editors' histories carry the new revisions (undo /
+            // redo then report conflicts).
+            if matches!(
+                update,
+                nail_config::ConfigUpdate::Changed { .. }
+                    | nail_config::ConfigUpdate::Errors { .. }
+            ) {
+                for scope in nail_api::editing::HistoryScope::ALL {
+                    drop(events.send(Event::EditHistoryChanged {
+                        history: config.edit_history(*scope),
+                    }));
+                }
+            }
         })?;
         *lock(&self.inner.watcher) = Some(watcher);
         let accounts = crate::watch::AccountsWatcher::start(self)?;
@@ -1415,6 +1430,15 @@ impl Service {
             | Request::ReturnPopOut { .. }
             | Request::ClosePopOut { .. }
             | Request::FocusPopOut { .. }) => crate::windows::handle(self, request).await?,
+            // M5d (ADR 0131): the undo history and the theme editor.
+            request @ (Request::GetEditHistory { .. }
+            | Request::UndoEdit { .. }
+            | Request::RedoEdit { .. }
+            | Request::GetThemeDetails { .. }
+            | Request::EditTheme { .. }
+            | Request::DuplicateTheme { .. }
+            | Request::RenameTheme { .. }
+            | Request::DeleteTheme { .. }) => crate::editing::handle(self, request).await?,
         })
     }
 }

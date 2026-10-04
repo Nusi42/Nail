@@ -16,6 +16,7 @@ import type {
   ThemeKind,
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
+import { recordMockEdit, registerMockHistoryScope } from "../../api/editHistoryMock";
 import { defaultTheme } from "../../api/mockData";
 import {
   BUILTIN_THEMES,
@@ -152,6 +153,38 @@ function themeKey(core: MockCore): string {
   return JSON.stringify(mockConfigTheme(core));
 }
 
+/**
+ * What the `appearance` undo history covers in the mock (M5d, ADR 0131):
+ * the selection and overrides, the theme list and the user's theme.
+ */
+interface AppearanceSnapshot {
+  settings: AppearanceMockState["settings"];
+  themes: AppearanceMockState["themes"];
+  theme: ResolvedTheme;
+}
+
+function appearanceSnapshot(core: MockCore): AppearanceSnapshot {
+  const state = core.data.features.appearance;
+  return structuredClone({
+    settings: state.settings,
+    themes: state.themes,
+    theme: core.data.theme,
+  });
+}
+
+registerMockHistoryScope("appearance", {
+  snapshot: appearanceSnapshot,
+  restore: (core, raw) => {
+    const snapshot = raw as AppearanceSnapshot;
+    const state = core.data.features.appearance;
+    const before = themeKey(core);
+    state.settings = snapshot.settings;
+    state.themes = snapshot.themes;
+    core.data.theme = snapshot.theme;
+    changed(core, state, before);
+  },
+});
+
 /** Windows switched light / dark or contrast (Follow Windows scenarios). */
 export function setMockSystemAppearance(core: MockCore, system: SystemAppearance): void {
   const state = core.data.features.appearance;
@@ -182,8 +215,11 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
         return invalid(`no usable theme ${request.theme_id}`, "theme-problem-unknown");
       }
       const before = themeKey(core);
+      const undo = appearanceSnapshot(core);
       state.settings = { ...state.settings, theme: request.theme_id, follow_system: false };
-      return changed(core, state, before);
+      const answer = changed(core, state, before);
+      recordMockEdit(core, "appearance", "set-theme", undo);
+      return answer;
     }
     case "SetThemePreferences": {
       const p = request.preferences;
@@ -193,6 +229,7 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
       const issue = overrideIssues(p.overrides)[0];
       if (issue) return invalid(issue, `theme-overrides-issue-${issue}`);
       const before = themeKey(core);
+      const undo = appearanceSnapshot(core);
       state.settings = {
         ...state.settings,
         follow_system: p.follow_system,
@@ -201,7 +238,9 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
         density: p.density,
         overrides: structuredClone(p.overrides),
       };
-      return changed(core, state, before);
+      const answer = changed(core, state, before);
+      recordMockEdit(core, "appearance", "set-theme-preferences", undo);
+      return answer;
     }
   }
 }

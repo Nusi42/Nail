@@ -2,6 +2,10 @@
  * Layout engine: turns a resolved layout window into a React tree.
  * Containers: `split` (resizable by pointer and keyboard), `stack`, `tabs`.
  * Leaves are looked up in the widget registry.
+ *
+ * M5d (ADR 0131): hidden nodes (`hidden=#true`) are skipped, and every node
+ * goes through the layout chrome (`./LayoutChrome.ts`), which the layout
+ * editor uses to draw its pane headers in customize mode.
  */
 import {
   Fragment,
@@ -26,6 +30,7 @@ import {
   selectBreakpointIndex,
   trackForSize,
 } from "./engine";
+import { nodeRefOfPath, rendersNode, useLayoutChrome } from "./LayoutChrome";
 import { useWindowWidth } from "./useWindowWidth";
 import { useWidgetRegistry, type WidgetNode } from "./widgetRegistry";
 
@@ -43,9 +48,11 @@ function nodeKeyOf(node: LayoutNode, path: string): string {
 
 function useVisibleChildren(children: readonly LayoutNode[]) {
   const hidden = useUi((s) => s.hiddenNodes);
+  const chrome = useLayoutChrome();
   return children
     .map((child, index) => ({ child, index }))
-    .filter(({ child }) => child.id === null || !hidden.includes(child.id));
+    .filter(({ child }) => child.id === null || !hidden.includes(child.id))
+    .filter(({ child }) => rendersNode(child, chrome));
 }
 
 export interface WindowViewProps {
@@ -74,6 +81,13 @@ interface NodeViewProps {
 }
 
 export function NodeView({ node, path }: NodeViewProps) {
+  const chrome = useLayoutChrome();
+  const content = nodeContent(node, path);
+  const ref = nodeRefOfPath(path);
+  return ref ? chrome.renderNode(node, ref, content) : content;
+}
+
+function nodeContent(node: LayoutNode, path: string): ReactNode {
   switch (node.type) {
     case "split":
       return <SplitView node={node} path={path} />;

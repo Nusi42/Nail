@@ -43,6 +43,7 @@ import type { FlagChange } from "./FlagChange";
 import type { FolderId } from "./FolderId";
 import type { GmailLabelId } from "./GmailLabelId";
 import type { GmailLabelSettings } from "./GmailLabelSettings";
+import type { HistoryScope } from "./HistoryScope";
 import type { IdentityId } from "./IdentityId";
 import type { ImportOptions } from "./ImportOptions";
 import type { ImportSource } from "./ImportSource";
@@ -118,6 +119,8 @@ import type { SmartcardSettings } from "./SmartcardSettings";
 import type { SystemAppearance } from "./SystemAppearance";
 import type { TaskFields } from "./TaskFields";
 import type { TaskId } from "./TaskId";
+import type { ThemeEditTarget } from "./ThemeEditTarget";
+import type { ThemePatch } from "./ThemePatch";
 import type { ThemePreferences } from "./ThemePreferences";
 import type { ThreadId } from "./ThreadId";
 import type { TrustDecision } from "./TrustDecision";
@@ -514,9 +517,16 @@ limit: number, } | { "type": "GetMcpServerInfo" } | { "type": "ReportUiContext",
  */
 context: UiContext, } | { "type": "GetUiContext" } | { "type": "UpdateLayout", 
 /**
- * The edits, applied in order as one write.
+ * The edits, applied in order as one write (one undo entry, M5d).
  */
-patches: Array<LayoutPatch>, } | { "type": "PreviewConfigMerge", 
+patches: Array<LayoutPatch>, 
+/**
+ * The [`crate::editing::config_revision`] of `layout.kdl` the
+ * editor saw ([`crate::editing::EditHistory::revision`]); when the
+ * file changed since, nothing is written and the answer is
+ * `conflict` (`edit-issue-conflict`). `null` = no check (M5d).
+ */
+base_revision?: string, } | { "type": "PreviewConfigMerge", 
 /**
  * `theme` or `layout`.
  */
@@ -2270,4 +2280,67 @@ window: string, } | { "type": "FocusPopOut",
 /**
  * The window id.
  */
-window: string, };
+window: string, } | { "type": "GetEditHistory", 
+/**
+ * `layout` or `appearance`.
+ */
+scope: HistoryScope, } | { "type": "UndoEdit", 
+/**
+ * `layout` or `appearance`.
+ */
+scope: HistoryScope, 
+/**
+ * Undo even over changes made on disk (`theme.kdl` / `layout.kdl`
+ * are backed up first).
+ */
+force?: boolean, } | { "type": "RedoEdit", 
+/**
+ * `layout` or `appearance`.
+ */
+scope: HistoryScope, 
+/**
+ * Redo even over changes made on disk.
+ */
+force?: boolean, } | { "type": "GetThemeDetails", 
+/**
+ * A theme id from [`Response::Themes`].
+ */
+theme_id: string, } | { "type": "EditTheme", 
+/**
+ * The file to edit.
+ */
+target: ThemeEditTarget, 
+/**
+ * The edits, applied in order as one write.
+ */
+patches: Array<ThemePatch>, 
+/**
+ * The revision of the target file the editor saw
+ * ([`crate::editing::ThemeDetails::revision`] /
+ * [`crate::editing::EditHistory::revision`]), `null` = no check.
+ */
+base_revision?: string, } | { "type": "DuplicateTheme", 
+/**
+ * The theme to copy.
+ */
+theme_id: string, 
+/**
+ * The new theme's display name.
+ */
+name: string, } | { "type": "RenameTheme", 
+/**
+ * The user theme.
+ */
+theme_id: string, 
+/**
+ * The new display name.
+ */
+name: string, 
+/**
+ * The new id, `null` = keep it.
+ */
+new_id?: string, } | { "type": "DeleteTheme", 
+/**
+ * The user theme.
+ */
+theme_id: string, };

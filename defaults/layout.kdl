@@ -179,6 +179,37 @@ layout "default" {
         snooze-list id="snoozed"
     }
 
+    // Layout presets (M5d): pane arrangements of the mail view that
+    // "Customize layout" offers. `pane "<id>"` is a pane of the window by its
+    // node id; panes a preset does not name stay in the window, hidden.
+    presets {
+        preset "three-panes" window="mail" label="@layout.preset.three-panes" icon="columns-3" {
+            split "horizontal" sizes="260px 1fr 1.4fr" {
+                pane "sidebar"
+                pane "list-pane"
+                pane "reader"
+            }
+        }
+        preset "reader-below" window="mail" label="@layout.preset.reader-below" icon="rows-2" {
+            split "horizontal" sizes="260px 1fr" {
+                pane "sidebar"
+                split "vertical" sizes="1fr 1.2fr" {
+                    pane "list-pane"
+                    pane "reader"
+                }
+            }
+        }
+        preset "wide-reader" window="mail" label="@layout.preset.wide-reader" icon="panel-left" {
+            split "horizontal" sizes="1fr 2fr" {
+                pane "list-pane"
+                pane "reader"
+            }
+        }
+        preset "focus" window="mail" label="@layout.preset.focus" icon="square" {
+            pane "reader"
+        }
+    }
+
     // Icons are Lucide names (https://lucide.dev, M5a): "reply-all",
     // "square-pen", … A theme's `icons` can replace any of them by name.
     actions {
@@ -218,6 +249,9 @@ layout "default" {
         action "inspector.toggle" label="@customize.action.inspector" icon="scan-search"
         action "customize.merge"  label="@customize.action.merge" icon="git-merge"
         action "customize.errors" label="@customize.action.errors" icon="circle-alert"
+        // M5d: the layout editor and the toolbar customizer.
+        action "layout.customize" label="@layout-editor.action.customize" icon="layout-dashboard"
+        action "toolbar.customize" label="@toolbar-editor.action.customize" icon="settings-2"
         action "security.autocrypt.import" label="@security.action.autocrypt-import" icon="key-round"
         action "remote.pair"      label="@remote.action.pair" icon="smartphone"
         action "remote.content.allow" label="@remote.action.load-content" icon="image"
@@ -664,5 +698,10 @@ layout "default" {
         item "gmail.new-label"
         separator
         item "settings.section" "accounts" label="@settings.section.accounts" icon="user-round"
+    }
+
+    // Right-click on any toolbar (M5d): customize that toolbar.
+    menu "context:toolbar" {
+        item "toolbar.customize"
     }
 }

@@ -203,7 +203,11 @@ impl Service {
             // M5c: remembered window geometry (no mail data).
             | Request::GetWindowStates
             | Request::SetWindowState { .. }
-            | Request::ResetWindowStates => Ok(()),
+            | Request::ResetWindowStates
+            // M5d: the editors' undo histories and theme details (no mail
+            // data).
+            | Request::GetEditHistory { .. }
+            | Request::GetThemeDetails { .. } => Ok(()),
             // M5a WP155: the attachment's message must be readable.
             Request::GetMessageAttachment { message_id, .. } => {
                 self.check_readable(access, message_id).await
@@ -244,6 +248,12 @@ impl Service {
             | Request::UpdateLayout { .. }
             | Request::SetTheme { .. }
             | Request::SetThemePreferences { .. }
+            | Request::UndoEdit { .. }
+            | Request::RedoEdit { .. }
+            | Request::EditTheme { .. }
+            | Request::DuplicateTheme { .. }
+            | Request::RenameTheme { .. }
+            | Request::DeleteTheme { .. }
             | Request::PreviewConfigMerge { .. }
             | Request::ResolveConfigMerge { .. }
             | Request::ApplyConfigMerge { .. }
@@ -1315,6 +1325,7 @@ impl Service {
             | Event::VaultProgress { .. }
             | Event::UiStateChanged { .. }
             | Event::WindowStateChanged { .. }
+            | Event::EditHistoryChanged { .. }
             | Event::RulesChanged => true,
             Event::MailChanged { folder_ids } => {
                 let mut kept = Vec::with_capacity(folder_ids.len());

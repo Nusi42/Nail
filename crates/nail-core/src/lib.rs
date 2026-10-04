@@ -33,6 +33,7 @@ mod customize;
 #[cfg(feature = "demo")]
 pub mod demo;
 mod desktop;
+mod editing;
 mod engine;
 mod error;
 mod exchange;

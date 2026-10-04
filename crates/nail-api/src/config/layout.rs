@@ -104,6 +104,11 @@ pub enum LayoutNode {
         /// Whether the user can drag the dividers.
         #[serde(default = "default_true")]
         resizable: bool,
+        /// Hidden (M5d, `hidden=#true`): the renderer skips the node and
+        /// its subtree; the layout editor shows it with a "show" eye.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        hidden: bool,
         /// Child nodes, in order.
         children: Vec<LayoutNode>,
     },
@@ -122,6 +127,11 @@ pub enum LayoutNode {
         /// everything else. Otherwise one entry per child.
         #[serde(default)]
         sizes: Vec<String>,
+        /// Hidden (M5d, `hidden=#true`): the renderer skips the node and
+        /// its subtree; the layout editor shows it with a "show" eye.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        hidden: bool,
         /// Child nodes, top to bottom.
         children: Vec<LayoutNode>,
     },
@@ -137,6 +147,11 @@ pub enum LayoutNode {
         /// Index of the initially active child.
         #[serde(default)]
         active: u32,
+        /// Hidden (M5d, `hidden=#true`): the renderer skips the node and
+        /// its subtree; the layout editor shows it with a "show" eye.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        hidden: bool,
         /// Child nodes, one per tab.
         children: Vec<LayoutNode>,
     },
@@ -166,6 +181,11 @@ pub enum LayoutNode {
         /// Where the widget was placed, for the inspector.
         #[serde(default)]
         source: Option<SourceLocation>,
+        /// Hidden (M5d, `hidden=#true`): the renderer skips the node and
+        /// its subtree; the layout editor shows it with a "show" eye.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        hidden: bool,
     },
 }
 
@@ -182,6 +202,24 @@ impl LayoutNode {
             | Self::Tabs { children, .. } => children,
             Self::Widget { .. } => &[],
         }
+    }
+
+    /// Whether the node is hidden (`hidden=#true`, M5d).
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Self::Split { hidden, .. }
+            | Self::Stack { hidden, .. }
+            | Self::Tabs { hidden, .. }
+            | Self::Widget { hidden, .. } => *hidden,
+        }
+    }
+
+    /// The node at `path` (child indexes) below this one; `None` when a
+    /// step does not exist.
+    pub fn at_path(&self, path: &[u32]) -> Option<&LayoutNode> {
+        path.iter().try_fold(self, |node, &index| {
+            node.children().get(usize::try_from(index).ok()?)
+        })
     }
 
     /// The node's optional id.
@@ -547,6 +585,84 @@ pub struct SettingsGroup {
     pub sections: Vec<SettingsSection>,
 }
 
+/// A node of a layout preset's arrangement (M5d, ADR 0131): containers
+/// and references to panes of the window by node id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PresetNode {
+    /// A split (`split "horizontal|vertical" sizes="…" { … }`).
+    Split {
+        /// Arrangement direction.
+        #[serde(default)]
+        orientation: Orientation,
+        /// One CSS track size per child; empty = equal sizes.
+        #[serde(default)]
+        sizes: Vec<String>,
+        /// Children.
+        children: Vec<PresetNode>,
+    },
+    /// A stack (`stack sizes="…" { … }`).
+    Stack {
+        /// One CSS track size per child; empty = the renderer's defaults.
+        #[serde(default)]
+        sizes: Vec<String>,
+        /// Children.
+        children: Vec<PresetNode>,
+    },
+    /// Tabs (`tabs { … }`), the first child active.
+    Tabs {
+        /// Children.
+        children: Vec<PresetNode>,
+    },
+    /// A pane of the window, by node id (`pane "<id>"`).
+    Pane {
+        /// The node id, e.g. `reader`.
+        id: String,
+    },
+}
+
+impl PresetNode {
+    /// The pane ids in this arrangement, depth-first.
+    pub fn pane_ids(&self) -> Vec<&str> {
+        let mut ids = Vec::new();
+        self.collect_panes(&mut ids);
+        ids
+    }
+
+    fn collect_panes<'a>(&'a self, ids: &mut Vec<&'a str>) {
+        match self {
+            Self::Split { children, .. }
+            | Self::Stack { children, .. }
+            | Self::Tabs { children } => {
+                for child in children {
+                    child.collect_panes(ids);
+                }
+            }
+            Self::Pane { id } => ids.push(id),
+        }
+    }
+}
+
+/// A layout preset (M5d, ADR 0131): `presets { preset "<id>" window="mail"
+/// label=… icon=… { <arrangement> } }`, applied with
+/// [`crate::LayoutPatch::ApplyPreset`] (the layout editor's "Three panes",
+/// "Reader below", "Wide reader", "Focus").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct LayoutPreset {
+    /// Kebab-case id, unique in the layout.
+    pub id: String,
+    /// The window it arranges.
+    pub window: String,
+    /// Label (`@id` labels as elsewhere), `null` = `layout-preset-<id>`.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Icon (a Lucide name), `null` = none.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// The arrangement: one root node.
+    pub root: PresetNode,
+}
+
 /// A fully resolved layout.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ResolvedLayout {
@@ -591,6 +707,9 @@ pub struct ResolvedLayout {
     /// `instances=`) by window name; only windows that set one.
     #[serde(default)]
     pub window_frames: IndexMap<String, crate::windows::WindowFrame>,
+    /// The layout presets (M5d, ADR 0131), in definition order.
+    #[serde(default)]
+    pub presets: Vec<LayoutPreset>,
 }
 
 impl ResolvedLayout {
@@ -649,6 +768,7 @@ mod tests {
             options: serde_json::Map::new(),
             rows: vec![],
             source: None,
+            hidden: false,
         };
         let bp = Breakpoint {
             min_width: Some(900),
@@ -693,6 +813,54 @@ mod tests {
             }
         });
         assert_eq!(kinds, ["folder-tree", "message-list"]);
+    }
+
+    #[test]
+    fn hidden_nodes_and_paths_m5d() {
+        let node: LayoutNode = serde_json::from_value(json!({
+            "type": "split",
+            "children": [
+                {"type": "widget", "kind": "folder-tree", "hidden": true},
+                {"type": "stack", "children": [{"type": "widget", "kind": "message-list"}]}
+            ]
+        }))
+        .unwrap();
+        assert!(!node.is_hidden());
+        let first = node.at_path(&[0]).unwrap();
+        assert!(first.is_hidden());
+        assert!(
+            matches!(node.at_path(&[1, 0]), Some(LayoutNode::Widget { kind, .. }) if kind == "message-list")
+        );
+        assert!(node.at_path(&[1, 1]).is_none());
+        assert!(
+            node.at_path(&[])
+                .is_some_and(|n| std::ptr::eq(n, &raw const node))
+        );
+        // `hidden` is left out when false.
+        let json = serde_json::to_value(&node).unwrap();
+        assert!(json.get("hidden").is_none());
+        assert_eq!(json["children"][0]["hidden"], json!(true));
+    }
+
+    #[test]
+    fn presets_list_their_panes_m5d() {
+        let preset: LayoutPreset = serde_json::from_value(json!({
+            "id": "reader-below",
+            "window": "mail",
+            "root": {"type": "split", "sizes": ["260px", "1fr"], "children": [
+                {"type": "pane", "id": "sidebar"},
+                {"type": "split", "orientation": "vertical", "children": [
+                    {"type": "pane", "id": "list-pane"},
+                    {"type": "pane", "id": "reader"}
+                ]}
+            ]}
+        }))
+        .unwrap();
+        assert_eq!(preset.root.pane_ids(), ["sidebar", "list-pane", "reader"]);
+        assert_eq!(preset.label, None);
+        let layout: ResolvedLayout =
+            serde_json::from_value(json!({"name": "x", "windows": {}})).unwrap();
+        assert!(layout.presets.is_empty());
     }
 
     #[test]

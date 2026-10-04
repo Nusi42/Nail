@@ -47,6 +47,11 @@ collapsible: Array<boolean>,
  */
 resizable: boolean, 
 /**
+ * Hidden (M5d, `hidden=#true`): the renderer skips the node and
+ * its subtree; the layout editor shows it with a "show" eye.
+ */
+hidden?: boolean, 
+/**
  * Child nodes, in order.
  */
 children: Array<LayoutNode>, } | { "type": "stack", 
@@ -67,6 +72,11 @@ label: string | null,
  */
 sizes: Array<string>, 
 /**
+ * Hidden (M5d, `hidden=#true`): the renderer skips the node and
+ * its subtree; the layout editor shows it with a "show" eye.
+ */
+hidden?: boolean, 
+/**
  * Child nodes, top to bottom.
  */
 children: Array<LayoutNode>, } | { "type": "tabs", 
@@ -82,6 +92,11 @@ label: string | null,
  * Index of the initially active child.
  */
 active: number, 
+/**
+ * Hidden (M5d, `hidden=#true`): the renderer skips the node and
+ * its subtree; the layout editor shows it with a "show" eye.
+ */
+hidden?: boolean, 
 /**
  * Child nodes, one per tab.
  */
@@ -116,4 +131,9 @@ rows: Array<string>,
 /**
  * Where the widget was placed, for the inspector.
  */
-source: SourceLocation | null, };
+source: SourceLocation | null, 
+/**
+ * Hidden (M5d, `hidden=#true`): the renderer skips the node and
+ * its subtree; the layout editor shows it with a "show" eye.
+ */
+hidden?: boolean, };

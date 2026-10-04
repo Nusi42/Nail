@@ -828,6 +828,7 @@ async fn layout_write_back_merge_backups_and_every_error() {
         &f.service,
         Request::UpdateLayout {
             patches: vec![patch],
+            base_revision: None,
         },
     )
     .await;

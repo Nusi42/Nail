@@ -82,11 +82,18 @@ fn error_code(response: Response) -> ErrorCode {
     }
 }
 
+/// The next event, skipping the editors' history updates (M5d: sent after
+/// every change of the config files).
 async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(10), rx.recv())
-        .await
-        .expect("no event within 10 s")
-        .unwrap()
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+            .await
+            .expect("no event within 10 s")
+            .unwrap();
+        if !matches!(event, Event::EditHistoryChanged { .. }) {
+            return event;
+        }
+    }
 }
 
 #[tokio::test]

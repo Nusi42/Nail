@@ -1,4 +1,4 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { measureElement, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { Address, MessageSummary, ThreadSummary } from "../api/generated";
@@ -41,9 +41,17 @@ const LIST_OVERSCAN = 12;
  * where the browser puts it — and which of the two won depended on timing
  * (the visual screen main-1024 landed at either of two positions).
  */
-export function exactRowSize(element: Element, entry: ResizeObserverEntry | undefined): number {
+export function exactRowSize(
+  element: Element,
+  entry: ResizeObserverEntry | undefined,
+  instance: Virtualizer<HTMLDivElement, Element>,
+): number {
   const box = entry?.borderBoxSize[0];
-  return box ? box.blockSize : element.getBoundingClientRect().height;
+  if (box) return box.blockSize;
+  const height = element.getBoundingClientRect().height;
+  // No layout (jsdom, a detached row): TanStack's own measuring (its cache,
+  // else `offsetHeight`).
+  return height > 0 ? height : measureElement(element, entry, instance);
 }
 
 /** Row templates used when the layout gives none (or only invalid ones). */

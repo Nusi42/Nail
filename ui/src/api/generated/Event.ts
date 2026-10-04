@@ -10,6 +10,7 @@ import type { ComposerEdit } from "./ComposerEdit";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { Confirmation } from "./Confirmation";
 import type { DraftId } from "./DraftId";
+import type { EditHistory } from "./EditHistory";
 import type { ErrorCode } from "./ErrorCode";
 import type { ExchangeArea } from "./ExchangeArea";
 import type { FolderId } from "./FolderId";
@@ -415,4 +416,8 @@ change: PopOutChange,
 /**
  * Every open pop-out after the change.
  */
-pop_outs: Array<PopOut>, };
+pop_outs: Array<PopOut>, } | { "type": "EditHistoryChanged", 
+/**
+ * The history now.
+ */
+history: EditHistory, };

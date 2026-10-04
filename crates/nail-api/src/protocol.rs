@@ -116,6 +116,8 @@ use crate::recovery::RecoveryKeyStatus;
 use crate::security::CryptoTechnology;
 // M5a (ADR 0102).
 use crate::appearance::{Appearance, SystemAppearance, ThemePreferences};
+// M5d (ADR 0131).
+use crate::editing::{EditHistory, HistoryScope, ThemeDetails, ThemeEditTarget, ThemePatch};
 use crate::smartcard::{
     PinPrompt, PinPromptCloseReason, SmartcardKeyRef, SmartcardSettings, SmartcardToken,
 };
@@ -621,8 +623,15 @@ pub enum Request {
     /// Answered with [`Response::Done`]; the new layout follows as
     /// [`Event::ConfigChanged`]. `config` when `layout.kdl` is invalid.
     UpdateLayout {
-        /// The edits, applied in order as one write.
+        /// The edits, applied in order as one write (one undo entry, M5d).
         patches: Vec<LayoutPatch>,
+        /// The [`crate::editing::config_revision`] of `layout.kdl` the
+        /// editor saw ([`crate::editing::EditHistory::revision`]); when the
+        /// file changed since, nothing is written and the answer is
+        /// `conflict` (`edit-issue-conflict`). `null` = no check (M5d).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        base_revision: Option<String>,
     },
     /// Compare an incoming theme or layout with the user's file. Answered
     /// with [`Response::ConfigMergePreview`].
@@ -2886,6 +2895,99 @@ pub enum Request {
         /// The window id.
         window: String,
     },
+
+    // --- In-app editors (M5d, ADR 0131) ---
+    // Layout edits are `UpdateLayout` patches ([`LayoutPatch`]).
+    /// The undo history of a scope. Answered with [`Response::EditHistory`].
+    GetEditHistory {
+        /// `layout` or `appearance`.
+        scope: HistoryScope,
+    },
+    /// Undo the scope's last entry: its files get back what they held
+    /// before. Answered with [`Response::EditHistory`]; `invalid_request`
+    /// with `edit-issue-nothing-to-undo`; `conflict` with
+    /// `edit-issue-conflict` when a file no longer holds what the entry
+    /// wrote (changed on disk) unless `force`. Sends
+    /// [`Event::EditHistoryChanged`] and the config events of the files
+    /// ([`Event::ConfigChanged`], [`Event::ThemeChanged`]).
+    UndoEdit {
+        /// `layout` or `appearance`.
+        scope: HistoryScope,
+        /// Undo even over changes made on disk (`theme.kdl` / `layout.kdl`
+        /// are backed up first).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        force: bool,
+    },
+    /// Redo the scope's last undone entry (the same checks and events as
+    /// [`Request::UndoEdit`]; `edit-issue-nothing-to-redo`).
+    RedoEdit {
+        /// `layout` or `appearance`.
+        scope: HistoryScope,
+        /// Redo even over changes made on disk.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        force: bool,
+    },
+    /// A theme's tokens and part rules for the theme editor. Answered with
+    /// [`Response::ThemeDetails`]; `not_found` with `edit-issue-theme-not-found`.
+    GetThemeDetails {
+        /// A theme id from [`Response::Themes`].
+        theme_id: String,
+    },
+    /// Edit tokens and part overrides of the user's `theme.kdl` or of a user
+    /// theme (format preserving, one undo entry). Answered with
+    /// [`Response::Themes`]; `invalid_request` with an `edit-issue-*` id
+    /// (`not-editable` for a built-in theme, `invalid-token`,
+    /// `invalid-part`), `conflict` for a stale `base_revision`. Sends
+    /// [`Event::ThemeChanged`] (+ [`Event::ConfigChanged`] when the active
+    /// theme changed) and [`Event::EditHistoryChanged`].
+    EditTheme {
+        /// The file to edit.
+        target: ThemeEditTarget,
+        /// The edits, applied in order as one write.
+        patches: Vec<ThemePatch>,
+        /// The revision of the target file the editor saw
+        /// ([`crate::editing::ThemeDetails::revision`] /
+        /// [`crate::editing::EditHistory::revision`]), `null` = no check.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        base_revision: Option<String>,
+    },
+    /// "Duplicate as new theme" / "New theme": copies a theme (built-in or
+    /// user) into `themes/<new id>.kdl` with its own name; the id is derived
+    /// from the name (kebab-case, made unique). Answered with
+    /// [`Response::ThemeSaved`]; `invalid_request` with
+    /// `edit-issue-invalid-theme-name`, `not_found` for an unknown theme.
+    DuplicateTheme {
+        /// The theme to copy.
+        theme_id: String,
+        /// The new theme's display name.
+        name: String,
+    },
+    /// Rename a user theme: its display name, and with `new_id` also its
+    /// file (`themes/<new id>.kdl`; the selection in `theme.kdl` follows).
+    /// Answered with [`Response::ThemeSaved`]; `invalid_request` with
+    /// `edit-issue-not-editable` for a built-in theme,
+    /// `edit-issue-theme-exists` for a taken id.
+    RenameTheme {
+        /// The user theme.
+        theme_id: String,
+        /// The new display name.
+        name: String,
+        /// The new id, `null` = keep it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        new_id: Option<String>,
+    },
+    /// Delete a user theme's file. A selection naming it falls back to the
+    /// default theme of its kind (`theme.kdl` is updated in the same undo
+    /// entry). Answered with [`Response::Themes`]; `invalid_request` with
+    /// `edit-issue-not-editable` for a built-in theme.
+    DeleteTheme {
+        /// The user theme.
+        theme_id: String,
+    },
 }
 
 /// The largest attachment [`Request::GetMessageAttachment`] returns
@@ -3980,6 +4082,25 @@ pub enum Response {
         /// Open pop-outs, in opening order.
         pop_outs: Vec<PopOut>,
     },
+    /// Answer to [`Request::GetEditHistory`], [`Request::UndoEdit`] and
+    /// [`Request::RedoEdit`] (M5d): the scope's history afterwards.
+    EditHistory {
+        /// The history.
+        history: EditHistory,
+    },
+    /// Answer to [`Request::GetThemeDetails`] (M5d).
+    ThemeDetails {
+        /// The theme's tokens and part rules.
+        details: Box<ThemeDetails>,
+    },
+    /// Answer to [`Request::DuplicateTheme`] and [`Request::RenameTheme`]
+    /// (M5d): the theme's (new) id and the appearance afterwards.
+    ThemeSaved {
+        /// The theme id.
+        theme_id: String,
+        /// Themes, selection, active theme, OS state.
+        appearance: Box<Appearance>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -4476,6 +4597,13 @@ pub enum Event {
         /// Every open pop-out after the change.
         pop_outs: Vec<PopOut>,
     },
+    // --- In-app editors (M5d, ADR 0131) ---
+    /// An undo history changed (an edit, undo or redo; from any window or
+    /// session), or the scope's files changed on disk (a new `revision`).
+    EditHistoryChanged {
+        /// The history now.
+        history: EditHistory,
+    },
 }
 
 /// A PKCS#11 module that could not be used ([`Response::Smartcards`]).
@@ -4738,10 +4866,22 @@ mod tests {
                          "items": [{"type": "action", "action": "mail.reply"}, {"type": "spacer"}]}]
         }))
         .unwrap();
-        let Request::UpdateLayout { patches } = update else {
+        let Request::UpdateLayout {
+            patches,
+            base_revision,
+        } = update
+        else {
             panic!("wrong variant");
         };
         assert_eq!(patches.len(), 1);
+        // M5d: the revision is optional and left out when absent.
+        assert_eq!(base_revision, None);
+        let with_revision = Request::UpdateLayout {
+            patches,
+            base_revision: Some("0123456789abcdef".into()),
+        };
+        let json = serde_json::to_value(&with_revision).unwrap();
+        assert_eq!(json["base_revision"], json!("0123456789abcdef"));
         let merge: Request = serde_json::from_value(json!({
             "type": "ApplyConfigMerge", "file": "theme", "incoming": "theme \"x\" {}",
             "choices": [{"item_id": "tokens/color.bg", "take": "theirs"}]

@@ -79,6 +79,7 @@ fn layout_schema_snapshot() {
             "keys",
             "menus",
             "name",
+            "presets",
             "rail",
             "settings-page",
             "toolbar-settings",

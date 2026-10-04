@@ -61,6 +61,7 @@ fn layout_reference_examples_are_valid() {
         "views",
         "rail",
         "settings-page",
+        "presets",
     ];
     let blocks = kdl_blocks("layout-reference.md");
     assert!(blocks.len() >= 8, "found only {} examples", blocks.len());

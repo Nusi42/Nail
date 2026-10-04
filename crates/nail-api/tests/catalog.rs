@@ -15,6 +15,7 @@ use nail_api::desktop::{
     DefaultAppState, DefaultAppTarget, InstallKind, InstallScope, UpdateChannel,
     UpdateDisabledReason, UpdateFailure,
 };
+use nail_api::editing::{EditIssue, EditKind, HistoryScope};
 use nail_api::exchange::oof::AutomaticRepliesIssue;
 use nail_api::exchange::{
     CategoryColor, ExchangeCategoryIssue, ExchangeConfigIssue, ExchangeEngine,
@@ -366,6 +367,12 @@ fn contract_message_ids_exist_in_english() {
         PopOutIssue,
     );
     wanted.extend(["config-window-size-invalid"].map(str::to_owned));
+    // M5d (ADR 0131): the editors' contract ids (core-editors.ftl).
+    labels!(HistoryScope, EditKind, EditIssue);
+    wanted.extend(
+        ["three-panes", "reader-below", "wide-reader", "focus"]
+            .map(|p| format!("layout-preset-{p}")),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
