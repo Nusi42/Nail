@@ -672,6 +672,10 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/m5d.spec.ts (in-app editors: layout.kdl / theme.kdl / themes/*.kdl, undo, conflicts);
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
+                       support/responsive.ts (P1, ADR 0139: STANDARD_SIZES 1600/1280/1024/800 × 1000/700,
+                       expectResponsive / layoutIssues / resizeWindow — overflow, clipping, overlap, off-screen,
+                       label alignment of [data-part]; screenshots <build dir>/screens/p1/<name>-<w>x<h>.png;
+                       self-test tests/responsive-helper.spec.ts);
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
                        (win32 = reference); review page from scripts/visual-review/)
@@ -1094,6 +1098,11 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   names: NFKD without combining marks, `theme-` before a non-letter start, ≤ 60 chars — core and UI alike. A first
   `UpdateLayout` creates `layout.kdl`, so undoing it removes the file. E2E: `m5d.spec.ts`; the a11y window sweep
   covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 in all).
+- P1 contract (ADR 0139): HTML mail broke because nail-mime's sanitizer drops `<style>` / `<head>` / `class` / body
+  attributes and nobody resolves `cid:` (the srcdoc frame also inherits the page CSP, which has no `cid:`); the
+  responsive standard (8 viewport sizes, windows at min-size and resized; no clipped text, overlaps, page scroll) is
+  checked with `e2e/support/responsive.ts` plus a screenshot review; shared dialog / form rules go into
+  `ui/src/theme/skinResponsive.ts` (after every feature skin, before the theme's part rules).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -34,6 +34,7 @@ import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
 import { LAYOUT_EDITOR_SKIN_CSS } from "../features/layout-editor/skin";
 import { TOOLBAR_CUSTOMIZER_SKIN_CSS } from "../features/toolbar-editor/skin";
 import { APPEARANCE_SKIN_CSS } from "../features/appearance/skin";
+import { RESPONSIVE_SKIN_CSS } from "./skinResponsive";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
@@ -322,7 +323,8 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   // The M5a look of the primitives (./skin.ts) sits between the structure
   // and the theme, so every theme rule still wins over it; the M5b
   // packages' skins (shell, settings page, calendar view; ADR 0109) and the
-  // M5c window manager / composer skins (ADRs 0117, 0118) follow it.
+  // M5c window manager / composer skins (ADRs 0117, 0118) follow it, and
+  // the P1 responsive rules of the windows and dialogs (ADR 0139) come last.
   const sections: string[] = [
     BASE_CSS,
     SKIN_CSS,
@@ -335,6 +337,7 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
       LAYOUT_EDITOR_SKIN_CSS,
       TOOLBAR_CUSTOMIZER_SKIN_CSS,
       APPEARANCE_SKIN_CSS,
+      RESPONSIVE_SKIN_CSS,
     ].filter((css) => css !== ""),
     ...tokenRules(theme, warnings),
   ];

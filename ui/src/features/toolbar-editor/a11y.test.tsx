@@ -60,7 +60,9 @@ describe("toolbar customizer accessibility (M5d)", () => {
       );
       await settle(env);
       // An item chosen and a drop target shown.
-      const first = must(dialog.querySelector<HTMLElement>('[data-list="bar"] [role="option"]'));
+      const first = await waitFor(() =>
+        must(dialog.querySelector<HTMLElement>('[data-list="bar"] [role="option"]')),
+      );
       fireEvent.click(first);
       const dataTransfer = { setData: () => undefined, effectAllowed: "", dropEffect: "" };
       fireEvent.dragStart(first, { dataTransfer });
