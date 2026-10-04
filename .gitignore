@@ -1,9 +1,9 @@
 # Rust
 /target/
 **/target/
-# Local cargo config; in the master it names the refusing rustc wrapper
-# (`node scripts/work-folders.mjs guard-master`)
-/.cargo/config.toml
+# Machine-specific cargo settings (.cargo/config.toml includes them); in the master
+# they name the refusing rustc wrapper (`node scripts/work-folders.mjs guard-master`)
+/.cargo/config.local.toml
 /.cargo/master-guard.cmd
 # Node
 node_modules/

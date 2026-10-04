@@ -101,7 +101,7 @@ export function assertWorkFolder(what, root = REPO_ROOT) {
 }
 
 /**
- * The rustc wrapper the master's local `.cargo/config.toml` names: a batch
+ * The rustc wrapper the master's `.cargo/config.local.toml` names: a batch
  * file that refuses every compilation (also `cargo metadata`, which asks
  * rustc for its version through the wrapper).
  */
@@ -114,7 +114,8 @@ export const MASTER_RUSTC_WRAPPER = [
 ].join("\r\n");
 
 /**
- * The master's local (gitignored) `.cargo/config.toml`.
+ * The master's `.cargo/config.local.toml` (gitignored; the committed
+ * `.cargo/config.toml` includes it).
  *
  * @param {string} wrapper path of the wrapper, relative to the checkout root
  * @returns {string}

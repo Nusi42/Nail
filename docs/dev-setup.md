@@ -24,7 +24,8 @@ OAuth2, HTTP, DNS; M1a).
 `<master>` is the **master repository**. It
 holds `main`, receives pushes and fast-forward merges, and nothing is built,
 tested, run, installed or committed there (releases included). All work
-happens in clones outside OneDrive, with `origin` pointing to the master:
+happens in clones outside OneDrive, with `origin` pointing to the master.
+It is the same setup as another project's (its ADR-0024):
 
 | Folder | Branch | Use |
 | --- | --- | --- |
@@ -33,22 +34,33 @@ happens in clones outside OneDrive, with `origin` pointing to the master:
 
 ```sh
 node scripts/work-folders.mjs create 6        # from a work folder: clone the master into nail-work-6 (branch work-6), npm ci
-git fetch origin && git reset --hard origin/work-1   # a package folder starts from the contract (clean tree first)
-git push --force-with-lease origin work-3       # a package is done; the integrator merges origin/work-3 into work-1
-git -C <master> merge --ff-only work-1   # main moves only after a green verify
+git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
+git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead merges origin/work-3 into work-1
+git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1
 node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuses every build
 ```
 
+`main` is always green: it only moves to a `work-1` commit whose full suite
+passed. Hooks in every work folder: pre-commit = the fast per-file checks,
+pre-push = `npm run check` (`.githooks/`), and Claude Code's post-edit hook
+runs the per-file checks on every file an agent edits
+(`.claude/settings.json` → `scripts/post-edit.mjs`; findings go back to
+the agent; skipped inside OneDrive).
+
 Guards: `npm run dev` / `check` / `test` / `visual` / `tauri` /
 `build:desktop`, the perf runner, the installer build, `npm ci`'s `prepare`
-and the pre-commit hook refuse inside any OneDrive folder
-(`scripts/lib/work-folder.mjs`). In the master, a local `.cargo/config.toml`
+and the Git hooks refuse inside any OneDrive folder
+(`scripts/lib/work-folder.mjs`). In the master, the gitignored `.cargo/config.local.toml`
+(included by the committed `.cargo/config.toml`)
 names a refusing `rustc-wrapper`. `create` also writes the folder's
 `.claude/settings.local.json`, so Claude Code's memory stays in the checkout
 (`.claude/memory`). Start Claude Code sessions in `nail-work-1`.
 
 Cargo builds into each work folder's `target/`. Give parallel cargo
 processes in one folder their own `CARGO_TARGET_DIR` (under `.nail-build/`).
+Machine-specific cargo settings go into the gitignored
+`.cargo/config.local.toml`, which the committed `.cargo/config.toml`
+includes.
 
 Build and test output (Playwright, visual, perf, the desktop test build,
 installers) goes to the checkout's gitignored `.nail-build/`

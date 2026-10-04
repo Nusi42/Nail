@@ -9,7 +9,7 @@
  *       `main` and pushed), write its .claude/settings.local.json, `npm ci`
  *   node scripts/work-folders.mjs guard-master
  *       make Cargo refuse every build in the master (a rustc wrapper in its
- *       local, gitignored .cargo/config.toml)
+ *       gitignored .cargo/config.local.toml)
  */
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
@@ -87,7 +87,7 @@ function guardMaster() {
   fs.mkdirSync(cargoDir, { recursive: true });
   const wrapper = path.join(cargoDir, "master-guard.cmd");
   fs.writeFileSync(wrapper, MASTER_RUSTC_WRAPPER);
-  const config = path.join(cargoDir, "config.toml");
+  const config = path.join(cargoDir, "config.local.toml");
   fs.writeFileSync(config, masterCargoConfig(path.relative(master, wrapper)));
   console.log(`${config}: every rustc call in the master is refused (${wrapper})`);
 }
