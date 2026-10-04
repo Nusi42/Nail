@@ -1137,9 +1137,11 @@ like this:
 3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`): packages in `nail-work-2` and up, reset to
    `main`; reviewers with a fresh context; merge into `work-1`, full suite, push `work-1`,
    `git -C <master> merge --ff-only work-1`.
-4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
+4. CodeGraph's index lives in `nail-work-1/.codegraph` (the master has none): pass
+   `projectPath: <work root>\nail-work-1` to `codegraph_explore`, or run `codegraph explore` there.
+5. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
-5. The owner reviews proposals and milestone results as HTML pages (artifacts); keep replies short.
+6. The owner reviews proposals and milestone results as HTML pages (artifacts); keep replies short.
 
 ## Git
 
