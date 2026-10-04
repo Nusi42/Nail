@@ -20,7 +20,9 @@ import {
  * M5c on the real desktop app (ADRs 0119, 0121): a composer pops out into
  * its own OS window (a second WebView2 on the same core), is written and
  * sent there, and its OS window closes; a second composer comes back to
- * the main window with "Return to main window" and keeps what was typed.
+ * the main window with "Return to main window" and keeps what was typed;
+ * a popped-out composer shows its questions in its own window (Discard,
+ * and the OS close button with unsaved typing: ADR 0122).
  *
  * Needs Windows with the WebView2 runtime and `npm run build:desktop`. In
  * CI it runs only with `NAIL_E2E_DESKTOP=1`; locally it always runs.
@@ -163,4 +165,71 @@ test("a popped-out composer returns to the main window with what was typed", asy
   await expect(inPage).toBeVisible({ timeout: 30_000 });
   await expect(inPage.getByRole("textbox", { name: "Subject" })).toHaveValue("Round trip");
   await expect(inPage.getByRole("textbox", { name: "Message" })).toHaveValue("Written outside.");
+});
+
+test("a popped-out composer asks its questions in its own window (Discard, OS close)", async () => {
+  const page = await launch();
+
+  // Discard: the question shows in the pop-out page, and discarding closes
+  // the OS window.
+  const first = await newComposer(page, "Throw away");
+  const firstInPage = page.locator(`[data-part="window"][data-window="${first}"]`);
+  await firstInPage.getByRole("button", { name: "Open in new window" }).click();
+  await expect(firstInPage).toHaveCount(0);
+  const thrown = await popOutPage(first);
+  const thrownHost = thrown.locator(`[data-part="pop-out"][data-window="${first}"]`);
+  await expect(thrownHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Throw away");
+  await thrownHost.getByRole("button", { name: "Discard", exact: true }).click();
+  const discard = thrown.locator(
+    `[data-part="window"][data-window="composer-discard:${first.split(":")[1]}"]`,
+  );
+  await expect(discard).toBeVisible();
+  await discard.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+
+  // The OS close button (Alt+F4) with unsaved typing: the page asks first,
+  // and "Save draft" keeps the text and closes the OS window.
+  const second = await newComposer(page, "Keep this");
+  const secondInPage = page.locator(`[data-part="window"][data-window="${second}"]`);
+  await secondInPage.getByRole("button", { name: "Open in new window" }).click();
+  await expect(secondInPage).toHaveCount(0);
+  const kept = await popOutPage(second);
+  const keptHost = kept.locator(`[data-part="pop-out"][data-window="${second}"]`);
+  await expect(keptHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Keep this");
+  await keptHost.getByRole("textbox", { name: "Message" }).fill("The last words.");
+  await shellControl(page, "close-pop-outs");
+  const question = kept.locator(
+    `[data-part="window"][data-window="composer-close:${second.split(":")[1]}"]`,
+  );
+  await expect(question).toBeVisible();
+  // Still open while it asks.
+  expect((await popOuts(page)).map((p) => p.label)).toEqual([`popout-${second}`]);
+  await question.getByRole("button", { name: "Save draft" }).click();
+  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+
+  // The draft has the last words: continued from the outbox's drafts (it
+  // opens in the page or, as the kind was last popped out, in a pop-out).
+  await runFromPalette(page, "outbox", "Outbox");
+  const draft = page
+    .locator('[data-part="outbox.item"][data-state="draft"]')
+    .filter({ hasText: "Keep this" });
+  await expect(draft).toBeVisible({ timeout: 30_000 });
+  await draft.locator('[data-action="continue-draft"]').click();
+  await expect
+    .poll(
+      async () => {
+        const pages = browser?.contexts().flatMap((c) => c.pages()) ?? [];
+        for (const p of pages) {
+          const found = await p
+            .evaluate(() =>
+              [...document.querySelectorAll("textarea")].some((t) => t.value === "The last words."),
+            )
+            .catch(() => false);
+          if (found) return true;
+        }
+        return false;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
 });

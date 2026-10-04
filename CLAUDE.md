@@ -108,7 +108,9 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        WindowStateFile = `window-state.json` v1, PopOut / PopOutChange / PopOutOpen / PopOutReport, issues);
                        GetWindowStates / SetWindowState / ResetWindowStates → WindowStates, WindowStateChanged; ListPopOuts /
                        PopOutWindow / ReturnPopOut / ClosePopOut / FocusPopOut → PopOuts, PopOutChanged; DesktopHost
-                       open_pop_out / close_pop_out / focus_pop_out, DesktopChange::PopOut (no longer Copy)
+                       open_pop_out / close_pop_out / focus_pop_out, DesktopChange::PopOut (no longer Copy);
+                       M5c review (ADR 0122): pop_out is opt-in (DEFAULT_WINDOW_SPEC.pop_out = false, layout.kdl
+                       `pop-out=#true`), PopOutWindow / PopOutOpen size + min_size (pop_out_sizes)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -552,7 +554,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        useSetWindowState / usePopOuts / usePopOutActions; App.tsx applies WindowStateChanged /
                        PopOutChanged), api/windowStateMock.ts (enableMockPopOuts / simulatePopOutReport), UiState.windows =
                        window ids in z-order + focusWindow, UiState.composers (per instance), Feature.windows; slots
-                       features/windows (WP171), features/popout (WP173: PopOutHost rendered by App.tsx on a pop-out route);
+                       features/windows (WP171), features/popout (WP173: PopOutHost rendered by App.tsx on a pop-out route,
+                       with its own WindowLayer `main=<window>`; OS close → DOM event POP_OUT_CLOSE_EVENT, ADR 0122);
                        M5c packages / integration (ADRs 0117–0121): layout/WindowLayer.tsx (layer, z-order, modality with
                        owners `modalOwner`, Ctrl+F6, openingOrder), layout/WindowFrame.tsx (frame, title bar + PopOutButton,
                        8 handles, snap preview, keyboard move / size, debounced saves; tabbables / trapTab),

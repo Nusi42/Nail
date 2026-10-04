@@ -8,10 +8,14 @@
  * down to its minimum size (520 × 400 by default), so the composer adapts
  * to its own width, not the page's — a container query on the composer:
  *
- * - Always: the footer (`composer.actions`: Send, Save, Discard) sticks to
- *   the bottom of the composer, which scrolls when the window is short, so
- *   nothing is clipped and Send stays reachable; the formatting bar, the
- *   footer and the send-later row wrap instead of overflowing.
+ * - Always: the footer (`composer.footer`: the attachment reminder, an
+ *   error, the send time and `composer.actions` with Send, Save, Discard)
+ *   sticks to the bottom of the composer, which scrolls when the window is
+ *   short, so Send and what it needs stay in view and nothing about sending
+ *   scrolls under the footer; the formatting bar, the actions and the
+ *   send-later row wrap instead of overflowing. The rows never shrink below
+ *   their content (only the message text gives way, down to its minimum
+ *   height), so a short window scrolls instead of squeezing them.
  * - Narrower than 36rem: labels go above their fields, the Markdown preview
  *   goes below the source, the editors start lower.
  * - Narrower than 26rem: the footer's spacer goes, so its buttons wrap as
@@ -45,10 +49,12 @@ export const COMPOSER_NARROW = "36rem";
 export const COMPOSER_TIGHT = "26rem";
 
 const BASE = `${p("composer")} { container: ${COMPOSER_CONTAINER} / inline-size; }
-${p("composer")} > ${p("composer.actions")} {
-  position: sticky; bottom: 0; z-index: 1; flex-wrap: wrap;
+${p("composer")} > :not(${p("composer.body")}) { flex-shrink: 0; }
+${p("composer")} > ${p("composer.footer")} {
+  position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: ${T.sm};
   margin-top: auto; padding-block: ${T.sm} 0; border-top: 1px solid ${T.border}; background-color: ${T.bg};
 }
+${inComposer("composer.actions")} { flex-wrap: wrap; }
 ${inComposer("composer.toolbar")} { flex-wrap: wrap; min-width: 0; }
 ${inComposer("composer.send-later")} { flex-wrap: wrap; }
 ${inComposer("composer.attachments.list")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; min-width: 0; }

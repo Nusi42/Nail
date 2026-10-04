@@ -52,7 +52,7 @@ import { useComposerPopOut } from "./popOut";
 import { needsReminder, parseKeywords } from "./reminder";
 import { composerOf, composerSessions, cryptoFor, patchComposer } from "./sessions";
 import {
-  AUTOSAVE_MS,
+  autosaveDelay,
   ComposerWindowContext,
   richStoreFor,
   useComposerWindow,
@@ -97,7 +97,7 @@ function useAutosave(
       return;
     }
     if (key === savedKey || busy !== null) return;
-    const timer = setTimeout(() => void saveRich(ctx, { quiet: true, window }), AUTOSAVE_MS);
+    const timer = setTimeout(() => void saveRich(ctx, { quiet: true, window }), autosaveDelay());
     return () => clearTimeout(timer);
   }, [ctx, window, key, savedKey, busy]);
 }
@@ -596,115 +596,120 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
 
       <Attachments ctx={ctx} />
 
-      {reminder && (
-        <div
-          data-part="composer.reminder"
-          data-state={rich.reminder === "confirm" ? "confirm" : undefined}
-          role={rich.reminder === "confirm" ? "alert" : undefined}
-        >
-          <span data-part="composer.reminder.message">{t("composer-reminder")}</span>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="attach"
-            onClick={() => fileInput.current?.click()}
+      {/* What sending needs (the attachment reminder, an error, the send
+          time) stays with Send in the footer, which sticks to the bottom of
+          a short window: nothing about sending scrolls under it. */}
+      <div data-part="composer.footer">
+        {reminder && (
+          <div
+            data-part="composer.reminder"
+            data-state={rich.reminder === "confirm" ? "confirm" : undefined}
+            role={rich.reminder === "confirm" ? "alert" : undefined}
           >
-            {t("composer-attach")}
-          </button>
-          {rich.reminder === "confirm" ? (
+            <span data-part="composer.reminder.message">{t("composer-reminder")}</span>
             <button
               type="button"
               data-part="form.button"
-              data-action="send-anyway"
-              onClick={() => {
-                richApi.setState({ reminder: "dismissed" });
-                send(true);
-              }}
+              data-action="attach"
+              onClick={() => fileInput.current?.click()}
             >
-              {t("composer-reminder-send-anyway")}
+              {t("composer-attach")}
             </button>
-          ) : (
+            {rich.reminder === "confirm" ? (
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="send-anyway"
+                onClick={() => {
+                  richApi.setState({ reminder: "dismissed" });
+                  send(true);
+                }}
+              >
+                {t("composer-reminder-send-anyway")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="dismiss-reminder"
+                onClick={() => richApi.setState({ reminder: "dismissed" })}
+              >
+                {t("composer-reminder-dismiss")}
+              </button>
+            )}
+          </div>
+        )}
+
+        {composer.error && (
+          <div data-part="composer.error" role="alert">
+            {t(composer.error.id, composer.error.args)}
+          </div>
+        )}
+        {later && (
+          <div data-part="composer.send-later">
+            <label data-part="composer.field.label" htmlFor={`${ids}-send-at`}>
+              {t("composer-send-at")}
+            </label>
+            <input
+              id={`${ids}-send-at`}
+              data-part="composer.send-at"
+              type="datetime-local"
+              value={sendAt}
+              onChange={(event) => setSendAt(event.target.value)}
+            />
+          </div>
+        )}
+        <div data-part="composer.actions">
+          <button
+            type="submit"
+            data-part="form.button"
+            data-action="send"
+            data-variant="primary"
+            disabled={busy}
+          >
+            <Icon name="send" part="form.button.icon" />
+            <span data-part="form.button.label">
+              {t(later ? "composer-schedule" : "composer-send")}
+            </span>
+          </button>
+          {allowLater && (
             <button
               type="button"
               data-part="form.button"
-              data-action="dismiss-reminder"
-              onClick={() => richApi.setState({ reminder: "dismissed" })}
+              data-action="send-later"
+              aria-pressed={later}
+              data-state={later ? "selected" : undefined}
+              disabled={busy}
+              onClick={() => setLater(!later)}
             >
-              {t("composer-reminder-dismiss")}
+              {t("composer-send-later")}
             </button>
           )}
-        </div>
-      )}
-
-      {composer.error && (
-        <div data-part="composer.error" role="alert">
-          {t(composer.error.id, composer.error.args)}
-        </div>
-      )}
-      {later && (
-        <div data-part="composer.send-later">
-          <label data-part="composer.field.label" htmlFor={`${ids}-send-at`}>
-            {t("composer-send-at")}
-          </label>
-          <input
-            id={`${ids}-send-at`}
-            data-part="composer.send-at"
-            type="datetime-local"
-            value={sendAt}
-            onChange={(event) => setSendAt(event.target.value)}
-          />
-        </div>
-      )}
-      <div data-part="composer.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-action="send"
-          data-variant="primary"
-          disabled={busy}
-        >
-          <Icon name="send" part="form.button.icon" />
-          <span data-part="form.button.label">
-            {t(later ? "composer-schedule" : "composer-send")}
-          </span>
-        </button>
-        {allowLater && (
+          <span data-part="composer.spacer" />
           <button
             type="button"
             data-part="form.button"
-            data-action="send-later"
-            aria-pressed={later}
-            data-state={later ? "selected" : undefined}
+            data-action="save"
             disabled={busy}
-            onClick={() => setLater(!later)}
+            onClick={() => void saveRich(ctx, { window })}
           >
-            {t("composer-send-later")}
+            {t("composer-save")}
           </button>
-        )}
-        <span data-part="composer.spacer" />
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="save"
-          disabled={busy}
-          onClick={() => void saveRich(ctx, { window })}
-        >
-          {t("composer-save")}
-        </button>
-        {savedText !== null && (
-          <span data-part="composer.saved" data-state={rich.autosave} aria-live="polite">
-            {savedText}
-          </span>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="discard"
-          disabled={busy}
-          onClick={() => void requestDiscard(ctx, window)}
-        >
-          {t("composer-discard")}
-        </button>
+          {savedText !== null && (
+            <span data-part="composer.saved" data-state={rich.autosave} aria-live="polite">
+              {savedText}
+            </span>
+          )}
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="discard"
+            disabled={busy}
+            onClick={() => void requestDiscard(ctx, window)}
+          >
+            {t("composer-discard")}
+          </button>
+        </div>
       </div>
     </form>
   );

@@ -622,6 +622,57 @@ describe("window manager (M5c WP171)", () => {
     outside.remove();
   });
 
+  it("opens a window's confirmation over that window and stacks it just above it", async () => {
+    const { env } = await setup(["plugin-manager", "config-errors"]);
+    // The plug-in manager moved to the left (600 x 400 at 140 / 200).
+    drag(header("plugin-manager"), [500, 210], [300, 210]);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 140, y: 200, width: 600, height: 400 });
+    act(() => within(frame("plugin-manager")).getByRole("textbox").focus());
+    act(() => env.store.getState().openWindow("gmail-label-delete"));
+    const confirm = await screen.findByRole("dialog", { name: "Delete label" });
+    await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
+    // Centred over its owner (440 x 220), not over the page.
+    await waitFor(() =>
+      expect(rectOf(confirm)).toEqual({ x: 220, y: 290, width: 440, height: 220 }),
+    );
+    const z = (el: Element) => Number(geometry(el)["z-index"]);
+    expect(z(confirm)).toBeGreaterThan(z(frame("plugin-manager")));
+    // Another window raised over the owner covers the confirmation too.
+    act(() => env.store.getState().focusWindow("config-errors"));
+    expect(z(frame("config-errors"))).toBeGreaterThan(z(confirm));
+    expect(z(confirm)).toBeGreaterThan(z(frame("plugin-manager")));
+    // A confirmation of the main window stays above every window.
+    act(() => env.store.getState().closeWindow("gmail-label-delete"));
+    act(() => document.body.focus());
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    act(() => outside.focus());
+    act(() => env.store.getState().openWindow("gmail-label-delete"));
+    const pageModal = await screen.findByRole("dialog", { name: "Delete label" });
+    await waitFor(() => expect(pageModal).toHaveAttribute("data-owner", MAIN_OWNER));
+    expect(z(pageModal)).toBeGreaterThan(z(frame("config-errors")));
+    expect(z(pageModal)).toBeGreaterThan(z(frame("plugin-manager")));
+    outside.remove();
+  });
+
+  it("opens a new window in a cascade slot no open window of its kind uses", async () => {
+    const { env } = await setup(["plugin-manager", "plugin-manager:w2"]);
+    const first = { x: 340, y: 200, width: 600, height: 400 };
+    const second = {
+      ...first,
+      x: first.x + WINDOW_CASCADE_OFFSET,
+      y: first.y + WINDOW_CASCADE_OFFSET,
+    };
+    expect(rectOf(frame("plugin-manager"))).toEqual(first);
+    expect(rectOf(frame("plugin-manager:w2"))).toEqual(second);
+    // The first closes, a third opens: in the free slot, not over the second.
+    act(() => env.store.getState().closeWindow("plugin-manager"));
+    act(() => env.store.getState().openWindow("plugin-manager:w3"));
+    await settle(env);
+    expect(rectOf(frame("plugin-manager:w3"))).toEqual(first);
+    expect(rectOf(frame("plugin-manager:w2"))).toEqual(second);
+  });
+
   it("finds the flow a confirmation belongs to", () => {
     const modal = (id: string) => id.startsWith("composer-close") || id === "smartcard-pin";
     const open = ["composer:w1", "composer:w2", "composer-close:w1"];

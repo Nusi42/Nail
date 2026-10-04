@@ -265,13 +265,19 @@ pub struct WindowSpec {
 }
 
 /// Every window that does not say otherwise: non-modal, resizable,
-/// 720 × 520 (at least 360 × 240), can pop out, one at a time.
+/// 720 × 520 (at least 360 × 240), one at a time, stays in the page.
+///
+/// Popping out is opt-in (`pop-out=#true` in `layout.kdl`, or the feature's
+/// registration): every webview has its own UI state, so only a window that
+/// shows core data alone, or that hands its state over before it pops out
+/// (a pop-out preparer, like the composer's draft), works in its own OS
+/// window.
 pub const DEFAULT_WINDOW_SPEC: WindowSpec = WindowSpec {
     modal: false,
     resizable: true,
     min_size: WindowSize::new(360, 240),
     size: WindowSize::new(720, 520),
-    pop_out: true,
+    pop_out: false,
     instances: WindowInstances::Single,
 };
 
@@ -621,6 +627,36 @@ pub struct PopOutOpen {
     /// Where to open it: the kind's remembered pop-out geometry, `null` =
     /// the shell's choice.
     pub geometry: Option<WindowGeometry>,
+    /// The first size when nothing is remembered (CSS pixels; the window
+    /// spec's `size`), `null` = [`DEFAULT_WINDOW_SPEC`]'s.
+    #[serde(default)]
+    pub size: Option<WindowSize>,
+    /// The smallest size (CSS pixels; the window spec's `min_size`),
+    /// `null` = the shell's minimum.
+    #[serde(default)]
+    pub min_size: Option<WindowSize>,
+}
+
+/// The first and smallest size of a pop-out as requested by the UI (the
+/// window spec), normalized like [`WindowSpec::normalized`]: edges within
+/// [`MIN_WINDOW_EDGE`] ..= [`MAX_WINDOW_EDGE`], the first size at least the
+/// smallest one.
+pub fn pop_out_sizes(
+    size: Option<WindowSize>,
+    min_size: Option<WindowSize>,
+) -> (Option<WindowSize>, Option<WindowSize>) {
+    let clamp = |s: WindowSize| {
+        WindowSize::new(
+            s.width.clamp(MIN_WINDOW_EDGE, MAX_WINDOW_EDGE),
+            s.height.clamp(MIN_WINDOW_EDGE, MAX_WINDOW_EDGE),
+        )
+    };
+    let min_size = min_size.map(clamp);
+    let size = size.map(clamp).map(|s| match min_size {
+        Some(min) => WindowSize::new(s.width.max(min.width), s.height.max(min.height)),
+        None => s,
+    });
+    (size, min_size)
 }
 
 /// What the desktop shell reports about a pop-out the user acted on
@@ -952,6 +988,32 @@ mod tests {
         assert_eq!(
             check_window_state_write(&current, "new-window", Some(&WindowState::default())),
             None
+        );
+    }
+
+    #[test]
+    fn pop_out_sizes_are_normalized() {
+        assert_eq!(pop_out_sizes(None, None), (None, None));
+        assert_eq!(
+            pop_out_sizes(
+                Some(WindowSize::new(820, 720)),
+                Some(WindowSize::new(520, 400))
+            ),
+            (
+                Some(WindowSize::new(820, 720)),
+                Some(WindowSize::new(520, 400))
+            )
+        );
+        // The first size is at least the smallest; edges are clamped.
+        assert_eq!(
+            pop_out_sizes(
+                Some(WindowSize::new(300, 999_999)),
+                Some(WindowSize::new(520, 1))
+            ),
+            (
+                Some(WindowSize::new(520, MAX_WINDOW_EDGE)),
+                Some(WindowSize::new(520, MIN_WINDOW_EDGE))
+            )
         );
     }
 

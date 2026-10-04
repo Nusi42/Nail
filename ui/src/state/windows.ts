@@ -52,6 +52,13 @@ export const MAX_POP_OUTS = 32;
 export const POP_OUT_ROUTE_PREFIX = "#/window/";
 /** `POP_OUT_LABEL_PREFIX` (the OS window label of a pop-out). */
 export const POP_OUT_LABEL_PREFIX = "popout-";
+/**
+ * The DOM event the desktop shell dispatches in a pop-out's page when the
+ * user closes its OS window (close button, Alt+F4): the page closes its
+ * window like the window's own close button would (app/src-tauri
+ * `popout.rs` `POP_OUT_CLOSE_EVENT`).
+ */
+export const POP_OUT_CLOSE_EVENT = "nail-pop-out-close-requested";
 
 /** `nail_api::windows::is_window_kind`. */
 export function isWindowKind(kind: string): boolean {
@@ -125,13 +132,18 @@ export function popOutLabel(window: string): string {
   return `${POP_OUT_LABEL_PREFIX}${window}`;
 }
 
-/** `DEFAULT_WINDOW_SPEC`. */
+/**
+ * `DEFAULT_WINDOW_SPEC`. Popping out is opt-in (`pop-out=#true` in
+ * `layout.kdl` or `pop_out: true` in the registration): only windows that
+ * show core data alone or register a pop-out preparer work in another
+ * webview (each has its own UI store).
+ */
 export const DEFAULT_WINDOW_SPEC: Readonly<WindowSpec> = {
   modal: false,
   resizable: true,
   min_size: { width: 360, height: 240 },
   size: { width: 720, height: 520 },
-  pop_out: true,
+  pop_out: false,
   instances: "single",
 };
 

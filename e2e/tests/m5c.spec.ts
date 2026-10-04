@@ -25,6 +25,16 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const win = (page: Page, id: string) => page.locator(`[data-part="window"][data-window="${id}"]`);
 const titleBar = (window: Locator) => window.locator('[data-part="window.header"]');
 
+/**
+ * Lengthens the composer's autosave (`__nailAutosaveMs`, read by the UI):
+ * scenarios that close a composer with unsaved changes must not race it.
+ */
+async function lengthenAutosave(page: Page) {
+  await page.addInitScript(() => {
+    (globalThis as Record<string, unknown>).__nailAutosaveMs = 10 * 60 * 1000;
+  });
+}
+
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
   server = await startNail({ seed });
   await page.goto(server.url);
@@ -296,6 +306,7 @@ test("two composers side by side: each edits and sends on its own", async ({ pag
 });
 
 test("a modal confirmation blocks only its own flow", async ({ page }) => {
+  await lengthenAutosave(page);
   await open(page);
   await rows(page).first().click();
   await page.keyboard.press("c");
@@ -303,7 +314,7 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   const id = (await composer.getAttribute("data-window"))!;
   const own = win(page, id);
   await own.getByRole("textbox", { name: "Subject" }).fill("Unsaved thoughts");
-  // Closed with unsaved changes (before the autosave): the composer asks.
+  // Closed with unsaved changes (the autosave is lengthened): the composer asks.
   await own.locator('[data-part="window.close"]').click();
   const key = id.split(":")[1];
   const confirm = win(page, `composer-close:${key}`);
@@ -344,8 +355,12 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
 });
 
 test("Escape closes the focused window, not windows behind the main window", async ({ page }) => {
+  await lengthenAutosave(page);
   await open(page);
   const rules = await openRules(page);
+  // The browser UI keeps every window in the page: no "Open in new window"
+  // (the real core answers the pop-out probe with `unsupported`).
+  await expect(rules.locator('[data-part="window.pop-out"]')).toHaveCount(0);
   // The new window has the focus.
   await expect(rules.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("Escape");
@@ -370,4 +385,7 @@ test("Escape closes the focused window, not windows behind the main window", asy
   await page.keyboard.press("Escape");
   await expect(confirm).toBeHidden();
   await expect(own).toBeVisible();
+  // Still no pop-out button, now that the probe had time to answer.
+  await expect(own.locator('[data-part="window.pop-out"]')).toHaveCount(0);
+  await expect(win(page, "rules").locator('[data-part="window.pop-out"]')).toHaveCount(0);
 });

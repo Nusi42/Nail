@@ -3440,7 +3440,7 @@
         "width": 1000,
         "height": 720
       },
-      "pop_out": null,
+      "pop_out": true,
       "instances": null
     },
     "composer": {
@@ -3454,7 +3454,7 @@
         "width": 820,
         "height": 720
       },
-      "pop_out": null,
+      "pop_out": true,
       "instances": "multiple"
     },
     "outbox": {
@@ -3468,7 +3468,7 @@
         "width": 720,
         "height": 480
       },
-      "pop_out": null,
+      "pop_out": true,
       "instances": null
     },
     "move": {
@@ -3510,7 +3510,7 @@
         "width": 900,
         "height": 640
       },
-      "pop_out": null,
+      "pop_out": true,
       "instances": null
     },
     "snoozed": {
@@ -3524,7 +3524,7 @@
         "width": 720,
         "height": 520
       },
-      "pop_out": null,
+      "pop_out": true,
       "instances": null
     }
   }

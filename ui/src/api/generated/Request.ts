@@ -125,6 +125,7 @@ import type { UiContext } from "./UiContext";
 import type { UpdateSettings } from "./UpdateSettings";
 import type { VacationSettings } from "./VacationSettings";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
+import type { WindowSize } from "./WindowSize";
 import type { WindowState } from "./WindowState";
 import type { WindowsCertStore } from "./WindowsCertStore";
 import type { JsonValue } from "./serde_json/JsonValue";
@@ -2246,7 +2247,18 @@ title?: string,
  * What the new webview needs to show the window (e.g. the draft
  * id), returned in [`crate::windows::PopOut::context`].
  */
-context?: JsonValue, } | { "type": "ReturnPopOut", 
+context?: JsonValue, 
+/**
+ * The window's first size (CSS pixels, the window spec's `size`),
+ * `null` = the default window size. Used when nothing is
+ * remembered for the kind; clamped to the window-edge limits.
+ */
+size?: WindowSize, 
+/**
+ * The window's smallest size (CSS pixels, the window spec's
+ * `min_size`), `null` = the shell's minimum.
+ */
+min_size?: WindowSize, } | { "type": "ReturnPopOut", 
 /**
  * The window id.
  */

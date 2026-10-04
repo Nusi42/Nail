@@ -146,21 +146,23 @@ layout "default" {
     // The view windows open at these sizes when shown as windows (M5c).
     // The settings view: grouped sections with search (the `settings-page`
     // section below says which settings each section shows).
-    window "settings" size="1000x720" min-size="640x480" {
+    window "settings" size="1000x720" min-size="640x480" pop-out=#true {
         settings-page id="settings-page"
     }
 
     // Secondary windows, opened over the main window (M5c: movable,
     // resizable and non-modal; `size` / `min-size` in pixels; several
-    // composers at once, one per draft).
-    window "composer" size="820x720" min-size="520x400" instances="multiple" {
+    // composers at once, one per draft). `pop-out=#true`: "Open in new
+    // window" in the desktop app — only windows that show core data alone
+    // (or hand their state over, like the composer's draft) may pop out.
+    window "composer" size="820x720" min-size="520x400" pop-out=#true instances="multiple" {
         stack id="composer-stack" sizes="1fr auto" {
             composer id="composer"
             // Sign and Encrypt with the key status of every recipient.
             security-composer id="composer-security"
         }
     }
-    window "outbox" size="720x480" min-size="420x280" {
+    window "outbox" size="720x480" min-size="420x280" pop-out=#true {
         outbox id="outbox"
     }
     window "move" size="420x560" min-size="320x360" pop-out=#false {
@@ -169,11 +171,11 @@ layout "default" {
     window "account-setup" size="720x640" min-size="520x480" {
         account-setup id="account-setup"
     }
-    window "rules" size="900x640" min-size="600x420" {
+    window "rules" size="900x640" min-size="600x420" pop-out=#true {
         rule-manager id="rules"
     }
     // Snoozed messages, with "Wake up now".
-    window "snoozed" size="720x520" min-size="420x300" {
+    window "snoozed" size="720x520" min-size="420x300" pop-out=#true {
         snooze-list id="snoozed"
     }
 

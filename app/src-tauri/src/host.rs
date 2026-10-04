@@ -686,6 +686,8 @@ mod tests {
             window: window.into(),
             title: title.map(str::to_owned),
             context: None,
+            size: None,
+            min_size: None,
         }
     }
 
@@ -711,6 +713,8 @@ mod tests {
                     window: "composer:d1".into(),
                     title: Some("Lunch on Friday".into()),
                     context: Some(serde_json::json!({ "draft": "d1" })),
+                    size: None,
+                    min_size: None,
                 })
                 .await,
         );

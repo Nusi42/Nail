@@ -60,8 +60,18 @@ describe("composer skin", () => {
 
   it("keeps the footer reachable and reflows fields, editor and footer", () => {
     const css = COMPOSER_SKIN_CSS;
+    // The footer (reminder, error, send time, actions) sticks together:
+    // nothing about sending scrolls under it (M5c review).
     expect(css).toMatch(
-      /\[data-part="composer"\] > \[data-part="composer\.actions"\] \{[^}]*position: sticky; bottom: 0;[^}]*flex-wrap: wrap;/,
+      /\[data-part="composer"\] > \[data-part="composer\.footer"\] \{[^}]*position: sticky; bottom: 0;/,
+    );
+    expect(css).toContain(
+      `[data-part="composer"] [data-part="composer.actions"] { flex-wrap: wrap; }`,
+    );
+    // Rows never shrink into each other (only the message text gives way):
+    // a short window scrolls (the high-contrast attachment reminder, M5c review).
+    expect(css).toContain(
+      `[data-part="composer"] > :not([data-part="composer.body"]) { flex-shrink: 0; }`,
     );
     const narrow = css.slice(css.indexOf(`(max-width: ${COMPOSER_NARROW})`));
     // Labels above their fields; the Markdown preview below the source.

@@ -51,10 +51,29 @@ fn the_default_layout_sizes_its_windows_and_allows_several_composers() {
             size: WindowSize::new(820, 720),
             min_size: WindowSize::new(520, 400),
             instances: WindowInstances::Multiple,
+            pop_out: true,
             ..DEFAULT_WINDOW_SPEC
         }
     );
     assert!(!layout.window_spec("move", DEFAULT_WINDOW_SPEC).pop_out);
+    // Popping out is opt-in: only windows that work from core data alone
+    // (or hand their state over, the composer) may pop out.
+    assert!(
+        !layout
+            .window_spec("pim-event-editor", DEFAULT_WINDOW_SPEC)
+            .pop_out
+    );
+    for name in ["composer", "settings", "rules", "outbox", "snoozed"] {
+        assert!(
+            layout.window_spec(name, DEFAULT_WINDOW_SPEC).pop_out,
+            "{name}"
+        );
+    }
+    assert!(
+        !layout
+            .window_spec("account-setup", DEFAULT_WINDOW_SPEC)
+            .pop_out
+    );
     // A kind the layout does not describe keeps the base.
     assert_eq!(
         layout.window_spec("pim-event-editor", DEFAULT_WINDOW_SPEC),
@@ -175,7 +194,8 @@ fn the_merge_dialog_shows_and_takes_window_properties() {
     let theirs = item.theirs.as_deref().unwrap();
     assert!(
         theirs.starts_with(
-            r#"window "composer" size="1000x800" min-size="600x500" modal=#false instances="multiple" {"#
+            // `pop-out` comes from the default layout it extends.
+            r#"window "composer" size="1000x800" min-size="600x500" modal=#false pop-out=#true instances="multiple" {"#
         ),
         "{theirs}"
     );
@@ -184,7 +204,7 @@ fn the_merge_dialog_shows_and_takes_window_properties() {
         item.mine
             .as_deref()
             .unwrap()
-            .contains(r#"size="820x720" min-size="520x400" instances="multiple""#)
+            .contains(r#"size="820x720" min-size="520x400" pop-out=#true instances="multiple""#)
     );
     let outcome = resolve_merge(
         ConfigFile::Layout,
@@ -229,7 +249,7 @@ fn the_write_back_keeps_window_properties() {
     .unwrap();
     assert!(
         patched.contains(
-            r#"window "composer" size="820x720" min-size="520x400" instances="multiple""#
+            r#"window "composer" size="820x720" min-size="520x400" pop-out=#true instances="multiple""#
         ),
         "{patched}"
     );

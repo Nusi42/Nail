@@ -142,8 +142,8 @@ running, it is started.
 
 ## Pop-out windows
 
-Any window but a question can leave Nail's main window and become a window
-of its own on your desktop — **Open in new window** in its title bar — for
+A message, Settings, filter rules, the outbox or snoozed messages can leave
+Nail's main window and become a window of its own on your desktop — **Open in new window** in its title bar — for
 example a message on a second monitor. It has its own taskbar entry, Nail
 remembers where it was (also across monitors), and **Return to main
 window** puts it back. See [Windows](windows.md#pop-out-windows-desktop-app).

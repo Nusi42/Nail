@@ -34,11 +34,12 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import type { WindowGeometry, WindowSnap, WindowSpec } from "../api/generated";
+import type { WindowGeometry, WindowRect, WindowSnap, WindowSpec } from "../api/generated";
 import {
   DRAG_THRESHOLD,
   RESIZE_EDGES,
   SAVE_DELAY_MS,
+  centredOn,
   initialGeometry,
   isArrowKey,
   keyboardMove,
@@ -68,6 +69,8 @@ export interface WindowFrameHandle {
   reset(): void;
   /** Focus the window (its last focused element, else the title bar). */
   focus(): void;
+  /** Where the window is shown (page pixels). */
+  rect(): WindowRect;
 }
 
 /** Keyboard move / size mode (Alt+F7 / Alt+F8). */
@@ -105,8 +108,13 @@ export interface WindowFrameProps {
    */
   owner?: string | null;
   viewport: Viewport;
-  /** Windows of the same kind opened before this one (cascade). */
+  /** The window's cascade slot (steps down and right from the default place). */
   cascade: number;
+  /**
+   * The shown rectangle of the window this one belongs to (a confirmation
+   * of a composer): it opens centred over it instead of on the page.
+   */
+  anchor?: WindowRect | null;
   /** The remembered in-page geometry of the kind. */
   remembered: WindowGeometry | null;
   /** Whether the remembered states have loaded (they may arrive after the window opened). */
@@ -133,6 +141,7 @@ export function WindowFrame({
   owner = null,
   viewport,
   cascade,
+  anchor = null,
   remembered,
   loaded,
   title,
@@ -147,16 +156,28 @@ export function WindowFrame({
   const headerRef = useRef<HTMLDivElement>(null);
   const min = spec.min_size;
   const [geometry, setGeometry] = useState<WindowGeometry>(() =>
-    initialGeometry(loaded ? remembered : null, spec.size, min, viewport, cascade),
+    anchor !== null
+      ? normal(centredOn(anchor, spec.size, min, viewport))
+      : initialGeometry(loaded ? remembered : null, spec.size, min, viewport, cascade),
   );
   // The remembered state was taken into account (it may load after the window
-  // opened); a change by the user settles it too.
-  const [settled, setSettled] = useState(loaded);
+  // opened); a change by the user settles it too. A window over its owner
+  // opens there, whatever is remembered.
+  const [settled, setSettled] = useState(loaded || anchor !== null);
   if (!settled && loaded) {
     setSettled(true);
     if (remembered !== null) {
       setGeometry(initialGeometry(remembered, spec.size, min, viewport, cascade));
     }
+  }
+  // The owner may be known only after the first render: the window moves
+  // over it then, unless the user placed it already.
+  const [anchoredTo, setAnchoredTo] = useState<WindowRect | null>(anchor);
+  const [touched, setTouched] = useState(false);
+  if (anchor !== null && anchoredTo === null && !touched) {
+    setAnchoredTo(anchor);
+    setSettled(true);
+    setGeometry(normal(centredOn(anchor, spec.size, min, viewport)));
   }
   const [preview, setPreview] = useState<WindowSnap | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -186,6 +207,7 @@ export function WindowFrame({
   const commit = useCallback(
     (next: WindowGeometry) => {
       setSettled(true);
+      setTouched(true);
       setGeometry(next);
       pending.current = next;
       if (timer.current !== null) clearTimeout(timer.current);
@@ -195,6 +217,10 @@ export function WindowFrame({
   );
 
   const shown = shownRect(geometry, min, viewport);
+  const shownRef = useRef(shown);
+  useLayoutEffect(() => {
+    shownRef.current = shown;
+  });
   const geom = `wm-${id}`;
   useGeometry(geom, {
     left: `${shown.x}px`,
@@ -238,6 +264,7 @@ export function WindowFrame({
         setGeometry(initialGeometry(null, spec.size, min, viewport, cascade));
       },
       focus: focusWindow,
+      rect: () => shownRef.current,
     }),
     [toggleMaximize, focusWindow, spec.size, min, viewport, cascade],
   );

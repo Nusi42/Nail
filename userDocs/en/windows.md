@@ -78,8 +78,13 @@ block only the place they came from:
   calendar or a label — dim the main window until you answer. Other open
   windows, such as a composer, keep working.
 
-A question always stays in front of other windows. `Esc` or its × button
+A question about one window opens over that window and stays in front of
+it; click another window and that window comes in front of both. A question
+from the main window stays in front of every window. `Esc` or its × button
 answers it the safe way (keep editing, cancel).
+
+A new window of a kind that is already open (a second message, say) opens a
+little lower and to the right, never exactly on top of an open one.
 
 ## Pop-out windows (desktop app)
 
@@ -89,7 +94,15 @@ second monitor while you read mail on the first.
 
 - Click **Open in new window** in the title bar (the icon with an arrow
   pointing out of a box), or use **Open window in new window** in the
-  command palette. Questions and the folder picker cannot pop out.
+  command palette. It is offered for messages, Settings, filter rules, the
+  outbox and snoozed messages. Editors that work on what is selected in the
+  main window (events, contacts, tasks, labels, categories), questions and
+  the folder picker stay in Nail's main window.
+- A message's questions (Discard?, unsaved changes, a plug-in stopping it)
+  show in its own window.
+- Closing a pop-out window with its × button or `Alt+F4` is like closing
+  it inside Nail: a message with unsaved changes asks whether to save them
+  first.
 - The new window has its own taskbar entry. A message's window is titled by
   its subject.
 - Everything you do there reaches Nail at once: a message sent from a

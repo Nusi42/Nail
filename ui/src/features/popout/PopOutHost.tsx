@@ -13,17 +13,31 @@
  *   focused window find it; when the content closes it (Send, Cancel,
  *   Close), the OS window closes (`ClosePopOut`).
  * - The context the window was opened with is read with `usePopOutContext`.
+ * - Windows the content opens (a composer's "Discard?" / "Close?"
+ *   questions, plug-in dialogs) show in this page's own window layer, with
+ *   the pop-out as the main window behind them.
+ * - Closing the OS window (its close button, Alt+F4) closes the content the
+ *   way its close button in the page does (`POP_OUT_CLOSE_EVENT` from the
+ *   shell): a composer with unsaved changes asks first, and the OS window
+ *   closes once the content is closed.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { ResolvedLayout } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { WindowView } from "../../layout/LayoutRenderer";
+import { WindowLayer } from "../../layout/WindowLayer";
 import { useDialogRegistry } from "../../layout/dialogRegistry";
+import { useWindowSpecs } from "../../layout/windowSpecs";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { usePopOutActions } from "../../state/windowState";
-import { WindowInstanceContext, windowKind } from "../../state/windows";
+import {
+  POP_OUT_CLOSE_EVENT,
+  WindowInstanceContext,
+  resolveWindowSpec,
+  windowKind,
+} from "../../state/windows";
 import { Icon } from "../../widgets/Icon";
 import { PopOutTitleContext } from "./hooks";
 import { errorMessageId, preparerOf, returnPopOut, windowTitleId } from "./model";
@@ -32,6 +46,7 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
   const t = useT();
   const dialogs = useDialogRegistry();
   const store = useUiStoreApi();
+  const specs = useWindowSpecs();
   const client = useClient();
   const queryClient = useQueryClient();
   const { close } = usePopOutActions();
@@ -49,15 +64,41 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
   }, [title]);
 
   // Open in this webview's store; closed by the content → close the OS window.
+  // Judged once the store settled: a store listener may see a change that
+  // another listener takes back in the same update (a composer with unsaved
+  // changes stays open and asks).
   useEffect(() => {
     store.getState().openWindow(window);
-    let open = true;
-    return store.subscribe((state) => {
-      const now = state.windows.includes(window);
-      if (open && !now) void closeRef.current(window).catch(() => undefined);
-      open = now;
+    let closed = false;
+    let pending = false;
+    const unsubscribe = store.subscribe(() => {
+      if (pending || closed) return;
+      pending = true;
+      queueMicrotask(() => {
+        pending = false;
+        if (closed || store.getState().windows.includes(window)) return;
+        closed = true;
+        void closeRef.current(window).catch(() => undefined);
+      });
     });
+    return () => {
+      closed = true;
+      unsubscribe();
+    };
   }, [store, window]);
+
+  // The user closes the OS window: close the content as its close button
+  // would (an open question is answered first; it stays in front).
+  useEffect(() => {
+    const onCloseRequested = () => {
+      const open = store.getState().windows;
+      const asking = open.some((id) => id !== window && resolveWindowSpec(id, layout, specs).modal);
+      if (asking) return;
+      store.getState().closeWindow(window);
+    };
+    globalThis.addEventListener(POP_OUT_CLOSE_EVENT, onCloseRequested);
+    return () => globalThis.removeEventListener(POP_OUT_CLOSE_EVENT, onCloseRequested);
+  }, [store, window, layout, specs]);
 
   const closeContent = () => store.getState().closeWindow(window);
   // A layout window wins; a feature dialog fills in for a name the layout lacks.
@@ -108,6 +149,7 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
           </div>
         </section>
       </WindowInstanceContext.Provider>
+      <WindowLayer layout={layout} main={window} />
     </PopOutTitleContext.Provider>
   );
 }

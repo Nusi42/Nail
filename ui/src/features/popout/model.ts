@@ -7,7 +7,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { NailError, type NailClient } from "../../api/client";
-import type { JsonValue, PopOut, PopOutChange, Response } from "../../api/generated";
+import type { JsonValue, PopOut, PopOutChange, Response, WindowSpec } from "../../api/generated";
 import type { UiStore } from "../../state/uiStore";
 import { applyPopOuts } from "../../state/windowState";
 import { parsePopOutRoute, windowKind } from "../../state/windows";
@@ -103,13 +103,15 @@ function popOutsOf(response: Response): readonly PopOut[] {
 
 /**
  * Pops `window` out (main page): runs the kind's preparer, asks the core
- * (`PopOutWindow` with the window's title and the context) and takes the
- * window off the page. The window stays in the page when anything fails.
+ * (`PopOutWindow` with the window's title, the context and the spec's
+ * first and smallest size) and takes the window off the page. The window
+ * stays in the page when anything fails.
  */
 export async function popOutWindow(
   ctx: PopOutPrepareContext,
   window: string,
   title: string,
+  spec?: Pick<WindowSpec, "size" | "min_size">,
 ): Promise<readonly PopOut[]> {
   const prepare = preparerOf(window);
   const context = prepare ? await prepare(window, ctx) : undefined;
@@ -119,6 +121,7 @@ export async function popOutWindow(
       window,
       title,
       ...(context === undefined || context === null ? {} : { context }),
+      ...(spec ? { size: spec.size, min_size: spec.min_size } : {}),
     }),
   );
   applyPopOuts(ctx.queryClient, popOuts);

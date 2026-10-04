@@ -190,15 +190,20 @@ pub enum TestControl {
     WindowVisible,
     /// Lists the pop-out OS windows (M5c): `[{label, title, visible}]`.
     PopOuts,
+    /// Closes every pop-out OS window the way the user's close button or
+    /// Alt+F4 does (a close request the page may answer with a question).
+    ClosePopOuts,
 }
 
 impl TestControl {
-    /// `"window-visible"`, `"pop-outs"` or a tray menu item id
+    /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"` or a tray menu
+    /// item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
         match op {
             "window-visible" => Some(Self::WindowVisible),
             "pop-outs" => Some(Self::PopOuts),
+            "close-pop-outs" => Some(Self::ClosePopOuts),
             other => TrayAction::from_id(other).map(Self::Tray),
         }
     }
@@ -235,6 +240,15 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
                 .collect();
             windows.sort_by(|a, b| a["label"].as_str().cmp(&b["label"].as_str()));
             Ok(serde_json::Value::Array(windows))
+        }
+        TestControl::ClosePopOuts => {
+            // `close` emits `CloseRequested` like the user's close button.
+            for (label, window) in app.webview_windows() {
+                if crate::popout::is_pop_out_label(&label) {
+                    window.close().map_err(|e| e.to_string())?;
+                }
+            }
+            Ok(serde_json::Value::Null)
         }
     }
 }
@@ -396,6 +410,10 @@ mod tests {
             Some(TestControl::WindowVisible)
         );
         assert_eq!(TestControl::parse("pop-outs"), Some(TestControl::PopOuts));
+        assert_eq!(
+            TestControl::parse("close-pop-outs"),
+            Some(TestControl::ClosePopOuts)
+        );
         assert_eq!(TestControl::parse("tray-format-disk"), None);
     }
 

@@ -13,8 +13,8 @@
 use std::sync::Arc;
 
 use nail_api::windows::{
-    PopOut, PopOutChange, PopOutIssue, PopOutOpen, PopOutReport, WindowGeometry, WindowState,
-    check_pop_out, pop_out_label, pop_out_route, window_kind,
+    PopOut, PopOutChange, PopOutIssue, PopOutOpen, PopOutReport, WindowGeometry, WindowSize,
+    WindowState, check_pop_out, pop_out_label, pop_out_route, pop_out_sizes, window_kind,
 };
 use nail_api::{ApiError, DesktopHost, ErrorCode, Event, LocalizedMessage, Request, Response};
 use nail_config::{ConfigManager, WindowStateError};
@@ -33,7 +33,18 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             window,
             title,
             context,
-        } => pop_out(service, window, title, context).await,
+            size,
+            min_size,
+        } => {
+            pop_out(
+                service,
+                window,
+                title,
+                context,
+                pop_out_sizes(size, min_size),
+            )
+            .await
+        }
         Request::ReturnPopOut { window } => {
             end_pop_out(service, window, PopOutChange::Returned).await
         }
@@ -178,6 +189,7 @@ async fn pop_out(
     window: String,
     title: Option<String>,
     context: Option<serde_json::Value>,
+    (size, min_size): (Option<WindowSize>, Option<WindowSize>),
 ) -> Result<Response> {
     let host = host(service)?;
     let already_open = is_open(service, &window);
@@ -209,6 +221,8 @@ async fn pop_out(
         route: pop_out_route(&window),
         title,
         geometry,
+        size,
+        min_size,
     })?;
     {
         let mut list = service
@@ -339,7 +353,7 @@ mod tests {
         InstallationInfo, UpdateSettings,
     };
     use nail_api::windows::{
-        PopOutChange, PopOutOpen, PopOutReport, WindowGeometry, WindowRect, WindowState,
+        PopOutChange, PopOutOpen, PopOutReport, WindowGeometry, WindowRect, WindowSize, WindowState,
     };
     use nail_api::{ApiError, DesktopHost, ErrorCode, Event, Request, Response};
     use pretty_assertions::assert_eq;
@@ -570,6 +584,8 @@ mod tests {
                         window: "composer".into(),
                         title: None,
                         context: None,
+                        size: None,
+                        min_size: None,
                     })
                     .await
             ),
@@ -600,6 +616,9 @@ mod tests {
                     window: "composer:d1".into(),
                     title: Some("New message".into()),
                     context: Some(json!({"draft": "d1"})),
+                    size: Some(WindowSize::new(820, 720)),
+                    // Below the edge limit: clamped.
+                    min_size: Some(WindowSize::new(520, 1)),
                 })
                 .await,
         );
@@ -611,6 +630,12 @@ mod tests {
         assert_eq!(opened.route, "#/window/composer:d1");
         assert_eq!(opened.title.as_deref(), Some("New message"));
         assert_eq!(opened.geometry, Some(geometry(300)));
+        // The window spec's sizes reach the shell (normalized).
+        assert_eq!(opened.size, Some(WindowSize::new(820, 720)));
+        assert_eq!(
+            opened.min_size,
+            Some(WindowSize::new(520, nail_api::windows::MIN_WINDOW_EDGE))
+        );
         let seen = drain(&mut events);
         assert!(matches!(
             &seen[0],
@@ -627,6 +652,8 @@ mod tests {
                     window: "composer:d1".into(),
                     title: None,
                     context: None,
+                    size: None,
+                    min_size: None,
                 })
                 .await,
         );
@@ -637,6 +664,8 @@ mod tests {
                     window: "settings".into(),
                     title: None,
                     context: None,
+                    size: None,
+                    min_size: None,
                 })
                 .await,
         );
@@ -723,6 +752,8 @@ mod tests {
                         window: "Bad".into(),
                         title: None,
                         context: None,
+                        size: None,
+                        min_size: None,
                     })
                     .await
             ),

@@ -2851,6 +2851,17 @@ pub enum Request {
         #[serde(default)]
         #[ts(optional)]
         context: Option<Value>,
+        /// The window's first size (CSS pixels, the window spec's `size`),
+        /// `null` = the default window size. Used when nothing is
+        /// remembered for the kind; clamped to the window-edge limits.
+        #[serde(default)]
+        #[ts(optional)]
+        size: Option<crate::windows::WindowSize>,
+        /// The window's smallest size (CSS pixels, the window spec's
+        /// `min_size`), `null` = the shell's minimum.
+        #[serde(default)]
+        #[ts(optional)]
+        min_size: Option<crate::windows::WindowSize>,
     },
     /// Close a pop-out and show the window in the page again (forgets
     /// `popped_out` for the kind). `conflict` with `pop-out-issue-not-open`

@@ -29,6 +29,26 @@ export const COMPOSER_KIND = "composer";
 /** Idle time after the last edit before the draft is saved. */
 export const AUTOSAVE_MS = 1500;
 
+/**
+ * The global a test sets to change the autosave delay (ms, a non-negative
+ * number): unit tests and Playwright scenarios that check "unsaved
+ * changes" flows lengthen it, so the autosave cannot race them under load.
+ */
+export const AUTOSAVE_OVERRIDE_GLOBAL = "__nailAutosaveMs";
+
+/** The autosave delay: `AUTOSAVE_MS`, or the test override when one is set. */
+export function autosaveDelay(): number {
+  const override: unknown = (globalThis as Record<string, unknown>)[AUTOSAVE_OVERRIDE_GLOBAL];
+  return typeof override === "number" && Number.isFinite(override) && override >= 0
+    ? override
+    : AUTOSAVE_MS;
+}
+
+/** Sets (or with `null` removes) the autosave delay override (tests). */
+export function setAutosaveDelay(ms: number | null): void {
+  (globalThis as Record<string, unknown>)[AUTOSAVE_OVERRIDE_GLOBAL] = ms ?? undefined;
+}
+
 export type AutosaveState = "idle" | "saving" | "saved" | "failed";
 
 export interface PendingSwitch {

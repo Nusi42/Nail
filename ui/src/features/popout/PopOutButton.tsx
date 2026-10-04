@@ -41,7 +41,7 @@ export function PopOutButton({ window, spec }: { window: string; spec?: WindowSp
       onClick={() => {
         setBusy(true);
         setError(null);
-        popOutWindow({ client, store, queryClient }, window, t(windowTitleId(window)))
+        popOutWindow({ client, store, queryClient }, window, t(windowTitleId(window)), resolved)
           .catch((e: unknown) => setError(errorMessageId(e)))
           .finally(() => setBusy(false));
       }}

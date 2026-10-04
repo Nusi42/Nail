@@ -111,6 +111,62 @@ export function defaultRect(
 }
 
 /**
+ * Where a window that belongs to another one opens (a confirmation of a
+ * composer): the spec's size, centred over `anchor` (the owner's shown
+ * rectangle), fully on the page where it fits — like an OS dialog over its
+ * owner window.
+ */
+export function centredOn(
+  anchor: WindowRect,
+  size: WindowSize,
+  min: WindowSize,
+  viewport: Viewport,
+): WindowRect {
+  const fitted = fitSize(size, min, viewport);
+  return roundRect(
+    insidePage(
+      {
+        x: anchor.x + (anchor.width - fitted.width) / 2,
+        y: anchor.y + (anchor.height - fitted.height) / 2,
+        ...fitted,
+      },
+      viewport,
+    ),
+  );
+}
+
+/**
+ * The cascade slot of every window in `order` (opening order): a window
+ * keeps the slot it opened with; a new one takes the lowest slot no open
+ * window of its kind uses, so it never opens exactly over one of them
+ * (open A and B, close A, open C: C takes A's place, not B's).
+ * `previous` itself when nothing changed.
+ */
+export function cascadeSlots(
+  previous: ReadonlyMap<string, number>,
+  order: readonly string[],
+  kindOf: (id: string) => string,
+): ReadonlyMap<string, number> {
+  const next = new Map<string, number>();
+  for (const id of order) {
+    const slot = previous.get(id);
+    if (slot !== undefined) next.set(id, slot);
+  }
+  for (const id of order) {
+    if (next.has(id)) continue;
+    const kind = kindOf(id);
+    const used = new Set(
+      [...next].filter(([other]) => kindOf(other) === kind).map(([, slot]) => slot),
+    );
+    let slot = 0;
+    while (used.has(slot)) slot += 1;
+    next.set(id, slot);
+  }
+  const same = next.size === previous.size && [...next].every(([id, s]) => previous.get(id) === s);
+  return same ? previous : next;
+}
+
+/**
  * The geometry a window opens with: the remembered one (cascaded when
  * another window of the kind is open), else the default.
  */
@@ -270,7 +326,9 @@ export function keyboardMove(start: WindowRect, key: ArrowKey, viewport: Viewpor
 
 /**
  * One keyboard resize step from the bottom-right corner: Right / Down grow
- * the window, Left / Up shrink it (not below `min`).
+ * the window, Left / Up shrink it (not below `min`). Growing never makes it
+ * smaller (a window standing off the right or bottom page edge keeps its
+ * size).
  */
 export function keyboardResize(
   start: WindowRect,
@@ -279,14 +337,20 @@ export function keyboardResize(
   viewport: Viewport,
 ): WindowRect {
   const [dx, dy] = ARROWS[key];
-  return resizeRect(
-    start,
-    dx !== 0 ? "e" : "s",
-    dx * WINDOW_KEYBOARD_STEP,
-    dy * WINDOW_KEYBOARD_STEP,
-    min,
-    viewport,
-  );
+  // Up to the page's right / bottom edge, but never below the current size.
+  const edge = (size: number, delta: number, room: number, least: number) =>
+    Math.min(MAX_WINDOW_EDGE, clamp(size + delta, least, Math.max(size, room, least)));
+  return {
+    ...start,
+    width:
+      dx === 0
+        ? start.width
+        : edge(start.width, dx * WINDOW_KEYBOARD_STEP, viewport.width - start.x, min.width),
+    height:
+      dy === 0
+        ? start.height
+        : edge(start.height, dy * WINDOW_KEYBOARD_STEP, viewport.height - start.y, min.height),
+  };
 }
 
 /** Whether two geometries are the same (nothing to remember). */

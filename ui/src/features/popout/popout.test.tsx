@@ -180,6 +180,9 @@ describe("the pop-out button", () => {
       window: "composer:d42",
       title: "New message",
       context: { draft: "d42" },
+      // The window spec's sizes: the OS window opens like the in-page one.
+      size: { width: 820, height: 720 },
+      min_size: { width: 520, height: 400 },
     });
     expect(await popOuts(env)).toMatchObject([
       { window: "composer:d42", context: { draft: "d42" }, focused: true },
@@ -349,8 +352,30 @@ describe("the router", () => {
     await settleQueries(env);
     act(() => env.store.getState().openWindow("rules"));
     await waitFor(() => expect(env.store.getState().windows).toEqual([]));
-    expect(sent).toContainEqual({ type: "PopOutWindow", window: "rules", title: "Filter rules" });
+    expect(sent).toContainEqual({
+      type: "PopOutWindow",
+      window: "rules",
+      title: "Filter rules",
+      size: { width: 900, height: 640 },
+      min_size: { width: 600, height: 420 },
+    });
     expect(await popOuts(env)).toMatchObject([{ window: "rules" }]);
+  });
+
+  it("keeps a kind in the page that was popped out before popping out became opt-in", async () => {
+    const env = desktopEnv();
+    await env.client.call({
+      type: "SetWindowState",
+      window: "pim-event-editor",
+      state: { page: null, pop_out: null, popped_out: true },
+    });
+    const sent = requests(env);
+    renderRouter(env);
+    await settleQueries(env);
+    act(() => env.store.getState().openWindow("pim-event-editor"));
+    await settleQueries(env);
+    expect(env.store.getState().windows).toEqual(["pim-event-editor"]);
+    expect(sent.some((r) => r.type === "PopOutWindow")).toBe(false);
   });
 
   it("raises a window that is popped out instead of showing it twice", async () => {
@@ -413,6 +438,21 @@ describe("the actions", () => {
     await act(async () => {
       await back.run(ctx, []);
     });
+    expect(await popOuts(env)).toEqual([]);
+  });
+
+  it("never pops out a window whose spec keeps it in the page", async () => {
+    window.location.hash = "";
+    const env = desktopEnv();
+    const action = must(actions[POP_OUT_ACTION]);
+    const ctx = { ...ctxOf(env), layout: layout(), t: (id: string) => id, locale: "en" };
+    // An editor of the main page's selection: its state would not travel.
+    act(() => env.store.getState().openWindow("pim-event-editor"));
+    expect(action.enabled?.(ctx, [])).toBe(false);
+    await act(async () => {
+      await action.run(ctx, []);
+    });
+    expect(env.store.getState().windows).toEqual(["pim-event-editor"]);
     expect(await popOuts(env)).toEqual([]);
   });
 });

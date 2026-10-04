@@ -50,7 +50,13 @@ import {
   newComposerWindow,
 } from "./sessions";
 import { draftKey } from "./draft";
-import { instanceRichStore, richStoreFor } from "./store";
+import {
+  autosaveDelay,
+  AUTOSAVE_MS,
+  instanceRichStore,
+  richStoreFor,
+  setAutosaveDelay,
+} from "./store";
 
 function setup(state: Partial<UiState> = {}): Env & { ctx: ComposeContext } {
   const env = createEnv({ state: { activeAccountId: "acc-personal", ...state } });
@@ -105,6 +111,11 @@ const formOf = (id: string) => region(id).getByRole("form", { name: "New message
 afterEach(() => act(() => composerCryptoStore.getState().reset()));
 
 describe("composer windows", () => {
+  // The closing flows check "unsaved changes": the autosave (real timers)
+  // must not save in between, however slow the run is.
+  beforeEach(() => setAutosaveDelay(10 * 60 * 1000));
+  afterEach(() => setAutosaveDelay(null));
+
   it("opens one window per message and mirrors the focused one", async () => {
     const env = setup();
     await startRichCompose(env.ctx);
@@ -291,15 +302,13 @@ describe("composer windows", () => {
     // Escape (window.close closes the topmost window): asked again.
     act(() => ui(env).closeWindow());
     expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
-    // (Under load the autosave may have run meanwhile; closing adds no save.)
-    const saves = () => env.transport.requests.filter((r) => r.type === "SaveDraft").length;
-    const before = saves();
     await user.click(
       region("composer-close:w1").getByRole("button", { name: "Close without saving" }),
     );
     expect(ui(env).windows).toEqual([]);
     expect(ui(env).composers).toEqual({});
-    expect(saves()).toBe(before);
+    // Nothing was saved: no autosave in between, and closing does not save.
+    expect(env.transport.requests.filter((r) => r.type === "SaveDraft")).toEqual([]);
   });
 
   it("saves and closes from the confirmation", async () => {
@@ -552,5 +561,19 @@ describe("window model", () => {
       modal: true,
       instances: "multiple",
     });
+  });
+});
+
+describe("the autosave delay", () => {
+  afterEach(() => setAutosaveDelay(null));
+
+  it("is AUTOSAVE_MS unless a test overrides it", () => {
+    expect(autosaveDelay()).toBe(AUTOSAVE_MS);
+    setAutosaveDelay(5000);
+    expect(autosaveDelay()).toBe(5000);
+    setAutosaveDelay(-1);
+    expect(autosaveDelay()).toBe(AUTOSAVE_MS);
+    setAutosaveDelay(null);
+    expect(autosaveDelay()).toBe(AUTOSAVE_MS);
   });
 });

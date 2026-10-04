@@ -13,6 +13,8 @@ import {
 import {
   RESIZE_EDGES,
   SNAP_EDGE,
+  cascadeSlots,
+  centredOn,
   defaultRect,
   fitSize,
   initialGeometry,
@@ -286,5 +288,62 @@ describe("window geometry (M5c WP171)", () => {
     expect(sameGeometry(a, { ...a, rect: { ...a.rect, x: 2 } })).toBe(false);
     expect(sameGeometry(null, null)).toBe(true);
     expect(sameGeometry(a, null)).toBe(false);
+  });
+
+  it("never lets Shift+Right / Shift+Down shrink a window that stands off the page edge", () => {
+    const wide = { width: 1600, height: 900 };
+    const composerMin = { width: 520, height: 400 };
+    // 820 wide at x = 900: only 700 px are on the page.
+    const off = { x: 900, y: 600, width: 820, height: 720 };
+    const right = keyboardResize(off, "ArrowRight", composerMin, wide);
+    expect(right.width).toBe(820);
+    const down = keyboardResize(off, "ArrowDown", composerMin, wide);
+    expect(down.height).toBe(720);
+    // Shrinking still works from there, and growing on the page still grows.
+    expect(keyboardResize(off, "ArrowLeft", composerMin, wide).width).toBe(
+      820 - WINDOW_KEYBOARD_STEP,
+    );
+    const inside = { x: 100, y: 100, width: 820, height: 600 };
+    expect(keyboardResize(inside, "ArrowRight", composerMin, wide).width).toBe(
+      820 + WINDOW_KEYBOARD_STEP,
+    );
+  });
+
+  it("centres a window over the rectangle of the window it belongs to", () => {
+    const wide = { width: 1600, height: 900 };
+    const confirm = { width: 480, height: 220 };
+    const small = { width: 320, height: 160 };
+    const owner = { x: 0, y: 0, width: 800, height: 900 };
+    expect(centredOn(owner, confirm, small, wide)).toEqual({
+      x: 160,
+      y: 340,
+      width: 480,
+      height: 220,
+    });
+    // An owner partly off the page: the window stays on the page.
+    const off = { x: 1400, y: 700, width: 820, height: 720 };
+    const placed = centredOn(off, confirm, small, wide);
+    expect(placed.x + placed.width).toBeLessThanOrEqual(wide.width);
+    expect(placed.y + placed.height).toBeLessThanOrEqual(wide.height);
+  });
+
+  it("gives a new window the first cascade slot no open window of its kind uses", () => {
+    const kindOf = (id: string) => id.split(":")[0] ?? id;
+    let slots = cascadeSlots(new Map(), ["composer:a", "composer:b", "rules"], kindOf);
+    expect([...slots]).toEqual([
+      ["composer:a", 0],
+      ["composer:b", 1],
+      ["rules", 0],
+    ]);
+    // A closes, C opens: C takes A's slot, not B's (no window opens over another).
+    slots = cascadeSlots(slots, ["composer:b", "rules", "composer:c"], kindOf);
+    expect(slots.get("composer:b")).toBe(1);
+    expect(slots.get("composer:c")).toBe(0);
+    // D takes the next free slot.
+    slots = cascadeSlots(slots, ["composer:b", "rules", "composer:c", "composer:d"], kindOf);
+    expect(slots.get("composer:d")).toBe(2);
+    // Nothing changed: the same map.
+    const order = ["composer:b", "rules", "composer:c", "composer:d"];
+    expect(cascadeSlots(slots, order, kindOf)).toBe(slots);
   });
 });

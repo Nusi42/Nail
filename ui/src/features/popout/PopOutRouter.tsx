@@ -57,8 +57,9 @@ function Router() {
       }
       const kind = windowKind(window);
       const state = Object.hasOwn(states, kind) ? states[kind] : undefined;
-      if (state?.popped_out && resolveWindowSpec(window, layout, specs).pop_out) {
-        void popOutWindow(ctx, window, t(windowTitleId(window))).catch(() => undefined);
+      const spec = resolveWindowSpec(window, layout, specs);
+      if (state?.popped_out && spec.pop_out) {
+        void popOutWindow(ctx, window, t(windowTitleId(window)), spec).catch(() => undefined);
       }
     }
   }, [windows, popOuts, states, client, store, queryClient, layout, specs, t]);

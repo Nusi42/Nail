@@ -108,7 +108,7 @@ window (or, in the desktop app, in a window of its own):
 | `min-size="<width>x<height>"` | the smallest size you can resize it to | `360x240` |
 | `modal=#true` | blocks the rest of Nail while open (meant for confirmations) | `#false` |
 | `resizable=#false` | fixed size: no resize handles, no maximize or snap | `#true` |
-| `pop-out=#false` | the desktop app never opens it in a window of its own | `#true` |
+| `pop-out=#true` | the desktop app offers **Open in new window** for it — only for windows that show what Nail stores (the default layout: composer, settings, rules, outbox, snoozed); an editor of what is selected in the main window opens empty in a window of its own | `#false` |
 | `instances="multiple"` | several can be open at once (one composer per draft) | `"single"` |
 
 Sizes are between 120 and 16384 pixels, and `size` cannot be smaller than

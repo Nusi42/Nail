@@ -48,6 +48,7 @@ import {
   windowTitleId,
 } from "./model";
 import { PopOutRouter } from "./PopOutRouter";
+import { resolveWindowSpec } from "../../state/windows";
 
 export { PopOutHost } from "./PopOutHost";
 export { PopOutButton } from "./PopOutButton";
@@ -76,11 +77,17 @@ export const actions: Feature["actions"] = {
     run: async (ctx, args) => {
       const window = windowArg(args) ?? ctx.store.getState().windows.at(-1);
       if (window === undefined || popOutPageWindow() !== null) return;
-      await popOutWindow(ctx, window, ctx.t(windowTitleId(window))).catch(() => undefined);
+      // Only windows that may pop out (opt-in: the layout's `pop-out=#true`;
+      // feature dialogs and confirmations stay in the page).
+      const spec = resolveWindowSpec(window, ctx.layout, {});
+      if (!spec.pop_out) return;
+      await popOutWindow(ctx, window, ctx.t(windowTitleId(window)), spec).catch(() => undefined);
     },
-    enabled: (ctx, args) =>
-      popOutPageWindow() === null &&
-      (windowArg(args) !== null || ctx.store.getState().windows.length > 0),
+    enabled: (ctx, args) => {
+      if (popOutPageWindow() !== null) return false;
+      const window = windowArg(args) ?? ctx.store.getState().windows.at(-1);
+      return window !== undefined && resolveWindowSpec(window, ctx.layout, {}).pop_out;
+    },
   },
   [RETURN_ACTION]: {
     run: async (ctx, args) => {

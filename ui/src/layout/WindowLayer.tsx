@@ -25,12 +25,20 @@
  *   topmost one; with one window open back and forth), Ctrl+Shift+F6 back to
  *   the main window; inside a window Tab stays in it and Escape (the
  *   layout's `window.close` binding) closes it.
+ * - **Placement:** a new window takes the first cascade slot no open
+ *   window of its kind uses (`cascadeSlots`); a confirmation that belongs
+ *   to a window opens centred over it and stacks just above it (the user
+ *   can raise another window over both), a confirmation of the main window
+ *   stays above every window.
  * - Popped-out windows (desktop, `usePopOuts`) are not shown in the page.
+ *   In a pop-out page the layer shows the windows the popped-out window
+ *   opens (its confirmations); the pop-out itself (`main`) is the main
+ *   window there.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ResolvedLayout, WindowGeometry } from "../api/generated";
+import type { ResolvedLayout, WindowGeometry, WindowRect } from "../api/generated";
 import { setWindowCommandHandler, type WindowCommand } from "../features/windows/commands";
-import { sameGeometry } from "../features/windows/geometry";
+import { cascadeSlots, sameGeometry } from "../features/windows/geometry";
 import { useViewport } from "../features/windows/useViewport";
 import { useT } from "../i18n/I18nProvider";
 import { useUi, useUiStoreApi, type UiState } from "../state/uiStore";
@@ -109,8 +117,36 @@ export function modalOwner(
   return MAIN_OWNER;
 }
 
-/** Renders every open secondary window. */
-export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
+/**
+ * The stacking order of every shown window (`shown` = z-order, topmost
+ * last): non-modal windows by position; a modal window that belongs to an
+ * open window just above that window (another window raised over the
+ * owner covers its confirmation too); a modal window of the main window
+ * above every window.
+ */
+export function stackingOrder(
+  shown: readonly string[],
+  isModal: (id: string) => boolean,
+  ownerOf: (id: string) => string,
+): ReadonlyMap<string, number> {
+  const out = new Map<string, number>();
+  shown.forEach((id, index) => {
+    if (!isModal(id)) {
+      out.set(id, zOf(index));
+      return;
+    }
+    const owner = ownerOf(id);
+    const at = owner === MAIN_OWNER ? -1 : shown.indexOf(owner);
+    out.set(id, at < 0 ? zOf(shown.length + index) : zOf(at) + 1);
+  });
+  return out;
+}
+
+/**
+ * Renders every open secondary window (`main`: in a pop-out page, the
+ * popped-out window the page itself shows).
+ */
+export function WindowLayer({ layout, main }: { layout: ResolvedLayout; main?: string }) {
   const t = useT();
   const store = useUiStoreApi();
   const windows = useUi((s) => s.windows);
@@ -130,8 +166,9 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
   // Popped-out windows live in their own OS window.
   const shown = useMemo(() => {
     const out = new Set((popOuts ?? []).map((p) => p.window));
+    if (main !== undefined) out.add(main);
     return windows.filter((id) => !out.has(id));
-  }, [windows, popOuts]);
+  }, [windows, popOuts, main]);
 
   // Titles from the UI state (a composer's subject), one string so the
   // selector result compares by value; NUL never occurs in a title.
@@ -148,6 +185,10 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
   const [order, setOrder] = useState<readonly string[]>([]);
   const nextOrder = openingOrder(order, shown);
   if (nextOrder !== order) setOrder(nextOrder);
+  // Cascade slots (kept per window; a new one takes the first free slot).
+  const [slots, setSlots] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const nextSlots = cascadeSlots(slots, nextOrder, windowKind);
+  if (nextSlots !== slots) setSlots(nextSlots);
 
   const specOf = useCallback((id: string) => resolveWindowSpec(id, layout, specs), [layout, specs]);
 
@@ -172,6 +213,22 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
       return same ? previous : next;
     });
   }, [modals, shown, specOf]);
+  // Where a window's confirmation opens: over the owner's shown rectangle
+  // (taken once, when the owner is known).
+  const [anchors, setAnchors] = useState<ReadonlyMap<string, WindowRect>>(() => new Map());
+  useLayoutEffect(() => {
+    setAnchors((previous) => {
+      const next = new Map<string, WindowRect>();
+      for (const [id, owner] of owners) {
+        if (owner === MAIN_OWNER) continue;
+        const rect = previous.get(id) ?? frames.current.get(owner)?.rect();
+        if (rect !== undefined) next.set(id, rect);
+      }
+      const same =
+        next.size === previous.size && [...next].every(([id, r]) => previous.get(id) === r);
+      return same ? previous : next;
+    });
+  }, [owners]);
   // Until its owner is known (the first layout pass), a modal window blocks the page.
   const ownerOf = (id: string): string => owners.get(id) ?? MAIN_OWNER;
   const blockedWindows = new Set(modals.map(ownerOf).filter((o) => o !== MAIN_OWNER));
@@ -309,7 +366,7 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
 
   if (shown.length === 0) return null;
 
-  const cascades = new Map<string, number>();
+  const stacking = stackingOrder(shown, (id) => specOf(id).modal, ownerOf);
   return (
     <div ref={layerRef} data-part="window-layer" data-modal={mainBlocked ? "" : undefined}>
       {mainBlocked ? (
@@ -327,11 +384,8 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
         const kind = windowKind(id);
         const spec = specOf(id);
         const index = shown.indexOf(id);
-        // Modal windows stay above every non-modal window (raising one
-        // never covers a confirmation).
-        const z = spec.modal ? zOf(shown.length + index) : zOf(index);
-        const cascade = cascades.get(kind) ?? 0;
-        cascades.set(kind, cascade + 1);
+        const z = stacking.get(id) ?? zOf(index);
+        const cascade = nextSlots.get(id) ?? 0;
         // A layout window wins; a feature dialog fills in for a name the layout lacks.
         const Dialog = Object.hasOwn(layout.windows, kind) ? undefined : dialogs[kind];
         const remembered = states.data?.[kind]?.page ?? null;
@@ -347,6 +401,7 @@ export function WindowLayer({ layout }: { layout: ResolvedLayout }) {
             owner={spec.modal ? ownerOf(id) : null}
             viewport={viewport}
             cascade={cascade}
+            anchor={spec.modal ? (anchors.get(id) ?? null) : null}
             remembered={remembered}
             loaded={loaded}
             title={customTitles[index] || t(windowTitleId(kind))}

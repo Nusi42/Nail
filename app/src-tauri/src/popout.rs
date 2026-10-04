@@ -42,6 +42,29 @@ pub const REPORT_MAX_DELAY: Duration = Duration::from_millis(500);
 pub const TITLE_STRIP: u32 = 32;
 /// The smallest pop-out (CSS pixels).
 pub const MIN_POP_OUT_SIZE: WindowSize = WindowSize::new(320, 240);
+/// The DOM event a pop-out's page gets when the user closes its OS window
+/// (the close button, Alt+F4, the taskbar): the page closes the window it
+/// shows the way the window's own close button does — a composer with
+/// unsaved changes asks first — and the OS window closes when the page
+/// closes it (`ClosePopOut`). Mirrored as `POP_OUT_CLOSE_EVENT` in the UI.
+pub const POP_OUT_CLOSE_EVENT: &str = "nail-pop-out-close-requested";
+
+/// The script run in a pop-out's page when the user closes its OS window.
+pub fn close_request_script() -> String {
+    format!("window.dispatchEvent(new Event({POP_OUT_CLOSE_EVENT:?}));")
+}
+
+/// The smallest inner size of a pop-out: the window spec's minimum, never
+/// below [`MIN_POP_OUT_SIZE`].
+pub fn pop_out_min_size(spec: Option<WindowSize>) -> WindowSize {
+    spec.map_or(MIN_POP_OUT_SIZE, |s| {
+        WindowSize::new(
+            s.width.max(MIN_POP_OUT_SIZE.width),
+            s.height.max(MIN_POP_OUT_SIZE.height),
+        )
+    })
+}
+
 /// How often a new window steps aside from one at the same place.
 const MAX_CASCADE_STEPS: usize = 32;
 
@@ -110,12 +133,20 @@ pub fn place(
     screen: &Screen,
     taken: &[WindowRect],
 ) -> WindowGeometry {
+    place_sized(requested, screen, taken, DEFAULT_WINDOW_SPEC.size)
+}
+
+/// [`place`] with the size (CSS pixels) a window without remembered
+/// geometry opens at (the window spec's `size`).
+pub fn place_sized(
+    requested: Option<&WindowGeometry>,
+    screen: &Screen,
+    taken: &[WindowRect],
+    size: WindowSize,
+) -> WindowGeometry {
     let strip = screen.px(TITLE_STRIP);
     let min_visible = screen.px(WINDOW_MIN_VISIBLE);
-    let default_size = (
-        screen.px(DEFAULT_WINDOW_SPEC.size.width),
-        screen.px(DEFAULT_WINDOW_SPEC.size.height),
-    );
+    let default_size = (screen.px(size.width), screen.px(size.height));
     let fit = |area: &WindowRect, (w, h): (u32, u32)| (w.min(area.width), h.min(area.height));
 
     let kept = requested.and_then(|g| {
@@ -478,7 +509,8 @@ impl PopOutManager {
         }
         let screen = windows.screen();
         let taken: Vec<WindowRect> = self.lock().values().filter_map(|t| t.last).collect();
-        let geometry = place(open.geometry.as_ref(), &screen, &taken);
+        let size = open.size.unwrap_or(DEFAULT_WINDOW_SPEC.size);
+        let geometry = place_sized(open.geometry.as_ref(), &screen, &taken, size);
         // Tracked before the window exists: it reports moves while it is
         // being placed.
         self.lock()
@@ -488,7 +520,7 @@ impl PopOutManager {
             url: pop_out_url(&open.route),
             title,
             geometry,
-            min_size: MIN_POP_OUT_SIZE,
+            min_size: pop_out_min_size(open.min_size),
             sink: self.sink(&open.window),
         };
         if let Err(err) = windows.open(spec) {
@@ -709,7 +741,17 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
         }
         let window = builder.build().map_err(|e| e.to_string())?;
         let sink = Arc::clone(&spec.sink);
+        let page = window.clone();
         window.on_window_event(move |event| match event {
+            // The page closes what it shows (a composer with unsaved changes
+            // asks first) and the OS window with it; a page that cannot be
+            // asked lets the OS close it.
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                match page.eval(close_request_script()) {
+                    Ok(()) => api.prevent_close(),
+                    Err(err) => tracing::warn!(%err, "cannot ask a pop-out's page to close"),
+                }
+            }
             tauri::WindowEvent::Moved(_)
             | tauri::WindowEvent::Resized(_)
             | tauri::WindowEvent::ScaleFactorChanged { .. } => sink(Signal::Moved),
@@ -1048,6 +1090,68 @@ mod tests {
     }
 
     #[test]
+    fn a_new_window_opens_at_its_spec_size() {
+        let screen = FakeWindows::single_monitor().screen();
+        let placed = place_sized(None, &screen, &[], WindowSize::new(820, 720));
+        assert_eq!((placed.rect.width, placed.rect.height), (820, 720));
+        // Scaled like the default size.
+        let scaled = Screen {
+            scale: 1.25,
+            ..screen.clone()
+        };
+        let placed = place_sized(None, &scaled, &[], WindowSize::new(800, 640));
+        assert_eq!((placed.rect.width, placed.rect.height), (1000, 800));
+        // A remembered size wins.
+        let remembered = WindowGeometry::at(rect(100, 100, 500, 400));
+        assert_eq!(
+            place_sized(Some(&remembered), &screen, &[], WindowSize::new(820, 720)),
+            remembered
+        );
+    }
+
+    #[test]
+    fn the_spec_minimum_size_applies_but_never_below_the_shell_minimum() {
+        assert_eq!(pop_out_min_size(None), MIN_POP_OUT_SIZE);
+        assert_eq!(
+            pop_out_min_size(Some(WindowSize::new(520, 400))),
+            WindowSize::new(520, 400)
+        );
+        assert_eq!(
+            pop_out_min_size(Some(WindowSize::new(200, 400))),
+            WindowSize::new(MIN_POP_OUT_SIZE.width, 400)
+        );
+    }
+
+    #[test]
+    fn the_close_request_script_dispatches_the_page_event() {
+        assert_eq!(
+            close_request_script(),
+            "window.dispatchEvent(new Event(\"nail-pop-out-close-requested\"));"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_manager_opens_a_window_with_its_spec_sizes() {
+        let (manager, fake, _) = manager();
+        let open = PopOutOpen {
+            size: Some(WindowSize::new(820, 720)),
+            min_size: Some(WindowSize::new(520, 400)),
+            ..open_request("composer:d1", None)
+        };
+        manager.open(&open, "Hi".into()).unwrap();
+        let windows = fake.windows.lock().unwrap();
+        let window = windows.get("popout-composer:d1").unwrap();
+        assert_eq!(window.spec.min_size, WindowSize::new(520, 400));
+        assert_eq!(
+            (
+                window.spec.geometry.rect.width,
+                window.spec.geometry.rect.height
+            ),
+            (820, 720)
+        );
+    }
+
+    #[test]
     fn taskbar_titles_are_cleaned() {
         assert_eq!(taskbar_title("  Re: Lunch  ").as_deref(), Some("Re: Lunch"));
         assert_eq!(taskbar_title("a\nb\u{7}").as_deref(), Some("a b"));
@@ -1126,6 +1230,8 @@ mod tests {
             route: pop_out_route(window),
             title: None,
             geometry,
+            size: None,
+            min_size: None,
         }
     }
 
