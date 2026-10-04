@@ -32,6 +32,20 @@ import { Avatar, Tag } from "./primitives";
  */
 const LIST_OVERSCAN = 12;
 
+/**
+ * A rendered row's exact height. TanStack Virtual's default rounds it
+ * (`Math.round` of the border box, or `offsetHeight`), but rows are
+ * fractional (e.g. 111.22 px from the font's line heights): the virtualizer's
+ * offsets then drift from the real layout by a fraction of a pixel per row, so
+ * "scroll the selected row into view" stopped up to a pixel or two short of
+ * where the browser puts it — and which of the two won depended on timing
+ * (the visual screen main-1024 landed at either of two positions).
+ */
+export function exactRowSize(element: Element, entry: ResizeObserverEntry | undefined): number {
+  const box = entry?.borderBoxSize[0];
+  return box ? box.blockSize : element.getBoundingClientRect().height;
+}
+
 /** Row templates used when the layout gives none (or only invalid ones). */
 export const DEFAULT_ROWS = ["{from.name | bold-if-unread}  {date | relative}", "{subject}"];
 
@@ -435,6 +449,7 @@ export function MessageList({ node }: WidgetProps) {
     // the real height afterwards).
     estimateSize: () => 20 * (columns.length > 0 ? 1 : templates.length + 1) + 24,
     overscan: LIST_OVERSCAN,
+    measureElement: exactRowSize,
     getItemKey: (index) => rows[index]?.key ?? index,
   });
   const items = virtualizer.getVirtualItems();

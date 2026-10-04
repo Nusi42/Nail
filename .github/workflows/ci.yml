@@ -483,9 +483,6 @@ jobs:
             ${{ runner.temp }}/nail-build/perf/standard/scroll-trace.json
           retention-days: 30
 
-  # Licences (no GPL / LGPL / AGPL), advisories (RustSec; the rsa 0.9
-  # exception is recorded in deny.toml), banned crates (OpenSSL, aws-lc),
-  # sources.
   # Visual regression (M5a, ADR 0106): built-in themes x densities against
   # e2e/visual/baselines/win32, plus the harness self-test. Non-blocking until a
   # CI run confirms the runner renders like the reference machine (fonts:
@@ -538,6 +535,9 @@ jobs:
             .nail-build/visual-selftest/review/
           retention-days: 14
 
+  # Licences (no GPL / LGPL / AGPL), advisories (RustSec; the rsa 0.9
+  # exception is recorded in deny.toml), banned crates (OpenSSL, aws-lc),
+  # sources.
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest

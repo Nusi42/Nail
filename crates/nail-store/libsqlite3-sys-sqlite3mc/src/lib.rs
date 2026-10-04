@@ -1,7 +1,11 @@
 //! `libsqlite3-sys` 0.38.2's API over the bundled SQLite3 Multiple
 //! Ciphers amalgamation (Nail, ADR 0095). The Rust side is the
 //! original crate's `lib.rs` / `error.rs` (MIT, the rusqlite developers).
-#![expect(non_snake_case, non_camel_case_types)]
+#![expect(
+    non_snake_case,
+    non_camel_case_types,
+    reason = "vendored bindgen output keeps SQLite's C names (sqlite3_int64, SQLITE_OK, ...)"
+)]
 #![cfg_attr(not(test), no_std)]
 
 pub use self::error::*;
