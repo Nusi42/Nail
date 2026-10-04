@@ -15,6 +15,7 @@ import type {
   ToolbarSettings,
 } from "../api/generated";
 import { DEFAULT_TOOLBAR_SETTINGS } from "../api/normalize";
+import { normalizeCombo } from "../actions/keys";
 import { resolveMenu } from "../features/menus";
 
 /** What a toolbar without its own settings does (`ToolbarSettings::default()`). */
@@ -162,4 +163,45 @@ export function wrapEdges(
     if (next?.top !== item.top) return "end";
     return null;
   });
+}
+
+/** The layout menu a right-click on a toolbar opens (M5d). */
+export const TOOLBAR_CONTEXT_MENU = "context:toolbar";
+
+/** The action that opens the context menu of the focused element (Shift+F10). */
+export const CONTEXT_MENU_ACTION = "menu.context";
+
+/**
+ * The toolbar's right-click menu, resolved like a context menu (labels,
+ * icons, shortcuts in the bar's key context); `null` when the layout has
+ * none (then the browser's menu stays).
+ */
+export function toolbarContextMenu(
+  layout: ResolvedLayout,
+  keyContext: string,
+): ResolvedMenuEntry[] | null {
+  if (!Object.hasOwn(layout.menus, TOOLBAR_CONTEXT_MENU)) return null;
+  const resolved = resolveMenu(layout, TOOLBAR_CONTEXT_MENU, keyContext);
+  return resolved && resolved.items.length > 0 ? resolved.items : null;
+}
+
+/**
+ * The arguments an action of the toolbar's menu runs with: an action
+ * without arguments of its own gets the toolbar's name (`toolbar.customize`
+ * then customizes the right-clicked toolbar).
+ */
+export function toolbarMenuArgs(toolbar: string, args: readonly JsonValue[]): JsonValue[] {
+  return args.length > 0 ? [...args] : [toolbar];
+}
+
+/**
+ * Whether `combo` (from `comboFromEvent`) opens a context menu: a binding
+ * of `menu.context` (Shift+F10 and the menu key in the default layout).
+ */
+export function opensContextMenu(layout: ResolvedLayout, combo: string | null): boolean {
+  if (combo === null) return false;
+  return layout.keys.some(
+    (k) =>
+      k.action === CONTEXT_MENU_ACTION && k.args.length === 0 && normalizeCombo(k.key) === combo,
+  );
 }
