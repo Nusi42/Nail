@@ -21,6 +21,14 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   in `[workspace.lints]`, no ESLint rule switched off, no `--no-verify`). An unavoidable exception needs
   `#[expect(lint, reason = "…")]` (Rust; `#[allow]` is denied) / `// eslint-disable-next-line rule -- reason` at the
   narrowest scope. `npm run check` runs every formatter and linter; the pre-commit hook checks staged files.
+  Conventions (ADRs 0124–0129): every integration-test crate root (`tests/*.rs`, `tests/*/main.rs`) starts with
+  `#![cfg(test)]` (so `clippy.toml`'s unwrap / expect exemption covers its helpers; no exception attribute); a test
+  crate that uses part of `tests/common` declares `#[expect(dead_code, reason = "…")] mod common;`; no `#[allow`
+  anywhere under `crates/` / `app/`; `let _ = x;` → `drop(x)` or a logged error; casts via `try_from`; German or
+  deliberately misspelled text sits behind `spellchecker:disable-line` / `spellchecker:off` … `on` markers. UI:
+  `must()` in tests instead of `!`, `charCount` / `nonEmpty` / `hasText` (`ui/src/text`); scripts: `readJson` /
+  `parseJson` (`scripts/lib/json.mjs`), `defined()` in e2e. Feature barrels (`features/*/index.ts`) never re-export
+  mock modules: the mock core must stay out of the app bundle (`npm run build` prints no warnings).
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
@@ -1004,6 +1012,13 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   one. Skins `WINDOWS_SKIN_CSS` / `COMPOSER_SKIN_CSS` follow the shared skin; window sizes come only from specs
   (`layout.kdl` `size=` / `min-size=`, `Feature.windows`), never from theme rules. API messages are stored with their
   remote id / Exchange / Gmail data in one transaction (`Store::merge_with_remote`, `ingest_with_remote`).
+- Q1 integration (ADR 0129; packages ADRs 0124 q-rust-a, 0125 q-rust-b, 0126 q-rust-c, 0127 q-ts-rest, 0128 q-ts-ui):
+  `npm run check` is green with 0 warnings and blocks in CI (`quality`); `nail serve` without remote login answers
+  `POST /api/auth` with `204` (`nail_api::remote::NO_LOGIN_STATUS`); `SearchIndex::open_with` / `PimIndex::open_with`
+  borrow the wrapper; the Vite build splits the initial code into `vendor`, `vendor-ui`, `catalogs`, `default-theme`
+  and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
+  notice is off (`checks.bundlerTimings`). `node_modules` in OneDrive is a reparse point: Vite configs that import a
+  symlinked workspace package need `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

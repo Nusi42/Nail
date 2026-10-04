@@ -826,6 +826,8 @@ Requirement: linters and formatters for every kind of file, with 0 warnings and 
 
 *Status:* contract done (ADR 0123). Findings at the contract: clippy 3096, rustdoc 23, ESLint 5918, tsc (Node scripts, prelude) 654, markdownlint 128, typos 79, cargo machete 12; rustfmt, taplo, Prettier, EditorConfig, actionlint and cargo deny clean. Report per crate / lint / area: `%LOCALAPPDATA%/nail-build/q1/findings.md`.
 
+*Status:* packages and integration done (ADRs 0124 q-rust-a, 0125 q-rust-b, 0126 q-rust-c, 0127 q-ts-rest, 0128 q-ts-ui, 0129 integration). `npm run check` passes all 15 steps with 0 warnings; no `#[allow` under `crates/` / `app/`, every `eslint-disable` has a reason; `npm run build` and the cargo builds print no warnings (mock core out of the app bundle, initial code in parallel chunks). Integration resolved the packages' requests (`POST /api/auth` → 204 without login, one `#![cfg(test)]` convention for integration tests, typos / markdownlint entries, `create-nail-plugin` tests on OneDrive). Follow-ups / deferred: real per-feature lazy loading of the UI (the initial code is split, not deferred); shellcheck for actionlint's `run:` blocks (GPL-3.0; as a development tool it links nothing into Nail, but adding it is the maintainer's decision); the non-Windows `cfg` branches of `nail-discovery` / `nail-exchange` are checked only by CI's Linux job; the release `tauri build` output is checked in CI only.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

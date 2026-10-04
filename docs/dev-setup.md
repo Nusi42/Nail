@@ -79,6 +79,55 @@ ESLint rule off, never relax `-D warnings`, never commit with `--no-verify`.
 An unavoidable exception is written at the narrowest scope with its reason:
 `#[expect(lint, reason = "…")]` in Rust (`#[allow]` is rejected by clippy) or
 `// eslint-disable-next-line rule -- reason` in TypeScript / JavaScript.
+Deliberate non-English text or misspellings (German test strings, a broken
+config in an error example) end their line with
+`// spellchecker:disable-line`, or sit between `spellchecker:off` and
+`spellchecker:on` comments (`//`, `#` or `<!-- -->`); see `typos.toml`.
+
+Habits of the type-aware TypeScript / JavaScript rules (ADR 0127):
+
+- Node scripts are typed with JSDoc. Parse JSON with `parseJson` /
+  `readJson` (`scripts/lib/json.mjs`, they answer `unknown`) and narrow or
+  cast the result; `JSON.parse` answers `any`, which the `no-unsafe-*`
+  rules reject wherever it flows, and a JSDoc cast is invisible to ESLint.
+- No non-null assertions: Playwright code uses `defined(value, "what")`
+  (`e2e/support/defined.ts`), which fails with a clear message; elsewhere
+  use `?? fallback`, `?.` or a check.
+- Numbers in template literals go through `String(n)`.
+- An `async` function needs an `await`; a test double that answers a
+  promise without awaiting anything returns `Promise.resolve(…)` (or
+  `asPromise(() => …)` in the plug-in test host, which keeps the rejection
+  semantics of `async`).
+- UI code (ADR 0128): tests use `must(value)` (`ui/src/test`) instead of
+  `!`; text length is `charCount` / `chars` (counts like the Rust core) and
+  "empty means missing" is `nonEmpty` / `hasText` (`ui/src/text`), not `||`.
+- Feature barrels (`ui/src/features/*/index.ts`) never re-export a mock
+  module (`mock.ts`, `mockSeed.ts`, `*Mock.ts`): that pulls the whole mock
+  core into the app bundle (ADR 0129). Tests import mocks from the mock
+  module itself; rules the UI needs live in a `model.ts`.
+
+Habits of the Rust lints (ADRs 0124–0126, 0129):
+
+- Every integration-test crate root (`tests/*.rs`, `tests/*/main.rs`)
+  starts with `#![cfg(test)]`, so `clippy.toml`'s `allow-unwrap-in-tests` /
+  `allow-expect-in-tests` also cover its helper functions. A test crate that
+  uses only part of `tests/common` declares
+  `#[expect(dead_code, reason = "…")] mod common;`.
+- No `#[allow(…)]` anywhere (`clippy::allow_attributes` is deny); an
+  expectation that no longer fires warns, so remove it with the cause.
+- `let _ = value;` → `drop(value);` (same drop point) or, for a
+  best-effort cleanup, log the error at debug level.
+- Narrowing casts use `try_from` with a fallback or an error; float
+  comparisons in tests that are exact by construction carry
+  `#[expect(clippy::float_cmp, reason = "…")]` on the test.
+- Types that hold secrets get a manual `Debug` that hides them.
+
+On a checkout inside OneDrive, `node_modules` is a cloud-file reparse
+point. Vite cannot canonicalize symlinked workspace packages there ("Failed
+to resolve import", or Node loading a package's `.ts` sources natively), so
+the Vite configs that need it set `resolve.preserveSymlinks: true`
+(`ui/vite.config.ts`, `packages/create-nail-plugin/vitest.config.ts`).
+Excluding `node_modules` from OneDrive sync fixes it at the source.
 
 | Files | Tool | Config | Fix |
 | --- | --- | --- | --- |
@@ -101,7 +150,9 @@ select some, `--fail-fast` stops at the first failure. Cargo runs with
 The **pre-commit hook** (`.githooks/pre-commit`, enabled by `npm install` /
 `npm ci` through the `prepare` script, which sets `core.hooksPath`) runs
 rustfmt, Prettier, ESLint, taplo, markdownlint, typos and the EditorConfig
-check on the staged files only, in parallel, in a few seconds. It reads the
+check on the staged files only, in parallel (measured at Q1: about 5 s for a
+commit with TypeScript files, most of it type-aware ESLint starting up;
+0.2 s for Rust / Markdown / TOML only). It reads the
 working-tree copy of each staged file, so stage the whole file you fixed.
 
 ### Console output in UI tests

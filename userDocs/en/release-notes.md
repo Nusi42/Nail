@@ -52,6 +52,10 @@ please keep a [backup](backup-restore.md) of your data.
   [Microsoft Exchange and Microsoft 365](exchange.md).
 - **Gmail and Exchange conversations** are shown as the server groups them.
 - **Faster first sync of large mailboxes**: tested with 100,000 messages.
+- **Faster start of the app**: the code that only the built-in demo needs
+  is no longer loaded when you use your own accounts, and the rest loads in
+  parallel parts. In web mode without remote sign-in, the browser console no
+  longer shows an error when Nail checks whether a sign-in is needed.
 
 ### Changes to existing data
 
