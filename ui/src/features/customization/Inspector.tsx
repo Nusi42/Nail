@@ -15,6 +15,7 @@ import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useWindowWidth } from "../../layout/useWindowWidth";
 import { useGeometry, useTheme } from "../../theme/ThemeProvider";
+import { EditStyleButton } from "../appearance/EditStyle";
 import { SourceLink } from "./SourceLink";
 import {
   INSPECTOR_PART_PREFIX,
@@ -123,6 +124,13 @@ function Details({ element }: { element: Element }) {
             </li>
           ))}
         </ol>
+        {/* M5d WP183: jump to the part in the theme editor. */}
+        <EditStyleButton
+          element={element}
+          onOpen={() => {
+            customizationStore.getState().setInspecting(false);
+          }}
+        />
       </section>
       <section data-part="inspector.section" data-section="states">
         <h3 data-part="inspector.heading">{t("inspector-states")}</h3>

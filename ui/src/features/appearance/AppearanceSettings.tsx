@@ -1,11 +1,15 @@
 /**
- * Settings → Appearance (M5a WP153; widget `appearance-settings`): the theme
- * gallery (built-in and the user's own themes), Follow Windows with its
- * light / dark pair, Comfortable / Compact density, and the text-size /
- * corner-radius / accent overrides. Everything is written by the core into
- * the user's `theme.kdl`; this page only asks for it.
+ * Settings → Appearance (M5a WP153, M5d WP183; widget `appearance-settings`):
+ * the theme gallery with live previews (built-in and the user's own
+ * themes; a user theme's card shows its own colours as soon as the editor
+ * changes them) and "New theme", Follow Windows with its light / dark pair,
+ * Comfortable / Compact density, the accent / text-size / corner-radius
+ * overrides (live: the app restyles while you pick), "Edit theme" for the
+ * full theme editor, and Undo / Redo of the appearance history.
+ * Everything is written by the core into the user's `theme.kdl` (or the
+ * theme's file); this page only asks for it.
  */
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   Appearance,
@@ -18,18 +22,18 @@ import type {
 import { useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { isUnsupported } from "../../state/queries";
-import { useGeometry } from "../../theme/ThemeProvider";
+import { useUiStoreApi } from "../../state/uiStore";
+import { useGeometry, useTheme } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { Segmented, Switch } from "../../widgets/primitives";
-import { FONT_SIZE_RANGE, RADIUS_RANGE, isHexColor, overrideIssues } from "./model";
+import { openNewTheme, openThemeEditor } from "./editorStore";
+import { HistoryButtons } from "./HistoryButtons";
+import { FONT_SIZE_RANGE, RADIUS_RANGE, overrideIssues } from "./model";
 import { preferencesOf, useAppearance, useSetTheme, useSetThemePreferences } from "./queries";
+import { useThemeName } from "./ThemeEditor";
 import { previewColors } from "./themes";
-
-/** The display name of a theme: the built-in's Fluent label, else its own name. */
-function useThemeName(): (theme: ThemeInfo) => string {
-  const t = useT();
-  return (theme) => (theme.label ? t(theme.label) : theme.name || theme.id);
-}
+import { pickerColor, pixels } from "./tokens";
+import { themeEditDelay } from "./useThemeEdits";
 
 /** Colours of a theme's preview (rail, list, accent, text). */
 const SWATCH_TOKENS = ["bg-subtle", "bg", "accent", "fg"] as const;
@@ -164,6 +168,61 @@ export function overridesOf(draft: OverrideDraft): ThemeOverrides | null {
   return out;
 }
 
+/** A pixel slider with its value; "theme default" while there is no override. */
+function PixelSlider({
+  name,
+  label,
+  value,
+  fallback,
+  range,
+  disabled,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  /** The override as typed (empty = none). */
+  value: string;
+  /** The theme's own value (px) shown while there is no override. */
+  fallback: number;
+  range: readonly [number, number];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const t = useT();
+  const id = useId();
+  const own = value.trim() !== "" && !Number.isNaN(Number(value));
+  const current = own ? Number(value) : Math.min(range[1], Math.max(range[0], fallback));
+  const text = own
+    ? t("appearance-pixels", { value: current })
+    : t("appearance-pixels-default", { value: current });
+  return (
+    <div data-part="form.field" data-field={name}>
+      <label data-part="form.label" htmlFor={id}>
+        {label}
+      </label>
+      <span data-part="appearance.slider">
+        <input
+          id={id}
+          type="range"
+          data-part="appearance.range"
+          min={range[0]}
+          max={range[1]}
+          step={1}
+          value={current}
+          disabled={disabled}
+          aria-valuetext={text}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+        <output data-part="appearance.range-value" htmlFor={id}>
+          {text}
+        </output>
+      </span>
+    </div>
+  );
+}
+
 function OverridesForm({
   appearance,
   busy,
@@ -175,10 +234,29 @@ function OverridesForm({
 }) {
   const t = useT();
   const id = useId();
+  const theme = useTheme();
   const saved = appearance.settings.overrides;
+  const savedKey = JSON.stringify(saved);
   const [draft, setDraft] = useState<OverrideDraft>(() => draftOf(saved));
+  const [seen, setSeen] = useState(savedKey);
+  const [waiting, setWaiting] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Saved elsewhere (undo, another window): show it unless a change waits.
+  if (seen !== savedKey && !waiting) {
+    setSeen(savedKey);
+    setDraft(draftOf(saved));
+  }
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
   const apply = (overrides: ThemeOverrides | null) => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    setWaiting(false);
     if (overrides === null) {
       setProblem({ id: "appearance-overrides-not-a-number" });
       return;
@@ -195,9 +273,20 @@ function OverridesForm({
     setProblem(null);
     onApply(overrides);
   };
-  const field = (key: keyof OverrideDraft) => (value: string) => {
-    setDraft((d) => ({ ...d, [key]: value }));
+  /** A slider or the colour picker moved: show it, apply it after a pause. */
+  const live = (key: keyof OverrideDraft) => (value: string) => {
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    setWaiting(true);
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      apply(overridesOf(next));
+    }, themeEditDelay());
   };
+  const fontSize = pixels(theme.tokens["font-size"]?.body) ?? FONT_SIZE_RANGE[0];
+  const radius = pixels(theme.tokens.radius?.md) ?? RADIUS_RANGE[0];
+  const picked =
+    pickerColor(draft.accent) ?? pickerColor(theme.tokens.color?.accent ?? "") ?? "#000000";
   return (
     <form
       data-part="appearance.overrides"
@@ -213,40 +302,6 @@ function OverridesForm({
         {t("appearance-overrides-title")}
       </h3>
       <p data-part="form.hint">{t("appearance-overrides-hint")}</p>
-      <div data-part="form.field" data-field="font-size">
-        <label data-part="form.label" htmlFor={`${id}-size`}>
-          {t("appearance-font-size", { min: FONT_SIZE_RANGE[0], max: FONT_SIZE_RANGE[1] })}
-        </label>
-        <input
-          id={`${id}-size`}
-          data-part="form.input"
-          type="number"
-          min={FONT_SIZE_RANGE[0]}
-          max={FONT_SIZE_RANGE[1]}
-          placeholder={t("appearance-override-default")}
-          value={draft.fontSize}
-          onChange={(event) => {
-            field("fontSize")(event.target.value);
-          }}
-        />
-      </div>
-      <div data-part="form.field" data-field="radius">
-        <label data-part="form.label" htmlFor={`${id}-radius`}>
-          {t("appearance-radius", { min: RADIUS_RANGE[0], max: RADIUS_RANGE[1] })}
-        </label>
-        <input
-          id={`${id}-radius`}
-          data-part="form.input"
-          type="number"
-          min={RADIUS_RANGE[0]}
-          max={RADIUS_RANGE[1]}
-          placeholder={t("appearance-override-default")}
-          value={draft.radius}
-          onChange={(event) => {
-            field("radius")(event.target.value);
-          }}
-        />
-      </div>
       <div data-part="form.field" data-field="accent">
         <label data-part="form.label" htmlFor={`${id}-accent`}>
           {t("appearance-accent")}
@@ -261,20 +316,39 @@ function OverridesForm({
             placeholder={t("appearance-override-default")}
             value={draft.accent}
             onChange={(event) => {
-              field("accent")(event.target.value);
+              setDraft((d) => ({ ...d, accent: event.target.value }));
             }}
           />
           <input
             data-part="appearance.accent-picker"
             type="color"
             aria-label={t("appearance-accent-pick")}
-            value={isHexColor(draft.accent) && draft.accent.length === 7 ? draft.accent : "#3b5bdb"}
+            value={picked}
+            disabled={busy}
             onChange={(event) => {
-              field("accent")(event.target.value);
+              live("accent")(event.target.value);
             }}
           />
         </span>
       </div>
+      <PixelSlider
+        name="font-size"
+        label={t("appearance-font-size")}
+        value={draft.fontSize}
+        fallback={fontSize}
+        range={FONT_SIZE_RANGE}
+        disabled={busy}
+        onChange={live("fontSize")}
+      />
+      <PixelSlider
+        name="radius"
+        label={t("appearance-radius")}
+        value={draft.radius}
+        fallback={radius}
+        range={RADIUS_RANGE}
+        disabled={busy}
+        onChange={live("radius")}
+      />
       {problem && (
         <p data-part="form.error" role="alert">
           {t(problem.id, problem.args)}
@@ -303,6 +377,7 @@ function OverridesForm({
 export function AppearanceSettings({ node }: WidgetProps) {
   const t = useT();
   const titleId = useId();
+  const ui = useUiStoreApi();
   const appearance = useAppearance();
   const setTheme = useSetTheme();
   const setPreferences = useSetThemePreferences();
@@ -392,6 +467,31 @@ export function AppearanceSettings({ node }: WidgetProps) {
             ))}
           </div>
           {s.follow_system && <p data-part="form.hint">{t("appearance-gallery-hint")}</p>}
+          <div data-part="appearance.actions" data-actions="themes">
+            <button
+              type="button"
+              data-part="form.button"
+              data-action="new-theme"
+              onClick={() => {
+                openNewTheme(ui, a.active);
+              }}
+            >
+              <Icon name="plus" part="form.button.icon" />
+              {t("appearance-new-theme")}
+            </button>
+            <button
+              type="button"
+              data-part="form.button"
+              data-action="edit-theme"
+              onClick={() => {
+                openThemeEditor(ui, a.active);
+              }}
+            >
+              <Icon name="palette" part="form.button.icon" />
+              {t("appearance-edit-theme")}
+            </button>
+          </div>
+          <p data-part="form.hint">{t("appearance-editor-hint")}</p>
         </section>
         <section data-part="card" data-section="density" aria-labelledby={`${titleId}-density`}>
           <h3 data-part="card.title" id={`${titleId}-density`}>
@@ -413,7 +513,6 @@ export function AppearanceSettings({ node }: WidgetProps) {
         </section>
         <section data-part="card" data-section="overrides">
           <OverridesForm
-            key={JSON.stringify(s.overrides)}
             appearance={a}
             busy={busy}
             onApply={(overrides) => {
@@ -437,9 +536,12 @@ export function AppearanceSettings({ node }: WidgetProps) {
       aria-labelledby={titleId}
       role="region"
     >
-      <h2 data-part="form.section.title" id={titleId}>
-        {t("appearance-title")}
-      </h2>
+      <div data-part="appearance.header">
+        <h2 data-part="form.section.title" id={titleId}>
+          {t("appearance-title")}
+        </h2>
+        <HistoryButtons />
+      </div>
       {content}
     </div>
   );

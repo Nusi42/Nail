@@ -12,6 +12,8 @@
 import type {
   AppearanceSettings,
   Density,
+  PartCondition,
+  PartRule,
   ResolvedTheme,
   ThemeInfo,
   ThemeKind,
@@ -57,7 +59,7 @@ function readValue(text: string): [string, string] | null {
   return null;
 }
 
-function tokenValue(category: string, value: string): string {
+export function tokenValue(category: string, value: string): string {
   if (PX_CATEGORIES.has(category) && /^-?\d+(\.\d+)?$/.test(value)) return `${value}px`;
   return refs(value);
 }
@@ -171,6 +173,7 @@ export function resolveMockTheme(
   id: string,
   settings: Pick<AppearanceSettings, "density" | "overrides">,
   pristine: ResolvedTheme | null = null,
+  layers: readonly ThemeLayer[] = [],
 ): ResolvedTheme {
   const theme = structuredClone(base);
   const file = BUILTIN_THEME_FILES.get(id);
@@ -197,6 +200,20 @@ export function resolveMockTheme(
       }
     }
   }
+  // User themes over the built-in (M5d), then the user's own theme.kdl edits.
+  for (const layer of layers) {
+    for (const [category, set] of Object.entries(layer.tokens)) {
+      for (const [name, value] of Object.entries(set)) replace(category, name, value);
+    }
+    for (const [variant, set] of Object.entries(layer.variants)) {
+      for (const [category, values] of Object.entries(set)) {
+        for (const [name, value] of Object.entries(values)) {
+          put((theme.modes[variant] ??= {}), category, name, value);
+        }
+      }
+    }
+    theme.parts.push(...structuredClone(layer.parts));
+  }
   const o = settings.overrides;
   if (o.font_size !== undefined) replace("font-size", "body", `${String(o.font_size)}px`);
   if (o.radius !== undefined) replace("radius", "md", `${String(o.radius)}px`);
@@ -204,4 +221,80 @@ export function resolveMockTheme(
   const density: Density = settings.density;
   theme.density = density;
   return theme;
+}
+
+/** A token as a theme file of the mock writes it (`value` as in KDL). */
+export interface MockThemeToken {
+  category: string;
+  name: string;
+  /** The base value; absent = only mode values. */
+  value?: string;
+  /** Mode / variant values (`dark`, `high-contrast`, `print`, `compact`). */
+  modes: Record<string, string>;
+}
+
+/** A part rule of a theme file of the mock. */
+export interface MockPartRule {
+  selector: string;
+  properties: Record<string, string>;
+}
+
+/** What a theme file of the mock defines itself (a user theme, or `theme.kdl`). */
+export interface MockThemeEdits {
+  tokens: MockThemeToken[];
+  parts: MockPartRule[];
+}
+
+/** One theme laid over the base by `resolveMockTheme` (CSS values). */
+export interface ThemeLayer {
+  tokens: TokenSet;
+  variants: Record<string, TokenSet>;
+  parts: PartRule[];
+}
+
+/** `split[orientation="horizontal"] split.divider:hover` → target, states, conditions, ancestors. */
+export function parseSelector(
+  selector: string,
+): Pick<PartRule, "selector" | "states" | "conditions" | "ancestors"> {
+  const steps = selector
+    .trim()
+    .split(/\s+/)
+    .map((step) => {
+      const name = /^[a-z0-9.-]*/.exec(step)?.[0] ?? "";
+      const states = [...step.matchAll(/:([a-z][a-z-]*)/g)].map((m) => m[1] ?? "");
+      const conditions: PartCondition[] = [
+        ...step.matchAll(/\[([a-z][a-z0-9-]*)(?:~?="([^"]*)")?\]/g),
+      ].map((m) => ({ key: m[1] ?? "", value: m[2] ?? null }));
+      return { selector: name, states, conditions };
+    });
+  const target = steps.pop() ?? { selector: "", states: [], conditions: [] };
+  return { ...target, ancestors: steps };
+}
+
+/** A theme file's own tokens and parts as a layer (CSS values, `$refs` → `var()`). */
+export function layerOf(edits: MockThemeEdits, file: string): ThemeLayer {
+  const layer: ThemeLayer = { tokens: {}, variants: {}, parts: [] };
+  for (const token of edits.tokens) {
+    if (token.value !== undefined) {
+      put(layer.tokens, token.category, token.name, tokenValue(token.category, token.value));
+    }
+    for (const [mode, value] of Object.entries(token.modes)) {
+      put(
+        (layer.variants[mode] ??= {}),
+        token.category,
+        token.name,
+        tokenValue(token.category, value),
+      );
+    }
+  }
+  edits.parts.forEach((rule, index) => {
+    layer.parts.push({
+      ...parseSelector(rule.selector),
+      declarations: Object.fromEntries(
+        Object.entries(rule.properties).map(([property, value]) => [property, refs(value)]),
+      ),
+      source: { file, line: index + 1, column: 1 },
+    });
+  });
+  return layer;
 }
