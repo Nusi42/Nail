@@ -28,10 +28,9 @@ import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { ariaShortcut, keyLabel } from "../menus/keyLabels";
-import { RUN_COMMAND } from "../plugins/commands";
 import { appRegistry } from "../registry";
 import { useInstallation } from "../system/queries";
-import { BUILTIN_INFO } from "./builtinInfo";
+import { paletteInfos, pluginTitles } from "./infos";
 import { contextsOf } from "./contexts";
 import { searchPalette, type Range, type ScoredEntry } from "./fuzzy";
 import { availabilityMessageId } from "./messages";
@@ -52,22 +51,6 @@ export function useRecentActions() {
     queryFn: async () =>
       (await client.request({ type: "GetRecentActions" }, "RecentActions")).recent,
   });
-}
-
-/** Every action description: built-ins, then the features' own (which win). */
-export function paletteInfos(): Record<string, ActionInfo> {
-  return { ...BUILTIN_INFO, ...appRegistry.actionInfo };
-}
-
-/** Plug-in commands in the layout (`plugin.<id>.<command>` → title). */
-export function pluginTitles(layout: ReturnType<typeof useLayoutConfig>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [id, def] of Object.entries(layout.actions)) {
-    if (def.alias_of === RUN_COMMAND && def.label !== null && !def.label.startsWith("@")) {
-      out[id] = def.label;
-    }
-  }
-  return out;
 }
 
 /** The title with the matched parts marked. */

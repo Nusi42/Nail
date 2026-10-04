@@ -558,6 +558,7 @@ describe("window model", () => {
     "exchange-category-delete",
     "gmail-label-delete",
     "mail-delete-permanently",
+    "theme-delete",
     "plugin-modal-small",
     "plugin-modal-medium",
     "plugin-modal-large",

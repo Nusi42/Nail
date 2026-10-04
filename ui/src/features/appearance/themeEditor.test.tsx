@@ -354,10 +354,10 @@ describe("theme editor", () => {
         .every((b) => b.textContent.includes("split.divider")),
     ).toBe(true);
     fireEvent.change(screen.getByLabelText("Part"), { target: { value: "Not A Part" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Add" })[0] ?? must(null));
+    fireEvent.click(must(screen.getAllByRole("button", { name: "Add" })[0]));
     expect(await screen.findByRole("alert")).toHaveTextContent(/part name/);
     fireEvent.change(screen.getByLabelText("Part"), { target: { value: "my-widget.title" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Add" })[0] ?? must(null));
+    fireEvent.click(must(screen.getAllByRole("button", { name: "Add" })[0]));
     const part = await screen.findByRole("region", { name: "my-widget.title" });
     expect(within(part).getByText(/No theme styles this part yet/)).toBeInTheDocument();
     await settleQueries(env);

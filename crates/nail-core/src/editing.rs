@@ -122,7 +122,7 @@ fn handle_blocking(
 
 #[cfg(test)]
 mod tests {
-    use nail_api::editing::{EditKind, HistoryScope, ThemeEditTarget};
+    use nail_api::editing::{EditKind, HistoryScope, ThemeEditTarget, ThemePatch};
     use nail_api::{ErrorCode, Event, LayoutNodeRef, LayoutPatch, Request, Response};
 
     use crate::service::Service;
@@ -289,6 +289,7 @@ mod tests {
                 Some("edit-issue-not-editable".to_owned())
             )
         );
+        // No patches: nothing to write, still an answer.
         let edit = service
             .handle(Request::EditTheme {
                 target: ThemeEditTarget::User,
@@ -296,6 +297,79 @@ mod tests {
                 base_revision: None,
             })
             .await;
-        assert_eq!(error_id(&edit).0, ErrorCode::Unsupported);
+        assert!(matches!(edit, Response::Themes { .. }), "{edit:?}");
+    }
+
+    /// WP185: the theme operations of WP184 through the core — duplicate,
+    /// edit with the details' revision, a stale revision, undo.
+    #[tokio::test]
+    async fn theme_operations_write_files_and_undo() {
+        let (service, dir, _data) = service();
+        let mut events = service.subscribe();
+        let saved = service
+            .handle(Request::DuplicateTheme {
+                theme_id: "frost".into(),
+                name: "My Frost".into(),
+            })
+            .await;
+        let Response::ThemeSaved { theme_id, .. } = saved else {
+            panic!("expected ThemeSaved, got {saved:?}");
+        };
+        assert_eq!(theme_id, "my-frost");
+        let file = dir.path().join("themes").join("my-frost.kdl");
+        assert!(file.is_file());
+
+        let details = service
+            .handle(Request::GetThemeDetails {
+                theme_id: theme_id.clone(),
+            })
+            .await;
+        let Response::ThemeDetails { details } = details else {
+            panic!("expected ThemeDetails, got {details:?}");
+        };
+        assert!(details.editable);
+        let patch = ThemePatch::SetToken {
+            category: "color".into(),
+            name: "accent".into(),
+            value: Some("#aa3366".into()),
+            mode: None,
+        };
+        let edited = service
+            .handle(Request::EditTheme {
+                target: ThemeEditTarget::Theme {
+                    theme_id: theme_id.clone(),
+                },
+                patches: vec![patch.clone()],
+                base_revision: Some(details.revision.clone()),
+            })
+            .await;
+        assert!(matches!(edited, Response::Themes { .. }), "{edited:?}");
+        assert!(std::fs::read_to_string(&file).unwrap().contains("#aa3366"));
+
+        // The old revision is stale now.
+        let stale = service
+            .handle(Request::EditTheme {
+                target: ThemeEditTarget::Theme { theme_id },
+                patches: vec![patch],
+                base_revision: Some(details.revision),
+            })
+            .await;
+        assert_eq!(error_id(&stale).0, ErrorCode::Conflict);
+
+        let undone = history(
+            service
+                .handle(Request::UndoEdit {
+                    scope: HistoryScope::Appearance,
+                    force: false,
+                })
+                .await,
+        );
+        assert_eq!(undone.redo.len(), 1);
+        assert!(!std::fs::read_to_string(&file).unwrap().contains("#aa3366"));
+        let mut saw_history = false;
+        while let Ok(event) = events.try_recv() {
+            saw_history |= matches!(event, Event::EditHistoryChanged { .. });
+        }
+        assert!(saw_history);
     }
 }

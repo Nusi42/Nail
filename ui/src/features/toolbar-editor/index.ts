@@ -28,12 +28,13 @@
  * The central registry (`../registry.ts`) merges these exports into the
  * app; see `../README.md`.
  */
+import { createElement, lazy, Suspense } from "react";
 import type { ActionInfo } from "../../actions/palette";
 import type { JsonValue } from "../../api/generated";
+import type { DialogProps } from "../../layout/dialogRegistry";
 import type { Feature } from "../types";
 import { TOOLBAR_CUSTOMIZE_ACTION, TOOLBAR_CUSTOMIZER_KIND, customizerWindow } from "./ids";
 import { ToolbarEditorSettings } from "./Settings";
-import { ToolbarCustomizer } from "./ToolbarCustomizer";
 
 export { TOOLBAR_CUSTOMIZE_ACTION, TOOLBAR_CUSTOMIZER_KIND, customizerWindow } from "./ids";
 
@@ -49,6 +50,25 @@ export function toolbarToCustomize(
   if (typeof first === "string" && first !== "") return first;
   const bar = focused?.closest<HTMLElement>('[data-part="toolbar"][data-toolbar]');
   return bar?.dataset.toolbar ?? null;
+}
+
+/*
+ * The customizer lists every action through the app registry (like the
+ * command palette), so its code loads lazily: the registry imports this
+ * file, never the other way round while modules load.
+ */
+const LazyCustomizer = lazy(async () => ({
+  default: (await import("./ToolbarCustomizer")).ToolbarCustomizer,
+}));
+
+/** Loads the customizer's code ahead of time (tests). */
+export function loadToolbarCustomizer(): Promise<unknown> {
+  return import("./ToolbarCustomizer");
+}
+
+/** The customizer window: its code loads on first use. */
+export function ToolbarCustomizerWindow(props: DialogProps) {
+  return createElement(Suspense, { fallback: null }, createElement(LazyCustomizer, props));
 }
 
 /** Layout widget kinds → components. */
@@ -85,7 +105,7 @@ export const settings: NonNullable<Feature["settings"]> = {
 
 /** Dialogs by name. */
 export const dialogs: Feature["dialogs"] = {
-  [TOOLBAR_CUSTOMIZER_KIND]: ToolbarCustomizer,
+  [TOOLBAR_CUSTOMIZER_KIND]: ToolbarCustomizerWindow,
 };
 
 /** Window model registrations by kind: one non-modal window per toolbar. */

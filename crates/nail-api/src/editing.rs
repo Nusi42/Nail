@@ -400,9 +400,6 @@ labeled_enum! {
         InvalidToken = "invalid-token",
         /// The part selector, property or value is invalid.
         InvalidPart = "invalid-part",
-        /// The operation is not implemented by this build yet (M5d contract
-        /// stubs; gone once WP184 is integrated).
-        NotReady = "not-ready",
     }
 }
 

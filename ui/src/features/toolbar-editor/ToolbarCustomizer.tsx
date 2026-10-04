@@ -50,7 +50,7 @@ import {
 } from "../../state/editHistory";
 import { useClient } from "../../state/queries";
 import { Icon } from "../../widgets/Icon";
-import { paletteInfos, pluginTitles } from "../palette/Palette";
+import { paletteInfos, pluginTitles } from "../palette/infos";
 import { appRegistry } from "../registry";
 import { CUSTOMIZER_PART, toolbarOfWindow } from "./ids";
 import {

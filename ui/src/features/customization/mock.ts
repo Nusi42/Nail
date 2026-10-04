@@ -43,7 +43,6 @@ import { mockConfigTheme } from "../appearance/mock";
 import { normalizeLayout } from "../../api/normalize";
 import { parseQuery } from "../../api/mockSearch";
 import {
-  MOCK_NOT_READY,
   checkMockBaseRevision,
   recordMockEdit,
   registerMockHistoryScope,
@@ -240,14 +239,6 @@ function updateLayout(
   const next = structuredClone(core.data.layout);
   for (const patch of patches) {
     const problem = applyPatch(next, patch);
-    if (problem === MOCK_NOT_READY) {
-      return {
-        type: "Error",
-        code: "unsupported",
-        message: `${patch.op} is not available yet`,
-        localized: { id: MOCK_NOT_READY },
-      };
-    }
     if (problem) return errorResponse("invalid_request", problem);
   }
   state(core).layoutPatches.push(...structuredClone(patches));

@@ -34,12 +34,6 @@ export function isEditHistoryRequest(request: Request): request is EditHistoryRe
   return (EDIT_HISTORY_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/**
- * What a feature mock's patch function answers for a patch it cannot apply
- * yet (M5d contract stubs); answered as `unsupported` with this Fluent id.
- */
-export const MOCK_NOT_READY = "edit-issue-not-ready";
-
 /** `nail_api::editing::MAX_EDIT_HISTORY`. */
 export const MAX_EDIT_HISTORY = 50;
 

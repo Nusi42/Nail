@@ -95,8 +95,11 @@ const barIds = (env: Env) =>
 const moreIds = (env: Env) =>
   moreItems(reader(env)).map((i) => (i.type === "action" ? i.action : i.type));
 
+/** The customizer window, once its lazily loaded content is there. */
 async function customizer(): Promise<HTMLElement> {
-  return screen.findByRole("dialog", { name: "Customize toolbar" });
+  const dialog = await screen.findByRole("dialog", { name: "Customize toolbar" });
+  await within(dialog).findAllByRole("listbox");
+  return dialog;
 }
 
 function list(dialog: HTMLElement, name: string): HTMLElement {

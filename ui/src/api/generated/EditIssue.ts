@@ -3,4 +3,4 @@
 /**
  * Why an editor request was refused (`edit-issue-*`).
  */
-export type EditIssue = "conflict" | "nothing-to-undo" | "nothing-to-redo" | "node-not-found" | "invalid-placement" | "unknown-widget" | "unknown-preset" | "preset-pane-missing" | "toolbar-slot-invalid" | "not-editable" | "theme-exists" | "theme-not-found" | "invalid-theme-name" | "invalid-token" | "invalid-part" | "not-ready";
+export type EditIssue = "conflict" | "nothing-to-undo" | "nothing-to-redo" | "node-not-found" | "invalid-placement" | "unknown-widget" | "unknown-preset" | "preset-pane-missing" | "toolbar-slot-invalid" | "not-editable" | "theme-exists" | "theme-not-found" | "invalid-theme-name" | "invalid-token" | "invalid-part";

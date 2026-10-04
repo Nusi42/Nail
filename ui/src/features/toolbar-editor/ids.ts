@@ -9,20 +9,14 @@ import { isWindowInstance, parseWindowId, windowId } from "../../state/windows";
 /** Customizes the toolbar the context menu was opened on (`defaults/layout.kdl`). */
 export const TOOLBAR_CUSTOMIZE_ACTION = "toolbar.customize";
 
-/*
- * The window kind and the root parts are template literals on purpose: the
- * i18n coverage test reads every quoted kebab string that starts like a
- * message id (`toolbar-…`) as one, and these are not messages.
- */
-
 /** The customizer's window kind (`window-toolbar-customizer` is its title). */
-export const TOOLBAR_CUSTOMIZER_KIND = `toolbar-customizer`;
+export const TOOLBAR_CUSTOMIZER_KIND = "toolbar-customizer";
 
 /** The customizer's root part (the window's content). */
-export const CUSTOMIZER_PART = `toolbar-customizer`;
+export const CUSTOMIZER_PART = "toolbar-customizer";
 
 /** The settings card's root part. */
-export const SETTINGS_PART = `toolbar-customizer-settings`;
+export const SETTINGS_PART = "toolbar-customizer-settings";
 
 /**
  * The customizer's window for `toolbar`: one window per toolbar; a name

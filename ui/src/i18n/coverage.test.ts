@@ -43,6 +43,7 @@ import * as appearanceMessages from "../features/appearance/messages";
 import * as shellMessages from "../features/shell/messages";
 import * as windowsMessages from "../features/windows/messages";
 import * as popoutMessages from "../features/popout/messages";
+import * as layoutEditorMessages from "../features/layout-editor/messages";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
 import { must } from "../test/must";
@@ -73,6 +74,7 @@ const FEATURE_MESSAGES = [
   shellMessages,
   windowsMessages,
   popoutMessages,
+  layoutEditorMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");
@@ -144,6 +146,9 @@ const NOT_MESSAGES = new Set([
   "layout-editor-settings",
   "toolbar-editor-settings",
   "layout-edits",
+  // M5d WP182: the toolbar customizer's window kind and root parts.
+  "toolbar-customizer",
+  "toolbar-customizer-settings",
   ...FEATURE_MESSAGES.flatMap((m) => m.notMessages),
 ]);
 

@@ -2,8 +2,8 @@
  * The mock core's undo histories (M5d, ADR 0131) behave like the core
  * (`crates/nail-core/src/editing.rs` tests): writes are recorded, undo /
  * redo restore them, stale revisions and changes "on disk" are conflicts,
- * and the editors' patches answer `edit-issue-not-ready` until their
- * packages land. The shared hooks follow the events.
+ * and the editors' patches are recorded like every other write. The shared
+ * hooks follow the events.
  */
 import { QueryClient } from "@tanstack/react-query";
 import type { EditHistory, Event as NailEvent, LayoutPatch } from "./generated";
@@ -100,22 +100,22 @@ describe("edit history (M5d)", () => {
     expect(themes.appearance.settings.theme).not.toBe("sage");
   });
 
-  it("leaves the editors' patches to their packages (not ready in the contract)", async () => {
+  it("records the editors' patches (layout editor and toolbar customizer)", async () => {
     const env = createEnv();
-    // The layout editor's patches are served (WP181: features/layout-editor/mock.ts).
-    for (const patch of [
+    const patches = [
       { op: "remove-toolbar-item", toolbar: "reader", from: { area: "bar", index: 0 } },
-    ] satisfies LayoutPatch[]) {
-      expect(await env.client.call({ type: "UpdateLayout", patches: [patch] })).toMatchObject({
-        type: "Error",
-        code: "unsupported",
-        localized: { id: "edit-issue-not-ready" },
-      });
+      { op: "set-hidden", node: { window: "mail", breakpoint: 0, path: [0] }, hidden: true },
+    ] satisfies LayoutPatch[];
+    for (const patch of patches) {
+      await env.client.request({ type: "UpdateLayout", patches: [patch] }, "Done");
     }
-    expect(mockEditHistory(env.transport, "layout").undo).toHaveLength(0);
+    expect(mockEditHistory(env.transport, "layout").undo.map((e) => e.kind)).toEqual([
+      "remove-toolbar-item",
+      "set-hidden",
+    ]);
   });
 
-  it("answers the theme editor's requests like the contract's core", async () => {
+  it("answers the theme editor's requests like the core", async () => {
     const env = createEnv();
     expect(await env.client.call({ type: "GetThemeDetails", theme_id: "nope" })).toMatchObject({
       code: "not_found",
@@ -127,7 +127,7 @@ describe("edit history (M5d)", () => {
     });
     expect(
       await env.client.call({ type: "DuplicateTheme", theme_id: "frost", name: "Mine" }),
-    ).toMatchObject({ code: "unsupported", localized: { id: "edit-issue-not-ready" } });
+    ).toMatchObject({ type: "ThemeSaved", theme_id: "mine" });
   });
 
   it("names an update's undo entry like LayoutPatch::kind_of", () => {

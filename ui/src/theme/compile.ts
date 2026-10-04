@@ -31,6 +31,9 @@ import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
 import { WINDOWS_SKIN_CSS } from "../features/windows/skin";
 import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
+import { LAYOUT_EDITOR_SKIN_CSS } from "../features/layout-editor/skin";
+import { TOOLBAR_CUSTOMIZER_SKIN_CSS } from "../features/toolbar-editor/skin";
+import { APPEARANCE_SKIN_CSS } from "../features/appearance/skin";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
@@ -329,6 +332,9 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
       PIM_SKIN_CSS,
       WINDOWS_SKIN_CSS,
       COMPOSER_SKIN_CSS,
+      LAYOUT_EDITOR_SKIN_CSS,
+      TOOLBAR_CUSTOMIZER_SKIN_CSS,
+      APPEARANCE_SKIN_CSS,
     ].filter((css) => css !== ""),
     ...tokenRules(theme, warnings),
   ];

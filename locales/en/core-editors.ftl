@@ -58,7 +58,6 @@ edit-issue-theme-not-found = The theme was not found.
 edit-issue-invalid-theme-name = Enter a theme name of up to 64 characters.
 edit-issue-invalid-token = This value cannot be used for this setting.
 edit-issue-invalid-part = This style cannot be used for this part.
-edit-issue-not-ready = This change is not available yet.
 
 ## Layout presets of the default layout (defaults/layout.kdl `presets`)
 
