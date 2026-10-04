@@ -6,7 +6,8 @@
  *   node scripts/work-folders.mjs create <n> [--no-install]
  *       clone the master into <parent of this folder>\nail-work-<N> on branch
  *       work-<N> (taken from the master when it exists, else created from
- *       `main` and pushed), write its .claude/settings.local.json, `npm ci`
+ *       `main` and pushed), write its .claude/settings.local.json, `npm ci`,
+ *       `npm run build`
  *   node scripts/work-folders.mjs guard-master
  *       make Cargo refuse every build in the master (a rustc wrapper in its
  *       gitignored .cargo/config.local.toml)
