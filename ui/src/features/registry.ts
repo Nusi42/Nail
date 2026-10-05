@@ -23,6 +23,7 @@ import * as exchange from "./exchange";
 import * as gmail from "./gmail";
 import * as launch from "./launch";
 import * as layoutEditor from "./layout-editor";
+import * as mailActions from "./mail-actions";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
 import * as palette from "./palette";
@@ -85,6 +86,8 @@ export const features: Readonly<Record<string, Feature>> = {
   // feed (WP-reader); their widgets stay message-list / thread-view.
   conversationList,
   conversationReader,
+  // P3 (ADR 0164): Gmail-like conversation actions (WP-actions-ui).
+  mailActions,
 };
 
 /** The merged registries. */

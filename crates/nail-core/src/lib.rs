@@ -47,6 +47,7 @@ mod launch;
 pub mod launch_args;
 pub mod logs;
 mod mail;
+mod mail_actions;
 mod mcp;
 mod notify;
 mod oauth;

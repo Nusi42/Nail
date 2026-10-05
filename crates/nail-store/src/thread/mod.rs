@@ -36,6 +36,7 @@
 //! Deleting messages does not split threads; [`Store::rethread_all`]
 //! rebuilds everything from the stored headers.
 
+pub mod activity;
 pub mod conversation;
 pub mod jwz;
 pub mod subject;

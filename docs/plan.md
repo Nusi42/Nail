@@ -933,6 +933,34 @@ Gates as in P1: every suite green, the responsive standard on the new list and r
 
 **Owner decisions:** the accent override is ignored in High contrast, with a note under Settings → Appearance (ADR 0161); wide HTML mail keeps its horizontal scrollbar — no fit-to-width scaling.
 
+### Wave P3 (conversation actions, conversation speed, card height)
+
+Owner decision: actions on a conversation row behave like Gmail — today they act on the newest message only (ADRs 0150, 0153). The wave also takes the two P2 follow-ups: `ListThreads` costs 33 ms p95 per page on the standard corpus (every page groups the whole folder; ADR 0154 deferred a per-folder thread-activity table), and HTML cards in the conversation feed keep a 40vh minimum because the sandboxed frame cannot report its height. Contract ADR 0164; memory `.claude/memory/p3-contract.md`.
+
+#### Scope decisions for P3
+
+- **Gmail-like semantics** (`nail_api::mail_actions::MailAction::reach`): Archive / Move / Snooze / Junk act on the conversation's messages in the listed folder (unified inbox: per account, every member folder); Delete moves every message the row counts to Trash, the user's replies in Sent included (never drafts); Mark read / unread and tags (Gmail labels, Exchange categories) act on every message of the conversation; Flag flags the newest message the user did not write (Gmail's star), Unflag clears every flag; Delete permanently only from Trash / Junk, with a confirmation that shows the message count. A conversation with new mail comes back to the Inbox (unchanged).
+- **Scope in the UI:** the reader's toolbar, the row, its menu and the list / reader keys act on the open conversation; a card's own actions act on that message.
+- **One batch, one undo:** every action goes through the operation queue as one batch with its inverses (schema v17 `mail_batches`); undo restores each message to where it was; the toast's Undo and `z`.
+- **Agents and plug-ins** get the same conversation targets (`conversations` in `update_messages` / `delete_messages` and `nail.mail.update` / `delete`); the confirmation shows the message count; destructive kinds always ask.
+- **Remote sessions** act on the conversation as their grant shows it: messages outside the grant are never touched, and the request is not refused for them (refusing would reveal hidden messages; ADR 0164).
+- **Speed:** `thread_activity` (schema v17, maintained from v18) makes a page of conversations an index range; budget `thread-page-p95-ms` ≤ 10 ms.
+- **Card height:** local frames get `sandbox="allow-same-origin"` without scripts and the reader measures them; remote frames get one hash-pinned script on the sandbox origin (opaque origin) that posts the height. No mail script runs anywhere (security argument in ADR 0164). Wide mail keeps its horizontal scrollbar.
+- No new crates. New catalogs `core-mail-actions.ftl` (contract ids) and `mail-actions.ftl` (UI); new UI slot `features/mail-actions/`.
+
+#### Packages of P3
+
+- **Contract (done):** ADR 0164, `nail_api::mail_actions` (`MessageTarget`, `ConversationRef`, `MailAction`, `ConversationReach`, `MailActionKind`, `MailActionIssue`, `MailActionResult`, `MailTargetResolution`, `MailBatchId`), `ApplyMailAction` / `ResolveMailTargets` / `UndoMailAction`, MCP `conversations` arguments, frame-height constants, schema v17 (`thread_activity` with backfill, `mail_batches`, `mail_batch_ops`), the core stub (forwarding, no undo), the full mock (`ui/src/api/mockMailActions.ts`), `ui/src/theme/frameHeight.ts`, catalogs and slots.
+- **WP-actions-core (parallel):** the real `ApplyMailAction` (every stored copy, one batch, undo, actors), engine batching (IMAP UID sets, Gmail batchModify / threads, Graph `$batch`, EWS multi-item), MCP / plug-in conversation targets with counts in confirmations, remote undo of own batches; `crates/nail-core/tests/mail_actions.rs`.
+- **WP-perf (parallel):** schema v18 keeps `thread_activity` current (triggers recommended, property test against the backfill), `ListThreads` on the table, nail-bench, `thread-page-p95-ms` ≤ 10.
+- **WP-actions-ui (parallel):** conversation targets from the toolbar, row, menus and keys; card actions on their message; the undo toast and `mail.undo`; the Delete permanently confirmation with the count; `e2e/tests/p3-actions.spec.ts`; user docs.
+- **WP-card-height (parallel):** measured local frames, the sandbox route's hashed height script with the `parent` check, no 40vh / 50vh minimums, `e2e/tests/p3-card-height.spec.ts` (local, remote UI, desktop).
+- **Integration:** merge, renumber ADRs / migrations, the full suite incl. the p3 specs and `npm run visual` (baselines only for intended changes), review screenshots mixing Frost (light) with Graphite / Nocturne (dark), memory `p3-status`, `next-steps`.
+
+Gates as in P2: every suite green, the responsive standard on changed screens, the perf budget met on the standard corpus, the owner's human gate on the real app (conversation actions with undo in the unified inbox, long HTML mail in the card feed).
+
+*Status (contract):* done (ADR 0164). The protocol, schema v17 (thread-activity table with backfill and `EXPLAIN`-checked page query; mail batches), the core stub (conversation targets resolved per reach, forwarded per message, no undo; remote sessions within the grant), MCP `conversations` (refused until WP-actions-core), the mock core with undo, `frameHeight.ts`, catalogs, the `mail-actions` slot. Next: the four packages in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

@@ -34,6 +34,22 @@ pub const PROXY_PATH: &str = "/api/proxy/";
 /// `css` query parameter carries the reader stylesheet.
 pub const RENDER_PATH: &str = "/render/";
 
+/// Query parameter of a [`RENDER_PATH`] request naming the app origin that
+/// frames the document (P3, ADR 0164): the sandbox origin answers only for
+/// one of its `frame-ancestors` origins and posts the document's height
+/// there.
+pub const RENDER_PARENT_PARAM: &str = "parent";
+
+/// `type` of the only message a sandbox-origin mail document posts to its
+/// parent (P3, ADR 0164): `{"type": "nail-frame-height", "height": <CSS
+/// px>}`. The parent accepts it only from its own frame's window and the
+/// sandbox origin, and clamps the height to [`MAX_FRAME_HEIGHT`].
+pub const FRAME_HEIGHT_MESSAGE: &str = "nail-frame-height";
+
+/// Tallest mail frame the reader sizes to its content (CSS px); a taller
+/// document scrolls inside the frame.
+pub const MAX_FRAME_HEIGHT: u32 = 200_000;
+
 /// What an allow-list entry covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]

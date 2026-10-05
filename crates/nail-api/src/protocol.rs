@@ -55,12 +55,13 @@ use crate::gmail::{GmailLabel, GmailLabelSettings};
 use crate::ids::{
     AccountId, AddressBookId, CalendarId, ConfigBackupId, ConfirmationId, ContactGroupId,
     ContactId, DraftId, EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId,
-    McpClientId, MessageId, OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId,
-    PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId,
-    RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
+    MailBatchId, McpClientId, MessageId, OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId,
+    PimSourceId, PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId,
+    RemoteUserId, RuleId, RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
+use crate::mail_actions::{MailAction, MailActionResult, MailTargetResolution, MessageTarget};
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::pim::calendar::FreeSlot;
@@ -320,6 +321,43 @@ pub enum Request {
         /// `false`: move to the account's Trash (messages already in Trash
         /// are deleted for good). `true`: delete for good at once.
         permanent: bool,
+    },
+
+    // --- Mail actions on conversations (P3, ADR 0164) ---
+    /// Apply one action to messages and conversations as list rows show
+    /// them (Gmail-like: [`crate::mail_actions::MailAction::reach`] picks a
+    /// conversation's messages). Applied locally at once, queued per account
+    /// as one batch with one undo. Answered with
+    /// [`Response::MailActionQueued`]; `invalid_request` with a
+    /// `mail-action-issue-*` id for no / too many targets, nothing to change
+    /// or delete permanently outside Trash and Junk; `not_found` for an
+    /// unknown message, thread or folder. Remote sessions: the targets
+    /// resolve within the grant only (ADR 0164).
+    ApplyMailAction {
+        /// What to act on (at most
+        /// [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`]).
+        targets: Vec<MessageTarget>,
+        /// What to do.
+        action: MailAction,
+    },
+    /// The messages [`Self::ApplyMailAction`] would touch, changing nothing
+    /// (confirmations show the count). Answered with
+    /// [`Response::MailTargets`]; errors as for `ApplyMailAction`.
+    ResolveMailTargets {
+        /// What to act on.
+        targets: Vec<MessageTarget>,
+        /// The action (its reach decides).
+        action: MailAction,
+    },
+    /// Undo a batch of [`Self::ApplyMailAction`]: queues the inverse
+    /// operations (each message back where it was, flags and tags as they
+    /// were); messages changed since are skipped. Answered with
+    /// [`Response::Queued`]; `not_found` with `mail-action-issue-undo-expired`,
+    /// `conflict` with `mail-action-issue-undone-already` /
+    /// `-not-undoable`.
+    UndoMailAction {
+        /// The batch ([`crate::mail_actions::MailActionResult::batch_id`]).
+        batch_id: MailBatchId,
     },
 
     // --- Threads and search ---
@@ -3161,6 +3199,16 @@ pub enum Response {
         thread: Box<ThreadSummary>,
         /// Its messages, oldest first.
         messages: Vec<ConversationMessage>,
+    },
+    /// Answer to [`Request::ApplyMailAction`] (P3).
+    MailActionQueued {
+        /// What was done, the batch to undo and the touched messages.
+        result: MailActionResult,
+    },
+    /// Answer to [`Request::ResolveMailTargets`] (P3).
+    MailTargets {
+        /// The messages the action would touch.
+        resolution: MailTargetResolution,
     },
     /// Answer to [`Request::Search`].
     SearchResults {

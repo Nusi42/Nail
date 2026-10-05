@@ -145,6 +145,11 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        ResolvedLayout.presets; UpdateLayout.base_revision; GetEditHistory / UndoEdit / RedoEdit →
                        EditHistory, EditHistoryChanged; GetThemeDetails, EditTheme, DuplicateTheme / RenameTheme →
                        ThemeSaved, DeleteTheme
+                       P3 (ADR 0164): mail_actions.rs (MessageTarget message / conversation = ConversationRef thread +
+                       listed folder, MailAction, ConversationReach listed / whole / newest = MailAction::reach,
+                       MailActionKind / MailActionIssue, MailActionResult + MailBatchId undo); ApplyMailAction /
+                       ResolveMailTargets / UndoMailAction; MCP `conversations` args; remote_content FRAME_HEIGHT_MESSAGE /
+                       RENDER_PARENT_PARAM / MAX_FRAME_HEIGHT
                        P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
                        ThreadSummary.participants, ThreadSummary.latest_from / latest_message, ConversationMessage
                        (MessageSummary flattened + from_me); GetConversation {thread_id, folder_id?} → Conversation
@@ -202,7 +207,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        by kind), GetThemeDetails origins, id_from_name = NFKD without marks like the UI's themeIdFromName),
                        kdl_edit detach / put / reindent / replace_with / set_arg; golden files
                        tests/golden/{layout_edit,theme_edit} (NAIL_UPDATE_GOLDEN=1)
-crates/nail-store      SQLite metadata (v16), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v17), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -258,7 +263,10 @@ crates/nail-store      SQLite metadata (v16), blob store, per-account operation 
                        upsert per message (row + subject key + meta);
                        P2 WP201 (ADR 0149): thread/conversation.rs (ConversationFolders threaded / singles / sent +
                        retain, OwnAddresses, list_conversations / conversation / summarize_conversation, single-<id> rows
-                       for Drafts); v16 covering index messages_folder_thread(folder_id, thread_id, date_sort)
+                       for Drafts); v16 covering index messages_folder_thread(folder_id, thread_id, date_sort);
+                       v17 (P3, ADR 0164): thread_activity (per folder + thread order key incl. the Sent join;
+                       thread/activity.rs PAGE_SQL / COUNT_SQL; WP-perf maintains it from v18), mail_batches /
+                       mail_batch_ops (mail actions with inverses for undo; mail_batches.rs)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -495,7 +503,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        identities + stored accounts; list_conversations / get_conversation with FolderFilter; conversation_row /
                        thread_row rebuild rows from the granted folders for remote sessions); demo.rs DemoMail (Corpus /
                        WithConversations: the seeds of `nail serve` add nail-testkit's demo conversations; seed_demo_with,
-                       start_demo_imap_with, start_demo_multi_with)
+                       start_demo_imap_with, start_demo_multi_with);
+                       P3 (ADR 0164): mail_actions.rs (ApplyMailAction / ResolveMailTargets / UndoMailAction; conversation
+                       targets resolved per reach, within a remote grant)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -675,6 +685,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        features/conversation-reader (conversation.* actions, readerStack.ts + ReaderOffer.tsx = the
                        one-time "Read conversations as cards" offer, UI-state key `conversation-reader.layout-offer`)
                        (ADR 0151); UiState.messageThreads (j / k continue from a conversation's row; ADR 0153);
+                       P3 (ADR 0164): features/mail-actions (conversation actions, undo toast), api/mockMailActions.ts (the
+                       contract with undo), theme/frameHeight.ts (mail frames report their height: srcdoc allow-same-origin
+                       without scripts, sandbox origin hashed script + postMessage);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -750,7 +763,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        (WP173); M5d: core-editors.ftl (contract ids: history scopes, edit kinds, edit issues, preset names,
                        config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182), appearance.ftl (WP183
                        theme editor); P2: conversations.ftl (contract: "me", separators, counts / folds, modes),
-                       conversation-list.ftl (WP202), conversation-reader.ftl (WP203); every file is embedded in
+                       conversation-list.ftl (WP202), conversation-reader.ftl (WP203); P3: core-mail-actions.ftl (contract ids), mail-actions.ftl
+                       (WP-actions-ui); every file is embedded in
                        nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
@@ -1204,6 +1218,14 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   notifier reads the state itself) and a downloaded release stays ready across later checks; the UI cancels a running
   `GetUpdateStatus` on `UpdateStatusChanged`. The mock Graph / EWS tenants' dates are absolute (2026-10-05 …): a spec
   that syncs them pins the core clock (`control(server, "clock-set", { at })`, see `exchange.spec.ts`).
+- P3 contract (ADR 0164): `ApplyMailAction { targets, action }` acts Gmail-like on conversations (`MailAction::reach`:
+  Archive / Move / Snooze / Junk = the listed folder's messages, Delete / read / tags / unflag = every message the row
+  counts incl. Sent replies, Flag = the newest not written by the user, Delete permanently only in Trash / Junk); one
+  batch, one undo (`UndoMailAction`, `mail_batches`); remote sessions act within their grant (never refused for hidden
+  messages). Until WP-actions-core the core's stub forwards per message without undo; the UI mock implements all of
+  it. Schema v17: `thread_activity` (WP-perf: v18 maintenance, `ListThreads` on it, `thread-page-p95-ms` ≤ 10).
+  Mail frames: local `sandbox="allow-same-origin"` (never scripts), remote a hash-pinned height script on the sandbox
+  origin (never same-origin).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

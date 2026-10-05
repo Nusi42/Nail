@@ -639,6 +639,8 @@ pub fn parse(op: &str, payload: &Value, blobs: &Blobs) -> Result<PluginWrite, Ap
             }
             PluginWrite::UpdateMessages(UpdateMessagesArgs {
                 message_ids: ids(payload)?,
+                // Conversation targets for plug-ins: P3 WP-actions-core.
+                conversations: Vec::new(),
                 read: changes.read,
                 flagged: changes.flagged,
                 add_tags: changes.add_tags,
@@ -653,6 +655,7 @@ pub fn parse(op: &str, payload: &Value, blobs: &Blobs) -> Result<PluginWrite, Ap
             let o: DeleteOptions = from(&options, "options")?;
             PluginWrite::DeleteMessages(DeleteMessagesArgs {
                 message_ids: ids(payload)?,
+                conversations: Vec::new(),
                 permanent: o.permanent,
                 idempotency_key: None,
             })

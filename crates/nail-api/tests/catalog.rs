@@ -373,6 +373,11 @@ fn contract_message_ids_exist_in_english() {
         ["three-panes", "reader-below", "wide-reader", "focus"]
             .map(|p| format!("layout-preset-{p}")),
     );
+    // P3 (ADR 0164): mail actions on conversations (core-mail-actions.ftl).
+    labels!(
+        nail_api::mail_actions::MailActionKind,
+        nail_api::mail_actions::MailActionIssue,
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [

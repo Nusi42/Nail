@@ -240,6 +240,12 @@ string_id!(
     /// [`crate::smartcard::PinPrompt`]). Opaque, made by the core.
     PinPromptId
 );
+string_id!(
+    /// Identifies a batch of mail writes with one undo (P3, ADR 0164;
+    /// [`crate::mail_actions::MailActionResult::batch_id`]). Opaque, made by
+    /// the core.
+    MailBatchId
+);
 
 impl PimSourceId {
     /// Id of the built-in local source (local calendars, task lists and

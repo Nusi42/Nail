@@ -9,8 +9,8 @@
 
 use nail_api::remote::{RemoteAuditKind, RemoteAuditOutcome};
 use nail_api::{
-    AccountId, ApiError, ErrorCode, FolderId, McpScope, RemoteDeviceId, RemoteSessionId,
-    RemoteUserId, Request,
+    AccountId, ApiError, ErrorCode, FolderId, MailAction, McpScope, RemoteDeviceId,
+    RemoteSessionId, RemoteUserId, Request,
 };
 
 use crate::service::RemoteAuth;
@@ -108,6 +108,18 @@ pub fn required_access(request: &Request) -> RequestAccess {
                 S::Organize
             }),
         ),
+
+        // --- Mail actions on conversations (P3) ---
+        Request::ApplyMailAction { action, .. } => (
+            "ApplyMailAction",
+            Scope(if matches!(action, MailAction::DeletePermanently) {
+                S::PermanentDelete
+            } else {
+                S::Organize
+            }),
+        ),
+        Request::ResolveMailTargets { .. } => ("ResolveMailTargets", Scope(S::Read)),
+        Request::UndoMailAction { .. } => ("UndoMailAction", Scope(S::Organize)),
 
         // --- Threads and search ---
         Request::ListThreads { .. } => ("ListThreads", Scope(S::Read)),
@@ -676,6 +688,35 @@ mod tests {
             required_access(&delete(true)).access,
             Access::Scope(McpScope::PermanentDelete)
         );
+    }
+
+    #[test]
+    fn mail_actions_need_organize_or_permanent_delete() {
+        let apply = |action| Request::ApplyMailAction {
+            targets: vec![nail_api::MessageTarget::conversation("t1", None)],
+            action,
+        };
+        assert_eq!(
+            required_access(&apply(MailAction::Trash)).access,
+            Access::Scope(McpScope::Organize)
+        );
+        assert_eq!(
+            required_access(&apply(MailAction::DeletePermanently)).access,
+            Access::Scope(McpScope::PermanentDelete)
+        );
+        let resolve = Request::ResolveMailTargets {
+            targets: vec![],
+            action: MailAction::DeletePermanently,
+        };
+        assert_eq!(
+            required_access(&resolve).access,
+            Access::Scope(McpScope::Read)
+        );
+        let undo = Request::UndoMailAction {
+            batch_id: "b1".into(),
+        };
+        assert_eq!(required_access(&undo).name, "UndoMailAction");
+        assert!(required_access(&undo).audited());
     }
 
     #[test]

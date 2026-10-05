@@ -58,6 +58,8 @@ import type { KeyFilter } from "./KeyFilter";
 import type { KeyId } from "./KeyId";
 import type { KeyLookupSource } from "./KeyLookupSource";
 import type { LayoutPatch } from "./LayoutPatch";
+import type { MailAction } from "./MailAction";
+import type { MailBatchId } from "./MailBatchId";
 import type { MailProtocol } from "./MailProtocol";
 import type { McpClientId } from "./McpClientId";
 import type { McpGrant } from "./McpGrant";
@@ -66,6 +68,7 @@ import type { McpSettings } from "./McpSettings";
 import type { MergeChoice } from "./MergeChoice";
 import type { MergeTake } from "./MergeTake";
 import type { MessageId } from "./MessageId";
+import type { MessageTarget } from "./MessageTarget";
 import type { MoveTarget } from "./MoveTarget";
 import type { NotificationSettings } from "./NotificationSettings";
 import type { OAuthFlowId } from "./OAuthFlowId";
@@ -280,7 +283,28 @@ message_ids: Array<MessageId>,
  * `false`: move to the account's Trash (messages already in Trash
  * are deleted for good). `true`: delete for good at once.
  */
-permanent: boolean, } | { "type": "ListThreads", 
+permanent: boolean, } | { "type": "ApplyMailAction", 
+/**
+ * What to act on (at most
+ * [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`]).
+ */
+targets: Array<MessageTarget>, 
+/**
+ * What to do.
+ */
+action: MailAction, } | { "type": "ResolveMailTargets", 
+/**
+ * What to act on.
+ */
+targets: Array<MessageTarget>, 
+/**
+ * The action (its reach decides).
+ */
+action: MailAction, } | { "type": "UndoMailAction", 
+/**
+ * The batch ([`crate::mail_actions::MailActionResult::batch_id`]).
+ */
+batch_id: MailBatchId, } | { "type": "ListThreads", 
 /**
  * The folder (real or virtual).
  */

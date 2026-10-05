@@ -178,7 +178,15 @@ pub enum McpTextFormat {
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct UpdateMessagesArgs {
     /// The messages (at most 500).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub message_ids: Vec<String>,
+    /// Conversations as listed (P3, ADR 0164; at most 500): read state and
+    /// tags reach every message of each, moves / archive / snooze its
+    /// messages in the listed folder, `flagged: true` its newest message,
+    /// `flagged: false` every flagged one. `message_ids` and
+    /// `conversations` may be combined; at least one is needed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conversations: Vec<McpConversationArg>,
     /// Mark read (`true`) or unread (`false`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read: Option<bool>,
@@ -211,7 +219,13 @@ pub struct UpdateMessagesArgs {
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct DeleteMessagesArgs {
     /// The messages (at most 500).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub message_ids: Vec<String>,
+    /// Conversations as listed (P3, ADR 0164; at most 500): to Trash with
+    /// the user's replies from Sent; `permanent` only their messages in
+    /// Trash or Junk.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conversations: Vec<McpConversationArg>,
     /// Delete for good instead of moving to Trash (needs the
     /// `permanent-delete` grant; never confirmed automatically).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -219,6 +233,19 @@ pub struct DeleteMessagesArgs {
     /// Repeating the key repeats the first call's result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
+}
+
+/// A conversation as a list row shows it (P3, ADR 0164): the thread id of
+/// `get_thread` / a search hit, and the folder it is listed in.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct McpConversationArg {
+    /// The thread.
+    pub thread_id: String,
+    /// The folder it is listed in (id from `list_folders`); left out = the
+    /// thread in every folder but Drafts, Trash and Junk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
 }
 
 /// An attachment for a draft: either the bytes or an attachment of an

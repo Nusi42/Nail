@@ -168,6 +168,14 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/conversation-reader.ftl"),
     ),
     (
+        "core-mail-actions.ftl",
+        include_str!("../../../locales/en/core-mail-actions.ftl"),
+    ),
+    (
+        "mail-actions.ftl",
+        include_str!("../../../locales/en/mail-actions.ftl"),
+    ),
+    (
         "portability.ftl",
         include_str!("../../../locales/en/portability.ftl"),
     ),
@@ -343,6 +351,14 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "conversation-reader.ftl",
         include_str!("../../../locales/de/conversation-reader.ftl"),
+    ),
+    (
+        "core-mail-actions.ftl",
+        include_str!("../../../locales/de/core-mail-actions.ftl"),
+    ),
+    (
+        "mail-actions.ftl",
+        include_str!("../../../locales/de/mail-actions.ftl"),
     ),
     (
         "portability.ftl",

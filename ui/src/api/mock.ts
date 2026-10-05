@@ -30,6 +30,7 @@ import {
   mockConfigTheme,
 } from "../features/appearance/mock";
 import { answerAttachment, isAttachmentRequest } from "./mockAttachments";
+import { answerMailAction, isMailActionRequest } from "./mockMailActions";
 import { answerUiState, isUiStateRequest } from "./uiStateMock";
 import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
 import { answerEditHistory, isEditHistoryRequest } from "./editHistoryMock";
@@ -165,6 +166,8 @@ export class MockTransport implements Transport, MockCore {
     if (isEditHistoryRequest(request)) return answerEditHistory(this, request);
     if (isThemeEditRequest(request)) return answerThemeEdit(this, request);
     if (isAttachmentRequest(request)) return answerAttachment(this, request);
+    // P3 (ADR 0164): Gmail-like actions on conversations with one undo.
+    if (isMailActionRequest(request)) return answerMailAction(this, request);
     if (isVaultRequest(request)) return answerVault(this, request);
     if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);
     switch (request.type) {

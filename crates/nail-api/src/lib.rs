@@ -105,6 +105,10 @@
 //!   bar and "More"), theme edits (tokens, part overrides, duplicate /
 //!   rename / delete user themes), the undo history of both and change
 //!   detection for files edited on disk.
+//! * P3 (ADR 0164): [`mail_actions`] — Gmail-like actions on conversations:
+//!   message or conversation targets, one action per request, resolved by
+//!   the core per action ([`mail_actions::ConversationReach`]), queued as one
+//!   batch with one undo.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -143,6 +147,7 @@ pub mod icons;
 pub mod ids;
 pub mod launch;
 pub mod localized;
+pub mod mail_actions;
 pub mod mapi;
 pub mod mcp;
 pub mod menus;
@@ -215,9 +220,13 @@ pub use ids::{
     PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId,
     RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
-pub use ids::{JobId, PinPromptId, PrintJobId};
+pub use ids::{JobId, MailBatchId, PinPromptId, PrintJobId};
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
+pub use mail_actions::{
+    ConversationReach, ConversationRef, MailAction, MailActionKind, MailActionResult,
+    MailTargetResolution, MessageTarget,
+};
 pub use mapi::{MapiMessage, MapiResult};
 pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
@@ -286,6 +295,9 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     accounts::SecretKind::export_all(&cfg)?;
     McpScope::export_all(&cfg)?;
     ConfigFile::export_all(&cfg)?;
+    // P3 (ADR 0164): the UI mirrors the reach rules and shows issues.
+    ConversationReach::export_all(&cfg)?;
+    mail_actions::MailActionIssue::export_all(&cfg)?;
     // M2a types reachable only through optional fields, or not at all.
     security::AuthVerdict::export_all(&cfg)?;
     SecurityStatus::export_all(&cfg)?;

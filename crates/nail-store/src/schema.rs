@@ -1668,6 +1668,80 @@ const V16: &str = r"
 CREATE INDEX messages_folder_thread ON messages(folder_id, thread_id, date_sort);
 ";
 
+/// Schema v17 (P3 contract, ADR 0164): conversation speed and conversation
+/// actions.
+///
+/// * `thread_activity` — one row per (folder, thread) with the thread's
+///   newest message in the folder (`folder_last`), the row's order key
+///   (`last_date`: also the user's own messages of the thread in the Sent
+///   folders of the folder's account, P2's Sent join) and the thread's
+///   messages in the folder (`message_count`, copies not collapsed). Drafts
+///   folders have no rows (their messages are rows of their own). A page of
+///   a folder's conversations is an index range of
+///   `thread_activity_order` (`thread::activity`); WP-perf keeps the table
+///   current (schema v18) and switches `ListThreads` to it.
+/// * `mail_batches` / `mail_batch_ops` — a mail action's queued operations
+///   with their inverses: undo as one unit (`UndoMailAction`), like a rule
+///   run's actions; WP-actions-core writes and reads them.
+const V17: &str = r"
+CREATE TABLE thread_activity (
+    folder_id     TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+    thread_id     TEXT NOT NULL,
+    -- Unix seconds (UTC): the newest date_sort of the thread in this folder.
+    folder_last   INTEGER NOT NULL,
+    -- Unix seconds (UTC): MAX(folder_last, the newest date_sort of the
+    -- thread in the Sent folders of the folder's account). Order key.
+    last_date     INTEGER NOT NULL,
+    -- The thread's messages in this folder (every stored copy).
+    message_count INTEGER NOT NULL CHECK (message_count > 0),
+    PRIMARY KEY (folder_id, thread_id)
+) WITHOUT ROWID;
+CREATE INDEX thread_activity_order ON thread_activity(folder_id, last_date DESC, thread_id DESC);
+CREATE INDEX thread_activity_thread ON thread_activity(thread_id);
+
+INSERT INTO thread_activity (folder_id, thread_id, folder_last, last_date, message_count)
+SELECT g.folder_id, g.thread_id, g.folder_last,
+       MAX(g.folder_last, COALESCE((
+           SELECT MAX(s.date_sort) FROM messages s
+            WHERE s.thread_id = g.thread_id
+              AND s.folder_id IN (SELECT sf.id FROM folders sf
+                                   WHERE sf.account_id = g.account_id AND sf.role = 'sent')
+       ), 0)),
+       g.message_count
+  FROM (SELECT m.folder_id, m.thread_id, f.account_id,
+               MAX(m.date_sort) AS folder_last, COUNT(*) AS message_count
+          FROM messages m JOIN folders f ON f.id = m.folder_id
+         WHERE m.thread_id IS NOT NULL AND f.role <> 'drafts'
+         GROUP BY m.folder_id, m.thread_id) g;
+
+CREATE TABLE mail_batches (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Who acted: 'user', 'remote:<session id>', 'mcp:<client id>',
+    -- 'plugin:<plug-in id>' (undo is the actor's).
+    actor         TEXT NOT NULL,
+    -- nail_api::mail_actions::MailActionKind wire name.
+    kind          TEXT NOT NULL,
+    state         TEXT NOT NULL DEFAULT 'done' CHECK (state IN ('done', 'undone')),
+    -- Unix seconds (UTC).
+    created_at    INTEGER NOT NULL,
+    message_count INTEGER NOT NULL,
+    conversations INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX mail_batches_created ON mail_batches(created_at);
+
+-- Every queued operation of a batch with its inverse.
+CREATE TABLE mail_batch_ops (
+    batch_id   INTEGER NOT NULL REFERENCES mail_batches(id) ON DELETE CASCADE,
+    seq        INTEGER NOT NULL,
+    message_id TEXT NOT NULL,
+    -- op_queue id.
+    op_id      INTEGER,
+    -- nail_store::Operation JSON that undoes it; NULL = cannot be undone.
+    undo       TEXT,
+    PRIMARY KEY (batch_id, seq)
+) WITHOUT ROWID;
+";
+
 impl Migration {
     pub(crate) const fn sql(sql: &'static str) -> Self {
         Self {
@@ -1714,6 +1788,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V14),
     Migration::rebuild(V15),
     Migration::sql(V16),
+    Migration::sql(V17),
 ];
 
 /// The schema version this build creates and understands.
@@ -1888,6 +1963,8 @@ mod tests {
                 "junk_tokens",
                 "junk_training",
                 "junk_verdicts",
+                "mail_batch_ops",
+                "mail_batches",
                 "mcp_audit",
                 "mcp_clients",
                 "mcp_grants",
@@ -1935,6 +2012,7 @@ mod tests {
                 "schema_version",
                 "sieve_state",
                 "snoozed_messages",
+                "thread_activity",
                 "thread_refs",
                 "vault_state"
             ]

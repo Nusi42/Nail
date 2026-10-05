@@ -104,6 +104,7 @@ mod filter;
 pub mod gmail;
 pub mod lock;
 mod mail;
+mod mail_batches;
 mod mcp;
 pub mod pim;
 mod plugin_activity;

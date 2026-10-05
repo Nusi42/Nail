@@ -213,7 +213,9 @@ describe("widgets show dates in the UI locale", () => {
       expect(dates.length).toBeGreaterThan(0);
       for (const text of dates) {
         // German relative dates. spellchecker:off
-        expect(text).toMatch(/^(vor |gestern|vorgestern|jetzt|heute|in |morgen|übermorgen)/);
+        expect(text).toMatch(
+          /^(vor |gestern|vorgestern|jetzt|heute|in |morgen|übermorgen|letzte|nächste)/,
+        );
         // spellchecker:on
         expect(text).not.toMatch(/ago|yesterday|now|tomorrow/);
       }

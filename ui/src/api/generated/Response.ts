@@ -64,6 +64,8 @@ import type { KeyLookupCandidate } from "./KeyLookupCandidate";
 import type { KeyLookupFailure } from "./KeyLookupFailure";
 import type { LaunchRequest } from "./LaunchRequest";
 import type { LocalizedMessage } from "./LocalizedMessage";
+import type { MailActionResult } from "./MailActionResult";
+import type { MailTargetResolution } from "./MailTargetResolution";
 import type { McpAuditEntry } from "./McpAuditEntry";
 import type { McpClient } from "./McpClient";
 import type { McpServerInfo } from "./McpServerInfo";
@@ -290,7 +292,15 @@ thread: ThreadSummary,
 /**
  * Its messages, oldest first.
  */
-messages: Array<ConversationMessage>, } | { "type": "SearchResults", 
+messages: Array<ConversationMessage>, } | { "type": "MailActionQueued", 
+/**
+ * What was done, the batch to undo and the touched messages.
+ */
+result: MailActionResult, } | { "type": "MailTargets", 
+/**
+ * The messages the action would touch.
+ */
+resolution: MailTargetResolution, } | { "type": "SearchResults", 
 /**
  * Offset of the first hit in `hits`.
  */

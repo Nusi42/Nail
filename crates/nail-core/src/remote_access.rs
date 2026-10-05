@@ -26,8 +26,9 @@
 use nail_api::mcp::McpScope;
 use nail_api::remote_content::RemoteContentScope;
 use nail_api::{
-    AccountId, ApiError, Draft, DraftId, ErrorCode, Event, FolderId, IdentityId, MessageId,
-    MessageSummary, MoveTarget, OpId, OutboxId, Request, Response, SearchQuery, UiContext,
+    AccountId, ApiError, Draft, DraftId, ErrorCode, Event, FolderId, IdentityId, MailAction,
+    MessageId, MessageSummary, MessageTarget, MoveTarget, OpId, OutboxId, Request, Response,
+    SearchQuery, UiContext,
 };
 use nail_mcp::access::Access;
 use nail_remote_auth::RemoteSessionCtx;
@@ -195,6 +196,22 @@ impl Service {
                 Response::Conversation {
                     thread: Box::new(thread),
                     messages,
+                }
+            }
+            // P3 (ADR 0164): conversation targets resolve within the grant
+            // only — the session acts on exactly the conversation it sees.
+            Request::ApplyMailAction { targets, action } if !full(&access) => {
+                Response::MailActionQueued {
+                    result: self
+                        .apply_mail_action(&targets, action, Some(&grant_filter(&access)))
+                        .await?,
+                }
+            }
+            Request::ResolveMailTargets { targets, action } if !full(&access) => {
+                Response::MailTargets {
+                    resolution: self
+                        .resolve_mail_targets(&targets, &action, Some(&grant_filter(&access)))
+                        .await?,
                 }
             }
             // Collected addresses are not per account: a narrowed grant
@@ -491,6 +508,15 @@ impl Service {
                 }
                 self.check_messages(access, message_ids).await
             }
+            // P3: messages named must be granted, conversations must be
+            // shown for a granted folder (or none: narrowed by the grant),
+            // a target folder must be granted.
+            Request::ApplyMailAction { targets, action }
+            | Request::ResolveMailTargets { targets, action } => {
+                self.check_mail_targets(access, targets, action).await
+            }
+            // WP-actions-core: only the session's own batches.
+            Request::UndoMailAction { .. } => Ok(()),
             Request::AllowRemoteContent { message_id, .. } => {
                 self.check_messages(access, std::slice::from_ref(message_id))
                     .await
@@ -811,6 +837,44 @@ impl Service {
                 check_send(access)?;
                 check_full(access)
             }
+        }
+    }
+
+    /// The targets and folders of a mail action (P3, ADR 0164).
+    async fn check_mail_targets(
+        &self,
+        access: &Access,
+        targets: &[MessageTarget],
+        action: &MailAction,
+    ) -> Result<()> {
+        let mut messages = Vec::new();
+        for target in targets {
+            match target {
+                MessageTarget::Message { message_id } => messages.push(message_id.clone()),
+                MessageTarget::Conversation(conversation) => {
+                    if let Some(folder) = &conversation.folder_id {
+                        self.check_folder(access, folder).await?;
+                    }
+                }
+            }
+        }
+        let folder = match action {
+            MailAction::Move {
+                target: MoveTarget::FolderId(id),
+            }
+            | MailAction::Snooze {
+                wake_folder_id: Some(id),
+                ..
+            } => Some(id),
+            _ => None,
+        };
+        if let Some(id) = folder {
+            self.check_folder(access, id).await?;
+        }
+        if messages.is_empty() {
+            Ok(())
+        } else {
+            self.check_messages(access, &messages).await
         }
     }
 

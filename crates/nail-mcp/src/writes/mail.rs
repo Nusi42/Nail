@@ -10,8 +10,8 @@ use nail_api::compose::Draft;
 use nail_api::mcp::McpScope;
 use nail_api::mcp::tools::{
     CreateDraftArgs, DeleteMessagesArgs, DraftAttachmentArg, EditOpenDraftArgs,
-    MAX_AGENT_ATTACHMENT, MAX_BATCH, McpEditOp, McpTextFormat, SendMessageArgs, UpdateDraftArgs,
-    UpdateMessagesArgs,
+    MAX_AGENT_ATTACHMENT, MAX_BATCH, McpConversationArg, McpEditOp, McpTextFormat, SendMessageArgs,
+    UpdateDraftArgs, UpdateMessagesArgs,
 };
 use nail_api::plugins::{ComposerEdit, ComposerEditOp, ComposerTextFormat};
 use nail_api::{
@@ -280,11 +280,23 @@ pub(crate) fn deletes(role: FolderRole) -> bool {
 }
 
 /// `update_messages`.
+/// Conversation targets (P3, ADR 0164) are planned by WP-actions-core
+/// (`ApplyMailAction` through the write path); until then they are refused
+/// rather than ignored.
+fn no_conversations_yet(conversations: &[McpConversationArg]) -> Result<(), Failure> {
+    if conversations.is_empty() {
+        Ok(())
+    } else {
+        Err(invalid("conversation targets are not supported yet"))
+    }
+}
+
 pub(crate) async fn update_messages<D: McpData>(
     ctx: &Ctx<'_, D>,
     a: UpdateMessagesArgs,
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Organize)?;
+    no_conversations_yet(&a.conversations)?;
     let tags = |list: &[String]| -> Result<Vec<String>, Failure> {
         list.iter()
             .map(|t| {
@@ -467,6 +479,7 @@ pub(crate) async fn delete_messages<D: McpData>(
     ctx: &Ctx<'_, D>,
     a: DeleteMessagesArgs,
 ) -> Result<Plan, Failure> {
+    no_conversations_yet(&a.conversations)?;
     let kind = if a.permanent {
         ActionKind::PermanentDelete
     } else {
