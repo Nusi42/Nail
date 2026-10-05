@@ -7,6 +7,13 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export type ViewName = "Mail" | "Calendar" | "Contacts" | "Tasks" | "Settings";
 
+/**
+ * The subject the reader shows (P2): the card feed's heading (the
+ * conversation's subject), or the message's own subject when it shows alone.
+ */
+export const READER_SUBJECT =
+  ':is([data-part="thread-view.subject"], [data-part="message-view.header.subject"])';
+
 /** The navigation rail. */
 export const rail = (page: Page) => page.getByRole("navigation", { name: "Sections", exact: true });
 

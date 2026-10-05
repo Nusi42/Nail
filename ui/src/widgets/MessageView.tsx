@@ -17,7 +17,7 @@ import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentCard } from "./AttachmentCard";
 import { splitQuotes } from "./ThreadViewModel";
-import { useReaderCard } from "./ThreadViewScope";
+import { cardShowsSubject, useReaderCard } from "./ThreadViewScope";
 
 /** Header fields the widget can show (`headers` option). */
 export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
@@ -157,8 +157,11 @@ export function MessageView({ node }: WidgetProps) {
   const ids = useId();
   const message = query.data;
   // Inside a card of the conversation feed (P2): the feed's header shows the
-  // subject and the card's header the sender, so the card shows neither.
-  const inCard = useReaderCard() !== null;
+  // subject and the card's header the sender, so the card shows neither —
+  // unless the message's subject says something the heading does not (the
+  // real subject of an encrypted message; P2 integration).
+  const card = useReaderCard();
+  const inCard = card !== null;
   const accountId = message ? (findSummary(ctx.queryClient, message.id)?.account_id ?? null) : null;
 
   // Reading a message marks it as read (a queued write, like any other).
@@ -186,7 +189,7 @@ export function MessageView({ node }: WidgetProps) {
       // left edge; text lines stay at a readable length.
       <div data-part="message-view.column">
         <header data-part="message-view.header">
-          {!inCard && (
+          {(card === null || cardShowsSubject(message.headers.subject, card)) && (
             <h1 data-part="message-view.header.subject">
               {message.headers.subject || t("message-no-subject")}
             </h1>

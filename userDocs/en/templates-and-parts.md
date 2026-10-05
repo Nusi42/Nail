@@ -33,6 +33,7 @@ message-list page-size=100 {
 | `tags` | The message's tags (use `chips`) |
 | `count` | Messages in the conversation (`threads="collapsed"`), or copies of the message in a virtual account |
 | `participants` | The people of the conversation, oldest first (use `names(n)`); for a single message its sender |
+| `latest_from` | The sender of the conversation's newest message (on a single message: its own sender; use `names(1)`) |
 
 An unknown field shows nothing.
 
@@ -49,6 +50,7 @@ Filters follow the field, separated by `|`. You can chain several.
 | `chips` | Shows a list as separate chips (`message-list.row.chip`) |
 | `names(n)` | At most `n` names of a list of people: with more, the first `n - 1` and the newest, with `…` between them. You are written "me"; people who sent unread mail are bold (`message-list.row.participant`, states `me` and `unread`) |
 | `if-many` | Shows a number only when it is more than 1 (for `count`: the conversation's count pill, empty for a single message) |
+| `then("text")` | Writes `text` after a value that is not empty, inside the field's element (`message-list.row.suffix`): `{latest_from \| names(1) \| then(":")}{preview}` gives "Grace Hopper: All set for…", and no colon when there is no sender |
 
 A misspelled filter, a missing argument (`truncate` needs a whole number) or
 unbalanced braces make Nail skip that row and log a warning; if no row is
@@ -62,7 +64,9 @@ Each field becomes an element named after the field:
 `{from.name}` → `message-list.row.from`, `{date | relative}` →
 `message-list.row.date`, `{has_attachments}` →
 `message-list.row.has-attachments`. Text between fields is
-`message-list.row.text`; each row line is `message-list.row.line`.
+`message-list.row.text`; each row line is `message-list.row.line`. A line
+carries `data-fields` with the fields it shows: the Compact density hides
+every line that shows `preview`, so conversation rows have two lines there.
 
 ```kdl
 part "message-list.row.date" { color "$color.fg-muted" }
@@ -82,7 +86,10 @@ listed in the theme reference, the UI renders these:
 | `folder-tree.list` | The list inside the folder tree |
 | `message-list.loading`, `message-view.loading` | Waiting for data |
 | `message-list.spacer` | Invisible space above and below the visible rows |
-| `message-list.row.text`, `message-list.row.chip`, `message-list.row.count`, `message-list.row.participants`, `message-list.row.participant`, `message-list.row.separator` | See "Row templates" |
+| `message-list.row.text`, `message-list.row.chip`, `message-list.row.count`, `message-list.row.participants`, `message-list.row.participant`, `message-list.row.separator`, `message-list.row.latest-from`, `message-list.row.suffix` | See "Row templates" |
+| `message-list.row.expander` (+ `.icon`) | The chevron of a conversation row with `threads="expandable"` (states `expanded`, `single`: a conversation of one message keeps the space but shows no chevron) |
+| `message-list.child` (+ `.rail`, `.from`, `.preview`, `.date`) | A message under an opened conversation row (`threads="expandable"`) |
+| `thread-view.card` (+ `.header`, `.toggle`, `.avatar`, `.recipients`, `.actions`), `thread-view.fold`, `thread-view.feed` | The reader's card feed (`thread-view mode="cards"`); `thread-view.item` is an alias of `thread-view.card` for one release |
 | `message-view.header.label`, `message-view.header.value` | Label ("From") and value of a header line |
 | `message-view.text` | The body of plain-text mail |
 | `message-view.attachment.name`, `message-view.attachment.size` | Inside an attachment |
@@ -91,7 +98,9 @@ States (`part "x:state"`):
 
 | Part | States |
 | --- | --- |
-| `message-list.row` | `selected`, `unread`, `flagged`, `answered`, `has-attachments` |
+| `message-list.row` | `selected`, `unread`, `flagged`, `answered`, `has-attachments`, `thread`, `expanded` |
+| `message-list.child` | `selected`, `unread`, `flagged`, `from-me` |
+| `thread-view.card` | `expanded`, `unread`, `selected`, `from-me` |
 | `folder-tree.item`, `account-switcher.item`, `tabs.tab` | `selected` |
 | `toolbar.button` | `disabled` |
 | `status-bar.item` (sync) | `idle`, `syncing`, `error`, `offline` |

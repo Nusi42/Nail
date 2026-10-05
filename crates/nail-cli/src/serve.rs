@@ -148,7 +148,11 @@ pub(crate) async fn run(args: ServeArgs) -> anyhow::Result<()> {
     // demo-multi: mock servers first, the service is pointed at them.
     let mut demo_multi = None;
     if args.seed == Some(Seed::DemoMulti) {
-        let demo = nail_core::demo::start_demo_multi().await?;
+        // P2: the seeds show the demo conversations too.
+        let demo = Box::pin(nail_core::demo::start_demo_multi_with(
+            nail_core::demo::DemoMail::WithConversations,
+        ))
+        .await?;
         write_demo_multi_config(&demo, &config_dir)?;
         options = demo.service_options(options);
         tracing::info!(
@@ -176,7 +180,11 @@ pub(crate) async fn run(args: ServeArgs) -> anyhow::Result<()> {
             let seed = {
                 let service = service.clone();
                 tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
-                    let seed = nail_core::demo::seed_demo(service.store(), service.blobs())?;
+                    let seed = nail_core::demo::seed_demo_with(
+                        service.store(),
+                        service.blobs(),
+                        nail_core::demo::DemoMail::WithConversations,
+                    )?;
                     // The seed goes straight into the store: index it too.
                     service.rebuild_search_index()?;
                     Ok(seed)
@@ -186,7 +194,9 @@ pub(crate) async fn run(args: ServeArgs) -> anyhow::Result<()> {
             tracing::info!(messages = seed.messages, "demo data loaded");
         }
         Some(Seed::DemoImap) => {
-            let demo = nail_core::demo::start_demo_imap().await?;
+            let demo =
+                nail_core::demo::start_demo_imap_with(nail_core::demo::DemoMail::WithConversations)
+                    .await?;
             tracing::info!(addr = %demo.server.addr(), "demo IMAP server running");
             let id = demo.account.id.clone();
             service

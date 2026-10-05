@@ -116,6 +116,8 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   expect(status.needs_recovery).toBe(false);
   expect(status.state).toBe("encrypted");
   await page.goto(server.url);
+  // The last view survives restarts (Settings, where the key was made).
+  await showView(page, "Mail");
   await expect(
     page.locator('[data-part="message-list.row"]').filter({ hasText: "Welcome to Nail" }),
   ).toBeVisible();

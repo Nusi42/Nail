@@ -18,6 +18,7 @@
  * accessible name, as in the regular e2e suite.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
+import { READER_SUBJECT } from "../support/views";
 
 /** The fixed clock of every screen but the calendar: after the demo mail's dates. */
 export const MAIN_TIME = new Date("2026-09-30T10:00:00Z");
@@ -148,7 +149,7 @@ async function selectConversation(page: Page) {
   await rows(page).filter({ hasText: CONVERSATION }).first().click();
   const feed = page.getByRole("feed");
   await expect(feed).toBeVisible();
-  await expect(page.locator('[data-part="thread-view.subject"]')).toContainText(CONVERSATION);
+  await expect(page.locator(READER_SUBJECT)).toContainText(CONVERSATION);
   await expect(
     feed.getByRole("article").and(page.locator('[data-state~="expanded"]')),
   ).toContainText("calibration");
@@ -158,7 +159,7 @@ async function selectConversation(page: Page) {
 
 async function selectMessage(page: Page, subject: string) {
   await rows(page).filter({ hasText: subject }).first().click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(subject);
+  await expect(page.locator(READER_SUBJECT)).toContainText(subject);
   await pinListScroll(page, subject);
 }
 

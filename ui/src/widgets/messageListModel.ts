@@ -74,20 +74,37 @@ export function messageOrderOf(rows: readonly RowRef[]): MessageId[] {
 }
 
 /**
+ * The conversation of each listed message's first row (`UiState.messageThreads`;
+ * child rows have none).
+ */
+export function messageThreadsOf(rows: readonly RowRef[]): Record<MessageId, ThreadId> {
+  const out: Record<MessageId, ThreadId> = {};
+  for (const row of rows) {
+    if (row.threadId !== null && !(row.messageId in out)) out[row.messageId] = row.threadId;
+  }
+  return out;
+}
+
+/**
  * The selected row: the chosen row while it still shows the selected
- * message, else the first row of that message; -1 when none shows it.
+ * message, else the first row of that message, else the row of the selected
+ * conversation (the reader's cards select older messages, also the user's
+ * own from Sent, that have no row of their own; P2); -1 when none shows it.
  */
 export function selectedIndexOf(
   rows: readonly RowRef[],
   chosenKey: string | null,
   selectedId: MessageId | null,
+  selectedThreadId: ThreadId | null = null,
 ): number {
   if (selectedId === null) return -1;
   if (chosenKey !== null) {
     const chosen = rows.findIndex((r) => r.key === chosenKey);
     if (chosen >= 0 && rows[chosen]?.messageId === selectedId) return chosen;
   }
-  return rows.findIndex((r) => r.messageId === selectedId);
+  const own = rows.findIndex((r) => r.messageId === selectedId);
+  if (own >= 0 || selectedThreadId === null) return own;
+  return rows.findIndex((r) => r.kind !== "child" && r.threadId === selectedThreadId);
 }
 
 /**

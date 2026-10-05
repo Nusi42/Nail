@@ -54,7 +54,7 @@ test("search with the query language", async ({ page }) => {
   await expect(rows(page)).toHaveCount(17);
 });
 
-test("the thread view shows a conversation across folders", async ({ page }) => {
+test("the reader shows a conversation across folders as cards", async ({ page }) => {
   await ready(page);
   const latest = rows(page).filter({ hasText: "Project Nightingale kickoff" }).first();
   await latest.click();
@@ -63,23 +63,20 @@ test("the thread view shows a conversation across folders", async ({ page }) => 
   await expect(thread.locator('[data-part="thread-view.subject"]')).toContainText(
     "Project Nightingale kickoff",
   );
-  // Four messages in the inbox, three replies in Sent: the newest three are
-  // shown, the older four folded (P2 quick win, ADR 0148).
-  const items = thread.locator('[data-part="thread-view.item"]');
-  await expect(items).toHaveCount(3);
-  await expect(items.and(page.locator('[aria-current="true"]'))).toHaveCount(1);
-  await expect(thread.locator('[data-part="thread-view.item.avatar"]')).toHaveCount(3);
-  await thread.getByRole("button", { name: "4 earlier messages" }).click();
-  await expect(items).toHaveCount(7);
+  // Four messages in the inbox, three replies in Sent: seven cards, oldest
+  // first (P2 card feed, ADR 0151), the selected one current.
+  const feed = page.getByRole("feed");
+  const cards = feed.getByRole("article");
+  await expect(cards.first()).toHaveAttribute("aria-setsize", "7");
+  await expect(cards.and(page.locator('[aria-current="true"]'))).toHaveCount(1);
+  await page.getByRole("button", { name: "Expand all" }).click();
+  await expect(cards).toHaveCount(7);
   await expect(thread.locator('[data-part="thread-view.fold"]')).toHaveCount(0);
 
-  // Opening another message of the conversation shows it in the reader.
-  const first = items.first();
-  await first.locator('[data-part="thread-view.item.toggle"]').click();
-  await expect(first.locator('[data-part="thread-view.text"]')).toBeVisible();
-  await first.locator('[data-part="thread-view.item.open"]').click();
+  // Choosing another card makes its message the reader's message.
+  const first = cards.first();
+  await expect(first).toHaveAttribute("data-state", /\bexpanded\b/);
+  await first.locator('[data-part="thread-view.card.toggle"]').focus();
   await expect(first).toHaveAttribute("aria-current", "true");
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Project Nightingale kickoff",
-  );
+  await expect(first.locator('[data-part="message-view"]')).toBeVisible();
 });

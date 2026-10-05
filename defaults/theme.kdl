@@ -2956,7 +2956,7 @@ theme "default" mode="system" {
     part "pim.sources.add" { display "flex"; flex-direction "column"; gap "$space.sm"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
 
     // Reminder toasts
-    part "pim.toasts" { position "fixed"; left "$space.lg"; bottom "$space.lg"; z-index 900; display "flex"; flex-direction "column"; gap "$space.sm"; max-width 380; }
+    part "pim.toasts" { position "fixed"; right "$space.lg"; bottom "$space.lg"; z-index 900; display "flex"; flex-direction "column"; gap "$space.sm"; max-width 380; }
     part "pim.toasts.list" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
     part "pim.toast" { padding "$space.sm" "$space.md"; border "$border.thin"; border-radius "$radius.md"; color "$color.fg"; background-color "$color.bg"; box-shadow "$shadow.overlay"; }
     part "pim.toast[kind=\"problem\"]" { border-color "$color.danger"; }

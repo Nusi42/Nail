@@ -46,7 +46,8 @@ use nail_proto_graph::testing::MockGraphServer;
 use nail_proto_imap::{Credentials, ImapConfig, Security};
 use nail_store::{BlobStore, Store};
 use nail_testkit::{
-    CryptoFixtures, MailStore, MockImapConfig, MockImapServer, crypto_fixture, demo_corpus,
+    CorpusFolder, CryptoFixtures, MailStore, MockImapConfig, MockImapServer, crypto_fixture,
+    demo_corpus, demo_corpus_with_conversations,
 };
 use nail_testkit_net::{
     DnsZone, MockDavConfig, MockDavServer, MockDavUser, MockDnsServer, MockHttpServer,
@@ -185,10 +186,44 @@ pub struct DemoSeed {
     pub messages: usize,
 }
 
+/// Which demo mail a seed serves (P2): the demo corpus the tests count on,
+/// or that corpus plus the P2 demo conversations
+/// (`nail_testkit::DEMO_CONVERSATIONS`), which the seeds of `nail serve`
+/// show.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DemoMail {
+    /// `nail_testkit::demo_corpus()`.
+    #[default]
+    Corpus,
+    /// `nail_testkit::demo_corpus_with_conversations()`.
+    WithConversations,
+}
+
+impl DemoMail {
+    fn folders(self) -> Vec<CorpusFolder> {
+        match self {
+            Self::Corpus => demo_corpus(),
+            Self::WithConversations => demo_corpus_with_conversations(),
+        }
+    }
+
+    fn mail_store(self) -> MailStore {
+        match self {
+            Self::Corpus => MailStore::demo(),
+            Self::WithConversations => MailStore::demo_with_conversations(),
+        }
+    }
+}
+
 /// Writes the demo corpus into `store` and `blobs` as a local account
 /// ([`DEMO_ACCOUNT_ID`]). Idempotent: ids are derived from the corpus, so
 /// seeding again updates the same rows. Blocking.
 pub fn seed_demo(store: &Store, blobs: &BlobStore) -> Result<DemoSeed> {
+    seed_demo_with(store, blobs, DemoMail::Corpus)
+}
+
+/// [`seed_demo`] with the given demo mail.
+pub fn seed_demo_with(store: &Store, blobs: &BlobStore, mail: DemoMail) -> Result<DemoSeed> {
     let account = Account {
         id: AccountId::new(DEMO_ACCOUNT_ID),
         name: "Demo".to_owned(),
@@ -199,7 +234,7 @@ pub fn seed_demo(store: &Store, blobs: &BlobStore) -> Result<DemoSeed> {
 
     let mut folders = Vec::new();
     let mut messages = 0;
-    for corpus_folder in demo_corpus() {
+    for corpus_folder in mail.folders() {
         let folder = Folder {
             id: ids::folder_id(&account.id, &corpus_folder.name),
             account_id: account.id.clone(),
@@ -249,7 +284,12 @@ pub struct DemoImap {
 
 /// Starts an in-process mock IMAP server serving the demo corpus.
 pub async fn start_demo_imap() -> Result<DemoImap> {
-    let server = MockImapServer::start_demo()
+    start_demo_imap_with(DemoMail::Corpus).await
+}
+
+/// [`start_demo_imap`] with the given demo mail.
+pub async fn start_demo_imap_with(mail: DemoMail) -> Result<DemoImap> {
+    let server = MockImapServer::start(MockImapConfig::default(), mail.mail_store())
         .await
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let settings = ImapAccount {
@@ -490,7 +530,12 @@ fn io_error(err: impl std::fmt::Display) -> std::io::Error {
 
 /// Starts the mock servers of `--seed demo-multi`.
 pub async fn start_demo_multi() -> Result<DemoMulti> {
-    let work_store = MailStore::demo();
+    Box::pin(start_demo_multi_with(DemoMail::Corpus)).await
+}
+
+/// [`start_demo_multi`] with the given demo mail in the "work" account.
+pub async fn start_demo_multi_with(mail: DemoMail) -> Result<DemoMulti> {
+    let work_store = mail.mail_store();
     work_store.add_mailbox("Drafts", FolderRole::Drafts);
     work_store.add_mailbox("Trash", FolderRole::Trash);
     work_store.append::<&str>("INBOX", MULTI_LIST_MESSAGE.as_bytes(), &[]);
@@ -1562,6 +1607,20 @@ mod tests {
         let again = seed_demo(&store, &blobs).unwrap();
         assert_eq!(again, seed);
         assert_eq!(store.list_accounts().unwrap(), vec![seed.account]);
+    }
+
+    #[test]
+    fn seeds_the_demo_conversations_on_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open_in_memory().unwrap();
+        let blobs = BlobStore::open(dir.path().join("blobs")).unwrap();
+        let seed = seed_demo_with(&store, &blobs, DemoMail::WithConversations).unwrap();
+        let expected: usize = demo_corpus_with_conversations()
+            .iter()
+            .map(|f| f.messages.len())
+            .sum();
+        assert_eq!(seed.messages, expected);
+        assert!(expected > demo_corpus().iter().map(|f| f.messages.len()).sum());
     }
 }
 

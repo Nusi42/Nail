@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { startNail } from "../support/nail";
-import { accountSections, sectionInbox } from "../support/views";
+import { accountSections, READER_SUBJECT, sectionInbox } from "../support/views";
 
 test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) => {
   // The demo corpus served by an in-process mock IMAP server.
@@ -34,9 +34,7 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
     await expect(rows).toHaveCount(14);
 
     await rows.filter({ hasText: "Welcome to Nail" }).click();
-    await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-      "Welcome to Nail",
-    );
+    await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
   } finally {
     await server.stop();
   }

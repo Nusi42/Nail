@@ -243,12 +243,6 @@
               "label": "@layout.pane.message",
               "sizes": [
                 "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
                 "1fr"
               ],
               "children": [
@@ -269,63 +263,7 @@
                   "label": null,
                   "kind": "thread-view",
                   "options": {
-                    "expand": "none"
-                  },
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-security",
-                  "label": null,
-                  "kind": "security-message",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-warnings",
-                  "label": null,
-                  "kind": "security-warnings",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-remote-content",
-                  "label": null,
-                  "kind": "remote-content",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-junk",
-                  "label": null,
-                  "kind": "junk-verdict",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-body-status",
-                  "label": null,
-                  "kind": "sync-message-body",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message",
-                  "label": null,
-                  "kind": "message-view",
-                  "options": {
-                    "headers": "from to cc date"
+                    "mode": "cards"
                   },
                   "rows": [],
                   "source": null
@@ -472,12 +410,6 @@
               "label": "@layout.pane.message",
               "sizes": [
                 "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
-                "auto",
                 "1fr"
               ],
               "children": [
@@ -498,63 +430,7 @@
                   "label": null,
                   "kind": "thread-view",
                   "options": {
-                    "expand": "none"
-                  },
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-security",
-                  "label": null,
-                  "kind": "security-message",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-warnings",
-                  "label": null,
-                  "kind": "security-warnings",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-remote-content",
-                  "label": null,
-                  "kind": "remote-content",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-junk",
-                  "label": null,
-                  "kind": "junk-verdict",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message-body-status",
-                  "label": null,
-                  "kind": "sync-message-body",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "message",
-                  "label": null,
-                  "kind": "message-view",
-                  "options": {
-                    "headers": "from date"
+                    "mode": "cards"
                   },
                   "rows": [],
                   "source": null
@@ -864,6 +740,48 @@
     "list.collapse": {
       "label": "@conversation-list.action.collapse",
       "icon": "chevron-down",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.next-card": {
+      "label": "@thread-view.action.next-card",
+      "icon": "chevron-down",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.previous-card": {
+      "label": "@thread-view.action.previous-card",
+      "icon": "chevron-up",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.next-message": {
+      "label": "@thread-view.action.next-message",
+      "icon": "chevron-right",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.previous-message": {
+      "label": "@thread-view.action.previous-message",
+      "icon": "chevron-left",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.toggle-card": {
+      "label": "@thread-view.action.toggle-card",
+      "icon": "rows-2",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.expand-all": {
+      "label": "@thread-view.action.expand-all",
+      "icon": "maximize-2",
+      "alias_of": null,
+      "args": []
+    },
+    "conversation.collapse-all": {
+      "label": "@thread-view.action.collapse-all",
+      "icon": "minimize-2",
       "alias_of": null,
       "args": []
     },
@@ -1636,13 +1554,43 @@
     {
       "context": "reader",
       "key": "j",
-      "action": "mail.next",
+      "action": "conversation.next-card",
       "args": []
     },
     {
       "context": "reader",
       "key": "k",
-      "action": "mail.previous",
+      "action": "conversation.previous-card",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "n",
+      "action": "conversation.next-message",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "p",
+      "action": "conversation.previous-message",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "o",
+      "action": "conversation.toggle-card",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": ";",
+      "action": "conversation.expand-all",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": ":",
+      "action": "conversation.collapse-all",
       "args": []
     },
     {

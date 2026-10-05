@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { repoRoot, startNail, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
 import { expectResponsive } from "../support/responsive";
+import { READER_SUBJECT } from "../support/views";
 
 /**
  * P2 WP202 (ADR 0148): the conversation list on the real core — Design A
@@ -126,23 +127,21 @@ test("expandable conversations open into their messages", async ({ page }) => {
   await expect(row).toHaveAttribute("aria-expanded", "true");
   const children = tree.locator('[data-part="message-list.child"]');
   const count = Number(await row.locator('[data-part="message-list.row.count"]').innerText());
-  // The conversation's messages (until WP201 the core's stub answers with
-  // every folder's copies, so there may be more than the pill counts).
-  await expect.poll(() => children.count()).toBeGreaterThanOrEqual(count);
+  // One child per message of the conversation (the Inbox and Sent, WP201).
+  await expect(children).toHaveCount(count);
   await expect(children.first()).toHaveAttribute("aria-level", "2");
 
-  // A child opens alone in the reader: no conversation strip.
+  // A child opens alone in the reader: no card feed.
   await children.nth(1).click();
   await expect(children.nth(1)).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Nightingale",
-  );
-  await expect(page.locator('[data-part="thread-view"]')).toHaveCount(0);
+  await expect(page.locator(READER_SUBJECT)).toContainText("Nightingale");
+  await expect(page.locator('[data-part="thread-view"][data-mode="single"]')).toBeVisible();
+  await expect(page.getByRole("feed")).toHaveCount(0);
 
   // ← to the conversation, ← closes it, → opens it again, j moves into it.
   await page.keyboard.press("ArrowLeft");
   await expect(row).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator('[data-part="thread-view"]')).toBeVisible();
+  await expect(page.getByRole("feed")).toBeVisible();
   await page.keyboard.press("ArrowLeft");
   await expect(children).toHaveCount(0);
   await page.keyboard.press("ArrowRight");

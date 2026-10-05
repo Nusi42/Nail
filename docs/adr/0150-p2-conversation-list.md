@@ -1,4 +1,4 @@
-# ADR 0149 (WP202): the conversation list — Design A rows, Design B children
+# ADR 0150 (WP202): the conversation list — Design A rows, Design B children
 
 Status: accepted · 2026-10-05 · P2 WP202 (list). The integrator renumbers.
 

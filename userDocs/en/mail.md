@@ -78,8 +78,9 @@ conversation: in Drafts every draft is listed on its own. While you search,
 a conversation is made of its messages in every folder except Drafts, Trash
 and Junk.
 
-The row's actions (flag, archive, move, delete, the right-click menu) act on
-the conversation's newest message, like the reader.
+Choosing a row selects the conversation's newest message that you did not
+write, and the row's actions (flag, archive, move, delete, the right-click
+menu) act on it — never on your own reply kept in Sent.
 
 ### The conversation in the reader
 
@@ -107,6 +108,13 @@ Screen readers hear the conversation as a feed: each card is an article
 
 For Gmail and Exchange accounts the server's own conversations count too:
 messages the server keeps together stay together in Nail.
+
+If your own `layout.kdl` was written before the card feed (a `thread-view`
+without `mode` above a `message-view`), Nail keeps showing the older strip
+and offers once to **Read conversations as cards**. **Use cards** rewrites
+the reader in your layout — your per-message widgets, their order and
+`mark-read` move into the cards — as one step you can undo under Settings →
+Layout & toolbars; **Not now** keeps the strip and does not ask again.
 
 ### Keyboard
 
@@ -139,6 +147,11 @@ A conversation row then gets a chevron. Click it (or press `→` on the row;
 `←` closes it again) to show the conversation's messages as rows beneath
 it, one level deep: sender, first words and date of each message. Choosing
 such a message shows just that message in the reader.
+
+With the list focused, `→` on a closed conversation opens it and on an open
+one moves to its first message; `←` on a message moves to its conversation
+and on an open conversation closes it (the actions `list.expand` /
+`list.collapse`). `j` / `k` step through every row, messages included.
 
 To list single messages instead of conversations, set `threads="off"`.
 

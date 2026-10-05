@@ -21,7 +21,7 @@ import {
   primaryMessage,
   stepStop,
 } from "./ThreadViewModel";
-import { scopedUiStore } from "./ThreadViewScope";
+import { cardShowsSubject, scopedUiStore } from "./ThreadViewScope";
 import { createUiStore } from "../state/uiStore";
 
 const INBOX = "acc-personal/Inbox";
@@ -393,5 +393,22 @@ describe("thread-view mode=cards", () => {
     await user.click(screen.getByRole("button", { name: "Expand all" }));
     await settleQueries(env);
     expect(await violations(container)).toEqual([]);
+  });
+});
+
+describe("a card's own subject (P2 integration)", () => {
+  const card = { messageId: "m", subject: "Lab move: timeline" };
+
+  it("stays hidden when it repeats the conversation's subject", () => {
+    expect(cardShowsSubject("Re: Lab move: timeline", card)).toBe(false);
+    expect(cardShowsSubject("FWD: re: lab move: TIMELINE", card)).toBe(false);
+    expect(cardShowsSubject("", card)).toBe(false);
+    // A mailing list's tag is no new subject either.
+    expect(cardShowsSubject("Re: [lab] Lab move: timeline", card)).toBe(false);
+  });
+
+  it("shows when it says something else (an encrypted message's real subject)", () => {
+    expect(cardShowsSubject("Secret plans", { messageId: "m", subject: "..." })).toBe(true);
+    expect(cardShowsSubject("Re: Lab move: new date", card)).toBe(true);
   });
 });

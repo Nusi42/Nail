@@ -10,7 +10,7 @@ import {
   rpcOk,
 } from "../support/remote";
 import { expectResponsive, type Size } from "../support/responsive";
-import { showView } from "../support/views";
+import { READER_SUBJECT, showView } from "../support/views";
 
 /**
  * P1 WP190: HTML mail renders as its author designed it (style sheets,
@@ -84,7 +84,7 @@ async function openMessage(page: Page, subject: string): Promise<void> {
   const row = page.locator('[data-part="message-list.row"]', { hasText: subject }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toHaveText(subject);
+  await expect(page.locator(READER_SUBJECT)).toHaveText(subject);
 }
 
 /** A computed style property of the first element matching `selector` in the frame. */
@@ -382,13 +382,24 @@ test.describe("the mail view at every standard size", () => {
     });
     await showPane("Messages");
 
-    // The page never scrolls with a long message either: the frame scrolls.
+    // The page never scrolls with a long message either: the reader's card
+    // feed scrolls (P2: a card's frame keeps at least 40 % of the window's
+    // height, so it may reach below the pane), never the page.
     await page.setViewportSize({ width: 1280, height: 700 });
     await openMessage(page, "Big October Sale");
     const frameBox = await page.locator('iframe[data-part="message-view.body"]').boundingBox();
     const viewport = page.viewportSize() as Size;
     expect(frameBox).not.toBeNull();
-    expect((frameBox?.y ?? 0) + (frameBox?.height ?? 0)).toBeLessThanOrEqual(viewport.height + 1);
+    expect(frameBox?.height ?? 0).toBeGreaterThanOrEqual(viewport.height * 0.4 - 1);
+    const pageScroll = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollHeight,
+      height: window.innerHeight,
+    }));
+    expect(pageScroll.scroll).toBeLessThanOrEqual(pageScroll.height + 1);
+    const feedScrolls = await page
+      .locator('[data-part="thread-view"]')
+      .evaluate((el) => getComputedStyle(el).overflowY);
+    expect(["auto", "scroll"]).toContain(feedScrolls);
   });
 });
 

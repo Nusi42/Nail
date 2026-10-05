@@ -58,12 +58,14 @@ date: string,
  */
 preview: string, 
 /**
- * The newest of them.
+ * The message choosing the row selects and the row's actions act on:
+ * the newest one the user did not write, else the newest (P2: never the
+ * user's own reply joined from Sent).
  */
 latest_message_id: MessageId, 
 /**
- * The newest message's summary (P2): what choosing the row selects, so
- * the UI's actions see its flags, tags and account at once, without a
+ * That message's summary (P2): what choosing the row selects, so the
+ * UI's actions see its flags, tags and account at once, without a
  * second request.
  */
 latest_message: MessageSummary, 

@@ -202,7 +202,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        by kind), GetThemeDetails origins, id_from_name = NFKD without marks like the UI's themeIdFromName),
                        kdl_edit detach / put / reindent / replace_with / set_arg; golden files
                        tests/golden/{layout_edit,theme_edit} (NAIL_UPDATE_GOLDEN=1)
-crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v16), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -255,7 +255,10 @@ crates/nail-store      SQLite metadata (v15), blob store, per-account operation 
                        (SUBJECT_REPLY_SQL / SUBJECT_ORIGINAL_SQL, EXPLAIN test; WP123 found the quadratic scan);
                        post-M4c (ADR 0101): BlobStore removal_mark / removed_since, sync lookups (message_id_by_uid,
                        message_exists, uidless_message_by_message_id with an EXPLAIN test, folder_uid_flags), one cached
-                       upsert per message (row + subject key + meta)
+                       upsert per message (row + subject key + meta);
+                       P2 WP201 (ADR 0149): thread/conversation.rs (ConversationFolders threaded / singles / sent +
+                       retain, OwnAddresses, list_conversations / conversation / summarize_conversation, single-<id> rows
+                       for Drafts); v16 covering index messages_folder_thread(folder_id, thread_id, date_sort)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -288,7 +291,10 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
                        smime/ada-{work,home}.p12 are the demo-multi certificates);
                        bin nail-fake-installer (M4b: the updater smoke's "package"; records its command line
-                       to NAIL_FAKE_INSTALLER_RECORD instead of installing; ADR 0092)
+                       to NAIL_FAKE_INSTALLER_RECORD instead of installing; ADR 0092);
+                       conversations/ = P2 demo conversations (ADR 0152: demo_corpus_with_conversations,
+                       conversation_corpus, MailStore::demo_with_conversations, DEMO_CONVERSATIONS; shown by the seeds of
+                       nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers; managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
                        sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
@@ -485,8 +491,11 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M5d (ADR 0131): editing.rs (GetEditHistory / UndoEdit / RedoEdit, the theme editor's requests;
                        broadcast_history after every theme / layout write; the watcher sends EditHistoryChanged when the
                        files change on disk)
-                       P2 (ADR 0148): conversations.rs (GetConversation; contract stub = GetThread's messages until WP201:
-                       the Sent join, "me" from the identities, counts over the conversation)
+                       P2 (ADRs 0148, 0149): conversations.rs (own_addresses_by_account = "me" from accounts.kdl addresses +
+                       identities + stored accounts; list_conversations / get_conversation with FolderFilter; conversation_row /
+                       thread_row rebuild rows from the granted folders for remote sessions); demo.rs DemoMail (Corpus /
+                       WithConversations: the seeds of `nail serve` add nail-testkit's demo conversations; seed_demo_with,
+                       start_demo_imap_with, start_demo_multi_with)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -658,6 +667,14 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        `if-many` + field `{participants}`, state/queries.ts useConversation, mailOps findSummary over thread
                        rows' latest_message, api/mockConversations.ts addMockConversation (Inbox + Sent + a draft), slots
                        features/conversation-list (WP202) / features/conversation-reader (WP203);
+                       P2 packages: widgets/messageListModel.ts (rows, children, selection by row key, thread fallback,
+                       tree moves), MessageListChild.tsx, messageListControl.ts, template filter `then("text")` + field
+                       `latest_from`, `data-fields` per row line (Compact hides preview lines), actions list.expand /
+                       list.collapse (ADR 0150); widgets/ThreadViewFeed.tsx + ThreadViewModel.ts + ThreadViewScope.tsx
+                       (the card feed: per-card scoped UI store renders the reader's per-message widgets, `card=`),
+                       features/conversation-reader (conversation.* actions, readerStack.ts + ReaderOffer.tsx = the
+                       one-time "Read conversations as cards" offer, UI-state key `conversation-reader.layout-offer`)
+                       (ADR 0151); UiState.messageThreads (j / k continue from a conversation's row; ADR 0153);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -792,7 +809,7 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
-npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 22 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 24 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
 npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
@@ -1134,7 +1151,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   (`layout-editor-settings`, `toolbar-editor-settings`) and → Appearance, right-click on a toolbar. Theme ids from
   names: NFKD without combining marks, `theme-` before a non-letter start, ≤ 60 chars — core and UI alike. A first
   `UpdateLayout` creates `layout.kdl`, so undoing it removes the file. E2E: `m5d.spec.ts`; the a11y window sweep
-  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 in all).
+  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 then; P2 adds `conversation`, `conversation-expanded`: 24).
 - P1 contract (ADR 0139): HTML mail broke because nail-mime's sanitizer drops `<style>` / `<head>` / `class` / body
   attributes and nobody resolves `cid:` (the srcdoc frame also inherits the page CSP, which has no `cid:`); the
   responsive standard (8 viewport sizes, windows at min-size and resized; no clipped text, overlaps, page scroll) is
@@ -1161,6 +1178,13 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   (widgets/ThreadView*, threadViewSkin.ts, features/conversation-reader, reader stack + keys), WP204 e2e
   (p2.spec.ts, visual screens, richer demo threads, userDocs mail); both UI packages regenerate the layout
   fixtures / goldens, the integrator regenerates them after merging.
+- P2 integration (ADR 0153; packages ADRs 0149 core, 0150 list, 0151 reader, 0152 demo conversations + e2e): the
+  default reader is `thread-view mode="cards"` (toolbar + feed, `sizes="auto 1fr"`); the subject lives in the feed's
+  `thread-view.subject` h1 (or `message-view.header.subject` when a message shows alone, `data-mode="single"`), so
+  e2e waits on `READER_SUBJECT` from `e2e/support/views.ts`. Strip-era user layouts keep the strip and get a
+  one-time offer. Seeds of `nail serve` include the demo conversations (`DemoMail::WithConversations`): demo-multi
+  unified inbox 17 rows, demo inbox 14, work inbox 15, demo Sent 5; Nightingale counts 7 (Inbox + Sent); core tests
+  keep the plain corpus. E2E: `p2.spec.ts`, `p2-list.spec.ts`, `p2-quickwin.spec.ts` (strip + offer).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

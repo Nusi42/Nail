@@ -120,6 +120,8 @@ function participantName(p: ThreadParticipant, me: string): string {
 
 interface CardProps {
   threadId: string;
+  /** The conversation's subject (a card shows its own only when it differs). */
+  subject: string;
   message: ConversationMessage;
   index: number;
   total: number;
@@ -134,6 +136,7 @@ interface CardProps {
 
 function Card({
   threadId,
+  subject,
   message: m,
   index,
   total,
@@ -269,7 +272,7 @@ function Card({
       </div>
       {open && (
         <div data-part="thread-view.card.body">
-          <CardScope messageId={m.id}>
+          <CardScope messageId={m.id} subject={subject}>
             <Widgets nodes={nodes} nodeKey={`${nodeKey}/${m.id}`} />
           </CardScope>
         </div>
@@ -458,6 +461,7 @@ export function ThreadFeed({ node, nodeKey }: WidgetProps) {
           <Card
             key={item.message.id}
             threadId={threadId}
+            subject={thread.subject}
             message={item.message}
             index={item.index}
             total={messages.length}

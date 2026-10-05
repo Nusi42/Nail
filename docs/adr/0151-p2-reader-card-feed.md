@@ -1,4 +1,4 @@
-# ADR 0149 (WP203): the reader as a card feed
+# ADR 0151 (WP203): the reader as a card feed
 
 Status: accepted · 2026-10-05 · P2 WP203 (reader; the integrator renumbers)
 

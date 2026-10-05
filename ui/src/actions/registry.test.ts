@@ -37,6 +37,23 @@ describe("actions", () => {
     expect(ctx.store.getState().selectedMessageId).toBe("a");
   });
 
+  it("steps on from the conversation's row for a message without a row (P2)", async () => {
+    const ctx = context();
+    ctx.store.getState().setMessageOrder(["a", "b", "c"], { a: "ta", b: "tb", c: "tc" });
+    // An older card of conversation tb (e.g. the user's reply from Sent).
+    ctx.store.setState({ selectedMessageId: "sent-reply", selectedThreadId: "tb" });
+    const { dispatch } = createDispatcher(ctx);
+    await dispatch("mail.next");
+    expect(ctx.store.getState().selectedMessageId).toBe("c");
+    ctx.store.setState({ selectedMessageId: "sent-reply", selectedThreadId: "tb" });
+    await dispatch("mail.previous");
+    expect(ctx.store.getState().selectedMessageId).toBe("a");
+    // Without a known conversation, j starts at the top as before.
+    ctx.store.setState({ selectedMessageId: "elsewhere", selectedThreadId: "tz" });
+    await dispatch("mail.next");
+    expect(ctx.store.getState().selectedMessageId).toBe("a");
+  });
+
   it("toggles nodes and syncs the active account", async () => {
     const ctx = context();
     const { dispatch } = createDispatcher(ctx);

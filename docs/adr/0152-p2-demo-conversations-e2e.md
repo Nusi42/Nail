@@ -1,4 +1,4 @@
-# ADR 0149 (P2 WP204 e2e-seed): richer demo conversations, the P2 e2e spec and screens
+# ADR 0152 (P2 WP204): richer demo conversations, the P2 e2e spec and screens
 
 Status: accepted · 2026-10-05 · P2 WP204 (package of the P2 wave; the integrator renumbers)
 

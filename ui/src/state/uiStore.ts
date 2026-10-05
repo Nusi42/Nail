@@ -89,6 +89,12 @@ export interface UiState {
   selectedMessageId: MessageId | null;
   /** Ids of the messages currently loaded in the list, in display order. */
   messageOrder: MessageId[];
+  /**
+   * The conversation each listed message's row shows (P2): j / k step on
+   * from a conversation's row while the reader selected one of its messages
+   * that has no row (an older card, the user's reply from Sent).
+   */
+  messageThreads: Readonly<Record<MessageId, ThreadId>>;
   /** Layout node ids hidden via `view.toggle`. */
   hiddenNodes: string[];
   /** User-dragged split sizes by split key, one CSS size per child. */
@@ -154,7 +160,7 @@ export interface UiState {
   selectAccount: (id: AccountId) => void;
   selectFolder: (id: FolderId | null) => void;
   selectMessage: (id: MessageId | null) => void;
-  setMessageOrder: (ids: MessageId[]) => void;
+  setMessageOrder: (ids: MessageId[], threads?: Readonly<Record<MessageId, ThreadId>>) => void;
   toggleNode: (id: string) => void;
   setSplitSizes: (key: string, sizes: string[]) => void;
   setActiveTab: (key: string, index: number) => void;
@@ -213,6 +219,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     activeFolderId: null,
     selectedMessageId: null,
     messageOrder: [],
+    messageThreads: {},
     hiddenNodes: [],
     splitSizes: {},
     activeTabs: {},
@@ -269,8 +276,8 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     selectMessage: (id) => {
       set({ selectedMessageId: id });
     },
-    setMessageOrder: (ids) => {
-      set({ messageOrder: ids });
+    setMessageOrder: (ids, threads = {}) => {
+      set({ messageOrder: ids, messageThreads: threads });
     },
     toggleNode: (id) => {
       set((s) => ({

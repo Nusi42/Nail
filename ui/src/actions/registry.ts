@@ -69,9 +69,16 @@ export interface ActionHandler {
 }
 
 function step(ctx: ActionContext, delta: number): void {
-  const { messageOrder, selectedMessageId, selectMessage } = ctx.store.getState();
+  const { messageOrder, messageThreads, selectedMessageId, selectedThreadId, selectMessage } =
+    ctx.store.getState();
   if (messageOrder.length === 0) return;
-  const index = selectedMessageId === null ? -1 : messageOrder.indexOf(selectedMessageId);
+  const own = selectedMessageId === null ? -1 : messageOrder.indexOf(selectedMessageId);
+  // A message without a row (an older card of the reader's conversation, a
+  // reply from Sent) steps on from its conversation's row (P2).
+  const index =
+    own >= 0 || selectedMessageId === null || selectedThreadId === null
+      ? own
+      : messageOrder.findIndex((id) => messageThreads[id] === selectedThreadId);
   const next =
     index < 0
       ? delta > 0

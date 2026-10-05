@@ -7,6 +7,7 @@ import {
   discardComposer,
   newMessageButton,
   openSettings,
+  READER_SUBJECT,
   readerAction,
   readerToolbar,
   runFromPalette,
@@ -42,9 +43,7 @@ test("the reader has no accessibility violations", async ({ page }) => {
   await page.goto("/");
   const rows = page.locator('[data-part="message-list.row"]');
   await rows.filter({ hasText: "Welcome to Nail" }).click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Welcome to Nail",
-  );
+  await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
   expect(await violations(page)).toEqual([]);
 });
 
@@ -61,9 +60,7 @@ test("high-contrast mode has no accessibility violations", async ({ page }) => {
   await expect(rows.first()).toBeVisible();
   expect(await violations(page), "main window").toEqual([]);
   await rows.filter({ hasText: "Welcome to Nail" }).click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Welcome to Nail",
-  );
+  await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
   expect(await violations(page), "reader").toEqual([]);
 });
 
@@ -211,9 +208,7 @@ test.describe("every built-in theme", () => {
         await page.goto(server.url);
         const rows = page.locator('[data-part="message-list.row"]');
         await rows.filter({ hasText: "Welcome to Nail" }).click();
-        await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-          "Welcome to Nail",
-        );
+        await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
         expect(await violations(page), `${theme}: mail`).toEqual([]);
         await readerToolbar(page).getByRole("button", { name: "More", exact: true }).click();
         await expect(page.getByRole("menu")).toBeVisible();

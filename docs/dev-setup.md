@@ -486,7 +486,10 @@ How it works:
 | `e2e/tests/sync.spec.ts` | `--seed demo-imap`: an IMAP account synced from the mock server, `F5` (`sync.now`) round trip |
 | `e2e/tests/accounts.spec.ts` | `--seed demo-multi`: unified inbox with two accounts and their status, adding an account through discovery (autoconfig mock), unverified discovery answers shown with a warning (`elsewhere.example` SRV mock), a POP3 account receiving mail, a virtual account merging folders and deduplicating a mailing-list message |
 | `e2e/tests/mailops.spec.ts` | `--seed demo-multi`: flag / archive / delete reach the mock IMAP server, a server-side flag change arrives through IDLE, writes made offline replay after reconnecting |
-| `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), the thread view across folders |
+| `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), a conversation across folders in the card feed |
+| `e2e/tests/p2.spec.ts` | `--seed demo-multi` with the demo conversations (`nail_testkit::DEMO_CONVERSATIONS`): conversation rows (participants, "me", count, "Sender: preview", Compact), the card feed (oldest first, folds, Expand / Collapse all, own replies from Sent, keys), Design B through a user `layout.kdl`, the responsive standard; review screenshots in `<build dir>/screens/p2/` |
+| `e2e/tests/p2-list.spec.ts` | Conversation rows and expandable rows at every standard size in Frost, Graphite Compact, Nocturne and High contrast (`<build dir>/screens/p1/p2-list-*`) |
+| `e2e/tests/p2-quickwin.spec.ts` | A strip-era user layout keeps the strip (newest three, "N earlier messages"); the one-time offer turns it into cards |
 | `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server; a Sent copy queued while IMAP is offline and filed once it is back |
 | `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every section of the settings page and the merge dialog; M5b: every built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) over the mail view, the reader's More menu, the calendar view and the settings page, colour contrast included; any violation, whatever its impact, fails |
 | `e2e/tests/composer.spec.ts` | `--seed demo-multi`: HTML and Markdown mails (bold text, Markdown source part, attachment, core-rendered preview) with their MIME parts as the mock SMTP server received them; reply quoting in HTML (blockquote) and Markdown (`>`); drafts autosaved to the server's Drafts folder, continued from the outbox after a reload, removed after sending |
@@ -519,12 +522,13 @@ How it works:
 
 ### Visual regression (M5a, ADR 0106)
 
-Screenshots of 22 screens (the main window with the rail and a message,
+Screenshots of 24 screens (the main window with the rail and a message,
 the reader's More menu, the composer, the settings page, the calendar views,
 Contacts and Tasks, a context menu, an HTML message, attachment cards before
 and after saving, the Move dialog, a modal confirmation, and — M5d —
 customize-layout mode, the toolbar customizer, Settings → Appearance and the
-theme editor; `e2e/visual/screens.ts`) for every built-in theme
+theme editor, and — P2 — a conversation in the card feed and the
+expandable conversation list; `e2e/visual/screens.ts`) for every built-in theme
 (Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.

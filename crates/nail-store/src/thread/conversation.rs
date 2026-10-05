@@ -264,7 +264,11 @@ fn collapse(
 /// Builds the row of a conversation from its messages (oldest first):
 /// distinct senders with "me" (an address of one of the conversation's
 /// accounts, or the sender of one of the user's messages) and unread
-/// senders, counts, and the newest message. `None` without messages.
+/// senders, counts, and the newest message (date, preview, sender). The
+/// message the row selects and acts on (`latest_message`) is the newest one
+/// the user did not write, else the newest: an Inbox row's Archive, Delete
+/// or label must never reach the user's own reply joined from Sent (P2
+/// integration, ADR 0153). `None` without messages.
 #[must_use]
 pub fn summarize_conversation(
     id: &str,
@@ -273,6 +277,7 @@ pub fn summarize_conversation(
 ) -> Option<ThreadSummary> {
     let first = messages.first()?;
     let latest = messages.last()?;
+    let target = messages.iter().rev().find(|m| !m.from_me).unwrap_or(latest);
     let mut accounts: Vec<AccountId> = Vec::new();
     for m in messages {
         if !accounts.contains(&m.message.account_id) {
@@ -323,8 +328,8 @@ pub fn summarize_conversation(
         has_attachments: messages.iter().any(|m| m.message.has_attachments),
         date: latest.message.date.clone(),
         preview: latest.message.preview.clone(),
-        latest_message_id: latest.message.id.clone(),
-        latest_message: Box::new(latest.message.clone()),
+        latest_message_id: target.message.id.clone(),
+        latest_message: Box::new(target.message.clone()),
         latest_from,
         account_ids: accounts,
     })

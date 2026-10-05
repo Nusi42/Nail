@@ -9,6 +9,7 @@ import {
   type DesktopApp,
 } from "../support/desktop";
 import { freePort, tempDir } from "../support/nail";
+import { READER_SUBJECT } from "../support/views";
 
 /**
  * M4c WP125 on the real desktop app (ADR 0099): "Save as PDF" of a message
@@ -43,9 +44,7 @@ test("print to PDF writes a PDF file of the message", async () => {
       .locator('[data-part="message-list.row"]')
       .filter({ hasText: "Welcome to Nail" })
       .click();
-    await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-      "Welcome to Nail",
-    );
+    await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
     await page.keyboard.press("Control+p");
     const dialog = page.getByRole("dialog", { name: "Print" });
     await expect(dialog).toBeVisible();

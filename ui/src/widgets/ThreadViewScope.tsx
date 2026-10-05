@@ -45,6 +45,25 @@ export function scopedUiStore(parent: UiStore, messageId: MessageId): UiStore {
 /** Whether a widget renders inside a card of the feed (and for which message). */
 export interface ReaderCard {
   messageId: MessageId;
+  /** The conversation's subject (the feed's heading). */
+  subject: string;
+}
+
+/** A subject without its reply / forward prefixes and list tags, for comparing. */
+function bareSubject(subject: string): string {
+  return subject
+    .replace(/^\s*((re|fwd?|aw|wg)\s*:\s*|\[[^\]]*\]\s*)+/i, "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Whether a card's message shows its own subject: when it says something
+ * the feed's heading does not (a changed subject, or the real subject of an
+ * encrypted message whose stored subject is a placeholder).
+ */
+export function cardShowsSubject(subject: string, card: ReaderCard): boolean {
+  return bareSubject(subject) !== "" && bareSubject(subject) !== bareSubject(card.subject);
 }
 
 const ReaderCardContext = createContext<ReaderCard | null>(null);
@@ -55,10 +74,18 @@ export function useReaderCard(): ReaderCard | null {
 }
 
 /** Renders `children` as the per-message widgets of `messageId`'s card. */
-export function CardScope({ messageId, children }: { messageId: MessageId; children: ReactNode }) {
+export function CardScope({
+  messageId,
+  subject,
+  children,
+}: {
+  messageId: MessageId;
+  subject: string;
+  children: ReactNode;
+}) {
   const parent = useUiStoreApi();
   const store = useMemo(() => scopedUiStore(parent, messageId), [parent, messageId]);
-  const card = useMemo(() => ({ messageId }), [messageId]);
+  const card = useMemo(() => ({ messageId, subject }), [messageId, subject]);
   return (
     <UiStoreContext.Provider value={store}>
       <ReaderCardContext.Provider value={card}>{children}</ReaderCardContext.Provider>

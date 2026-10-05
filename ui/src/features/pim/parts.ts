@@ -64,7 +64,7 @@ export const PIM_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; 
 [data-part="pim.datetime.controls"], [data-part="pim.datetime.input"] { display: inline-flex; flex-wrap: wrap; align-items: center; }
 [data-part="pim.datetime.popup"] { position: absolute; top: 100%; z-index: 20; }
 [data-part="pim.swatch"] { display: inline-block; }
-[data-part="pim.toasts"] { position: fixed; left: 16px; bottom: 16px; z-index: 300; max-width: min(420px, calc(100% - 32px)); }
+[data-part="pim.toasts"] { position: fixed; right: 16px; bottom: 16px; z-index: 300; max-width: min(420px, calc(100% - 32px)); }
 [data-part="contact-card.photo"], [data-part="pim.editor.photo"] { object-fit: cover; }
 [data-part="contact-card.address"] { display: flex; flex-direction: column; font-style: normal; }
 [data-part="pim.editor.main"], [data-part="pim.recurrence.weekdays"], [data-part="pim.scope.choices"] { margin: 0; min-width: 0; }

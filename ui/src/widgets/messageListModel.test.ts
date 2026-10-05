@@ -4,6 +4,7 @@ import {
   collapseMove,
   expandMove,
   messageOrderOf,
+  messageThreadsOf,
   selectedIndexOf,
   siblingPosition,
   stepIndex,
@@ -56,6 +57,12 @@ describe("messageOrderOf", () => {
   });
 });
 
+describe("messageThreadsOf", () => {
+  it("maps each message to the conversation of its first row", () => {
+    expect(messageThreadsOf(open(["t1"]))).toEqual({ m3: "t1", m9: "t2" });
+  });
+});
+
 describe("selectedIndexOf", () => {
   const rows = open(["t1"]);
 
@@ -68,6 +75,13 @@ describe("selectedIndexOf", () => {
     expect(selectedIndexOf(rows, "t1/m3", "m2")).toBe(2);
     expect(selectedIndexOf(rows, null, "m3")).toBe(0);
     expect(selectedIndexOf(rows, "gone", "m9")).toBe(4);
+  });
+
+  it("falls back to the selected conversation's row for a message without a row", () => {
+    expect(selectedIndexOf(rows, null, "sent-reply", "t1")).toBe(0);
+    expect(selectedIndexOf(rows, null, "sent-reply", "other")).toBe(-1);
+    // A message with a row of its own wins over the conversation.
+    expect(selectedIndexOf(rows, null, "m9", "t1")).toBe(4);
   });
 
   it("is -1 without a selection or when no row shows it", () => {

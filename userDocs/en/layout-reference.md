@@ -205,7 +205,7 @@ A widget is a node named after its kind. Its properties are its options.
 | `settings-page` | `search` (`#true`/`#false`): the settings page of the `settings-page` section (see [The settings page](#the-settings-page)) |
 | `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`: one row per message, `collapsed`: one row per conversation (the default layout's), `expandable`: one row per conversation that opens into its messages; `expanded` is the older name of `expandable`), `follow-search` (`#true`/`#false`: show search results while a search is active), `columns` (column order, written back by Nail); `row` templates |
 | `message-view` | `headers` (e.g. `"from to cc date"`), `mark-read` (`#true`/`#false`: mark a message read when it is shown); `row` templates |
-| `thread-view` | `expand` (`latest`, `unread`, `all`, `none`: which messages of the conversation start opened), `hide-single` (`#true`/`#false`: hide for messages without replies) |
+| `thread-view` | `mode` (`cards`: the conversation as a feed of cards, oldest first — the default layout's; `strip`, or no `mode`: the older strip above a separate `message-view`), `card` (with `mode="cards"`: which per-message widgets an open card shows, in order — any of `security-message security-warnings remote-content junk-verdict sync-message-body message-view`; default all), `headers` and `mark-read` (passed to the card's `message-view`), `expand` (strip only: `latest`, `unread`, `all`, `none`: which messages start opened), `hide-single` (strip only: `#true`/`#false`, hide for messages without replies) |
 | `search-bar` | `scope` (`account`, `folder`, `all`), `hints` (`#true`/`#false`: suggest search fields while typing), `live-check` (`#true`/`#false`: point out mistakes while typing) |
 | `composer` | `send-later` (`#true`/`#false`: offer "Send later") |
 | `outbox` | — |
@@ -461,7 +461,7 @@ left out. Parts with a context menu:
 | Part | Where | Shortcuts shown from context |
 | --- | --- | --- |
 | `message-list.row` | A message in the list (it becomes the selected message) | `list`, then global |
-| `thread-view.message` | A message of the conversation above the reader | `reader` |
+| `thread-view.message` | A card of the reader's conversation (or a message of the older strip) | `reader` |
 | `message-view` | The shown message | `reader` |
 | `message-view.attachment` | An attachment of the shown message | `reader` |
 | `folder-tree.folder` | A folder (the folder is not opened; its actions use it) | global |

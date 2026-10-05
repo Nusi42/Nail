@@ -7,6 +7,7 @@ import {
   composerWindow,
   discardComposer,
   openSettingsTab,
+  READER_SUBJECT,
   sectionInbox,
   showView,
   viewRegion,
@@ -133,6 +134,8 @@ test("a signed and encrypted OpenPGP mail between two accounts hides its subject
   await expect(row).toContainText("...");
   await row.click();
   const view = page.locator('[data-part="message-view"]');
+  // The stored subject is the placeholder "..." (the feed's heading); the
+  // card shows the decrypted one because it differs.
   await expect(view.locator('[data-part="message-view.header.subject"]')).toContainText(
     "Secret plans",
   );
@@ -324,9 +327,7 @@ test("sender checks count only for a receiving server the user configured", asyn
     .filter({ hasText: "Checked by an unconfirmed server" });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await row.click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Checked by an unconfirmed server",
-  );
+  await expect(page.locator(READER_SUBJECT)).toContainText("Checked by an unconfirmed server");
   await expect(page.locator('button[data-part="auth-badge"]')).toHaveCount(0);
 
   // The user confirms the server: the same message now shows the badge.
@@ -353,7 +354,7 @@ test("encryption at rest can be switched on and off with the data intact", async
     .filter({ hasText: "Release notes for M1" })
     .first();
   await row.click();
-  const subject = page.locator('[data-part="message-view.header.subject"]');
+  const subject = page.locator(READER_SUBJECT);
   await expect(subject).toContainText("Release notes for M1");
 
   await showView(page, "Settings");

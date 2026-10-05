@@ -401,6 +401,9 @@ function summarize(d: MockData, id: string, messages: MessageSummary[]): ThreadS
   const latest = sorted.at(-1);
   if (latest === undefined) throw new Error(`thread ${id} has no messages`);
   const mine = myAddresses(d);
+  // What the row selects and acts on: the newest message the user did not
+  // write, else the newest (never the user's reply joined from Sent).
+  const target = sorted.findLast((m) => !isFromMe(d, mine, m)) ?? latest;
   const accounts = new Set(messages.map((m) => m.account_id));
   const isMe = (email: string) =>
     [...accounts].some((a) => mine.get(a)?.has(email.toLowerCase()) ?? false);
@@ -422,8 +425,8 @@ function summarize(d: MockData, id: string, messages: MessageSummary[]): ThreadS
     has_attachments: messages.some((m) => m.has_attachments),
     date: latest.date,
     preview: latest.preview,
-    latest_message_id: latest.id,
-    latest_message: latest,
+    latest_message_id: target.id,
+    latest_message: target,
     latest_from: latest.from
       ? { ...latest.from, me: isMe(latest.from.email), unread: !latest.flags.seen }
       : null,

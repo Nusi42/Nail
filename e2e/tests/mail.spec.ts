@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { defined } from "../support/defined";
+import { READER_SUBJECT } from "../support/views";
 
 /** The seeded demo data (nail-testkit corpus) in the shared server. */
 
@@ -71,9 +72,7 @@ test("the reader shows the body in a sandboxed iframe with remote images blocked
   await rows.filter({ hasText: "Your weekly garden digest" }).click();
 
   const view = page.locator('[data-part="message-view"]');
-  await expect(view.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Your weekly garden digest",
-  );
+  await expect(page.locator(READER_SUBJECT)).toContainText("Your weekly garden digest");
   await expect(page.getByRole("region", { name: "Remote content" })).toBeVisible();
 
   const iframe = view.locator('iframe[data-part="message-view.body"]');
@@ -110,7 +109,7 @@ test("j/k move through the message list", async ({ page }) => {
 
   await page.keyboard.press("j");
   await expect(rows.nth(0)).toHaveAttribute("aria-selected", "true");
-  const firstSubject = page.locator('[data-part="message-view.header.subject"]');
+  const firstSubject = page.locator(READER_SUBJECT);
   await expect(firstSubject).toContainText("Reminder: Nightingale review");
 
   await page.keyboard.press("j");

@@ -8,6 +8,7 @@ import { nailBinary, startNail, type NailServer } from "../support/nail";
 import { commandManifest, followUpPackage, packFiles, writePluginFolder } from "../support/plugins";
 import {
   openSettingsTab,
+  READER_SUBJECT,
   readerAction,
   readerToolbar,
   showView,
@@ -225,7 +226,7 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
     await other.locator('[data-part="message-list.row.subject"]').innerText()
   ).trim();
   await other.click();
-  await expect(page.locator('[data-part="message-view"]')).toContainText(subject);
+  await expect(page.locator(READER_SUBJECT)).toContainText(subject);
 
   // The core stops it after its CPU budget and says so.
   await expect(

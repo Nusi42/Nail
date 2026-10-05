@@ -60,6 +60,7 @@ import {
   collapseMove,
   expandMove,
   messageOrderOf,
+  messageThreadsOf,
   selectedIndexOf,
   siblingPosition,
   stepIndex,
@@ -709,9 +710,10 @@ export function MessageList({ node }: WidgetProps) {
   const accountNames = useMemo(() => accountTags(accountList ?? []), [accountList]);
 
   const order = useMemo(() => messageOrderOf(rows), [rows]);
+  const orderThreads = useMemo(() => messageThreadsOf(rows), [rows]);
   useEffect(() => {
-    setMessageOrder(order);
-  }, [order, setMessageOrder]);
+    setMessageOrder(order, orderThreads);
+  }, [order, orderThreads, setMessageOrder]);
 
   // Report a query the core rejected to the search bar (its positions refer
   // to the typed text only without a filter term).
@@ -759,7 +761,8 @@ export function MessageList({ node }: WidgetProps) {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length, items.length]);
 
   // Keep the selection visible (keyboard navigation).
-  const selectedIndex = selectedIndexOf(rows, chosenKey, selectedId);
+  const selectedThreadId = useUi((s) => s.selectedThreadId);
+  const selectedIndex = selectedIndexOf(rows, chosenKey, selectedId, selectedThreadId);
   useEffect(() => {
     if (selectedIndex >= 0) virtualizer.scrollToIndex(selectedIndex, { align: "auto" });
   }, [selectedIndex, virtualizer]);

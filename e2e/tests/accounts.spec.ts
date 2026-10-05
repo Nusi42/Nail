@@ -4,6 +4,7 @@ import {
   accountSectionNamed,
   accountSections,
   openSettingsTab,
+  READER_SUBJECT,
   runFromPalette,
   sectionInbox,
   showView,
@@ -126,9 +127,7 @@ test("a POP3 account receives mail", async ({ page }) => {
   await page.keyboard.press("F5");
   await expect(rows(page)).toHaveCount(4);
   await rows(page).filter({ hasText: "Fresh from the POP3 server" }).click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    "Fresh from the POP3 server",
-  );
+  await expect(page.locator(READER_SUBJECT)).toContainText("Fresh from the POP3 server");
 });
 
 test("a virtual account merges folders and dedupes a mailing-list message", async ({ page }) => {

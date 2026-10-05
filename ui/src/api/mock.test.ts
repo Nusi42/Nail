@@ -216,6 +216,26 @@ describe("writes in the mock core", () => {
 });
 
 describe("threads and search in the mock core", () => {
+  it("selects the newest message the user did not write, never a reply from Sent (P2)", async () => {
+    const { client, transport } = setup(12);
+    const added = addMockConversation(transport.data);
+    const reply = must(added[4]);
+    expect(reply.folder_id).toBe("acc-personal/Sent");
+    // The user's reply becomes the newest message of the conversation.
+    transport.data.messages.push({
+      ...reply,
+      id: "acc-personal/Sent#newest-reply",
+      date: new Date(Date.parse(must(added[5]).date) + 60_000).toISOString(),
+    });
+    const page = await client.request(
+      { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
+      "Threads",
+    );
+    const row = must(page.threads.find((t) => t.id === MOCK_CONVERSATION_ID));
+    expect(row.latest_from).toMatchObject({ me: true });
+    expect(row.latest_message_id).toBe(added[5]?.id);
+  });
+
   it("groups a folder into threads and returns a thread oldest first", async () => {
     const { client } = setup(24);
     const page = await client.request(

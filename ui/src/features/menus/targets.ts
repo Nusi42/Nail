@@ -9,6 +9,8 @@ import { CONTEXT_MENU_PARTS } from "./resolve";
 /** DOM part → context-menu part (`context:<part>` in `layout.kdl`). */
 export const DOM_PARTS: Readonly<Record<string, string>> = {
   "message-list.row": "message-list.row",
+  // P2 Design B: a conversation's message under its expanded row.
+  "message-list.child": "message-list.row",
   "thread-view.item": "thread-view.message",
   // P2 WP203: a card of the reader's feed (its open body is a message-view).
   "thread-view.card": "thread-view.message",

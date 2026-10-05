@@ -220,7 +220,10 @@ export function removeFromLists(ctx: WriteContext, ids: readonly MessageId[]): v
   const ui = ctx.store.getState();
   const next = nextSelection(ui.messageOrder, ui.selectedMessageId, ids);
   patchSummaries(ctx.queryClient, ids, () => null);
-  ui.setMessageOrder(ui.messageOrder.filter((id) => !ids.includes(id)));
+  ui.setMessageOrder(
+    ui.messageOrder.filter((id) => !ids.includes(id)),
+    ui.messageThreads,
+  );
   ui.selectMessage(next);
 }
 

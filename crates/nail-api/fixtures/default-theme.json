@@ -10019,7 +10019,7 @@
       "ancestors": [],
       "declarations": {
         "position": "fixed",
-        "left": "var(--nail-space-lg)",
+        "right": "var(--nail-space-lg)",
         "bottom": "var(--nail-space-lg)",
         "z-index": "900",
         "display": "flex",

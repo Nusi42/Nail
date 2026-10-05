@@ -7,6 +7,7 @@ import { createUser, rpcOk } from "../support/remote";
 import {
   newMessageButton,
   openSettings,
+  READER_SUBJECT,
   runFromPalette,
   settingsNav,
   showView,
@@ -217,9 +218,7 @@ for (const mode of MODES) {
 
       // The reader with a message open.
       await rows.filter({ hasText: "Welcome to Nail" }).click();
-      await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-        "Welcome to Nail",
-      );
+      await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
       await sweep.scan("reader");
       // M5c: "Delete permanently?" is a modal confirmation (cancelled here).
       await page.keyboard.press("Shift+Delete");
@@ -499,7 +498,7 @@ for (const mode of MODES) {
       await sweep.scanWindow("gmail-label-delete");
       await sweep.close("gmail-label-delete");
       await rows.filter({ hasText: "Lunch on Friday?" }).click();
-      const invitationReader = page.locator('[data-part="message-view.header.subject"]');
+      const invitationReader = page.locator(READER_SUBJECT);
       await expect(invitationReader).toContainText("Lunch on Friday?");
       await sweep.scan("reader (Gmail message with labels)");
       await toolbarAction(page, actions, "Labels…");

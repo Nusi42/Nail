@@ -121,6 +121,23 @@ describe("context targets", () => {
     document.body.innerHTML = "";
   });
 
+  it("gives a Design B child row and a reader card their menus (P2)", () => {
+    document.body.innerHTML = `
+      <div data-part="message-list.child" id="c" data-message="m2" data-thread="t1" data-folder="f1" data-account="a"></div>
+      <article data-part="thread-view.card" data-message="m3"><span id="body">x</span></article>`;
+    expect(findContextTarget(document.getElementById("c"))).toMatchObject({
+      part: "message-list.row",
+      messageId: "m2",
+      threadId: "t1",
+      folderId: "f1",
+    });
+    expect(findContextTarget(document.getElementById("body"))).toMatchObject({
+      part: "thread-view.message",
+      messageId: "m3",
+    });
+    document.body.innerHTML = "";
+  });
+
   it("gives the navigation rail its View menu (M5d)", () => {
     document.body.innerHTML = `
       <nav data-part="nav-rail"><button id="mail" data-part="nav-rail.item">Mail</button></nav>`;

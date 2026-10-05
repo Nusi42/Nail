@@ -157,8 +157,11 @@ fn an_inbox_row_counts_the_users_replies_from_sent() {
         "a, s1, b, s2 — no draft, Trash, Junk or a2's Sent"
     );
     assert_eq!(plan.unread_count, 1);
-    assert_eq!(plan.latest_message_id, MessageId::from("s2"));
-    assert_eq!(plan.latest_message.id, MessageId::from("s2"));
+    // The row shows the newest activity (the user's reply s2), but choosing
+    // it selects, and its actions act on, the newest message the user did
+    // not write (b in the Inbox), never the Sent copy.
+    assert_eq!(plan.latest_message_id, MessageId::from("b"));
+    assert_eq!(plan.latest_message.id, MessageId::from("b"));
     assert!(plan.date.starts_with("2026-01-08"));
     let latest = plan.latest_from.as_ref().unwrap();
     assert!(latest.me && !latest.unread);
@@ -299,11 +302,6 @@ fn a_copy_in_the_inbox_and_in_sent_counts_once_as_the_listed_copy() {
         .unwrap();
     let plan = &page.threads[0];
     assert_eq!(plan.message_count, 5);
-    assert_eq!(
-        plan.latest_message_id,
-        MessageId::from("s3-inbox"),
-        "the listed copy is kept"
-    );
     let (_, messages) = store
         .conversation(&plan.id, Some(&scope), &OwnAddresses::new())
         .unwrap();
@@ -374,4 +372,19 @@ fn paging_follows_the_conversation_order() {
             .threads
             .is_empty()
     );
+}
+
+#[test]
+fn a_sent_row_selects_the_users_newest_message() {
+    let store = store();
+    let page = store
+        .list_conversations(&folders(&store, &["sent"]), &own(), 0, 50)
+        .unwrap();
+    let plan = page
+        .threads
+        .iter()
+        .find(|t| t.subject == "Plan")
+        .expect("the Plan conversation is listed in Sent");
+    // Every message of the row is the user's: the newest one is chosen.
+    assert_eq!(plan.latest_message_id, MessageId::from("s2"));
 }

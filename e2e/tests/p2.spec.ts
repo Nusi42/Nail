@@ -146,8 +146,12 @@ test.describe("conversation rows (Design A)", () => {
     const lab = rowOf(page, LAB);
     await expect(lab.locator('[data-part="message-list.row.count"]')).toBeVisible();
     await expect(lab.locator('[data-part="message-list.row.participants"]')).toBeVisible();
-    await expect(lab.locator('[data-part="message-list.row.preview"]')).toHaveCount(0);
-    await expect(lab.locator('[data-part="message-list.row.line"]')).toHaveCount(2);
+    // The preview line is hidden: two lines remain.
+    await expect(lab.locator('[data-part="message-list.row.preview"]')).toBeHidden();
+    const lines = lab.locator('[data-part="message-list.row.line"]');
+    await expect(lines.nth(2)).toBeHidden();
+    await expect(lines.nth(0)).toBeVisible();
+    await expect(lines.nth(1)).toBeVisible();
   });
 
   test("the Sent folder lists the user's own replies as their conversations", async ({ page }) => {
@@ -186,13 +190,15 @@ test.describe("the card feed (Design A)", () => {
     expect(folded).toBeGreaterThan(0);
     await expect(fold(page)).toHaveAccessibleName(`${String(folded)} older messages`);
 
-    // The newest unread message is open (Marie's, the 8th), the read ones
-    // around it are collapsed to one line.
+    // The unread message (Marie's, the 8th) and the newest one (the row's
+    // choice) are open, the read ones around them collapsed to one line.
     const open = cards(page).and(page.locator('[data-state~="expanded"]'));
-    await expect(open).toHaveCount(1);
-    await expect(open).toHaveAttribute("data-state", hasState("unread"));
-    await expect(open).toContainText("calibration by the vendor's technician");
-    await expect(open.locator('[data-part="message-view"]')).toBeVisible();
+    await expect(open).toHaveCount(2);
+    // Marie's card (opening marks it read, so its `unread` state goes).
+    const unread = open.filter({ hasText: "calibration by the vendor's technician" });
+    await expect(unread).toHaveCount(1);
+    await expect(unread.locator('[data-part="message-view"]')).toBeVisible();
+    await expect(cards(page).last()).toHaveAttribute("data-state", hasState("expanded"));
     const first = cards(page).first();
     await expect(first).not.toHaveAttribute("data-state", hasState("expanded"));
     const toggle = cardHeader(first).getByRole("button").first();
@@ -256,13 +262,14 @@ test.describe("the card feed (Design A)", () => {
     await openConversation(page, LAB);
     await unfold(page);
     const first = cards(page).first();
-    await first.focus();
-    await expect(first).toBeFocused();
-    // j / k: next and previous card.
+    const toggleOf = (card: Locator) => card.locator('[data-part="thread-view.card.toggle"]');
+    await toggleOf(first).focus();
+    await expect(toggleOf(first)).toBeFocused();
+    // j / k: next and previous card (their header buttons take the focus).
     await page.keyboard.press("j");
-    await expect(cards(page).nth(1)).toBeFocused();
+    await expect(toggleOf(cards(page).nth(1))).toBeFocused();
     await page.keyboard.press("k");
-    await expect(first).toBeFocused();
+    await expect(toggleOf(first)).toBeFocused();
     // Enter / o: open and close the focused card.
     await page.keyboard.press("Enter");
     await expect(first).toHaveAttribute("data-state", hasState("expanded"));
@@ -271,13 +278,14 @@ test.describe("the card feed (Design A)", () => {
     // ; and Shift+; expand and collapse all.
     await page.keyboard.press(";");
     await expect(cards(page).and(page.locator('[data-state~="expanded"]'))).toHaveCount(LAB_TOTAL);
-    await page.keyboard.press("Shift+;");
+    // Shift+; on a keyboard types ":" (Playwright's "Shift+;" keeps the key ";").
+    await page.keyboard.press(":");
     expect(
       await cards(page).and(page.locator('[data-state~="expanded"]')).count(),
     ).toBeLessThanOrEqual(1);
     // r answers the focused card's message (Marie's, the 8th).
     const marie = cards(page).nth(7);
-    await marie.focus();
+    await toggleOf(marie).focus();
     await page.keyboard.press("r");
     const composer = composerWindow(page);
     await expect(composer).toBeVisible();
@@ -313,10 +321,9 @@ const EXPANDABLE_LAYOUT = [
   '                row "{participants | names(3)}  {count | if-many}  {date | relative}"',
   '                row "{subject}"',
   "            }",
-  '            stack id="reader" sizes="auto auto 1fr" {',
+  '            stack id="reader" sizes="auto 1fr" {',
   '                toolbar id="reader-toolbar" toolbar="reader"',
-  '                thread-view id="thread"',
-  '                message-view id="message" headers="from to cc date"',
+  '                thread-view id="thread" mode="cards"',
   "            }",
   "        }",
   "    }",
@@ -333,7 +340,10 @@ test.describe("conversations that open in the list (Design B, opt-in)", () => {
     await openApp(page);
     const lab = rowOf(page, LAB);
     const expander = lab.locator('[data-part="message-list.row.expander"]');
-    await expect(expander).toHaveAccessibleName("Show the conversation's messages");
+    // A pointer-only chevron: keyboard users press → (the row is a treeitem
+    // with aria-expanded), so screen readers skip it.
+    await expect(expander).toHaveAttribute("aria-hidden", "true");
+    await expect(lab).toHaveAttribute("aria-expanded", "false");
     const children = page.locator('[data-part="message-list.child"]');
     await expect(children).toHaveCount(0);
 
@@ -376,7 +386,8 @@ test.describe("screenshots for the owner", () => {
       ]) {
         await openApp(page, size);
         await openConversation(page, LAB);
-        await expect(cards(page).and(page.locator('[data-state~="expanded"]'))).toHaveCount(1);
+        // The newest card is open (and, on the first visit, the unread one).
+        await expect(cards(page).last()).toHaveAttribute("data-state", hasState("expanded"));
         await page.screenshot({
           path: screenshotPath(
             `conversation-${theme}-${String(size.width)}x${String(size.height)}`,
