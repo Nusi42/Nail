@@ -995,3 +995,86 @@ async fn every_message_id_is_listed_without_fetching() {
         server.requests()
     );
 }
+
+/// P3 (ADR 0164): a conversation's label changes and moves go as one
+/// `batchModify` per change; trash stays per message.
+#[tokio::test]
+async fn many_writes_share_batch_modify_calls() {
+    let (server, engine) = demo().await;
+    let inbox: Vec<String> = DEMO_SYNCED_IDS
+        .iter()
+        .filter(|id| server.labels_of(id).contains(&"INBOX".to_owned()))
+        .take(3)
+        .map(|id| (*id).to_owned())
+        .collect();
+    let ids: Vec<&str> = inbox.iter().map(String::as_str).collect();
+    assert_eq!(ids.len(), 3);
+    let read = |id: &str| RemoteWrite::SetFlags {
+        remote_id: id.to_owned(),
+        change: FlagChange {
+            seen: Some(true),
+            add_tags: vec!["Brand New".into()],
+            ..FlagChange::default()
+        },
+    };
+    let archive = |id: &str| RemoteWrite::Move {
+        remote_id: id.to_owned(),
+        from_folder: "INBOX".into(),
+        to_folder: "ARCHIVE".into(),
+    };
+    let mut writes: Vec<RemoteWrite> = ids.iter().map(|id| read(id)).collect();
+    writes.extend(ids[..2].iter().map(|id| archive(id)));
+    writes.push(RemoteWrite::Trash {
+        remote_id: ids[2].to_owned(),
+    });
+    writes.push(RemoteWrite::SetFlags {
+        remote_id: ids[0].to_owned(),
+        change: FlagChange {
+            answered: Some(true),
+            ..FlagChange::default()
+        },
+    });
+    server.clear_requests();
+    let results = engine.write_many(&writes).await;
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let created = server
+        .labels()
+        .into_iter()
+        .find(|l| l.name == "Brand New")
+        .unwrap();
+    for id in &ids {
+        let labels = server.labels_of(id);
+        assert!(!labels.contains(&"UNREAD".to_owned()), "{id}");
+        assert!(labels.contains(&created.id), "{id}");
+    }
+    let folder = |id: &str| nail_api::gmail::GmailFolder::for_labels(&server.labels_of(id)).path();
+    assert_eq!(folder(ids[0]), "ARCHIVE");
+    assert_eq!(folder(ids[1]), "ARCHIVE");
+    assert_eq!(folder(ids[2]), "TRASH");
+    let requests = server.requests();
+    let batches = requests
+        .iter()
+        .filter(|r| r.path.ends_with("/batchModify"))
+        .count();
+    assert_eq!(batches, 2, "one per label change");
+    assert!(requests.iter().all(|r| !r.path.ends_with("/modify")));
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|r| r.path.ends_with("/trash"))
+            .count(),
+        1
+    );
+    // A move Gmail cannot do still fails on its own.
+    let refused = engine
+        .write_many(&[RemoteWrite::Move {
+            remote_id: ids[0].to_owned(),
+            from_folder: "INBOX".into(),
+            to_folder: "SENT".into(),
+        }])
+        .await;
+    assert_eq!(
+        refused[0].as_ref().unwrap_err().code,
+        ErrorCode::Unsupported
+    );
+}

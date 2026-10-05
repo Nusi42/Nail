@@ -1503,3 +1503,110 @@ async fn moving_to_trash_asks_like_a_delete() {
     assert_eq!(value(&result)["status"], "denied");
     assert!(env.data.written().is_empty());
 }
+
+/// P3 (ADR 0164): conversations resolve per action in the core and run as
+/// one mail-action batch on the resolved messages the grant covers; the
+/// confirmation names the conversation and message counts; deletes ask.
+#[tokio::test]
+async fn conversations_act_within_the_grant_and_confirm_with_counts() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    // Thread t1 = m1 (work) + m2 (home): m2 is outside the grant and left
+    // out, not refused.
+    let r = call(
+        &client,
+        "update_messages",
+        json!({"conversations": [{"thread_id": "t1"}], "read": true, "flagged": true}),
+    )
+    .await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    let written = env.data.written();
+    assert_eq!(written.len(), 2, "{written:?}");
+    for (request, expected) in written.iter().zip([
+        nail_api::MailAction::MarkRead { read: true },
+        nail_api::MailAction::Flag { flagged: true },
+    ]) {
+        let Request::ApplyMailAction { targets, action } = request else {
+            panic!("{request:?}");
+        };
+        assert_eq!(*action, expected);
+        assert_eq!(*targets, vec![nail_api::MessageTarget::message("m1")]);
+    }
+    // A conversation listed in an excluded folder is refused.
+    nail_mcp::admin::handle(
+        &env.store,
+        None,
+        Request::UpdateMcpGrants {
+            client_id: id.clone(),
+            grant: McpGrant {
+                scopes: vec![McpScope::Organize],
+                accounts: vec!["work".into()],
+                excluded_folders: vec!["work-hr".into()],
+                ..McpGrant::default()
+            },
+        },
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let r = call(
+        &client,
+        "update_messages",
+        json!({"conversations": [{"thread_id": "t1", "folder_id": "work-hr"}], "read": true}),
+    )
+    .await;
+    assert_eq!(r.is_error, Some(true));
+    assert_eq!(value(&r)["error"], "denied");
+    // Nothing of the conversation is granted: nothing to change.
+    let r = call(
+        &client,
+        "update_messages",
+        json!({"conversations": [{"thread_id": "t-none"}], "read": true}),
+    )
+    .await;
+    assert_eq!(r.is_error, Some(true), "{r:?}");
+
+    // Delete to Trash always asks; the summary counts the messages.
+    let waiting = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            call(
+                &client,
+                "delete_messages",
+                json!({"conversations": [{"thread_id": "t1", "folder_id": "work-inbox"}]}),
+            )
+            .await
+        })
+    };
+    let confirmation = pending(&env.store).await;
+    assert_eq!(confirmation.kind, ActionKind::Trash);
+    assert_eq!(confirmation.summary.id, "mail-action-confirmation-trash");
+    let arg = |name: &str| serde_json::to_value(&confirmation.summary.args).unwrap()[name].clone();
+    assert_eq!(arg("count"), json!(1));
+    assert_eq!(arg("conversations"), json!(1));
+    assert_eq!(confirmation.targets.len(), 1);
+    decide(&env.store, &confirmation, true);
+    let result = tokio::time::timeout(Duration::from_secs(10), waiting)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(value(&result)["status"], "done", "{result:?}");
+    let Some(Request::ApplyMailAction { targets, action }) = env.data.written().pop() else {
+        panic!("no mail action");
+    };
+    assert_eq!(action, nail_api::MailAction::Trash);
+    assert_eq!(targets, vec![nail_api::MessageTarget::message("m1")]);
+    // More than the limit is refused before anything is resolved.
+    let many: Vec<Value> = (0..501)
+        .map(|i| json!({"thread_id": format!("t{i}")}))
+        .collect();
+    let r = call(
+        &client,
+        "update_messages",
+        json!({"conversations": many, "read": true}),
+    )
+    .await;
+    assert_eq!(r.is_error, Some(true));
+}

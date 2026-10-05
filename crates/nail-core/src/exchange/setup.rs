@@ -35,6 +35,7 @@ use nail_exchange::sspi::SspiNegotiate;
 use nail_proto_ews::{EwsAuth, EwsClient, EwsEngine};
 use nail_proto_graph::{GraphAuth, GraphClient, GraphEngine};
 
+use super::batch::BatchWrites;
 use super::{GraphEndpoint, exchange_parts};
 use crate::creds::SecretSource;
 use crate::error::{CoreError, Result};
@@ -89,6 +90,14 @@ pub(crate) fn engine_for(
     service: &Service,
     account: &AccountConfig,
 ) -> Result<Arc<dyn ExchangeEngine>> {
+    Ok(engines_for(service, account)?.0)
+}
+
+/// An engine and its grouped-write seam (P3; `None` = one write at a time).
+pub(crate) type Engines = (Arc<dyn ExchangeEngine>, Option<Arc<dyn BatchWrites>>);
+
+/// [`engine_for`] with the engine's grouped-write seam (P3).
+pub(crate) fn engines_for(service: &Service, account: &AccountConfig) -> Result<Engines> {
     let Some((server, options)) = exchange_parts(account) else {
         return Err(ApiError::invalid_request(format!(
             "account {} is not an Exchange account",
@@ -98,9 +107,10 @@ pub(crate) fn engine_for(
     };
     let tokens = Arc::clone(&service.inner.tokens);
     match options.engine {
-        EngineKind::Graph => Ok(Arc::new(
-            GraphEngine::for_account(account, tokens).map_err(engine_error)?,
-        )),
+        EngineKind::Graph => {
+            let engine = Arc::new(GraphEngine::for_account(account, tokens).map_err(engine_error)?);
+            Ok((engine.clone(), Some(super::batch::of_graph(&engine))))
+        }
         EngineKind::Ews => {
             let negotiate = match &server.auth {
                 AuthConfig::Windows { .. } => {
@@ -109,7 +119,7 @@ pub(crate) fn engine_for(
                 }
                 _ => None,
             };
-            Ok(Arc::new(
+            let engine = Arc::new(
                 EwsEngine::for_account(
                     account,
                     Arc::clone(&service.inner.secrets),
@@ -117,7 +127,8 @@ pub(crate) fn engine_for(
                     negotiate,
                 )
                 .map_err(engine_error)?,
-            ))
+            );
+            Ok((engine.clone(), Some(super::batch::of_ews(&engine))))
         }
     }
 }

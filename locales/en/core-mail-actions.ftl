@@ -32,3 +32,29 @@ mail-action-issue-not-in-trash = Only messages in Trash or Junk can be deleted p
 mail-action-issue-undo-expired = This action can no longer be undone.
 mail-action-issue-undone-already = This action was undone already.
 mail-action-issue-not-undoable = Messages deleted permanently cannot be restored.
+
+## Confirmations of agents and plug-ins acting on conversations
+## (update_messages / delete_messages with `conversations`, nail.mail.update /
+## nail.mail.delete; WP-actions-core): the action and the message count.
+
+mail-action-confirmation-organize = { $actor } wants to change { $conversations ->
+    [one] a conversation
+   *[other] { $conversations } conversations
+} ({ $count ->
+    [one] one message
+   *[other] { $count } messages
+}).
+mail-action-confirmation-trash = { $actor } wants to move { $conversations ->
+    [one] a conversation
+   *[other] { $conversations } conversations
+} to Trash ({ $count ->
+    [one] one message
+   *[other] { $count } messages
+}).
+mail-action-confirmation-permanent-delete = { $actor } wants to delete { $conversations ->
+    [one] a conversation
+   *[other] { $conversations } conversations
+} permanently ({ $count ->
+    [one] one message
+   *[other] { $count } messages
+}). This cannot be undone.

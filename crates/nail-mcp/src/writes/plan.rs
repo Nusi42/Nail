@@ -279,6 +279,8 @@ impl<D: McpData> Shared<D> {
     fn collect(response: &Response, creates: bool, done: &mut Executed) -> Result<(), Failure> {
         match response {
             Response::Queued { op_ids: ids } => done.op_ids.extend(op_ids(ids)),
+            // P3: a mail action's batch (the agent's to undo).
+            Response::MailActionQueued { result } => done.op_ids.extend(op_ids(&result.op_ids)),
             Response::Done | Response::Scheduled { .. } => {}
             Response::DraftSaved { draft_id } => {
                 if creates {

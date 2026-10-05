@@ -352,6 +352,17 @@ impl Service {
         messages: &[MessageId],
         target: &MoveTarget,
     ) -> Result<Vec<OpId>> {
+        let operations = self.plan_moves(messages, target).await?;
+        self.enqueue(operations).await
+    }
+
+    /// The move operations of [`Self::move_messages`] (messages already in
+    /// their target folder are left out).
+    pub(crate) async fn plan_moves(
+        &self,
+        messages: &[MessageId],
+        target: &MoveTarget,
+    ) -> Result<Vec<Operation>> {
         let messages = unique(messages);
         let ids = messages.clone();
         let summaries = self
@@ -420,7 +431,7 @@ impl Service {
                 source: None,
             });
         }
-        self.enqueue(operations).await
+        Ok(operations)
     }
 
     /// `DeleteMessages`: to the account's Trash, or for good.

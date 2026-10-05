@@ -17,9 +17,9 @@ use base64::Engine as _;
 use nail_api::agents::ActionKind;
 use nail_api::mcp::tools::{
     CreateDraftArgs, CreateEventArgs, DeleteMessagesArgs, DraftAttachmentArg, MAX_AGENT_ATTACHMENT,
-    MAX_BATCH, McpEditScope, McpInviteResponse, McpTextFormat, McpWriteResult, RespondToInviteArgs,
-    SendMessageArgs, UpdateDraftArgs, UpdateEventArgs, UpdateMessagesArgs, UpsertContactArgs,
-    UpsertTaskArgs,
+    MAX_BATCH, McpConversationArg, McpEditScope, McpInviteResponse, McpTextFormat, McpWriteResult,
+    RespondToInviteArgs, SendMessageArgs, UpdateDraftArgs, UpdateEventArgs, UpdateMessagesArgs,
+    UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::plugins::PluginPermission;
 use nail_api::{ApiError, MessageId};
@@ -232,6 +232,53 @@ fn ids(payload: &Value) -> Result<Vec<String>, ApiError> {
         }
     }
     Ok(out)
+}
+
+/// A conversation as a plug-in names it (P3, ADR 0164).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConversationIn {
+    thread_id: String,
+    #[serde(default)]
+    folder_id: Option<String>,
+}
+
+/// The targets of `nail.mail.update` / `delete`: message ids and (P3)
+/// conversations (`{ threadId, folderId? }`, at most [`MAX_BATCH`]); at
+/// least one of the two.
+fn targets(payload: &Value) -> Result<(Vec<String>, Vec<McpConversationArg>), ApiError> {
+    let conversations: Vec<ConversationIn> = match payload.get("conversations") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(list) => serde_json::from_value(list.clone())
+            .map_err(|_| invalid("conversations must be a list of { threadId, folderId? }"))?,
+    };
+    if conversations.is_empty() {
+        return Ok((ids(payload)?, Vec::new()));
+    }
+    if conversations.len() > MAX_BATCH {
+        return Err(invalid(format!("1 to {MAX_BATCH} conversations")));
+    }
+    let mut out: Vec<McpConversationArg> = Vec::with_capacity(conversations.len());
+    for c in conversations {
+        let valid = |s: &str| !s.is_empty() && s.len() <= 512;
+        if !valid(&c.thread_id) || c.folder_id.as_deref().is_some_and(|f| !valid(f)) {
+            return Err(invalid(
+                "a conversation needs its threadId (and a valid folderId)",
+            ));
+        }
+        let arg = McpConversationArg {
+            thread_id: c.thread_id,
+            folder_id: c.folder_id,
+        };
+        if !out.contains(&arg) {
+            out.push(arg);
+        }
+    }
+    let named = match payload.get("ids").and_then(Value::as_array) {
+        Some(list) if !list.is_empty() => ids(payload)?,
+        _ => Vec::new(),
+    };
+    Ok((named, out))
 }
 
 fn text_ok(field: &str, value: Option<&String>) -> Result<(), ApiError> {
@@ -637,10 +684,10 @@ pub fn parse(op: &str, payload: &Value, blobs: &Blobs) -> Result<PluginWrite, Ap
             if changes.archive && changes.move_to_folder_id.is_some() {
                 return Err(invalid("pass either `archive` or `moveToFolderId`"));
             }
+            let (message_ids, conversations) = targets(payload)?;
             PluginWrite::UpdateMessages(UpdateMessagesArgs {
-                message_ids: ids(payload)?,
-                // Conversation targets for plug-ins: P3 WP-actions-core.
-                conversations: Vec::new(),
+                message_ids,
+                conversations,
                 read: changes.read,
                 flagged: changes.flagged,
                 add_tags: changes.add_tags,
@@ -653,9 +700,10 @@ pub fn parse(op: &str, payload: &Value, blobs: &Blobs) -> Result<PluginWrite, Ap
         }
         "mail.delete" => {
             let o: DeleteOptions = from(&options, "options")?;
+            let (message_ids, conversations) = targets(payload)?;
             PluginWrite::DeleteMessages(DeleteMessagesArgs {
-                message_ids: ids(payload)?,
-                conversations: Vec::new(),
+                message_ids,
+                conversations,
                 permanent: o.permanent,
                 idempotency_key: None,
             })
@@ -904,6 +952,59 @@ mod tests {
             p(
                 "mail.update",
                 &json!({"ids": many, "options": {"read": true}})
+            )
+            .is_err()
+        );
+
+        // P3: conversations, alone or beside message ids.
+        let w = p(
+            "mail.update",
+            &json!({"ids": [], "conversations": [{"threadId": "t1", "folderId": "f-in"}, {"threadId": "t2"}],
+                    "options": {"archive": true}}),
+        )
+        .unwrap();
+        let PluginWrite::UpdateMessages(args) = &w else {
+            panic!()
+        };
+        assert!(args.message_ids.is_empty());
+        assert_eq!(
+            args.conversations,
+            [
+                McpConversationArg {
+                    thread_id: "t1".into(),
+                    folder_id: Some("f-in".into())
+                },
+                McpConversationArg {
+                    thread_id: "t2".into(),
+                    folder_id: None
+                }
+            ]
+        );
+        let w = p(
+            "mail.delete",
+            &json!({"ids": ["m9"], "conversations": [{"threadId": "t1"}], "options": {"permanent": true}}),
+        )
+        .unwrap();
+        let PluginWrite::DeleteMessages(args) = &w else {
+            panic!()
+        };
+        assert_eq!((args.message_ids.len(), args.conversations.len()), (1, 1));
+        assert_eq!(w.kind(), ActionKind::PermanentDelete);
+        for bad in [
+            json!({"conversations": [{"threadId": ""}], "options": {"read": true}}),
+            json!({"conversations": [{"thread": "t1"}], "options": {"read": true}}),
+            json!({"conversations": "t1", "options": {"read": true}}),
+            json!({"conversations": [], "options": {"read": true}}),
+        ] {
+            assert!(p("mail.update", &bad.clone()).is_err(), "{bad}");
+        }
+        let many: Vec<Value> = (0..=MAX_BATCH)
+            .map(|i| json!({"threadId": format!("t{i}")}))
+            .collect();
+        assert!(
+            p(
+                "mail.update",
+                &json!({"conversations": many, "options": {"read": true}})
             )
             .is_err()
         );

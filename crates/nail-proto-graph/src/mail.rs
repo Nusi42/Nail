@@ -439,20 +439,7 @@ impl GraphEngine {
         change: &FlagChange,
     ) -> Result<(), GraphError> {
         let path = Self::message_path(mailbox, remote_id);
-        let mut body = serde_json::Map::new();
-        if let Some(seen) = change.seen {
-            body.insert("isRead".into(), json!(seen));
-        }
-        if let Some(flagged) = change.flagged {
-            let status = if flagged { "flagged" } else { "notFlagged" };
-            body.insert("flag".into(), json!({ "flagStatus": status }));
-        }
-        if change.answered == Some(true) {
-            body.insert(
-                "singleValueExtendedProperties".into(),
-                json!([{ "id": LAST_VERB_EXECUTED, "value": "102" }]),
-            );
-        }
+        let mut body = flag_body(change);
         if !change.add_tags.is_empty() || !change.remove_tags.is_empty() {
             let current: Message = self
                 .client
@@ -828,6 +815,152 @@ pub fn merge_categories(current: &[String], add: &[String], remove: &[String]) -
         }
     }
     out
+}
+
+/// The `PATCH` body of a flag change without its tags.
+fn flag_body(change: &FlagChange) -> serde_json::Map<String, Value> {
+    let mut body = serde_json::Map::new();
+    if let Some(seen) = change.seen {
+        body.insert("isRead".into(), json!(seen));
+    }
+    if let Some(flagged) = change.flagged {
+        let status = if flagged { "flagged" } else { "notFlagged" };
+        body.insert("flag".into(), json!({ "flagStatus": status }));
+    }
+    if change.answered == Some(true) {
+        body.insert(
+            "singleValueExtendedProperties".into(),
+            json!([{ "id": LAST_VERB_EXECUTED, "value": "102" }]),
+        );
+    }
+    body
+}
+
+/// How one write of [`GraphEngine::write_many`] goes.
+enum Planned {
+    /// Nothing to send.
+    Done,
+    /// A part of a `$batch`; `moves` = the answer carries the new id.
+    Part(BatchRequest, bool),
+    /// On its own ([`GraphEngine::replay`]).
+    Alone,
+}
+
+impl GraphEngine {
+    /// Replays several writes of one mailbox with as few calls as Graph
+    /// allows (P3, ADR 0164): flag changes without tags, moves, moves to
+    /// Deleted Items and permanent deletes go as parts of `$batch` calls
+    /// ([`crate::batch::MAX_BATCH`] per call); tag changes (they read the
+    /// categories first) and appends one by one. Answers one result per
+    /// write, in order; a part that finds no message answers
+    /// [`WriteOutcome::Gone`]. When a `$batch` call itself fails, every
+    /// part of it answers that error (moves are never sent twice: Graph
+    /// does not repeat a `POST` batch after a server error).
+    pub async fn write_many(
+        &self,
+        mailbox: Option<&str>,
+        writes: &[RemoteWrite],
+    ) -> Vec<Result<WriteOutcome, GraphError>> {
+        let mut out: Vec<Option<Result<WriteOutcome, GraphError>>> = vec![None; writes.len()];
+        let mut parts: Vec<(usize, BatchRequest, bool)> = Vec::new();
+        for (index, write) in writes.iter().enumerate() {
+            match plan_part(mailbox, write) {
+                Planned::Done => out[index] = Some(Ok(WriteOutcome::Done { remote_id: None })),
+                Planned::Part(request, moves) => parts.push((index, request, moves)),
+                Planned::Alone => {}
+            }
+        }
+        if !parts.is_empty() {
+            let requests: Vec<BatchRequest> = parts.iter().map(|(_, r, _)| r.clone()).collect();
+            match self.client.batch(&requests).await {
+                Ok(answers) => {
+                    for ((index, _, moves), answer) in parts.iter().zip(answers) {
+                        out[*index] = Some(part_outcome(&answer, *moves));
+                    }
+                }
+                Err(err) => {
+                    for (index, _, _) in &parts {
+                        out[*index] = Some(Err(err.clone()));
+                    }
+                }
+            }
+        }
+        let mut results = Vec::with_capacity(writes.len());
+        for (index, write) in writes.iter().enumerate() {
+            let result = match out[index].take() {
+                Some(result) => result,
+                None => self.replay(mailbox, write).await,
+            };
+            results.push(result);
+        }
+        results
+    }
+}
+
+fn plan_part(mailbox: Option<&str>, write: &RemoteWrite) -> Planned {
+    let message = |id: &str| GraphEngine::message_path(mailbox, id);
+    let move_to = |id: &str, folder: &str| {
+        Planned::Part(
+            BatchRequest::with_body(
+                Method::POST,
+                format!("{}/move", message(id)),
+                json!({ "destinationId": folder }),
+            ),
+            true,
+        )
+    };
+    match write {
+        RemoteWrite::SetFlags { remote_id, change }
+            if change.add_tags.is_empty() && change.remove_tags.is_empty() =>
+        {
+            let body = flag_body(change);
+            if body.is_empty() {
+                Planned::Done
+            } else {
+                Planned::Part(
+                    BatchRequest::with_body(Method::PATCH, message(remote_id), Value::Object(body)),
+                    false,
+                )
+            }
+        }
+        RemoteWrite::Move {
+            remote_id,
+            to_folder,
+            ..
+        } => move_to(remote_id, to_folder),
+        RemoteWrite::Trash { remote_id } => move_to(remote_id, "deleteditems"),
+        RemoteWrite::Delete { remote_id } => Planned::Part(
+            BatchRequest::with_body(
+                Method::POST,
+                format!("{}/permanentDelete", message(remote_id)),
+                json!({}),
+            ),
+            false,
+        ),
+        RemoteWrite::SetFlags { .. } | RemoteWrite::Append { .. } => Planned::Alone,
+    }
+}
+
+fn part_outcome(
+    answer: &crate::batch::BatchResponse,
+    moves: bool,
+) -> Result<WriteOutcome, GraphError> {
+    if answer.status == 404 {
+        return Ok(WriteOutcome::Gone);
+    }
+    if moves {
+        let message: Message = answer.json("POST messages/move")?;
+        if message.id.is_empty() {
+            return Err(GraphError::Protocol("move answered no id".into()));
+        }
+        return Ok(WriteOutcome::Done {
+            remote_id: Some(message.id),
+        });
+    }
+    match answer.error("batched write") {
+        Some(err) => Err(err),
+        None => Ok(WriteOutcome::Done { remote_id: None }),
+    }
 }
 
 #[cfg(test)]

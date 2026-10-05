@@ -40,6 +40,7 @@ pub mod activity;
 pub mod conversation;
 pub mod jwz;
 pub mod subject;
+pub mod targets;
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -56,6 +57,7 @@ pub use conversation::{
     ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder, summarize_conversation,
 };
 use subject::{SubjectKind, normalize_subject};
+pub use targets::TargetMessage;
 
 /// How far apart (in seconds) two messages may be to join by subject.
 pub const SUBJECT_WINDOW_SECS: i64 = 60 * 24 * 60 * 60;

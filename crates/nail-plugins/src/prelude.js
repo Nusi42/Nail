@@ -233,6 +233,22 @@
     }
 
     /**
+     * The targets of `nail.mail.update` / `delete` (P3: conversations too).
+     * @param {unknown} value
+     * @returns {{ ids: unknown[], conversations?: unknown }}
+     */
+    function mailTargets(value) {
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        const named = /** @type {{ messageIds?: unknown, conversations?: unknown }} */ (value);
+        return {
+          ids: named.messageIds === undefined ? [] : ids(named.messageIds),
+          conversations: named.conversations,
+        };
+      }
+      return { ids: ids(value) };
+    }
+
+    /**
      * @param {string} op
      * @param {unknown} text
      * @param {{ format?: unknown, draftId?: unknown } | undefined} options
@@ -444,10 +460,12 @@
         thread: (/** @type {unknown} */ threadId) => request("mail.thread", { threadId }),
         // M4a writes (`mail.organize`, `mail.send`); each resolves with
         // `{ status: "done" | "denied" | "expired" | "vetoed", ... }`.
-        update: (/** @type {unknown} */ messageIds, /** @type {unknown} */ changes) =>
-          request("mail.update", { ids: ids(messageIds), options: changes }),
-        delete: (/** @type {unknown} */ messageIds, /** @type {unknown} */ options) =>
-          request("mail.delete", { ids: ids(messageIds), options }),
+        // P3: `targets` is a message id, a list of them, or
+        // `{ messageIds?, conversations?: [{ threadId, folderId? }] }`.
+        update: (/** @type {unknown} */ targets, /** @type {unknown} */ changes) =>
+          request("mail.update", { ...mailTargets(targets), options: changes }),
+        delete: (/** @type {unknown} */ targets, /** @type {unknown} */ options) =>
+          request("mail.delete", { ...mailTargets(targets), options }),
         createDraft: (/** @type {unknown} */ draft) =>
           request("mail.createDraft", { options: encodeBytes(draft) }),
         updateDraft: (/** @type {unknown} */ draftId, /** @type {unknown} */ changes) =>

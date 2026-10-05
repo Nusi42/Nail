@@ -16,8 +16,8 @@ use nail_api::mcp::tools::{
 use nail_api::plugins::{ComposerEdit, ComposerEditOp, ComposerTextFormat};
 use nail_api::{
     AccountId, ApiError, DraftContext, DraftContextMode, DraftId, FlagChange, Folder, FolderId,
-    FolderRole, IdentityId, LocalizedMessage, MessageId, MessageSummary, MoveTarget, Request,
-    Response,
+    FolderRole, IdentityId, LocalizedMessage, MailAction, MessageId, MessageSummary, MessageTarget,
+    MoveTarget, Request, Response,
 };
 
 use super::plan::{
@@ -279,24 +279,127 @@ pub(crate) fn deletes(role: FolderRole) -> bool {
     matches!(role, FolderRole::Trash | FolderRole::Junk)
 }
 
-/// `update_messages`.
-/// Conversation targets (P3, ADR 0164) are planned by WP-actions-core
-/// (`ApplyMailAction` through the write path); until then they are refused
-/// rather than ignored.
-fn no_conversations_yet(conversations: &[McpConversationArg]) -> Result<(), Failure> {
-    if conversations.is_empty() {
-        Ok(())
-    } else {
-        Err(invalid("conversation targets are not supported yet"))
+/// Conversation targets of `update_messages` / `delete_messages` (P3,
+/// ADR 0164): each component of the call is one [`MailAction`], resolved
+/// by the core per [`MailAction::reach`] (`ResolveMailTargets`) and run as
+/// one `ApplyMailAction` batch on exactly the resolved messages the grant
+/// covers. Messages outside the grant are left out, never refused (a
+/// refusal would tell the agent they exist), like a remote session's.
+struct Conversations<'a> {
+    args: &'a [McpConversationArg],
+    /// Messages named beside the conversations (checked already).
+    named: Vec<MessageSummary>,
+}
+
+/// What one action of a conversation call reaches.
+struct Reached {
+    action: MailAction,
+    messages: Vec<MessageSummary>,
+    conversations: u32,
+}
+
+impl Conversations<'_> {
+    fn targets(&self) -> Vec<MessageTarget> {
+        self.named
+            .iter()
+            .map(|m| MessageTarget::message(m.id.clone()))
+            .chain(self.args.iter().map(|c| {
+                MessageTarget::conversation(
+                    c.thread_id.clone(),
+                    c.folder_id.clone().map(FolderId::new),
+                )
+            }))
+            .collect()
+    }
+
+    /// The messages `action` reaches, within the grant.
+    async fn reach<D: McpData>(
+        &self,
+        ctx: &Ctx<'_, D>,
+        action: MailAction,
+    ) -> Result<Reached, Failure> {
+        let request = Request::ResolveMailTargets {
+            targets: self.targets(),
+            action: action.clone(),
+        };
+        let resolution = match ctx.shared.data.query(request).await? {
+            Response::MailTargets { resolution } => resolution,
+            other => return Err(unexpected(&other)),
+        };
+        let mut messages = Vec::with_capacity(resolution.message_ids.len());
+        for id in &resolution.message_ids {
+            let summary = ctx.shared.data.message_summary(id).await?;
+            if ctx.access.require_place(&summary).is_ok() {
+                messages.push(summary);
+            }
+        }
+        Ok(Reached {
+            action,
+            messages,
+            conversations: resolution.conversations,
+        })
     }
 }
 
+/// Checks the `conversations` argument: at most [`MAX_BATCH`], thread ids
+/// given, listed folders not excluded.
+fn check_conversations<D: McpData>(
+    ctx: &Ctx<'_, D>,
+    list: &[McpConversationArg],
+) -> Result<(), Failure> {
+    if list.len() > MAX_BATCH {
+        return Err(invalid(format!(
+            "at most {MAX_BATCH} conversations per call"
+        )));
+    }
+    for c in list {
+        if c.thread_id.trim().is_empty() {
+            return Err(invalid("a conversation needs its thread_id"));
+        }
+        if let Some(folder) = &c.folder_id {
+            let folder = FolderId::new(folder.clone());
+            if !ctx.access.allows_folder(&folder) {
+                return Err(Denial::Folder(folder).into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The messages of several reaches, each once, in order.
+fn union_of(reached: &[Reached]) -> Vec<MessageSummary> {
+    let mut out: Vec<MessageSummary> = Vec::new();
+    for r in reached {
+        for m in &r.messages {
+            if !out.iter().any(|o| o.id == m.id) {
+                out.push(m.clone());
+            }
+        }
+    }
+    out
+}
+
+/// The confirmation summary of a conversation call: the action and the
+/// message count of the resolved conversations.
+fn conversation_summary(
+    id: &str,
+    actor: &str,
+    conversations: u32,
+    messages: usize,
+) -> LocalizedMessage {
+    LocalizedMessage::new(id)
+        .arg("actor", actor)
+        .arg("conversations", conversations)
+        .arg("count", messages)
+}
+
+/// `update_messages`.
 pub(crate) async fn update_messages<D: McpData>(
     ctx: &Ctx<'_, D>,
     a: UpdateMessagesArgs,
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Organize)?;
-    no_conversations_yet(&a.conversations)?;
+    check_conversations(ctx, &a.conversations)?;
     let tags = |list: &[String]| -> Result<Vec<String>, Failure> {
         list.iter()
             .map(|t| {
@@ -329,7 +432,57 @@ pub(crate) async fn update_messages<D: McpData>(
     if flags.is_empty() && moves == 0 {
         return Err(invalid("nothing to change"));
     }
-    let messages = ctx.target_messages(&a.message_ids).await?;
+    // P3: conversations resolve per action (each one batch).
+    let conversational = !a.conversations.is_empty();
+    let mut reached: Vec<Reached> = Vec::new();
+    let messages = if conversational {
+        let named = if a.message_ids.is_empty() {
+            Vec::new()
+        } else {
+            ctx.target_messages(&a.message_ids).await?
+        };
+        let conversations = Conversations {
+            args: &a.conversations,
+            named,
+        };
+        let mut actions = Vec::new();
+        if let Some(read) = a.read {
+            actions.push(MailAction::MarkRead { read });
+        }
+        if let Some(flagged) = a.flagged {
+            actions.push(MailAction::Flag { flagged });
+        }
+        if !add_tags.is_empty() || !remove_tags.is_empty() {
+            actions.push(MailAction::Tags {
+                add: add_tags.clone(),
+                remove: remove_tags.clone(),
+            });
+        }
+        if let Some(folder) = &a.move_to_folder_id {
+            actions.push(MailAction::Move {
+                target: MoveTarget::FolderId(FolderId::new(folder.clone())),
+            });
+        }
+        if a.archive {
+            actions.push(MailAction::Archive);
+        }
+        if let Some(until) = &a.snooze_until {
+            actions.push(MailAction::Snooze {
+                until: until.clone(),
+                wake_folder_id: None,
+            });
+        }
+        for action in actions {
+            reached.push(conversations.reach(ctx, action).await?);
+        }
+        let all = union_of(&reached);
+        if all.is_empty() {
+            return Err(invalid("the conversations have no messages to change"));
+        }
+        all
+    } else {
+        ctx.target_messages(&a.message_ids).await?
+    };
     let ids: Vec<MessageId> = messages.iter().map(|m| m.id.clone()).collect();
     let account_ids = accounts(messages.iter().map(|m| &m.account_id));
     let folders = ctx.folders_of(&account_ids).await?;
@@ -400,7 +553,11 @@ pub(crate) async fn update_messages<D: McpData>(
         if deletes(folder.role) {
             kind = ActionKind::Trash;
         }
-        if let Some(other) = messages.iter().find(|m| m.account_id != folder.account_id) {
+        let to_move = reached
+            .iter()
+            .find(|r| matches!(r.action, MailAction::Move { .. }))
+            .map_or(messages.as_slice(), |r| r.messages.as_slice());
+        if let Some(other) = to_move.iter().find(|m| m.account_id != folder.account_id) {
             return Err(invalid(format!(
                 "message {} is not in the folder's account {}",
                 other.id, folder.account_id
@@ -451,7 +608,39 @@ pub(crate) async fn update_messages<D: McpData>(
             wake_folder_id: None,
         });
     }
-    let summary = if kind == ActionKind::Trash {
+    let summary = if conversational {
+        let requests = reached
+            .iter()
+            .filter(|r| !r.messages.is_empty())
+            .map(|r| Request::ApplyMailAction {
+                targets: r
+                    .messages
+                    .iter()
+                    .map(|m| MessageTarget::message(m.id.clone()))
+                    .collect(),
+                action: r.action.clone(),
+            })
+            .collect();
+        let conversations = reached.iter().map(|r| r.conversations).max().unwrap_or(0);
+        let id = if kind == ActionKind::Trash {
+            "mail-action-confirmation-trash"
+        } else {
+            "mail-action-confirmation-organize"
+        };
+        return Ok(Plan {
+            kind,
+            summary: conversation_summary(id, ctx.actor(), conversations, messages.len()),
+            targets: messages
+                .iter()
+                .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
+                .collect(),
+            changes,
+            accounts: account_ids,
+            audit: audit_lines,
+            sends: 0,
+            action: Action::Requests { requests },
+        });
+    } else if kind == ActionKind::Trash {
         "confirmation-summary-trash"
     } else {
         "confirmation-summary-organize"
@@ -479,7 +668,6 @@ pub(crate) async fn delete_messages<D: McpData>(
     ctx: &Ctx<'_, D>,
     a: DeleteMessagesArgs,
 ) -> Result<Plan, Failure> {
-    no_conversations_yet(&a.conversations)?;
     let kind = if a.permanent {
         ActionKind::PermanentDelete
     } else {
@@ -487,6 +675,10 @@ pub(crate) async fn delete_messages<D: McpData>(
     };
     for scope in kind.mcp_scopes() {
         ctx.access.require(*scope)?;
+    }
+    check_conversations(ctx, &a.conversations)?;
+    if !a.conversations.is_empty() {
+        return delete_conversations(ctx, a, kind).await;
     }
     let messages = ctx.target_messages(&a.message_ids).await?;
     let account_ids = accounts(messages.iter().map(|m| &m.account_id));
@@ -539,6 +731,89 @@ pub(crate) async fn delete_messages<D: McpData>(
             requests: vec![Request::DeleteMessages {
                 message_ids: messages.iter().map(|m| m.id.clone()).collect(),
                 permanent: a.permanent,
+            }],
+        },
+    })
+}
+
+/// `delete_messages` with conversations (P3): Trash reaches the user's
+/// replies in Sent too, a permanent delete only the messages in Trash or
+/// Junk (the core refuses others: `mail-action-issue-not-in-trash`).
+async fn delete_conversations<D: McpData>(
+    ctx: &Ctx<'_, D>,
+    a: DeleteMessagesArgs,
+    kind: ActionKind,
+) -> Result<Plan, Failure> {
+    let listed = if a.message_ids.is_empty() {
+        Vec::new()
+    } else {
+        ctx.target_messages(&a.message_ids).await?
+    };
+    let conversations = Conversations {
+        args: &a.conversations,
+        named: listed,
+    };
+    let action = if a.permanent {
+        MailAction::DeletePermanently
+    } else {
+        MailAction::Trash
+    };
+    let reached = conversations.reach(ctx, action.clone()).await?;
+    let messages = reached.messages;
+    if messages.is_empty() {
+        return Err(invalid("the conversations have no messages to delete"));
+    }
+    let account_ids = accounts(messages.iter().map(|m| &m.account_id));
+    let folders = ctx.folders_of(&account_ids).await?;
+    let names: Vec<String> = messages
+        .iter()
+        .map(|m| {
+            folders
+                .get(&m.folder_id)
+                .map_or_else(|| m.folder_id.as_str().to_owned(), |f| f.name.clone())
+        })
+        .collect();
+    let after = if a.permanent {
+        None
+    } else {
+        joined(
+            folders
+                .values()
+                .filter(|f| f.role == FolderRole::Trash)
+                .map(|f| f.name.as_str()),
+        )
+    };
+    let id = if a.permanent {
+        "mail-action-confirmation-permanent-delete"
+    } else {
+        "mail-action-confirmation-trash"
+    };
+    Ok(Plan {
+        kind,
+        summary: conversation_summary(id, ctx.actor(), reached.conversations, messages.len()),
+        targets: messages
+            .iter()
+            .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
+            .collect(),
+        changes: vec![change(
+            "action-field-folder",
+            joined(names.iter().map(String::as_str)),
+            after,
+        )],
+        accounts: account_ids,
+        audit: vec![audit(
+            "folder",
+            joined(messages.iter().map(|m| m.folder_id.as_str())),
+            Some(if a.permanent { "deleted" } else { "trash" }.into()),
+        )],
+        sends: 0,
+        action: Action::Requests {
+            requests: vec![Request::ApplyMailAction {
+                targets: messages
+                    .iter()
+                    .map(|m| MessageTarget::message(m.id.clone()))
+                    .collect(),
+                action,
             }],
         },
     })

@@ -112,55 +112,87 @@ impl Service {
         if ids.is_empty() {
             return Err(ApiError::invalid_request("no messages to mark").into());
         }
-        let now = self.triage_now();
-        let (ops, accounts) = self
-            .blocking(move |service| {
-                let store = service.store();
-                let mut ops = Vec::new();
-                let mut accounts: Vec<AccountId> = Vec::new();
-                for id in &ids {
-                    let input = junk_input(store, service.blobs(), id)
-                        .ok_or_else(|| ApiError::not_found(format!("message {id}")))?;
-                    let settings = store.junk_settings(&input.account_id)?;
-                    classifier::train(
-                        &StoreJunk(store),
-                        &input.account_id,
-                        &input.key,
-                        junk,
-                        &input.tokens,
-                        now,
-                    )?;
-                    store.set_junk_verdict(
-                        id,
-                        &JunkVerdict {
-                            junk,
-                            score: None,
-                            source: JunkSource::User,
-                        },
-                        now,
-                    )?;
-                    ops.extend(classifier::plan_mark(
-                        &settings,
-                        &MessageFacts {
-                            message_id: Some(id),
-                            folder_role: input.folder_role,
-                            keywords: &input.keywords,
-                        },
-                        &input.account_id,
-                        junk,
-                    ));
-                    if !accounts.contains(&input.account_id) {
-                        accounts.push(input.account_id);
-                    }
-                }
-                Ok((ops, accounts))
-            })
-            .await?;
+        let (ops, accounts) = self.plan_mark_junk(ids, junk).await?;
         let op_ids = self.run_triage_ops(ops).await?;
         for account_id in accounts {
             self.broadcast(Event::JunkStatusChanged { account_id });
         }
         Ok(op_ids)
+    }
+
+    /// The training, verdicts and planned writes of [`Self::mark_junk`]:
+    /// trains each message's account and records the user's verdict at
+    /// once; answers the keyword / move writes and the accounts trained.
+    pub(crate) async fn plan_mark_junk(
+        &self,
+        ids: Vec<MessageId>,
+        junk: bool,
+    ) -> Result<(Vec<TriageOp>, Vec<AccountId>)> {
+        let now = self.triage_now();
+        self.blocking(move |service| {
+            let store = service.store();
+            let mut ops = Vec::new();
+            let mut accounts: Vec<AccountId> = Vec::new();
+            for id in &ids {
+                let input = junk_input(store, service.blobs(), id)
+                    .ok_or_else(|| ApiError::not_found(format!("message {id}")))?;
+                let settings = store.junk_settings(&input.account_id)?;
+                classifier::train(
+                    &StoreJunk(store),
+                    &input.account_id,
+                    &input.key,
+                    junk,
+                    &input.tokens,
+                    now,
+                )?;
+                store.set_junk_verdict(
+                    id,
+                    &JunkVerdict {
+                        junk,
+                        score: None,
+                        source: JunkSource::User,
+                    },
+                    now,
+                )?;
+                ops.extend(classifier::plan_mark(
+                    &settings,
+                    &MessageFacts {
+                        message_id: Some(id),
+                        folder_role: input.folder_role,
+                        keywords: &input.keywords,
+                    },
+                    &input.account_id,
+                    junk,
+                ));
+                if !accounts.contains(&input.account_id) {
+                    accounts.push(input.account_id);
+                }
+            }
+            Ok((ops, accounts))
+        })
+        .await
+    }
+
+    /// Forgets the user's training of `ids` (an undone "Mark as junk / not
+    /// junk", P3): the classifier no longer counts them. Answers the
+    /// accounts whose training changed.
+    pub(crate) async fn untrain_junk(&self, ids: Vec<MessageId>) -> Result<Vec<AccountId>> {
+        self.blocking(move |service| {
+            let store = service.store();
+            let mut accounts: Vec<AccountId> = Vec::new();
+            for id in &ids {
+                let Some(input) = junk_input(store, service.blobs(), id) else {
+                    continue;
+                };
+                if StoreJunk(store).untrain(&input.account_id, &input.key)?
+                    && !accounts.contains(&input.account_id)
+                {
+                    accounts.push(input.account_id);
+                }
+            }
+            Ok(accounts)
+        })
+        .await
     }
 
     /// Junk handling of newly arrived messages: the server's verdict

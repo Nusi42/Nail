@@ -489,6 +489,103 @@ impl GmailEngine {
         }))
     }
 
+    /// Replays several writes with as few calls as the Gmail API allows
+    /// (P3, ADR 0164): flag / tag changes with the same change, and moves
+    /// between the same two folders (label changes; not into or out of
+    /// Trash), go as one `messages.batchModify` per group (in chunks of
+    /// [`crate::messages::MAX_BATCH_MODIFY`] ids); trash, delete and
+    /// append go one by one. `batchModify` ignores ids Gmail no longer has
+    /// (the next history pass removes them). Answers one result per write,
+    /// in order. A group whose call fails permanently is replayed write by
+    /// write (each finds its own outcome); a failure that may pass answers
+    /// that error for the whole group.
+    pub async fn write_many(
+        &self,
+        writes: &[RemoteWrite],
+    ) -> Vec<Result<WriteOutcome, EngineError>> {
+        let mut out: Vec<Option<Result<WriteOutcome, EngineError>>> = vec![None; writes.len()];
+        // Groups by their label change, in order of first appearance.
+        let mut groups: Vec<(LabelChange, Vec<usize>)> = Vec::new();
+        for (index, write) in writes.iter().enumerate() {
+            let change = match write {
+                RemoteWrite::SetFlags { change, .. } => match self.label_change_for(change).await {
+                    Ok(labels) => labels,
+                    Err(err) => {
+                        out[index] = Some(Err(err.into()));
+                        continue;
+                    }
+                },
+                RemoteWrite::Move {
+                    from_folder,
+                    to_folder,
+                    ..
+                } => {
+                    let (Some(from), Some(to)) = (
+                        GmailFolder::from_path(from_folder),
+                        GmailFolder::from_path(to_folder),
+                    ) else {
+                        continue;
+                    };
+                    if from == GmailFolder::Trash || to == GmailFolder::Trash {
+                        continue;
+                    }
+                    match from.move_change(to) {
+                        Some(change) => change,
+                        None => continue,
+                    }
+                }
+                RemoteWrite::Trash { .. }
+                | RemoteWrite::Delete { .. }
+                | RemoteWrite::Append { .. } => {
+                    continue;
+                }
+            };
+            if change.is_empty() {
+                out[index] = Some(Ok(WriteOutcome::Done { remote_id: None }));
+                continue;
+            }
+            match groups.iter_mut().find(|(c, _)| *c == change) {
+                Some((_, members)) => members.push(index),
+                None => groups.push((change, vec![index])),
+            }
+        }
+        for (change, members) in &groups {
+            let ids: Vec<String> = members
+                .iter()
+                .filter_map(|&i| match &writes[i] {
+                    RemoteWrite::SetFlags { remote_id, .. }
+                    | RemoteWrite::Move { remote_id, .. } => Some(remote_id.clone()),
+                    _ => None,
+                })
+                .collect();
+            match self.client.batch_modify(&ids, change).await {
+                Ok(()) => {
+                    for &i in members {
+                        out[i] = Some(Ok(WriteOutcome::Done { remote_id: None }));
+                    }
+                }
+                Err(err) if err.retryable() => {
+                    let err: EngineError = err.into();
+                    for &i in members {
+                        out[i] = Some(Err(err.clone()));
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!(error = %err, "batchModify failed; replaying one by one");
+                }
+            }
+        }
+        let mut results = Vec::with_capacity(writes.len());
+        for (index, write) in writes.iter().enumerate() {
+            let result = match out[index].take() {
+                Some(result) => result,
+                None => self.replay(write).await,
+            };
+            results.push(result);
+        }
+        results
+    }
+
     async fn replay(&self, write: &RemoteWrite) -> Result<WriteOutcome, EngineError> {
         match write {
             RemoteWrite::SetFlags { remote_id, change } => {

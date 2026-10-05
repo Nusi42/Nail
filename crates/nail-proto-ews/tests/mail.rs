@@ -1147,3 +1147,138 @@ fn recorded_stream_parses() {
     assert_eq!(events[0].1.kind, "NewMailEvent");
     assert_eq!(events[0].1.parent_folder_id.as_deref(), Some("AQMkInbox"));
 }
+
+/// P3 (ADR 0164): a conversation's writes share multi-item requests; tag
+/// changes and appends stay single calls.
+#[tokio::test]
+async fn many_writes_share_multi_item_requests() {
+    let server = MockEwsServer::start().await.unwrap();
+    let engine = engine(&server);
+    let inbox = server.folder_id(None, "inbox").unwrap();
+    let ids: Vec<String> = server.items_in(&inbox).into_iter().map(|i| i.id).collect();
+    assert!(ids.len() >= 3, "{ids:?}");
+    let receipts = server.folder_named(None, "Receipts").unwrap();
+    let seen = FlagChange {
+        seen: Some(true),
+        ..FlagChange::default()
+    };
+    let writes = vec![
+        RemoteWrite::SetFlags {
+            remote_id: ids[0].clone(),
+            change: seen.clone(),
+        },
+        RemoteWrite::SetFlags {
+            remote_id: ids[1].clone(),
+            change: seen.clone(),
+        },
+        RemoteWrite::SetFlags {
+            remote_id: "AAMkMissing".into(),
+            change: seen,
+        },
+        RemoteWrite::SetFlags {
+            remote_id: ids[2].clone(),
+            change: FlagChange {
+                add_tags: vec!["Urgent".into()],
+                ..FlagChange::default()
+            },
+        },
+        RemoteWrite::Move {
+            remote_id: ids[0].clone(),
+            from_folder: inbox.clone(),
+            to_folder: receipts.clone(),
+        },
+        RemoteWrite::Move {
+            remote_id: ids[1].clone(),
+            from_folder: inbox.clone(),
+            to_folder: receipts.clone(),
+        },
+    ];
+    server.clear_requests();
+    let results: Vec<WriteOutcome> = engine
+        .write_many(None, &writes)
+        .await
+        .into_iter()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(results[0], WriteOutcome::Done { remote_id: None });
+    assert_eq!(results[2], WriteOutcome::Gone);
+    let moved: Vec<String> = results[4..]
+        .iter()
+        .map(|r| match r {
+            WriteOutcome::Done {
+                remote_id: Some(id),
+            } => id.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    for id in &moved {
+        let item = server.item(id).unwrap();
+        assert_eq!(item.folder, receipts);
+        assert_eq!(item.props.child_text("IsRead"), Some("true"));
+    }
+    assert_eq!(
+        server
+            .item(&ids[2])
+            .unwrap()
+            .props
+            .strings("Categories", "String"),
+        ["Urgent"]
+    );
+    // One UpdateItem for the three reads, the tag change on its own (with
+    // its read of the categories), one MoveItem for both moves.
+    let operations = server.operations();
+    assert_eq!(
+        operations.iter().filter(|o| *o == "MoveItem").count(),
+        1,
+        "{operations:?}"
+    );
+    assert_eq!(
+        operations.iter().filter(|o| *o == "UpdateItem").count(),
+        2,
+        "{operations:?}"
+    );
+    // Trash and permanent deletes.
+    let trashed = engine
+        .write_many(
+            None,
+            &[RemoteWrite::Trash {
+                remote_id: moved[0].clone(),
+            }],
+        )
+        .await;
+    let Ok(WriteOutcome::Done {
+        remote_id: Some(in_trash),
+    }) = &trashed[0]
+    else {
+        panic!("{trashed:?}");
+    };
+    assert_eq!(
+        server.item(in_trash).unwrap().folder,
+        server.folder_id(None, "deleteditems").unwrap()
+    );
+    let deleted = engine
+        .write_many(
+            None,
+            &[
+                RemoteWrite::Delete {
+                    remote_id: in_trash.clone(),
+                },
+                RemoteWrite::Delete {
+                    remote_id: moved[1].clone(),
+                },
+                RemoteWrite::Delete {
+                    remote_id: "AAMkMissing".into(),
+                },
+            ],
+        )
+        .await;
+    assert_eq!(
+        deleted,
+        vec![
+            Ok(WriteOutcome::Done { remote_id: None }),
+            Ok(WriteOutcome::Done { remote_id: None }),
+            Ok(WriteOutcome::Gone),
+        ]
+    );
+    assert!(server.item(in_trash).is_none() && server.item(&moved[1]).is_none());
+}

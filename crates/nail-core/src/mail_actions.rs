@@ -1,38 +1,71 @@
-//! Mail actions on conversations (P3, ADR 0164).
+//! Mail actions on conversations (P3, ADR 0164; WP-actions-core).
 //!
-//! `ApplyMailAction` / `ResolveMailTargets` / `UndoMailAction`. The contract
-//! stage ships a working **stub**: targets resolve per
-//! [`MailAction::reach`] from the conversation request's messages (one copy
-//! per Message-ID; duplicates are WP-actions-core's), and the action is
-//! forwarded to the per-message writes (`update_flags`, `move_messages`,
-//! `delete_messages`, `snooze_messages`, `mark_junk`) — several queue
-//! operations, **no batch and no undo** (`batch_id` is `null`,
-//! `UndoMailAction` answers `unsupported`). WP-actions-core replaces it:
-//! every stored copy, one batch in the store (`mail_batches`, schema v17)
-//! with the inverse operations, undo, engine-side batching.
+//! `ApplyMailAction` / `ResolveMailTargets` / `UndoMailAction`:
+//!
+//! * **Targets** resolve per [`MailAction::reach`] to **every stored copy**
+//!   (`nail_store::thread::targets`): a conversation's messages in the
+//!   listed folder (a virtual folder: its member folders; none: everywhere
+//!   but Drafts, Trash, Junk), plus the user's replies from Sent for the
+//!   `whole` actions, or the row's own message for Flag. A remote session's
+//!   grant narrows the folders before anything else: it acts on exactly
+//!   the conversation it sees and is never refused for hidden messages.
+//! * **One batch**: the planned per-message operations are applied
+//!   locally, queued and recorded with their inverses in one store
+//!   transaction (`Store::apply_mail_batch`); the queue groups them again
+//!   for the engines (one `UID MOVE` per folder, a Gmail `batchModify`, an
+//!   EWS multi-item request).
+//! * **Undo** queues the inverses of the actor's own batch (newest first)
+//!   and marks it undone; a snooze also cancels its wake timer, a junk
+//!   verdict its training.
+//! * **Actors**: `user` (the UI), `remote:<session>`, `mcp:<client>`,
+//!   `plugin:<id>` — only the actor of a batch can undo it.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
+use nail_api::agents::ActionActor;
 use nail_api::mail_actions::{
-    ConversationReach, MAX_MAIL_ACTION_MESSAGES, MAX_MAIL_ACTION_TARGETS, MailActionIssue,
-    MailActionResult, MailTargetResolution,
+    MAIL_UNDO_SECS, MAX_MAIL_ACTION_MESSAGES, MAX_MAIL_ACTION_TARGETS, MailActionIssue,
+    MailActionKind, MailActionResult, MailTargetResolution,
 };
 use nail_api::{
-    AccountId, ApiError, FlagChange, FolderId, FolderRole, LocalizedMessage, MailAction,
+    AccountId, ApiError, ErrorCode, Event, FolderId, FolderRole, LocalizedMessage, MailAction,
     MailBatchId, MessageId, MessageTarget, MoveTarget, OpId,
+};
+use nail_store::{
+    ConversationFolders, MailBatchPlan, MailBatchUndo, Operation, ScopeFolder, TargetMessage,
+    mail_batch_id, parse_mail_batch_id,
 };
 
 use crate::conversations::FolderFilter;
 use crate::error::Result;
 use crate::service::Service;
 
+/// The UI's own actor.
+pub(crate) const USER_ACTOR: &str = "user";
+
+/// The batch actor of a remote session.
+pub(crate) fn remote_actor(session: &impl std::fmt::Display) -> String {
+    format!("remote:{session}")
+}
+
+/// The batch actor of an MCP client or a plug-in.
+pub(crate) fn agent_actor(actor: &ActionActor) -> String {
+    match actor {
+        ActionActor::McpClient { client_id } => format!("mcp:{client_id}"),
+        ActionActor::Plugin { plugin_id } => format!("plugin:{plugin_id}"),
+    }
+}
+
 /// The messages a set of targets resolves to.
 struct Resolved {
-    ids: Vec<MessageId>,
-    accounts: BTreeSet<AccountId>,
-    /// Folder of each message.
-    folders: HashMap<MessageId, FolderId>,
+    messages: Vec<TargetMessage>,
     conversations: u32,
+}
+
+impl Resolved {
+    fn ids(&self) -> Vec<MessageId> {
+        self.messages.iter().map(|m| m.id.clone()).collect()
+    }
 }
 
 fn issue(issue: MailActionIssue, detail: &str) -> ApiError {
@@ -40,15 +73,55 @@ fn issue(issue: MailActionIssue, detail: &str) -> ApiError {
         .with_localized(LocalizedMessage::new(issue.message_id()))
 }
 
+/// The folder role's wire name (`inbox`, `trash`, …).
+fn role_name(role: FolderRole) -> String {
+    match serde_json::to_value(role) {
+        Ok(serde_json::Value::String(s)) => s,
+        _ => String::new(),
+    }
+}
+
 impl Service {
-    async fn folder_role(&self, id: &FolderId) -> Result<FolderRole> {
+    /// The listed folders behind a conversation target's folder, narrowed
+    /// by `filter` (as the conversation list shows them).
+    async fn target_scope(
+        &self,
+        folder: &FolderId,
+        filter: Option<&FolderFilter>,
+    ) -> Result<ConversationFolders> {
+        let resolved = self.resolve_folder(folder).await?;
+        if !resolved.is_virtual {
+            let id = folder.clone();
+            self.inner.store.call(move |s| s.get_folder(&id)).await?;
+        }
+        let mut scope = self
+            .inner
+            .store
+            .call(move |s| s.conversation_folders(&resolved.sources))
+            .await?;
+        if let Some(keep) = filter {
+            scope.retain(|f| keep(f));
+        }
+        Ok(scope)
+    }
+
+    /// One message target as a [`TargetMessage`].
+    async fn message_target(&self, id: &MessageId) -> Result<TargetMessage> {
         let id = id.clone();
         Ok(self
             .inner
             .store
-            .call(move |s| s.get_folder(&id))
-            .await?
-            .role)
+            .call(move |s| {
+                let summary = s.get_message(&id)?.summary;
+                let role = s.get_folder(&summary.folder_id)?.role;
+                Ok(TargetMessage {
+                    id: summary.id,
+                    account_id: summary.account_id,
+                    folder_id: summary.folder_id,
+                    role: role_name(role),
+                })
+            })
+            .await?)
     }
 
     /// Resolves `targets` for `action` within `filter` (a remote session's
@@ -72,80 +145,71 @@ impl Service {
         if action.is_empty() {
             return Err(issue(MailActionIssue::NothingToChange, "nothing to change").into());
         }
+        let reach = action.reach();
+        let own = self.own_addresses_by_account().await?;
         let mut out = Resolved {
-            ids: Vec::new(),
-            accounts: BTreeSet::new(),
-            folders: HashMap::new(),
+            messages: Vec::new(),
             conversations: 0,
         };
         let mut seen = BTreeSet::new();
         for target in targets {
-            let picked: Vec<(MessageId, AccountId, FolderId)> = match target {
+            let picked = match target {
                 MessageTarget::Message { message_id } => {
-                    let id = message_id.clone();
-                    let stored = self.inner.store.call(move |s| s.get_message(&id)).await?;
-                    let summary = stored.summary;
-                    vec![(summary.id, summary.account_id, summary.folder_id)]
+                    vec![self.message_target(message_id).await?]
                 }
                 MessageTarget::Conversation(conversation) => {
-                    let (thread, messages) = self
-                        .get_conversation(
-                            &conversation.thread_id,
-                            conversation.folder_id.as_ref(),
-                            filter,
-                        )
-                        .await?;
-                    let listed: Option<Vec<FolderId>> = match &conversation.folder_id {
-                        Some(folder) => Some(self.resolve_folder(folder).await?.sources),
+                    let scope = match &conversation.folder_id {
+                        Some(folder) => Some(self.target_scope(folder, filter).await?),
                         None => None,
                     };
-                    let mut picked = Vec::new();
-                    for m in messages {
-                        let m = m.message;
-                        let keep = match action.reach() {
-                            ConversationReach::Whole => true,
-                            ConversationReach::Newest => m.id == thread.latest_message_id,
-                            ConversationReach::Listed => match &listed {
-                                Some(sources) => sources.contains(&m.folder_id),
-                                None => self.folder_role(&m.folder_id).await? != FolderRole::Sent,
-                            },
-                        };
-                        if keep {
-                            picked.push((m.id, m.account_id, m.folder_id));
-                        }
-                    }
+                    let (thread, own, keep) =
+                        (conversation.thread_id.clone(), own.clone(), filter.cloned());
+                    let picked = self
+                        .inner
+                        .store
+                        .call(move |s| {
+                            let keep: Option<&dyn Fn(&ScopeFolder) -> bool> = match &keep {
+                                Some(k) => Some(k.as_ref()),
+                                None => None,
+                            };
+                            s.conversation_targets(&thread, scope.as_ref(), &own, keep, reach)
+                        })
+                        .await?;
                     if !picked.is_empty() {
                         out.conversations += 1;
                     }
                     picked
                 }
             };
-            for (id, account, folder) in picked {
-                if seen.insert(id.clone()) {
-                    out.accounts.insert(account);
-                    out.folders.insert(id.clone(), folder);
-                    out.ids.push(id);
+            for message in picked {
+                if seen.insert(message.id.clone()) {
+                    out.messages.push(message);
                 }
             }
+            if out.messages.len() > MAX_MAIL_ACTION_MESSAGES {
+                return Err(issue(
+                    MailActionIssue::TooManyMessages,
+                    &format!("at most {MAX_MAIL_ACTION_MESSAGES} messages"),
+                )
+                .into());
+            }
         }
-        if out.ids.len() > MAX_MAIL_ACTION_MESSAGES {
+        // Grouped by account and folder (stable), so the queue hands each
+        // folder's operations to the engine together (one `UID MOVE` per
+        // folder, not one per alternating Inbox / Sent message).
+        out.messages
+            .sort_by(|a, b| (&a.account_id, &a.folder_id).cmp(&(&b.account_id, &b.folder_id)));
+        if matches!(action, MailAction::DeletePermanently)
+            && let Some(m) = out
+                .messages
+                .iter()
+                .find(|m| !matches!(m.role.as_str(), "trash" | "junk"))
+        {
             return Err(issue(
-                MailActionIssue::TooManyMessages,
-                &format!("at most {MAX_MAIL_ACTION_MESSAGES} messages"),
+                MailActionIssue::NotInTrash,
+                &format!("message {} is not in Trash or Junk", m.id),
             )
             .into());
-        }
-        if matches!(action, MailAction::DeletePermanently) {
-            for id in &out.ids {
-                let role = self.folder_role(&out.folders[id]).await?;
-                if !matches!(role, FolderRole::Trash | FolderRole::Junk) {
-                    return Err(issue(
-                        MailActionIssue::NotInTrash,
-                        &format!("message {id} is not in Trash or Junk"),
-                    )
-                    .into());
-                }
-            }
         }
         Ok(out)
     }
@@ -158,105 +222,260 @@ impl Service {
         filter: Option<&FolderFilter>,
     ) -> Result<MailTargetResolution> {
         let resolved = self.resolve_targets(targets, action, filter).await?;
+        let accounts: BTreeSet<AccountId> = resolved
+            .messages
+            .iter()
+            .map(|m| m.account_id.clone())
+            .collect();
         Ok(MailTargetResolution {
-            message_ids: resolved.ids,
-            account_ids: resolved.accounts.into_iter().collect(),
+            message_ids: resolved.ids(),
+            account_ids: accounts.into_iter().collect(),
             conversations: resolved.conversations,
         })
     }
 
-    /// `ApplyMailAction` (contract stub: forwarded per message, no undo).
-    pub(crate) async fn apply_mail_action(
+    /// The per-message operations of `action` on `messages`.
+    async fn plan_mail_action(
         &self,
-        targets: &[MessageTarget],
-        action: MailAction,
-        filter: Option<&FolderFilter>,
-    ) -> Result<MailActionResult> {
-        let resolved = self.resolve_targets(targets, &action, filter).await?;
-        let mut ids = resolved.ids.clone();
-        if matches!(action, MailAction::Archive) {
-            // Messages already in their Archive stay.
-            let mut kept = Vec::with_capacity(ids.len());
-            for id in ids {
-                if self.folder_role(&resolved.folders[&id]).await? != FolderRole::Archive {
-                    kept.push(id);
-                }
-            }
-            ids = kept;
-        }
-        if ids.is_empty() {
-            return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
-        }
-        let op_ids: Vec<OpId> = match &action {
+        messages: &[TargetMessage],
+        action: &MailAction,
+    ) -> Result<Vec<Operation>> {
+        let ids: Vec<MessageId> = messages.iter().map(|m| m.id.clone()).collect();
+        let flags = |change: nail_store::FlagChange| -> Vec<Operation> {
+            ids.iter()
+                .map(|id| Operation::UpdateFlags {
+                    message_id: id.clone(),
+                    change: change.clone(),
+                })
+                .collect()
+        };
+        Ok(match action {
             MailAction::Archive => {
-                self.move_messages(&ids, &MoveTarget::Role(FolderRole::Archive))
+                // Messages already in their account's Archive stay.
+                let movable: Vec<MessageId> = messages
+                    .iter()
+                    .filter(|m| m.role != "archive")
+                    .map(|m| m.id.clone())
+                    .collect();
+                self.plan_moves(&movable, &MoveTarget::Role(FolderRole::Archive))
                     .await?
             }
-            MailAction::Trash => self.delete_messages(&ids, false).await?,
-            MailAction::DeletePermanently => self.delete_messages(&ids, true).await?,
-            MailAction::Move { target } => self.move_messages(&ids, target).await?,
-            MailAction::MarkRead { read } => {
-                self.update_flags(
-                    &ids,
-                    FlagChange {
-                        seen: Some(*read),
-                        ..FlagChange::default()
-                    },
-                )
-                .await?
-            }
-            MailAction::Flag { flagged } => {
-                self.update_flags(
-                    &ids,
-                    FlagChange {
-                        flagged: Some(*flagged),
-                        ..FlagChange::default()
-                    },
-                )
-                .await?
-            }
+            MailAction::Move { target } => self.plan_moves(&ids, target).await?,
+            MailAction::Trash | MailAction::DeletePermanently => ids
+                .iter()
+                .map(|id| Operation::DeleteMessage {
+                    message_id: id.clone(),
+                    permanent: matches!(action, MailAction::DeletePermanently),
+                    source: None,
+                    trash_folder_id: None,
+                })
+                .collect(),
+            MailAction::MarkRead { read } => flags(nail_store::FlagChange {
+                seen: Some(*read),
+                ..nail_store::FlagChange::default()
+            }),
+            MailAction::Flag { flagged } => flags(nail_store::FlagChange {
+                flagged: Some(*flagged),
+                ..nail_store::FlagChange::default()
+            }),
             MailAction::Tags { add, remove } => {
-                self.update_flags(
-                    &ids,
-                    FlagChange {
-                        add_tags: add.clone(),
-                        remove_tags: remove.clone(),
-                        ..FlagChange::default()
-                    },
-                )
-                .await?
+                for tag in add.iter().chain(remove) {
+                    if !crate::mail::is_valid_tag(tag) {
+                        return Err(
+                            ApiError::invalid_request(format!("invalid tag {tag:?}")).into()
+                        );
+                    }
+                }
+                flags(nail_store::FlagChange {
+                    add_tags: add.clone(),
+                    remove_tags: remove.clone(),
+                    ..nail_store::FlagChange::default()
+                })
             }
             MailAction::Snooze {
                 until,
                 wake_folder_id,
             } => {
-                self.snooze_messages(ids.clone(), until, wake_folder_id.clone())
-                    .await?
+                let ops = self
+                    .plan_snooze(ids.clone(), until, wake_folder_id.clone())
+                    .await?;
+                match self.triage_operations(ops).await {
+                    Ok(operations) => operations,
+                    Err(err) => {
+                        drop(self.forget_snoozes(ids).await);
+                        return Err(err);
+                    }
+                }
             }
-            MailAction::Junk { junk } => self.mark_junk(ids.clone(), *junk).await?,
-        };
-        Ok(MailActionResult {
-            batch_id: None,
-            op_ids,
-            kind: action.kind(),
-            message_ids: ids,
-            conversations: resolved.conversations,
-            undo_until: None,
+            MailAction::Junk { junk } => {
+                let (ops, _) = self.plan_mark_junk(ids, *junk).await?;
+                self.triage_operations(ops).await?
+            }
         })
     }
 
-    /// `UndoMailAction` (contract stub: the stub keeps no batches).
-    #[expect(
-        clippy::unused_async,
-        reason = "WP-actions-core reads the batch from the store here"
-    )]
-    pub(crate) async fn undo_mail_action(&self, batch: &MailBatchId) -> Result<Vec<OpId>> {
-        Err(ApiError::unsupported(format!(
-            "batch {batch}: undo arrives with P3 WP-actions-core"
-        ))
-        .with_localized(LocalizedMessage::new(
-            MailActionIssue::UndoExpired.message_id(),
-        ))
-        .into())
+    /// `ApplyMailAction` as `actor` within `filter`.
+    pub(crate) async fn apply_mail_action(
+        &self,
+        targets: &[MessageTarget],
+        action: MailAction,
+        filter: Option<&FolderFilter>,
+        actor: &str,
+    ) -> Result<MailActionResult> {
+        let resolved = self.resolve_targets(targets, &action, filter).await?;
+        if resolved.messages.is_empty() {
+            return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
+        }
+        let operations = self.plan_mail_action(&resolved.messages, &action).await?;
+        let snooze = matches!(action, MailAction::Snooze { .. });
+        if operations.is_empty() {
+            if snooze {
+                drop(self.forget_snoozes(resolved.ids()).await);
+            }
+            return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
+        }
+        let mut message_ids: Vec<MessageId> = Vec::new();
+        for op in &operations {
+            if !message_ids.contains(op.message_id()) {
+                message_ids.push(op.message_id().clone());
+            }
+        }
+        let kind = action.kind();
+        let now = self.triage_now();
+        let (actor_name, conversations, undoable) =
+            (actor.to_owned(), resolved.conversations, action.undoable());
+        let applied = self
+            .inner
+            .store
+            .call(move |s| {
+                s.apply_mail_batch(
+                    &MailBatchPlan {
+                        actor: &actor_name,
+                        kind: kind.as_str(),
+                        conversations,
+                        undoable,
+                        now,
+                    },
+                    &operations,
+                )
+            })
+            .await;
+        let applied = match applied {
+            Ok(applied) => applied,
+            Err(err) => {
+                if snooze {
+                    drop(self.forget_snoozes(resolved.ids()).await);
+                }
+                return Err(err.into());
+            }
+        };
+        let op_ids = self.announce_enqueued(&applied.queued);
+        match &action {
+            MailAction::Snooze { .. } => {
+                self.inner.snooze.wake.notify_one();
+                self.broadcast(Event::SnoozeChanged);
+            }
+            MailAction::Junk { .. } => {
+                let accounts: BTreeSet<AccountId> = resolved
+                    .messages
+                    .iter()
+                    .map(|m| m.account_id.clone())
+                    .collect();
+                for account_id in accounts {
+                    self.broadcast(Event::JunkStatusChanged { account_id });
+                }
+            }
+            _ => {}
+        }
+        let undo_secs = i64::try_from(MAIL_UNDO_SECS).unwrap_or(i64::MAX);
+        Ok(MailActionResult {
+            batch_id: applied.batch.map(|n| MailBatchId(mail_batch_id(n))),
+            op_ids,
+            kind,
+            message_ids,
+            conversations: resolved.conversations,
+            undo_until: applied
+                .batch
+                .map(|_| crate::rules::rfc3339(now.saturating_add(undo_secs))),
+        })
+    }
+
+    /// `UndoMailAction` as `actor`: the actor's own batch only.
+    pub(crate) async fn undo_mail_action(
+        &self,
+        batch: &MailBatchId,
+        actor: &str,
+    ) -> Result<Vec<OpId>> {
+        let expired = || -> crate::error::CoreError {
+            ApiError::not_found(format!("batch {batch}"))
+                .with_localized(LocalizedMessage::new(
+                    MailActionIssue::UndoExpired.message_id(),
+                ))
+                .into()
+        };
+        let Some(n) = parse_mail_batch_id(batch.as_str()) else {
+            return Err(expired());
+        };
+        let (actor, now) = (actor.to_owned(), self.triage_now());
+        let undone = self
+            .inner
+            .store
+            .call(move |s| s.undo_mail_batch(n, &actor, now))
+            .await?;
+        let (record, queued) = match undone {
+            MailBatchUndo::Undone {
+                record,
+                queued,
+                skipped,
+            } => {
+                if skipped > 0 {
+                    tracing::info!(%batch, skipped, "undo skipped messages that moved on since");
+                }
+                (record, queued)
+            }
+            MailBatchUndo::Expired => return Err(expired()),
+            MailBatchUndo::UndoneAlready => {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("batch {batch} was undone already"),
+                )
+                .with_localized(LocalizedMessage::new(
+                    MailActionIssue::UndoneAlready.message_id(),
+                ))
+                .into());
+            }
+        };
+        let op_ids = self.announce_enqueued(&queued);
+        let kind = MailActionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| k.as_str() == record.kind);
+        match kind {
+            Some(MailActionKind::Snooze) => {
+                self.forget_snoozes(record.message_ids.clone()).await?;
+            }
+            Some(MailActionKind::Junk | MailActionKind::NotJunk) => {
+                for account_id in self.untrain_junk(record.message_ids.clone()).await? {
+                    self.broadcast(Event::JunkStatusChanged { account_id });
+                }
+            }
+            _ => {}
+        }
+        Ok(op_ids)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn actors_are_named_by_kind() {
+        assert_eq!(USER_ACTOR, "user");
+        assert_eq!(remote_actor(&"s1"), "remote:s1");
+        assert_eq!(agent_actor(&ActionActor::mcp_client("c1")), "mcp:c1");
+        assert_eq!(agent_actor(&ActionActor::plugin("p.x")), "plugin:p.x");
+        assert_eq!(role_name(FolderRole::Trash), "trash");
+        assert_eq!(role_name(FolderRole::Archive), "archive");
     }
 }

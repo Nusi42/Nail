@@ -119,8 +119,8 @@ pub(crate) async fn run(
     };
     let options = options.clone();
     service.set_status(&account.id, AccountState::Connecting, None);
-    let engine = match super::setup::engine_for(&service, &account) {
-        Ok(engine) => engine,
+    let (engine, batch) = match super::setup::engines_for(&service, &account) {
+        Ok(engines) => engines,
         Err(err) => {
             service.set_status(
                 &account.id,
@@ -134,6 +134,7 @@ pub(crate) async fn run(
     let streaming = engine.kind() == EngineKind::Ews && options.streaming();
     let running = Arc::new(RunningEngine {
         engine,
+        batch,
         push: Mutex::new(if streaming {
             ExchangePush::Streaming
         } else {
@@ -1677,6 +1678,7 @@ pub(crate) async fn replay(
     let executor = ExchangeExecutor {
         service,
         engine: Arc::clone(&running.engine),
+        batch: running.batch.clone(),
     };
     tracing::debug!(%account, "Exchange replay: mail");
     if let Err(err) = replay_account(service, account, &executor).await {
@@ -1844,7 +1846,49 @@ async fn classify(
 pub(crate) struct ExchangeExecutor<'a> {
     pub service: &'a Service,
     pub engine: Arc<dyn ExchangeEngine>,
+    /// Grouped writes (P3); `None` = one write at a time.
+    pub batch: Option<Arc<dyn super::batch::BatchWrites>>,
 }
+
+/// What follows a grouped write of an operation (P3).
+enum AfterWrite {
+    /// Nothing.
+    Nothing,
+    /// The message has a new remote id in this folder (a move).
+    Moved(Option<ExchangeFolderRecord>),
+}
+
+/// A grouped write: the mailbox, the write and what follows it.
+struct GroupedWrite {
+    mailbox: Option<String>,
+    write: RemoteWrite,
+    after: AfterWrite,
+}
+
+/// The grouped writes of one mailbox (index in the group, write, what
+/// follows).
+type MailboxWrites = (Option<String>, Vec<(usize, RemoteWrite, AfterWrite)>);
+
+/// How one operation of a group is replayed.
+enum Grouped {
+    /// Its write goes with the others of the same mailbox.
+    Write(Box<GroupedWrite>),
+    /// Nothing to do.
+    Nothing,
+    /// On its own ([`ExchangeExecutor::run`]).
+    Alone,
+}
+
+fn grouped(mailbox: Option<String>, write: RemoteWrite, after: AfterWrite) -> Grouped {
+    Grouped::Write(Box::new(GroupedWrite {
+        mailbox,
+        write,
+        after,
+    }))
+}
+
+/// Most operations one Exchange replay sends together.
+const EXCHANGE_GROUP: usize = 200;
 
 impl ExchangeExecutor<'_> {
     async fn remote_of(
@@ -1916,28 +1960,164 @@ impl ExchangeExecutor<'_> {
         );
     }
 
+    /// The write of a grouped operation: a flag change, a move within one
+    /// mailbox or a delete; anything else goes on its own.
+    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped, EngineError> {
+        match &op.operation {
+            Operation::UpdateFlags { message_id, change } => {
+                let Some((mailbox, remote_id)) = self.remote_of(message_id).await? else {
+                    return Ok(Grouped::Nothing);
+                };
+                Ok(grouped(
+                    mailbox,
+                    RemoteWrite::SetFlags {
+                        remote_id,
+                        change: category_change(change),
+                    },
+                    AfterWrite::Nothing,
+                ))
+            }
+            Operation::MoveMessage {
+                message_id,
+                target_folder_id,
+                source: Some(source),
+            } => {
+                let remote = match &source.remote_id {
+                    Some(r) => Some(r.clone()),
+                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
+                };
+                let Some(remote_id) = remote else {
+                    return Ok(Grouped::Nothing);
+                };
+                let (Some(from), Some(to)) = (
+                    self.folder(&source.folder_id).await?,
+                    self.folder(target_folder_id).await?,
+                ) else {
+                    return Ok(Grouped::Alone);
+                };
+                let same_account = {
+                    let (a, b) = (from.folder_id.clone(), to.folder_id.clone());
+                    self.service
+                        .store()
+                        .call(move |s| {
+                            Ok(s.get_folder(&a)?.account_id == s.get_folder(&b)?.account_id)
+                        })
+                        .await
+                        .map_err(|e| EngineError::from(CoreError::from(e)))?
+                };
+                if !same_account || from.mailbox != to.mailbox {
+                    return Ok(Grouped::Alone);
+                }
+                Ok(grouped(
+                    from.mailbox.clone(),
+                    RemoteWrite::Move {
+                        remote_id,
+                        from_folder: from.remote_id.clone(),
+                        to_folder: to.remote_id.clone(),
+                    },
+                    AfterWrite::Moved(Some(to)),
+                ))
+            }
+            Operation::DeleteMessage {
+                message_id,
+                source,
+                trash_folder_id,
+                ..
+            } => {
+                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
+                    Some(r) => Some(r),
+                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
+                };
+                let Some(remote_id) = remote else {
+                    return Ok(Grouped::Nothing);
+                };
+                let mailbox = match source {
+                    Some(source) => self
+                        .folder(&source.folder_id)
+                        .await?
+                        .and_then(|f| f.mailbox),
+                    None => None,
+                };
+                Ok(match trash_folder_id {
+                    Some(trash) => grouped(
+                        mailbox,
+                        RemoteWrite::Trash { remote_id },
+                        AfterWrite::Moved(self.folder(trash).await?),
+                    ),
+                    None => grouped(
+                        mailbox,
+                        RemoteWrite::Delete { remote_id },
+                        AfterWrite::Nothing,
+                    ),
+                })
+            }
+            _ => Ok(Grouped::Alone),
+        }
+    }
+
+    /// A group of operations (P3, ADR 0164): the writes of each mailbox go
+    /// to the engine together (Graph `$batch`, EWS multi-item requests).
+    async fn run_group(&self, ops: &[QueuedOp]) -> Vec<Result<(), EngineError>> {
+        let Some(batch) = &self.batch else {
+            let mut out = Vec::with_capacity(ops.len());
+            for op in ops {
+                out.push(self.run(op).await);
+            }
+            return out;
+        };
+        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut by_mailbox: Vec<MailboxWrites> = Vec::new();
+        for (index, op) in ops.iter().enumerate() {
+            match self.group_write(op).await {
+                Ok(Grouped::Write(grouped)) => {
+                    let GroupedWrite {
+                        mailbox,
+                        write,
+                        after,
+                    } = *grouped;
+                    match by_mailbox.iter_mut().find(|(m, _)| *m == mailbox) {
+                        Some((_, list)) => list.push((index, write, after)),
+                        None => by_mailbox.push((mailbox, vec![(index, write, after)])),
+                    }
+                }
+                Ok(Grouped::Nothing) => out[index] = Some(Ok(())),
+                Ok(Grouped::Alone) => out[index] = Some(self.run(op).await),
+                Err(err) => out[index] = Some(Err(err)),
+            }
+        }
+        for (mailbox, list) in by_mailbox {
+            let writes: Vec<RemoteWrite> = list.iter().map(|(_, w, _)| w.clone()).collect();
+            let results = batch.write_many(mailbox.as_deref(), &writes).await;
+            for ((index, _, after), result) in list.into_iter().zip(results) {
+                let result = match (result, after) {
+                    (
+                        Ok(WriteOutcome::Done {
+                            remote_id: Some(new),
+                        }),
+                        AfterWrite::Moved(folder),
+                    ) => {
+                        self.set_remote(ops[index].operation.message_id(), &new, folder.as_ref())
+                            .await;
+                        Ok(())
+                    }
+                    (Ok(_), _) => Ok(()),
+                    (Err(err), _) => Err(err),
+                };
+                out[index] = Some(result);
+            }
+        }
+        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+
     async fn run(&self, op: &QueuedOp) -> Result<(), EngineError> {
         match &op.operation {
             Operation::UpdateFlags { message_id, change } => {
                 let Some((mailbox, remote_id)) = self.remote_of(message_id).await? else {
                     return Ok(());
                 };
-                let keep = |tags: &[String]| -> Vec<String> {
-                    tags.iter()
-                        .filter(|t| nail_exchange::mapping::categories::is_category_name(t))
-                        .cloned()
-                        .collect()
-                };
                 let write = RemoteWrite::SetFlags {
                     remote_id,
-                    change: nail_api::FlagChange {
-                        seen: change.seen,
-                        flagged: change.flagged,
-                        answered: change.answered,
-                        draft: change.draft,
-                        add_tags: keep(&change.add_tags),
-                        remove_tags: keep(&change.remove_tags),
-                    },
+                    change: category_change(change),
                 };
                 self.engine.write(mailbox.as_deref(), &write).await?;
                 Ok(())
@@ -2135,6 +2315,40 @@ impl ExchangeExecutor<'_> {
 impl OpExecutor for ExchangeExecutor<'_> {
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(self.run(op))
+    }
+
+    fn max_group(&self) -> usize {
+        if self.batch.is_some() {
+            EXCHANGE_GROUP
+        } else {
+            1
+        }
+    }
+
+    fn execute_group<'a>(
+        &'a self,
+        ops: &'a [QueuedOp],
+    ) -> BoxFuture<'a, Vec<Result<(), EngineError>>> {
+        Box::pin(self.run_group(ops))
+    }
+}
+
+/// A flag change as Exchange stores it: tags that are not category names
+/// stay local.
+fn category_change(change: &nail_store::FlagChange) -> nail_api::FlagChange {
+    let keep = |tags: &[String]| -> Vec<String> {
+        tags.iter()
+            .filter(|t| nail_exchange::mapping::categories::is_category_name(t))
+            .cloned()
+            .collect()
+    };
+    nail_api::FlagChange {
+        seen: change.seen,
+        flagged: change.flagged,
+        answered: change.answered,
+        draft: change.draft,
+        add_tags: keep(&change.add_tags),
+        remove_tags: keep(&change.remove_tags),
     }
 }
 

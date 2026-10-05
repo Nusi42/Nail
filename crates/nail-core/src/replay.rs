@@ -38,10 +38,52 @@ use crate::ids;
 use crate::service::Service;
 use crate::sync::{ImapSettings, connect};
 
-/// Performs one queued operation.
+/// Performs queued operations.
 pub(crate) trait OpExecutor: Send + Sync {
     /// `Err` with `retryable` keeps the operation queued.
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>>;
+
+    /// Most operations [`Self::execute_group`] takes (P3, ADR 0164); `1`
+    /// (the default) executes every operation on its own.
+    fn max_group(&self) -> usize {
+        1
+    }
+
+    /// Executes consecutive operations of one account with the same
+    /// `Operation::group_key` together (one server call where the protocol
+    /// allows). One result per operation, in order; a shorter answer
+    /// leaves the rest unattempted. The default executes them one by one
+    /// and stops after the first retryable error.
+    fn execute_group<'a>(
+        &'a self,
+        ops: &'a [QueuedOp],
+    ) -> BoxFuture<'a, Vec<Result<(), EngineError>>> {
+        Box::pin(async move {
+            let mut out = Vec::with_capacity(ops.len());
+            for op in ops {
+                let result = self.execute(op).await;
+                let stop = matches!(&result, Err(err) if err.retryable);
+                out.push(result);
+                if stop {
+                    break;
+                }
+            }
+            out
+        })
+    }
+}
+
+/// Executes `ops` one by one (an executor's fallback for groups it cannot
+/// send as one call).
+async fn one_by_one(
+    executor: &(impl OpExecutor + ?Sized),
+    ops: &[QueuedOp],
+) -> Vec<Result<(), EngineError>> {
+    let mut out = Vec::with_capacity(ops.len());
+    for op in ops {
+        out.push(executor.execute(op).await);
+    }
+    out
 }
 
 /// Adapts an executor to the store's [`Replayer`], broadcasting progress.
@@ -66,10 +108,9 @@ impl EventReplayer<'_> {
     }
 }
 
-impl Replayer for EventReplayer<'_> {
-    async fn replay(&self, op: &QueuedOp) -> ReplayOutcome {
-        self.status(op, OpState::InFlight, None);
-        match self.executor.execute(op).await {
+impl EventReplayer<'_> {
+    fn outcome(&self, op: &QueuedOp, result: Result<(), EngineError>) -> ReplayOutcome {
+        match result {
             Ok(()) => {
                 self.status(op, OpState::Done, None);
                 ReplayOutcome::Done
@@ -85,6 +126,34 @@ impl Replayer for EventReplayer<'_> {
                 ReplayOutcome::Fail(err.to_string())
             }
         }
+    }
+}
+
+impl Replayer for EventReplayer<'_> {
+    async fn replay(&self, op: &QueuedOp) -> ReplayOutcome {
+        self.status(op, OpState::InFlight, None);
+        let result = self.executor.execute(op).await;
+        self.outcome(op, result)
+    }
+
+    fn max_group(&self) -> usize {
+        self.executor.max_group()
+    }
+
+    async fn replay_group(&self, ops: &[QueuedOp]) -> Vec<ReplayOutcome> {
+        for op in ops {
+            self.status(op, OpState::InFlight, None);
+        }
+        let results = self.executor.execute_group(ops).await;
+        let mut out = Vec::with_capacity(results.len());
+        for (op, result) in ops.iter().zip(results) {
+            out.push(self.outcome(op, result));
+        }
+        // Not attempted: back to pending.
+        for op in &ops[out.len()..] {
+            self.status(op, OpState::Pending, None);
+        }
+        out
     }
 }
 
@@ -682,7 +751,238 @@ impl ImapExecutor<'_> {
     }
 }
 
+/// Most operations an IMAP replay sends as one UID set (the client splits
+/// long sets into chunks itself).
+const IMAP_GROUP: usize = 500;
+
+impl ImapExecutor<'_> {
+    /// The UIDs of `ops` in `from` (each op's own [`MessageSource`]):
+    /// `(index, uid)` for the messages found; the others are done (not on
+    /// the server) or answer their error.
+    async fn resolve_all(
+        &self,
+        ops: &[QueuedOp],
+        from: &Folder,
+        out: &mut [Option<Result<(), EngineError>>],
+    ) -> Vec<(usize, u32, u32)> {
+        let mut found = Vec::new();
+        for (index, op) in ops.iter().enumerate() {
+            let Some(source) = op.operation.source() else {
+                out[index] = Some(Err(EngineError::permanent(
+                    ErrorCode::Internal,
+                    format!("cannot replay {} without its source", op.operation.kind()),
+                )));
+                continue;
+            };
+            match self.resolve(op, from, source).await {
+                Ok(Some((uid, validity))) => found.push((index, uid, validity)),
+                Ok(None) => out[index] = Some(Ok(())),
+                Err(err) => out[index] = Some(Err(err)),
+            }
+        }
+        found
+    }
+
+    /// Flag changes of a group: one `UID STORE` per folder.
+    async fn flags_group(
+        &self,
+        ops: &[QueuedOp],
+        change: &nail_store::FlagChange,
+    ) -> Vec<Result<(), EngineError>> {
+        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut by_folder: Vec<(Folder, Vec<(usize, u32)>)> = Vec::new();
+        for (index, op) in ops.iter().enumerate() {
+            let located = match server_location(self.service, op).await {
+                Ok(Some((folder, source))) if folder.account_id == op.account_id => self
+                    .resolve(op, &folder, &source)
+                    .await
+                    .map(|uid| uid.map(|(uid, _)| (folder, uid))),
+                Ok(_) => Ok(None),
+                Err(err) => Err(err),
+            };
+            match located {
+                Ok(Some((folder, uid))) => {
+                    match by_folder.iter_mut().find(|(f, _)| f.id == folder.id) {
+                        Some((_, uids)) => uids.push((index, uid)),
+                        None => by_folder.push((folder, vec![(index, uid)])),
+                    }
+                }
+                Ok(None) => out[index] = Some(Ok(())),
+                Err(err) => out[index] = Some(Err(err)),
+            }
+        }
+        let api_change = nail_api::FlagChange {
+            seen: change.seen,
+            flagged: change.flagged,
+            answered: change.answered,
+            draft: change.draft,
+            add_tags: change.add_tags.clone(),
+            remove_tags: change.remove_tags.clone(),
+        };
+        for (folder, members) in by_folder {
+            let uids: Vec<u32> = members.iter().map(|(_, uid)| *uid).collect();
+            let result = self
+                .client
+                .lock()
+                .await
+                .apply_flag_change(&folder.path, &uids, &api_change)
+                .await
+                .map(drop)
+                .map_err(EngineError::from);
+            for (index, _) in members {
+                out[index] = Some(result.clone());
+            }
+        }
+        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+
+    /// Moves of a group within the account (deletes to Trash too): one
+    /// `UID MOVE` (or COPY + expunge) with the UID set.
+    async fn move_group(
+        &self,
+        ops: &[QueuedOp],
+        from_id: &nail_api::FolderId,
+        target_id: &nail_api::FolderId,
+    ) -> Vec<Result<(), EngineError>> {
+        let folders = async {
+            Ok::<_, EngineError>((
+                folder(self.service, from_id).await?,
+                folder(self.service, target_id).await?,
+            ))
+        };
+        let (from, target) = match folders.await {
+            Ok(found) => found,
+            Err(err) => return vec![Err(err); ops.len()],
+        };
+        if target.account_id != from.account_id {
+            // Into another account: copy by copy.
+            return one_by_one(self, ops).await;
+        }
+        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let found = self.resolve_all(ops, &from, &mut out).await;
+        if !found.is_empty() {
+            let snoozed = {
+                let target = target.clone();
+                self.service
+                    .store()
+                    .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &target)))
+                    .await
+                    .unwrap_or(false)
+            };
+            let mut result: Result<(), EngineError> = Ok(());
+            if snoozed {
+                let created = self.client.lock().await.create_folder(&target.path).await;
+                match created {
+                    Ok(()) => tracing::info!(folder = %target.path, "created the Snoozed folder"),
+                    Err(err) if err.code() == ErrorCode::Conflict => {}
+                    Err(err) => result = Err(err.into()),
+                }
+            }
+            if result.is_ok() {
+                let uids: Vec<u32> = found.iter().map(|(_, uid, _)| *uid).collect();
+                let moved = self
+                    .client
+                    .lock()
+                    .await
+                    .move_messages(&from.path, &uids, &target.path)
+                    .await;
+                match moved {
+                    Ok(moved) => {
+                        for (index, uid, _) in &found {
+                            let new_uid = moved
+                                .copy
+                                .mapping
+                                .iter()
+                                .find(|(old, _)| old == uid)
+                                .map(|(_, new)| *new);
+                            placed(
+                                self.service,
+                                &ops[*index],
+                                &target,
+                                new_uid,
+                                moved.copy.uid_validity,
+                            )
+                            .await;
+                        }
+                    }
+                    Err(err) => result = Err(err.into()),
+                }
+            }
+            for (index, _, _) in &found {
+                out[*index] = Some(result.clone());
+            }
+        }
+        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+
+    /// Permanent deletes of a group: one `\Deleted` + expunge of the set.
+    async fn expunge_group(
+        &self,
+        ops: &[QueuedOp],
+        from_id: &nail_api::FolderId,
+    ) -> Vec<Result<(), EngineError>> {
+        let from = match folder(self.service, from_id).await {
+            Ok(from) => from,
+            Err(err) => return vec![Err(err); ops.len()],
+        };
+        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let found = self.resolve_all(ops, &from, &mut out).await;
+        if !found.is_empty() {
+            let uids: Vec<u32> = found.iter().map(|(_, uid, _)| *uid).collect();
+            let result = self
+                .client
+                .lock()
+                .await
+                .expunge_messages(&from.path, &uids)
+                .await
+                .map(drop)
+                .map_err(EngineError::from);
+            for (index, _, _) in &found {
+                out[*index] = Some(result.clone());
+            }
+        }
+        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+}
+
 impl OpExecutor for ImapExecutor<'_> {
+    fn max_group(&self) -> usize {
+        IMAP_GROUP
+    }
+
+    fn execute_group<'a>(
+        &'a self,
+        ops: &'a [QueuedOp],
+    ) -> BoxFuture<'a, Vec<Result<(), EngineError>>> {
+        Box::pin(async move {
+            let Some(first) = ops.first() else {
+                return Vec::new();
+            };
+            match &first.operation {
+                Operation::UpdateFlags { change, .. } => self.flags_group(ops, change).await,
+                Operation::MoveMessage {
+                    target_folder_id,
+                    source: Some(source),
+                    ..
+                } => {
+                    self.move_group(ops, &source.folder_id, target_folder_id)
+                        .await
+                }
+                Operation::DeleteMessage {
+                    source: Some(source),
+                    trash_folder_id: Some(trash),
+                    ..
+                } => self.move_group(ops, &source.folder_id, trash).await,
+                Operation::DeleteMessage {
+                    source: Some(source),
+                    trash_folder_id: None,
+                    ..
+                } => self.expunge_group(ops, &source.folder_id).await,
+                _ => one_by_one(self, ops).await,
+            }
+        })
+    }
+
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(async move {
             match &op.operation {

@@ -1027,13 +1027,17 @@ impl Service {
             },
             // P3 (ADR 0164): Gmail-like actions on conversations.
             Request::ApplyMailAction { targets, action } => Response::MailActionQueued {
-                result: self.apply_mail_action(&targets, action, None).await?,
+                result: self
+                    .apply_mail_action(&targets, action, None, crate::mail_actions::USER_ACTOR)
+                    .await?,
             },
             Request::ResolveMailTargets { targets, action } => Response::MailTargets {
                 resolution: self.resolve_mail_targets(&targets, &action, None).await?,
             },
             Request::UndoMailAction { batch_id } => Response::Queued {
-                op_ids: self.undo_mail_action(&batch_id).await?,
+                op_ids: self
+                    .undo_mail_action(&batch_id, crate::mail_actions::USER_ACTOR)
+                    .await?,
             },
             Request::ListThreads {
                 folder_id,

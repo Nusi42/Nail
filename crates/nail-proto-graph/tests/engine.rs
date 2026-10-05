@@ -2092,3 +2092,108 @@ async fn mock_server_basics() {
         .unwrap();
     assert_eq!(batch.status().as_u16(), 400, "at most 20 requests");
 }
+
+/// P3 (ADR 0164): a conversation's writes go out as `$batch` parts; tag
+/// changes (they read the categories) and appends stay single calls.
+#[tokio::test]
+async fn many_writes_share_batch_calls() {
+    let (server, engine) = demo().await;
+    let mut inbox: Vec<String> = server
+        .messages_in(None, "inbox")
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    let folder = server.folder_id(None, "inbox");
+    for _ in 0..2 {
+        let copy = engine.copy_message(None, &inbox[0], &folder).await.unwrap();
+        inbox.push(copy);
+    }
+    let archive = server.folder_id(None, "archive");
+    let seen = FlagChange {
+        seen: Some(true),
+        ..FlagChange::default()
+    };
+    let writes = vec![
+        RemoteWrite::SetFlags {
+            remote_id: inbox[0].clone(),
+            change: seen.clone(),
+        },
+        RemoteWrite::SetFlags {
+            remote_id: inbox[1].clone(),
+            change: FlagChange {
+                add_tags: vec!["Partner".into()],
+                ..FlagChange::default()
+            },
+        },
+        RemoteWrite::SetFlags {
+            remote_id: inbox[1].clone(),
+            change: FlagChange::default(),
+        },
+        RemoteWrite::Move {
+            remote_id: inbox[2].clone(),
+            from_folder: server.message(None, &inbox[2]).unwrap().folder,
+            to_folder: archive.clone(),
+        },
+        RemoteWrite::Trash {
+            remote_id: inbox[3].clone(),
+        },
+        RemoteWrite::SetFlags {
+            remote_id: "AAMk-gone=".into(),
+            change: seen,
+        },
+    ];
+    server.clear_requests();
+    let results = engine.write_many(None, &writes).await;
+    let results: Vec<WriteOutcome> = results.into_iter().map(Result::unwrap).collect();
+    assert_eq!(results[0], WriteOutcome::Done { remote_id: None });
+    assert_eq!(results[1], WriteOutcome::Done { remote_id: None });
+    assert_eq!(results[2], WriteOutcome::Done { remote_id: None });
+    assert!(matches!(&results[3], WriteOutcome::Done { remote_id: Some(id) } if *id == inbox[2]));
+    assert!(matches!(
+        &results[4],
+        WriteOutcome::Done { remote_id: Some(_) }
+    ));
+    assert_eq!(results[5], WriteOutcome::Gone);
+    assert!(server.message(None, &inbox[0]).unwrap().is_read);
+    assert_eq!(
+        server.message(None, &inbox[1]).unwrap().categories,
+        ["Partner"]
+    );
+    assert_eq!(server.message(None, &inbox[2]).unwrap().folder, archive);
+    assert_eq!(
+        server.message(None, &inbox[3]).unwrap().folder,
+        server.folder_id(None, "deleteditems")
+    );
+    let requests = server.requests();
+    let batches = requests
+        .iter()
+        .filter(|r| !r.in_batch && r.path.ends_with("$batch"))
+        .count();
+    assert_eq!(batches, 1, "four parts in one $batch");
+    assert_eq!(requests.iter().filter(|r| r.in_batch).count(), 4);
+    assert!(
+        requests
+            .iter()
+            .filter(|r| !r.in_batch && r.method == "PATCH")
+            .count()
+            == 1,
+        "the tag change goes alone"
+    );
+    // A permanent delete in a batch; a second one finds nothing.
+    let gone = engine
+        .write_many(
+            None,
+            &[
+                RemoteWrite::Delete {
+                    remote_id: inbox[0].clone(),
+                },
+                RemoteWrite::Delete {
+                    remote_id: inbox[0].clone(),
+                },
+            ],
+        )
+        .await;
+    assert_eq!(gone[0], Ok(WriteOutcome::Done { remote_id: None }));
+    assert_eq!(gone[1], Ok(WriteOutcome::Gone));
+    assert!(server.message(None, &inbox[0]).is_none());
+}

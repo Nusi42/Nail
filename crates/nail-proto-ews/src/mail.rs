@@ -525,6 +525,108 @@ impl EwsClient {
         })
     }
 
+    /// `UpdateItem` of many messages with the same absolute `updates` and
+    /// no change keys (P3, ADR 0164: a conversation's read state or flag),
+    /// [`MANY_ITEMS`] per call. One result per id, in order: the item's
+    /// new reference, or its own error (`ErrorItemNotFound` →
+    /// [`EwsError::NotFound`]). `Err` when a call as a whole failed.
+    pub async fn update_items(
+        &self,
+        mailbox: Option<&str>,
+        ids: &[&str],
+        updates: &[Update],
+    ) -> Result<Vec<Result<ItemRef, EwsError>>, EwsError> {
+        let changes: String = updates.iter().map(|u| u.xml("Message")).collect();
+        let mut out = Vec::with_capacity(ids.len());
+        for chunk in ids.chunks(MANY_ITEMS) {
+            let mut items = String::new();
+            for id in chunk {
+                items.push_str("<t:ItemChange>");
+                items.push_str(&ItemRef::new(*id).xml());
+                items.push_str("<t:Updates>");
+                items.push_str(&changes);
+                items.push_str("</t:Updates></t:ItemChange>");
+            }
+            let body = format!(
+                r#"<m:UpdateItem ConflictResolution="AlwaysOverwrite" MessageDisposition="SaveOnly" SuppressReadReceipts="true"><m:ItemChanges>{items}</m:ItemChanges></m:UpdateItem>"#
+            );
+            let mut op = Operation::write("UpdateItem", body);
+            op.idempotent = updates_are_absolute(updates);
+            let response = self.call(&op.anchored(mailbox)).await?;
+            let answers = soap::response_messages(&response.body);
+            check_count("UpdateItem", answers.len(), chunk.len())?;
+            for (id, answer) in chunk.iter().zip(answers) {
+                out.push(answer.check().map(|()| {
+                    answer
+                        .element
+                        .child("Items")
+                        .and_then(|items| items.children.first())
+                        .and_then(|i| element_id(i, "ItemId"))
+                        .unwrap_or_else(|| ItemRef::new(*id))
+                }));
+            }
+        }
+        Ok(out)
+    }
+
+    /// `MoveItem` of many items into one folder ([`MANY_ITEMS`] per call).
+    /// One result per id, in order: the new item id, or the item's own
+    /// error. `Err` when a call as a whole failed (moves are not repeated).
+    pub async fn move_items(
+        &self,
+        mailbox: Option<&str>,
+        ids: &[&str],
+        folder: FolderRef<'_>,
+    ) -> Result<Vec<Result<ItemRef, EwsError>>, EwsError> {
+        let mut out = Vec::with_capacity(ids.len());
+        for chunk in ids.chunks(MANY_ITEMS) {
+            let items: String = chunk.iter().map(|id| ItemRef::new(*id).xml()).collect();
+            let body = format!(
+                "<m:MoveItem><m:ToFolderId>{}</m:ToFolderId><m:ItemIds>{items}</m:ItemIds><m:ReturnNewItemIds>true</m:ReturnNewItemIds></m:MoveItem>",
+                folder.xml()
+            );
+            let response = self
+                .call(&Operation::write("MoveItem", body).anchored(mailbox))
+                .await?;
+            let answers = soap::response_messages(&response.body);
+            check_count("MoveItem", answers.len(), chunk.len())?;
+            for answer in answers {
+                out.push(answer.check().and_then(|()| {
+                    first_item(answer.element).and_then(|i| {
+                        element_id(&i, "ItemId").ok_or_else(|| {
+                            EwsError::Protocol("MoveItem without the new item id".into())
+                        })
+                    })
+                }));
+            }
+        }
+        Ok(out)
+    }
+
+    /// `DeleteItem` of many items (`HardDelete`, …; [`MANY_ITEMS`] per
+    /// call). One result per id, in order.
+    pub async fn delete_items(
+        &self,
+        mailbox: Option<&str>,
+        ids: &[&str],
+        delete_type: &str,
+    ) -> Result<Vec<Result<(), EwsError>>, EwsError> {
+        let mut out = Vec::with_capacity(ids.len());
+        for chunk in ids.chunks(MANY_ITEMS) {
+            let items: String = chunk.iter().map(|id| ItemRef::new(*id).xml()).collect();
+            let body = format!(
+                r#"<m:DeleteItem DeleteType="{delete_type}"><m:ItemIds>{items}</m:ItemIds></m:DeleteItem>"#
+            );
+            let mut op = Operation::write("DeleteItem", body);
+            op.idempotent = true;
+            let response = self.call(&op.anchored(mailbox)).await?;
+            let answers = soap::response_messages(&response.body);
+            check_count("DeleteItem", answers.len(), chunk.len())?;
+            out.extend(answers.iter().map(ResponseMessage::check));
+        }
+        Ok(out)
+    }
+
     /// `DeleteItem` (`HardDelete`, `SoftDelete` or `MoveToDeletedItems`),
     /// with `extra_attributes` for meetings and tasks.
     pub async fn delete_item(
@@ -572,6 +674,21 @@ impl EwsClient {
             .path(&["RootFolder", "Items"])
             .and_then(|items| items.children.first())
             .and_then(|i| element_id(i, "ItemId")))
+    }
+}
+
+/// Most items one multi-item request names ([`EwsClient::update_items`],
+/// [`EwsClient::move_items`], [`EwsClient::delete_items`]).
+pub const MANY_ITEMS: usize = 100;
+
+/// A multi-item answer must answer every item.
+fn check_count(what: &str, answered: usize, asked: usize) -> Result<(), EwsError> {
+    if answered == asked {
+        Ok(())
+    } else {
+        Err(EwsError::Protocol(format!(
+            "{what} answered {answered} of {asked} items"
+        )))
     }
 }
 

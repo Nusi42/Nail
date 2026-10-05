@@ -96,6 +96,22 @@ pub struct EwsEngine {
     rooms: Mutex<HashSet<String>>,
 }
 
+/// A group of [`EwsEngine::write_many`]: its key, its request and the
+/// writes it carries (index, item id).
+type ManyEntry<'w> = (String, ManyGroup<'w>, Vec<(usize, &'w str)>);
+
+/// One multi-item request of [`EwsEngine::write_many`].
+enum ManyGroup<'w> {
+    /// `UpdateItem` with these updates.
+    Update(Vec<Update>),
+    /// `MoveItem` into this folder.
+    Move(&'w str),
+    /// `MoveItem` into Deleted Items.
+    Trash,
+    /// `DeleteItem` (hard).
+    Delete,
+}
+
 fn key(mailbox: Option<&str>) -> Option<String> {
     mailbox.map(str::to_ascii_lowercase)
 }
@@ -320,6 +336,137 @@ impl EwsEngine {
             }
         }
         Ok(DeltaOutcome::Delta(delta))
+    }
+
+    /// Replays several writes of one mailbox with as few calls as EWS
+    /// allows (P3, ADR 0164): flag changes without tags that set the same
+    /// fields share one `UpdateItem`, moves into one folder (and moves to
+    /// Deleted Items) one `MoveItem`, permanent deletes one `DeleteItem`;
+    /// tag changes (they read the categories first) and appends go one by
+    /// one. Answers one result per write, in order; an item the server no
+    /// longer has answers [`WriteOutcome::Gone`]. When a call as a whole
+    /// fails, every write of it answers that error.
+    pub async fn write_many(
+        &self,
+        mailbox: Option<&str>,
+        writes: &[RemoteWrite],
+    ) -> Vec<Result<WriteOutcome, EwsError>> {
+        let mut out: Vec<Option<Result<WriteOutcome, EwsError>>> = vec![None; writes.len()];
+        // Groups by their key, in order of first appearance.
+        let mut groups: Vec<ManyEntry<'_>> = Vec::new();
+        for (index, write) in writes.iter().enumerate() {
+            let (key, group, id) = match write {
+                RemoteWrite::SetFlags { remote_id, change }
+                    if change.add_tags.is_empty() && change.remove_tags.is_empty() =>
+                {
+                    let updates = mail::flag_updates(change);
+                    if updates.is_empty() {
+                        out[index] = Some(Ok(WriteOutcome::Done { remote_id: None }));
+                        continue;
+                    }
+                    let key = format!(
+                        "update:{}",
+                        updates.iter().map(|u| u.xml("Message")).collect::<String>()
+                    );
+                    (key, ManyGroup::Update(updates), remote_id.as_str())
+                }
+                RemoteWrite::Move {
+                    remote_id,
+                    to_folder,
+                    ..
+                } => (
+                    format!("move:{to_folder}"),
+                    ManyGroup::Move(to_folder.as_str()),
+                    remote_id.as_str(),
+                ),
+                RemoteWrite::Trash { remote_id } => {
+                    ("trash".to_owned(), ManyGroup::Trash, remote_id.as_str())
+                }
+                RemoteWrite::Delete { remote_id } => {
+                    ("delete".to_owned(), ManyGroup::Delete, remote_id.as_str())
+                }
+                RemoteWrite::SetFlags { .. } | RemoteWrite::Append { .. } => continue,
+            };
+            match groups.iter_mut().find(|(k, _, _)| *k == key) {
+                Some((_, _, members)) => members.push((index, id)),
+                None => groups.push((key, group, vec![(index, id)])),
+            }
+        }
+        for (_, group, members) in &groups {
+            let ids: Vec<&str> = members.iter().map(|(_, id)| *id).collect();
+            match self.write_group(mailbox, group, &ids).await {
+                Ok(answers) => {
+                    for ((index, _), answer) in members.iter().zip(answers) {
+                        out[*index] = Some(match answer {
+                            Err(EwsError::NotFound(_)) => Ok(WriteOutcome::Gone),
+                            other => other,
+                        });
+                    }
+                }
+                Err(err) => {
+                    for (index, _) in members {
+                        out[*index] = Some(Err(err.clone()));
+                    }
+                }
+            }
+        }
+        let mut results = Vec::with_capacity(writes.len());
+        for (index, write) in writes.iter().enumerate() {
+            let result = match out[index].take() {
+                Some(result) => result,
+                None => self.replay(mailbox, write).await,
+            };
+            results.push(result);
+        }
+        results
+    }
+
+    /// One multi-item request of [`Self::write_many`].
+    async fn write_group(
+        &self,
+        mailbox: Option<&str>,
+        group: &ManyGroup<'_>,
+        ids: &[&str],
+    ) -> Result<Vec<Result<WriteOutcome, EwsError>>, EwsError> {
+        let moved = |list: Vec<Result<ItemRef, EwsError>>| -> Vec<Result<WriteOutcome, EwsError>> {
+            list.into_iter()
+                .map(|r| {
+                    r.map(|new| WriteOutcome::Done {
+                        remote_id: Some(new.id),
+                    })
+                })
+                .collect()
+        };
+        Ok(match group {
+            ManyGroup::Update(updates) => self
+                .client
+                .update_items(mailbox, ids, updates)
+                .await?
+                .into_iter()
+                .map(|r| r.map(|_| WriteOutcome::Done { remote_id: None }))
+                .collect(),
+            ManyGroup::Move(folder) => moved(
+                self.client
+                    .move_items(mailbox, ids, FolderRef::named(mailbox, folder))
+                    .await?,
+            ),
+            ManyGroup::Trash => moved(
+                self.client
+                    .move_items(
+                        mailbox,
+                        ids,
+                        FolderRef::distinguished("deleteditems", mailbox),
+                    )
+                    .await?,
+            ),
+            ManyGroup::Delete => self
+                .client
+                .delete_items(mailbox, ids, "HardDelete")
+                .await?
+                .into_iter()
+                .map(|r| r.map(|()| WriteOutcome::Done { remote_id: None }))
+                .collect(),
+        })
     }
 
     async fn replay(

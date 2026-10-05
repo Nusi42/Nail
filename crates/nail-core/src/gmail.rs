@@ -1001,9 +1001,130 @@ impl GmailExecutor<'_> {
     }
 }
 
+/// How one operation of a group is replayed (P3).
+enum Grouped {
+    /// Its write goes with the others.
+    Write(RemoteWrite),
+    /// Nothing to do (the message never reached the server).
+    Nothing,
+    /// On its own ([`GmailExecutor::run`]): moves into another account.
+    Alone,
+}
+
+impl GmailExecutor<'_> {
+    /// The remote id of an operation's message: the recorded one, else the
+    /// row's.
+    async fn remote_of(
+        &self,
+        message: &MessageId,
+        source: Option<&nail_store::MessageSource>,
+    ) -> Result<Option<String>, EngineError> {
+        match source.and_then(|s| s.remote_id.clone()) {
+            Some(remote) => Ok(Some(remote)),
+            None => self.remote_id(message).await,
+        }
+    }
+
+    /// The write of a grouped operation: a flag change, a move within the
+    /// account or a delete.
+    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped, EngineError> {
+        let write = match &op.operation {
+            Operation::UpdateFlags { message_id, change } => self
+                .remote_of(message_id, None)
+                .await?
+                .map(|remote_id| RemoteWrite::SetFlags {
+                    remote_id,
+                    change: nail_api::FlagChange {
+                        seen: change.seen,
+                        flagged: change.flagged,
+                        answered: change.answered,
+                        draft: change.draft,
+                        add_tags: change.add_tags.clone(),
+                        remove_tags: change.remove_tags.clone(),
+                    },
+                }),
+            Operation::MoveMessage {
+                message_id,
+                target_folder_id,
+                source: Some(source),
+            } => {
+                let target = self.folder_path(target_folder_id).await?;
+                if target.account_id != self.account {
+                    return Ok(Grouped::Alone);
+                }
+                let from = self.folder_path(&source.folder_id).await?;
+                self.remote_of(message_id, Some(source))
+                    .await?
+                    .map(|remote_id| RemoteWrite::Move {
+                        remote_id,
+                        from_folder: from.path,
+                        to_folder: target.path,
+                    })
+            }
+            Operation::DeleteMessage {
+                message_id,
+                source,
+                trash_folder_id,
+                ..
+            } => self
+                .remote_of(message_id, source.as_ref())
+                .await?
+                .map(|remote_id| {
+                    if trash_folder_id.is_some() {
+                        RemoteWrite::Trash { remote_id }
+                    } else {
+                        RemoteWrite::Delete { remote_id }
+                    }
+                }),
+            _ => return Ok(Grouped::Alone),
+        };
+        Ok(write.map_or(Grouped::Nothing, Grouped::Write))
+    }
+
+    /// A group of operations (P3, ADR 0164): their writes go to the
+    /// engine together (one `batchModify` per label change).
+    async fn run_group(&self, ops: &[QueuedOp]) -> Vec<Result<(), EngineError>> {
+        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut writes: Vec<RemoteWrite> = Vec::new();
+        let mut members: Vec<usize> = Vec::new();
+        for (index, op) in ops.iter().enumerate() {
+            match self.group_write(op).await {
+                Ok(Grouped::Write(write)) => {
+                    writes.push(write);
+                    members.push(index);
+                }
+                Ok(Grouped::Nothing) => out[index] = Some(Ok(())),
+                Ok(Grouped::Alone) => out[index] = Some(self.run(op).await),
+                Err(err) => out[index] = Some(Err(err)),
+            }
+        }
+        if !writes.is_empty() {
+            let results = self.engine.write_many(&writes).await;
+            for (index, result) in members.into_iter().zip(results) {
+                out[index] = Some(result.map(drop));
+            }
+        }
+        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+}
+
+/// Most operations one Gmail replay sends together.
+const GMAIL_GROUP: usize = 1000;
+
 impl OpExecutor for GmailExecutor<'_> {
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(self.run(op))
+    }
+
+    fn max_group(&self) -> usize {
+        GMAIL_GROUP
+    }
+
+    fn execute_group<'a>(
+        &'a self,
+        ops: &'a [QueuedOp],
+    ) -> BoxFuture<'a, Vec<Result<(), EngineError>>> {
+        Box::pin(self.run_group(ops))
     }
 }
 

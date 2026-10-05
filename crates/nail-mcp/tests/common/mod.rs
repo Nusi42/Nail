@@ -403,7 +403,44 @@ impl McpData for FakeData {
     }
 
     async fn query(&self, request: Request) -> DataResult<Response> {
-        pim_answer(request)
+        match request {
+            // P3: a conversation is its thread's fake messages (in the
+            // listed folder for the actions that stay there; the newest one
+            // for a flag).
+            Request::ResolveMailTargets { targets, action } => {
+                use nail_api::mail_actions::{ConversationReach, MailTargetResolution};
+                let mut resolution = MailTargetResolution::default();
+                for target in targets {
+                    match target {
+                        nail_api::MessageTarget::Message { message_id } => {
+                            resolution.message_ids.push(message_id);
+                        }
+                        nail_api::MessageTarget::Conversation(c) => {
+                            let mut found: Vec<&MessageSummary> = self
+                                .messages
+                                .iter()
+                                .filter(|m| m.thread_id.as_ref() == Some(&c.thread_id))
+                                .filter(|m| {
+                                    action.reach() != ConversationReach::Listed
+                                        || c.folder_id.as_ref().is_none_or(|f| *f == m.folder_id)
+                                })
+                                .collect();
+                            if action.reach() == ConversationReach::Newest {
+                                found.truncate(1);
+                            }
+                            if !found.is_empty() {
+                                resolution.conversations += 1;
+                            }
+                            resolution
+                                .message_ids
+                                .extend(found.into_iter().map(|m| m.id.clone()));
+                        }
+                    }
+                }
+                Ok(Response::MailTargets { resolution })
+            }
+            other => pim_answer(other),
+        }
     }
 
     async fn write(&self, by: &ActionAttribution, request: Request) -> DataResult<Response> {
@@ -421,6 +458,22 @@ impl McpData for FakeData {
             | Request::MoveMessages { .. }
             | Request::DeleteMessages { .. }
             | Request::SnoozeMessages { .. } => Response::Queued { op_ids: op() },
+            Request::ApplyMailAction { targets, action } => Response::MailActionQueued {
+                result: nail_api::mail_actions::MailActionResult {
+                    batch_id: Some(format!("batch-{n}").into()),
+                    op_ids: op(),
+                    kind: action.kind(),
+                    message_ids: targets
+                        .into_iter()
+                        .filter_map(|t| match t {
+                            nail_api::MessageTarget::Message { message_id } => Some(message_id),
+                            nail_api::MessageTarget::Conversation(_) => None,
+                        })
+                        .collect(),
+                    conversations: 0,
+                    undo_until: None,
+                },
+            },
             Request::UploadAttachment {
                 filename,
                 mime,

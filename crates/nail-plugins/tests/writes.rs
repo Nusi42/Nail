@@ -379,3 +379,44 @@ async fn collections_are_listed_with_the_write_permissions() {
     assert_eq!(result["lists"][0]["name"], "Inbox");
     assert_eq!(result["calendars"][0]["readOnly"], false);
 }
+
+/// P3 (ADR 0164): `nail.mail.update` / `delete` take conversations
+/// (`{ messageIds?, conversations }`); the core resolves them within the
+/// plug-in's grant.
+#[tokio::test(flavor = "multi_thread")]
+async fn conversations_reach_the_core_as_conversation_targets() {
+    let fake = Fake::new();
+    let host = host(&fake);
+    let js = script(
+        r#"const archived = await nail.mail.update(
+             {conversations: [{threadId: "t1", folderId: "work-inbox"}]}, {archive: true});
+           const trashed = await nail.mail.delete({messageIds: "m1", conversations: [{threadId: "t2"}]});
+           let bad;
+           try { await nail.mail.update({conversations: [{thread: "t1"}]}, {read: true}); } catch (e) { bad = e.code; }
+           return {archived, trashed, bad};"#,
+    );
+    let mut s = spec("convo", &["mail.read", "mail.organize"], &js);
+    s.grants = vec![grant("mail.read", None), grant("mail.organize", None)];
+    host.start(s).await.unwrap();
+    let result = outcome(&fake, "convo").await.unwrap();
+    assert_eq!(result["archived"]["status"], "done");
+    assert_eq!(result["trashed"]["status"], "done");
+    assert_eq!(result["bad"], "invalid_request");
+    let writes = fake.writes();
+    assert_eq!(writes.len(), 2);
+    let PluginWrite::UpdateMessages(update) = &writes[0].write else {
+        panic!("{:?}", writes[0].write)
+    };
+    assert!(update.message_ids.is_empty() && update.archive);
+    assert_eq!(update.conversations[0].thread_id, "t1");
+    assert_eq!(
+        update.conversations[0].folder_id.as_deref(),
+        Some("work-inbox")
+    );
+    let PluginWrite::DeleteMessages(delete) = &writes[1].write else {
+        panic!("{:?}", writes[1].write)
+    };
+    assert_eq!(delete.message_ids, ["m1"]);
+    assert_eq!(delete.conversations[0].thread_id, "t2");
+    assert_eq!(writes[1].kind, ActionKind::Trash);
+}

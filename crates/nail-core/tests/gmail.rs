@@ -673,3 +673,71 @@ async fn a_resumed_full_listing_still_removes_deleted_messages() {
     let archive = messages(&env.service, FolderRole::Archive).await;
     assert!(archive.iter().filter(|m| m.subject == "Filler").count() >= 100);
 }
+
+/// P3 (ADR 0164): archiving several Inbox messages is one label change
+/// for all of them (`batchModify`), and its undo another.
+#[tokio::test(flavor = "multi_thread")]
+async fn mail_actions_replay_as_one_batch_modify() {
+    let env = setup().await;
+    synced(&env).await;
+    let list = messages(&env.service, FolderRole::Inbox).await;
+    let targets: Vec<nail_api::MessageTarget> = list
+        .iter()
+        .take(3)
+        .map(|m| nail_api::MessageTarget::message(m.id.clone()))
+        .collect();
+    let remote: Vec<String> = list
+        .iter()
+        .take(3)
+        .map(|m| {
+            env.service
+                .store()
+                .message_remote_id(&m.id)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    env.gmail.clear_requests();
+    let result = match request(
+        &env.service,
+        Request::ApplyMailAction {
+            targets,
+            action: nail_api::MailAction::Archive,
+        },
+    )
+    .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("unexpected {other:?}"),
+    };
+    assert_eq!(result.message_ids.len(), 3);
+    until("archived on Gmail", || async {
+        remote
+            .iter()
+            .all(|id| !env.gmail.labels_of(id).contains(&"INBOX".to_owned()))
+    })
+    .await;
+    let calls = |suffix: &str| {
+        env.gmail
+            .requests()
+            .iter()
+            .filter(|r| r.path.ends_with(suffix))
+            .count()
+    };
+    assert_eq!(calls("/batchModify"), 1);
+    assert_eq!(calls("/modify"), 0);
+    request(
+        &env.service,
+        Request::UndoMailAction {
+            batch_id: result.batch_id.unwrap(),
+        },
+    )
+    .await;
+    until("back in the Gmail inbox", || async {
+        remote
+            .iter()
+            .all(|id| env.gmail.labels_of(id).contains(&"INBOX".to_owned()))
+    })
+    .await;
+    assert_eq!(calls("/batchModify"), 2);
+}

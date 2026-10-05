@@ -139,6 +139,10 @@ pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,
     SyncedMessage, UidFlags,
 };
+pub use mail_batches::{
+    MailBatchApplied, MailBatchPlan, MailBatchRecord, MailBatchUndo, mail_batch_id,
+    parse_mail_batch_id,
+};
 pub use mcp::{McpAuditRecord, hash_mcp_token};
 pub use plugin_activity::{MAX_ACTIVITY_ERROR, PluginJobState};
 pub use plugins::{
@@ -162,8 +166,8 @@ pub use seal::{
 };
 pub use store::{BLOB_DIR_NAME, DB_FILE_NAME, Store};
 pub use thread::{
-    ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder, ThreadPage, ThreadTreeEntry,
-    summarize_conversation,
+    ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder, TargetMessage, ThreadPage,
+    ThreadTreeEntry, summarize_conversation,
 };
 pub use triage::{
     JUNK_TOKEN_LIMIT, JUNK_TRAINING_ROWS, JUNK_TRAINING_WITH_TOKENS, JunkStats, MCP_SETTINGS_KEY,

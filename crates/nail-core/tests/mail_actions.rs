@@ -1,17 +1,29 @@
-//! Mail actions on conversations (P3, ADR 0164). The contract's stub
-//! resolves conversation targets per action and forwards to the
-//! per-message writes; WP-actions-core extends this file (one batch, undo,
-//! every stored copy, engines, remote narrowing).
+//! Mail actions on conversations (P3, ADR 0164; WP-actions-core):
+//! targets resolved per reach (every stored copy), one batch with one
+//! undo, the actor's own undo (user, remote session, MCP client), remote
+//! sessions within their grant, snooze and junk undone with their side
+//! effects, and the demo-multi IMAP account's "Lab move" conversation on
+//! the mock server (grouped `UID MOVE`s, undo back to where each was).
 
 #![cfg(test)]
 
-use nail_api::mail_actions::MailActionKind;
-use nail_api::{
-    AccountId, ErrorCode, Folder, FolderRole, MailAction, MessageTarget, Request, Response,
-    ThreadSummary,
+use std::time::Duration;
+
+use nail_api::agents::{ActionActor, ActionAttribution};
+use nail_api::mail_actions::{MailActionKind, MailActionResult};
+use nail_api::remote::{
+    AuthRequest, AuthResponse, DEVICE_COOKIE, RemoteAccessPreset, RemoteGrant, SESSION_COOKIE,
 };
-use nail_core::demo::{DEMO_ACCOUNT_ID, demo_options, seed_demo};
-use nail_core::{Service, ServiceOptions};
+use nail_api::{
+    AccountId, ErrorCode, Folder, FolderId, FolderRole, MailAction, MessageId, MessageTarget,
+    MoveTarget, Request, Response, ThreadSummary,
+};
+use nail_core::demo::{
+    DEMO_ACCOUNT_ID, DemoMail, MULTI_WORK_ID, demo_options, seed_demo, start_demo_multi_with,
+};
+use nail_core::{McpCore, Service, ServiceOptions};
+use nail_mcp::CoreAccess;
+use nail_remote_auth::{ClientMeta, Cookies, RemoteSessionCtx};
 
 const SUBJECT: &str = "Project Nightingale kickoff";
 
@@ -29,6 +41,23 @@ fn setup() -> Fixture {
     options.start_engines = false;
     let service = Service::open(demo_options(options)).unwrap();
     seed_demo(service.store(), service.blobs()).unwrap();
+    // Trash and Junk folders for deletes and junk (the demo corpus has
+    // none).
+    for (name, role) in [("Trash", FolderRole::Trash), ("Junk", FolderRole::Junk)] {
+        service
+            .store()
+            .upsert_folder(&Folder {
+                id: FolderId::new(format!("demo-{name}")),
+                account_id: AccountId::new(DEMO_ACCOUNT_ID),
+                parent_id: None,
+                name: name.into(),
+                path: name.into(),
+                role,
+                unread: 0,
+                total: 0,
+            })
+            .unwrap();
+    }
     Fixture {
         service,
         _data: data,
@@ -185,4 +214,644 @@ async fn delete_permanently_only_from_trash_or_junk() {
         ),
         other => panic!("{other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// WP-actions-core
+
+async fn apply(f: &Fixture, targets: Vec<MessageTarget>, action: MailAction) -> MailActionResult {
+    match f
+        .service
+        .handle(Request::ApplyMailAction { targets, action })
+        .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The folders the thread's messages are in now, by folder id.
+fn where_are(f: &Fixture, thread: &nail_api::ThreadId) -> Vec<(FolderId, usize)> {
+    let store = f.service.store();
+    let mut out: Vec<(FolderId, usize)> = Vec::new();
+    for folder in store
+        .list_folders(&AccountId::new(DEMO_ACCOUNT_ID))
+        .unwrap()
+    {
+        let n = store
+            .list_messages(&folder.id, 0, 1000)
+            .unwrap()
+            .messages
+            .iter()
+            .filter(|m| m.thread_id.as_ref() == Some(thread))
+            .count();
+        if n > 0 {
+            out.push((folder.id, n));
+        }
+    }
+    out.sort();
+    out
+}
+
+fn issue_of(response: &Response) -> (ErrorCode, Option<String>) {
+    match response {
+        Response::Error {
+            code, localized, ..
+        } => (*code, localized.as_ref().map(|l| l.id.clone())),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn one_batch_one_undo_and_every_message_back_where_it_was() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let archive = folder(&f, FolderRole::Archive);
+    let row = nightingale(&f, &inbox).await;
+    let before = where_are(&f, &row.id);
+    let result = apply(
+        &f,
+        vec![MessageTarget::conversation(
+            row.id.clone(),
+            Some(inbox.id.clone()),
+        )],
+        MailAction::Archive,
+    )
+    .await;
+    let batch = result.batch_id.clone().expect("archiving is undoable");
+    assert!(result.undo_until.is_some());
+    assert_eq!(result.op_ids.len(), 4, "one queued move per message");
+    let after = where_are(&f, &row.id);
+    assert!(
+        after.iter().any(|(id, n)| *id == archive.id && *n >= 4),
+        "{after:?}"
+    );
+    assert!(after.iter().all(|(id, _)| *id != inbox.id));
+
+    let undone = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: batch.clone(),
+        })
+        .await;
+    assert!(
+        matches!(&undone, Response::Queued { op_ids } if op_ids.len() == 4),
+        "{undone:?}"
+    );
+    assert_eq!(where_are(&f, &row.id), before);
+    // Once only; unknown batches look expired.
+    let again = f
+        .service
+        .handle(Request::UndoMailAction { batch_id: batch })
+        .await;
+    assert_eq!(
+        issue_of(&again),
+        (
+            ErrorCode::Conflict,
+            Some("mail-action-issue-undone-already".into())
+        )
+    );
+    let unknown = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: "batch-999".into(),
+        })
+        .await;
+    assert_eq!(
+        issue_of(&unknown),
+        (
+            ErrorCode::NotFound,
+            Some("mail-action-issue-undo-expired".into())
+        )
+    );
+}
+
+#[tokio::test]
+async fn delete_reaches_the_replies_in_sent_and_undo_returns_each() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let sent = folder(&f, FolderRole::Sent);
+    let trash = folder(&f, FolderRole::Trash);
+    let row = nightingale(&f, &inbox).await;
+    let before = where_are(&f, &row.id);
+    let result = apply(
+        &f,
+        vec![MessageTarget::conversation(
+            row.id.clone(),
+            Some(inbox.id.clone()),
+        )],
+        MailAction::Trash,
+    )
+    .await;
+    assert_eq!(result.kind, MailActionKind::Trash);
+    assert_eq!(result.message_ids.len(), 7, "four listed, three replies");
+    let after = where_are(&f, &row.id);
+    assert!(
+        after
+            .iter()
+            .all(|(id, _)| *id != inbox.id && *id != sent.id),
+        "{after:?}"
+    );
+    assert!(after.iter().any(|(id, n)| *id == trash.id && *n >= 7));
+    // Delete permanently from Trash: refused while other copies are
+    // elsewhere is not the case here, so it is allowed, but not undoable.
+    let trash_row = nightingale(&f, &trash).await;
+    let resolution = match f
+        .service
+        .handle(Request::ResolveMailTargets {
+            targets: vec![MessageTarget::conversation(
+                trash_row.id.clone(),
+                Some(trash.id.clone()),
+            )],
+            action: MailAction::DeletePermanently,
+        })
+        .await
+    {
+        Response::MailTargets { resolution } => resolution,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(resolution.message_ids.len(), 7);
+    // Undo the trash first: everything is back where it was.
+    let undone = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: result.batch_id.unwrap(),
+        })
+        .await;
+    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    assert_eq!(where_are(&f, &row.id), before);
+}
+
+#[tokio::test]
+async fn read_state_and_flags_undo_per_message() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let row = nightingale(&f, &inbox).await;
+    let target = vec![MessageTarget::conversation(
+        row.id.clone(),
+        Some(inbox.id.clone()),
+    )];
+    let flags = |f: &Fixture| -> Vec<(MessageId, bool, bool)> {
+        let (_, messages) = f.service.store().get_thread(&row.id, None).unwrap();
+        let mut out: Vec<_> = messages
+            .into_iter()
+            .map(|m| (m.id, m.flags.seen, m.flags.flagged))
+            .collect();
+        out.sort();
+        out
+    };
+    let before = flags(&f);
+    let unread = apply(&f, target.clone(), MailAction::MarkRead { read: false }).await;
+    assert!(flags(&f).iter().all(|(_, seen, _)| !seen));
+    // Only the messages that were read are queued.
+    let were_read = before.iter().filter(|(_, seen, _)| *seen).count();
+    assert_eq!(unread.op_ids.len(), were_read);
+    let flagged = apply(&f, target.clone(), MailAction::Flag { flagged: true }).await;
+    assert_eq!(flagged.message_ids, vec![row.latest_message_id.clone()]);
+    for batch in [flagged.batch_id.unwrap(), unread.batch_id.unwrap()] {
+        let undone = f
+            .service
+            .handle(Request::UndoMailAction { batch_id: batch })
+            .await;
+        assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    }
+    assert_eq!(flags(&f), before);
+}
+
+#[tokio::test]
+async fn snooze_and_junk_undo_their_side_effects() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let row = nightingale(&f, &inbox).await;
+    let before = where_are(&f, &row.id);
+    let target = vec![MessageTarget::conversation(
+        row.id.clone(),
+        Some(inbox.id.clone()),
+    )];
+    let snoozed = apply(
+        &f,
+        target.clone(),
+        MailAction::Snooze {
+            until: "2030-01-01T08:00:00Z".into(),
+            wake_folder_id: None,
+        },
+    )
+    .await;
+    assert_eq!(f.service.store().list_snoozed(None).unwrap().len(), 4);
+    let undone = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: snoozed.batch_id.unwrap(),
+        })
+        .await;
+    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    assert!(f.service.store().list_snoozed(None).unwrap().is_empty());
+    assert_eq!(where_are(&f, &row.id), before);
+    let tags = |f: &Fixture| -> Vec<String> {
+        let (_, messages) = f.service.store().get_thread(&row.id, None).unwrap();
+        messages.into_iter().flat_map(|m| m.tags).collect()
+    };
+    assert!(!tags(&f).iter().any(|t| t == "$Snoozed"));
+
+    let junk = apply(&f, target, MailAction::Junk { junk: true }).await;
+    assert!(where_are(&f, &row.id).iter().all(|(id, _)| *id != inbox.id));
+    let undone = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: junk.batch_id.unwrap(),
+        })
+        .await;
+    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    assert_eq!(where_are(&f, &row.id), before);
+    let stats = f
+        .service
+        .store()
+        .junk_stats(&AccountId::new(DEMO_ACCOUNT_ID))
+        .unwrap();
+    assert_eq!(stats.trained_junk, 0, "the training is undone too");
+}
+
+#[tokio::test]
+async fn an_agents_batch_is_its_own_to_undo() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let row = nightingale(&f, &inbox).await;
+    let mcp = McpCore(f.service.clone());
+    let by = ActionAttribution {
+        actor: ActionActor::mcp_client("claude"),
+        name: "Claude".into(),
+        on_behalf_of: None,
+    };
+    let result = match mcp
+        .handle_write(
+            &by,
+            Request::ApplyMailAction {
+                targets: vec![MessageTarget::conversation(
+                    row.id.clone(),
+                    Some(inbox.id.clone()),
+                )],
+                action: MailAction::Archive,
+            },
+        )
+        .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("{other:?}"),
+    };
+    let batch = result.batch_id.unwrap();
+    // The user's undo does not reach an agent's batch …
+    let user = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: batch.clone(),
+        })
+        .await;
+    assert_eq!(issue_of(&user).0, ErrorCode::NotFound);
+    // … nor another agent's; the agent's own does.
+    let other = ActionAttribution {
+        actor: ActionActor::plugin("some.plugin"),
+        name: "Plug-in".into(),
+        on_behalf_of: None,
+    };
+    let response = mcp
+        .handle_write(
+            &other,
+            Request::UndoMailAction {
+                batch_id: batch.clone(),
+            },
+        )
+        .await;
+    assert_eq!(issue_of(&response).0, ErrorCode::NotFound);
+    let response = mcp
+        .handle_write(&by, Request::UndoMailAction { batch_id: batch })
+        .await;
+    assert!(matches!(response, Response::Queued { .. }), "{response:?}");
+}
+
+/// A user with `grant` and a browser paired to them.
+async fn remote_session(f: &Fixture, name: &str, grant: RemoteGrant) -> RemoteSessionCtx {
+    let user = match f
+        .service
+        .handle(Request::CreateRemoteUser {
+            name: name.into(),
+            display_name: None,
+            grant,
+        })
+        .await
+    {
+        Response::RemoteUserSaved { user } => user,
+        other => panic!("{other:?}"),
+    };
+    let code = match f
+        .service
+        .handle(Request::CreatePairingCode {
+            user_id: user.id.clone(),
+            device_name: Some("Phone".into()),
+            grant: None,
+            ttl_minutes: None,
+        })
+        .await
+    {
+        Response::PairingCodeCreated { code, .. } => code,
+        other => panic!("{other:?}"),
+    };
+    let auth = f.service.remote_auth();
+    let client = ClientMeta {
+        ip: Some("192.168.1.20".parse().unwrap()),
+        user_agent: Some("Test".into()),
+    };
+    let anonymous = Cookies::default();
+    let csrf = auth.csrf_token(&anonymous);
+    let reply = auth
+        .handle_auth(
+            AuthRequest::Pair {
+                code,
+                device_name: "Phone".into(),
+            },
+            &anonymous,
+            &client,
+            Some(&csrf),
+        )
+        .await;
+    assert!(
+        matches!(reply.response, AuthResponse::LoggedIn { .. }),
+        "{:?}",
+        reply.response
+    );
+    let mut cookies = Cookies::default();
+    for set in &reply.cookies {
+        let (pair, _) = set.split_once(';').unwrap_or((set, ""));
+        let (name, value) = pair.split_once('=').unwrap();
+        let value = Some(zeroize::Zeroizing::new(value.to_owned()));
+        match name {
+            SESSION_COOKIE => cookies.session = value,
+            DEVICE_COOKIE => cookies.device = value,
+            other => panic!("{other}"),
+        }
+    }
+    auth.resolve(&cookies, &client).unwrap().ctx
+}
+
+#[tokio::test]
+async fn a_remote_session_acts_on_what_its_grant_shows_and_undoes_its_own() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let sent = folder(&f, FolderRole::Sent);
+    let row = nightingale(&f, &inbox).await;
+    let mut grant = RemoteAccessPreset::NoSend.grant();
+    grant.mail.excluded_folders = vec![sent.id.clone()];
+    let ctx = remote_session(&f, "no-sent", grant).await;
+    let target = vec![MessageTarget::conversation(
+        row.id.clone(),
+        Some(inbox.id.clone()),
+    )];
+    // Delete reaches the replies in Sent — but not for this session, and it
+    // is not refused for them either.
+    let resolved = match f
+        .service
+        .handle_remote(
+            &ctx,
+            Request::ResolveMailTargets {
+                targets: target.clone(),
+                action: MailAction::Trash,
+            },
+        )
+        .await
+    {
+        Response::MailTargets { resolution } => resolution,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(resolved.message_ids.len(), 4);
+    let result = match f
+        .service
+        .handle_remote(
+            &ctx,
+            Request::ApplyMailAction {
+                targets: target,
+                action: MailAction::Trash,
+            },
+        )
+        .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(result.message_ids.len(), 4);
+    let in_sent = where_are(&f, &row.id)
+        .into_iter()
+        .find(|(id, _)| *id == sent.id)
+        .map(|(_, n)| n);
+    assert_eq!(in_sent, Some(3), "the hidden replies stay");
+    let batch = result.batch_id.unwrap();
+    // The desktop's user cannot undo the session's batch; the session can.
+    let user = f
+        .service
+        .handle(Request::UndoMailAction {
+            batch_id: batch.clone(),
+        })
+        .await;
+    assert_eq!(issue_of(&user).0, ErrorCode::NotFound);
+    let undone = f
+        .service
+        .handle_remote(&ctx, Request::UndoMailAction { batch_id: batch })
+        .await;
+    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    // A move into a folder outside the grant is refused.
+    let refused = f
+        .service
+        .handle_remote(
+            &ctx,
+            Request::ApplyMailAction {
+                targets: vec![MessageTarget::conversation(row.id, Some(inbox.id))],
+                action: MailAction::Move {
+                    target: MoveTarget::FolderId(sent.id),
+                },
+            },
+        )
+        .await;
+    assert_eq!(issue_of(&refused).0, ErrorCode::Forbidden);
+}
+
+// ---------------------------------------------------------------------------
+// The demo-multi IMAP account against the mock server
+
+const TIMEOUT: Duration = Duration::from_secs(30);
+
+async fn eventually<F, Fut>(what: &str, mut check: F)
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    let deadline = tokio::time::Instant::now() + TIMEOUT;
+    loop {
+        if check().await {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for: {what}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Lab-move messages per mailbox on the mock server.
+fn on_server(demo: &nail_core::demo::DemoMulti) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = demo
+        .work
+        .store()
+        .mailboxes()
+        .into_iter()
+        .map(|m| {
+            let n = m
+                .messages
+                .iter()
+                .filter(|s| {
+                    String::from_utf8_lossy(&s.raw).contains("Subject: Re: Lab move")
+                        || String::from_utf8_lossy(&s.raw).contains("Subject: Lab move")
+                })
+                .count();
+            (m.name, n)
+        })
+        .filter(|(_, n)| *n > 0)
+        .collect();
+    out.sort();
+    out
+}
+
+#[tokio::test]
+async fn the_lab_move_conversation_on_the_imap_server() {
+    let demo = start_demo_multi_with(DemoMail::WithConversations)
+        .await
+        .unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    demo.write_config(config.path()).unwrap();
+    let service =
+        Service::open(demo.service_options(ServiceOptions::new(data.path(), config.path())))
+            .unwrap();
+    let work_folder = |role: FolderRole| {
+        service
+            .store()
+            .list_folders(&AccountId::new(MULTI_WORK_ID))
+            .unwrap()
+            .into_iter()
+            .find(|f| f.role == role)
+    };
+    eventually("the work account synced with Sent", || async {
+        work_folder(FolderRole::Inbox).is_some() && work_folder(FolderRole::Sent).is_some() && {
+            let inbox = work_folder(FolderRole::Inbox).unwrap();
+            matches!(
+                service.handle(Request::ListThreads { folder_id: inbox.id, offset: 0, limit: 200 }).await,
+                Response::Threads { threads, .. }
+                    if threads.iter().any(|t| t.subject.contains("Lab move") && t.message_count == 12)
+            )
+        }
+    })
+    .await;
+    let inbox = work_folder(FolderRole::Inbox).unwrap();
+    let row = match service
+        .handle(Request::ListThreads {
+            folder_id: inbox.id.clone(),
+            offset: 0,
+            limit: 200,
+        })
+        .await
+    {
+        Response::Threads { threads, .. } => threads
+            .into_iter()
+            .find(|t| t.subject.contains("Lab move"))
+            .unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let start = on_server(&demo);
+    assert_eq!(
+        start,
+        [("INBOX".to_owned(), 9), ("Sent".to_owned(), 3)],
+        "the demo conversation"
+    );
+    let target = vec![MessageTarget::conversation(
+        row.id.clone(),
+        Some(inbox.id.clone()),
+    )];
+    let act = |action: MailAction| {
+        let (service, target) = (service.clone(), target.clone());
+        async move {
+            match service
+                .handle(Request::ApplyMailAction {
+                    targets: target,
+                    action,
+                })
+                .await
+            {
+                Response::MailActionQueued { result } => result,
+                other => panic!("{other:?}"),
+            }
+        }
+    };
+    let undo = |batch: nail_api::MailBatchId| {
+        let service = service.clone();
+        async move {
+            let response = service
+                .handle(Request::UndoMailAction { batch_id: batch })
+                .await;
+            assert!(matches!(response, Response::Queued { .. }), "{response:?}");
+        }
+    };
+
+    // Archive: the nine in the Inbox, with one UID MOVE.
+    demo.work.clear_commands();
+    let archived = act(MailAction::Archive).await;
+    assert_eq!(archived.message_ids.len(), 9);
+    eventually("archived on the server", || async {
+        on_server(&demo) == [("Archive".to_owned(), 9), ("Sent".to_owned(), 3)]
+    })
+    .await;
+    assert_eq!(
+        demo.work.command_count("UID MOVE"),
+        1,
+        "{:?}",
+        demo.work.commands()
+    );
+    undo(archived.batch_id.unwrap()).await;
+    eventually("back in the Inbox", || async { on_server(&demo) == start }).await;
+
+    // Delete: the Inbox's and the user's replies in Sent go to Trash.
+    demo.work.clear_commands();
+    let trashed = act(MailAction::Trash).await;
+    assert_eq!(trashed.message_ids.len(), 12);
+    eventually("in Trash on the server", || async {
+        on_server(&demo) == [("Trash".to_owned(), 12)]
+    })
+    .await;
+    assert_eq!(
+        demo.work.command_count("UID MOVE"),
+        2,
+        "one per source folder: {:?}",
+        demo.work.commands()
+    );
+    undo(trashed.batch_id.unwrap()).await;
+    eventually("each back where it was", || async {
+        on_server(&demo) == start
+    })
+    .await;
+
+    // Read state: one UID STORE for the whole conversation.
+    demo.work.clear_commands();
+    let unread = act(MailAction::MarkRead { read: false }).await;
+    assert!(!unread.op_ids.is_empty());
+    eventually("unread on the server", || async {
+        demo.work.store().mailboxes().iter().all(|m| {
+            m.messages
+                .iter()
+                .filter(|s| String::from_utf8_lossy(&s.raw).contains("Lab move"))
+                .all(|s| !s.has_flag("\\Seen"))
+        })
+    })
+    .await;
+    assert!(
+        demo.work.command_count("UID STORE") <= 2,
+        "one per folder: {:?}",
+        demo.work.commands()
+    );
 }

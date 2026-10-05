@@ -146,7 +146,28 @@ impl CoreAccess for McpCore {
         // the confirmation and the audit log.
         tracing::debug!(actor = %by.name, "agent write");
         let service = self.0.clone();
-        async move { service.handle(request).await }
+        // P3: a mail action's batch is the agent's (only it can undo it).
+        let actor = crate::mail_actions::agent_actor(&by.actor);
+        async move {
+            match request {
+                Request::ApplyMailAction { targets, action } => {
+                    match service
+                        .apply_mail_action(&targets, action, None, &actor)
+                        .await
+                    {
+                        Ok(result) => Response::MailActionQueued { result },
+                        Err(err) => ApiError::from(err).into(),
+                    }
+                }
+                Request::UndoMailAction { batch_id } => {
+                    match service.undo_mail_action(&batch_id, &actor).await {
+                        Ok(op_ids) => Response::Queued { op_ids },
+                        Err(err) => ApiError::from(err).into(),
+                    }
+                }
+                other => service.handle(other).await,
+            }
+        }
     }
 
     fn confirmations(&self) -> Option<Arc<dyn nail_mcp::broker::ConfirmationBroker>> {

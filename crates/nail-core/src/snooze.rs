@@ -118,6 +118,21 @@ impl Service {
         until: &str,
         wake_folder: Option<FolderId>,
     ) -> Result<Vec<OpId>> {
+        let ops = self.plan_snooze(ids, until, wake_folder).await?;
+        let op_ids = self.run_triage_ops(ops).await?;
+        self.inner.snooze.wake.notify_one();
+        self.broadcast(Event::SnoozeChanged);
+        Ok(op_ids)
+    }
+
+    /// Schedules the snoozes of [`Self::snooze_messages`] (the records are
+    /// stored at once) and answers the writes that hide the messages.
+    pub(crate) async fn plan_snooze(
+        &self,
+        ids: Vec<MessageId>,
+        until: &str,
+        wake_folder: Option<FolderId>,
+    ) -> Result<Vec<TriageOp>> {
         let until = chrono::DateTime::parse_from_rfc3339(until)
             .map_err(|_| ApiError::invalid_request(format!("invalid time {until:?}")))?
             .timestamp();
@@ -159,10 +174,22 @@ impl Service {
                 })
             })
             .await?;
-        let op_ids = self.run_triage_ops(plan.ops).await?;
+        Ok(plan.ops)
+    }
+
+    /// Cancels the snoozes of `ids` without bringing anything back (an
+    /// undone snooze, P3: the batch's inverses move the messages).
+    pub(crate) async fn forget_snoozes(&self, ids: Vec<MessageId>) -> Result<()> {
+        self.blocking(move |service| {
+            service.with_scheduler(|s| {
+                s.forget(&ids)?;
+                Ok(())
+            })
+        })
+        .await?;
         self.inner.snooze.wake.notify_one();
         self.broadcast(Event::SnoozeChanged);
-        Ok(op_ids)
+        Ok(())
     }
 
     /// `UnsnoozeMessages`: the messages come back now.

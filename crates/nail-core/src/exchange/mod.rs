@@ -24,6 +24,7 @@
 //! [`PollTimer`]: nail_proto_graph::PollTimer
 //! [`FolderPoll`]: nail_proto_graph::FolderPoll
 
+pub(crate) mod batch;
 pub(crate) mod pim;
 pub(crate) mod settings;
 pub(crate) mod setup;
@@ -102,6 +103,8 @@ impl std::fmt::Debug for ExchangeHooks {
 pub(crate) struct RunningEngine {
     /// The engine.
     pub engine: Arc<dyn ExchangeEngine>,
+    /// Its grouped mail writes (P3); `None` = one write at a time.
+    pub batch: Option<Arc<dyn batch::BatchWrites>>,
     /// How changes arrive now.
     pub push: Mutex<ExchangePush>,
     /// Warnings found while syncing (Focused Inbox unavailable, rooms need

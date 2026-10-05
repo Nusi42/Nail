@@ -200,13 +200,28 @@ impl Service {
             }
             // P3 (ADR 0164): conversation targets resolve within the grant
             // only — the session acts on exactly the conversation it sees.
-            Request::ApplyMailAction { targets, action } if !full(&access) => {
+            // The batch is the session's: only it can undo it.
+            Request::ApplyMailAction { targets, action } => {
+                let filter = (!full(&access)).then(|| grant_filter(&access));
                 Response::MailActionQueued {
                     result: self
-                        .apply_mail_action(&targets, action, Some(&grant_filter(&access)))
+                        .apply_mail_action(
+                            &targets,
+                            action,
+                            filter.as_ref(),
+                            &crate::mail_actions::remote_actor(&ctx.session.id),
+                        )
                         .await?,
                 }
             }
+            Request::UndoMailAction { batch_id } => Response::Queued {
+                op_ids: self
+                    .undo_mail_action(
+                        &batch_id,
+                        &crate::mail_actions::remote_actor(&ctx.session.id),
+                    )
+                    .await?,
+            },
             Request::ResolveMailTargets { targets, action } if !full(&access) => {
                 Response::MailTargets {
                     resolution: self
@@ -515,7 +530,9 @@ impl Service {
             | Request::ResolveMailTargets { targets, action } => {
                 self.check_mail_targets(access, targets, action).await
             }
-            // WP-actions-core: only the session's own batches.
+            // Only the session's own batches (the undo runs as the
+            // session's actor; another actor's batch answers like an
+            // expired one).
             Request::UndoMailAction { .. } => Ok(()),
             Request::AllowRemoteContent { message_id, .. } => {
                 self.check_messages(access, std::slice::from_ref(message_id))

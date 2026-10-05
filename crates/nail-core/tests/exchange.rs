@@ -1881,3 +1881,112 @@ async fn ews_writes_sending_settings_and_pim() {
     })
     .await;
 }
+
+/// P3 (ADR 0164): a mail action on several messages replays as grouped
+/// engine calls — Graph `$batch` parts, one EWS `UpdateItem` / `MoveItem`
+/// for the set — and its undo puts every message back.
+#[tokio::test(flavor = "multi_thread")]
+async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
+    let env = setup(true, "").await;
+    let service = &env.service;
+    until("both inboxes", || async {
+        inbox(service, GRAPH).await.len() == 2 && inbox(service, EWS).await.len() >= 3
+    })
+    .await;
+    let apply = |targets: Vec<nail_api::MessageTarget>, action: nail_api::MailAction| async move {
+        match request(service, Request::ApplyMailAction { targets, action }).await {
+            Response::MailActionQueued { result } => result,
+            other => panic!("unexpected {other:?}"),
+        }
+    };
+    let targets = |list: &[MessageSummary]| -> Vec<nail_api::MessageTarget> {
+        list.iter()
+            .map(|m| nail_api::MessageTarget::message(m.id.clone()))
+            .collect()
+    };
+
+    // Graph: both inbox messages into Receipts as parts of one $batch.
+    let receipts = folder_at(service, GRAPH, "Inbox/Receipts").await.unwrap();
+    let receipts_remote = env.graph.with_mailbox(None, |m, _| {
+        m.folders
+            .values()
+            .find(|f| f.name == "Receipts")
+            .map(|f| f.id.clone())
+            .unwrap()
+    });
+    let inbox_remote = env.graph.folder_id(None, "inbox");
+    env.graph.clear_requests();
+    let moved = apply(
+        targets(&inbox(service, GRAPH).await),
+        nail_api::MailAction::Move {
+            target: MoveTarget::FolderId(receipts.id.clone()),
+        },
+    )
+    .await;
+    assert_eq!(moved.message_ids.len(), 2);
+    until("both moved on Graph", || async {
+        env.graph.messages_in(None, &inbox_remote).is_empty()
+            && env.graph.messages_in(None, &receipts_remote).len() >= 2
+    })
+    .await;
+    let parts = env
+        .graph
+        .requests()
+        .iter()
+        .filter(|r| r.in_batch && r.path.ends_with("/move"))
+        .count();
+    assert_eq!(parts, 2, "{:?}", env.graph.requests());
+    request(
+        service,
+        Request::UndoMailAction {
+            batch_id: moved.batch_id.unwrap(),
+        },
+    )
+    .await;
+    until("both back in the Graph inbox", || async {
+        env.graph.messages_in(None, &inbox_remote).len() == 2
+    })
+    .await;
+
+    // EWS: the unread inbox read with one UpdateItem, unread again with
+    // its undo.
+    let ews = env.ews.as_ref().unwrap();
+    let ews_inbox = ews.folder_id(None, "inbox").unwrap();
+    let list = inbox(service, EWS).await;
+    let unread: Vec<MessageSummary> = list.iter().filter(|m| !m.flags.seen).cloned().collect();
+    assert!(unread.len() >= 2, "{list:?}");
+    let read_on_server = || {
+        ews.items_in(&ews_inbox)
+            .iter()
+            .filter(|i| i.text("IsRead") == Some("true"))
+            .count()
+    };
+    let read_before = read_on_server();
+    ews.clear_requests();
+    let marked = apply(
+        targets(&unread),
+        nail_api::MailAction::MarkRead { read: true },
+    )
+    .await;
+    until("read on EWS", || async {
+        read_on_server() == read_before + unread.len()
+    })
+    .await;
+    let updates = ews
+        .operations()
+        .iter()
+        .filter(|o| *o == "UpdateItem")
+        .count();
+    assert_eq!(updates, 1, "{:?}", ews.operations());
+    request(
+        service,
+        Request::UndoMailAction {
+            batch_id: marked.batch_id.unwrap(),
+        },
+    )
+    .await;
+    until("unread again on EWS", || async {
+        read_on_server() == read_before
+    })
+    .await;
+}

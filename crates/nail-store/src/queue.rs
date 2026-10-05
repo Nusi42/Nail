@@ -259,6 +259,38 @@ impl Operation {
         }
     }
 
+    /// Operations with the same key may be replayed as one server call
+    /// (P3, ADR 0164: an IMAP UID set, a Gmail `batchModify`, an EWS
+    /// multi-item request): the same flag change, or moves / deletes from
+    /// the same folder to the same place. `None` = always on its own.
+    pub fn group_key(&self) -> Option<String> {
+        match self {
+            Self::UpdateFlags { change, .. } => {
+                Some(format!("flags:{}", serde_json::to_string(change).ok()?))
+            }
+            Self::MoveMessage {
+                target_folder_id,
+                source: Some(source),
+                ..
+            } => Some(format!(
+                "move:{}:{}:{target_folder_id}",
+                source.account_id, source.folder_id
+            )),
+            Self::DeleteMessage {
+                permanent,
+                source: Some(source),
+                trash_folder_id,
+                ..
+            } => Some(format!(
+                "delete:{}:{}:{permanent}:{}",
+                source.account_id,
+                source.folder_id,
+                trash_folder_id.as_ref().map_or("", FolderId::as_str)
+            )),
+            _ => None,
+        }
+    }
+
     /// Whether the operation moves the message out of its folder (the
     /// sync merge must then leave the local row alone).
     pub fn takes_message_away(&self) -> bool {
@@ -532,6 +564,33 @@ pub trait Replayer: Send + Sync {
     /// Replays one operation. Must be idempotent: after a crash the same
     /// operation can be replayed again.
     fn replay(&self, op: &QueuedOp) -> impl Future<Output = ReplayOutcome> + Send;
+
+    /// Most operations [`Self::replay_group`] takes at once (P3, ADR 0164);
+    /// `1` (the default) replays every operation on its own.
+    fn max_group(&self) -> usize {
+        1
+    }
+
+    /// Replays consecutive operations of one account with the same
+    /// [`Operation::group_key`] together (one server call where the
+    /// protocol allows). Answers one outcome per operation, in order; an
+    /// answer shorter than `ops` leaves the rest unattempted (they go back
+    /// to `pending` without counting the attempt). The default replays
+    /// them one by one and stops after the first [`ReplayOutcome::Retry`].
+    fn replay_group(&self, ops: &[QueuedOp]) -> impl Future<Output = Vec<ReplayOutcome>> + Send {
+        async move {
+            let mut out = Vec::with_capacity(ops.len());
+            for op in ops {
+                let outcome = self.replay(op).await;
+                let stop = matches!(outcome, ReplayOutcome::Retry(_));
+                out.push(outcome);
+                if stop {
+                    break;
+                }
+            }
+            out
+        }
+    }
 }
 
 /// Limits for [`Store::replay_pending`].
@@ -824,6 +883,76 @@ impl Store {
         })
     }
 
+    /// Puts an `in_flight` operation that was claimed with a group but
+    /// never attempted back to `pending`, without counting the attempt.
+    fn unclaim_op(&self, id: OpId) -> Result<()> {
+        self.with_conn(|conn| {
+            conn.execute(
+                &format!(
+                    "UPDATE op_queue SET state = 'pending', attempts = MAX(attempts - 1, 0),
+                     updated_at = {NOW} WHERE id = ?1 AND state = 'in_flight'"
+                ),
+                [id.0],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Marks the account's oldest `pending` operation and up to `max - 1`
+    /// directly following ones with the same [`Operation::group_key`]
+    /// (each message at most once) `in_flight`, counting an attempt each.
+    fn claim_next_group(&self, account: &AccountId, max: usize) -> Result<Vec<QueuedOp>> {
+        if max <= 1 {
+            return Ok(self.claim_next_op(account)?.into_iter().collect());
+        }
+        self.with_tx(|tx| {
+            let rows: Vec<(i64, String)> = {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT id, payload FROM op_queue WHERE account_id = ?1 AND state = 'pending'
+                     ORDER BY id LIMIT ?2",
+                )?;
+                stmt.query_map(
+                    params![account.as_str(), i64::try_from(max).unwrap_or(i64::MAX)],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?
+                .collect::<rusqlite::Result<_>>()?
+            };
+            let mut picked: Vec<i64> = Vec::new();
+            let mut key: Option<String> = None;
+            let mut messages: Vec<MessageId> = Vec::new();
+            for (id, payload) in rows {
+                let operation: Operation = serde_json::from_str(&payload)?;
+                let this = operation.group_key();
+                if picked.is_empty() {
+                    picked.push(id);
+                    key = this;
+                    messages.push(operation.message_id().clone());
+                    if key.is_none() {
+                        break;
+                    }
+                    continue;
+                }
+                if this.is_none() || this != key || messages.contains(operation.message_id()) {
+                    break;
+                }
+                messages.push(operation.message_id().clone());
+                picked.push(id);
+            }
+            let mut out = Vec::with_capacity(picked.len());
+            for id in picked {
+                tx.execute(
+                    &format!(
+                        "UPDATE op_queue SET state = 'in_flight', attempts = attempts + 1,
+                         updated_at = {NOW} WHERE id = ?1"
+                    ),
+                    [id],
+                )?;
+                out.push(op_in_tx(tx, OpId(id))?);
+            }
+            Ok(out)
+        })
+    }
+
     /// Marks the account's oldest `pending` operation `in_flight`, counting
     /// an attempt.
     fn claim_next_op(&self, account: &AccountId) -> Result<Option<QueuedOp>> {
@@ -887,46 +1016,63 @@ impl Store {
         let lock = self.account_lock(account);
         let _pass = lock.lock().await;
         let mut report = ReplayReport::default();
+        let max = replayer.max_group().max(1);
         loop {
             let claim_account = account.clone();
-            let Some(op) = self.call(move |s| s.claim_next_op(&claim_account)).await? else {
+            let ops = self
+                .call(move |s| s.claim_next_group(&claim_account, max))
+                .await?;
+            if ops.is_empty() {
                 break;
-            };
-            // Puts the op back to `pending` unless it is finished below: the
-            // pass may be cancelled while `replay` runs, or `finish_op` may
-            // fail. Otherwise it would stay `in_flight` until a restart.
+            }
+            // Puts the ops back to `pending` unless they are finished below:
+            // the pass may be cancelled while `replay` runs, or `finish_op`
+            // may fail. Otherwise they would stay `in_flight` until a restart.
             let mut claim = ClaimGuard {
                 store: self,
-                id: Some(op.id),
+                ids: ops.iter().map(|op| op.id).collect(),
             };
-            let outcome = replayer.replay(&op).await;
-            let id = op.id;
+            let outcomes = if ops.len() == 1 {
+                vec![replayer.replay(&ops[0]).await]
+            } else {
+                replayer.replay_group(&ops).await
+            };
             let mut deferred = false;
-            let (state, error) = match outcome {
-                ReplayOutcome::Done => {
-                    report.done.push(id);
-                    (OpState::Done, None)
-                }
-                ReplayOutcome::Fail(err) => {
-                    tracing::warn!(%id, error = %err, "operation failed permanently");
-                    report.failed.push(id);
-                    (OpState::Failed, Some(err))
-                }
-                ReplayOutcome::Retry(err) if op.attempts >= policy.max_attempts => {
-                    tracing::warn!(%id, error = %err, attempts = op.attempts, "operation gave up after retries");
-                    report.failed.push(id);
-                    (OpState::Failed, Some(err))
-                }
-                ReplayOutcome::Retry(err) => {
-                    tracing::debug!(%id, error = %err, "operation deferred");
-                    report.deferred.push(id);
-                    deferred = true;
-                    (OpState::Pending, Some(err))
-                }
-            };
-            self.call(move |s| s.finish_op(id, state, error.as_deref()))
-                .await?;
-            claim.id = None;
+            for (index, op) in ops.iter().enumerate() {
+                let id = op.id;
+                let Some(outcome) = outcomes.get(index).cloned() else {
+                    self.call(move |s| s.unclaim_op(id)).await?;
+                    claim.ids.retain(|c| *c != id);
+                    continue;
+                };
+                let (state, error) = match outcome {
+                    ReplayOutcome::Done => {
+                        report.done.push(id);
+                        (OpState::Done, None)
+                    }
+                    ReplayOutcome::Fail(err) => {
+                        tracing::warn!(%id, error = %err, "operation failed permanently");
+                        report.failed.push(id);
+                        (OpState::Failed, Some(err))
+                    }
+                    ReplayOutcome::Retry(err) if op.attempts >= policy.max_attempts => {
+                        tracing::warn!(%id, error = %err, attempts = op.attempts, "operation gave up after retries");
+                        report.failed.push(id);
+                        (OpState::Failed, Some(err))
+                    }
+                    ReplayOutcome::Retry(err) => {
+                        tracing::debug!(%id, error = %err, "operation deferred");
+                        if !deferred {
+                            report.deferred.push(id);
+                        }
+                        deferred = true;
+                        (OpState::Pending, Some(err))
+                    }
+                };
+                self.call(move |s| s.finish_op(id, state, error.as_deref()))
+                    .await?;
+                claim.ids.retain(|c| *c != id);
+            }
             if deferred {
                 break;
             }
@@ -971,16 +1117,16 @@ impl Store {
     }
 }
 
-/// An operation claimed by a replay pass; see [`Store::replay_account`].
+/// Operations claimed by a replay pass; see [`Store::replay_account`].
 struct ClaimGuard<'a> {
     store: &'a Store,
-    /// `None` once the operation is finished.
-    id: Option<OpId>,
+    /// The claimed operations not finished yet.
+    ids: Vec<OpId>,
 }
 
 impl Drop for ClaimGuard<'_> {
     fn drop(&mut self) {
-        if let Some(id) = self.id.take() {
+        for id in std::mem::take(&mut self.ids) {
             // A short, local write; fine to do synchronously here.
             match self.store.release_op(id) {
                 Ok(()) => tracing::debug!(%id, "interrupted operation re-queued"),
