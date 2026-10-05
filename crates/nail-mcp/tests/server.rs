@@ -330,6 +330,9 @@ async fn tools_filter_by_grant_and_mark_content() {
         "the aggregate of the visible messages only"
     );
     assert_eq!(thread["participants"][0]["email"], json!("ada@example.org"));
+    // P2 (ADR 0148): the same participant shape as an unrestricted answer.
+    assert_eq!(thread["participants"][0]["me"], json!(false));
+    assert!(thread["participants"][0]["unread"].is_boolean());
 
     let result = tool(&client, "list_folders", json!({"account_id": "work"})).await;
     let folders = result.structured_content.unwrap();

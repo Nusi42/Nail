@@ -1658,6 +1658,16 @@ pub(crate) struct Migration {
     pub foreign_keys_off: bool,
 }
 
+/// Schema v16 (P2 WP201, ADR 0149): conversations.
+///
+/// * `messages_folder_thread` — a folder's messages by thread, newest last:
+///   a conversation list groups a folder by thread, counts its threads and
+///   joins the Sent folders' messages of the listed threads from this index
+///   alone (no row reads; `thread::conversation::PAGE_SQL`).
+const V16: &str = r"
+CREATE INDEX messages_folder_thread ON messages(folder_id, thread_id, date_sort);
+";
+
 impl Migration {
     pub(crate) const fn sql(sql: &'static str) -> Self {
         Self {
@@ -1703,6 +1713,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V13),
     Migration::sql(V14),
     Migration::rebuild(V15),
+    Migration::sql(V16),
 ];
 
 /// The schema version this build creates and understands.

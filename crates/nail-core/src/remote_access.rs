@@ -33,8 +33,13 @@ use nail_mcp::access::Access;
 use nail_remote_auth::RemoteSessionCtx;
 use nail_remote_auth::access::{Access as Needs, required_access};
 
+use std::sync::Arc;
+
+use nail_store::ScopeFolder;
+
+use crate::conversations::FolderFilter;
 use crate::error::Result;
-use crate::service::Service;
+use crate::service::{MAX_PAGE_SIZE, Service};
 
 fn forbidden(message: String) -> ApiError {
     ApiError::new(ErrorCode::Forbidden, message)
@@ -64,6 +69,14 @@ fn draft_original(draft: &Draft) -> Option<MessageId> {
 
 fn message_allowed(access: &Access, message: &MessageSummary) -> bool {
     access.allows_account(&message.account_id) && access.allows_folder(&message.folder_id)
+}
+
+/// The folders of a conversation the grant covers (P2, ADR 0148).
+fn grant_filter(access: &Access) -> FolderFilter {
+    let access = access.clone();
+    Arc::new(move |f: &ScopeFolder| {
+        access.allows_account(&f.account_id) && access.allows_folder(&f.id)
+    })
 }
 
 impl Service {
@@ -136,6 +149,42 @@ impl Service {
                 }
                 other => other,
             },
+            // P2 (ADR 0148): a narrowed grant lists and reads conversations
+            // over the folders it covers only, so a Sent folder (or a
+            // virtual folder's member) outside the grant adds nothing to a
+            // row's counts, participants or newest message.
+            Request::ListThreads {
+                folder_id,
+                offset,
+                limit,
+            } if !full(&access) => {
+                let page = self
+                    .list_conversations(
+                        &folder_id,
+                        offset,
+                        limit.min(MAX_PAGE_SIZE),
+                        Some(&grant_filter(&access)),
+                    )
+                    .await?;
+                Response::Threads {
+                    folder_id,
+                    offset,
+                    total: page.total,
+                    threads: page.threads,
+                }
+            }
+            Request::GetConversation {
+                thread_id,
+                folder_id,
+            } if !full(&access) => {
+                let (thread, messages) = self
+                    .get_conversation(&thread_id, folder_id.as_ref(), Some(&grant_filter(&access)))
+                    .await?;
+                Response::Conversation {
+                    thread: Box::new(thread),
+                    messages,
+                }
+            }
             // Collected addresses are not per account: a narrowed grant
             // would learn other accounts' correspondents.
             Request::SuggestAddresses { .. } if !full(&access) => Response::AddressSuggestions {
@@ -1117,23 +1166,37 @@ impl Service {
                     messages,
                 }
             }
+            // The row is rebuilt from the granted messages: nothing about
+            // the others (count, participants, newest message) remains.
             Response::Thread {
-                thread,
+                mut thread,
                 mut messages,
             } => {
+                let before = messages.len();
                 messages.retain(keep);
                 if messages.is_empty() {
                     return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
                 }
+                if messages.len() != before
+                    && let Some(row) = self.thread_row(&thread.id, &messages).await?
+                {
+                    *thread = row;
+                }
                 Response::Thread { thread, messages }
             }
             Response::Conversation {
-                thread,
+                mut thread,
                 mut messages,
             } => {
+                let before = messages.len();
                 messages.retain(|m| keep(&m.message));
                 if messages.is_empty() {
                     return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
+                }
+                if messages.len() != before
+                    && let Some(row) = self.conversation_row(&thread.id, &messages).await?
+                {
+                    *thread = row;
                 }
                 Response::Conversation { thread, messages }
             }

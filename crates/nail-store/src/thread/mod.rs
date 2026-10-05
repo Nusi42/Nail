@@ -36,13 +36,14 @@
 //! Deleting messages does not split threads; [`Store::rethread_all`]
 //! rebuilds everything from the stored headers.
 
+pub mod conversation;
 pub mod jwz;
 pub mod subject;
 
 use std::collections::{BTreeSet, HashMap};
 
 use nail_api::{
-    AccountId, FolderId, MessageId, MessageSummary, ThreadId, ThreadParticipant, ThreadSummary,
+    AccountId, ConversationMessage, FolderId, MessageId, MessageSummary, ThreadId, ThreadSummary,
 };
 use rusqlite::{OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
@@ -50,6 +51,9 @@ use sha2::{Digest, Sha256};
 use crate::error::{Error, Result};
 use crate::mail::{MESSAGE_COLS, summary_from_row};
 use crate::store::Store;
+pub use conversation::{
+    ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder, summarize_conversation,
+};
 use subject::{SubjectKind, normalize_subject};
 
 /// How far apart (in seconds) two messages may be to join by subject.
@@ -367,51 +371,17 @@ pub struct ThreadTreeEntry {
     pub depth: u32,
 }
 
-/// Builds a [`ThreadSummary`] from a thread's messages (oldest first).
+/// Builds a [`ThreadSummary`] from a thread's messages (oldest first),
+/// with nobody marked "me" ([`OwnAddresses::mark`] does that).
 fn summarize(thread_id: &str, messages: &[MessageSummary]) -> Option<ThreadSummary> {
-    let first = messages.first()?;
-    let latest = messages.last()?;
-    let mut participants: Vec<ThreadParticipant> = Vec::new();
-    let mut accounts: Vec<AccountId> = Vec::new();
-    for m in messages {
-        if let Some(from) = &m.from {
-            let unread = !m.flags.seen;
-            if let Some(known) = participants
-                .iter_mut()
-                .find(|p| p.address.email.eq_ignore_ascii_case(&from.email))
-            {
-                known.unread |= unread;
-            } else {
-                participants.push(ThreadParticipant {
-                    unread,
-                    ..ThreadParticipant::new(from.clone())
-                });
-            }
-        }
-        if !accounts.contains(&m.account_id) {
-            accounts.push(m.account_id.clone());
-        }
-    }
-    Some(ThreadSummary {
-        id: ThreadId(thread_id.to_owned()),
-        subject: normalize_subject(&first.subject).display,
-        participants,
-        message_count: u32::try_from(messages.len()).unwrap_or(u32::MAX),
-        unread_count: u32::try_from(messages.iter().filter(|m| !m.flags.seen).count())
-            .unwrap_or(u32::MAX),
-        flagged: messages.iter().any(|m| m.flags.flagged),
-        has_attachments: messages.iter().any(|m| m.has_attachments),
-        date: latest.date.clone(),
-        preview: latest.preview.clone(),
-        latest_message_id: latest.id.clone(),
-        latest_message: Box::new(latest.clone()),
-        // "me" is resolved by the core (identities live in accounts.kdl).
-        latest_from: latest.from.clone().map(|from| ThreadParticipant {
-            unread: !latest.flags.seen,
-            ..ThreadParticipant::new(from)
-        }),
-        account_ids: accounts,
-    })
+    let messages: Vec<ConversationMessage> = messages
+        .iter()
+        .map(|m| ConversationMessage {
+            message: m.clone(),
+            from_me: false,
+        })
+        .collect();
+    summarize_conversation(thread_id, &messages, &OwnAddresses::new())
 }
 
 fn json_ids<T: std::fmt::Display>(ids: &[T]) -> Result<String> {
@@ -421,58 +391,19 @@ fn json_ids<T: std::fmt::Display>(ids: &[T]) -> Result<String> {
 }
 
 impl Store {
-    /// A page of the threads that have messages in `folders` (a real
-    /// folder, or the member folders of a virtual folder), newest activity
-    /// first. Counts and previews consider only the messages in `folders`;
-    /// copies with the same Message-ID count once.
+    /// A page of the conversations in `folders` (a real folder, or the
+    /// member folders of a virtual folder), newest activity first, with
+    /// nobody's identities known: [`Store::list_conversations`] over
+    /// [`Store::conversation_folders`]. Copies with the same Message-ID
+    /// count once.
     pub fn list_threads(
         &self,
         folders: &[FolderId],
         offset: u32,
         limit: u32,
     ) -> Result<ThreadPage> {
-        let folder_json = json_ids(folders)?;
-        self.with_tx(|tx| {
-            let total: u32 = tx.query_row(
-                "SELECT COUNT(DISTINCT thread_id) FROM messages
-                 WHERE folder_id IN (SELECT value FROM json_each(?1)) AND thread_id IS NOT NULL",
-                [&folder_json],
-                |r| r.get(0),
-            )?;
-            let page: Vec<String> = {
-                let mut stmt = tx.prepare_cached(
-                    "SELECT thread_id FROM messages
-                     WHERE folder_id IN (SELECT value FROM json_each(?1)) AND thread_id IS NOT NULL
-                     GROUP BY thread_id
-                     ORDER BY MAX(date_sort) DESC, thread_id DESC
-                     LIMIT ?2 OFFSET ?3",
-                )?;
-                stmt.query_map(params![folder_json, limit, offset], |r| r.get(0))?
-                    .collect::<rusqlite::Result<_>>()?
-            };
-            let mut threads = Vec::with_capacity(page.len());
-            let mut stmt = tx.prepare_cached(&format!(
-                "SELECT {MESSAGE_COLS}, m.message_id FROM messages m
-                 WHERE m.thread_id = ?1 AND m.folder_id IN (SELECT value FROM json_each(?2))
-                 ORDER BY m.date_sort, m.id"
-            ))?;
-            for thread_id in page {
-                let messages = stmt
-                    .query_map(params![thread_id, folder_json], |r| {
-                        Ok((
-                            summary_from_row(r)?,
-                            r.get::<_, Option<String>>(MESSAGE_ID_COL)?,
-                        ))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
-                let messages =
-                    crate::mail::attach_tags(tx, crate::mail::collapse_duplicates(messages))?;
-                if let Some(summary) = summarize(&thread_id, &messages) {
-                    threads.push(summary);
-                }
-            }
-            Ok(ThreadPage { total, threads })
-        })
+        let scope = self.conversation_folders(folders)?;
+        self.list_conversations(&scope, &OwnAddresses::new(), offset, limit)
     }
 
     /// All messages of a thread, oldest first, across folders; limited to
