@@ -68,6 +68,8 @@ ${p("message-list.row.count")}:empty { display: none; }
 ${ROW}[data-state~="selected"] ${p("message-list.row.count")} { color: inherit; border-color: currentColor; }
 ${p("message-list.row.participants")}, ${p("message-list.row.latest-from")} { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
 ${p("message-list.row.participant-group")} { display: flex; flex: 0 1 auto; min-width: 0; }
+/* "me" never shrinks when the names do not fit (P2 integration). */
+${p("message-list.row.participant-group")}[data-state~="me"] { flex-shrink: 0; }
 ${p("message-list.row.separator")}, ${p("message-list.row.suffix")} { flex: none; white-space: pre; }
 ${p("message-list.row.participant")} { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ${p("message-list.row.participant")}[data-state~="unread"] { font-weight: ${T.semibold}; }

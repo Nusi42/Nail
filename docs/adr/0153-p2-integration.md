@@ -34,6 +34,8 @@ and the docs. Run together on the real core, a few seams showed.
 - **Reminder toasts** moved from the bottom left to the bottom right (`defaults/theme.kdl`,
   `features/pim/parts.ts`): at the bottom left they covered the navigation rail's Settings button (the
   three Exchange e2e failures that also happened on `main`).
+- **"me" in narrow rows.** When the names of a row do not fit, "me" keeps its width (its
+  `message-list.row.participant-group` carries the state `me`); the other names shrink alike.
 - **Seeds.** `nail serve`'s seeds show the demo conversations (`nail_core::demo::DemoMail::WithConversations`,
   WP204's wiring patch); core tests keep the plain corpus.
 - **E2E.** The reader's subject is the feed's `thread-view.subject` heading, or the message's own heading

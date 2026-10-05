@@ -620,7 +620,11 @@ function SegmentView({ segment }: { segment: Segment }) {
             );
             const gap = segment.skipped > 0 && index === segment.items.length - 1;
             return (
-              <span key={index} data-part="message-list.row.participant-group">
+              <span
+                key={index}
+                data-part="message-list.row.participant-group"
+                data-state={item.me ? "me" : undefined}
+              >
                 {index > 0 && (
                   <span data-part="message-list.row.separator">
                     {t(gap ? "conversations-names-gap" : "conversations-names-separator")}

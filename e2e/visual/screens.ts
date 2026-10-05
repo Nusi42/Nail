@@ -143,16 +143,20 @@ export const CONVERSATION_UNREAD = `subject:"${CONVERSATION}" from:marie@radium.
 
 /**
  * Selects the long conversation: its row in the list, the reader's card
- * feed with the unread card open (P2 Design A).
+ * feed with the unread card and the newest open (P2 Design A).
  */
 async function selectConversation(page: Page) {
   await rows(page).filter({ hasText: CONVERSATION }).first().click();
   const feed = page.getByRole("feed");
   await expect(feed).toBeVisible();
   await expect(page.locator(READER_SUBJECT)).toContainText(CONVERSATION);
+  // The unread card (Marie's, the 8th) and the newest are open.
   await expect(
-    feed.getByRole("article").and(page.locator('[data-state~="expanded"]')),
+    feed.locator('[data-part="thread-view.card"][aria-posinset="8"][data-state~="expanded"]'),
   ).toContainText("calibration");
+  await expect(
+    feed.locator('[data-part="thread-view.card"][aria-posinset="12"][data-state~="expanded"]'),
+  ).toBeVisible();
   await pinListScroll(page, CONVERSATION);
   return feed;
 }

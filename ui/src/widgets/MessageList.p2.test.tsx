@@ -84,6 +84,9 @@ describe("conversation rows (Design A)", () => {
       ["Katherine Johnson", null],
     ]);
     expect(people).toHaveTextContent("Grace Hopper, me … Katherine Johnson");
+    // "me" never shrinks when the names do not fit (its group carries the state).
+    const groups = people.querySelectorAll('[data-part="message-list.row.participant-group"]');
+    expect([...groups].map((g) => g.getAttribute("data-state"))).toEqual([null, "me", null]);
     expect(part(row, "message-list.row.count")).toHaveTextContent("6");
     expect(part(row, "message-list.row.subject")).toHaveTextContent(MOCK_CONVERSATION_SUBJECT);
     const latest = part(row, "message-list.row.latest-from");
