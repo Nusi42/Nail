@@ -134,6 +134,7 @@ describe("template language", () => {
       "names",
       "relative",
       "short-date",
+      "then",
       "truncate",
     ]);
   });
@@ -201,6 +202,27 @@ describe("template language", () => {
     it("checks the pipes' arguments", () => {
       expect(() => compileTemplate("{participants | names}")).toThrow(/positive whole number/);
       expect(() => compileTemplate("{count | if-many(2)}")).toThrow(/takes no arguments/);
+    });
+
+    it("writes `then`'s text after a value that is there, inside the field (WP202)", () => {
+      const source = '{latest_from | names(1) | then(":")}  {preview | then(" …")}';
+      const [names, , preview] = row(
+        source,
+        { latest_from: { name: "Grace", email: "g@x", me: false, unread: true }, preview: "Hi" },
+        ctx,
+      );
+      expect(names).toMatchObject({ kind: "names", suffix: ":", items: [{ text: "Grace" }] });
+      expect(preview).toMatchObject({ kind: "field", text: "Hi", suffix: " …" });
+      // Nothing to follow: no separator.
+      const [none, , empty] = row(source, { latest_from: null, preview: "" }, ctx);
+      expect(none).toEqual({ kind: "names", field: "latest-from", items: [], skipped: 0 });
+      expect(empty).toEqual({ kind: "field", field: "preview", text: "", strong: false });
+    });
+
+    it("takes exactly one quoted text for `then`", () => {
+      expect(() => compileTemplate("{subject | then}")).toThrow(/one quoted text/);
+      expect(() => compileTemplate("{subject | then(3)}")).toThrow(/one quoted text/);
+      expect(() => compileTemplate('{subject | then(":", ";")}')).toThrow(/one quoted text/);
     });
   });
 });

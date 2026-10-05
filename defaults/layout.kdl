@@ -54,12 +54,16 @@ layout "default" {
                     category-tabs id="gmail-categories"
                     // Exchange Focused Inbox tabs (nothing for other accounts).
                     focused-tabs id="exchange-focused"
-                    // One row per conversation (P2): the newest sender, the
-                    // number of messages when there are several, the date.
+                    // One row per conversation (P2, Design A): up to three
+                    // people ("me" for you, unread senders bold), the number
+                    // of messages when there are several, the date; the
+                    // subject; "Sender: preview" of the newest message
+                    // (Compact hides that line). threads="expandable" lets
+                    // the rows open into their messages (Design B).
                     message-list id="list" page-size=100 threads="collapsed" {
-                        row "{from.name}  {count | if-many}  {date | relative}"
+                        row "{participants | names(3)}  {count | if-many}  {date | relative}"
                         row "{subject}"
-                        row "{preview}"
+                        row "{latest_from | names(1) | then(\":\")}{preview}"
                     }
                 }
                 stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
@@ -100,7 +104,7 @@ layout "default" {
                     category-tabs id="gmail-categories"
                     focused-tabs id="exchange-focused"
                     message-list id="list" page-size=100 threads="collapsed" {
-                        row "{from.name}  {count | if-many}  {date | relative}"
+                        row "{participants | names(3)}  {count | if-many}  {date | relative}"
                         row "{subject}"
                     }
                 }
@@ -217,6 +221,9 @@ layout "default" {
     actions {
         action "mail.next"        label="@mail.action.next" icon="chevron-down"
         action "mail.previous"    label="@mail.action.previous" icon="chevron-up"
+        // P2 (threads="expandable"): open / close a conversation row.
+        action "list.expand"      label="@conversation-list.action.expand" icon="chevron-right"
+        action "list.collapse"    label="@conversation-list.action.collapse" icon="chevron-down"
         action "mail.compose"     label="@mail.action.compose"     icon="square-pen"
         action "mail.reply"       label="@mail.action.reply"       icon="reply"
         action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
@@ -467,6 +474,9 @@ layout "default" {
         bind "k" "mail.previous"
         bind "arrowdown" "mail.next"
         bind "arrowup" "mail.previous"
+        // threads="expandable": open / close the selected conversation.
+        bind "arrowright" "list.expand"
+        bind "arrowleft" "list.collapse"
         bind "ctrl+p" "print.message"
     }
 

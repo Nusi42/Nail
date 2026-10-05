@@ -229,9 +229,9 @@
                     "threads": "collapsed"
                   },
                   "rows": [
-                    "{from.name}  {count | if-many}  {date | relative}",
+                    "{participants | names(3)}  {count | if-many}  {date | relative}",
                     "{subject}",
-                    "{preview}"
+                    "{latest_from | names(1) | then(\":\")}{preview}"
                   ],
                   "source": null
                 }
@@ -459,7 +459,7 @@
                     "threads": "collapsed"
                   },
                   "rows": [
-                    "{from.name}  {count | if-many}  {date | relative}",
+                    "{participants | names(3)}  {count | if-many}  {date | relative}",
                     "{subject}"
                   ],
                   "source": null
@@ -852,6 +852,18 @@
     "mail.previous": {
       "label": "@mail.action.previous",
       "icon": "chevron-up",
+      "alias_of": null,
+      "args": []
+    },
+    "list.expand": {
+      "label": "@conversation-list.action.expand",
+      "icon": "chevron-right",
+      "alias_of": null,
+      "args": []
+    },
+    "list.collapse": {
+      "label": "@conversation-list.action.collapse",
+      "icon": "chevron-down",
       "alias_of": null,
       "args": []
     },
@@ -1601,6 +1613,18 @@
       "context": "list",
       "key": "arrowup",
       "action": "mail.previous",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "arrowright",
+      "action": "list.expand",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "arrowleft",
+      "action": "list.collapse",
       "args": []
     },
     {

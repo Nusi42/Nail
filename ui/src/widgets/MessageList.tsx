@@ -1,8 +1,28 @@
+import { useQueries } from "@tanstack/react-query";
 import { measureElement, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
-import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { comboFromEvent, normalizeCombo } from "../actions/keys";
 import { errorMessageIdOf } from "../api/client";
-import type { Address, MessageSummary, ThreadParticipant, ThreadSummary } from "../api/generated";
+import type {
+  Address,
+  ConversationMessage,
+  KeyBinding,
+  MessageSummary,
+  ThreadParticipant,
+  ThreadSummary,
+} from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
+import { LayoutContext } from "../layout/LayoutContext";
 import {
   optionBool,
   optionNumber,
@@ -11,10 +31,19 @@ import {
   type WidgetProps,
 } from "../layout/widgetRegistry";
 import { useNow } from "../state/clock";
-import { isUnsupported, useAccounts, useMessages, useSearch, useThreads } from "../state/queries";
-import { useUi } from "../state/uiStore";
+import {
+  isUnsupported,
+  queryKeys,
+  useAccounts,
+  useClient,
+  useMessages,
+  useSearch,
+  useThreads,
+} from "../state/queries";
+import { useUi, useUiStoreApi } from "../state/uiStore";
 import {
   compileTemplate,
+  fieldPart,
   renderTemplate,
   type CompiledTemplate,
   type Segment,
@@ -23,6 +52,22 @@ import { useGeometry } from "../theme/ThemeProvider";
 import { ALL_ACCOUNTS } from "./AccountSwitcher";
 import { accountColorSlot } from "./folderPane";
 import { filteredScope } from "./listFilter";
+import { Icon } from "./Icon";
+import { ChildRowView } from "./MessageListChild";
+import { registerListControl } from "./messageListControl";
+import {
+  childKey,
+  collapseMove,
+  expandMove,
+  messageOrderOf,
+  selectedIndexOf,
+  siblingPosition,
+  stepIndex,
+  toggled,
+  visibleRows,
+  type RowRef,
+  type TreeMove,
+} from "./messageListModel";
 import { Avatar, Tag } from "./primitives";
 
 /**
@@ -125,8 +170,10 @@ function templateData(message: MessageSummary) {
     flagged: message.flags.flagged,
     account: message.account_id,
     count: 1 + message.duplicates.length,
-    // P2: a message row's people are its sender (`{participants | names(N)}`).
+    // P2: a message row's people are its sender (`{participants | names(N)}`),
+    // and it is its own newest message ("Sender: preview", WP202).
     participants: message.from ? [{ ...message.from, me: false, unread: !message.flags.seen }] : [],
+    latest_from: message.from ? { ...message.from, me: false, unread: !message.flags.seen } : null,
   };
 }
 
@@ -191,12 +238,11 @@ export interface RowTags {
   labels: readonly string[];
 }
 
-/** One row of the list: a message, or a thread represented by its newest message. */
-interface Row {
-  key: string;
-  /** The message selected when the row is chosen. */
-  messageId: string;
-  threadId: string | null;
+/**
+ * One row of the list: a message, a conversation represented by its newest
+ * message, or (Design B) a message of an expanded conversation.
+ */
+export interface Row extends RowRef {
   accountId: string;
   states: (selected: boolean) => string | undefined;
   data: object;
@@ -204,6 +250,8 @@ interface Row {
   /** The sender the avatar stands for. */
   from: Address | null;
   tags: RowTags;
+  /** A child row's message (Design B). */
+  child?: ConversationMessage;
 }
 
 /** The proposed extra fields of a summary, when present and well typed. */
@@ -233,8 +281,11 @@ export function messageTags(m: MessageSummary): RowTags {
 function messageRow(m: MessageSummary): Row {
   return {
     key: m.id,
+    kind: "message",
     messageId: m.id,
     threadId: m.thread_id,
+    parentKey: null,
+    expandable: false,
     accountId: m.account_id,
     states: (selected) => rowStates(m, selected),
     data: templateData(m),
@@ -244,11 +295,18 @@ function messageRow(m: MessageSummary): Row {
   };
 }
 
-function threadRow(thread: ThreadSummary): Row {
+/** A conversation row (Design A); the tag line adds the newest message's labels. */
+export function threadRow(thread: ThreadSummary): Row {
+  // Older cores (and some tests' fixtures) may lack the newest summary.
+  const latest = (thread as Partial<ThreadSummary>).latest_message;
+  const extras = latest ? extrasOf(latest) : {};
   return {
     key: thread.id,
+    kind: "conversation",
     messageId: thread.latest_message_id,
     threadId: thread.id,
+    parentKey: null,
+    expandable: thread.message_count > 1,
     accountId: thread.account_ids.join(" "),
     states: (selected) => threadStates(thread, selected),
     data: threadTemplateData(thread),
@@ -258,12 +316,58 @@ function threadRow(thread: ThreadSummary): Row {
       accountIds: thread.account_ids,
       attachments: thread.has_attachments,
       attachmentCount: null,
-      invitation: false,
-      warning: false,
+      invitation: extras.invitation ?? false,
+      warning: extras.warning ?? false,
       flagged: thread.flagged,
-      labels: [],
+      labels: latest?.tags ?? [],
     },
   };
+}
+
+/** Space-separated `data-state` tokens of a child row (Design B). */
+export function childStates(m: ConversationMessage, selected: boolean): string | undefined {
+  const states: string[] = [];
+  if (selected) states.push("selected");
+  if (!m.flags.seen) states.push("unread");
+  if (m.flags.flagged) states.push("flagged");
+  if (m.from_me) states.push("from-me");
+  return states.length > 0 ? states.join(" ") : undefined;
+}
+
+/** A message of an expanded conversation (Design B): the reader shows it alone. */
+export function childRow(parent: RowRef, m: ConversationMessage): Row {
+  return {
+    key: childKey(parent.key, m.id),
+    kind: "child",
+    messageId: m.id,
+    threadId: null,
+    parentKey: parent.key,
+    expandable: false,
+    accountId: m.account_id,
+    states: (selected) => childStates(m, selected),
+    data: templateData(m),
+    unread: !m.flags.seen,
+    from: m.from,
+    tags: messageTags(m),
+    child: m,
+  };
+}
+
+/**
+ * The list's step for a key typed in it (`mail.next` / `mail.previous`
+ * bound in the `list` context; P2 WP202): +1, -1, or `null` for any other
+ * key. An expandable list steps through its own rows with it, because a
+ * conversation row and its newest child select the same message.
+ */
+export function listStep(keys: readonly KeyBinding[], combo: string): number | null {
+  for (const binding of keys) {
+    if (binding.context !== "list" || /\s/.test(binding.key.trim())) continue;
+    if (normalizeCombo(binding.key.trim()) !== combo) continue;
+    if (binding.action === "mail.next") return 1;
+    if (binding.action === "mail.previous") return -1;
+    return null;
+  }
+  return null;
 }
 
 /** An account's name and colour on the tag line. */
@@ -384,9 +488,8 @@ function useRows(node: WidgetNode, pageSize: number) {
   // to the user's search.
   const filterSearch = filteredScope(listFilter, activeSearch, accountId, folderId);
   const searching = filterSearch ?? activeSearch;
-  // Design B's child rows (`expandable`) are WP-list's: until then such a
-  // list shows its conversations collapsed.
-  const threadMode = threadModeOf(node) !== "off";
+  const mode = threadModeOf(node);
+  const threadMode = mode !== "off";
   const threads = useThreads(folderId, pageSize, threadMode && searching === null);
   const threadRows = threadMode && searching === null && !isUnsupported(threads.error);
   const messages = useMessages(searching === null && !threadRows ? folderId : null, pageSize);
@@ -406,7 +509,76 @@ function useRows(node: WidgetNode, pageSize: number) {
   const searchError = hits.data?.pages.find((p) => p.error !== null)?.error ?? null;
   const total = searching ? (hits.data?.pages[0]?.total ?? 0) : null;
   const filtered = filterSearch !== null;
-  return { rows, query, activeSearch, searchError, total, filtered, listFilter };
+  // Design B: conversation rows open into their messages (not while
+  // searching: hits are messages).
+  const expandable = mode === "expandable" && threadRows;
+  return { rows, query, activeSearch, searchError, total, filtered, listFilter, expandable };
+}
+
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+interface Expansion {
+  scope: string | null;
+  keys: ReadonlySet<string>;
+}
+
+/**
+ * The open conversations per UI state and list (`node.id`), so a list that
+ * remounts — the layout switching breakpoints, a view coming back — keeps
+ * them open.
+ */
+const remembered = new WeakMap<object, Map<string, Expansion>>();
+
+/**
+ * Design B: the expanded conversations of the active folder and their
+ * messages (`GetConversation`, the conversation as the folder lists it).
+ * Opening another folder starts with every conversation closed.
+ */
+function useExpansion(listKey: string, folderId: string | null, enabled: boolean) {
+  const client = useClient();
+  const store = useUiStoreApi();
+  const memory = useMemo(() => {
+    let map = remembered.get(store);
+    if (!map) {
+      map = new Map();
+      remembered.set(store, map);
+    }
+    return map;
+  }, [store]);
+  const [state, setState] = useState<Expansion>(
+    () => memory.get(listKey) ?? { scope: folderId, keys: NO_KEYS },
+  );
+  useEffect(() => {
+    memory.set(listKey, state);
+  }, [memory, listKey, state]);
+  const expanded = enabled && state.scope === folderId ? state.keys : NO_KEYS;
+  const setExpanded = useCallback(
+    (update: (keys: ReadonlySet<string>) => ReadonlySet<string>) => {
+      setState((old) => ({
+        scope: folderId,
+        keys: update(old.scope === folderId ? old.keys : NO_KEYS),
+      }));
+    },
+    [folderId],
+  );
+  const ids = [...expanded];
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.conversation(id, folderId),
+      queryFn: () =>
+        client.request(
+          { type: "GetConversation", thread_id: id, folder_id: folderId },
+          "Conversation",
+        ),
+    })),
+  });
+  const children = new Map<string, readonly ConversationMessage[]>();
+  ids.forEach((id, index) => {
+    const messages = results[index]?.data?.messages;
+    if (messages) children.set(id, messages);
+  });
+  const loading = results.some((r) => r.isPending);
+  return { expanded, setExpanded, children, loading };
 }
 
 function SegmentView({ segment }: { segment: Segment }) {
@@ -421,6 +593,9 @@ function SegmentView({ segment }: { segment: Segment }) {
           data-emphasis={segment.strong ? "strong" : undefined}
         >
           {segment.text}
+          {segment.suffix !== undefined && (
+            <span data-part="message-list.row.suffix">{segment.suffix}</span>
+          )}
         </span>
       );
     case "chips":
@@ -459,9 +634,18 @@ function SegmentView({ segment }: { segment: Segment }) {
               </span>
             );
           })}
+          {segment.suffix !== undefined && (
+            <span data-part="message-list.row.suffix">{segment.suffix}</span>
+          )}
         </span>
       );
   }
+}
+
+/** The field parts a row template shows (`data-fields` of its line). */
+export function templateFields(template: CompiledTemplate): string | undefined {
+  const fields = template.nodes.flatMap((n) => (n.kind === "field" ? [fieldPart(n.path)] : []));
+  return fields.length > 0 ? [...new Set(fields)].join(" ") : undefined;
 }
 
 /** The virtualized message list of the active folder, or of the active search. */
@@ -478,11 +662,37 @@ export function MessageList({ node }: WidgetProps) {
   const setMessageOrder = useUi((s) => s.setMessageOrder);
   const setSearch = useUi((s) => s.setSearch);
   const pageSize = Math.max(1, Math.min(1000, optionNumber(node, "page-size", 100)));
-  const { rows, query, activeSearch, searchError, total, filtered, listFilter } = useRows(
-    node,
-    pageSize,
+  const {
+    rows: baseRows,
+    query,
+    activeSearch,
+    searchError,
+    total,
+    filtered,
+    listFilter,
+    expandable,
+  } = useRows(node, pageSize);
+  const { expanded, setExpanded, children, loading } = useExpansion(
+    node.id ?? "message-list",
+    folderId,
+    expandable,
   );
+  const rows = useMemo(
+    () =>
+      expandable
+        ? visibleRows(baseRows, expanded, (row) =>
+            children.get(row.key)?.map((m) => childRow(row, m)),
+          )
+        : baseRows,
+    [expandable, baseRows, expanded, children],
+  );
+  // The row the user chose (a conversation and its newest child select the
+  // same message; Design B).
+  const [chosenKey, setChosenKey] = useState<string | null>(null);
+  const layout = useContext(LayoutContext);
   const templates = useMemo(() => compileRows(node.rows), [node.rows]);
+  // The fields of each line (`data-fields`: Compact hides the preview line).
+  const lineFields = useMemo(() => templates.map(templateFields), [templates]);
   const columnKey = columnsOf(node).join(" ");
   const columns = useMemo(
     () =>
@@ -498,9 +708,10 @@ export function MessageList({ node }: WidgetProps) {
   const accountList = useAccounts().data;
   const accountNames = useMemo(() => accountTags(accountList ?? []), [accountList]);
 
+  const order = useMemo(() => messageOrderOf(rows), [rows]);
   useEffect(() => {
-    setMessageOrder(rows.map((r) => r.messageId));
-  }, [rows, setMessageOrder]);
+    setMessageOrder(order);
+  }, [order, setMessageOrder]);
 
   // Report a query the core rejected to the search bar (its positions refer
   // to the typed text only without a filter term).
@@ -516,7 +727,10 @@ export function MessageList({ node }: WidgetProps) {
     getScrollElement: () => scrollRef.current,
     // Row lines, the tag line and the row padding (the virtualizer measures
     // the real height afterwards).
-    estimateSize: () => 20 * (columns.length > 0 ? 1 : templates.length + 1) + 24,
+    estimateSize: (index) =>
+      rows[index]?.kind === "child"
+        ? 20 + 12
+        : 20 * (columns.length > 0 ? 1 : templates.length + 1) + 24,
     overscan: LIST_OVERSCAN,
     measureElement: exactRowSize,
     getItemKey: (index) => rows[index]?.key ?? index,
@@ -545,8 +759,7 @@ export function MessageList({ node }: WidgetProps) {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length, items.length]);
 
   // Keep the selection visible (keyboard navigation).
-  const selectedIndex =
-    selectedId === null ? -1 : rows.findIndex((r) => r.messageId === selectedId);
+  const selectedIndex = selectedIndexOf(rows, chosenKey, selectedId);
   useEffect(() => {
     if (selectedIndex >= 0) virtualizer.scrollToIndex(selectedIndex, { align: "auto" });
   }, [selectedIndex, virtualizer]);
@@ -556,6 +769,75 @@ export function MessageList({ node }: WidgetProps) {
   useEffect(() => {
     if (selectedThread !== undefined) selectThread(selectedThread);
   }, [selectedThread, selectThread]);
+
+  const choose = useCallback(
+    (row: Row | undefined) => {
+      if (!row) return;
+      setChosenKey(row.key);
+      selectMessage(row.messageId);
+      selectThread(row.threadId);
+    },
+    [selectMessage, selectThread],
+  );
+
+  // Design B: → / ← (the actions `list.expand` / `list.collapse`).
+  const move = useCallback(
+    (step: TreeMove) => {
+      switch (step.kind) {
+        case "expand":
+          setExpanded((keys) => toggled(keys, step.key, true));
+          break;
+        case "collapse":
+          setExpanded((keys) => toggled(keys, step.key, false));
+          // A child row disappears with its conversation: keep the selection
+          // on the conversation.
+          if (rows[selectedIndex]?.parentKey === step.key) {
+            choose(rows.find((r) => r.key === step.key));
+          }
+          break;
+        case "select":
+          choose(rows[step.index]);
+          break;
+        case "none":
+          break;
+      }
+    },
+    [setExpanded, rows, selectedIndex, choose],
+  );
+  const toggle = (row: Row) => {
+    move(
+      expanded.has(row.key) ? { kind: "collapse", key: row.key } : { kind: "expand", key: row.key },
+    );
+  };
+  const controlState = useRef({ rows, selectedIndex, expanded, move });
+  useEffect(() => {
+    controlState.current = { rows, selectedIndex, expanded, move };
+  });
+  useEffect(() => {
+    if (!expandable) return undefined;
+    return registerListControl({
+      element: () => scrollRef.current,
+      expand: () => {
+        const s = controlState.current;
+        s.move(expandMove(s.rows, s.selectedIndex, s.expanded));
+      },
+      collapse: () => {
+        const s = controlState.current;
+        s.move(collapseMove(s.rows, s.selectedIndex, s.expanded));
+      },
+    });
+  }, [expandable]);
+
+  // Design B: j / k (or what the list context binds to mail.next /
+  // mail.previous) step through the rows, children included.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!expandable || event.defaultPrevented || event.target !== event.currentTarget) return;
+    const combo = comboFromEvent(event.nativeEvent);
+    const delta = combo === null ? null : listStep(layout?.keys ?? [], combo);
+    if (delta === null) return;
+    event.preventDefault();
+    choose(rows[stepIndex(rows.length, selectedIndex, delta)]);
+  };
 
   const rowId = (index: number) => `${geom}-row-${String(index)}`;
   let status: ReactNode = null;
@@ -587,15 +869,16 @@ export function MessageList({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       data-state={activeSearch ? "search" : undefined}
       data-filter={filtered ? listFilter : undefined}
-      role="listbox"
+      role={expandable ? "tree" : "listbox"}
       tabIndex={0}
+      onKeyDown={onKeyDown}
       aria-label={node.label ? label(node.label) : t("message-list-label")}
       aria-activedescendant={
         selectedIndex >= 0 && items.some((i) => i.index === selectedIndex)
           ? rowId(selectedIndex)
           : undefined
       }
-      aria-busy={query.isFetching}
+      aria-busy={query.isFetching || loading}
     >
       {activeSearch && total !== null && !searchError && query.isSuccess && (
         <div data-part="message-list.search-summary">
@@ -616,26 +899,55 @@ export function MessageList({ node }: WidgetProps) {
       {items.map((item) => {
         const row = rows[item.index];
         if (!row) return null;
-        const selected = row.messageId === selectedId;
+        const selected = item.index === selectedIndex;
         const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
+        if (row.child) {
+          const position = siblingPosition(rows, item.index);
+          return (
+            <ChildRowView
+              key={item.key}
+              id={rowId(item.index)}
+              index={item.index}
+              measure={virtualizer.measureElement}
+              message={row.child}
+              parentKey={row.parentKey}
+              selected={selected}
+              states={row.states(selected)}
+              posinset={position?.posinset ?? 1}
+              setsize={position?.setsize ?? 1}
+              locale={locale}
+              now={now}
+              onChoose={() => {
+                choose(row);
+                scrollRef.current?.focus({ preventScroll: true });
+              }}
+            />
+          );
+        }
+        const isOpen = expandable && row.expandable && expanded.has(row.key);
         return (
-          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
           <div
             key={item.key}
             id={rowId(item.index)}
             ref={virtualizer.measureElement}
             data-index={item.index}
-            role="option"
+            role={expandable ? "treeitem" : "option"}
             aria-selected={selected}
+            {...(expandable
+              ? { "aria-level": 1, ...(row.expandable ? { "aria-expanded": isOpen } : {}) }
+              : {})}
             data-part="message-list.row"
             data-view={columns.length > 0 ? "columns" : "rows"}
-            data-state={row.states(selected)}
+            data-state={
+              [row.states(selected), isOpen ? "expanded" : null].filter(Boolean).join(" ") ||
+              undefined
+            }
             data-account={row.accountId}
             data-message={row.messageId}
             data-thread={row.threadId ?? undefined}
             onClick={() => {
-              selectMessage(row.messageId);
-              selectThread(row.threadId);
+              choose(row);
               scrollRef.current?.focus({ preventScroll: true });
             }}
           >
@@ -659,7 +971,11 @@ export function MessageList({ node }: WidgetProps) {
                 />
                 <div data-part="message-list.row.body">
                   {templates.map((template, line) => (
-                    <div key={line} data-part="message-list.row.line">
+                    <div
+                      key={line}
+                      data-part="message-list.row.line"
+                      data-fields={lineFields[line]}
+                    >
                       {renderTemplate(template, row.data, ctx).map((segment, index) => (
                         <SegmentView key={index} segment={segment} />
                       ))}
@@ -667,6 +983,32 @@ export function MessageList({ node }: WidgetProps) {
                   ))}
                   <TagLine tags={row.tags} accounts={accountNames} />
                 </div>
+                {expandable && (
+                  // The list's keyboard (→ / ←) opens and closes the
+                  // conversation; the chevron is its pointer twin, so it is
+                  // no focus stop of its own inside the tree item (hidden
+                  // from assistive technology: the item says aria-expanded).
+                  <span
+                    data-part="message-list.row.expander"
+                    data-state={row.expandable ? (isOpen ? "expanded" : undefined) : "single"}
+                    title={
+                      row.expandable
+                        ? t(isOpen ? "conversations-collapse" : "conversations-expand")
+                        : undefined
+                    }
+                    aria-hidden="true"
+                    onClick={(event) => {
+                      if (!row.expandable) return;
+                      event.stopPropagation();
+                      toggle(row);
+                      scrollRef.current?.focus({ preventScroll: true });
+                    }}
+                  >
+                    {row.expandable && (
+                      <Icon name="chevron-right" part="message-list.row.expander.icon" />
+                    )}
+                  </span>
+                )}
               </>
             )}
           </div>

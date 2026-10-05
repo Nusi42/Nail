@@ -32,12 +32,16 @@ layout "custom" extends="default" {
                     category-tabs id="gmail-categories"
                     // Exchange Focused Inbox tabs (nothing for other accounts).
                     focused-tabs id="exchange-focused"
-                    // One row per conversation (P2): the newest sender, the
-                    // number of messages when there are several, the date.
+                    // One row per conversation (P2, Design A): up to three
+                    // people ("me" for you, unread senders bold), the number
+                    // of messages when there are several, the date; the
+                    // subject; "Sender: preview" of the newest message
+                    // (Compact hides that line). threads="expandable" lets
+                    // the rows open into their messages (Design B).
                     message-list id="list" page-size=100 threads="collapsed" {
-                        row "{from.name}  {count | if-many}  {date | relative}"
+                        row "{participants | names(3)}  {count | if-many}  {date | relative}"
                         row "{subject}"
-                        row "{preview}"
+                        row "{latest_from | names(1) | then(\":\")}{preview}"
                     }
                 }
                 stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
@@ -76,7 +80,7 @@ layout "custom" extends="default" {
                     category-tabs id="gmail-categories"
                     focused-tabs id="exchange-focused"
                     message-list id="list" page-size=100 threads="collapsed" {
-                        row "{from.name}  {count | if-many}  {date | relative}"
+                        row "{participants | names(3)}  {count | if-many}  {date | relative}"
                         row "{subject}"
                     }
                 }
