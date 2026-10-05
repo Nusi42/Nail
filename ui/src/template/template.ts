@@ -7,6 +7,10 @@
  *   pipe     := name [ "(" arg ( "," arg )* ")" ]
  *   arg      := integer | "quoted string"
  *
+ * P2 (WP202): `then("text")` appends `text` to a field that is not empty,
+ * inside the field's own element (`{latest_from | names(1) | then(":")}`
+ * writes "Grace:" but nothing for a message without a sender).
+ *
  * Templates are data, not code: they are parsed by hand, fields are looked up
  * as own properties only, and pipes come from a fixed table. Unknown pipes,
  * wrong arguments and syntax errors are rejected at compile time.
@@ -32,14 +36,28 @@ export interface NameItem {
 /** A rendered piece of a template line. */
 export type Segment =
   | { kind: "text"; text: string }
-  | { kind: "field"; field: string; text: string; strong: boolean }
+  | {
+      kind: "field";
+      field: string;
+      text: string;
+      strong: boolean;
+      /** `then("…")`: text written after a non-empty value. */
+      suffix?: string;
+    }
   | { kind: "chips"; field: string; items: string[] }
   /**
    * `{participants | names(N)}`: at most N names; with more people the
    * first N - 1 and the newest, `skipped` = how many are left out between
    * them.
    */
-  | { kind: "names"; field: string; items: NameItem[]; skipped: number };
+  | {
+      kind: "names";
+      field: string;
+      items: NameItem[];
+      skipped: number;
+      /** `then("…")`: text written after the names when there are any. */
+      suffix?: string;
+    };
 
 /** Formatting context for pipes. */
 export interface TemplateContext {
@@ -84,7 +102,7 @@ export class TemplateError extends Error {
 
 interface PipeSpec {
   /** Allowed argument shapes. */
-  args: "none" | "positive-int";
+  args: "none" | "positive-int" | "string";
 }
 
 /** The fixed pipe table. */
@@ -97,6 +115,8 @@ export const PIPES: Readonly<Record<string, PipeSpec>> = {
   // P2 (ADR 0148): the conversation row's people and its count pill.
   names: { args: "positive-int" },
   "if-many": { args: "none" },
+  // P2 WP202: a separator that follows a non-empty value ("Sender:").
+  then: { args: "string" },
 };
 
 const IDENT_START = /[A-Za-z_]/;
@@ -219,6 +239,9 @@ class Parser {
         args[0] < 1)
     ) {
       throw new TemplateError(`pipe "${name}" takes one positive whole number`, start);
+    }
+    if (spec.args === "string" && (args.length !== 1 || typeof args[0] !== "string")) {
+      throw new TemplateError(`pipe "${name}" takes one quoted text`, start);
     }
     return { name, args };
   }
@@ -357,6 +380,7 @@ export function renderTemplate(
     let strong = false;
     let chips: string[] | null = null;
     let names: { items: NameItem[]; skipped: number } | null = null;
+    let suffix: string | null = null;
     for (const pipe of node.pipes) {
       switch (pipe.name) {
         case "relative": {
@@ -390,15 +414,30 @@ export function renderTemplate(
         case "if-many":
           value = typeof value === "number" && value > 1 ? value : "";
           break;
+        case "then":
+          suffix = pipe.args[0] as string;
+          break;
       }
     }
     const field = fieldPart(node.path);
     if (names) {
-      out.push({ kind: "names", field, ...names });
+      out.push({
+        kind: "names",
+        field,
+        ...names,
+        ...(suffix !== null && names.items.length > 0 ? { suffix } : {}),
+      });
     } else if (chips) {
       out.push({ kind: "chips", field, items: chips });
     } else {
-      out.push({ kind: "field", field, text: display(value), strong });
+      const text = display(value);
+      out.push({
+        kind: "field",
+        field,
+        text,
+        strong,
+        ...(suffix !== null && text !== "" ? { suffix } : {}),
+      });
     }
   }
   return out;
