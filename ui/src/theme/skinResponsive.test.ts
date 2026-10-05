@@ -5,6 +5,7 @@ import { compileTheme } from "./compile";
 import { SKIN_CSS } from "./skin";
 import {
   DIALOG_BUTTON_ROWS,
+  FIELD_ROWS,
   FIELDS_CONTAINER,
   GROWING_DIALOGS,
   INLINE_FIELD_ROWS,
@@ -66,9 +67,27 @@ describe("P1 responsive skin (theme/skinResponsive.ts)", () => {
     const named = [...RESPONSIVE_SKIN_CSS.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1] ?? "");
     const missing = [...new Set(named)].filter((part) => !sources.includes(`"${part}"`));
     expect(missing).toEqual([]);
-    for (const part of [...DIALOG_BUTTON_ROWS, ...GROWING_DIALOGS, ...INLINE_FIELD_ROWS]) {
+    for (const part of [
+      ...DIALOG_BUTTON_ROWS,
+      ...GROWING_DIALOGS,
+      ...INLINE_FIELD_ROWS,
+      ...FIELD_ROWS,
+    ]) {
       expect(sources, part).toContain(`"${part}"`);
     }
+  });
+
+  it("shares a row of controls between its fields; a sized control keeps its width (ADR 0160)", () => {
+    const [rows] = rulesFor(':is([data-part="rules.add"]');
+    expect(rows).toBeDefined();
+    expect(rows).toMatch(/align-items: flex-end;/);
+    for (const part of FIELD_ROWS) {
+      expect(RESPONSIVE_SKIN_CSS, part).toContain(`[data-part="${part}"]`);
+    }
+    // A control marked `data-width` keeps the width the shared skin gives it.
+    expect(RESPONSIVE_SKIN_CSS).toContain(
+      '[data-part="form.textarea"]):not([data-width]) {\n  flex: 1 1 8rem; min-width: 0;\n}',
+    );
   });
 
   it("lets the window pad and the dialog inside shrink instead of scrolling sideways", () => {

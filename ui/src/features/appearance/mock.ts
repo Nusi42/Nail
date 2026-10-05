@@ -22,6 +22,7 @@ import {
   BUILTIN_THEMES,
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
+  accentIgnored,
   activeTheme,
   overrideIssues,
 } from "./model";
@@ -41,6 +42,7 @@ export {
   FONT_SIZE_RANGE,
   HIGH_CONTRAST_THEME,
   RADIUS_RANGE,
+  accentIgnored,
   activeTheme,
   isHexColor,
   overrideIssues,
@@ -195,27 +197,43 @@ function invalid(message: string, id: string): Response {
 let pristine: ResolvedTheme | null = null;
 
 /**
+ * The user's own edits without the accent override (its base value; mode
+ * values stay), for a high-contrast theme (ADR 0161).
+ */
+function withoutAccent(user: MockThemeEdits): MockThemeEdits {
+  return {
+    ...user,
+    tokens: user.tokens.flatMap((token) => {
+      if (token.category !== "color" || token.name !== "accent") return [token];
+      const modesOnly = { ...token };
+      delete modesOnly.value;
+      return Object.keys(modesOnly.modes).length > 0 ? [modesOnly] : [];
+    }),
+  };
+}
+
+/**
  * The resolved theme `GetConfig` answers: the user's theme (`data.theme`)
  * with the active built-in theme under it, density and overrides applied
  * (`./themes.ts`). Tokens the user changed (they differ from the shipped
  * default) stay the user's, like in the core where the user file wins.
+ * While a high-contrast theme is active the accent override is left out,
+ * like the core (ADR 0161); the stored value is kept.
  */
 export function mockConfigTheme(core: MockCore): ResolvedTheme {
   const state = core.data.features.appearance;
   pristine ??= defaultTheme();
   const active = activeTheme(state.settings, state.system, state.themes);
   const chain = themeChain(state, active);
+  const ignoreAccent = accentIgnored(active, state.themes);
   const layers: ThemeLayer[] = chain.files.map((file) => layerOf(file, `themes/${file.id}.kdl`));
   if (state.user.tokens.length > 0 || state.user.parts.length > 0) {
-    layers.push(layerOf(state.user, "theme.kdl"));
+    layers.push(layerOf(ignoreAccent ? withoutAccent(state.user) : state.user, "theme.kdl"));
   }
-  return resolveMockTheme(
-    core.data.theme,
-    chain.builtin ?? active,
-    state.settings,
-    pristine,
-    layers,
-  );
+  const overrides = { ...state.settings.overrides };
+  if (ignoreAccent) delete overrides.accent;
+  const settings = { ...state.settings, overrides };
+  return resolveMockTheme(core.data.theme, chain.builtin ?? active, settings, pristine, layers);
 }
 
 export function changed(

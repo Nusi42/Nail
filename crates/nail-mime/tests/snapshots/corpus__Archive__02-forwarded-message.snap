@@ -10,6 +10,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
         "index": 0,
         "inline": false,
         "mime": "message/rfc822",
+        "shown_in_body": false,
         "size": 295
       }
     ],

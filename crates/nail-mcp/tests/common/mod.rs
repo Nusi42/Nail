@@ -235,6 +235,7 @@ impl McpData for FakeData {
                     mime: "text/csv".into(),
                     size: 3,
                     inline: false,
+                    shown_in_body: false,
                 }]
             } else {
                 vec![]

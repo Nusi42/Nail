@@ -26,6 +26,7 @@ pub mod remote_content;
 mod sanitize;
 mod text;
 
+use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use mail_parser::decoders::html::html_to_text;
@@ -89,9 +90,10 @@ pub struct ParsedMessage {
 }
 
 impl ParsedMessage {
-    /// Whether the message has at least one non-inline attachment.
+    /// Whether the message has at least one attachment the reader lists:
+    /// one its HTML body does not show (ADR 0162).
     pub fn has_attachments(&self) -> bool {
-        self.attachments.iter().any(|a| !a.inline)
+        self.attachments.iter().any(|a| !a.shown_in_body)
     }
 
     /// Builds a message-list row. `fallback_date` (RFC 3339, typically the
@@ -241,7 +243,7 @@ pub fn attachment_content(raw: &[u8], index: u32) -> Option<AttachmentContent> {
         let message = parse(raw)?;
         let part = message.attachment(index)?;
         Some(AttachmentContent {
-            info: attachment_info(index, part),
+            info: attachment_info(index, part, &shown_for(&message, part)),
             data: part.contents().to_vec(),
         })
     })
@@ -259,7 +261,7 @@ pub fn inline_content_by_cid(raw: &[u8], cid: &str) -> Option<AttachmentContent>
                 .is_some_and(|id| normalize_cid(id) == wanted)
         })?;
         Some(AttachmentContent {
-            info: attachment_info(u32::try_from(index).ok()?, part),
+            info: attachment_info(u32::try_from(index).ok()?, part, &shown_for(&message, part)),
             data: part.contents().to_vec(),
         })
     })
@@ -343,13 +345,7 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
 
     // `text/markdown` alternatives are bodies, not attachments (M2c).
     let markdown = markdown::alternatives(message);
-    let markdown_source = (!markdown.is_empty()).then(|| {
-        markdown
-            .iter()
-            .map(|(_, source)| source.trim_end())
-            .collect::<Vec<_>>()
-            .join("\n\n")
-    });
+    let markdown_source = markdown_source(&markdown);
     let has_plain = message
         .text_bodies()
         .any(|part| matches!(part.body, PartType::Text(_)));
@@ -359,9 +355,8 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
     };
     // The reader gets inline images as `data:` URLs; everything else
     // (quoting, MCP, plug-ins) keeps the small `cid:` references.
-    let (html, reader_html) = body_html(message)
-        .or_else(|| markdown_source.as_deref().map(markdown::to_html))
-        .map_or((None, None), |html| {
+    let (html, reader_html) =
+        html_source(message, markdown_source.as_deref()).map_or((None, None), |html| {
             let inline = inline_images(message, &html);
             let reader = (!inline.is_empty())
                 .then(|| sanitize_mail_html(&html, rewriter.clone(), inline.clone()).html);
@@ -371,6 +366,10 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
             )
         });
     let preview = preview_text(&text, PREVIEW_CHARS);
+    let shown = html
+        .as_ref()
+        .map(|h| h.inline_shown.clone())
+        .unwrap_or_default();
     let attachments = message
         .attachments
         .iter()
@@ -381,6 +380,7 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
             Some(attachment_info(
                 u32::try_from(index).unwrap_or(u32::MAX),
                 part,
+                &shown,
             ))
         })
         .collect();
@@ -511,14 +511,50 @@ fn html_text(sanitized: &str) -> String {
     out.trim_end().to_owned()
 }
 
-/// The `data:` URLs of the inline image parts `html` refers to (by
-/// Content-ID), up to [`MAX_INLINE_IMAGE_BYTES`] each and
-/// [`MAX_INLINE_IMAGES_BYTES`] together. The image type comes from the
-/// bytes, never from the part's header (no SVG: it can carry script).
+/// The `text/markdown` alternatives joined, `None` when there are none.
+fn markdown_source(markdown: &[(u32, String)]) -> Option<String> {
+    (!markdown.is_empty()).then(|| {
+        markdown
+            .iter()
+            .map(|(_, source)| source.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    })
+}
+
+/// The raw HTML body: the HTML parts, else the Markdown alternatives as
+/// HTML; `None` for text-only mail.
+fn html_source(message: &Message<'_>, markdown_source: Option<&str>) -> Option<String> {
+    body_html(message).or_else(|| markdown_source.map(markdown::to_html))
+}
+
+/// The normalized Content-IDs of the inline images the message's HTML body
+/// shows (as [`build`] finds them), computed only when `part` has a
+/// Content-ID at all: for [`attachment_content`] / [`inline_content_by_cid`].
+fn shown_for(message: &Message<'_>, part: &MessagePart<'_>) -> BTreeSet<String> {
+    if part.content_id().is_none() {
+        return BTreeSet::new();
+    }
+    let markdown_source = markdown_source(&markdown::alternatives(message));
+    html_source(message, markdown_source.as_deref()).map_or_else(BTreeSet::new, |html| {
+        let inline = inline_images(message, &html);
+        if inline.is_empty() {
+            return BTreeSet::new();
+        }
+        sanitize_mail_html_portable(&html, None, inline).inline_shown
+    })
+}
+
+/// The `data:` URLs of the inline image parts `html` may refer to (by
+/// Content-ID, ignoring case; the sanitizer checks the actual references),
+/// up to [`MAX_INLINE_IMAGE_BYTES`] each and [`MAX_INLINE_IMAGES_BYTES`]
+/// together. The image type comes from the bytes, never from the part's
+/// header (no SVG: it can carry script).
 fn inline_images(message: &Message<'_>, html: &str) -> InlineImages {
     use base64::Engine as _;
     let mut images = InlineImages::default();
-    if !html.contains("cid:") && !html.contains("CID:") {
+    let lower = html.to_lowercase();
+    if !lower.contains("cid:") {
         return images;
     }
     let mut total = 0usize;
@@ -526,7 +562,10 @@ fn inline_images(message: &Message<'_>, html: &str) -> InlineImages {
         let Some(cid) = part.content_id().map(normalize_cid) else {
             continue;
         };
-        if cid.is_empty() || images.get(&cid).is_some() || !html.contains(cid.as_str()) {
+        // A `cid:` URL may percent-encode the `@` (RFC 2392).
+        let mentioned = lower.contains(cid.as_str())
+            || (cid.contains('@') && lower.contains(&cid.replace('@', "%40")));
+        if cid.is_empty() || images.get(&cid).is_some() || !mentioned {
             continue;
         }
         let data = part.contents();
@@ -574,7 +613,9 @@ fn body_html(message: &Message<'_>) -> Option<String> {
     Some(html.join("\n"))
 }
 
-fn attachment_info(index: u32, part: &MessagePart<'_>) -> AttachmentInfo {
+/// The metadata of attachment `index`; `shown` = the normalized
+/// Content-IDs of the inline images the HTML body shows.
+fn attachment_info(index: u32, part: &MessagePart<'_>, shown: &BTreeSet<String>) -> AttachmentInfo {
     let mime = part
         .content_type()
         .map(|ct| match &ct.c_subtype {
@@ -610,6 +651,9 @@ fn attachment_info(index: u32, part: &MessagePart<'_>) -> AttachmentInfo {
         mime,
         size: part.len() as u64,
         inline,
+        shown_in_body: part
+            .content_id()
+            .is_some_and(|cid| shown.contains(&normalize_cid(cid))),
     }
 }
 

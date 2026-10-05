@@ -2,7 +2,14 @@ import { render } from "@testing-library/react";
 import type { ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { BASE_CSS, COMPACT_VARIANT, compileTheme, resolveTokenRefs } from "./compile";
-import { AVATAR_COLORS, SKIN_CSS, colorSlot, stableHash } from "./skin";
+import {
+  AVATAR_COLORS,
+  CONTROL_WIDTHS,
+  CONTROL_WIDTH_VAR,
+  SKIN_CSS,
+  colorSlot,
+  stableHash,
+} from "./skin";
 import { ThemeProvider } from "./ThemeProvider";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
 import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
@@ -161,6 +168,26 @@ describe("M5a skin (theme/skin.ts)", () => {
           ).toEqual([]);
         }
       }
+    }
+  });
+
+  it("lets text-like controls fill their column unless data-width sizes them (ADR 0160)", () => {
+    const rule = SKIN_CSS.split("}")
+      .map((block) => block.trim())
+      .find((block) =>
+        block.startsWith(
+          '[data-part="form.input"], [data-part="form.select"], [data-part="form.textarea"] {',
+        ),
+      );
+    expect(rule).toBeDefined();
+    // Full width in blocks, grids and columns; the content as basis in a flex row.
+    expect(rule).toContain(
+      `width: var(${CONTROL_WIDTH_VAR}, 100%); flex-basis: content; min-width: 0; max-width: 100%;`,
+    );
+    for (const [name, width] of Object.entries(CONTROL_WIDTHS)) {
+      expect(SKIN_CSS).toContain(
+        `[data-part][data-width="${name}"] { ${CONTROL_WIDTH_VAR}: ${width}; width: var(${CONTROL_WIDTH_VAR}); max-width: 100%;`,
+      );
     }
   });
 

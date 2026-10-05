@@ -134,6 +134,7 @@ function ViewSwitch({
           id={id}
           data-part="form.select"
           data-field="calendar-view"
+          data-width="content"
           value={view}
           onChange={(e) => {
             if (isViewKind(e.target.value)) onChange(e.target.value);

@@ -133,7 +133,8 @@ export function MessagePrint({ body, options }: { body: MessageBody; options: Pr
   const locale = useLocale();
   const format = useDateFormat();
   const h = body.headers;
-  const attachments = body.attachments.filter((a) => !a.inline);
+  // The attachments the reader lists: not the images the body shows (ADR 0162).
+  const attachments = body.attachments.filter((a) => !a.shown_in_body);
   return (
     <article data-part="print.message">
       <h1 data-part="print.subject">{h.subject || t("print-no-subject")}</h1>

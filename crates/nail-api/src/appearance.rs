@@ -49,6 +49,12 @@
 //! chain ← the user's `theme.kdl` (overrides and part rules); its
 //! `density` comes from the `appearance` node.
 //!
+//! The accent override is left out while the active theme is a
+//! high-contrast one ([`accent_ignored`], ADR 0161): High contrast, a user
+//! theme whose chain resolves to the high-contrast kind, whether picked or
+//! chosen by Follow Windows. The value stays in `theme.kdl` and applies
+//! again with any other theme; font size and radius always apply.
+//!
 //! # Density
 //!
 //! Comfortable / Compact applies to every theme: density-dependent tokens
@@ -274,6 +280,8 @@ pub struct ThemeOverrides {
     #[ts(optional)]
     pub radius: Option<u32>,
     /// Accent colour, `#rgb` or `#rrggbb` (lowercase after normalizing).
+    /// Not applied while a high-contrast theme is active
+    /// ([`accent_ignored`]); it stays stored.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub accent: Option<String>,
@@ -447,6 +455,21 @@ pub fn active_theme(
         };
         pick(&settings.theme, fallback)
     }
+}
+
+/// Whether the user's accent override is left out of the rendered theme
+/// because `active` ([`active_theme`]) is a high-contrast theme: its kind
+/// in `themes` (a user theme's kind is that of its resolved `extends`
+/// chain, so a theme extending High contrast counts unless it sets another
+/// `mode`). The stored override is kept and applies again with any other
+/// theme (ADR 0161).
+pub fn accent_ignored(active: &str, themes: &[ThemeInfo]) -> bool {
+    // The first entry wins, like the catalog: a built-in before a user
+    // theme that shadows its id.
+    themes
+        .iter()
+        .find(|t| t.id == active)
+        .is_some_and(|t| t.kind == ThemeKind::HighContrast)
 }
 
 // ---------------------------------------------------------------------------
@@ -799,6 +822,20 @@ mod tests {
             "graphite"
         );
         assert_eq!(active_theme(&s, Some(hc), &themes), "graphite");
+    }
+
+    #[test]
+    fn the_accent_is_ignored_only_for_high_contrast_themes() {
+        let mut themes = builtins();
+        themes.push(info("ink", ThemeKind::HighContrast, true));
+        themes.push(info("ocean", ThemeKind::Dark, true));
+        // A user theme shadowing a built-in's id: the built-in counts.
+        themes.push(info("frost", ThemeKind::HighContrast, false));
+        assert!(accent_ignored(HIGH_CONTRAST_THEME, &themes));
+        assert!(accent_ignored("ink", &themes));
+        for id in ["frost", "sage", "graphite", "nocturne", "ocean", "nope"] {
+            assert!(!accent_ignored(id, &themes), "{id}");
+        }
     }
 
     #[test]

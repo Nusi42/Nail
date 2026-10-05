@@ -106,6 +106,29 @@ function naturalWidth(frame: FrameLocator, alt: string): Promise<number> {
     .catch(() => -1);
 }
 
+/**
+ * The reader lists no attachment card for the message's only attachment, an
+ * image its body shows (ADR 0162); "Show all attachments (1)" reveals the
+ * card (`name`), still downloadable, and hides it again.
+ */
+async function expectEmbeddedOnly(page: Page, name: string): Promise<void> {
+  const reader = page.locator('[data-part="message-view"]');
+  const toggle = reader.locator('[data-part="message-view.attachments.toggle"]');
+  await expect(toggle).toHaveText("Show all attachments (1)");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(reader.locator('[data-part="attachment-card"]')).toHaveCount(0);
+  await expect(reader.getByText("Unnamed attachment")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle).toHaveText("Hide images shown in the message");
+  const cards = reader.getByRole("list", { name: "Attachments" }).getByRole("listitem");
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toContainText(name);
+  await expect(cards.first().getByRole("button", { name: `Save ${name}` })).toBeEnabled();
+  await toggle.click();
+  await expect(reader.locator('[data-part="attachment-card"]')).toHaveCount(0);
+}
+
 interface RemoteHosts {
   images: string;
   private: string;
@@ -157,6 +180,8 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     expect(await frame.getByAltText("Shop logo").getAttribute("src")).toMatch(
       /^data:image\/png;base64,/,
     );
+    // ADR 0162: the logo the body shows is no attachment card; the toggle lists it.
+    await expectEmbeddedOnly(page, "logo.png");
     // The remote banner is blocked: no address at all, a quiet placeholder.
     const banner = frame.getByAltText("Banner");
     expect(await banner.getAttribute("src")).toBeNull();
@@ -252,6 +277,7 @@ test.describe("HTML mail from the demo corpus", () => {
     await openMessage(page, "Photo of the new lab bench");
     await expect(frame.getByText("Here is the new bench")).toBeVisible();
     await expect.poll(() => naturalWidth(frame, "Lab bench"), { timeout: 15_000 }).toBe(1);
+    await expectEmbeddedOnly(page, "bench.png");
 
     await openMessage(page, "Your weekly garden digest 🌱");
     await expect(frame.getByRole("heading", { name: "Autumn is here" })).toBeVisible();

@@ -335,6 +335,7 @@ export function createMockData(inboxSize = 250): MockData {
                   mime: "application/pdf",
                   size: 48_213,
                   inline: false,
+                  shown_in_body: false,
                 },
               ]
             : [];

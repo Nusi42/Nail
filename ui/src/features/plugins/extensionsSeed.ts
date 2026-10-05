@@ -316,6 +316,7 @@ export function installDemoExtensions(core: MockCore): PluginInfo[] {
       mime: "text/csv",
       size: 812,
       inline: false,
+      shown_in_body: false,
     });
   }
   if (state.host) {

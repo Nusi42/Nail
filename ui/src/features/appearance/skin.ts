@@ -101,6 +101,8 @@ ${p("appearance.slider")} { display: flex; align-items: center; gap: ${T.md}; }
 ${p("appearance.range")} { flex: 1 1 auto; min-width: 0; accent-color: ${T.accent}; }
 ${p("appearance.range")}:focus-visible { ${focusRing} }
 ${p("appearance.range-value")} { min-width: calc(8 * ${T.md}); font-size: ${T.small}; color: ${T.muted}; font-variant-numeric: tabular-nums; }
+/* ADR 0161: why the accent is off while a high-contrast theme is active. */
+${p("appearance.accent-note")} { margin: 0; font-size: ${T.small}; color: ${T.muted}; }
 
 ${p("theme-editor")} { container: ${THEME_EDITOR_CONTAINER} / inline-size; display: flex; flex-direction: column; gap: ${T.md}; min-height: 0; }
 ${e("host")} { display: flex; flex-direction: column; min-height: 0; padding: ${T.lg}; }

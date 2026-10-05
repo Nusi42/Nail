@@ -65,6 +65,15 @@ export function activeTheme(
   return pick(settings.theme, kind === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME);
 }
 
+/**
+ * `nail_api::appearance::accent_ignored` (ADR 0161): the accent override is
+ * left out while the active theme is a high-contrast one (its kind, which a
+ * user theme inherits from the theme it extends).
+ */
+export function accentIgnored(active: string, themes: readonly ThemeInfo[]): boolean {
+  return themes.find((t) => t.id === active)?.kind === "high-contrast";
+}
+
 /** The longest theme name the core accepts (`edit-issue-invalid-theme-name`). */
 export const THEME_NAME_MAX = 64;
 

@@ -52,6 +52,7 @@ const csv: AttachmentInfo = {
   mime: "text/plain",
   size: 10,
   inline: false,
+  shown_in_body: false,
 };
 const pdf: AttachmentInfo = {
   index: 0,
@@ -59,6 +60,7 @@ const pdf: AttachmentInfo = {
   mime: "application/pdf",
   size: 6e6,
   inline: false,
+  shown_in_body: false,
 };
 
 describe("extension matching", () => {

@@ -619,6 +619,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
           <select
             id={`${base}-toolbar`}
             data-part="form.select"
+            data-width="medium"
             value={toolbar}
             onChange={(event) => {
               setChosen(event.target.value);

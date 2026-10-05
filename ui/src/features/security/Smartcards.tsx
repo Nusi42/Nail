@@ -183,6 +183,7 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
         <input
           id={`${id}-cache`}
           data-part="form.input"
+          data-width="short"
           type="number"
           min={0}
           max={MAX_PIN_CACHE_MINUTES}

@@ -78,7 +78,8 @@ including changes you have not saved yet. Part rules show in the app itself
 while the theme is in use.
 
 The accent, text size and corner radius you set on the Appearance page win
-over every theme. A token they replace is marked **Overridden in
+over every theme (except the accent in a high-contrast theme, which keeps
+its own). A token they replace is marked **Overridden in
 Appearance** with the value in use, and the preview shows that value; **Clear
 override** removes the Appearance setting so the theme's own value applies.
 

@@ -94,6 +94,15 @@ ${p("segmented")}[data-field="calendar-view"] { flex: 0 1 auto; min-width: 0; ov
 ${p("segmented")}[data-field="calendar-view"] ${p("segmented.option")} { flex: 0 0 auto; white-space: nowrap; }
 ${p("calendar.view-menu")} { display: inline-flex; align-items: center; gap: ${T.xs}; }`;
 
+/**
+ * ADR 0160: a date and time field's row — the date takes the room the row
+ * offers (its segments start at the left), the "Choose" button and the time
+ * (`data-width="short"`) keep their size.
+ */
+const DATETIME = `${p("pim.datetime.controls")} > ${p("pim.datetime.date")} { flex: 1 1 10rem; min-width: 0; }
+${p("pim.datetime.date")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }
+${p("pim.datetime.time")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }`;
+
 const CARD_PARTS = [
   "calendar.event",
   "calendar.chip",
@@ -368,6 +377,7 @@ export const PIM_SKIN_CSS = [
   VIEW_HEADER,
   CONTACTS,
   TASKS,
+  DATETIME,
 ].join("\n");
 
 /**
@@ -377,10 +387,12 @@ export const PIM_SKIN_CSS = [
  */
 export const PIM_SKIN_PARTS: readonly string[] = [
   ...new Set(
-    // The responsive rules select through two parts (or more), so they win
-    // over any single-part theme rule anyway.
-    [...PIM_SKIN_CSS.replace(RESPONSIVE, "").matchAll(/\[data-part="([^"]+)"\]/g)].map(
-      (m) => m[1] ?? "",
-    ),
+    // The responsive and date / time rules select through two parts (or
+    // more), so they win over any single-part theme rule anyway.
+    [
+      ...PIM_SKIN_CSS.replace(RESPONSIVE, "")
+        .replace(DATETIME, "")
+        .matchAll(/\[data-part="([^"]+)"\]/g),
+    ].map((m) => m[1] ?? ""),
   ),
 ].sort();

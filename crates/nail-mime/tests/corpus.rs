@@ -110,6 +110,7 @@ fn attachments_are_listed_and_decodable() {
     assert_eq!(pdf.filename.as_deref(), Some("INV-2026-09-5521.pdf"));
     assert_eq!(pdf.mime, "application/pdf");
     assert!(!pdf.inline);
+    assert!(!pdf.shown_in_body);
     assert_eq!(parsed.attachments[1].mime, "text/csv");
 
     let content = attachment_content(&raw, 0).unwrap();
@@ -142,6 +143,7 @@ fn inline_cid_image_is_embedded_as_data_url() {
     assert!(!parsed.remote_content_blocked);
     assert_eq!(parsed.attachments.len(), 1);
     assert!(parsed.attachments[0].inline);
+    assert!(parsed.attachments[0].shown_in_body);
     assert_eq!(parsed.attachments[0].mime, "image/png");
     assert!(
         !parsed.has_attachments(),

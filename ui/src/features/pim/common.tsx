@@ -142,6 +142,7 @@ export function NumberField({
     <input
       id={id}
       data-part="form.input"
+      data-width="short"
       type="number"
       inputMode="numeric"
       min={min}

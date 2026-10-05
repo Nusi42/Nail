@@ -295,7 +295,8 @@ async fn replies_and_forwards_are_quoted_in_every_mode() {
 /// P1 review: inline images reach only the reader as `data:` URLs
 /// (`MessageBody::reader_html`); `sanitized_html`, which quoting, MCP and
 /// plug-ins use, keeps the small `cid:` reference, so a reply carries no
-/// megabytes of base64.
+/// megabytes of base64. The parts the body shows are flagged
+/// `shown_in_body` (ADR 0162).
 #[tokio::test]
 async fn inline_images_are_embedded_for_the_reader_only() {
     const PNG_1X1: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -317,6 +318,13 @@ async fn inline_images_are_embedded_for_the_reader_only() {
         "--rel",
         "Content-Type: image/png",
         "Content-ID: <logo@shop.example>",
+        "Content-Transfer-Encoding: base64",
+        "",
+        PNG_1X1,
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <photo@shop.example>",
+        "Content-Disposition: inline; filename=\"photo.png\"",
         "Content-Transfer-Encoding: base64",
         "",
         PNG_1X1,
@@ -346,6 +354,18 @@ async fn inline_images_are_embedded_for_the_reader_only() {
     else {
         panic!()
     };
+    // ADR 0162: the logo the body shows is flagged, the inline photo it
+    // does not show stays a listed attachment (and the list row's paperclip).
+    let shown: Vec<_> = message
+        .attachments
+        .iter()
+        .map(|a| (a.filename.as_deref(), a.inline, a.shown_in_body))
+        .collect();
+    assert_eq!(
+        shown,
+        [(None, true, true), (Some("photo.png"), true, false)]
+    );
+    assert!(original.has_attachments);
     let portable = message.sanitized_html.unwrap();
     assert!(
         portable.contains(r#"src="cid:logo@shop.example""#),

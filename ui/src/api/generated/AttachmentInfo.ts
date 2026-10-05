@@ -23,5 +23,18 @@ mime: string,
 size: number, 
 /**
  * Whether the part is inline (e.g. a `cid:` image) rather than a download.
+ * Taken from the part's headers (`Content-Disposition`, `Content-ID`),
+ * so it is also true for an inline photo the body never shows; see
+ * [`Self::shown_in_body`] for what the reader embeds.
  */
-inline: boolean, };
+inline: boolean, 
+/**
+ * Whether the HTML body shows this part (ADR 0162): the sanitized body
+ * refers to the part's `Content-ID` with a `cid:` URL (scheme, angle
+ * brackets and case ignored) and the part is an image the reader embeds
+ * (PNG, GIF, JPEG or WebP by its bytes, within the inline image size
+ * limits). The reader lists such parts only on request; they stay
+ * downloadable like every attachment. False for every other part,
+ * whatever its `Content-Disposition`.
+ */
+shown_in_body: boolean, };

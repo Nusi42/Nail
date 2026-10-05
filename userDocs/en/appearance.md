@@ -64,7 +64,9 @@ invitation and label chips). Density applies to every theme.
 - **Accent colour** (`#rgb` or `#rrggbb`): buttons, links, the unread dot,
   focus rings, selections and pressed chips. It applies to the light and the
   dark theme alike. Type it and click **Apply**, or use the colour picker
-  beside the field.
+  beside the field. High contrast themes keep their own colours: while one is
+  in use, the field is off ("High contrast uses its own colours"), and your
+  accent applies again as soon as you switch to another theme.
 
 The sliders and the colour picker apply as you move them; Nail writes the
 value once you pause for a moment. Until you set one, a slider shows the

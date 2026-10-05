@@ -98,6 +98,11 @@ replacing a file); in a browser the file is downloaded. The card then says
 when a plug-in can show that type, and the **…** button has the plug-ins'
 attachment actions.
 
+Pictures the message shows in its text (a newsletter's logo, a photo
+placed between paragraphs) are not listed as cards. **Show all
+attachments** lists them too, so you can save them; **Hide images shown
+in the message** puts the list back.
+
 ## Flag, archive, move, delete
 
 The action bar above the message, the message's right-click menu (or

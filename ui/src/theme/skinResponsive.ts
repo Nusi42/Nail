@@ -109,6 +109,30 @@ ${p("account-setup.steps")} {
 }`;
 
 /**
+ * ADR 0160: rows of controls side by side — a chooser and its Add button, a
+ * rule's condition, two date fields, a filter beside its button. Each field
+ * or control takes its share of the row (and wraps onto its own line below
+ * 8rem); buttons keep their width and line up with the controls (a field's
+ * label sits above its control). A control marked `data-width` keeps its
+ * own size (`./skin.ts` `CONTROL_WIDTHS`).
+ */
+export const FIELD_ROWS = [
+  "rules.add",
+  "rules.condition",
+  "rules.action",
+  "toolbar-editor.add",
+  "column-editor.add",
+  "vacation-editor.dates",
+  "appearance.accent",
+] as const;
+
+const fieldRows = FIELD_ROWS.map(p).join(", ");
+const ROWS = `:is(${fieldRows})[data-part] { align-items: flex-end; }
+:is(${fieldRows}) > :is(${ps("form.field", "form.input", "form.select", "form.textarea")}):not([data-width]) {
+  flex: 1 1 8rem; min-width: 0;
+}`;
+
+/**
  * Paragraphs inside windows and settings cards: their containers space them
  * (flex / grid gaps), so the browser's paragraph margins would double the
  * space (a hint drifting away from its field).
@@ -251,6 +275,7 @@ const TWO_PANES = `${p("window.body")} ${p("rules")}, ${p("settings-page.card")}
 export const RESPONSIVE_SKIN_CSS = [
   WINDOWS,
   FORMS,
+  ROWS,
   TEXT,
   INLINE,
   SWITCHERS,

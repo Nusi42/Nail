@@ -391,6 +391,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
         <input
           id={ids.refresh}
           data-part="form.input"
+          data-width="short"
           type="number"
           inputMode="numeric"
           min={1}

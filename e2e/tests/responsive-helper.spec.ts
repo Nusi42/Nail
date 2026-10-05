@@ -247,3 +247,98 @@ test("visually hidden screen-reader text is not clipped text", async ({ page }) 
   const issues = await layoutIssues(page);
   expect(issues, formatIssues(issues)).toEqual([]);
 });
+
+test("a control left at the browser's default width in a row with room is undersized", async ({
+  page,
+}) => {
+  // The P1 composer finding: To sat in a block wrapper inside its grid row at
+  // 20 characters while Subject spanned the row.
+  await show(
+    page,
+    `<div data-part="app">
+      <div data-part="composer.field" style="display:grid; grid-template-columns:80px minmax(0, 1fr); gap:8px; width:600px">
+        <label data-part="composer.label">To</label>
+        <div data-part="composer.address"><input data-part="composer.field.input" aria-label="To"></div>
+        <label data-part="composer.label">Subject</label>
+        <input data-part="composer.field.input" aria-label="Subject">
+      </div>
+      <div data-part="settings.row" style="display:flex; gap:8px; width:600px">
+        <label data-part="form.label">Server</label>
+        <input data-part="form.input" aria-label="Server">
+      </div>
+      <div data-part="form.field" style="display:grid; justify-items:start; width:600px">
+        <label data-part="form.label">Theme</label>
+        <select data-part="form.select" aria-label="Theme"><option>Frost</option></select>
+      </div>
+      <div data-part="form.field" style="display:block; width:600px">
+        <textarea data-part="form.textarea" aria-label="Notes"></textarea>
+      </div>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(kinds(issues), formatIssues(issues)).toEqual([
+    "undersized-control",
+    "undersized-control",
+    "undersized-control",
+    "undersized-control",
+  ]);
+  const found = issues.map((i) => i.element).join("\n");
+  for (const name of ["[To]", "[Server]", "[Theme]", "[Notes]"]) expect(found).toContain(name);
+  expect(found).not.toContain("[Subject]");
+});
+
+test("controls that fill their row, grow or are marked small are not undersized", async ({
+  page,
+}) => {
+  await show(
+    page,
+    `<div data-part="app">
+      <div data-part="composer.address" style="width:600px"><input data-part="composer.field.input" aria-label="To" style="width:100%"></div>
+      <div data-part="settings.row" style="display:flex; gap:8px; width:600px">
+        <label data-part="form.label">Server</label>
+        <input data-part="form.input" aria-label="Server" style="flex:1 1 auto; min-width:0">
+        <input data-part="form.input" aria-label="Port" type="number" data-width="short" style="width:80px">
+      </div>
+      <div data-part="settings.row" style="display:flex; gap:8px; width:600px">
+        <label data-part="form.label">Remind me</label>
+        <input data-part="form.input" aria-label="Minutes" type="number" data-width="short" style="width:80px">
+        <span data-part="form.hint">minutes before</span>
+      </div>
+      <div data-part="toolbar" style="display:flex; gap:8px; width:600px">
+        <button data-part="toolbar.button">Reply</button>
+        <input data-part="toolbar.search" aria-label="Search" data-width="content" style="width:160px">
+      </div>
+      <div data-part="pim.datetime" style="display:flex; gap:8px; width:600px">
+        <span data-part="pim.datetime.date" data-width="medium" style="display:inline-flex"><input data-part="form.input" type="date" aria-label="Date"></span>
+        <input data-part="form.input" type="time" aria-label="Time" data-width="short">
+      </div>
+      <div data-part="editor" contenteditable="true" aria-label="Body" style="display:block; width:600px; min-height:40px"><p>Text</p></div>
+      <div data-part="form.field" style="display:grid; width:600px">
+        <label data-part="form.label">Name</label>
+        <input data-part="form.input" aria-label="Name">
+        <select data-part="form.select" aria-label="Kind"><option>Work</option></select>
+      </div>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(issues, formatIssues(issues)).toEqual([]);
+});
+
+test("a control short of the edge its column siblings share is undersized", async ({ page }) => {
+  await show(
+    page,
+    `<div data-part="app">
+      <form data-part="form" aria-label="Account" style="width:420px">
+        <div data-part="row"><input data-part="form.input" aria-label="Name" style="width:400px"></div>
+        <div data-part="row"><input data-part="form.input" aria-label="Address" style="width:400px"></div>
+        <div data-part="row"><select data-part="form.select" aria-label="Kind" style="width:370px"><option>IMAP</option></select></div>
+        <div data-part="row"><input data-part="form.input" aria-label="Date" style="width:300px"><button data-part="form.button" style="width:96px">Pick</button></div>
+      </form>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(kinds(issues), formatIssues(issues)).toEqual(["undersized-control"]);
+  expect(issues[0]?.element).toContain("[Kind]");
+  expect(issues[0]?.detail).toContain("column");
+  expect(await layoutIssues(page, { skip: ["undersized-control"] })).toEqual([]);
+});

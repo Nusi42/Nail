@@ -24,6 +24,7 @@
  */
 
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
+import { CONTROL_WIDTH_VAR } from "../../theme/skin";
 
 /** `[data-part="…"]` for one part. */
 const p = (part: string) => `[data-part="${part}"]`;
@@ -177,8 +178,9 @@ ${inCard("form.field")} > ${p("form.label")} { align-self: end; font-size: ${T.b
 ${inCard("form.field")} > ${p("form.hint")} { align-self: start; }
 ${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.label")} { align-self: center; }
 ${inCard("form.field")} > ${p("form.input")}, ${inCard("form.field")} > ${p("form.select")} {
-  grid-column: 2; grid-row: 1 / span 2; justify-self: stretch; width: 100%; min-width: 0; max-width: 100%;
+  grid-column: 2; grid-row: 1 / span 2; justify-self: stretch; width: var(${CONTROL_WIDTH_VAR}, 100%); min-width: 0; max-width: 100%;
 }
+${inCard("form.field")} > [data-width] { justify-self: start; }
 ${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.input")},
 ${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.select")} { grid-row: 1; }
 ${inCard("form.field")} > ${p("form.textarea")} { width: 100%; }

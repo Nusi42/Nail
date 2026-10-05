@@ -823,7 +823,9 @@ impl PluginServices for CoreServices {
                 attachments: message
                     .attachments
                     .iter()
-                    .filter(|a| !a.inline)
+                    // The attachments the reader lists: not the images the
+                    // body shows (ADR 0162).
+                    .filter(|a| !a.shown_in_body)
                     .map(|a| PluginAttachment {
                         name: a.filename.clone().unwrap_or_default(),
                         mime_type: a.mime.clone(),

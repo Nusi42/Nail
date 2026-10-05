@@ -54,6 +54,7 @@ function SettingField({
         <input
           id={id}
           data-part="form.input"
+          data-width="short"
           type="number"
           step={1}
           min={def.min}

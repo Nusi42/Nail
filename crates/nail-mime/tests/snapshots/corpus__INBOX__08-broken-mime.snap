@@ -10,6 +10,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
         "index": 0,
         "inline": false,
         "mime": "application/octet-stream",
+        "shown_in_body": false,
         "size": 35
       },
       {
@@ -17,6 +18,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
         "index": 1,
         "inline": false,
         "mime": "text/html",
+        "shown_in_body": false,
         "size": 36
       }
     ],

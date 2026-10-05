@@ -547,6 +547,34 @@ describe("theme editor", () => {
     await settleQueries(env);
   });
 
+  // ADR 0161: a high-contrast theme keeps its own accent.
+  it("does not mark the accent overridden in a high-contrast theme", async () => {
+    const env = createEnv();
+    const id = await userTheme(env, "high-contrast", "Ink");
+    const appearance = (await env.client.request({ type: "ListThemes" }, "Themes")).appearance;
+    expect(appearance.themes.find((t) => t.id === id)?.kind).toBe("high-contrast");
+    await env.client.request(
+      {
+        type: "SetThemePreferences",
+        preferences: {
+          follow_system: appearance.settings.follow_system,
+          light: appearance.settings.light,
+          dark: appearance.settings.dark,
+          density: appearance.settings.density,
+          overrides: { accent: "#aa3366" },
+        },
+      },
+      "Themes",
+    );
+    showEditor(env, id);
+    const row = await tokenRow("color.accent");
+    expect(within(row).queryByText(/Overridden/)).toBeNull();
+    expect(within(row).getByRole("textbox", { name: "Value of color.accent" })).toHaveValue(
+      "#ffff00",
+    );
+    await settleQueries(env);
+  });
+
   it("reports a theme file changed on disk and reloads it", async () => {
     const env = createEnv();
     const id = await userTheme(env);
