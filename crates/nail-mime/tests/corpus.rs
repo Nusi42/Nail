@@ -77,7 +77,11 @@ fn newsletter_remote_content_and_tracking_pixel_are_blocked() {
     assert!(!html.contains("pumpkins.jpg"));
     assert!(!html.contains("paper.jpg"));
     assert!(!html.contains("leaf.png"));
-    assert!(!html.contains("<style"));
+    // The style block stays (P1 WP190) without its remote background; the
+    // remote style sheet link never does.
+    assert!(html.starts_with("<style>"), "{html}");
+    assert!(!html.contains("bg.png"));
+    assert!(!html.contains("garden-weekly.example/mail.css"));
     assert!(!html.contains("<link"));
     assert!(html.contains("Autumn is here"));
     assert!(html.contains(r#"href="https://garden-weekly.example/r/abc123?to=bulbs""#));
@@ -119,14 +123,17 @@ fn attachments_are_listed_and_decodable() {
 }
 
 #[test]
-fn inline_cid_image_is_kept_as_reference() {
+fn inline_cid_image_is_embedded_as_data_url() {
     let raw = corpus_message("INBOX", "05-inline-image.eml").unwrap();
     let parsed = parse_message(&raw);
     let html = parsed.sanitized_html.as_deref().unwrap();
+    // Resolved when the body is built (P1 WP190): every transport shows it
+    // without allowing `cid:` in a CSP.
     assert!(
-        html.contains(r#"src="cid:bench-photo-1@chem.example""#),
+        html.contains(r#"src="data:image/png;base64,iVBORw0KGgo"#),
         "{html}"
     );
+    assert!(!html.contains("cid:"), "{html}");
     assert!(!parsed.remote_content_blocked);
     assert_eq!(parsed.attachments.len(), 1);
     assert!(parsed.attachments[0].inline);

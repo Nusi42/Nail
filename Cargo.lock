@@ -4658,7 +4658,9 @@ name = "nail-mime"
 version = "1.0.0-rc.1"
 dependencies = [
  "ammonia",
+ "base64 0.23.1",
  "comrak",
+ "html5ever 0.40.1",
  "idna",
  "insta",
  "mail-parser",

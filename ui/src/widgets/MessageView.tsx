@@ -12,7 +12,7 @@ import { findSummary, setFlags } from "../state/mailOps";
 import { useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { useReaderCss } from "../theme/ThemeProvider";
-import { proxyBase, readerDocument } from "../theme/reader";
+import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
 import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentCard } from "./AttachmentCard";
@@ -57,7 +57,10 @@ function renderSrc(renderUrl: string, css: string): string {
 /**
  * The HTML body in a sandboxed frame without scripts: from the remote UI's
  * separate sandbox origin when the core names one (`render_url`), else as
- * `srcdoc` (set through the Trusted Types policy).
+ * `srcdoc` (set through the Trusted Types policy). The frame fills the rest
+ * of the reader and scrolls the mail itself (it cannot report its content
+ * height without scripts); mail with its own design (`data-state="designed"`)
+ * gets a wider column than the reading width.
  */
 function Body({ message }: { message: MessageBody }) {
   const t = useT();
@@ -73,10 +76,12 @@ function Body({ message }: { message: MessageBody }) {
     if (frame.current && srcDoc !== null) setSrcdoc(frame.current, srcDoc);
   }, [srcDoc]);
   const title = t("message-view-body-title", { subject: message.headers.subject });
+  const state = html !== null && isDesignedMail(html) ? "designed" : undefined;
   if (html !== null && renderUrl !== null) {
     return (
       <iframe
         data-part="message-view.body"
+        data-state={state}
         sandbox=""
         src={renderSrc(renderUrl, css)}
         referrerPolicy="no-referrer"
@@ -89,6 +94,7 @@ function Body({ message }: { message: MessageBody }) {
       <iframe
         ref={frame}
         data-part="message-view.body"
+        data-state={state}
         sandbox=""
         referrerPolicy="no-referrer"
         title={title}

@@ -12,6 +12,10 @@ nail-api.workspace = true
 tracing.workspace = true
 mail-parser = { workspace = true, features = ["full_encoding"] }
 ammonia = "4.2.0"
+# P1 WP190: style blocks and <body> attributes of HTML mail (the tokenizer
+# ammonia parses with); inline images as data: URLs.
+html5ever = "0.40"
+base64.workspace = true
 # M2c WP53: `text/markdown` bodies without an HTML alternative are rendered.
 comrak.workspace = true
 # M2a WP33 (ADR 0029): link safety (punycode, confusables).

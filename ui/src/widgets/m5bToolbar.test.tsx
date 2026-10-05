@@ -314,6 +314,49 @@ describe("reader action bar (M5b)", () => {
     }
   });
 
+  it("fits again when the window is made wider and quickly narrower again (P1)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const width = { width: 1000 };
+    const restore = stubWidths(width);
+    // The bar's content is wider than the bar whenever it shows too much.
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth");
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.dataset.part === "toolbar" && names().length > 5 ? 2000 : 0;
+      },
+    });
+    const observer = fakeResizeObserver();
+    try {
+      const env = readerEnv();
+      renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
+        layout: readerLayout(env),
+      });
+      expect(names()).toHaveLength(9);
+      width.width = 400;
+      observer.resize();
+      expect(names()).toEqual(["Reply", "Reply all", "Forward", "Archive", "More"]);
+      vi.advanceTimersByTime(1000);
+      width.width = 1000;
+      observer.resize();
+      expect(names()).toHaveLength(9);
+      // Back to 400 at once: looks like a measuring flip and is not fitted yet …
+      vi.advanceTimersByTime(50);
+      width.width = 400;
+      observer.resize();
+      expect(names()).toHaveLength(9);
+      // … but the bar overflows, so it fits again a moment later.
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(names()).toEqual(["Reply", "Reply all", "Forward", "Archive", "More"]);
+    } finally {
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollWidth", scroll);
+      restore();
+      vi.useRealTimers();
+    }
+  });
+
   it("adds a More button of its own to a toolbar without one when it overflows", async () => {
     const width = { width: 200 };
     const restore = stubWidths(width);

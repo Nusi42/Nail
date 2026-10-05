@@ -16,6 +16,8 @@
 //! ```
 
 pub mod auth_results;
+mod css;
+mod document;
 mod domain;
 pub mod links;
 mod markdown;
@@ -39,8 +41,18 @@ pub use message_file::{
     MAX_MESSAGE_FILE, MessageFile, MessageFileError, check_message_bytes, read_message_file,
 };
 pub use remote_content::ProxyRewriter;
-pub use sanitize::{SanitizedHtml, sanitize_html, sanitize_html_with};
+use sanitize::normalize_cid;
+pub use sanitize::{
+    InlineImages, SanitizedHtml, sanitize_html, sanitize_html_with, sanitize_mail_html,
+};
 pub use text::{PREVIEW_CHARS, preview_text};
+
+/// The largest inline (`cid:`) image the reader shows, in decoded bytes;
+/// larger ones stay attachments and the reader shows a placeholder.
+pub const MAX_INLINE_IMAGE_BYTES: usize = 2 * 1024 * 1024;
+
+/// The most inline image bytes resolved for one message.
+pub const MAX_INLINE_IMAGES_BYTES: usize = 8 * 1024 * 1024;
 
 /// Date used for [`MessageSummary::date`] when neither the `Date` header nor
 /// a fallback date is available.
@@ -295,12 +307,6 @@ impl Drop for Parsed<'_> {
     }
 }
 
-fn normalize_cid(cid: &str) -> String {
-    let cid = cid.trim();
-    let cid = cid.strip_prefix("cid:").unwrap_or(cid);
-    cid.trim_start_matches('<').trim_end_matches('>').to_owned()
-}
-
 /// Runs `f`, turning a panic in a third-party parser into `None`.
 fn guarded<T>(f: impl FnOnce() -> T) -> Option<T> {
     if let Ok(value) = catch_unwind(AssertUnwindSafe(f)) {
@@ -346,7 +352,10 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
     };
     let html = body_html(message)
         .or_else(|| markdown_source.as_deref().map(markdown::to_html))
-        .map(|html| sanitize_html_with(&html, rewriter));
+        .map(|html| {
+            let inline = inline_images(message, &html);
+            sanitize_mail_html(&html, rewriter, inline)
+        });
     let preview = preview_text(&text, PREVIEW_CHARS);
     let attachments = message
         .attachments
@@ -414,13 +423,124 @@ fn body_text(message: &Message<'_>) -> String {
         .text_bodies()
         .filter_map(|part| match &part.body {
             PartType::Text(text) => Some(text.to_string()),
-            PartType::Html(html) => Some(html_to_text(&sanitize_html(html).html)),
+            PartType::Html(html) => Some(html_text(&sanitize_html(html).html)),
             _ => None,
         })
         .map(|text| text.trim_end().to_owned())
         .filter(|text| !text.is_empty())
         .collect();
     parts.join("\n\n")
+}
+
+/// Block elements whose end starts a new line in [`html_text`].
+const BLOCK_ENDS: &[&str] = &[
+    "</div>",
+    "</h1>",
+    "</h2>",
+    "</h3>",
+    "</h4>",
+    "</h5>",
+    "</h6>",
+    "</li>",
+    "</tr>",
+    "</table>",
+    "</blockquote>",
+    "</section>",
+    "</article>",
+    "</header>",
+    "</footer>",
+    "</main>",
+    "</ul>",
+    "</ol>",
+    "</pre>",
+    "</center>",
+    "</dt>",
+    "</dd>",
+];
+
+/// The text of sanitized HTML: blocks on lines of their own (mail-parser
+/// breaks only at `<br>` and `</p>`), table cells apart, at most one blank
+/// line in a row.
+fn html_text(sanitized: &str) -> String {
+    let mut marked = String::with_capacity(sanitized.len() + 64);
+    let mut rest = sanitized;
+    while let Some(start) = rest.find("</") {
+        marked.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let end = rest.find('>').map_or(rest.len(), |i| i + 1);
+        let tag = &rest[..end];
+        marked.push_str(tag);
+        if BLOCK_ENDS.contains(&tag) {
+            marked.push_str("<br>");
+        } else if tag == "</td>" || tag == "</th>" {
+            marked.push(' ');
+        }
+        rest = &rest[end..];
+    }
+    marked.push_str(rest);
+    let text = html_to_text(&marked);
+    let mut out = String::with_capacity(text.len());
+    let mut blank = 0;
+    for line in text.lines().map(str::trim_end) {
+        if line.trim().is_empty() {
+            blank += 1;
+            if blank > 1 || out.is_empty() {
+                continue;
+            }
+        } else {
+            blank = 0;
+        }
+        out.push_str(line.trim_start_matches(' '));
+        out.push('\n');
+    }
+    out.trim_end().to_owned()
+}
+
+/// The `data:` URLs of the inline image parts `html` refers to (by
+/// Content-ID), up to [`MAX_INLINE_IMAGE_BYTES`] each and
+/// [`MAX_INLINE_IMAGES_BYTES`] together. The image type comes from the
+/// bytes, never from the part's header (no SVG: it can carry script).
+fn inline_images(message: &Message<'_>, html: &str) -> InlineImages {
+    use base64::Engine as _;
+    let mut images = InlineImages::default();
+    if !html.contains("cid:") && !html.contains("CID:") {
+        return images;
+    }
+    let mut total = 0usize;
+    for part in message.attachments() {
+        let Some(cid) = part.content_id().map(normalize_cid) else {
+            continue;
+        };
+        if cid.is_empty() || images.get(&cid).is_some() || !html.contains(cid.as_str()) {
+            continue;
+        }
+        let data = part.contents();
+        if data.len() > MAX_INLINE_IMAGE_BYTES || total + data.len() > MAX_INLINE_IMAGES_BYTES {
+            continue;
+        }
+        let Some(mime) = image_type(data) else {
+            continue;
+        };
+        total += data.len();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+        images.insert(&cid, format!("data:{mime};base64,{encoded}"));
+    }
+    images
+}
+
+/// The type of a PNG, GIF, JPEG or WebP image from its first bytes.
+fn image_type(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
 }
 
 /// The raw HTML to sanitize, or `None` when the message has no HTML part.
