@@ -480,6 +480,19 @@ describe("window manager (M5c WP171)", () => {
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 840, y: 500, width: 600, height: 400 });
   });
 
+  it("keeps a window that lay wholly on the page wholly on it when the page shrinks (P1)", async () => {
+    await setup(["plugin-manager"]);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 340, y: 200, width: 600, height: 400 });
+    // Narrower and lower: moved in from the right and bottom edges, the title bar
+    // and its buttons stay on the page.
+    setPage(800, 500);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 200, y: 100, width: 600, height: 400 });
+    setPage(500, 350);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 0, y: 0, width: 500, height: 350 });
+    setPage(PAGE.width, PAGE.height);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 340, y: 200, width: 600, height: 400 });
+  });
+
   it("remembers geometry per kind (debounced) and restores it when the window opens again", async () => {
     const { env } = await setup(["plugin-manager"]);
     const bar = header("plugin-manager");

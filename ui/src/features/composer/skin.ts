@@ -51,8 +51,8 @@ export const COMPOSER_TIGHT = "26rem";
 const BASE = `${p("composer")} { container: ${COMPOSER_CONTAINER} / inline-size; }
 ${p("composer")} > :not(${p("composer.body")}) { flex-shrink: 0; }
 ${p("composer")} > ${p("composer.footer")} {
-  position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: ${T.sm};
-  margin-top: auto; padding-block: ${T.sm} 0; border-top: 1px solid ${T.border}; background-color: ${T.bg};
+  position: sticky; bottom: calc(-1 * ${T.md}); z-index: 1; display: flex; flex-direction: column; gap: ${T.sm};
+  margin-top: auto; padding-block: ${T.sm} ${T.md}; border-top: 1px solid ${T.border}; background-color: ${T.bg};
 }
 ${inComposer("composer.actions")} { flex-wrap: wrap; }
 ${inComposer("composer.toolbar")} { flex-wrap: wrap; min-width: 0; }

@@ -11,12 +11,19 @@
  *   card, form fields become rows — label and description on the left, the
  *   control on the right — separated by hairlines, and the widgets' own
  *   cards and sections lose their borders so cards do not nest.
+ * - P1 (WP191): the card is the container its rows measure: every control
+ *   of a card shares one column (one left edge, one width); in a narrow card
+ *   the label goes above its control. A widget's sections without a layout
+ *   of their own stack their rows with a gap (checks one per row, not glued
+ *   inline), and the page pads less when it is narrow.
  * - Search matches are `settings-page.mark`; a revealed setting carries
  *   `data-settings-found` for a moment.
  * - M5a review points: a segmented control (Density) keeps its natural width
  *   instead of stretching across its card, and its selected segment is
  *   filled in High contrast (not only bold).
  */
+
+import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 
 /** `[data-part="…"]` for one part. */
 const p = (part: string) => `[data-part="${part}"]`;
@@ -148,22 +155,37 @@ ${p("settings-page.mark")} {
   box-shadow: 0 1px 0 0 ${T.accent};
 }`;
 
+/** Below this container width a form row puts its label above the control. */
+export const FIELDS_NARROW = "30rem";
+/** The width of the control column of a form row (P1: one left edge per card). */
+const CONTROL_COLUMN = `calc(16 * ${T.lg})`;
+
 const CARDS = `${p("settings-page.card")} {
   display: grid; gap: ${T.md}; min-width: 0; padding: ${T.lg};
   border: 1px solid ${T.border}; border-radius: ${T.rLg}; background-color: ${T.bg};
+  container: ${FIELDS_CONTAINER} / inline-size;
 }
 ${p("settings-page.card")}:focus { outline: none; }
+${p("settings-page.card")} > [data-part] { min-width: 0; padding: 0; overflow: visible; }
 ${inCard("form.field")} {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: ${T.lg}; row-gap: ${T.xxs};
-  padding-block: ${T.sm};
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, ${CONTROL_COLUMN}); align-items: center;
+  column-gap: ${T.lg}; row-gap: ${T.xxs}; padding-block: ${T.sm};
 }
 ${inCard("form.field")} > * { grid-column: 1 / -1; }
 ${inCard("form.field")} > ${p("form.label")}, ${inCard("form.field")} > ${p("form.hint")} { grid-column: 1; }
-${inCard("form.field")} > ${p("form.label")} { font-size: ${T.body}; font-weight: ${T.medium}; }
+${inCard("form.field")} > ${p("form.label")} { align-self: end; font-size: ${T.body}; font-weight: ${T.medium}; }
+${inCard("form.field")} > ${p("form.hint")} { align-self: start; }
+${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.label")} { align-self: center; }
 ${inCard("form.field")} > ${p("form.input")}, ${inCard("form.field")} > ${p("form.select")} {
-  grid-column: 2; grid-row: 1 / span 2; justify-self: end; width: auto; min-width: calc(12 * ${T.lg}); max-width: 100%;
+  grid-column: 2; grid-row: 1 / span 2; justify-self: stretch; width: 100%; min-width: 0; max-width: 100%;
 }
+${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.input")},
+${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.select")} { grid-row: 1; }
+${inCard("form.field")} > ${p("form.textarea")} { width: 100%; }
 ${inCard("switch-field")}, ${inCard("form.check")} { padding-block: ${T.sm}; }
+:where(${p("settings-page.card")} section)[data-part] { display: flex; flex-direction: column; gap: ${T.sm}; min-width: 0; }
+:where(${p("settings-page.card")} section[data-part]) > ${p("form.button")} { align-self: flex-start; }
+${inCard("form.section.title")} { padding-inline: 0; }
 ${inCard("form.field")} + ${p("form.field")}, ${inCard("form.field")} + ${p("switch-field")}, ${inCard("form.field")} + ${p("form.check")},
 ${inCard("switch-field")} + ${p("form.field")}, ${inCard("switch-field")} + ${p("switch-field")}, ${inCard("switch-field")} + ${p("form.check")},
 ${inCard("form.check")} + ${p("form.field")}, ${inCard("form.check")} + ${p("switch-field")}, ${inCard("form.check")} + ${p("form.check")} {
@@ -175,6 +197,29 @@ ${p("settings-page.card")} > ${p("appearance")} { max-width: none; padding: 0; o
 [data-settings-found] {
   border-radius: ${T.rSm}; outline: 2px solid ${T.accent}; outline-offset: 2px;
   background-color: ${T.accentSoft}; transition: background-color ${T.fast} ${T.ease};
+}
+@container ${FIELDS_CONTAINER} (max-width: ${FIELDS_NARROW}) {
+  ${inCard("form.field")} { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  ${inCard("form.field")} > *, ${inCard("form.field")} > ${p("form.label")}, ${inCard("form.field")} > ${p("form.hint")} { grid-column: 1; grid-row: auto; align-self: auto; }
+  ${inCard("form.field")} > ${p("form.input")}, ${inCard("form.field")} > ${p("form.select")},
+  ${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.input")},
+  ${inCard("form.field")}:not(:has(> ${p("form.hint")})) > ${p("form.select")} { grid-column: 1; grid-row: 2; }
+  ${inCard("form.field")} > ${p("form.hint")} { grid-row: 3; }
+}`;
+
+/**
+ * P1 (WP191): the page measures its own width, not the viewport's — a
+ * narrow window, a pop-out or the rail beside it make it narrow too.
+ */
+const NARROW = `${p("settings-page.content")} { container: nail-settings-content / inline-size; }
+@container nail-settings-content (max-width: 40rem) {
+  ${p("settings-page.header")} { padding: ${T.lg} ${T.lg} ${T.sm}; }
+  ${p("settings-page.body")} { padding: ${T.xs} ${T.lg} ${T.xl}; }
+}
+@container nail-settings-content (max-width: 30rem) {
+  ${p("settings-page.header")} { padding: ${T.md} ${T.md} ${T.sm}; }
+  ${p("settings-page.body")} { padding: ${T.xs} ${T.md} ${T.lg}; gap: ${T.md}; }
+  ${p("settings-page.card")} { padding: ${T.md}; }
 }`;
 
 /**
@@ -187,4 +232,4 @@ ${p("appearance")} ${p("segmented.option")}[aria-checked="true"], ${p("settings-
 }`;
 
 /** The whole settings-page skin. */
-export const SETTINGS_SKIN_CSS = [PAGE, NAV, CARDS, SEGMENTED].join("\n");
+export const SETTINGS_SKIN_CSS = [PAGE, NAV, CARDS, NARROW, SEGMENTED].join("\n");

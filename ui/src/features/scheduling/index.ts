@@ -129,7 +129,13 @@ export const dialogs: Feature["dialogs"] = {
  * (`confirmation: true`) are modal. The layout's `window` properties win.
  */
 export const windows: NonNullable<Feature["windows"]> = {
-  [CANCEL_DIALOG]: { confirmation: true, size: { width: 520, height: 460 }, resizable: true },
+  // P1: a resizable confirmation keeps room for its choices and buttons.
+  [CANCEL_DIALOG]: {
+    confirmation: true,
+    size: { width: 520, height: 460 },
+    min_size: { width: 400, height: 340 },
+    resizable: true,
+  },
   [SETTINGS_DIALOG]: { size: { width: 640, height: 560 }, min_size: { width: 480, height: 400 } },
   [FIND_TIME_DIALOG]: { size: { width: 900, height: 640 }, min_size: { width: 640, height: 480 } },
 };
