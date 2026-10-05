@@ -9,7 +9,7 @@ import {
   remoteContext,
   rpcOk,
 } from "../support/remote";
-import { expectResponsive, type Size } from "../support/responsive";
+import { expectResponsive } from "../support/responsive";
 import { READER_SUBJECT, showView } from "../support/views";
 
 /**
@@ -161,8 +161,9 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     await openMessage(page, "Big October Sale");
 
     const body = page.locator('iframe[data-part="message-view.body"]');
-    await expect(body).toHaveAttribute("sandbox", "");
-    await expect(body).toHaveAttribute("data-state", "designed");
+    // P3 (ADR 0164): the app's origin for measuring, never scripts.
+    await expect(body).toHaveAttribute("sandbox", "allow-same-origin");
+    await expect(body).toHaveAttribute("data-state", /(^|\s)designed(\s|$)/);
     const frame = readerFrame(page);
     await expect(frame.getByRole("heading", { name: "Big October Sale" })).toBeVisible();
     // The style sheet and the classes arrived: computed colours inside the frame.
@@ -409,14 +410,21 @@ test.describe("the mail view at every standard size", () => {
     await showPane("Messages");
 
     // The page never scrolls with a long message either: the reader's card
-    // feed scrolls (P2: a card's frame keeps at least 40 % of the window's
-    // height, so it may reach below the pane), never the page.
+    // feed scrolls (P3, ADR 0164: the frame is as tall as the whole mail, so
+    // it may reach below the pane), never the page.
     await page.setViewportSize({ width: 1280, height: 700 });
     await openMessage(page, "Big October Sale");
-    const frameBox = await page.locator('iframe[data-part="message-view.body"]').boundingBox();
-    const viewport = page.viewportSize() as Size;
-    expect(frameBox).not.toBeNull();
-    expect(frameBox?.height ?? 0).toBeGreaterThanOrEqual(viewport.height * 0.4 - 1);
+    const frame = page.locator('iframe[data-part="message-view.body"]');
+    await expect(frame).toHaveAttribute("data-state", /(^|\s)measured(\s|$)/);
+    await expect
+      .poll(async () => {
+        const content = await frame
+          .contentFrame()
+          .locator("html")
+          .evaluate((root: HTMLElement) => root.offsetHeight);
+        return Math.abs(((await frame.boundingBox())?.height ?? 0) - content);
+      })
+      .toBeLessThanOrEqual(2);
     const pageScroll = await page.evaluate(() => ({
       scroll: document.documentElement.scrollHeight,
       height: window.innerHeight,

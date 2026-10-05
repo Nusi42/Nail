@@ -55,7 +55,8 @@ test("remote images load through the proxy after allowing the sender; private ta
   const bar = page.getByRole("region", { name: "Remote content" });
   await expect(bar).toContainText("Nail blocked 3");
   const frame = page.locator('iframe[data-part="message-view.body"]');
-  await expect(frame).toHaveAttribute("sandbox", "");
+  // P3 (ADR 0164): the app's origin for measuring, never scripts.
+  await expect(frame).toHaveAttribute("sandbox", "allow-same-origin");
   const blocked = (await frame.getAttribute("srcdoc")) ?? "";
   expect(blocked).toContain("Our catalogue");
   expect(blocked).not.toContain("images.nail.example");

@@ -133,8 +133,8 @@ const inCard = (part: string) => `${p("thread-view.card.body")} ${p(part)}`;
  * collapsed card one line, each card as tall as its content (the quote
  * toggle sits right under the text); a fold "N older messages" is a line of
  * its own between cards (`thread-view.fold-row`). Inside a card the
- * reader's widgets lose their own column, scroll area and subject (the
- * frame of an HTML body keeps a minimum height and scrolls itself).
+ * reader's widgets lose their own column, scroll area and subject; the
+ * frame of an HTML body is as tall as its mail (P3, ADR 0164).
  * `data-mode="single"` is the selected message alone (no conversation).
  */
 const FEED = `${p("stack")}:has(> ${p("thread-view")}[data-mode]) { container: nail-reader / inline-size; }
@@ -227,7 +227,7 @@ ${inCard("message-view.text-block")}, ${inCard("message-view.quote")} {
 ${inCard("message-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: 3px solid ${T.quote}; color: ${T.muted}; }
 ${inCard("message-view.quote-toggle")} { width: fit-content; font-size: ${T.small}; color: ${T.accent}; cursor: pointer; }
 ${inCard("message-view.quote-toggle")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
-${inCard("message-view.body")} { min-height: max(calc(12 * ${T.lg}), 40vh); background-color: transparent; }
+${inCard("message-view.body")} { background-color: transparent; }
 @container nail-reader (max-width: 640px) {
   ${p("thread-view")}[data-mode="cards"] { padding: ${T.md} ${T.pane} ${T.lg}; }
   ${p("thread-view.card.body")} { padding-inline-start: ${T.md}; }

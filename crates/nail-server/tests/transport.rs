@@ -530,9 +530,43 @@ async fn mail_html_is_served_only_on_the_sandbox_origin() {
         .map(str::trim)
         .find(|d| d.starts_with("sandbox"))
         .unwrap();
-    assert!(!sandbox_directive.contains("allow-scripts"), "{csp}");
+    // P3 (ADR 0164): scripts run, but only the hash-pinned height script,
+    // and the document keeps an opaque origin.
+    assert!(sandbox_directive.contains("allow-scripts"), "{csp}");
     assert!(!sandbox_directive.contains("allow-same-origin"), "{csp}");
-    assert!(!csp.contains("script-src"));
+    assert!(
+        csp.contains(&format!(
+            "script-src {};",
+            nail_server::sandbox::height_script_source()
+        )),
+        "{csp}"
+    );
+    assert!(body.contains(&format!(
+        "<script>{}</script>",
+        nail_server::sandbox::HEIGHT_SCRIPT
+    )));
+    // The height goes only to an app origin that may frame the document.
+    let app_origin = format!("http://127.0.0.1:{}", app.port());
+    let framed = get(
+        sandbox,
+        &format!("/render/{token}?parent={app_origin}"),
+        &[("Cookie", "__Host-nail-session=abc")],
+    )
+    .await;
+    assert_eq!(framed.status, 200);
+    for parent in ["https://evil.example", "null", "*"] {
+        assert_eq!(
+            get(
+                sandbox,
+                &format!("/render/{token}?parent={parent}"),
+                &[("Cookie", "__Host-nail-session=abc")],
+            )
+            .await
+            .status,
+            400,
+            "{parent}"
+        );
+    }
     assert!(
         csp.contains(&format!("frame-ancestors http://127.0.0.1:{}", app.port())),
         "{csp}"

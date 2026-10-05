@@ -76,7 +76,8 @@ test("the reader shows the body in a sandboxed iframe with remote images blocked
   await expect(page.getByRole("region", { name: "Remote content" })).toBeVisible();
 
   const iframe = view.locator('iframe[data-part="message-view.body"]');
-  await expect(iframe).toHaveAttribute("sandbox", "");
+  // P3 (ADR 0164): the app's origin for measuring, never scripts.
+  await expect(iframe).toHaveAttribute("sandbox", "allow-same-origin");
   const body = page.frameLocator('iframe[data-part="message-view.body"]');
   await expect(body.locator("h1")).toHaveText("Autumn is here");
   // No remote image survives: sources are gone or local.
