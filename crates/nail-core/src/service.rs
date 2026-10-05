@@ -1052,7 +1052,7 @@ impl Service {
                 folder_id,
             } => {
                 let (thread, messages) = self
-                    .get_conversation(&thread_id, folder_id.as_ref())
+                    .get_conversation(&thread_id, folder_id.as_ref(), None)
                     .await?;
                 Response::Conversation {
                     thread: Box::new(thread),

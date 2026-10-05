@@ -1,86 +1,140 @@
-//! Conversations (P2, ADR 0148): the slot of WP-core.
+//! Conversations (P2, ADR 0148; WP201).
 //!
-//! `GetConversation` answers the conversation of a thread as a list row
-//! shows it: the thread's messages in the listed folder plus the user's own
-//! messages from the accounts' Sent folders (`from_me`), oldest first,
-//! never drafts; without a folder, every folder but
-//! Drafts, Trash and Junk. `ListThreads` counts the same set, and
-//! resolves "me" in the participants from the accounts' identities.
-//!
-//! Contract stub: until WP-core replaces it, the answer is `GetThread`'s
-//! (every stored copy across folders, nothing marked `from_me`), so the UI
-//! can be built against the request on the real core.
+//! A list row in a folder is a conversation: the thread's messages in the
+//! listed folder (or the member folders of a virtual folder) plus the
+//! user's own messages from the Sent folders of the same accounts
+//! (`from_me`), never drafts — a listed Drafts folder shows every draft on
+//! its own (`single-<message id>`). Without a folder a conversation is the
+//! thread's messages in every folder but Drafts, Trash and Junk. The store
+//! does the work (`nail_store::thread::conversation`); the core resolves
+//! virtual folders, "me" from the identities (`accounts.kdl`, compared
+//! case-insensitively), and narrows the folders to a remote session's grant
+//! ([`FolderFilter`]).
 
-use nail_api::{ConversationMessage, FolderId, ThreadId, ThreadSummary};
+use std::sync::Arc;
+
+use nail_api::{ConversationMessage, FolderId, MessageSummary, ThreadId, ThreadSummary};
+use nail_store::{ConversationFolders, OwnAddresses, ScopeFolder, ThreadPage};
 
 use crate::error::Result;
 use crate::service::Service;
 
+/// Which folders a caller may see (a remote session's grant); callers pass
+/// `None` for all.
+pub(crate) type FolderFilter = Arc<dyn Fn(&ScopeFolder) -> bool + Send + Sync>;
+
 impl Service {
+    /// The user's addresses per account: the configured accounts' addresses
+    /// and identities, and the stored accounts' addresses (local and
+    /// registered accounts).
+    pub(crate) async fn own_addresses_by_account(&self) -> Result<OwnAddresses> {
+        let mut own = OwnAddresses::new();
+        for account in &self.inner.accounts.config().accounts {
+            own.add(&account.id, &account.email);
+            for identity in &account.identities {
+                own.add(&account.id, &identity.email);
+            }
+        }
+        for account in self.stored_accounts().await? {
+            own.add(&account.id, &account.email);
+        }
+        Ok(own)
+    }
+
+    /// The conversation folders behind a listed folder id, narrowed by
+    /// `filter`. Unknown folders fail with `not_found`, as for
+    /// `ListMessages`.
+    async fn conversation_scope(
+        &self,
+        folder: &FolderId,
+        filter: Option<&FolderFilter>,
+    ) -> Result<ConversationFolders> {
+        let resolved = self.resolve_folder(folder).await?;
+        if !resolved.is_virtual {
+            let id = folder.clone();
+            self.inner.store.call(move |s| s.get_folder(&id)).await?;
+        }
+        let mut scope = self
+            .inner
+            .store
+            .call(move |s| s.conversation_folders(&resolved.sources))
+            .await?;
+        if let Some(keep) = filter {
+            scope.retain(|f| keep(f));
+        }
+        Ok(scope)
+    }
+
+    /// `ListThreads`: a page of the folder's conversations, newest activity
+    /// first, within `filter`.
+    pub(crate) async fn list_conversations(
+        &self,
+        folder: &FolderId,
+        offset: u32,
+        limit: u32,
+        filter: Option<&FolderFilter>,
+    ) -> Result<ThreadPage> {
+        let scope = self.conversation_scope(folder, filter).await?;
+        let own = self.own_addresses_by_account().await?;
+        Ok(self
+            .inner
+            .store
+            .call(move |s| s.list_conversations(&scope, &own, offset, limit))
+            .await?)
+    }
+
     /// `GetConversation`: the conversation's row and its messages, oldest
-    /// first.
+    /// first, as listed in `folder` (within `filter`), or without a folder
+    /// across every folder but Drafts, Trash and Junk.
     pub(crate) async fn get_conversation(
         &self,
         thread: &ThreadId,
         folder: Option<&FolderId>,
+        filter: Option<&FolderFilter>,
     ) -> Result<(ThreadSummary, Vec<ConversationMessage>)> {
-        if let Some(folder) = folder {
-            // Unknown folders are an error, as for ListThreads.
-            if !self.resolve_folder(folder).await?.is_virtual {
-                let id = folder.clone();
-                self.inner.store.call(move |s| s.get_folder(&id)).await?;
-            }
-        }
-        let (summary, messages) = self.get_thread(thread).await?;
-        Ok((summary, stub_messages(messages)))
-    }
-}
-
-/// The contract stub's messages: every message as it is, none marked as
-/// the user's.
-fn stub_messages(messages: Vec<nail_api::MessageSummary>) -> Vec<ConversationMessage> {
-    messages
-        .into_iter()
-        .map(|message| ConversationMessage {
-            message,
-            from_me: false,
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use nail_api::{Flags, MessageSummary};
-
-    use super::stub_messages;
-
-    #[test]
-    fn the_stub_keeps_order_and_marks_nothing_as_mine() {
-        let message = |id: &str| MessageSummary {
-            id: id.into(),
-            account_id: "a".into(),
-            folder_id: "f".into(),
-            subject: String::new(),
-            from: None,
-            to: Vec::new(),
-            date: String::new(),
-            flags: Flags::default(),
-            has_attachments: false,
-            preview: String::new(),
-            thread_id: None,
-            tags: Vec::new(),
-            duplicates: Vec::new(),
-            headers_only: false,
-            gmail: None,
-            exchange: None,
+        let scope = match folder {
+            Some(folder) => Some(self.conversation_scope(folder, filter).await?),
+            None => None,
         };
-        let out = stub_messages(vec![message("1"), message("2")]);
-        assert_eq!(
-            out.iter()
-                .map(|m| m.message.id.as_str())
-                .collect::<Vec<_>>(),
-            ["1", "2"]
-        );
-        assert!(out.iter().all(|m| !m.from_me));
+        let own = self.own_addresses_by_account().await?;
+        let thread = thread.clone();
+        Ok(self
+            .inner
+            .store
+            .call(move |s| s.conversation(&thread, scope.as_ref(), &own))
+            .await?)
+    }
+
+    /// The row of a conversation rebuilt from the messages a caller may
+    /// see (a remote session's narrowed answer): nothing about the dropped
+    /// messages remains in the counts, participants or newest message.
+    pub(crate) async fn conversation_row(
+        &self,
+        thread: &ThreadId,
+        messages: &[ConversationMessage],
+    ) -> Result<Option<ThreadSummary>> {
+        let own = self.own_addresses_by_account().await?;
+        Ok(nail_store::summarize_conversation(
+            thread.as_str(),
+            messages,
+            &own,
+        ))
+    }
+
+    /// [`Self::conversation_row`] for a thread's plain messages
+    /// (`GetThread`).
+    pub(crate) async fn thread_row(
+        &self,
+        thread: &ThreadId,
+        messages: &[MessageSummary],
+    ) -> Result<Option<ThreadSummary>> {
+        let messages: Vec<ConversationMessage> = messages
+            .iter()
+            .map(|m| ConversationMessage {
+                message: m.clone(),
+                from_me: false,
+            })
+            .collect();
+        self.conversation_row(thread, &messages).await
     }
 }

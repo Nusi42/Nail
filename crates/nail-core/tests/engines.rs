@@ -944,7 +944,7 @@ async fn search_threads_and_query_errors() {
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].duplicates.len(), 1);
     // P2 (ADR 0148): the conversation request answers for a listed folder
-    // (contract stub: GetThread's messages, none marked as the user's) and
+    // (copies collapsed, a mailing-list message is not the user's) and
     // refuses an unknown folder.
     let Response::Conversation { thread, messages } = request(
         &f.service,

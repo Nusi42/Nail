@@ -160,7 +160,10 @@ pub use seal::{
     SealMode, SealedColumn,
 };
 pub use store::{BLOB_DIR_NAME, DB_FILE_NAME, Store};
-pub use thread::{ThreadPage, ThreadTreeEntry};
+pub use thread::{
+    ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder, ThreadPage, ThreadTreeEntry,
+    summarize_conversation,
+};
 pub use triage::{
     JUNK_TOKEN_LIMIT, JUNK_TRAINING_ROWS, JUNK_TRAINING_WITH_TOKENS, JunkStats, MCP_SETTINGS_KEY,
     NOTIFICATION_SETTINGS_KEY, SieveLocation, SieveRecord, SieveUpload, SnoozeRecord, TokenCounts,

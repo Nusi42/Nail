@@ -427,14 +427,32 @@ impl<D: McpData> Shared<D> {
             value["subject"] = json!(thread.thread.subject);
             value["participants"] = json!(thread.thread.participants);
         } else {
-            let mut participants: Vec<&nail_api::Address> = Vec::new();
-            for from in visible.iter().filter_map(|m| m.from.as_ref()) {
-                if !participants
-                    .iter()
-                    .any(|p| p.email.eq_ignore_ascii_case(&from.email))
+            // P2 (ADR 0148): the same shape as the full answer (`{name,
+            // email, me, unread}`): "me" from the thread's participants,
+            // unread from the visible messages only.
+            let mut participants: Vec<nail_api::ThreadParticipant> = Vec::new();
+            for m in &visible {
+                let Some(from) = m.from.as_ref() else {
+                    continue;
+                };
+                let unread = !m.flags.seen;
+                if let Some(known) = participants
+                    .iter_mut()
+                    .find(|p| p.address.email.eq_ignore_ascii_case(&from.email))
                 {
-                    participants.push(from);
+                    known.unread |= unread;
+                    continue;
                 }
+                let me = thread
+                    .thread
+                    .participants
+                    .iter()
+                    .any(|p| p.me && p.address.email.eq_ignore_ascii_case(&from.email));
+                participants.push(nail_api::ThreadParticipant {
+                    address: from.clone(),
+                    me,
+                    unread,
+                });
             }
             value["subject"] = json!(visible[0].subject);
             value["participants"] = json!(participants);

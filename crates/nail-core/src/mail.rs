@@ -180,38 +180,32 @@ impl Service {
             .await?)
     }
 
-    /// `ListThreads` over a real or virtual folder.
+    /// `ListThreads` over a real or virtual folder: its conversations
+    /// (P2, ADR 0148; `conversations.rs`).
     pub(crate) async fn list_threads(
         &self,
         folder: &FolderId,
         offset: u32,
         limit: u32,
     ) -> Result<ThreadPage> {
-        let resolved = self.resolve_folder(folder).await?;
-        if !resolved.is_virtual {
-            // Unknown real folders are an error, as for ListMessages.
-            let id = folder.clone();
-            self.inner.store.call(move |s| s.get_folder(&id)).await?;
-        }
-        Ok(self
-            .inner
-            .store
-            .call(move |s| s.list_threads(&resolved.sources, offset, limit))
-            .await?)
+        self.list_conversations(folder, offset, limit, None).await
     }
 
     /// `GetThread`: every stored message of the thread, across folders and
-    /// accounts, oldest first.
+    /// accounts, oldest first; "me" resolved in the participants.
     pub(crate) async fn get_thread(
         &self,
         thread: &ThreadId,
     ) -> Result<(ThreadSummary, Vec<MessageSummary>)> {
+        let own = self.own_addresses_by_account().await?;
         let thread = thread.clone();
-        Ok(self
+        let (mut summary, messages) = self
             .inner
             .store
             .call(move |s| s.get_thread(&thread, None))
-            .await?)
+            .await?;
+        own.mark(&mut summary);
+        Ok((summary, messages))
     }
 
     /// Applies operations locally, queues them and tells the engines.
