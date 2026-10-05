@@ -237,10 +237,8 @@ describe("PIM skin", () => {
         l.startsWith('[data-part="calendar"] {'),
       );
       expect(calendar).toContain(`container: ${CALENDAR_CONTAINER} / inline-size;`);
-      // The calendar window's panes give way down to their min-sizes.
-      expect(PIM_SKIN_CSS).toContain(
-        '[data-part="split"][data-node-id="calendar-panes"] > [data-part="split.pane"] { flex-shrink: 1; }',
-      );
+      // The calendar window's panes give way through flexForSize, not a skin rule.
+      expect(PIM_SKIN_CSS).not.toContain('[data-node-id="calendar-panes"]');
     });
 
     it("puts the toolbar on two rows in a narrow calendar, keeping every name", () => {

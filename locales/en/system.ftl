@@ -73,6 +73,9 @@ system-about-mapi-no = Not installed
 
 ## Tray and startup (widget desktop-settings)
 
+# Shown on the desktop-only cards (updates, tray and startup, default apps) in the browser.
+system-desktop-only = This setting is available in the Nail desktop app.
+
 system-desktop-title = Tray and startup
 system-desktop-tray = When the window closes
 system-desktop-close-to-tray = Keep Nail running in the notification area

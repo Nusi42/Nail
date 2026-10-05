@@ -329,13 +329,10 @@ const srOnly =
   "position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;";
 
 /**
- * P1 (WP192, ADR 0139): the panes of the default calendar window's split
- * (`calendar-panes`) give way down to their `min-sizes` before the window
- * runs out of room — a fixed `260px` pane does not shrink by itself
- * (`flexForSize`), so at 800 px the calendar pane was pushed past the
- * window's edge. (A rule for every split belongs in the layout renderer;
- * no `:has()` with a descendant search here: costly in jsdom's style
- * matching, which the axe tests run.) The
+ * P1 (WP192, ADR 0142): the panes of the calendar window's split give way
+ * down to their `min-sizes` through the layout renderer (`flexForSize`, ADR
+ * 0144). No `:has()` with a descendant search here: costly in jsdom's style
+ * matching, which the axe tests run. The
  * calendar is a size container (`parts.ts`), so its content (the toolbar's
  * buttons, the time grid's columns) never widens the pane it sits in: the
  * panes keep their place at 800 px and the grids
@@ -346,8 +343,7 @@ const srOnly =
  * The contact filters share the list's width; a contact card's and the
  * task list's content stop at a reading width in a wide window.
  */
-const RESPONSIVE = `${p("split")}[data-node-id="calendar-panes"] > ${p("split.pane")} { flex-shrink: 1; }
-@container ${CALENDAR_CONTAINER} (max-width: ${CALENDAR_NARROW}) {
+const RESPONSIVE = `@container ${CALENDAR_CONTAINER} (max-width: ${CALENDAR_NARROW}) {
   ${p("calendar.toolbar")} { flex-wrap: wrap; row-gap: ${T.xs}; }
   ${p("calendar.toolbar")} > ${p("calendar.title")} { order: 99; flex: 1 0 100%; margin: 0; }
   ${p("calendar.toolbar")} > [data-field="calendar-new-event"] { margin-inline-start: auto; }

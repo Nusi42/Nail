@@ -246,44 +246,18 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
           ))}
         </ul>
       )}
-      <WizardButtons>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant={preview ? undefined : "primary"}
-          data-action="preview"
-          disabled={busy || issues.length > 0}
-          onClick={() => void showPreview()}
-        >
-          {t("portability-diagnostics-preview")}
-        </button>
-      </WizardButtons>
       {preview && <DiagnosticsPreview manifest={preview} />}
       {preview && !bundle && (
-        <>
-          <PathField
-            labelId="portability-diagnostics-file"
-            field="bundle-path"
-            value={path}
-            onChange={setPath}
-            kind="save-file"
-            titleId="portability-diagnostics-pick-title"
-            filters={DIAGNOSTICS_FILTERS}
-            defaultPath={`${plainText(t("portability-diagnostics-default-name", { date: new Date().toISOString().slice(0, 10) }))}.zip`}
-          />
-          <WizardButtons>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="save"
-              disabled={busy || !isAbsolutePath(path)}
-              onClick={() => void save()}
-            >
-              {t("portability-diagnostics-save")}
-            </button>
-          </WizardButtons>
-        </>
+        <PathField
+          labelId="portability-diagnostics-file"
+          field="bundle-path"
+          value={path}
+          onChange={setPath}
+          kind="save-file"
+          titleId="portability-diagnostics-pick-title"
+          filters={DIAGNOSTICS_FILTERS}
+          defaultPath={`${plainText(t("portability-diagnostics-default-name", { date: new Date().toISOString().slice(0, 10) }))}.zip`}
+        />
       )}
       {bundle && (
         <section data-part="diagnostics.saved" role="status">
@@ -300,13 +274,37 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
         </section>
       )}
       {problem && <Problem problem={problem} />}
-      {close && (
-        <WizardButtons>
+      {/* One button row at the end: in the dialog it stays visible at the
+          window's bottom while the body scrolls (P1, ADR 0144). */}
+      <WizardButtons>
+        <button
+          type="button"
+          data-part="form.button"
+          data-variant={preview ? undefined : "primary"}
+          data-action="preview"
+          disabled={busy || issues.length > 0}
+          onClick={() => void showPreview()}
+        >
+          {t("portability-diagnostics-preview")}
+        </button>
+        {preview && !bundle && (
+          <button
+            type="button"
+            data-part="form.button"
+            data-variant="primary"
+            data-action="save"
+            disabled={busy || !isAbsolutePath(path)}
+            onClick={() => void save()}
+          >
+            {t("portability-diagnostics-save")}
+          </button>
+        )}
+        {close && (
           <button type="button" data-part="form.button" data-action="close" onClick={close}>
             {t("portability-close")}
           </button>
-        </WizardButtons>
-      )}
+        )}
+      </WizardButtons>
     </div>
   );
 }

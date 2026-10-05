@@ -4,6 +4,7 @@
  * keep it fresh (`handleSystemEvent` in `index.ts`).
  */
 import { useQuery } from "@tanstack/react-query";
+import { retryUnlessUnsupported } from "./QueryProblem";
 import { useClient } from "../../state/queries";
 
 /** Query keys of this feature. */
@@ -33,6 +34,7 @@ export function useInstallation(enabled = true) {
 export function useUpdateStatus() {
   const client = useClient();
   return useQuery({
+    retry: retryUnlessUnsupported,
     queryKey: systemKeys.updates,
     queryFn: async () => (await client.request({ type: "GetUpdateStatus" }, "UpdateStatus")).status,
   });
@@ -42,6 +44,7 @@ export function useUpdateStatus() {
 export function useDesktopSettings() {
   const client = useClient();
   return useQuery({
+    retry: retryUnlessUnsupported,
     queryKey: systemKeys.desktop,
     queryFn: async () => {
       const answer = await client.request({ type: "GetDesktopSettings" }, "DesktopSettings");
@@ -61,6 +64,7 @@ export function useDesktopSettings() {
 export function useDefaultApps() {
   const client = useClient();
   return useQuery({
+    retry: retryUnlessUnsupported,
     queryKey: systemKeys.defaultApps,
     refetchOnWindowFocus: "always",
     queryFn: async () => {

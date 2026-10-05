@@ -1,4 +1,4 @@
-# 0140 — WP190: HTML mail as its own document, and the mail view's responsive pass
+# ADR 0140: WP190: HTML mail as its own document, and the mail view's responsive pass
 
 - Status: accepted
 - Date: 2026-10-05

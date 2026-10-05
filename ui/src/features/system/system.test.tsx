@@ -343,6 +343,21 @@ describe("default-apps widget", () => {
   });
 });
 
+describe("desktop-only cards outside the desktop app", () => {
+  it.each(["update-settings", "desktop-settings", "default-apps"])(
+    "%s says where the setting lives instead of an error",
+    async (kind) => {
+      const env = createEnv();
+      env.transport.data.features.system.desktop = false;
+      renderWithProviders(<NodeView node={widget(kind)} path="t/0" />, env);
+      expect(
+        await screen.findByText("This setting is available in the Nail desktop app."),
+      ).toBeVisible();
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
+});
+
 describe("first-run screen", () => {
   it("is offered once in the desktop app until completed", async () => {
     const env = createEnv();

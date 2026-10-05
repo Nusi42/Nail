@@ -16,6 +16,7 @@ import type { DesktopSettings, LocalizedMessage } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
+import { QueryProblem } from "./QueryProblem";
 import { systemKeys, useDesktopSettings } from "./queries";
 
 /** Saves desktop settings; the answer replaces the cached ones. */
@@ -107,11 +108,7 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
       aria-busy={busy}
     >
       <h3 data-part="desktop-settings.title">{t("system-desktop-title")}</h3>
-      {query.isError && (
-        <p data-part="desktop-settings.error" role="alert">
-          {t(errorMessageOf(query.error).id, errorMessageOf(query.error).args)}
-        </p>
-      )}
+      {query.isError && <QueryProblem error={query.error} part="desktop-settings.error" />}
       {problem && (
         <p data-part="desktop-settings.error" role="alert">
           {t(problem.id, problem.args)}

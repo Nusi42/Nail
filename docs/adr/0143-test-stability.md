@@ -1,6 +1,6 @@
-# ADR 0140: P1 WP193 — tests that were flaky under machine load
+# ADR 0143: P1 WP193 — tests that were flaky under machine load
 
-Status: accepted · 2026-10-05 · P1 WP193 (stability; the integrator renumbers)
+Status: accepted · 2026-10-05 · P1 WP193 (stability; integrated by ADR 0144)
 
 ## Context
 

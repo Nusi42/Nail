@@ -58,7 +58,10 @@ export function flexForSize(size: string | undefined): string {
   const parsed = parseSize(size);
   if (!parsed) return "1 1 0px";
   if (parsed.unit === "fr") return `${String(parsed.value)} 1 0px`;
-  return `0 0 ${size}`;
+  // A fixed size gives way down to the pane's `min-sizes` (min-width /
+  // min-height come from useGeometry) when the window runs out of room,
+  // instead of pushing its neighbours past the window's edge (P1, ADR 0144).
+  return `0 1 ${size}`;
 }
 
 /** Grid track for a stack child (`1fr` may shrink below its content). */

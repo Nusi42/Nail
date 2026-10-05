@@ -50,8 +50,8 @@ describe("sizes", () => {
   });
 
   it("maps pane sizes to flex", () => {
-    expect(flexForSize("240px")).toBe("0 0 240px");
-    expect(flexForSize("30%")).toBe("0 0 30%");
+    expect(flexForSize("240px")).toBe("0 1 240px");
+    expect(flexForSize("30%")).toBe("0 1 30%");
     expect(flexForSize("1.4fr")).toBe("1.4 1 0px");
     expect(flexForSize(undefined)).toBe("1 1 auto");
     expect(flexForSize("auto")).toBe("0 0 auto");

@@ -18,6 +18,7 @@ import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { UPDATE_CHANNELS, channelMessageId, installKindMessageId } from "./model";
 import { systemKeys, useInstallation, useUpdateStatus } from "./queries";
+import { QueryProblem } from "./QueryProblem";
 import { UpdateStatusPanel } from "./UpdateStatus";
 
 /** Channel and automatic checks / downloads; every change is saved at once. */
@@ -130,16 +131,11 @@ export function UpdateSection({
   showInstallation?: boolean;
   showOptions?: boolean;
 }) {
-  const t = useT();
   const status = useUpdateStatus();
   return (
     <>
       {showInstallation && <InstallationLine />}
-      {status.isError && (
-        <p data-part="update-settings.error" role="alert">
-          {t(errorMessageOf(status.error).id, errorMessageOf(status.error).args)}
-        </p>
-      )}
+      {status.isError && <QueryProblem error={status.error} part="update-settings.error" />}
       {status.data && (
         <>
           <UpdateStatusPanel status={status.data} />

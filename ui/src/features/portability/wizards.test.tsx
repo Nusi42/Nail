@@ -461,6 +461,16 @@ describe("diagnostics bundle", () => {
     expect(within(preview).queryByText(/\.eml$/)).toBeNull();
     expect(within(preview).getAllByText("Passwords and keys removed").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
+    // One button row, last in the dialog, so it stays at the window's bottom.
+    const rows = dialog.querySelectorAll('[data-part="wizard.buttons"]');
+    expect(rows).toHaveLength(1);
+    const row = must(rows[0]);
+    expect(row.parentElement?.lastElementChild).toBe(row);
+    expect(
+      within(row as HTMLElement)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Show what will be included", "Save bundle", "Close"]);
     // Opting in to mail needs a message; the preview is asked for again.
     await user.click(
       within(dialog).getByRole("checkbox", { name: "Chosen messages (full content)" }),

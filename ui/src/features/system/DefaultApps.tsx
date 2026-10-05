@@ -15,6 +15,7 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { defaultAppMessageId, defaultAppStateMessageId } from "./model";
+import { QueryProblem } from "./QueryProblem";
 import { useDefaultApps, useInstallation } from "./queries";
 
 /** "Choose in Default apps": opens Windows Settings on Nail's page. */
@@ -97,11 +98,7 @@ export function DefaultAppsContent({ showMapi = true }: { showMapi?: boolean }) 
   const mapiInstalled = installation.data?.mapi_installed ?? true;
   return (
     <>
-      {query.isError && (
-        <p data-part="default-apps.error" role="alert">
-          {t(errorMessageOf(query.error).id, errorMessageOf(query.error).args)}
-        </p>
-      )}
+      {query.isError && <QueryProblem error={query.error} part="default-apps.error" />}
       {data && !data.status.registered && (
         <p data-part="default-apps.unregistered" role="status">
           {t("system-default-apps-not-registered")}

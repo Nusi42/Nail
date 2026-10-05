@@ -1,6 +1,6 @@
-# ADR 0140: P1 WP192 — calendar, contacts, tasks and the M5d editors at every window size
+# ADR 0142: P1 WP192 — calendar, contacts, tasks and the M5d editors at every window size
 
-Status: accepted · 2026-10-05 · P1 WP192 (parallel package; the integrator renumbers)
+Status: accepted · 2026-10-05 · P1 WP192 (parallel package; integrated by ADR 0144)
 
 ## Context
 

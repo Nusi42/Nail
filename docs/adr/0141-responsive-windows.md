@@ -1,6 +1,6 @@
-# ADR 0140: P1 WP191 — responsive windows, dialogs and settings
+# ADR 0141: P1 WP191 — responsive windows, dialogs and settings
 
-Status: accepted · 2026-10-05 · P1 WP191 (windows and dialogs; the integrator renumbers)
+Status: accepted · 2026-10-05 · P1 WP191 (windows and dialogs; integrated by ADR 0144)
 
 ## Context
 

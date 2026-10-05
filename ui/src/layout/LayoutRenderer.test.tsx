@@ -66,7 +66,7 @@ describe("layout engine", () => {
     const panes = split.querySelectorAll(':scope > [data-part="split.pane"]');
     expect(panes).toHaveLength(3);
     expect(split.querySelectorAll(':scope > [data-part="split.divider"]')).toHaveLength(2);
-    expect(geometryOf(must(panes[0]))).toContain("flex: 0 0 260px");
+    expect(geometryOf(must(panes[0]))).toContain("flex: 0 1 260px");
     expect(geometryOf(must(panes[0]))).toContain("min-width: 200px");
     expect(geometryOf(must(panes[0]))).toContain("max-width: 480px");
     expect(geometryOf(must(panes[2]))).toContain("flex: 1.4 1 0px");
@@ -130,7 +130,7 @@ describe("layout engine", () => {
 
     fireEvent.keyDown(must(divider), { key: "ArrowRight" });
     expect(env.store.getState().splitSizes.panes?.[0]).toBe("276px");
-    expect(geometryOf(pane)).toContain("flex: 0 0 276px");
+    expect(geometryOf(pane)).toContain("flex: 0 1 276px");
     fireEvent.keyDown(must(divider), { key: "ArrowLeft", shiftKey: true });
     expect(env.store.getState().splitSizes.panes?.[0]).toBe("212px");
     // Clamped at the pane's minimum (200px).
