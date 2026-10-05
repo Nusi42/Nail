@@ -661,6 +661,9 @@ pub fn is_pop_out_label(label: &str) -> bool {
 pub struct TauriPopOuts<R: tauri::Runtime> {
     app: tauri::AppHandle<R>,
     webview_dir: Option<std::path::PathBuf>,
+    /// Test runs (ADR 0146): pop-outs asked to open maximized (Windows has
+    /// no maximize without activation, so it is only remembered).
+    background_maximized: Mutex<std::collections::HashSet<String>>,
 }
 
 impl<R: tauri::Runtime> std::fmt::Debug for TauriPopOuts<R> {
@@ -674,12 +677,22 @@ impl<R: tauri::Runtime> std::fmt::Debug for TauriPopOuts<R> {
 impl<R: tauri::Runtime> TauriPopOuts<R> {
     /// Pop-outs of `app` (`webview_dir` = the main window's data folder).
     pub fn new(app: tauri::AppHandle<R>, webview_dir: Option<std::path::PathBuf>) -> Self {
-        Self { app, webview_dir }
+        Self {
+            app,
+            webview_dir,
+            background_maximized: Mutex::default(),
+        }
     }
 
     fn window(&self, label: &str) -> Option<tauri::WebviewWindow<R>> {
         use tauri::Manager as _;
         self.app.get_webview_window(label)
+    }
+
+    fn background_maximized(&self) -> std::sync::MutexGuard<'_, std::collections::HashSet<String>> {
+        self.background_maximized
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -729,24 +742,29 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
 
     fn open(&self, spec: OpenSpec) -> Result<(), String> {
         let url = tauri::WebviewUrl::App(spec.url.into());
-        let mut builder = tauri::WebviewWindowBuilder::new(&self.app, &spec.label, url)
-            .title(&spec.title)
-            .visible(false)
-            .min_inner_size(
-                f64::from(spec.min_size.width),
-                f64::from(spec.min_size.height),
-            )
-            .on_document_title_changed(|window, title| {
-                if let Some(title) = taskbar_title(&title)
-                    && let Err(err) = window.set_title(&title)
-                {
-                    tracing::warn!(%err, "cannot retitle a pop-out window");
-                }
-            });
+        let mut builder = crate::background::prepare(tauri::WebviewWindowBuilder::new(
+            &self.app,
+            &spec.label,
+            url,
+        ))
+        .title(&spec.title)
+        .visible(false)
+        .min_inner_size(
+            f64::from(spec.min_size.width),
+            f64::from(spec.min_size.height),
+        )
+        .on_document_title_changed(|window, title| {
+            if let Some(title) = taskbar_title(&title)
+                && let Err(err) = window.set_title(&title)
+            {
+                tracing::warn!(%err, "cannot retitle a pop-out window");
+            }
+        });
         if let Some(dir) = &self.webview_dir {
             builder = builder.data_directory(dir.clone());
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        crate::background::conceal(&window);
         let sink = Arc::clone(&spec.sink);
         let page = window.clone();
         window.on_window_event(move |event| match event {
@@ -767,18 +785,26 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
             _ => {}
         });
         let rect = spec.geometry.rect;
+        let background = crate::background::active();
+        if background {
+            let mut maximized = self.background_maximized();
+            if spec.geometry.maximized {
+                maximized.insert(spec.label.clone());
+            } else {
+                maximized.remove(&spec.label);
+            }
+        }
         let placed = window
             .set_position(tauri::PhysicalPosition::new(rect.x, rect.y))
             .and_then(|()| window.set_size(tauri::PhysicalSize::new(rect.width, rect.height)))
             .and_then(|()| {
-                if spec.geometry.maximized {
+                if spec.geometry.maximized && !background {
                     window.maximize()
                 } else {
                     Ok(())
                 }
             })
-            .and_then(|()| window.show())
-            .and_then(|()| window.set_focus());
+            .and_then(|()| crate::background::bring_up(&window));
         if let Err(err) = placed {
             drop(window.destroy());
             return Err(err.to_string());
@@ -787,6 +813,7 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
     }
 
     fn close(&self, label: &str) -> Result<bool, String> {
+        self.background_maximized().remove(label);
         match self.window(label) {
             Some(window) => window.destroy().map(|()| true).map_err(|e| e.to_string()),
             None => Ok(false),
@@ -795,10 +822,7 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
 
     fn focus(&self, label: &str) -> Result<bool, String> {
         match self.window(label) {
-            Some(window) => window
-                .show()
-                .and_then(|()| window.unminimize())
-                .and_then(|()| window.set_focus())
+            Some(window) => crate::background::bring_up(&window)
                 .map(|()| true)
                 .map_err(|e| e.to_string()),
             None => Ok(false),
@@ -809,7 +833,8 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
         let window = self.window(label)?;
         Some(Observed {
             rect: rect_of(window.outer_position().ok()?, window.inner_size().ok()?),
-            maximized: window.is_maximized().unwrap_or(false),
+            maximized: window.is_maximized().unwrap_or(false)
+                || self.background_maximized().contains(label),
             minimized: window.is_minimized().unwrap_or(false),
         })
     }

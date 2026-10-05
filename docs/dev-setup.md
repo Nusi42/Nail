@@ -420,8 +420,13 @@ How it works:
   build enables the test-only cargo features `nail-app/test-overrides` and
   `nail-mapi/test-overrides`: only then do the app and the DLL honour
   `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY`,
-  `NAIL_MAPI_PIPE` and `NAIL_MAPI_APP` (a plain `cargo build` or an
-  installer build ignores them; ADR 0093).
+  `NAIL_MAPI_PIPE`, `NAIL_MAPI_APP` and `NAIL_TEST_BACKGROUND_WINDOWS` (a
+  plain `cargo build` or an installer build ignores them; ADR 0093).
+  `startDesktop` sets `NAIL_TEST_BACKGROUND_WINDOWS=1` (ADR 0146): the test
+  apps' windows are cloaked, never activated and off the taskbar, so they
+  never take your mouse or keyboard while the suites run; `connectDesktop`
+  and the specs check it (`expectWindowsInBackground`, test control
+  `windows`). Run with `NAIL_TEST_BACKGROUND_WINDOWS=0` to watch them.
   `NAIL_APP_BIN` selects another binary. A seeded app keeps its data,
   config and WebView2 profile in a temporary directory. The test always
   runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,
@@ -776,9 +781,11 @@ the real registry, Run key or pipe. Test variables of the shell:
 | `NAIL_REGISTRY_ROOT=Software\NailTests\<name>` | Both hives below that `HKCU` key (`<root>\HKCU\…`, `<root>\HKLM\…`): stage installation facts (`Software\Nail\Install`) and policies (`Software\Policies\Nail`) without touching HKLM; seeded runs otherwise use an in-memory registry |
 | `NAIL_UPDATE_ENDPOINT=http://127.0.0.1:<port>/{{channel}}/latest.json` + `NAIL_UPDATE_PUBKEY=<minisign public key>` | A loopback update source (other hosts are refused); enables the updater in development builds; plain `http` needs a debug build (or the release overlay's `dangerousInsecureTransportProtocol`); policies still win |
 | `NAIL_MAPI_PIPE=\\.\pipe\<name>` | The Simple MAPI pipe name (seeded runs serve a pipe only with it); the DLL and `nail-mapi-harness` read it too, and `NAIL_MAPI_APP` (only together with it) names the app the DLL may start |
+| `NAIL_TEST_BACKGROUND_WINDOWS=1` | Test runs (ADR 0146; set by `startDesktop`): every window (main, pop-outs, print) is DWM-cloaked (shown as far as Windows and the shell know, never drawn, no mouse input), not activatable (`WS_EX_NOACTIVATE`, shown with `SW_SHOWNOACTIVATE`, never `set_focus`) and off the taskbar; no OS notifications, file dialogs (a pick is cancelled), Settings app or start-refusal message box |
 
 Seeded runs also register the test control `nail_test_shell` (a tray menu
-item id, or `window-visible`), which the desktop smoke tests call through
+item id, `window-visible`, `pop-outs`, `close-pop-outs` or `windows` — each
+OS window's visible / cloaked / activatable / foreground facts), which the desktop smoke tests call through
 `window.__TAURI_INTERNALS__.invoke`; a real profile never has it.
 
 To inspect the WebView2 window with Chrome DevTools or Playwright, start it

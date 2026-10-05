@@ -543,6 +543,9 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        M4c (ADR 0099): printing.rs (PDF: hidden window `print-<job>` on `#/print/<job>`, waits for
                        PrintViewReady, WebView2 PrintToPdf via webview2-com), dialog.rs (PickPath: Windows common item
                        dialog on an STA thread); capabilities cover `print-*` windows;
+                       background.rs (ADR 0146): NAIL_TEST_BACKGROUND_WINDOWS=1 (startDesktop sets it) = every
+                       window DWM-cloaked, WS_EX_NOACTIVATE, off the taskbar, never set_focus; no notifications /
+                       file dialogs / Settings app; test control `windows` + e2e expectWindowsInBackground;
                        M4b deps: tauri tray-icon, tauri-plugin-updater (rustls / ring) (ADR 0087)
 packaging/             M4b WP112 (ADR 0089): updater/dev.pub (development update key; private keys never in the
                        repo), winget/ facts, release-notes/<version>.md (written before a release); README =
@@ -987,9 +990,9 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `GetUpdateStatus` instead of writing their answer (events may be newer). Seeded desktop runs never touch the real
   registry / Run key / pipe and register `nail_test_shell` (tray item ids, `window-visible`) for the smoke tests;
   shell test variables: `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` + `NAIL_UPDATE_PUBKEY` (loopback only),
-  `NAIL_MAPI_PIPE` (docs/dev-setup.md) — honoured only by builds with the `test-overrides` features
-  (`npm run build:desktop`), never by installer builds. The real MSI install runs only in CI (`msi-smoke.ps1`,
-  elevated).
+  `NAIL_MAPI_PIPE`, `NAIL_TEST_BACKGROUND_WINDOWS` (docs/dev-setup.md) — honoured only by builds with the
+  `test-overrides` features (`npm run build:desktop`), never by installer builds. The real MSI install runs only in
+  CI (`msi-smoke.ps1`, elevated).
 - M4b review (ADR 0093): no machine-wide registration may name a user-writable file (the NSIS MAPI option copies
   the DLLs to `%ProgramFiles%\Nail MAPI` in one elevated `cmd.exe` and registers the copy); nothing elevated reads
   from `%TEMP%`; secrets go to the one step that needs them (the update key reaches only `tauri bundle`);

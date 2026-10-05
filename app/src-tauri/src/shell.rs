@@ -65,7 +65,7 @@ pub fn closes_to_tray(setting: bool, has_tray: bool, quitting: bool) -> bool {
 
 /// Whether this build honours the test-only environment overrides
 /// (`NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY`,
-/// `NAIL_MAPI_PIPE`): only with the `test-overrides` feature, which the e2e
+/// `NAIL_MAPI_PIPE`, `NAIL_TEST_BACKGROUND_WINDOWS`): only with the `test-overrides` feature, which the e2e
 /// desktop build enables and installer builds never do.
 pub const TEST_OVERRIDES: bool = cfg!(feature = "test-overrides");
 
@@ -136,16 +136,25 @@ pub fn desktop_host<R: Runtime>(
         exe: exe.unwrap_or_else(|| nail_api::mapi::APP_EXE_FILE.into()),
         data_dir: data_dir.to_path_buf(),
         runtime,
-        opener: Arc::new(crate::win::open_settings_uri),
+        opener: if crate::background::active() {
+            // Test runs (ADR 0146): no Settings app on the user's screen.
+            Arc::new(|uri: &str| {
+                tracing::info!(uri, "test run: not opening Settings");
+                Ok(())
+            })
+        } else {
+            Arc::new(crate::win::open_settings_uri)
+        },
     }))
 }
 
-/// Shows, restores and focuses the main window.
+/// Shows, restores and focuses the main window (test runs: shows it
+/// without activating it, ADR 0146).
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-        drop(window.show());
-        drop(window.unminimize());
-        drop(window.set_focus());
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW)
+        && let Err(err) = crate::background::bring_up(&window)
+    {
+        tracing::warn!(%err, "cannot show the main window");
     }
 }
 
@@ -201,17 +210,21 @@ pub enum TestControl {
     /// Closes every pop-out OS window the way the user's close button or
     /// Alt+F4 does (a close request the page may answer with a question).
     ClosePopOuts,
+    /// Reports every OS window: shown, cloaked, activatable, foreground
+    /// (test runs keep them away from the user, ADR 0146).
+    Windows,
 }
 
 impl TestControl {
-    /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"` or a tray menu
-    /// item id
+    /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"` or
+    /// a tray menu item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
         match op {
             "window-visible" => Some(Self::WindowVisible),
             "pop-outs" => Some(Self::PopOuts),
             "close-pop-outs" => Some(Self::ClosePopOuts),
+            "windows" => Some(Self::Windows),
             other => TrayAction::from_id(other).map(Self::Tray),
         }
     }
@@ -258,6 +271,7 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
             }
             Ok(serde_json::Value::Null)
         }
+        TestControl::Windows => Ok(crate::background::report(app)),
     }
 }
 
@@ -422,6 +436,7 @@ mod tests {
             TestControl::parse("close-pop-outs"),
             Some(TestControl::ClosePopOuts)
         );
+        assert_eq!(TestControl::parse("windows"), Some(TestControl::Windows));
         assert_eq!(TestControl::parse("tray-format-disk"), None);
     }
 

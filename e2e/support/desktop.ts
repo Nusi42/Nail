@@ -58,6 +58,13 @@ export interface DesktopOptions {
   env?: Record<string, string>;
 }
 
+/**
+ * `NAIL_TEST_BACKGROUND_WINDOWS` for the app (ADR 0146): on, so its windows
+ * are cloaked, never activated and off the taskbar — they never take the
+ * developer's mouse or keyboard. Set it to `0` to watch the windows.
+ */
+const backgroundWindows = process.env.NAIL_TEST_BACKGROUND_WINDOWS ?? "1";
+
 /** Waits until the WebView2 DevTools endpoint answers. */
 async function waitForCdp(url: string, child: ChildProcess, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -97,6 +104,7 @@ export async function startDesktop(
       ...process.env,
       NAIL_LOG: process.env.NAIL_LOG ?? "warn",
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${String(port)}`,
+      NAIL_TEST_BACKGROUND_WINDOWS: backgroundWindows,
       ...env,
     },
   });
@@ -142,6 +150,7 @@ export async function connectDesktop(app: DesktopApp): Promise<{ browser: Browse
     undefined,
     { timeout: 60_000 },
   );
+  await expectWindowsInBackground(page);
   return { browser, page };
 }
 
@@ -170,4 +179,47 @@ export async function shellControl(page: Page, op: string): Promise<unknown> {
     ).__TAURI_INTERNALS__;
     return internals.invoke("nail_test_shell", { op });
   }, op);
+}
+
+/** One OS window of the app as `nail_test_shell "windows"` reports it. */
+export interface ShellWindow {
+  label: string;
+  /** Shown as far as Windows is concerned. */
+  visible: boolean;
+  /** Cloaked by DWM: never drawn, no mouse input. */
+  cloaked: boolean;
+  /** Could be activated (no `WS_EX_NOACTIVATE`). */
+  activatable: boolean;
+  /** The foreground window. */
+  foreground: boolean;
+  /** Cloaked, not activatable and not in the foreground. */
+  inBackground: boolean;
+}
+
+/** The answer of `nail_test_shell "windows"`. */
+export interface ShellWindows {
+  /** The app runs with background windows. */
+  active: boolean;
+  /** The foreground window belongs to the app (a window, a dialog). */
+  foreground: boolean;
+  windows: ShellWindow[];
+}
+
+/**
+ * Checks that the app keeps its windows away from the developer (ADR
+ * 0146): every OS window is cloaked, cannot be activated and is not in the
+ * foreground, and the foreground window is not the app's. Answers the
+ * report (with `NAIL_TEST_BACKGROUND_WINDOWS=0` only the report).
+ */
+export async function expectWindowsInBackground(page: Page): Promise<ShellWindows> {
+  const report = (await shellControl(page, "windows")) as ShellWindows;
+  if (backgroundWindows === "0") return report;
+  expect(report.active, "the app runs with background windows").toBe(true);
+  expect(report.windows.length, "the app's windows").toBeGreaterThan(0);
+  expect(
+    report.windows.filter((w) => !w.inBackground),
+    "windows the developer could see, click or type into",
+  ).toEqual([]);
+  expect(report.foreground, "the app took the foreground").toBe(false);
+  return report;
 }

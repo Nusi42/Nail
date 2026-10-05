@@ -174,14 +174,16 @@ impl ShellHost {
         let label = crate::printing::window_label(&job.job_id);
         let ready = self.print_ready.expect(&job.job_id);
         let url = tauri::WebviewUrl::App(crate::printing::view_url(job).into());
-        let mut builder = tauri::WebviewWindowBuilder::new(&app, &label, url)
-            .visible(false)
-            .focused(false)
-            .skip_taskbar(true);
+        let mut builder =
+            crate::background::prepare(tauri::WebviewWindowBuilder::new(&app, &label, url))
+                .visible(false)
+                .focused(false)
+                .skip_taskbar(true);
         if let Some(dir) = webview_dir {
             builder = builder.data_directory(dir);
         }
         let window = builder.build().map_err(pdf_error)?;
+        crate::background::conceal(&window);
         let outcome: Result<(), ApiError> = async {
             tokio::time::timeout(READY_TIMEOUT, ready)
                 .await
@@ -336,6 +338,12 @@ impl DesktopHost for ShellHost {
         pick: &'a PathPick,
     ) -> BoxFuture<'a, Result<Option<String>, ApiError>> {
         Box::pin(async move {
+            // Test runs (ADR 0146): no file dialog on the user's screen;
+            // the pick is cancelled.
+            if crate::background::active() {
+                tracing::info!("test run: file dialog cancelled");
+                return Ok(None);
+            }
             let spec = crate::dialog::spec(pick, |id| self.localize(id));
             let owner = self.main_window_handle();
             let (tx, rx) = tokio::sync::oneshot::channel();
