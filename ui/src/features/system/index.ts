@@ -120,6 +120,9 @@ export const windows: NonNullable<Feature["windows"]> = {
 export const handleSystemEvent: FeatureEventHandler = (event, { queryClient }) => {
   switch (event.type) {
     case "UpdateStatusChanged":
+      // A fetch still running (the refetch after "Check now") read an older
+      // status: it must not land after this one and undo it.
+      void queryClient.cancelQueries({ queryKey: systemKeys.updates });
       queryClient.setQueryData(systemKeys.updates, event.status);
       break;
     case "DesktopSettingsChanged":

@@ -1200,6 +1200,10 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   one-time offer. Seeds of `nail serve` include the demo conversations (`DemoMail::WithConversations`): demo-multi
   unified inbox 17 rows, demo inbox 14, work inbox 15, demo Sent 5; Nightingale counts 7 (Inbox + Sent); core tests
   keep the plain corpus. E2E: `p2.spec.ts`, `p2-list.spec.ts`, `p2-quickwin.spec.ts` (strip + offer).
+- P2 merge (ADR 0163): the shell's updater announces changes one at a time (`Shared::notify_order`; the core's
+  notifier reads the state itself) and a downloaded release stays ready across later checks; the UI cancels a running
+  `GetUpdateStatus` on `UpdateStatusChanged`. The mock Graph / EWS tenants' dates are absolute (2026-10-05 …): a spec
+  that syncs them pins the core clock (`control(server, "clock-set", { at })`, see `exchange.spec.ts`).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

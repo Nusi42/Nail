@@ -23,8 +23,17 @@ import { defined } from "../support/defined";
 
 let server: NailServer;
 
+/**
+ * The core's clock for these tests: before every dated item of the mock
+ * tenants (their first reminders are due 2026-10-05 06:45 UTC), so no
+ * reminder comes due — or is caught up — while a test runs, whatever the
+ * day the suite runs on. Reminder toasts are `pim.spec.ts`'s subject.
+ */
+const FIXTURE_NOW = Date.UTC(2026, 9, 1, 8, 0) / 1000;
+
 test.beforeEach(async () => {
   server = await startNail({ seed: "demo-multi" });
+  await control(server, "clock-set", { at: FIXTURE_NOW });
 });
 
 test.afterEach(async () => {

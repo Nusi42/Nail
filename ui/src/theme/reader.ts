@@ -147,6 +147,9 @@ export function readerCss(theme: ResolvedTheme, mode: string, designed = false):
       rules.push(
         `:where(body) { color: ${p("var(--nail-color-fg)", "#1f1f1f")}; background-color: ${p("var(--nail-color-bg)", "#ffffff")}; }`,
         `:where(a) { color: ${p("var(--nail-color-accent)", "#0b57d0")}; }`,
+        // The text keeps off the paper's edge (the mail's own body padding
+        // still wins: its style comes later).
+        `body { padding: 12px 16px 24px; }`,
       );
     } else {
       // Plain mail takes the theme's colours.

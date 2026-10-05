@@ -70,6 +70,10 @@ describe("reader stylesheet (P1 WP190)", () => {
     expect(css).toContain(link);
     expect(css.lastIndexOf(":where(a)")).toBe(css.indexOf(link));
     expect(css.indexOf(paper)).toBeGreaterThan(css.indexOf(":where(body) {"));
+    // The text keeps off the paper's edge, after the base body rule.
+    const padding = "body { padding: 12px 16px 24px; }";
+    expect(css.indexOf(padding)).toBeGreaterThan(css.indexOf("body { margin: 0;"));
+    expect(readerCss(theme, "dark", false)).not.toContain(padding);
     // A light link colour on white paper would be unreadable (≥ 4.5:1 wanted).
     expect(contrast(print("accent"), print("bg"))).toBeGreaterThanOrEqual(4.5);
   });

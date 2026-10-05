@@ -414,6 +414,7 @@ const EXPANDABLE_LAYOUT = [
   '            message-list id="list" page-size=100 threads="expandable" {',
   '                row "{participants | names(3)}  {count | if-many}  {date | relative}"',
   '                row "{subject}"',
+  '                row "{latest_from | names(1) | then(\\":\\")}{preview}"',
   "            }",
   '            stack id="reader" sizes="auto 1fr" {',
   '                toolbar id="reader-toolbar" toolbar="reader"',
@@ -471,6 +472,27 @@ test.describe("conversations that open in the list (Design B, opt-in)", () => {
     await expect(children).toHaveCount(0);
     await page.keyboard.press("ArrowRight");
     await expect(children).toHaveCount(LAB_TOTAL);
+  });
+
+  test("rows keep the preview line, and the open list keeps to the responsive standard", async ({
+    page,
+  }) => {
+    for (const size of [
+      { width: 1600, height: 1000 },
+      { width: 1024, height: 700 },
+      { width: 800, height: 700 },
+    ]) {
+      await openApp(page, size);
+      const lab = rowOf(page, LAB);
+      // "Sender: preview" as in Design A rows.
+      await expect(lab.locator('[data-part="message-list.row.preview"]')).toContainText(
+        "All my crates are labelled",
+      );
+      await lab.locator('[data-part="message-list.row.expander"]').click();
+      await expect(page.locator('[data-part="message-list.child"]')).toHaveCount(LAB_TOTAL);
+      const issues = (await layoutIssues(page)).filter((i) => i.element.includes("message-list"));
+      expect(issues, formatIssues(issues)).toEqual([]);
+    }
   });
 });
 

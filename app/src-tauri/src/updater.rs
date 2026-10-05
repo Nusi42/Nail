@@ -5,7 +5,15 @@
 //! request) finds a release → it downloads in the background when
 //! `auto_download` is on → ready to install, which happens when the user
 //! picks "Restart to install" or when Nail quits. Failures land in
-//! `failed` and the next check starts over.
+//! `failed` and the next check starts over — except that a downloaded
+//! release stays ready: a later check that fails, finds nothing or finds
+//! the same version returns to `ready-to-install` and never downloads it
+//! again; only a different version replaces it.
+//!
+//! Changes are announced one at a time (`Shared::notify_order`): the
+//! core's notifier reads the state and then broadcasts it, so two
+//! announcements racing on different threads could otherwise send an
+//! older state after a newer one and leave the UI on it.
 //!
 //! The network side is an [`UpdateBackend`] — the real one is
 //! [`crate::updater_tauri`] (tauri-plugin-updater: signed manifests and
@@ -91,6 +99,9 @@ struct Shared {
     forced_channel: Option<UpdateChannel>,
     state: Mutex<State>,
     notify: OnceLock<DesktopNotifier>,
+    /// Held while announcing a change, so announcements never overtake
+    /// each other: the last one always carries the latest state.
+    notify_order: Mutex<()>,
 }
 
 /// The updater (cheap to clone).
@@ -135,6 +146,7 @@ impl Updater {
                     generation: 0,
                 }),
                 notify: OnceLock::new(),
+                notify_order: Mutex::new(()),
             }),
         }
     }
@@ -153,6 +165,14 @@ impl Updater {
 
     fn changed(&self) {
         if let Some(notify) = self.shared.notify.get() {
+            // The notifier reads the state itself (after a store read that
+            // may be slow): one at a time, so a newer state announced on
+            // another thread is never followed by an older one.
+            let _order = self
+                .shared
+                .notify_order
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             notify(DesktopChange::Update);
         }
     }
@@ -243,23 +263,33 @@ impl Updater {
                 return;
             }
             state.host.last_checked_at = Some(rfc3339_now());
-            match result {
-                Ok(None) => {
+            // A release already downloaded stays ready unless the check
+            // found a different version: never download it again.
+            let ready = state
+                .pending
+                .as_ref()
+                .filter(|_| state.bytes.is_some())
+                .map(|p| p.info().clone());
+            match (result, ready) {
+                (Ok(None), Some(update)) => {
+                    state.host.state = UpdateState::ReadyToInstall { update };
+                    false
+                }
+                (Err((failure, detail)), Some(update)) => {
+                    tracing::warn!(?failure, %detail, "update check failed; the downloaded release stays ready");
+                    state.host.state = UpdateState::ReadyToInstall { update };
+                    false
+                }
+                (Ok(None), None) => {
                     state.pending = None;
                     state.bytes = None;
                     state.host.state = UpdateState::UpToDate;
                     false
                 }
-                Ok(Some(found)) => {
+                (Ok(Some(found)), ready) => {
                     let info = found.info().clone();
-                    // The release we already downloaded: stay ready.
-                    let ready = state.bytes.is_some()
-                        && state
-                            .pending
-                            .as_ref()
-                            .is_some_and(|p| p.info().version == info.version);
-                    if ready {
-                        state.host.state = UpdateState::ReadyToInstall { update: info };
+                    if let Some(update) = ready.filter(|r| r.version == info.version) {
+                        state.host.state = UpdateState::ReadyToInstall { update };
                         false
                     } else {
                         state.pending = Some(found);
@@ -268,7 +298,7 @@ impl Updater {
                         state.settings.auto_download
                     }
                 }
-                Err((failure, detail)) => {
+                (Err((failure, detail)), None) => {
                     tracing::warn!(?failure, %detail, "update check failed");
                     state.pending = None;
                     state.bytes = None;
@@ -749,6 +779,120 @@ mod tests {
         );
         updater.check().unwrap();
         wait_for(&updater, |s| *s == UpdateState::UpToDate).await;
+    }
+
+    #[tokio::test]
+    async fn a_ready_release_stays_ready_and_is_never_downloaded_again() {
+        let backend = Arc::new(FakeBackend::default());
+        let release = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        backend.answer(Ok(Some(Arc::clone(&release))));
+        // Later checks: the same version, a failure, nothing found.
+        backend.answer(Ok(Some(Arc::clone(&release))));
+        backend.answer(Err((UpdateFailure::Network, "offline".into())));
+        backend.answer(Ok(None));
+        let (updater, _) = updater(&backend, true);
+        updater.apply_settings(&UpdateSettings::default());
+        updater.check().unwrap();
+        wait_for(&updater, |s| {
+            matches!(s, UpdateState::ReadyToInstall { .. })
+        })
+        .await;
+        // A second download would fail: none may start.
+        *release.download.lock().unwrap() = None;
+        for _ in 0..3 {
+            updater.check().unwrap();
+            let state = wait_for(&updater, |s| *s != UpdateState::Checking).await;
+            assert_eq!(state.update().unwrap().version, "1.1.0");
+            assert!(
+                matches!(state, UpdateState::ReadyToInstall { .. }),
+                "still ready, not {state:?}"
+            );
+        }
+        assert_eq!(backend.asked.lock().unwrap().len(), 4);
+        assert!(updater.install_on_exit());
+        assert_eq!(*release.installs.lock().unwrap(), [(1000, false)]);
+    }
+
+    #[tokio::test]
+    async fn a_different_version_replaces_the_ready_one() {
+        let backend = Arc::new(FakeBackend::default());
+        let first = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        let second = FakeUpdate::new("1.2.0", UpdateChannel::Stable);
+        backend.answer(Ok(Some(Arc::clone(&first))));
+        backend.answer(Ok(Some(Arc::clone(&second))));
+        let (updater, _) = updater(&backend, true);
+        updater.apply_settings(&UpdateSettings::default());
+        updater.check().unwrap();
+        wait_for(&updater, |s| {
+            matches!(s, UpdateState::ReadyToInstall { .. })
+        })
+        .await;
+        updater.check().unwrap();
+        let state = wait_for(
+            &updater,
+            |s| matches!(s, UpdateState::ReadyToInstall { update } if update.version == "1.2.0"),
+        )
+        .await;
+        assert_eq!(state.update().unwrap().version, "1.2.0");
+        assert!(updater.install_on_exit());
+        assert!(first.installs.lock().unwrap().is_empty());
+        assert_eq!(*second.installs.lock().unwrap(), [(1000, false)]);
+    }
+
+    /// The core's notifier reads the state, then broadcasts it (the store
+    /// read before can be slow). A change announced on another thread
+    /// meanwhile must not be followed by the older state: the desktop e2e
+    /// once ended on "downloading 100 %" after "ready to install".
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn announcements_never_overtake_each_other() {
+        use std::sync::mpsc;
+        let backend = Arc::new(FakeBackend::default());
+        let updater = Updater::new(backend, tokio::runtime::Handle::current(), true, None);
+        let broadcasts = Arc::new(Mutex::new(Vec::<UpdateState>::new()));
+        let (entered_tx, entered_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let slow = Mutex::new(Some((entered_tx, release_rx)));
+        let reader = updater.clone();
+        let record = Arc::clone(&broadcasts);
+        updater.attach(Arc::new(move |_| {
+            let state = reader.state().state;
+            // The first announcement reads, then stalls before sending.
+            let stall = slow.lock().unwrap().take();
+            if let Some((entered, release)) = stall {
+                entered.send(()).unwrap();
+                release.recv().unwrap();
+            }
+            record.lock().unwrap().push(state);
+        }));
+        let update = FakeUpdate::new("1.1.0", UpdateChannel::Stable).info.clone();
+        let announce = |state: UpdateState| {
+            updater.lock().host.state = state;
+            updater.changed();
+        };
+        std::thread::scope(|scope| {
+            let downloading = UpdateState::Downloading {
+                update: update.clone(),
+                downloaded_bytes: 1000,
+                total_bytes: Some(1000),
+            };
+            let older = scope.spawn(|| announce(downloading));
+            entered_rx.recv().unwrap();
+            let newer = scope.spawn(|| {
+                announce(UpdateState::ReadyToInstall {
+                    update: update.clone(),
+                });
+            });
+            // Give the newer announcement time to overtake (it must wait).
+            std::thread::sleep(Duration::from_millis(100));
+            release_tx.send(()).unwrap();
+            older.join().unwrap();
+            newer.join().unwrap();
+        });
+        let broadcasts = broadcasts.lock().unwrap();
+        assert!(
+            matches!(broadcasts.last(), Some(UpdateState::ReadyToInstall { .. })),
+            "the last announcement is the latest state: {broadcasts:?}"
+        );
     }
 
     #[tokio::test]

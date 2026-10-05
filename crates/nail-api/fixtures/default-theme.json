@@ -9351,6 +9351,9 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
@@ -9538,7 +9541,7 @@
         "display": "flex",
         "flex-wrap": "wrap",
         "gap": "var(--nail-space-md)",
-        "border": "1px solid var(--nail-color-accent)",
+        "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)",
         "padding": "var(--nail-space-sm)"
       },

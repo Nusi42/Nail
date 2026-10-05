@@ -352,4 +352,26 @@ describe("system events", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: systemKeys.defaultApps });
     expect(SYSTEM_EVENTS).toHaveLength(3);
   });
+
+  it("an event wins over a status fetch that was still running", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ctx = { queryClient } as unknown as FeatureEventContext;
+    const older = { current_version: "1.0.0", state: { state: "downloading" } } as UpdateStatus;
+    const newer = {
+      current_version: "1.0.0",
+      state: { state: "ready-to-install" },
+    } as UpdateStatus;
+    let answer: (status: UpdateStatus) => void = () => undefined;
+    const fetching = queryClient.query({
+      queryKey: systemKeys.updates,
+      queryFn: () =>
+        new Promise<UpdateStatus>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    handleSystemEvent({ type: "UpdateStatusChanged", status: newer }, ctx);
+    answer(older);
+    await fetching.catch(() => undefined);
+    expect(queryClient.getQueryData(systemKeys.updates)).toBe(newer);
+  });
 });

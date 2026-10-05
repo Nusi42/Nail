@@ -2901,7 +2901,7 @@ theme "default" mode="system" {
     part "pim.datetime:invalid" { color "$color.danger"; }
     part "pim.datetime.segment" { padding "0" "1px"; border-radius "$radius.sm"; }
     part "pim.datetime.segment:focus" { color "$color.selection-fg"; background-color "$color.selection"; outline "none"; }
-    part "pim.datetime.pick" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
+    part "pim.datetime.pick" { display "inline-flex"; align-items "center"; gap "$space.xs"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
     part "pim.datetime.pick.icon" { width "$size.icon"; height "$size.icon"; }
     part "pim.datetime.popup" { position "absolute"; top "100%"; z-index 20; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; background-color "$color.bg"; box-shadow "$shadow.overlay"; }
     part "pim.datetime.popup.nav" { display "flex"; justify-content "space-between"; }
@@ -2917,7 +2917,8 @@ theme "default" mode="system" {
     part "pim.editor.main" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; border 0; }
     part "pim.editor.when" { display "flex"; flex-direction "column"; gap "$space.sm"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
     part "pim.editor.section" { display "flex"; flex-direction "column"; gap "$space.xs"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
-    part "pim.editor.scope" { display "flex"; flex-wrap "wrap"; gap "$space.md"; border "1px solid $color.accent"; border-radius "$radius.md"; padding "$space.sm"; }
+    // Framed like the When / Repeat sections; the choices sit side by side.
+    part "pim.editor.scope" { display "flex"; flex-wrap "wrap"; gap "$space.md"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
     part "pim.editor.row" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
     part "pim.editor.attendee-list" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
     part "pim.editor.attendee.status" { font-size "$font-size.xs"; color "$color.fg-muted"; }
