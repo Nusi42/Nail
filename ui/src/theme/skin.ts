@@ -506,7 +506,7 @@ ${p("list-header.chips")} ${p("chip")}:hover { color: ${T.fg}; }`;
 
 /** Settings → Appearance. */
 const APPEARANCE = `${p("appearance")} { display: grid; gap: ${T.section}; align-content: start; max-width: calc(48 * ${T.lg}); padding: ${T.pane}; overflow: auto; }
-${p("appearance.pair")} { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(12 * ${T.lg}), 1fr)); gap: ${T.md}; }
+${p("appearance.pair")} { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(18 * ${T.lg}), 1fr)); gap: ${T.md}; }
 ${p("theme-gallery")} { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(10 * ${T.lg}), 1fr)); gap: ${T.md}; }
 ${p("theme-card")} {
   position: relative; display: grid; gap: ${T.xxs}; padding: 0 0 ${T.sm}; overflow: hidden; text-align: start;
@@ -562,6 +562,10 @@ ${p("layout-offer.title")} { margin: 0; font-size: ${T.heading}; font-weight: ${
 ${p("layout-offer.text")} { margin: 0; font-size: ${T.body}; line-height: ${T.normal}; color: ${T.muted}; }
 ${p("layout-offer.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
 ${p("security-compose.toggles")} > ${p("form.field")} { display: inline-flex; align-items: center; gap: ${T.sm}; }
+${p("security-compose.toggles")} > ${p("form.field")} > ${p("form.label")} {
+  /* P1 verify: "Technology" reads like the "Sign" / "Encrypt" check labels beside it, not like a bold field label. */
+  font-size: ${T.body}; font-weight: ${T.regular};
+}
 ${p("folder-tree.section.status")} {
   flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.pill};
   font-size: ${T.small}; font-weight: ${T.regular}; line-height: 1.4; text-transform: none; letter-spacing: 0;

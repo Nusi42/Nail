@@ -10,6 +10,9 @@
  * come from geometry rules: the edited theme's own values).
  */
 
+import { FIELDS_NARROW } from "../settings/skin";
+import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
+
 /** `[data-part="…"]` for one part. */
 const p = (part: string) => `[data-part="${part}"]`;
 /** The editor's own parts. */
@@ -74,18 +77,26 @@ export const THEME_PANEL_CONTAINER = "nail-theme-panel";
 /** Below this panel width a token's value field goes below its name (P1 review). */
 export const THEME_PANEL_STACKED = "40rem";
 
+/** A field of the light / dark pair. */
+const PAIR_FIELD = `${p("appearance.pair")} > ${p("form.field")}`;
+
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 
 export const APPEARANCE_SKIN_CSS = `${p("appearance.header")} { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: ${T.sm}; }
 ${p("appearance.history")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.xs}; }
 ${p("appearance.history")} > ${p("form.error")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; flex-basis: 100%; }
 ${p("appearance.actions")}[data-actions="themes"] { justify-content: flex-start; flex-wrap: wrap; }
-/* P1 (WP192): the light / dark choice is one pair of fields — no settings-row line between them,
-   label and select on one line. */
+/* P1 (WP192): the light / dark choice is one pair of fields — no settings-row line between them. */
 ${p("appearance.pair")} > ${p("form.field")} + ${p("form.field")} { border-top: 0; }
-${p("appearance.pair")} > ${p("form.field")} > ${p("form.select")} { grid-row: 1; }
-/* P1 review: "Light theme" / "Dark theme" stay on one line beside their select at laptop widths. */
-${p("appearance.pair")} > ${p("form.field")} > ${p("form.label")} { white-space: nowrap; }
+/* P1 verify: where a card puts labels beside their controls, each field of the pair gives its label
+   its own width on one line and the select the rest — the label column never shrinks under its text
+   ("Light t" / "Dark th" at 1024 px). The pair stacks its two fields when they do not fit side by side
+   (\`theme/skin.ts\`); a narrow card puts every label above its control, the pair's too. */
+@container ${FIELDS_CONTAINER} (width > ${FIELDS_NARROW}) {
+  ${PAIR_FIELD} { grid-template-columns: max-content minmax(0, 1fr); }
+  ${PAIR_FIELD} > ${p("form.label")} { grid-column: 1; white-space: nowrap; }
+  ${PAIR_FIELD} > ${p("form.select")} { grid-column: 2; grid-row: 1; }
+}
 ${p("appearance.slider")} { display: flex; align-items: center; gap: ${T.md}; }
 ${p("appearance.range")} { flex: 1 1 auto; min-width: 0; accent-color: ${T.accent}; }
 ${p("appearance.range")}:focus-visible { ${focusRing} }

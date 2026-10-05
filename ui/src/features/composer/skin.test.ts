@@ -82,6 +82,10 @@ describe("composer skin", () => {
     expect(css).toContain(
       `[data-part="composer"] [data-part="composer.html.content"], [data-part="composer"] [data-part="composer.html.source"] { flex: 1 1 auto; }`,
     );
+    // P1 verify: the To / Cc / Bcc inputs span their row like Subject (not the browser's 20 characters).
+    expect(css).toContain(
+      `[data-part="composer"] [data-part="composer.address"] > [data-part="composer.field.input"] { box-sizing: border-box; width: 100%; }`,
+    );
     const narrow = css.slice(css.indexOf(`(max-width: ${COMPOSER_NARROW})`));
     // Labels above their fields; the Markdown preview below the source.
     expect(narrow).toMatch(/composer\.field"\] \{ grid-template-columns: minmax\(0, 1fr\);/);

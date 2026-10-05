@@ -7,6 +7,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultTheme } from "../../api/mockData";
+import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
+import { FIELDS_NARROW } from "../settings/skin";
 import {
   APPEARANCE_SKIN_CSS,
   THEME_EDITOR_CONTAINER,
@@ -116,10 +118,25 @@ describe("appearance skin", () => {
       expect(
         rule('[data-part="appearance.pair"] > [data-part="form.field"] + [data-part="form.field"]'),
       ).toMatch(/border-top: 0;/);
-      // P1 review: the labels do not wrap beside their selects at 1024 px.
-      expect(
-        rule('[data-part="appearance.pair"] > [data-part="form.field"] > [data-part="form.label"]'),
-      ).toMatch(/white-space: nowrap;/);
+      // P1 verify: where a card puts labels beside their controls, the label column of the pair
+      // is as wide as its text (one line) and the select takes the rest — it never shrinks under
+      // the text ("Light t" at 1024 px); a narrow card stacks label and select like every row.
+      const field = '[data-part="appearance.pair"] > [data-part="form.field"]';
+      const head = `@container ${FIELDS_CONTAINER} (width > ${FIELDS_NARROW}) {`;
+      const start = APPEARANCE_SKIN_CSS.indexOf(head);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const block = APPEARANCE_SKIN_CSS.slice(start, APPEARANCE_SKIN_CSS.indexOf("\n}", start));
+      expect(block).toContain(`${field} { grid-template-columns: max-content minmax(0, 1fr); }`);
+      expect(block).toContain(
+        `${field} > [data-part="form.label"] { grid-column: 1; white-space: nowrap; }`,
+      );
+      expect(block).toContain(
+        `${field} > [data-part="form.select"] { grid-column: 2; grid-row: 1; }`,
+      );
+      // Outside that query nothing pins the label to one line.
+      expect(APPEARANCE_SKIN_CSS.slice(0, start)).not.toContain(
+        `${field} > [data-part="form.label"]`,
+      );
     });
 
     it("keeps the live preview in sight at every width (P1 review)", () => {

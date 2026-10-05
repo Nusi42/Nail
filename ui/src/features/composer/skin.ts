@@ -63,6 +63,10 @@ ${inComposer("composer.toolbar")} { flex-wrap: wrap; min-width: 0; }
 ${inComposer("composer.send-later")} { flex-wrap: wrap; }
 ${inComposer("composer.attachments.list")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; min-width: 0; }
 ${inComposer("composer.field.input")}, ${inComposer("composer.identity")} { min-width: 0; max-width: 100%; }
+/* P1 verify: an address field's input (inside the suggestion anchor) spans the row like Subject — at the
+   browser's default size it cut "Ben Ortiz <ben@nail.example>" after 20 characters. */
+${inComposer("composer.address")} { min-width: 0; }
+${inComposer("composer.address")} > ${p("composer.field.input")} { box-sizing: border-box; width: 100%; }
 ${p("composer.confirm")} { display: grid; gap: ${T.md}; align-content: start; }
 ${p("composer.confirm.question")} { margin: 0; overflow-wrap: anywhere; }
 ${p("composer.confirm.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;

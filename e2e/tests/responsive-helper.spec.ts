@@ -67,6 +67,53 @@ test("clipped text is found, an ellipsis and a line clamp are not", async ({ pag
   expect(issues.map((i) => i.element).join("\n")).toContain("form.cut");
 });
 
+test("text sticking out of a box that does not clip it is found", async ({ page }) => {
+  await show(
+    page,
+    `<div data-part="app">
+      <label data-part="form.wide" style="display:block; width:40px; white-space:nowrap">Server address</label>
+      <label data-part="form.fits" style="display:block; width:200px; white-space:nowrap">Server address</label>
+      <label data-part="form.wraps" style="display:block; width:60px">Server address</label>
+      <span data-part="form.ellipsis" style="display:block; width:40px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">Server address</span>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(kinds(issues), formatIssues(issues)).toEqual(["overflowing"]);
+  expect(issues[0]?.element).toContain("form.wide");
+});
+
+test("a label running under the select beside it is an overlap", async ({ page }) => {
+  // The P1 verify finding: "Light theme" nowrap in a shrinking grid column,
+  // the select painted over its end — the boxes themselves do not overlap.
+  await show(
+    page,
+    `<div data-part="app">
+      <div data-part="form.field" style="display:grid; grid-template-columns:minmax(0, 1fr) 140px; width:200px; column-gap:8px">
+        <label data-part="form.label" style="white-space:nowrap">Light theme</label>
+        <select data-part="form.select"><option>Frost</option></select>
+      </div>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(kinds(issues), formatIssues(issues)).toEqual(["overflowing", "overlap"]);
+  const overlap = issues.find((i) => i.kind === "overlap");
+  expect(`${overlap?.element ?? ""} / ${overlap?.other ?? ""}`).toContain("Light theme");
+  expect(`${overlap?.element ?? ""} / ${overlap?.other ?? ""}`).toContain("form.select");
+  expect(await layoutIssues(page, { skip: ["overflowing", "overlap"] })).toEqual([]);
+});
+
+test("text a scrolling pane hides is not overflowing", async ({ page }) => {
+  await show(
+    page,
+    `<div data-part="app">
+      <div data-part="pane" style="width:100px; overflow:auto"><div style="white-space:nowrap">A long line that scrolls inside its own pane</div></div>
+      <button data-part="next">Next</button>
+    </div>`,
+  );
+  const issues = await layoutIssues(page);
+  expect(issues, formatIssues(issues)).toEqual([]);
+});
+
 test("overlapping controls are found within a window, not across windows", async ({ page }) => {
   await show(
     page,

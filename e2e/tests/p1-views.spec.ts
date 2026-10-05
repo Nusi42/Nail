@@ -226,6 +226,44 @@ test("Settings → Appearance at every size", async ({ page }) => {
       await openSettings(page, "Appearance");
     },
   });
+
+  // The P1 verify finding: between 1024 and 1150 px the "Light theme" /
+  // "Dark theme" labels ran under their selects ("Light t", "Dark th").
+  for (const width of [1024, 1080, 1150, 1200]) {
+    await page.setViewportSize({ width, height: 800 });
+    await openSettings(page, "Appearance");
+    const pair = page.locator('[data-part="appearance.pair"]');
+    await expect(pair).toBeVisible();
+    const fields = await pair.locator(':scope > [data-part="form.field"]').evaluateAll((els) =>
+      els.map((field) => {
+        const label = field.querySelector(':scope > [data-part="form.label"]');
+        const select = field.querySelector(':scope > [data-part="form.select"]');
+        if (!label || !select) return { name: "", textRight: 0, labelRight: 0, selectLeft: 0 };
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const box = select.getBoundingClientRect();
+        const text = range.getBoundingClientRect();
+        return {
+          name: label.textContent.trim(),
+          textRight: text.right,
+          labelRight: label.getBoundingClientRect().right,
+          // A select below its label (stacked) does not compete for the line.
+          selectLeft: box.top >= text.bottom ? Number.POSITIVE_INFINITY : box.left,
+        };
+      }),
+    );
+    expect(fields.map((f) => f.name)).toEqual(["Light theme", "Dark theme"]);
+    for (const field of fields) {
+      expect(field.textRight, `${field.name} at ${String(width)} px`).toBeLessThanOrEqual(
+        field.labelRight + 1,
+      );
+      expect(field.textRight, `${field.name} at ${String(width)} px`).toBeLessThanOrEqual(
+        field.selectLeft,
+      );
+    }
+    const issues = await layoutIssues(page, { scope: '[data-part="appearance.pair"]' });
+    expect(issues, formatIssues(issues)).toEqual([]);
+  }
 });
 
 test("the theme editor at every size, min-size and larger; its title once, tags aligned", async ({

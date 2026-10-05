@@ -397,6 +397,13 @@ const GROUPS: Record<string, Group> = {
           .locator(`[data-part="${part}"]`)
           .evaluate((el) => Math.round(el.getBoundingClientRect().bottom));
       const plainBottom = await bottom("composer.body");
+      // P1 verify: the To input spans its row like Subject (it was the browser's
+      // 20 characters wide and cut "Ben Ortiz <ben@nail.example>").
+      const right = (name: string) =>
+        composer
+          .getByRole("textbox", { name, exact: true })
+          .evaluate((el) => Math.round(el.getBoundingClientRect().right));
+      expect(Math.abs((await right("To")) - (await right("Subject")))).toBeLessThanOrEqual(2);
       await composer.getByRole("radio", { name: "HTML" }).click();
       await expect(composer.locator('[data-part="composer.html.content"]')).toBeVisible();
       // P1 review: the rich editor fills the height down to the footer like the textarea.

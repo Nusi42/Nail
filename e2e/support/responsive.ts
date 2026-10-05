@@ -9,10 +9,14 @@
  *   bodies scroll, never the document);
  * - `clipped`: an element cuts its own content off (overflow hidden / clip)
  *   without an ellipsis or a line clamp;
+ * - `overflowing`: an element's text sticks out of its box sideways while
+ *   the box lets it (overflow visible, e.g. `white-space: nowrap` in a column
+ *   that shrank) — the text runs into or under its neighbours;
  * - `offscreen`: a visible control or text sticks out of the viewport
  *   sideways (not inside a horizontally scrolling container);
  * - `overlap`: two controls or text leaves of the same window cover each
- *   other;
+ *   other — a text leaf counts with the text that sticks out of it sideways, so
+ *   a label running under the select beside it is an overlap;
  * - `misaligned`: the labels of one form column do not share a left edge
  *   (only for the groups a test names in `aligned`).
  *
@@ -41,7 +45,13 @@ export const STANDARD_SIZES: readonly Size[] = STANDARD_WIDTHS.flatMap((width) =
 );
 
 export type IssueKind =
-  "page-overflow" | "page-scroll" | "clipped" | "offscreen" | "overlap" | "misaligned";
+  | "page-overflow"
+  | "page-scroll"
+  | "clipped"
+  | "overflowing"
+  | "offscreen"
+  | "overlap"
+  | "misaligned";
 
 export interface ResponsiveIssue {
   kind: IssueKind;
@@ -135,11 +145,18 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
     const value = axis === "x" ? style.overflowX : style.overflowY;
     return value !== "visible";
   };
-  /** The element's rectangle cut by every clipping ancestor (its visible part). */
-  const visibleRect = (el: Element) => {
-    const r = el.getBoundingClientRect();
+  interface Box {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  }
+  /** `r` cut by every clipping element from `from` up (its visible part). */
+  const clipRect = (r: Omit<Box, "width" | "height">, from: Element | null): Box => {
     let { left, top, right, bottom } = r;
-    for (let at = el.parentElement; at; at = at.parentElement) {
+    for (let at = from; at; at = at.parentElement) {
       const style = getComputedStyle(at);
       if (clips(style, "x") || clips(style, "y")) {
         const a = at.getBoundingClientRect();
@@ -155,6 +172,53 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
       if (style.position === "fixed") break;
     }
     return { left, top, right, bottom, width: right - left, height: bottom - top };
+  };
+  /** The element's rectangle cut by every clipping ancestor (its visible part). */
+  const visibleRect = (el: Element) => clipRect(el.getBoundingClientRect(), el.parentElement);
+  /**
+   * The visible rectangles of the element's text: its text nodes, also
+   * inside plain descendants, but not inside a descendant `[data-part]`
+   * (that one is checked itself). Each is cut by its clipping ancestors.
+   */
+  const textRects = (el: Element): Box[] => {
+    const rects: Box[] = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || (node.textContent ?? "").trim() === "") continue;
+      const owner = parent.closest("[data-part]");
+      if (owner !== null && owner !== el && el.contains(owner)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const r of Array.from(range.getClientRects())) {
+        const cut = clipRect(r, parent);
+        if (cut.width > tol && cut.height > tol) rects.push(cut);
+      }
+    }
+    return rects;
+  };
+  /** The smallest rectangle around `boxes`. */
+  const union = (boxes: readonly Box[]): Box | undefined => {
+    if (boxes.length === 0) return undefined;
+    const left = Math.min(...boxes.map((b) => b.left));
+    const top = Math.min(...boxes.map((b) => b.top));
+    const right = Math.max(...boxes.map((b) => b.right));
+    const bottom = Math.max(...boxes.map((b) => b.bottom));
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  };
+  /**
+   * A leaf's visible box widened by the text that sticks out of it
+   * sideways. Only sideways: a text line's glyph box is a little taller
+   * than its line (ascent + descent > line-height), so stacked lines would
+   * "overlap" by a pixel or two that nobody can see.
+   */
+  const withSpill = (el: Element): Box => {
+    const box = visibleRect(el);
+    const text = union(textRects(el));
+    if (!text) return box;
+    const left = Math.min(box.left, text.left);
+    const right = Math.max(box.right, text.right);
+    return { ...box, left, right, width: right - left };
   };
   const scrollsSideways = (el: Element) => {
     for (let at = el.parentElement; at && at !== doc; at = at.parentElement) {
@@ -202,6 +266,23 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
         });
       }
     }
+    if (
+      !skip.has("overflowing") &&
+      style.overflowX === "visible" &&
+      style.textOverflow !== "ellipsis"
+    ) {
+      // Text wider than its box that the box does not cut: it runs into the
+      // neighbours (or under them, when they paint later).
+      const box = el.getBoundingClientRect();
+      const text = union(textRects(el));
+      if (text && (text.right > box.right + tol || text.left < box.left - tol)) {
+        issues.push({
+          kind: "overflowing",
+          element: describe(el),
+          detail: `text ${fmt(text)} outside its box ${fmt(box)}`,
+        });
+      }
+    }
     if (!skip.has("offscreen") && (isControl(el) || hasOwnText(el)) && !scrollsSideways(el)) {
       const r = el.getBoundingClientRect();
       if (r.right > window.innerWidth + tol || r.left < -tol) {
@@ -225,7 +306,7 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
     const boxes = leaves
       .map((el) => ({
         el,
-        rect: visibleRect(el),
+        rect: withSpill(el),
         layer: el.closest(
           '[data-part="window"], [role="menu"], [role="listbox"], [role="tooltip"]',
         ),

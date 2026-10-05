@@ -241,6 +241,14 @@ describe("M5a skin (theme/skin.ts)", () => {
     expect(status).toContain("white-space: nowrap");
   });
 
+  it("sets the composer's Technology label like the Sign / Encrypt labels beside it (P1 verify)", () => {
+    const label = ruleBody(
+      '[data-part="security-compose.toggles"] > [data-part="form.field"] > [data-part="form.label"]',
+    );
+    expect(label).toContain("font-size: var(--nail-font-size-body)");
+    expect(label).toContain("font-weight: var(--nail-font-weight-regular)");
+  });
+
   it("hides the tag line in Compact", () => {
     expect(SKIN_CSS).toContain(
       ':root[data-nail-density="compact"] [data-part="message-list.row.tag-line"]',

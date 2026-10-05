@@ -691,8 +691,9 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
                        support/responsive.ts (P1, ADR 0139: STANDARD_SIZES 1600/1280/1024/800 × 1000/700,
-                       expectResponsive / layoutIssues / resizeWindow — overflow, clipping, overlap, off-screen,
-                       label alignment of [data-part]; screenshots <build dir>/screens/p1/<name>-<w>x<h>.png;
+                       expectResponsive / layoutIssues / resizeWindow — overflow, clipping, text running out of a
+                       non-clipping box (`overflowing`, ADR 0147), overlap (incl. a text leaf's sideways spill),
+                       off-screen, label alignment of [data-part]; screenshots <build dir>/screens/p1/<name>-<w>x<h>.png;
                        self-test tests/responsive-helper.spec.ts);
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
@@ -1131,6 +1132,9 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   size shrink to their `min-sizes`; a dialog's last button row is sticky (one row at the end, not several). E2E:
   `p1-mail.spec.ts`, `p1-windows.spec.ts` (coverage = the a11y window sweep's dialog list), `p1-views.spec.ts`; a new
   dialog must be listed in one of them. Avoid `:has()` with descendant searches in skins (jsdom / axe cost).
+- P1 verify (ADR 0147): a one-line (`nowrap`) label belongs in a column sized by its text (`max-content`), never in a
+  `minmax(0, 1fr)` column that can shrink under it (the text runs under the next control; the helper's `overflowing`
+  check finds it).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,
