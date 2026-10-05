@@ -6,7 +6,6 @@
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import axe from "axe-core";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PaletteEntry } from "../../actions/palette";
 import type { ResolvedLayout } from "../../api/generated";
@@ -21,6 +20,7 @@ import { fold, matchToken, mergeRanges, searchPalette } from "./fuzzy";
 import { PALETTE_DIALOG, PALETTE_OPEN_ACTION, loadPalette } from ".";
 import { paletteStoreFor } from "./store";
 import { must } from "../../test/must";
+import { violations } from "../../test/axe";
 
 beforeAll(() => loadPalette());
 
@@ -168,7 +168,7 @@ function withSelection(): Env {
 describe("command palette", () => {
   it("finds an action by fuzzy words, shows its keys and runs it with Enter", async () => {
     const env = withSelection();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env);
     const input = await openPalette(user);
     expect(paletteStoreFor(env.store).getState().contexts).toEqual(
@@ -199,7 +199,7 @@ describe("command palette", () => {
   it("moves with the arrow keys and lists recent actions first", async () => {
     const env = withSelection();
     await env.transport.send({ type: "RecordActionUsed", action_id: "sync.now" });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env);
     const input = await openPalette(user);
     const list = await screen.findByRole("listbox");
@@ -225,7 +225,7 @@ describe("command palette", () => {
 
   it("lists unavailable actions last and explains instead of running them", async () => {
     const env = createEnv();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env);
     const input = await openPalette(user);
     await user.type(input, "forward");
@@ -241,7 +241,7 @@ describe("command palette", () => {
   it("lists plug-in commands and layout aliases and says when nothing matches", async () => {
     const env = withSelection();
     await installFollowUp(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env);
     const input = await openPalette(user);
     await user.type(input, "follow");
@@ -261,7 +261,7 @@ describe("command palette", () => {
 
   it("closes again with the same action and with Escape", async () => {
     const env = createEnv();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env);
     await openPalette(user);
     await user.keyboard("{Escape}");
@@ -276,14 +276,13 @@ describe("command palette", () => {
   it("has no axe violations", async () => {
     const env = withSelection();
     await env.transport.send({ type: "RecordActionUsed", action_id: "mail.compose" });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(env);
     const input = await openPalette(user);
     await user.type(input, "re");
     await screen.findAllByRole("option");
-    const result = await axe.run(container, {
-      rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
-    });
-    expect(result.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    // Inside act (the shared helper): the palette's queries may still answer
+    // while axe walks the tree.
+    expect(await violations(container)).toEqual([]);
   });
 });

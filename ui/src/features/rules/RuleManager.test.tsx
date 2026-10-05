@@ -28,7 +28,7 @@ function field(container: HTMLElement, name: string): HTMLElement {
 }
 
 async function openSample(env: Env) {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = renderWithProviders(<RuleManagerView />, env);
   await user.click(await screen.findByRole("button", { name: "Rust announcements" }));
   const editor = await screen.findByRole("form", { name: "Rule" });
@@ -48,7 +48,7 @@ describe("rule manager", () => {
     const list = await screen.findByRole("list", { name: "Rules, in the order they run" });
     expect(within(list).getByText("when mail arrives")).toBeInTheDocument();
     expect(screen.getByText("Choose a rule to edit it, or create a new one.")).toBeInTheDocument();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await user.click(screen.getByRole("button", { name: "Rust announcements" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Rust announcements");
@@ -69,7 +69,7 @@ describe("rule manager", () => {
 
   it("creates a rule with nested conditions and actions", async () => {
     const env = setup();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(<RuleManagerView />, env);
     await user.click(await screen.findByRole("button", { name: "New rule" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
@@ -224,7 +224,7 @@ describe("rule manager", () => {
       name: "Second",
     } as Rule;
     env.transport.data.features.rules.rules.push(extra);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderWithProviders(<RuleManagerView />, env);
     await user.click(await screen.findByRole("button", { name: "Move “Second” up" }));
     await waitFor(() => {
@@ -294,7 +294,7 @@ describe("create rule from message", () => {
     await handler?.run(ctx, []);
     expect(env.store.getState().windows).toContain("rules");
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderWithProviders(<RuleManagerView />, env);
     const editor = await screen.findByRole("form", { name: "Rule" });
     expect(editor).toHaveAttribute("data-new", "true");

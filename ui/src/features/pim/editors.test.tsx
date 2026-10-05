@@ -75,7 +75,7 @@ describe("date and time picker", () => {
 
   it("follows the UI locale, not the browser's, and picks days from a month grid", async () => {
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const changes: string[] = [];
     renderWithProviders(<Picker onChange={(d, t) => changes.push(`${d} ${t}`)} />, env, {
@@ -116,7 +116,7 @@ describe("date and time picker", () => {
 
 describe("event editor", () => {
   it("creates a weekly event with an attendee, a reminder and another zone", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const close = vi.fn();
     const day = todayIn(localZone()).add({ days: 2 });
@@ -163,7 +163,7 @@ describe("event editor", () => {
   });
 
   it("refuses an end before the start before asking the core", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const day = todayIn(localZone());
     pimStoreFor(env.store)
@@ -181,7 +181,7 @@ describe("event editor", () => {
   });
 
   it("edits one occurrence, this and following, or all of a series", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     await settle(env);
     const instances = (
@@ -281,7 +281,7 @@ describe("event editor", () => {
   });
 
   it("applies the scope chosen for a dragged recurring occurrence", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const instances = (
       await env.client.request(
@@ -330,7 +330,7 @@ describe("event editor", () => {
 
 describe("contacts", () => {
   it("lists, searches, selects and shows contacts with linked ones", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(
       <>
@@ -367,7 +367,7 @@ describe("contacts", () => {
   });
 
   it("creates and edits a contact in the editor", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const close = vi.fn();
     pimStoreFor(env.store)
@@ -425,7 +425,7 @@ describe("contacts", () => {
   });
 
   it("refuses a contact without any name", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     pimStoreFor(env.store)
       .getState()
@@ -436,7 +436,7 @@ describe("contacts", () => {
   });
 
   it("merges duplicates: folds the same book, links the others", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const close = vi.fn();
     renderWithProviders(<MergeDialog name="pim-merge-contacts" close={close} />, env);
@@ -462,7 +462,7 @@ describe("contacts", () => {
   });
 
   it("edits groups and their members", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(<GroupsDialog name="pim-contact-groups" close={() => undefined} />, env);
     await user.click(await screen.findByRole("button", { name: "Family (2 members)" }));
@@ -483,7 +483,7 @@ describe("contacts", () => {
 
 describe("tasks", () => {
   it("shows tasks with subtasks, completes, collapses and adds tasks", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("task-list"), env);
     const tree = await screen.findByRole("tree", { name: "Tasks" });
@@ -531,7 +531,7 @@ describe("tasks", () => {
   });
 
   it("edits a task with due date, priority, recurrence and subtasks", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const close = vi.fn();
     pimStoreFor(env.store).getState().editTask({ mode: "edit", taskId: "tk-groceries" });
@@ -558,7 +558,7 @@ describe("tasks", () => {
   });
 
   it("creates a subtask-less task and refuses a recurrence without a date", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const close = vi.fn();
     pimStoreFor(env.store)
@@ -582,7 +582,7 @@ describe("tasks", () => {
 
 describe("reminders", () => {
   it("shows a fired reminder as a toast to snooze or dismiss", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(<PimToasts />, env);
     // The app shell passes every core event to the feature's handlers.
@@ -622,7 +622,7 @@ describe("reminders", () => {
 
 describe("import and sources", () => {
   it("previews and imports an uploaded vCard file", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(<ImportDialog name="pim-import" close={() => undefined} />, env);
     const file = new File(
@@ -643,7 +643,7 @@ describe("import and sources", () => {
   });
 
   it("previews and imports a file Nail was opened with", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     const send = env.transport.send.bind(env.transport);
     const sent: unknown[] = [];
@@ -704,7 +704,7 @@ describe("import and sources", () => {
   });
 
   it("adds a calendar subscription after testing it, syncs and removes sources", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(<SourcesDialog name="pim-sources" close={() => undefined} />, env);
     const list = await screen.findByRole("list", { name: "Sources" });
