@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { App, overridesFromUrl } from "./App";
 import { defaultTheme } from "./api/mockData";
 import { createEnv, setWindowWidth, stubElementSizes } from "./test/harness";
@@ -46,14 +46,19 @@ describe("App", () => {
   });
 
   it("opens a message on click and shows it in the sandboxed reader", async () => {
-    const { container } = renderApp();
+    renderApp();
     const rows = await screen.findAllByRole("option");
     fireEvent.click(must(rows[0]));
-    const view = must(container.querySelector<HTMLElement>('[data-part="message-view"]'));
+    // The reader's card feed (P2): the conversation's subject on top, the
+    // message in its card.
+    const feed = await screen.findByRole("feed");
     expect(
-      await within(view).findByRole("heading", { name: "Compiler notes for Monday" }),
+      await screen.findByRole("heading", { name: "Compiler notes for Monday" }),
     ).toBeInTheDocument();
-    expect(view.querySelector("iframe")?.getAttribute("sandbox")).toBe("");
+    const frame = await waitFor(() =>
+      must(feed.querySelector<HTMLElement>('[data-part="message-view"] iframe')),
+    );
+    expect(frame.getAttribute("sandbox")).toBe("");
   });
 
   it("navigates with the layout's key bindings (j/k, ctrl+b, g r)", async () => {

@@ -16,6 +16,18 @@ pub(crate) const FAVORITE_FOLDERS: &[&str] = &[
     "outbox",
 ];
 
+/// The `thread-view card=` words: the reader's per-message widgets a card
+/// of the feed can show (P2 WP203; `ui/src/widgets/ThreadViewModel.ts`
+/// `CARD_WIDGETS`, same order).
+pub(crate) const CARD_WIDGETS: &[&str] = &[
+    "security-message",
+    "security-warnings",
+    "remote-content",
+    "junk-verdict",
+    "sync-message-body",
+    "message-view",
+];
+
 /// Built-in widgets. Implemented widgets have typed options; future ones
 /// accept any options until they exist.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
@@ -78,6 +90,17 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     widget(
         "thread-view",
         &[
+            // P2 (WP203): `cards` = the reader as a card feed (the default
+            // layout's), `strip` (the default) = the strip above a separate
+            // `message-view`, as in layouts written before P2.
+            ("mode", OptionType::OneOf(&["strip", "cards"])),
+            // Cards: the per-message widgets an open card shows, in order.
+            ("card", OptionType::Words(CARD_WIDGETS)),
+            // Cards: the header fields of a card's `message-view` (the
+            // card's own header shows sender, recipients and date).
+            ("headers", OptionType::Str),
+            ("mark-read", OptionType::Bool),
+            // Strip only.
             (
                 "expand",
                 OptionType::OneOf(&["latest", "unread", "all", "none"]),
@@ -195,5 +218,42 @@ mod p2_tests {
         assert!(
             crate::parse_layout(&layout("message-list threads=\"tree\""), "layout.kdl").is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod p2_reader_tests {
+    fn layout(widget: &str) -> String {
+        format!(
+            "layout \"x\" extends=\"default\" {{
+    window \"w\" {{
+        {widget}
+    }}
+}}
+"
+        )
+    }
+
+    /// P2 WP203: the reader's card feed and its card widgets.
+    #[test]
+    fn thread_view_card_options_are_checked() {
+        for ok in [
+            "thread-view mode=\"cards\"",
+            "thread-view mode=\"strip\" expand=\"none\"",
+            "thread-view mode=\"cards\" card=\"message-view\" headers=\"cc\" mark-read=#false",
+            "thread-view mode=\"cards\" card=\"remote-content security-message message-view\"",
+        ] {
+            crate::parse_layout(&layout(ok), "layout.kdl").unwrap();
+        }
+        for bad in [
+            "thread-view mode=\"feed\"",
+            "thread-view card=\"message-list\"",
+            "thread-view card=\"message-view message-view\"",
+        ] {
+            assert!(
+                crate::parse_layout(&layout(bad), "layout.kdl").is_err(),
+                "{bad}"
+            );
+        }
     }
 }

@@ -17,10 +17,18 @@
  * Sent). Only WP-reader edits the files in this directory. The central registry
  * (`../registry.ts`) merges these exports into the app; see `../README.md`.
  */
+import type { ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
+import { conversationActionInfo, conversationActions } from "./actions";
+import { ReaderOffer } from "./ReaderOffer";
 
+/** The card feed is the `thread-view` widget (`mode="cards"`), registered with the core widgets. */
 export const widgets: Feature["widgets"] = {};
-export const actions: Feature["actions"] = {};
+/** The feed's keys (`conversation.*`). */
+export const actions: Feature["actions"] = conversationActions;
+/** Command-palette descriptions of the feed's keys. */
+export const actionInfo: Readonly<Record<string, ActionInfo>> = conversationActionInfo;
 export const dialogs: Feature["dialogs"] = {};
 export const events: Feature["events"] = [];
-export const effects: Feature["effects"] = [];
+/** The offer to turn a strip-era reader stack into the card feed. */
+export const effects: Feature["effects"] = [ReaderOffer];

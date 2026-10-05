@@ -9,6 +9,8 @@ import { isUnsupported, useConversation, useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { formatRelative } from "../template/template";
 import { Avatar } from "./primitives";
+import { ThreadFeed } from "./ThreadViewFeed";
+import { splitQuotes } from "./ThreadViewModel";
 
 /**
  * How many of the newest messages the strip shows; older ones fold into
@@ -54,17 +56,7 @@ export function initiallyExpanded(
   }
 }
 
-/** Splits text into runs of quoted (`>`) and own lines. */
-export function splitQuotes(text: string): { quoted: boolean; text: string }[] {
-  const blocks: { quoted: boolean; text: string }[] = [];
-  for (const line of text.split("\n")) {
-    const quoted = line.startsWith(">");
-    const last = blocks[blocks.length - 1];
-    if (last?.quoted === quoted) last.text += `\n${line}`;
-    else blocks.push({ quoted, text: line });
-  }
-  return blocks;
-}
+export { splitQuotes } from "./ThreadViewModel";
 
 function MessageText({ id }: { id: string }) {
   const t = useT();
@@ -92,13 +84,26 @@ function MessageText({ id }: { id: string }) {
 }
 
 /**
+ * The `thread-view` widget: the card feed (`mode="cards"`, P2 Design A, the
+ * default layout's reader) or the strip above a separate `message-view`
+ * (`mode="strip"`, the default for layouts written before P2).
+ */
+export function ThreadView(props: WidgetProps) {
+  return optionString(props.node, "mode", "strip") === "cards" ? (
+    <ThreadFeed {...props} />
+  ) : (
+    <ThreadStrip {...props} />
+  );
+}
+
+/**
  * The conversation of the selected message: its messages oldest first (the
  * user's replies from Sent among them), each expandable in place with
  * quoted text collapsed, older ones folded into "N earlier messages".
  * Choosing a message opens it in the message view. No scroll area of its
  * own: the strip is at most the fold plus three lines (P2 quick win).
  */
-export function ThreadView({ node }: WidgetProps) {
+function ThreadStrip({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
   const locale = useLocale();

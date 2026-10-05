@@ -136,7 +136,11 @@ describe("layout editor model", () => {
     expect(dropPatch(widget, ref([2]), reader, "into")).toEqual({
       op: "add-widget",
       widget: widget.widget,
-      to: { kind: "into", parent: ref([2]), index: reader.type === "widget" ? 0 : 8 },
+      to: {
+        kind: "into",
+        parent: ref([2]),
+        index: reader.type === "widget" ? 0 : reader.children.length,
+      },
     });
   });
 

@@ -242,7 +242,9 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
             "message-list"
         ]
     );
-    assert!(pane_kinds[2].contains(&"message-view".to_owned()));
+    // The reader: its bar and the conversation as cards (P2 WP203; each
+    // open card shows the message-view).
+    assert!(pane_kinds[2].contains(&"thread-view".to_owned()));
     assert!(pane_kinds[2].contains(&"toolbar".to_owned()));
 
     let narrow = mail_window.iter().find(|bp| bp.matches(600)).unwrap();
