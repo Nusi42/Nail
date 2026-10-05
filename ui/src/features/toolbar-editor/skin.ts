@@ -64,22 +64,38 @@ const T = {
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 1px;`;
 
+/** The container the customizer's narrow rule measures (P1 WP192). */
+export const CUSTOMIZER_CONTAINER = "nail-toolbar-customizer";
+/** Below this width the available actions go below the toolbar's lists. */
+export const CUSTOMIZER_NARROW = "40rem";
+/** Below this height the body scrolls instead of the lists shrinking further. */
+export const CUSTOMIZER_SHORT = "30rem";
+
 const FRAME = `${p(CUSTOMIZER_PART)} {
   display: flex; flex-direction: column; gap: ${T.md}; height: 100%; min-height: 0; padding: ${T.md};
-  box-sizing: border-box; color: ${T.fg};
+  box-sizing: border-box; color: ${T.fg}; container: ${CUSTOMIZER_CONTAINER} / size;
 }
 ${p(CUSTOMIZER_PART)}[aria-busy="true"] ${c("list")} { cursor: progress; }
 ${c("header")} { display: flex; flex-wrap: wrap; align-items: end; gap: ${T.sm} ${T.lg}; }
 ${c("intro")}, ${c("drop-hint")}, ${c("more-matches")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; max-width: 70ch; }
+/* P1 (WP192): in a tall window the lists share the height and scroll inside; in a short one (a
+   container query on the customizer, not the page) they keep their natural height and the body
+   scrolls instead of letting them run into each other (the header and footer stay). In a narrow
+   window the available actions go below the toolbar's lists. */
 ${c("body")} {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: ${T.lg};
   flex: 1; min-height: 0;
 }
-@media (max-width: 640px) { ${c("body")} { grid-template-columns: minmax(0, 1fr); overflow: auto; } }
+@container ${CUSTOMIZER_CONTAINER} (max-width: ${CUSTOMIZER_NARROW}) { ${c("body")} { grid-template-columns: minmax(0, 1fr); } }
 ${c("areas")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; min-height: 0; }
 ${c("area")}[data-area="more"] { flex: 1; }
 ${c("area")} > ${c("list")}[data-orientation="vertical"] { flex: 1; min-height: calc(3 * ${T.control}); }
 ${c("area")}, ${c("palette")} { display: flex; flex-direction: column; gap: ${T.xs}; min-width: 0; min-height: 0; }
+@container ${CUSTOMIZER_CONTAINER} (max-height: ${CUSTOMIZER_SHORT}) {
+  ${c("body")} { overflow: auto; }
+  ${c("areas")}, ${c("area")}, ${c("palette")} { min-height: auto; }
+  ${c("list")}[data-orientation="vertical"] { flex: none; max-height: calc(6 * ${T.control}); }
+}
 ${c("heading")} {
   margin: 0; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.04em;
   text-transform: uppercase; color: ${T.muted};
@@ -113,6 +129,11 @@ ${c("item")}[data-kind="separator"], ${c("item")}[data-kind="spacer"], ${c("item
   color: ${T.muted}; font-style: italic;
 }
 ${c("item")}[data-state="selected"][data-kind] { color: ${T.selectionFg}; }
+${c("item")}[data-kind="separator"] ${c("item.label")}, ${c("item")}[data-kind="spacer"] ${c("item.label")},
+${c("item")}[data-kind="header"] ${c("item.label")} {
+  /* Room for the italic glyphs' overhang, which the clipping label would cut off. */
+  padding-inline-end: 0.2em;
+}
 ${c("item.icon")} { width: ${T.icon}; height: ${T.icon}; flex: none; }
 ${c("item.label")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ${c("list")}[data-orientation="vertical"] ${c("item.label")} { flex: 1; }

@@ -118,7 +118,15 @@ ${p("event-card.title")} { ${oneLine} font-weight: ${T.semibold}; color: inherit
 ${p("event-card.time")} { ${oneLine} font-size: ${T.label}; font-variant-numeric: tabular-nums; color: inherit; }
 ${p("event-card.location")} { ${oneLine} font-size: ${T.label}; color: inherit; }
 ${p("event-card.badge")} { display: none; }
-${p("calendar.event")} > ${p("event-card.title")} { white-space: normal; overflow-wrap: anywhere; flex: 0 0 auto; }
+${p("calendar.event")} > ${p("event-card.title")} {
+  flex: 0 0 auto; white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+/* P1 (WP192): the time and place keep their line height (a long title in a narrow column squeezed
+   them into half a line); a short event shows its title on one line so the time still fits. */
+${p("calendar.event")} > ${p("event-card.time")}, ${p("calendar.event")} > ${p("event-card.location")} { flex: 0 0 auto; }
+${p("calendar.event")} { container: nail-event / size; }
+@container nail-event (max-height: 3.5rem) { ${p("calendar.event")} > ${p("event-card.title")} { -webkit-line-clamp: 1; } }
 ${ps("calendar.chip", "calendar.agenda.event", "agenda.list.event")} { align-items: baseline; gap: ${T.xs}; padding: 1px ${T.xs}; white-space: nowrap; }
 ${p("calendar.chip")} > ${p("event-card.time")} { order: -1; flex: 0 0 auto; }
 ${p("calendar.chip")} > ${p("event-card.location")} { display: none; }
@@ -308,9 +316,54 @@ ${p("task-list.add")} { display: flex; flex-wrap: wrap; align-items: center; gap
 ${p("task-list.add")} > ${p("form.label")} { flex: 1 0 100%; margin: 0; }
 ${p("task-list.add")} > ${p("form.input")} { flex: 1 1 12em; min-width: 0; }`;
 
+/** The container the calendar's narrow rules measure (P1 WP192). */
+export const CALENDAR_CONTAINER = "nail-calendar";
+/** Below this width the calendar toolbar takes two rows. */
+export const CALENDAR_NARROW = "40rem";
+
+/** The widest a contact card's or the task list's content gets (Edit / Delete stay near the name). */
+const READING = "56rem";
+
+/** Visually hidden, still read (the accessible name stays). */
+const srOnly =
+  "position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;";
+
+/**
+ * P1 (WP192, ADR 0139): the panes of the default calendar window's split
+ * (`calendar-panes`) give way down to their `min-sizes` before the window
+ * runs out of room — a fixed `260px` pane does not shrink by itself
+ * (`flexForSize`), so at 800 px the calendar pane was pushed past the
+ * window's edge. (A rule for every split belongs in the layout renderer;
+ * no `:has()` with a descendant search here: costly in jsdom's style
+ * matching, which the axe tests run.) The
+ * calendar is a size container (`parts.ts`), so its content (the toolbar's
+ * buttons, the time grid's columns) never widens the pane it sits in: the
+ * panes keep their place at 800 px and the grids
+ * fit the pane. In a narrow pane the toolbar takes two rows — the buttons, then the range
+ * on its own line instead of a cut-off title — the view menu loses its
+ * visible "View" label and "New event" shows its icon only (both keep
+ * their names). All-day chips leave out their "All day" (the row says it).
+ * The contact filters share the list's width; a contact card's and the
+ * task list's content stop at a reading width in a wide window.
+ */
+const RESPONSIVE = `${p("split")}[data-node-id="calendar-panes"] > ${p("split.pane")} { flex-shrink: 1; }
+@container ${CALENDAR_CONTAINER} (max-width: ${CALENDAR_NARROW}) {
+  ${p("calendar.toolbar")} { flex-wrap: wrap; row-gap: ${T.xs}; }
+  ${p("calendar.toolbar")} > ${p("calendar.title")} { order: 99; flex: 1 0 100%; margin: 0; }
+  ${p("calendar.toolbar")} > [data-field="calendar-new-event"] { margin-inline-start: auto; }
+  ${p("calendar.view-menu")} > ${p("form.label")} { ${srOnly} }
+  [data-field="calendar-new-event"] > ${p("form.button.label")} { ${srOnly} }
+}
+${p("calendar.all-day.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { display: none; }
+${p("contact-list")} > ${p("contact-list.toolbar")} > ${p("form.field")} { flex: 1 1 10rem; min-width: 0; }
+${p("contact-list")} > ${p("contact-list.toolbar")} > ${p("form.field")} > ${p("form.select")} { width: 100%; min-width: 0; }
+${p("contact-card")} > ${p("contact-card.header")}, ${p("contact-card")} > ${p("contact-card.section")} { width: 100%; max-width: ${READING}; box-sizing: border-box; }
+${p("task-list")} > * { width: 100%; max-width: ${READING}; box-sizing: border-box; }`;
+
 /** The PIM skin (empty sections are dropped). */
 export const PIM_SKIN_CSS = [
   TOOLBAR,
+  RESPONSIVE,
   CARDS,
   GRIDS,
   MINI_MONTH,
@@ -327,5 +380,11 @@ export const PIM_SKIN_CSS = [
  * those rules so the M5b look shows; a user theme can still restyle them.
  */
 export const PIM_SKIN_PARTS: readonly string[] = [
-  ...new Set([...PIM_SKIN_CSS.matchAll(/\[data-part="([^"]+)"\]/g)].map((m) => m[1] ?? "")),
+  ...new Set(
+    // The responsive rules select through two parts (or more), so they win
+    // over any single-part theme rule anyway.
+    [...PIM_SKIN_CSS.replace(RESPONSIVE, "").matchAll(/\[data-part="([^"]+)"\]/g)].map(
+      (m) => m[1] ?? "",
+    ),
+  ),
 ].sort();

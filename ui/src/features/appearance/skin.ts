@@ -55,7 +55,11 @@ const T = {
 /** The container the editor's layout query measures. */
 export const THEME_EDITOR_CONTAINER = "nail-theme-editor";
 /** Below this width the preview goes below the panel. */
-export const THEME_EDITOR_NARROW = "52rem";
+export const THEME_EDITOR_NARROW = "64rem";
+/** The container the preview's narrow rule measures (P1 WP192). */
+export const THEME_PREVIEW_CONTAINER = "nail-theme-preview";
+/** Below this width a token's value field goes below its name (P1 WP192). */
+export const THEME_EDITOR_STACKED = "40rem";
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 
@@ -63,6 +67,10 @@ export const APPEARANCE_SKIN_CSS = `${p("appearance.header")} { display: flex; f
 ${p("appearance.history")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.xs}; }
 ${p("appearance.history")} > ${p("form.error")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; flex-basis: 100%; }
 ${p("appearance.actions")}[data-actions="themes"] { justify-content: flex-start; flex-wrap: wrap; }
+/* P1 (WP192): the light / dark choice is one pair of fields — no settings-row line between them,
+   label and select on one line. */
+${p("appearance.pair")} > ${p("form.field")} + ${p("form.field")} { border-top: 0; }
+${p("appearance.pair")} > ${p("form.field")} > ${p("form.select")} { grid-row: 1; }
 ${p("appearance.slider")} { display: flex; align-items: center; gap: ${T.md}; }
 ${p("appearance.range")} { flex: 1 1 auto; min-width: 0; accent-color: ${T.accent}; }
 ${p("appearance.range")}:focus-visible { ${focusRing} }
@@ -76,19 +84,25 @@ ${e("actions")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.
 ${e("status")} { margin-inline-start: auto; font-size: ${T.small}; color: ${T.muted}; }
 ${e("notice")} { margin: 0; padding: ${T.sm} ${T.md}; border-radius: ${T.rMd}; background-color: ${T.accentSoft}; color: ${T.fg}; }
 ${e("notice")}[data-tone="warning"] { border: 1px solid ${T.warning}; background-color: color-mix(in srgb, ${T.warning} 14%, ${T.bg}); }
-${e("body")} { display: grid; grid-template-columns: minmax(calc(10 * ${T.lg}), auto) minmax(0, 1fr) minmax(calc(16 * ${T.lg}), 1fr); gap: ${T.lg}; align-items: start; min-height: 0; }
+${e("body")} { display: grid; grid-template-columns: minmax(calc(8 * ${T.lg}), auto) minmax(0, 2fr) minmax(calc(15 * ${T.lg}), 0.8fr); gap: ${T.lg}; align-items: start; min-height: 0; }
 ${e("body")} > ${p("tabs.tab-list")} { display: flex; flex-direction: column; gap: ${T.xxs}; border: 0; }
 ${e("body")} > ${p("tabs.tab-list")} > ${p("tabs.tab")} { justify-content: flex-start; text-align: start; }
 ${e("panel")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; }
 ${e("tokens")} { display: flex; flex-direction: column; gap: ${T.sm}; }
 ${e("token-list")}, ${e("part-list")} { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid ${T.border}; border-radius: ${T.rMd}; }
-${e("token")} { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: ${T.sm} ${T.md}; align-items: center; padding: ${T.sm} ${T.md}; }
+/* P1 (WP192): one grid per row — name, origin tag, controls — with the controls at a fixed share of
+   the row, so every row's tag ends at the same edge and the value field gets room for long values.
+   Override notes go below the name. */
+${e("token")} { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 60%); gap: ${T.xs} ${T.md}; align-items: center; padding: ${T.sm} ${T.md}; }
 ${e("token")} + ${e("token")} { border-top: 1px solid ${T.border}; }
 ${e("token")}[data-state~="changed"] { background-color: ${T.accentSoft}; }
-${e("token.text")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.xs} ${T.sm}; min-width: 0; }
+${e("token.text")} { display: contents; }
+${e("token.text")} > ${e("token.name")} { grid-column: 1; grid-row: 1; min-width: 0; }
+${e("token.text")} > ${p("tag")}[data-kind="origin"] { grid-column: 2; grid-row: 1; justify-self: end; white-space: nowrap; }
+${e("token.text")} > :nth-child(n + 3) { grid-column: 1 / 3; justify-self: start; }
 ${e("token.name")}, ${e("part.selector")}, ${e("property.name")}, ${e("property.text")} { font-family: ${T.mono}; font-size: ${T.small}; overflow-wrap: anywhere; }
-${e("token.controls")} { display: flex; align-items: center; gap: ${T.xs}; }
-${e("token.controls")} > ${p("form.input")} { width: calc(12 * ${T.lg}); max-width: 100%; }
+${e("token.controls")} { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: ${T.xs}; min-width: 0; }
+${e("token.controls")} > ${p("form.input")} { flex: 1 1 auto; width: auto; min-width: 0; }
 ${e("token.color")} { width: calc(${T.control} + ${T.md}); height: ${T.control}; padding: ${T.xxs}; border: 1px solid ${T.line}; border-radius: ${T.rSm}; background: none; }
 ${e("token.color")}:focus-visible { ${focusRing} }
 ${e("parts")} { display: grid; grid-template-columns: minmax(calc(12 * ${T.lg}), 1fr) minmax(0, 2fr); gap: ${T.lg}; align-items: start; }
@@ -111,7 +125,7 @@ ${e("add-property")}, ${e("add-part")} { display: flex; flex-wrap: wrap; align-i
 ${e("add-property")} > ${p("form.error")}, ${e("add-part")} > ${p("form.error")} { flex-basis: 100%; }
 ${e("empty")}, ${e("loading")}, ${e("unavailable")} { margin: 0; color: ${T.muted}; }
 
-${e("preview")} { margin: 0; display: flex; flex-direction: column; gap: ${T.xs}; position: sticky; top: 0; }
+${e("preview")} { margin: 0; display: flex; flex-direction: column; gap: ${T.xs}; position: sticky; top: 0; container: ${THEME_PREVIEW_CONTAINER} / inline-size; }
 ${e("preview.caption")} { font-size: ${T.label}; color: ${T.muted}; }
 ${v("frame")} { display: grid; grid-template-columns: ${T.lg} minmax(0, 2fr) minmax(0, 3fr) minmax(0, 4fr); min-height: calc(16 * ${T.lg}); overflow: hidden; border: 1px solid; border-radius: ${T.rLg}; }
 ${v("rail")} { display: flex; flex-direction: column; align-items: center; padding-block: ${T.sm}; border-inline-end: 1px solid; }
@@ -135,6 +149,15 @@ ${p("theme-dialog.actions")} { display: flex; flex-wrap: wrap; justify-content: 
 ${p("theme-dialog.question")} { margin: 0; font-weight: ${T.semibold}; }
 ${p("theme-dialog.note")}, ${p("theme-dialog.gone")} { margin: 0; color: ${T.muted}; }
 
+/* A narrow preview leaves out its folder column so the list and the message keep readable widths. */
+@container ${THEME_PREVIEW_CONTAINER} (max-width: 22rem) {
+  ${v("frame")} { grid-template-columns: ${T.lg} minmax(0, 1fr) minmax(0, 1fr); }
+  ${v("sidebar")} { display: none; }
+}
+@container ${THEME_EDITOR_CONTAINER} (max-width: ${THEME_EDITOR_STACKED}) {
+  ${e("token")} { grid-template-columns: minmax(0, 1fr) auto; }
+  ${e("token.controls")} { grid-column: 1 / -1; grid-row: auto; }
+}
 @container ${THEME_EDITOR_CONTAINER} (max-width: ${THEME_EDITOR_NARROW}) {
   ${e("body")} { grid-template-columns: minmax(0, 1fr); }
   ${e("body")} > ${p("tabs.tab-list")} { flex-direction: row; flex-wrap: wrap; }

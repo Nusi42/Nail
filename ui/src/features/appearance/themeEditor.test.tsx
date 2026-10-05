@@ -411,6 +411,27 @@ describe("theme editor", () => {
     await settleQueries(env);
   });
 
+  // P1 (WP192, M5 cosmetic list): the window's title bar names the editor;
+  // the window body does not repeat it. Placed as a layout widget (no title
+  // bar), the editor shows its own heading.
+  it("names itself once: no heading in the window, a heading as a widget", async () => {
+    const env = createEnv();
+    const view = showEditor(env, null);
+    const region = await screen.findByRole("region", { name: "Theme editor" });
+    await tokenRow("color.accent");
+    expect(within(region).queryByRole("heading", { name: "Theme editor" })).toBeNull();
+    expect(region).not.toHaveAttribute("aria-labelledby");
+    view.unmount();
+
+    renderNode(widget("theme-editor"), env);
+    const heading = await screen.findByRole("heading", { name: "Theme editor" });
+    const placed = screen.getByRole("region", { name: "Theme editor" });
+    expect(placed).toContainElement(heading);
+    expect(placed).toHaveAttribute("aria-labelledby", heading.id);
+    await tokenRow("color.accent");
+    await settleQueries(env);
+  });
+
   // Review finding (ADR 0138): a picker change still waiting for its write
   // must not come back after Undo, and Undo must not undo an older entry.
   it("writes a waiting picker change before Undo, then undoes that change", async () => {
