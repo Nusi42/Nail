@@ -1,6 +1,6 @@
 # ADR 0165: P3 WP-actions-core — conversation actions in store, core and engines
 
-Status: accepted · 2026-10-05 · P3 package WP-actions-core (contract ADR 0164; the integrator renumbers)
+Status: accepted · 2026-10-05 · P3 package WP-actions-core (contract ADR 0164; integration ADR 0169)
 
 ## Context
 

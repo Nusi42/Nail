@@ -283,3 +283,13 @@ package's change touches.
   table adds a small cost to every message write.
 - Local mail frames gain the app's origin (scripts stay off); remote mail
   frames gain exactly one hash-pinned script in an opaque origin.
+
+## Integration notes (ADR 0169)
+
+- WP-actions-core needed no migration: the schema stays at **v18** (WP-perf's
+  thread-activity triggers); the v19 slot is unused. The MCP tools and the
+  plug-in API accept `conversations` (no longer refused); the plug-in SDK type
+  is `PluginMailTargets` in `packages/plugin-api/src/api.ts`.
+- `frameHeightOf` also accepts `event.origin === "null"`: a document on the
+  sandbox origin without `allow-same-origin` posts from an opaque origin, so
+  the sender is identified only by its frame's `contentWindow` (ADR 0168).

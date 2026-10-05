@@ -38,6 +38,7 @@ import type {
   PluginJobsRegistry,
   PluginMcpRegistry,
   PluginDraftInput,
+  PluginMailTargets,
   PluginEventInput,
   PluginHookMessage,
   PluginHttpRequest,
@@ -673,6 +674,20 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     if (list.length === 0 || list.length > 500) throw invalid("1 to 500 message ids");
     return list;
   };
+  /** Message ids of `nail.mail.update` / `delete` targets (conversations: their messages, in `folderId` if given). */
+  const targetIds = (targets: string | string[] | PluginMailTargets): string[] => {
+    if (typeof targets === "string" || Array.isArray(targets)) return idList(targets);
+    const named = targets.messageIds === undefined ? [] : [targets.messageIds].flat();
+    const fromThreads = (targets.conversations ?? []).flatMap((c) =>
+      [...messages.values()]
+        .filter(
+          (m) =>
+            m.threadId === c.threadId && (c.folderId === undefined || m.folderId === c.folderId),
+        )
+        .map((m) => m.id),
+    );
+    return idList([...named, ...fromThreads]);
+  };
   let lastComposerDraft: DraftId | undefined;
   const composerEdit = (
     op: ComposerEdit["op"],
@@ -810,7 +825,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         }),
       async update(ids, changes) {
         need("mail.organize");
-        const messageIds = idList(ids);
+        const messageIds = targetIds(ids);
         const targets = messageIds.map(message);
         for (const m of targets) need("mail.organize", m.accountId);
         return write(
@@ -827,7 +842,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       },
       async delete(ids, deleteOptions = {}) {
         need("mail.organize");
-        const messageIds = idList(ids);
+        const messageIds = targetIds(ids);
         const targets = messageIds.map(message);
         for (const m of targets) need("mail.organize", m.accountId);
         const permanent = deleteOptions.permanent === true;

@@ -230,6 +230,26 @@ describe("writes", () => {
     ).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  it("acts on whole conversations", async () => {
+    const host = createTestHost({
+      messages: [
+        msg("a1", "work", { threadId: "t1" }),
+        msg("a2", "work", { threadId: "t1", folderId: "Sent" }),
+        msg("b1", "work", { threadId: "t2" }),
+      ],
+    });
+    await host.api.mail.update(
+      { conversations: [{ threadId: "t1", folderId: "INBOX" }] },
+      {
+        moveToFolderId: "Archive",
+      },
+    );
+    expect(host.messages.get("a1")?.folderId).toBe("Archive");
+    expect(host.messages.get("a2")?.folderId).toBe("Sent");
+    await host.api.mail.delete({ messageIds: "b1", conversations: [{ threadId: "t1" }] });
+    expect([...host.messages.values()].map((m) => m.folderId)).toEqual(["Trash", "Trash", "Trash"]);
+  });
+
   it("keeps mail writes to the granted accounts", async () => {
     const host = createTestHost({
       messages: [msg("w", "work"), msg("h", "home")],

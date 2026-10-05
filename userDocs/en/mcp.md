@@ -219,6 +219,11 @@ open another message.
 - **Everything is undoable.** Changes go through Nail's operation queue,
   like your own: they appear in the undo history, sync to your servers the
   same way, and are written to the activity log with what changed.
+- **Whole conversations.** `update_messages` and `delete_messages` also take
+  `conversations` (a thread id and the folder it is listed in) and act on
+  them the way Nail's own conversation rows do; the confirmation names how
+  many conversations and messages are affected. Messages outside the
+  client's accounts are left alone.
 - **Drafts are never sent by writing them.** Sending is always a separate
   `send_message`. When you have a draft open, `edit_open_draft` inserts or
   replaces text in it live (you see it, and can undo it like typing), and

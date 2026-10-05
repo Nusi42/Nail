@@ -17,7 +17,12 @@ the user in **Confirmations**.
 | `nail.contacts.upsert` / `delete` | `contacts.write` | `contact` / `pim-delete` (always asks) |
 | `nail.tasks.create` / `update` / `delete` | `tasks.write` | `task` / `pim-delete` (always asks) |
 
-`ids` may be one message id or a list (at most 500). Mail writes also need
+`ids` may be one message id or a list (at most 500), or an object naming
+whole conversations, the way a row of the message list shows them:
+`{ messageIds, conversations: [{ threadId, folderId }] }`. Read state, tags
+and Trash then reach every message of each conversation, including your
+replies in Sent; moves, archive and snooze reach its messages in `folderId`;
+`flagged: true` flags its newest message. Mail writes also need
 read access to the messages they name, in the accounts the grant covers.
 
 ## Results

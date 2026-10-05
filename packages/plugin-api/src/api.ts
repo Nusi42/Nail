@@ -242,6 +242,19 @@ export interface PluginSendOptions {
   sendAt?: string;
 }
 
+/** What `nail.mail.update` / `nail.mail.delete` act on: messages and whole conversations. */
+export interface PluginMailTargets {
+  /** Messages named directly. */
+  messageIds?: MessageId | MessageId[];
+  /**
+   * Conversations as a list row shows them: read state, tags and Trash
+   * reach every message of each, including the user's replies in Sent;
+   * moves, archive and snooze reach its messages in `folderId`;
+   * `flagged: true` reaches its newest message. At most 500.
+   */
+  conversations?: { threadId: ThreadId; folderId?: FolderId }[];
+}
+
 /**
  * `nail.mail`: mail. Headers need `mail.read`, bodies `mail.read.body`,
  * changes `mail.organize`, drafts and sending `mail.send` — each for the
@@ -269,18 +282,20 @@ export interface NailMailApi {
   thread(threadId: ThreadId): Promise<PluginMessage[]>;
   /**
    * Flags, tags, read state, moves, archiving, snoozing (at most 500
-   * messages). Needs `mail.organize` (action kind `organize`).
+   * messages). Takes message ids or {@link PluginMailTargets} (whole
+   * conversations). Needs `mail.organize` (action kind `organize`).
    */
   update(
-    messageIds: MessageId | MessageId[],
+    targets: MessageId | MessageId[] | PluginMailTargets,
     changes: PluginMessageChanges,
   ): Promise<PluginWriteResult>;
   /**
    * Moves messages to Trash, or deletes them for good. Needs
    * `mail.organize`; always asks the user (`trash` / `permanent-delete`).
+   * Takes message ids or {@link PluginMailTargets} (whole conversations).
    */
   delete(
-    messageIds: MessageId | MessageId[],
+    targets: MessageId | MessageId[] | PluginMailTargets,
     options?: PluginDeleteOptions,
   ): Promise<PluginWriteResult>;
   /**

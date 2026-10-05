@@ -1,6 +1,6 @@
-# ADR 0165 (WP-card-height): mail frames as tall as their mail
+# ADR 0168: P3 WP-card-height — mail frames as tall as their mail
 
-Status: accepted · 2026-10-05 · P3 WP-card-height (the integrator renumbers)
+Status: accepted · 2026-10-05 · P3 WP-card-height (integration ADR 0169)
 
 ## Context
 

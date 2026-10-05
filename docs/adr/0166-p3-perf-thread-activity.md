@@ -1,7 +1,6 @@
-# ADR 0165: P3 WP-perf — thread-activity maintenance and conversation pages
+# ADR 0166: P3 WP-perf — thread-activity maintenance and conversation pages
 
-Status: accepted · 2026-10-05 · P3 WP-perf (contract ADR 0164; the integrator
-renumbers this ADR and the migration if needed)
+Status: accepted · 2026-10-05 · P3 WP-perf (contract ADR 0164; integration ADR 0169)
 
 ## Context
 
