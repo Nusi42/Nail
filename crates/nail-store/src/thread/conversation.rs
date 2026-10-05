@@ -24,6 +24,7 @@ use nail_api::{
 };
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use super::activity;
 use super::subject::normalize_subject;
 use super::{ThreadPage, json_ids};
 use crate::error::{Error, Result};
@@ -139,32 +140,6 @@ const CONVERSATION_EXTRA: &str = "m.message_id,
     m.folder_id IN (SELECT value FROM json_each(?3)) AS joined,
     EXISTS (SELECT 1 FROM folders f WHERE f.id = m.folder_id AND f.role = 'sent') AS in_sent";
 
-/// The listed conversations' keys, newest activity first (`?1` threaded
-/// folders, `?2` Sent folders that join, `?3` Drafts folders, `?4` limit,
-/// `?5` offset). A Sent message only adds activity to a thread that has a
-/// message in the listed folders. Every part reads the covering index
-/// `messages_folder_thread` (schema v16) only; `+thread_id` keeps SQLite on
-/// it for the Sent folders (one pass over Sent against the listed threads)
-/// instead of one thread lookup per listed message.
-pub(crate) const PAGE_SQL: &str = "SELECT k, MAX(d) AS last FROM (
-        SELECT thread_id AS k, date_sort AS d FROM messages
-         WHERE folder_id IN (SELECT value FROM json_each(?1)) AND thread_id IS NOT NULL
-        UNION ALL
-        SELECT thread_id, date_sort FROM messages
-         WHERE folder_id IN (SELECT value FROM json_each(?2))
-           AND +thread_id IN (SELECT thread_id FROM messages
-                               WHERE folder_id IN (SELECT value FROM json_each(?1)))
-        UNION ALL
-        SELECT 'single-' || id, date_sort FROM messages
-         WHERE folder_id IN (SELECT value FROM json_each(?3))
-     ) GROUP BY k ORDER BY last DESC, k DESC LIMIT ?4 OFFSET ?5";
-
-/// The number of listed conversations (`?1` threaded, `?2` Drafts folders).
-pub(crate) const COUNT_SQL: &str = "SELECT
-        (SELECT COUNT(DISTINCT thread_id) FROM messages
-          WHERE folder_id IN (SELECT value FROM json_each(?1)) AND thread_id IS NOT NULL)
-      + (SELECT COUNT(*) FROM messages WHERE folder_id IN (SELECT value FROM json_each(?2)))";
-
 /// A thread's messages in the listed folders (`?2`) and the joining Sent
 /// folders (`?3`), oldest first; a listed copy before a joined one.
 pub(crate) fn listed_sql() -> String {
@@ -174,6 +149,20 @@ pub(crate) fn listed_sql() -> String {
            AND (m.folder_id IN (SELECT value FROM json_each(?2))
                 OR m.folder_id IN (SELECT value FROM json_each(?3)))
          ORDER BY m.date_sort, joined, m.id"
+    )
+}
+
+/// The messages of a page's threads (`?1`, JSON array of thread ids) in
+/// the listed folders (`?2`) and the joining Sent folders (`?3`), by
+/// thread, each oldest first as [`listed_sql`]; the last column is the
+/// thread id. One query per page instead of one per conversation.
+pub(crate) fn listed_page_sql() -> String {
+    format!(
+        "SELECT {MESSAGE_COLS}, {CONVERSATION_EXTRA}, m.thread_id FROM messages m
+         WHERE m.thread_id IN (SELECT value FROM json_each(?1))
+           AND (m.folder_id IN (SELECT value FROM json_each(?2))
+                OR m.folder_id IN (SELECT value FROM json_each(?3)))
+         ORDER BY m.thread_id, m.date_sort, joined, m.id"
     )
 }
 
@@ -219,12 +208,8 @@ fn read_rows(
 }
 
 /// Collapses copies with the same Message-ID into the first (the others in
-/// its `duplicates`) and marks the user's messages.
-fn collapse(
-    tx: &Transaction<'_>,
-    rows: Vec<Row>,
-    own: &OwnAddresses,
-) -> Result<Vec<ConversationMessage>> {
+/// its `duplicates`) and marks the user's messages; tags stay empty.
+fn collapse_rows(rows: Vec<Row>, own: &OwnAddresses) -> Vec<ConversationMessage> {
     let mut first_by_mid: HashMap<String, usize> = HashMap::new();
     let mut out: Vec<(MessageSummary, bool)> = Vec::with_capacity(rows.len());
     for row in rows {
@@ -243,11 +228,7 @@ fn collapse(
         }
         out.push((row.summary, row.in_sent));
     }
-    let (summaries, in_sent): (Vec<MessageSummary>, Vec<bool>) = out.into_iter().unzip();
-    let summaries = attach_tags(tx, summaries)?;
-    Ok(summaries
-        .into_iter()
-        .zip(in_sent)
+    out.into_iter()
         .map(|(message, in_sent)| {
             let mine = message
                 .from
@@ -258,6 +239,23 @@ fn collapse(
                 message,
             }
         })
+        .collect()
+}
+
+/// [`collapse_rows`] with every message's tags (and Gmail / Exchange data).
+fn collapse(
+    tx: &Transaction<'_>,
+    rows: Vec<Row>,
+    own: &OwnAddresses,
+) -> Result<Vec<ConversationMessage>> {
+    let (summaries, from_me): (Vec<MessageSummary>, Vec<bool>) = collapse_rows(rows, own)
+        .into_iter()
+        .map(|m| (m.message, m.from_me))
+        .unzip();
+    Ok(attach_tags(tx, summaries)?
+        .into_iter()
+        .zip(from_me)
+        .map(|(message, from_me)| ConversationMessage { message, from_me })
         .collect())
 }
 
@@ -335,21 +333,46 @@ pub fn summarize_conversation(
     })
 }
 
-/// The messages of one listed conversation key (a thread id or a single
-/// message).
-fn listed_messages(
+/// The rows of a page's conversations, by key: the threads' messages in
+/// the listed and joined folders in one query ([`listed_page_sql`]), a
+/// single message per [`SINGLE_PREFIX`] key; each oldest first.
+fn page_rows(
     tx: &Transaction<'_>,
-    key: &str,
+    keys: &[String],
     listed: &str,
     joined: &str,
-    own: &OwnAddresses,
-) -> Result<Vec<ConversationMessage>> {
-    let rows = if let Some(message) = key.strip_prefix(SINGLE_PREFIX) {
-        read_rows(tx, &single_sql(), message, "[]", "[]")?
-    } else {
-        read_rows(tx, &listed_sql(), key, listed, joined)?
-    };
-    collapse(tx, rows, own)
+) -> Result<HashMap<String, Vec<Row>>> {
+    let mut out: HashMap<String, Vec<Row>> = HashMap::with_capacity(keys.len());
+    let mut threads: Vec<&str> = Vec::with_capacity(keys.len());
+    for key in keys {
+        if let Some(message) = key.strip_prefix(SINGLE_PREFIX) {
+            out.insert(
+                key.clone(),
+                read_rows(tx, &single_sql(), message, "[]", "[]")?,
+            );
+        } else {
+            threads.push(key);
+        }
+    }
+    if threads.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = tx.prepare_cached(&listed_page_sql())?;
+    let rows = stmt.query_map(params![json_ids(&threads)?, listed, joined], |r| {
+        Ok((
+            r.get::<_, String>(MESSAGE_COL_COUNT + 3)?,
+            Row {
+                summary: summary_from_row(r)?,
+                message_id: r.get(MESSAGE_COL_COUNT)?,
+                in_sent: r.get(MESSAGE_COL_COUNT + 2)?,
+            },
+        ))
+    })?;
+    for row in rows {
+        let (thread, row) = row?;
+        out.entry(thread).or_default().push(row);
+    }
+    Ok(out)
 }
 
 impl Store {
@@ -410,7 +433,9 @@ impl Store {
     /// A page of the conversations in `folders`, newest activity first (the
     /// user's replies from Sent count as activity). Counts, participants
     /// and the newest message consider the conversation as defined in the
-    /// module docs.
+    /// module docs. The page's keys come from `thread_activity` (an index
+    /// range per folder, P3); a list whose Sent folders a grant narrowed
+    /// groups `messages` instead (`super::activity::covers`).
     pub fn list_conversations(
         &self,
         folders: &ConversationFolders,
@@ -419,23 +444,32 @@ impl Store {
         limit: u32,
     ) -> Result<ThreadPage> {
         let threaded = ConversationFolders::json(&folders.threaded)?;
-        let singles = ConversationFolders::json(&folders.singles)?;
         let sent = ConversationFolders::json(&folders.sent)?;
         self.with_tx(|tx| {
-            let total: u32 = tx.query_row(COUNT_SQL, params![threaded, singles], |r| r.get(0))?;
-            let page: Vec<String> = {
-                let mut stmt = tx.prepare_cached(PAGE_SQL)?;
-                stmt.query_map(params![threaded, sent, singles, limit, offset], |r| {
-                    r.get(0)
-                })?
-                .collect::<rusqlite::Result<_>>()?
+            let (total, page) = if activity::covers(tx, folders)? {
+                activity::page(tx, folders, offset, limit)?
+            } else {
+                activity::grouping_page(tx, folders, offset, limit)?
             };
+            let mut rows = page_rows(tx, &page, &threaded, &sent)?;
             let mut threads = Vec::with_capacity(page.len());
             for key in page {
-                let messages = listed_messages(tx, &key, &threaded, &sent, own)?;
+                let messages = collapse_rows(rows.remove(&key).unwrap_or_default(), own);
                 if let Some(summary) = summarize_conversation(&key, &messages, own) {
                     threads.push(summary);
                 }
+            }
+            // Only the message a row selects carries tags: the row's other
+            // messages give counts, senders and dates.
+            let selected = attach_tags(
+                tx,
+                threads
+                    .iter()
+                    .map(|t| (*t.latest_message).clone())
+                    .collect(),
+            )?;
+            for (thread, message) in threads.iter_mut().zip(selected) {
+                *thread.latest_message = message;
             }
             Ok(ThreadPage { total, threads })
         })
@@ -538,41 +572,6 @@ mod tests {
         );
     }
 
-    /// The list page reads the listed and the Sent folders from the
-    /// covering folder-thread index (v16); the Sent join probes the listed
-    /// threads (no lookup per listed message).
-    #[test]
-    fn the_page_query_uses_the_folder_index() {
-        let conn = migrated();
-        let p = plan(
-            &conn,
-            PAGE_SQL,
-            &[&"[\"in\"]", &"[\"sent\"]", &"[]", &50_i64, &0_i64],
-        );
-        // Schema v16: every part reads only `messages_folder_thread`.
-        assert!(
-            p.contains("USING COVERING INDEX messages_folder_thread"),
-            "{p}"
-        );
-        assert!(
-            !p.contains("USING INDEX messages_folder_date"),
-            "the page reads message rows:
-{p}"
-        );
-        assert!(
-            !p.contains("messages_thread_id"),
-            "the Sent join looks up every listed thread:
-{p}"
-        );
-        assert_no_scan(&p);
-        let p = plan(&conn, COUNT_SQL, &[&"[\"in\"]", &"[]"]);
-        assert!(
-            p.contains("USING COVERING INDEX messages_folder_thread"),
-            "{p}"
-        );
-        assert_no_scan(&p);
-    }
-
     /// A conversation's messages come through the thread index.
     #[test]
     fn conversation_reads_use_the_thread_index() {
@@ -583,6 +582,14 @@ mod tests {
             assert_no_scan(&p);
         }
         let p = plan(&conn, &single_sql(), &[&"m1", &"[]", &"[]"]);
+        assert_no_scan(&p);
+        // A page's threads in one query, through the same index.
+        let p = plan(
+            &conn,
+            &listed_page_sql(),
+            &[&"[\"t1\",\"t2\"]", &"[\"in\"]", &"[]"],
+        );
+        assert!(p.contains("messages_thread_id"), "{p}");
         assert_no_scan(&p);
     }
 

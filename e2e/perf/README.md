@@ -10,7 +10,8 @@ ADR 0094, package ADR 0097). Two harnesses check them:
   does not count), and measures through `nail_core::Service`:
   `initial-sync-secs`, `incremental-sync-ms` (200 new Inbox messages),
   `list-page-p95-ms`, `thread-page-p95-ms` (a page of the conversation list,
-  `ListThreads`, the default list since P2), `search-p95-ms` (typical queries: sender, subject,
+  `ListThreads`, the default list since P2; 10 ms since P3, when pages became
+  index ranges of the per-folder `thread_activity` table), `search-p95-ms` (typical queries: sender, subject,
   body word, phrase, attachments, unread, a word that occurs once …),
   `cold-start-ms` (reopen + first Inbox page) and `peak-memory-mib`.
   `cargo run -p nail-bench --release -- --corpus small` (add `--tolerant`
