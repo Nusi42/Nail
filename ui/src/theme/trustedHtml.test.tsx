@@ -72,7 +72,10 @@ describe("the remote UI's reader", () => {
     expect(src.origin).toBe("https://nail.local:50001");
     expect(src.pathname).toBe("/render/tok.en");
     expect(src.searchParams.get("css")).toContain("body");
-    expect(frame).toHaveAttribute("sandbox", "");
+    // P3 (ADR 0164): the app's origin as the height script's target, and
+    // scripts (only the route's hash-pinned one) in an opaque origin.
+    expect(src.searchParams.get("parent")).toBe(window.location.origin);
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts");
     expect(frame?.getAttribute("srcdoc")).toBeNull();
   });
 });

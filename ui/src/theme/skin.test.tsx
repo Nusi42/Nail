@@ -264,9 +264,14 @@ describe("M5a skin (theme/skin.ts)", () => {
     );
     expect(body).toContain("margin-inline: auto");
     expect(body).toContain("width: min(68ch, 100% - 2 * var(--nail-space-xxl))");
-    // The reader fills its row, so an HTML body gets the rest of the pane.
+    // The reader fills its row and scrolls as a whole; an HTML body is as
+    // tall as its mail (P3, ADR 0164: a measured geometry rule), with a
+    // placeholder height until it is measured — never stretched or squeezed.
     expect(ruleBody('[data-part="message-view"]')).toContain("height: 100%");
-    expect(ruleBody('[data-part="message-view.body"]')).toContain("flex: 1 1 auto");
+    const frame = ruleBody('[data-part="message-view.body"]');
+    expect(frame).toContain("flex: 0 0 auto");
+    expect(frame).toContain("height: calc(12 * var(--nail-space-lg))");
+    expect(frame).not.toContain("vh");
   });
 
   it("puts the attachment save status next to the size, not on a new card row", () => {
@@ -332,6 +337,14 @@ describe("conversations (P2 quick win, ADR 0148)", () => {
     const strip0 = must(/\[data-part="thread-view"\] \{[^}]*\}/.exec(THREAD_VIEW_SKIN_CSS))[0];
     expect(strip0).toContain("background-color: var(--nail-color-bg);");
     expect(strip0).not.toMatch(/overflow|max-height/);
+    // P3 (ADR 0164): an HTML card is as tall as its mail — no 40vh minimum.
+    const cardFrame = must(
+      /\[data-part="thread-view\.card\.body"\] \[data-part="message-view\.body"\] \{[^}]*\}/.exec(
+        THREAD_VIEW_SKIN_CSS,
+      ),
+    )[0];
+    expect(cardFrame).not.toMatch(/min-height|vh/);
+    expect(THREAD_VIEW_SKIN_CSS).not.toContain("40vh");
     expect(THREAD_VIEW_SKIN_CSS).toContain("var(--nail-space-row)");
     expect(THREAD_VIEW_SKIN_CSS).toContain(
       "--nail-skin-avatar-sm: calc(var(--nail-size-avatar) * 28 / 34)",

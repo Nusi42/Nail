@@ -46,19 +46,131 @@ export function clampFrameHeight(height: number): number {
 }
 
 /**
+ * The origin a sandboxed document without `allow-same-origin` posts from:
+ * the opaque origin serializes as `"null"`. The sandbox-origin frame is
+ * such a document (the CSP's and the iframe's `sandbox` lack
+ * `allow-same-origin`), so its messages arrive with this origin; the
+ * source window (the reader's own frame, which no other document can
+ * impersonate) is what identifies them.
+ */
+export const OPAQUE_ORIGIN = "null";
+
+/**
  * The height a sandbox-origin frame posted, or `null` unless the message
- * comes from `frame`'s own window on `sandboxOrigin` and has the contract's
- * shape.
+ * comes from `frame`'s own window — on `sandboxOrigin`, or the opaque origin
+ * the sandbox gives that document ({@link OPAQUE_ORIGIN}) — and has the
+ * contract's shape.
  */
 export function frameHeightOf(
   event: Pick<MessageEvent, "data" | "origin" | "source">,
   frame: Window | null,
   sandboxOrigin: string,
 ): number | null {
-  if (frame === null || event.source !== frame || event.origin !== sandboxOrigin) return null;
+  if (frame === null || event.source !== frame) return null;
+  if (event.origin !== sandboxOrigin && event.origin !== OPAQUE_ORIGIN) return null;
   const data: unknown = event.data;
   if (typeof data !== "object" || data === null) return null;
   const { type, height } = data as { type?: unknown; height?: unknown };
   if (type !== FRAME_HEIGHT_MESSAGE || typeof height !== "number") return null;
   return clampFrameHeight(height);
+}
+
+/**
+ * What the measurement reads of a mail document (its root element and its
+ * window). The same arithmetic runs in the sandbox route's height script
+ * (`crates/nail-server/src/sandbox.rs`, `HEIGHT_SCRIPT`).
+ */
+export interface FrameMetrics {
+  /** `documentElement.clientHeight`: the frame's viewport without a horizontal scrollbar. */
+  clientHeight: number;
+  /** `documentElement.scrollHeight`: the viewport, or the content when it overflows. */
+  scrollHeight: number;
+  /** `documentElement.offsetHeight`: the root's own height (content-sized, unless the mail sets one). */
+  offsetHeight: number;
+  /** `window.innerHeight`: the viewport with its scrollbar. */
+  innerHeight: number;
+}
+
+/**
+ * The frame height that shows the whole document: its overflow when it
+ * overflows the frame, else its root's height (so a frame can shrink when
+ * the content does, e.g. after a width change), plus a horizontal
+ * scrollbar's thickness (wide mail keeps its scrollbar under the last line).
+ */
+export function contentHeight(m: FrameMetrics): number {
+  const content = m.scrollHeight > m.clientHeight ? m.scrollHeight : m.offsetHeight;
+  return clampFrameHeight(content + Math.max(0, m.innerHeight - m.clientHeight));
+}
+
+/** {@link FrameMetrics} of a loaded document, `null` before it has a root. */
+export function documentMetrics(doc: Document): FrameMetrics | null {
+  const root = doc.documentElement as HTMLElement | null;
+  const view = doc.defaultView;
+  if (root === null || view === null) return null;
+  return {
+    clientHeight: root.clientHeight,
+    scrollHeight: root.scrollHeight,
+    offsetHeight: root.offsetHeight,
+    innerHeight: view.innerHeight,
+  };
+}
+
+/** Growths by the same amount in a row that count as a runaway (`100vh` + padding). */
+const RUNAWAY_STEPS = 40;
+
+/**
+ * Keeps a frame's measured height from oscillating or running away. Mail
+ * whose size depends on the frame's own height (`min-height: 100vh` plus a
+ * margin; content that overflows the root by an absolute box) would make
+ * "size the frame to the content" a loop:
+ *
+ * - **Flip-flop** (A → B → A): the frame settles at the larger of the two
+ *   and does not shrink below it again.
+ * - **Runaway** (growing by the same step again and again): growth stops.
+ *
+ * {@link reset} starts over — a new document, or a new frame width.
+ */
+export class FrameHeightGuard {
+  private current: number | null = null;
+  private shrunkFrom: number | null = null;
+  private floor = 0;
+  private ceiling = Number.POSITIVE_INFINITY;
+  private lastStep = 0;
+  private sameSteps = 0;
+
+  /** Starts over (keeps nothing of the previous document or width). */
+  reset(): void {
+    this.shrunkFrom = null;
+    this.floor = 0;
+    this.ceiling = Number.POSITIVE_INFINITY;
+    this.lastStep = 0;
+    this.sameSteps = 0;
+  }
+
+  /** The height to apply for a measured `height`, or `null` to keep the current one. */
+  accept(height: number): number | null {
+    let next = clampFrameHeight(height);
+    next = Math.min(Math.max(next, this.floor), this.ceiling);
+    const current = this.current;
+    if (current === next) return null;
+    if (current !== null && next < current) {
+      this.shrunkFrom = current;
+      this.lastStep = 0;
+      this.sameSteps = 0;
+    } else if (current !== null) {
+      if (this.shrunkFrom === next) {
+        // Back where it was before shrinking: a flip-flop; stay here.
+        this.floor = next;
+      }
+      const step = next - current;
+      this.sameSteps = step === this.lastStep ? this.sameSteps + 1 : 1;
+      this.lastStep = step;
+      if (this.sameSteps >= RUNAWAY_STEPS) {
+        this.ceiling = current;
+        return null;
+      }
+    }
+    this.current = next;
+    return next;
+  }
 }

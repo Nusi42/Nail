@@ -1,8 +1,10 @@
 /**
  * The document rendered inside the sandboxed reader iframe.
  *
- * The iframe has `sandbox=""` (no scripts, opaque origin) and the document
- * carries its own Content-Security-Policy: nothing may be loaded except inline
+ * The iframe has `sandbox="allow-same-origin"` — never with scripts (P3,
+ * ADR 0164: the reader measures the document's height; `frameHeight.ts`) —
+ * and the document carries its own Content-Security-Policy without
+ * `script-src`: nothing may be loaded except inline
  * styles, `data:` images/fonts and — for remote content the user allowed —
  * the core's proxy. Inline (`cid:`) images arrive as `data:` URLs: the core
  * resolves them when it builds the body (P1 WP190), because a `srcdoc`

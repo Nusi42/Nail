@@ -266,7 +266,8 @@ describe("message-view", () => {
     );
     const iframe = must(container.querySelector("iframe"));
     expect(iframe).toHaveAttribute("data-part", "message-view.body");
-    expect(iframe.getAttribute("sandbox")).toBe("");
+    // P3 (ADR 0164): measured, never with scripts.
+    expect(iframe.getAttribute("sandbox")).toBe("allow-same-origin");
     const doc = iframe.getAttribute("srcdoc") ?? "";
     expect(doc).toContain('http-equiv="Content-Security-Policy"');
     expect(doc).toContain("default-src 'none'");

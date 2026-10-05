@@ -1,7 +1,9 @@
 /**
  * Trusted Types for the two documents the UI hands the browser as HTML:
  * the reader's and the composer preview's `srcdoc` (both sanitized by the
- * core, both rendered in `sandbox=""` iframes without scripts).
+ * core, both rendered in sandboxed iframes without scripts: the composer
+ * preview with `sandbox=""`, the reader with `sandbox="allow-same-origin"`
+ * so it can measure the document (P3, ADR 0164) — never `allow-scripts`).
  *
  * The remote UI enforces Trusted Types (`require-trusted-types-for
  * 'script'; trusted-types nail nail-reader`, ADR 0038): assigning a plain

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useId, useMemo, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import { FocusMoveButton, MessageCategories } from "../features/exchange";
 import { MessageLabels } from "../features/gmail";
@@ -13,9 +13,9 @@ import { useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { useReaderCss } from "../theme/ThemeProvider";
 import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
-import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentList } from "./AttachmentList";
+import { LocalMailFrame, RemoteMailFrame } from "./MailFrame";
 import { splitQuotes } from "./ThreadViewModel";
 import { cardShowsSubject, useReaderCard } from "./ThreadViewScope";
 
@@ -49,19 +49,12 @@ function headerValue(message: MessageBody, field: HeaderField, locale: string): 
   }
 }
 
-/** The address of the message document on the remote UI's sandbox origin. */
-function renderSrc(renderUrl: string, css: string): string {
-  const url = new URL(renderUrl);
-  url.searchParams.set("css", css);
-  return url.toString();
-}
-
 /**
- * The HTML body in a sandboxed frame without scripts: from the remote UI's
- * separate sandbox origin when the core names one (`render_url`), else as
- * `srcdoc` (set through the Trusted Types policy). The frame fills the rest
- * of the reader and scrolls the mail itself (it cannot report its content
- * height without scripts); mail with its own design (`data-state="designed"`)
+ * The HTML body in a sandboxed frame without mail scripts, sized to its
+ * content (P3, ADR 0164; `MailFrame.tsx`): from the remote UI's separate
+ * sandbox origin when the core names one (`render_url`), else as `srcdoc`
+ * (set through the Trusted Types policy). The reader (or the card feed)
+ * scrolls as a whole; mail with its own design (`data-state~="designed"`)
  * gets a wider column than the reading width.
  */
 function Body({ message, quotesFold }: { message: MessageBody; quotesFold: boolean }) {
@@ -75,35 +68,12 @@ function Body({ message, quotesFold }: { message: MessageBody; quotesFold: boole
     () => (html === null || renderUrl !== null ? null : readerDocument(html, css, proxyBase())),
     [html, css, renderUrl],
   );
-  const frame = useRef<HTMLIFrameElement>(null);
-  useLayoutEffect(() => {
-    if (frame.current && srcDoc !== null) setSrcdoc(frame.current, srcDoc);
-  }, [srcDoc]);
   const title = t("message-view-body-title", { subject: message.headers.subject });
-  const state = designed ? "designed" : undefined;
   if (html !== null && renderUrl !== null) {
-    return (
-      <iframe
-        data-part="message-view.body"
-        data-state={state}
-        sandbox=""
-        src={renderSrc(renderUrl, css)}
-        referrerPolicy="no-referrer"
-        title={title}
-      />
-    );
+    return <RemoteMailFrame renderUrl={renderUrl} css={css} title={title} designed={designed} />;
   }
   if (srcDoc !== null) {
-    return (
-      <iframe
-        ref={frame}
-        data-part="message-view.body"
-        data-state={state}
-        sandbox=""
-        referrerPolicy="no-referrer"
-        title={title}
-      />
-    );
+    return <LocalMailFrame srcDoc={srcDoc} title={title} designed={designed} />;
   }
   if (!quotesFold) return <pre data-part="message-view.text">{message.text}</pre>;
   // In a card of the conversation feed (P2): quoted lines fold away — the

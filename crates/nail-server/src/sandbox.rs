@@ -9,11 +9,16 @@
 //!   the core signed ([`nail_proxy::Purpose::Render`]) for a remote
 //!   session; the request must carry that session's cookies (browsers send
 //!   the app's cookies to the same host on another port). The response's
-//!   CSP carries `sandbox` without `allow-scripts` or `allow-same-origin`:
-//!   the document runs no script and gets an **opaque** origin, so its
-//!   requests are cross-site and carry no `SameSite` cookies; it may be
-//!   framed only by the app's origins (`frame-ancestors`). `nail-proxy:`
-//!   URLs in the HTML point to this origin's proxy route.
+//!   CSP carries `sandbox` without `allow-same-origin`: the document gets
+//!   an **opaque** origin, so its requests are cross-site and carry no
+//!   `SameSite` cookies; it may be framed only by the app's origins
+//!   (`frame-ancestors`). `nail-proxy:` URLs in the HTML point to this
+//!   origin's proxy route. Since P3 (ADR 0164) the sandbox has
+//!   `allow-scripts`, but `script-src` allows exactly one script by its
+//!   hash: [`HEIGHT_SCRIPT`], which posts the document's height to the app
+//!   origin named in the `parent` query parameter (one of the
+//!   `frame-ancestors`; any other answers 400). No mail script, inline
+//!   handler or `javascript:` URL runs.
 //! * `GET /api/proxy/<token>`: the remote-content proxy.
 //!
 //! No WebSocket, no blobs, no login, no UI bundle; cookies sent to it are
@@ -23,17 +28,20 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use nail_api::remote_content::{PROXY_PATH, PROXY_URL_SCHEME};
 use nail_api::{MessageId, Request, Response as ApiResponse};
 use nail_core::Service;
 use nail_proxy::{Proxy, Purpose};
+use sha2::{Digest, Sha256};
 
 /// Route prefix of mail documents on the sandbox origin.
 pub const RENDER_PATH: &str = nail_api::remote_content::RENDER_PATH;
@@ -88,26 +96,79 @@ pub(crate) struct SandboxState {
     pub(crate) scheme: &'static str,
 }
 
+/// The only script a sandbox document runs (P3, ADR 0164), allowed by its
+/// hash ([`height_script_source`]). It reads the app origin from the
+/// document's `parent` query parameter
+/// ([`nail_api::remote_content::RENDER_PARENT_PARAM`]) and posts
+/// `{type: "nail-frame-height", height}`
+/// ([`nail_api::remote_content::FRAME_HEIGHT_MESSAGE`]) there — after
+/// `load`, after each image's `load` / `error`, on `<details>` toggles,
+/// when fonts arrive, on resize and whenever the root or body resizes; only
+/// when the height changed. The arithmetic is the reader's
+/// (`ui/src/theme/frameHeight.ts`, `contentHeight`): the overflow when the
+/// document overflows the frame, else the root's own height, plus a
+/// horizontal scrollbar. It touches nothing else (an opaque origin has no
+/// cookies or storage anyway). Changing one byte changes its hash; the CSP
+/// follows automatically.
+pub const HEIGHT_SCRIPT: &str = concat!(
+    "(function(){\"use strict\";",
+    "var t=new URLSearchParams(location.search).get(\"parent\");if(!t)return;",
+    "var d=document.documentElement,l=-1;",
+    "function m(){var v=d.clientHeight,s=d.scrollHeight;",
+    "var h=Math.min(Math.ceil((s>v?s:d.offsetHeight)+Math.max(0,innerHeight-v)),200000);",
+    "if(h!==l){l=h;parent.postMessage({type:\"nail-frame-height\",height:h},t)}}",
+    "addEventListener(\"load\",m);addEventListener(\"resize\",m);",
+    "[\"load\",\"error\",\"toggle\"].forEach(function(e){document.addEventListener(e,m,true)});",
+    "var r=typeof ResizeObserver===\"function\"?new ResizeObserver(m):null;if(r)r.observe(d);",
+    "document.addEventListener(\"DOMContentLoaded\",function(){if(r&&document.body)r.observe(document.body);m()});",
+    "if(document.fonts)document.fonts.ready.then(m)",
+    "})();"
+);
+
+static HEIGHT_SCRIPT_SOURCE: LazyLock<String> = LazyLock::new(|| {
+    let digest = Sha256::digest(HEIGHT_SCRIPT.as_bytes());
+    format!("'sha256-{}'", STANDARD.encode(digest))
+});
+
+/// The CSP source that allows [`HEIGHT_SCRIPT`] (and nothing else):
+/// `'sha256-<base64>'`.
+pub fn height_script_source() -> &'static str {
+    &HEIGHT_SCRIPT_SOURCE
+}
+
+/// Whether `parent` is one of the space-separated `frame_ancestors`
+/// sources (exactly; the app origins the route may be framed by).
+pub fn is_frame_ancestor(parent: &str, frame_ancestors: &str) -> bool {
+    !parent.is_empty() && frame_ancestors.split(' ').any(|origin| origin == parent)
+}
+
 /// The sandbox document for `html`: `nail-proxy:` URLs resolved to this
 /// origin's proxy route, no referrer, and the reader stylesheet `css`
-/// (the app's theme; it cannot close its `<style>` element).
+/// (the app's theme; it cannot close its `<style>` element), with the
+/// height script ([`HEIGHT_SCRIPT`]) in its head.
 pub fn document(html: &str, css: &str) -> String {
     let body = html.replace(PROXY_URL_SCHEME, PROXY_PATH);
     let css = css.replace("</", "<\\/");
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
-         <meta name=\"referrer\" content=\"no-referrer\"><style>{css}</style></head>\
+         <meta name=\"referrer\" content=\"no-referrer\"><style>{css}</style>\
+         <script>{HEIGHT_SCRIPT}</script></head>\
          <body>{body}</body></html>"
     )
 }
 
-/// The CSP of a sandbox document served as `self_origin`.
+/// The CSP of a sandbox document served as `self_origin`: scripts only by
+/// the height script's hash (no `'unsafe-inline'`, no `'unsafe-hashes'`:
+/// inline handlers and `javascript:` URLs stay blocked), and a sandbox
+/// with `allow-scripts` but never `allow-same-origin` (an opaque origin).
 pub fn document_csp(self_origin: &str, frame_ancestors: &str) -> String {
+    let script = height_script_source();
     format!(
-        "default-src 'none'; img-src {self_origin} data:; style-src {self_origin} 'unsafe-inline'; \
+        "default-src 'none'; script-src {script}; img-src {self_origin} data:; \
+         style-src {self_origin} 'unsafe-inline'; \
          font-src {self_origin} data:; media-src 'none'; frame-ancestors {frame_ancestors}; \
          base-uri 'none'; form-action 'none'; \
-         sandbox allow-popups allow-popups-to-escape-sandbox"
+         sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox"
     )
 }
 
@@ -123,6 +184,9 @@ pub(crate) fn router(state: SandboxState) -> Router {
 #[derive(Debug, serde::Deserialize)]
 struct RenderQuery {
     css: Option<String>,
+    /// [`nail_api::remote_content::RENDER_PARENT_PARAM`]: the app origin
+    /// the height script posts to.
+    parent: Option<String>,
 }
 
 async fn render(
@@ -134,6 +198,12 @@ async fn render(
     let css = query.css.unwrap_or_default();
     if css.len() > MAX_CSS_LEN {
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    }
+    // The height goes only to an origin that may frame this document.
+    if let Some(parent) = query.parent.as_deref()
+        && !is_frame_ancestor(parent, &state.frame_ancestors)
+    {
+        return StatusCode::BAD_REQUEST.into_response();
     }
     let Ok(grant) = state.proxy.signer().verify(&token, Purpose::Render) else {
         return StatusCode::NOT_FOUND.into_response();
@@ -196,19 +266,68 @@ mod tests {
     }
 
     #[test]
-    fn the_document_csp_runs_no_script_and_has_an_opaque_origin() {
+    fn the_document_csp_runs_only_the_height_script_in_an_opaque_origin() {
         let csp = document_csp("https://nail.example:4781", "https://nail.example:4780");
         assert!(csp.starts_with("default-src 'none'"));
-        assert!(!csp.contains("script-src"));
+        let script_src = csp
+            .split(';')
+            .map(str::trim)
+            .find(|d| d.starts_with("script-src"))
+            .unwrap();
+        assert_eq!(script_src, format!("script-src {}", height_script_source()));
+        assert!(!script_src.contains("unsafe") && !script_src.contains("'self'"));
+        assert!(!csp.contains("unsafe-hashes") && !csp.contains("unsafe-eval"));
         let sandbox = csp
             .split(';')
             .find(|d| d.trim().starts_with("sandbox"))
             .unwrap();
-        assert!(!sandbox.contains("allow-scripts"));
+        assert!(sandbox.contains("allow-scripts"));
         assert!(!sandbox.contains("allow-same-origin"));
         assert!(!sandbox.contains("allow-forms"));
         assert!(!sandbox.contains("allow-top-navigation "));
         assert!(csp.contains("frame-ancestors https://nail.example:4780;"));
         assert!(csp.contains("img-src https://nail.example:4781 data:;"));
+    }
+
+    #[test]
+    fn the_height_script_is_the_contracts_and_pinned_by_its_hash() {
+        use nail_api::remote_content::{
+            FRAME_HEIGHT_MESSAGE, MAX_FRAME_HEIGHT, RENDER_PARENT_PARAM,
+        };
+        assert!(HEIGHT_SCRIPT.contains(&format!("type:\"{FRAME_HEIGHT_MESSAGE}\"")));
+        assert!(HEIGHT_SCRIPT.contains(&format!(".get(\"{RENDER_PARENT_PARAM}\")")));
+        assert!(HEIGHT_SCRIPT.contains(&format!(",{MAX_FRAME_HEIGHT})")));
+        // It posts to the named parent only, never to `*`.
+        assert!(HEIGHT_SCRIPT.contains("parent.postMessage("));
+        assert!(!HEIGHT_SCRIPT.contains("\"*\""));
+        // Nothing that reads or writes state.
+        for forbidden in [
+            "cookie",
+            "Storage",
+            "fetch",
+            "XMLHttpRequest",
+            "innerHTML",
+            "eval",
+        ] {
+            assert!(!HEIGHT_SCRIPT.contains(forbidden), "{forbidden}");
+        }
+        // It cannot end its own element.
+        assert!(!HEIGHT_SCRIPT.contains("</"));
+        let expected = STANDARD.encode(Sha256::digest(HEIGHT_SCRIPT.as_bytes()));
+        assert_eq!(height_script_source(), format!("'sha256-{expected}'"));
+        let doc = document("<p>Hi</p>", "");
+        assert!(doc.contains(&format!("<script>{HEIGHT_SCRIPT}</script></head>")));
+        assert_eq!(doc.matches("<script").count(), 1);
+    }
+
+    #[test]
+    fn only_frame_ancestors_are_parents() {
+        let ancestors = "http://127.0.0.1:4780 https://nail.example:4780";
+        assert!(is_frame_ancestor("http://127.0.0.1:4780", ancestors));
+        assert!(is_frame_ancestor("https://nail.example:4780", ancestors));
+        assert!(!is_frame_ancestor("https://evil.example", ancestors));
+        assert!(!is_frame_ancestor("http://127.0.0.1:478", ancestors));
+        assert!(!is_frame_ancestor("", ancestors));
+        assert!(!is_frame_ancestor("*", ancestors));
     }
 }
