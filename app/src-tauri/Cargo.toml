@@ -22,7 +22,8 @@ test = false
 [features]
 # Test-only (M4b review): honour the environment overrides of the registry
 # root (NAIL_REGISTRY_ROOT), the update source (NAIL_UPDATE_ENDPOINT /
-# NAIL_UPDATE_PUBKEY) and the Simple MAPI pipe (NAIL_MAPI_PIPE). Enabled by
+# NAIL_UPDATE_PUBKEY), the Simple MAPI pipe (NAIL_MAPI_PIPE) and background
+# windows (NAIL_TEST_BACKGROUND_WINDOWS, ADR 0146). Enabled by
 # the e2e desktop build (e2e/scripts/build-desktop.mjs) only; installer
 # builds never enable it, so a normal user cannot redirect the admin's
 # policy or the update key of a shipped Nail.exe.
@@ -56,9 +57,11 @@ futures-util.workspace = true
 # Installer helper (setup_helper.rs): per-user PATH, Credential Manager.
 # M4b (win.rs): the user's SID and the Simple MAPI pipe's ACL (Security,
 # Authorization, Threading), random tokens (Cryptography, from the
-# workspace), opening Settings → Default apps (Shell).
+# workspace), opening Settings → Default apps (Shell). Test runs cloak their
+# windows (Dwm; ADR 0146).
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
+    "Win32_Graphics_Dwm",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Security_Credentials",

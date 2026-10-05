@@ -1,5 +1,10 @@
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
-import { skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
+import {
+  expectWindowsInBackground,
+  skipFirstRun,
+  startDesktop,
+  type DesktopApp,
+} from "../support/desktop";
 import { freePort } from "../support/nail";
 import {
   composerWindow,
@@ -51,6 +56,8 @@ test.afterAll(async () => {
 });
 
 test("the desktop app shows the demo mail through Tauri IPC", async () => {
+  // ADR 0146: the test app's window never reaches the developer's screen.
+  await expectWindowsInBackground(page);
   const rows = page.locator('[data-part="message-list.row"]');
   await expect(rows).toHaveCount(14, { timeout: 60_000 });
   await expect(page.locator('[data-part="folder-tree.item"]')).toHaveCount(3);
@@ -124,6 +131,7 @@ test("a mailto: link the app is started with opens the composer", async () => {
     await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue("Hello from a link");
     await expect(dialog.getByRole("textbox", { name: "To" })).toHaveValue(/grace@navy\.example/);
     await expect(dialog.getByRole("textbox", { name: "Message" })).toHaveValue(/^See you soon/);
+    await expectWindowsInBackground(window);
   } finally {
     await cdp.close().catch(() => undefined);
     await linked.stop();

@@ -6,6 +6,7 @@ import { expect, test, type Browser, type Locator, type Page } from "@playwright
 import {
   connectDesktop,
   desktopBinary,
+  expectWindowsInBackground,
   fakeInstaller,
   mapiDll,
   mapiHarness,
@@ -196,6 +197,9 @@ test("the tray's New message opens the composer, and start hidden keeps the wind
   // Tray → New message: the window comes up with an empty composer.
   await shellControl(page, "tray-new-message");
   await expect.poll(() => shellControl(page, "window-visible")).toBe(true);
+  // Shown for the shell, yet cloaked and not activated (ADR 0146).
+  const shown = await expectWindowsInBackground(page);
+  expect(shown.windows.find((w) => w.label === "main")?.visible).toBe(true);
   const dialog = composerWindow(page);
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByRole("textbox", { name: "To" })).toHaveValue("");

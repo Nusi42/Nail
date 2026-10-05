@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { connectDesktop, skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
+import {
+  connectDesktop,
+  expectWindowsInBackground,
+  skipFirstRun,
+  startDesktop,
+  type DesktopApp,
+} from "../support/desktop";
 import { freePort, tempDir } from "../support/nail";
 
 /**
@@ -54,6 +60,7 @@ test("print to PDF writes a PDF file of the message", async () => {
     expect(pdf.length).toBeGreaterThan(1000);
     // The hidden print window is gone again.
     await expect.poll(() => browser.contexts().flatMap((c) => c.pages()).length).toBe(1);
+    await expectWindowsInBackground(page);
     // The PDF went through a temporary file next to the target.
     expect(existsSync(`${target}.nail-part`)).toBe(false);
 

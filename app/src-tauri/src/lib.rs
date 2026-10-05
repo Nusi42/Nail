@@ -39,6 +39,7 @@
 //! every core event reaches every webview, so each window keeps itself
 //! current. Closing the main window closes its pop-outs.
 
+pub mod background;
 pub mod default_apps;
 pub mod dev_endpoint;
 pub mod dialog;
@@ -493,6 +494,12 @@ async fn show_notifications(app: AppHandle, service: Service) {
     let mut events = service.subscribe();
     loop {
         match events.recv().await {
+            // Test runs (ADR 0146) put nothing on the user's screen.
+            Ok(Event::NotificationRequested { .. } | Event::PluginNotification { .. })
+                if background::active() =>
+            {
+                tracing::debug!("test run: no OS notification");
+            }
             Ok(Event::NotificationRequested { notification }) => {
                 show_notification(&app, &service, &notification);
             }
@@ -512,8 +519,9 @@ async fn show_notifications(app: AppHandle, service: Service) {
 #[expect(unsafe_code, reason = "one MessageBoxW call")]
 fn refuse_start(message: &str) {
     tracing::error!("{message}");
+    // Test runs (ADR 0146): no message box on the user's screen.
     #[cfg(windows)]
-    {
+    if !background::active() {
         use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
         use windows::core::HSTRING;
         // SAFETY: a modal message box without an owner window; both
@@ -599,6 +607,10 @@ pub fn run() {
             });
         })
         .setup(move |app| {
+            // Test runs (ADR 0146): windows stay cloaked and inactive.
+            background::init(background::wanted(
+                shell::test_env(background::BACKGROUND_WINDOWS_ENV).as_deref(),
+            ));
             // Opened within Tauri's runtime, so the account engines, the
             // outbox and the index upkeep start on it (and the accounts.kdl
             // watcher can apply changes).
@@ -662,12 +674,21 @@ pub fn run() {
             // Started with Windows and "start hidden": only the tray icon.
             let hidden =
                 startup::starts_hidden(args.autostart, desktop.start_hidden, tray.is_some());
-            let mut window =
-                tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?.visible(!hidden);
+            // Test runs build it hidden, cloak it, then show it inactive.
+            let shown_later = background::active() && !hidden;
+            let mut window = background::prepare(tauri::WebviewWindowBuilder::from_config(
+                app.handle(),
+                &config,
+            )?)
+            .visible(!hidden && !shown_later);
             if let Some(base) = &base {
                 window = window.data_directory(base.join("webview"));
             }
             let window = window.build()?;
+            background::conceal(&window);
+            if shown_later {
+                background::show(&window)?;
+            }
             // M4c: file dialogs (owned by this window) and hidden print
             // windows (sharing its WebView2 data folder).
             host.bind_app(

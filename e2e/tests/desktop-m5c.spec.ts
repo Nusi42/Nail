@@ -1,6 +1,7 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
   connectDesktop,
+  expectWindowsInBackground,
   shellControl,
   skipFirstRun,
   startDesktop,
@@ -102,6 +103,18 @@ async function popOutPage(window: string): Promise<Page> {
   return defined(found, "the pop-out page");
 }
 
+/**
+ * Clicks a button that closes its own pop-out page: the OS window may be
+ * gone before Playwright's click returns, which is the expected outcome.
+ */
+async function clickClosing(button: Locator, popOut: Page): Promise<void> {
+  try {
+    await button.click();
+  } catch (error) {
+    if (!popOut.isClosed()) throw error;
+  }
+}
+
 async function newComposer(page: Page, subject: string): Promise<string> {
   const before = await composerWindows(page).count();
   await newMessageButton(page).click();
@@ -128,6 +141,9 @@ test("a composer pops out, is sent from its own window, and the window closes", 
   await expect
     .poll(async () => (await popOuts(page))[0]?.title, { timeout: 30_000 })
     .toBe("From its own window");
+  // Shown, yet cloaked and never activated (ADR 0146).
+  const shown = await expectWindowsInBackground(page);
+  expect(shown.windows.map((w) => w.label)).toEqual(["main", `popout-${id}`]);
 
   // The pop-out page shows the composer with the draft it was saved as.
   const popped = await popOutPage(id);
@@ -136,7 +152,7 @@ test("a composer pops out, is sent from its own window, and the window closes", 
   await expect(host.getByRole("textbox", { name: "Subject" })).toHaveValue("From its own window");
   await expect(host.getByRole("textbox", { name: "To" })).toHaveValue(/grace@navy\.example/);
   await host.getByRole("textbox", { name: "Message" }).fill("Typed in the pop-out.");
-  await host.getByRole("button", { name: "Send", exact: true }).click();
+  await clickClosing(host.getByRole("button", { name: "Send", exact: true }), popped);
 
   // Sent: the OS window closes; the message is in the main window's
   // outbox (this profile's SMTP server is unreachable, so it stays queued).
@@ -159,7 +175,7 @@ test("a popped-out composer returns to the main window with what was typed", asy
   const host = popped.locator(`[data-part="pop-out"][data-window="${id}"]`);
   await expect(host.getByRole("textbox", { name: "Subject" })).toHaveValue("Round trip");
   await host.getByRole("textbox", { name: "Message" }).fill("Written outside.");
-  await host.getByRole("button", { name: "Return to main window" }).click();
+  await clickClosing(host.getByRole("button", { name: "Return to main window" }), popped);
 
   // The OS window closes and the composer is back in the page, with the text.
   await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
@@ -185,7 +201,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
     `[data-part="window"][data-window="composer-discard:${first.split(":")[1] ?? ""}"]`,
   );
   await expect(discard).toBeVisible();
-  await discard.getByRole("button", { name: "Discard", exact: true }).click();
+  await clickClosing(discard.getByRole("button", { name: "Discard", exact: true }), thrown);
   await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
 
   // The OS close button (Alt+F4) with unsaved typing: the page asks first,
@@ -205,7 +221,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await expect(question).toBeVisible();
   // Still open while it asks.
   expect((await popOuts(page)).map((p) => p.label)).toEqual([`popout-${second}`]);
-  await question.getByRole("button", { name: "Save draft" }).click();
+  await clickClosing(question.getByRole("button", { name: "Save draft" }), kept);
   await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
 
   // The draft has the last words: continued from the outbox's drafts (it
