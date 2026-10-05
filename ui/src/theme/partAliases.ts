@@ -11,7 +11,10 @@
  */
 import type { PartRule } from "../api/generated";
 
-export const PART_ALIASES: Readonly<Record<string, string>> = {};
+export const PART_ALIASES: Readonly<Record<string, string>> = {
+  // P2 WP203: the reader's strip became the card feed.
+  "thread-view.item": "thread-view.card",
+};
 
 /** The part name under its new name, or `null` when no alias covers it. */
 export function aliasedPart(

@@ -66,20 +66,17 @@ layout "default" {
                         row "{latest_from | names(1) | then(\":\")}{preview}"
                     }
                 }
-                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
                     toolbar id="reader-toolbar" toolbar="reader"
-                    thread-view id="thread" expand="none"
-                    // Signature / encryption and sender check badges, then
-                    // warnings about deceptive links and risky attachments.
-                    security-message id="message-security"
-                    security-warnings id="message-warnings"
-                    // Remote images stay blocked until you allow them.
-                    remote-content id="message-remote-content"
-                    // Junk verdict with "Not junk"; a body that is not
-                    // stored yet with "Download full message".
-                    junk-verdict id="message-junk"
-                    sync-message-body id="message-body-status"
-                    message-view id="message" headers="from to cc date"
+                    // The conversation as cards, oldest first (P2): unread
+                    // messages and the newest one open, older read ones one
+                    // line each. An open card shows the message's signature /
+                    // encryption and sender check badges, warnings about
+                    // deceptive links and risky attachments, the blocked
+                    // remote images, the junk verdict, a body that is not
+                    // stored yet and the message itself (`card=` chooses and
+                    // orders them).
+                    thread-view id="thread" mode="cards"
                 }
             }
         }
@@ -108,15 +105,9 @@ layout "default" {
                         row "{subject}"
                     }
                 }
-                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
                     toolbar id="reader-toolbar" toolbar="reader"
-                    thread-view id="thread" expand="none"
-                    security-message id="message-security"
-                    security-warnings id="message-warnings"
-                    remote-content id="message-remote-content"
-                    junk-verdict id="message-junk"
-                    sync-message-body id="message-body-status"
-                    message-view id="message" headers="from date"
+                    thread-view id="thread" mode="cards"
                 }
             }
         }
@@ -224,6 +215,14 @@ layout "default" {
         // P2 (threads="expandable"): open / close a conversation row.
         action "list.expand"      label="@conversation-list.action.expand" icon="chevron-right"
         action "list.collapse"    label="@conversation-list.action.collapse" icon="chevron-down"
+        // The reader's card feed (P2; keys context="reader").
+        action "conversation.next-card" label="@thread-view.action.next-card" icon="chevron-down"
+        action "conversation.previous-card" label="@thread-view.action.previous-card" icon="chevron-up"
+        action "conversation.next-message" label="@thread-view.action.next-message" icon="chevron-right"
+        action "conversation.previous-message" label="@thread-view.action.previous-message" icon="chevron-left"
+        action "conversation.toggle-card" label="@thread-view.action.toggle-card" icon="rows-2"
+        action "conversation.expand-all" label="@thread-view.action.expand-all" icon="maximize-2"
+        action "conversation.collapse-all" label="@thread-view.action.collapse-all" icon="minimize-2"
         action "mail.compose"     label="@mail.action.compose"     icon="square-pen"
         action "mail.reply"       label="@mail.action.reply"       icon="reply"
         action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
@@ -480,9 +479,19 @@ layout "default" {
         bind "ctrl+p" "print.message"
     }
 
+    // The reader's card feed (P2): j / k move between the cards (and
+    // folds), n / p between the messages (opening folds), o (or Enter on a
+    // card's header) opens or closes a card, ; / : open or close them all.
+    // r / a / f answer the focused card. Without a card feed j / k step
+    // through the list.
     keys context="reader" {
-        bind "j" "mail.next"
-        bind "k" "mail.previous"
+        bind "j" "conversation.next-card"
+        bind "k" "conversation.previous-card"
+        bind "n" "conversation.next-message"
+        bind "p" "conversation.previous-message"
+        bind "o" "conversation.toggle-card"
+        bind ";" "conversation.expand-all"
+        bind ":" "conversation.collapse-all"
         bind "shift+y" "scheduling.accept"
         bind "shift+m" "scheduling.tentative"
         bind "shift+n" "scheduling.decline"

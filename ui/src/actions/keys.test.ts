@@ -89,7 +89,9 @@ describe("KeyMatcher", () => {
     expect(m.feed("arrowdown", ["list", "global"])).toMatchObject({
       match: { action: "mail.next" },
     });
-    expect(m.feed("k", ["reader", "global"])).toMatchObject({ match: { action: "mail.previous" } });
+    expect(m.feed("k", ["reader", "global"])).toMatchObject({
+      match: { action: "conversation.previous-card" },
+    });
     expect(m.feed("ctrl+b", ["folders", "global"])).toMatchObject({
       match: { action: "view.toggle", args: ["sidebar"] },
     });

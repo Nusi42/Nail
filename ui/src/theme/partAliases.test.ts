@@ -22,8 +22,11 @@ describe("renamed parts (P2, ADR 0148)", () => {
     expect(aliasedRule({ selector: "message-view", ancestors: [] }, ALIASES)).toBeNull();
   });
 
-  it("has no aliases until the card feed replaces the strip", () => {
-    expect(PART_ALIASES).toEqual({});
-    expect(aliasedRule({ selector: "thread-view.item", ancestors: [] })).toBeNull();
+  it("keeps the strip's item parts as old names of the feed's cards (WP203)", () => {
+    expect(PART_ALIASES).toEqual(ALIASES);
+    expect(aliasedRule({ selector: "thread-view.item.avatar", ancestors: [] })).toEqual({
+      selector: "thread-view.card.avatar",
+      ancestors: [],
+    });
   });
 });

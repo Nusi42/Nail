@@ -10,6 +10,8 @@ import { CONTEXT_MENU_PARTS } from "./resolve";
 export const DOM_PARTS: Readonly<Record<string, string>> = {
   "message-list.row": "message-list.row",
   "thread-view.item": "thread-view.message",
+  // P2 WP203: a card of the reader's feed (its open body is a message-view).
+  "thread-view.card": "thread-view.message",
   "message-view.attachment": "message-view.attachment",
   "message-view": "message-view",
   "folder-tree.item": "folder-tree.folder",

@@ -16,6 +16,8 @@ import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
 import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentCard } from "./AttachmentCard";
+import { splitQuotes } from "./ThreadViewModel";
+import { useReaderCard } from "./ThreadViewScope";
 
 /** Header fields the widget can show (`headers` option). */
 export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
@@ -62,7 +64,7 @@ function renderSrc(renderUrl: string, css: string): string {
  * height without scripts); mail with its own design (`data-state="designed"`)
  * gets a wider column than the reading width.
  */
-function Body({ message }: { message: MessageBody }) {
+function Body({ message, quotesFold }: { message: MessageBody; quotesFold: boolean }) {
   const t = useT();
   // The reader's form (inline images embedded as data: URLs) when the core sends one.
   const html = message.reader_html ?? message.sanitized_html;
@@ -103,7 +105,25 @@ function Body({ message }: { message: MessageBody }) {
       />
     );
   }
-  return <pre data-part="message-view.text">{message.text}</pre>;
+  if (!quotesFold) return <pre data-part="message-view.text">{message.text}</pre>;
+  // In a card of the conversation feed (P2): quoted lines fold away — the
+  // feed shows the earlier messages themselves.
+  return (
+    <div data-part="message-view.text">
+      {splitQuotes(message.text).map((block, index) =>
+        block.quoted ? (
+          <details key={index} data-part="message-view.quote-block">
+            <summary data-part="message-view.quote-toggle">{t("thread-view-show-quote")}</summary>
+            <pre data-part="message-view.quote">{block.text}</pre>
+          </details>
+        ) : (
+          <pre key={index} data-part="message-view.text-block">
+            {block.text}
+          </pre>
+        ),
+      )}
+    </div>
+  );
 }
 
 /**
@@ -136,6 +156,9 @@ export function MessageView({ node }: WidgetProps) {
   const ctx = useComposeContext();
   const ids = useId();
   const message = query.data;
+  // Inside a card of the conversation feed (P2): the feed's header shows the
+  // subject and the card's header the sender, so the card shows neither.
+  const inCard = useReaderCard() !== null;
   const accountId = message ? (findSummary(ctx.queryClient, message.id)?.account_id ?? null) : null;
 
   // Reading a message marks it as read (a queued write, like any other).
@@ -163,9 +186,11 @@ export function MessageView({ node }: WidgetProps) {
       // left edge; text lines stay at a readable length.
       <div data-part="message-view.column">
         <header data-part="message-view.header">
-          <h1 data-part="message-view.header.subject">
-            {message.headers.subject || t("message-no-subject")}
-          </h1>
+          {!inCard && (
+            <h1 data-part="message-view.header.subject">
+              {message.headers.subject || t("message-no-subject")}
+            </h1>
+          )}
           {fields.map((field) => {
             const value = headerValue(message, field, locale);
             if (!value) return null;
@@ -195,7 +220,7 @@ export function MessageView({ node }: WidgetProps) {
             ))}
           </ul>
         )}
-        <Body message={message} />
+        <Body message={message} quotesFold={inCard} />
         {message.attachments
           .filter((a) => !a.inline)
           .map((a) => (
@@ -207,6 +232,21 @@ export function MessageView({ node }: WidgetProps) {
               accountId={accountId}
             />
           ))}
+      </div>
+    );
+  }
+
+  if (inCard) {
+    // The card is the message's article: no landmark or label of its own.
+    return (
+      <div
+        data-part="message-view"
+        data-state="card"
+        data-key-context="reader"
+        data-message={message?.id}
+        aria-busy={query.isFetching}
+      >
+        {content}
       </div>
     );
   }
