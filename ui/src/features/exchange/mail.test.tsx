@@ -158,9 +158,9 @@ describe("categories", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "UpdateFlags")[0]?.change).toMatchObject({
-      add_tags: ["Customers"],
-      remove_tags: ["Urgent"],
+    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+      targets: [{ kind: "message", message_id: checklist.id }],
+      action: { type: "tags", add: ["Customers"], remove: ["Urgent"] },
     });
   });
 

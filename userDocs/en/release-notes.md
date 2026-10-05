@@ -20,7 +20,15 @@ please keep a [backup](backup-restore.md) of your data.
 - **Several messages at once** — each message has its own composer window,
   titled by its subject; in the desktop app a window can pop out into its
   own window on your desktop.
-- **Delete permanently?** now asks before deleting.
+- **Delete permanently?** now asks before deleting, with the number of
+  messages.
+- **Conversation actions like Gmail** — Archive, Delete, Move, Snooze,
+  Junk, read / unread and flags on a conversation row act on the whole
+  conversation (Delete takes your replies in Sent along); one **Undo** in
+  the notice (or `Z`) puts every message back. Each message in the
+  conversation has its own **More** menu for actions on that message only.
+- **HTML mail at its own height** — in the conversation feed short HTML
+  mail takes only the room it needs and long newsletters show in full.
 - **HTML mail as designed** — newsletters and mail from Outlook or Gmail
   keep their style sheets, colours and pictures sent inside the message.
 - **Every window size** — the views, windows, dialogs and Settings adapt

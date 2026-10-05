@@ -22,6 +22,7 @@
 import type { Event as NailEvent, InferenceClassification } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { findSummary } from "../../state/mailOps";
+import { rememberTagTargets } from "../mail-actions/tags";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
 import { AutomaticRepliesBanner, AutomaticRepliesDialog } from "./AutomaticReplies";
@@ -176,6 +177,7 @@ export const actions: Feature["actions"] = {
   /** The categories of the selected Exchange message (tags written as categories). */
   "exchange.apply-categories": {
     run: (ctx) => {
+      rememberTagTargets(ctx.store);
       ctx.store.getState().openWindow(APPLY_CATEGORIES_DIALOG);
     },
     enabled: (ctx) => {

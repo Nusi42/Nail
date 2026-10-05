@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { MenuItem, ResolvedLayout } from "../../api/generated";
-import { contextMenuName, keyContextOf, resolveMenu, withoutDisabled } from "./resolve";
+import {
+  contextMenuName,
+  keyContextOf,
+  resolveMenu,
+  withoutConversationShortcuts,
+  withoutDisabled,
+} from "./resolve";
 
 const item = (action: string): MenuItem => ({
   type: "action",
@@ -165,5 +171,48 @@ describe("withoutDisabled (M5b review)", () => {
 
   it("is empty when nothing applies", () => {
     expect(withoutDisabled([entry("junk.not-junk"), { type: "separator" }], enabled)).toEqual([]);
+  });
+});
+
+describe("card menus (P3, ADR 0169)", () => {
+  it("drop the keys of conversation-wide actions, keep reply keys", () => {
+    const items = withoutConversationShortcuts([
+      { type: "action", action: "mail.reply", args: [], label: null, icon: null, shortcut: "r" },
+      { type: "separator" },
+      { type: "action", action: "mail.archive", args: [], label: null, icon: null, shortcut: "e" },
+      {
+        type: "submenu",
+        label: "More",
+        items: [
+          {
+            type: "action",
+            action: "mail.delete",
+            args: [],
+            label: null,
+            icon: null,
+            shortcut: "#",
+          },
+        ],
+      },
+    ]);
+    expect(items).toEqual([
+      { type: "action", action: "mail.reply", args: [], label: null, icon: null, shortcut: "r" },
+      { type: "separator" },
+      { type: "action", action: "mail.archive", args: [], label: null, icon: null, shortcut: null },
+      {
+        type: "submenu",
+        label: "More",
+        items: [
+          {
+            type: "action",
+            action: "mail.delete",
+            args: [],
+            label: null,
+            icon: null,
+            shortcut: null,
+          },
+        ],
+      },
+    ]);
   });
 });

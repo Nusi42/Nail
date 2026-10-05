@@ -961,6 +961,8 @@ Gates as in P2: every suite green, the responsive standard on changed screens, t
 
 *Status (contract):* done (ADR 0164). The protocol, schema v17 (thread-activity table with backfill and `EXPLAIN`-checked page query; mail batches), the core stub (conversation targets resolved per reach, forwarded per message, no undo; remote sessions within the grant), MCP `conversations` (refused until WP-actions-core), the mock core with undo, `frameHeight.ts`, catalogs, the `mail-actions` slot. Next: the four packages in parallel.
 
+*Status (integration):* done (ADR 0169; packages ADRs 0165 actions core, 0166 thread-activity speed, 0167 actions UI, 0168 card height). Every conversation action is one `ApplyMailAction` batch over every stored copy with one undo per actor (toast, `z`), batched on the wire (IMAP UID sets per folder, Gmail `batchModify`, Graph `$batch`, EWS multi-item); MCP and plug-ins take `conversations` (SDK `PluginMailTargets`); the Gmail labels and Exchange categories windows act on the conversation too; schema v18 keeps `thread_activity` current by triggers (no v19), `thread-page-p95-ms` budget 10; HTML mail frames are as tall as their mail (local measured, remote hash-pinned script). A card's menu shows no keys for conversation-wide actions. `thread-page-p95-ms` 8.2 ms on the standard corpus. Deferred: Gmail `threads.modify` / batched `messages.trash`, narrowed remote Sent grants page at P2 speed, the composer preview frame keeps a fixed height. Next: reviews, verify, the owner's human gate.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

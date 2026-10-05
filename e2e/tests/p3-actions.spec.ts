@@ -24,7 +24,8 @@ import {
  * - Delete moves all 12 to Trash (the replies too); Undo brings them back.
  * - A card's own "More" menu deletes that one message only.
  * - Delete permanently from Trash asks with the message count.
- * - Several picked conversations act together; a Gmail conversation archives.
+ * - Several picked conversations act together; a Gmail conversation archives
+ *   and takes labels (`l`) as one undoable change.
  *
  * Screenshots for the owner (light Frost, dark Graphite and Nocturne):
  * `<build dir>/screens/p3-actions/`.
@@ -37,6 +38,10 @@ const LAB_SENT = 3;
 const LAB_TOTAL = LAB_INBOX + LAB_SENT;
 
 let server: NailServer;
+
+// Each test starts demo-multi and waits for its first sync (up to 30 s on a
+// loaded machine) before acting; the default 30 s would leave no time to act.
+test.describe.configure({ timeout: 90_000 });
 
 test.beforeEach(async () => {
   server = await startNail({ seed: "demo-multi" });
@@ -203,9 +208,11 @@ test("several picked conversations act together", async ({ page }) => {
   await expect(rows(page)).toHaveCount(15);
 });
 
-test("a Gmail conversation archives from the reader's toolbar", async ({ page }) => {
-  const labelsOf = async (subject: string) =>
-    (await control<{ id: string; labels: string[] }>(server, "gmail-message", { subject })).labels;
+const labelsOf = async (subject: string) =>
+  (await control<{ id: string; labels: string[] }>(server, "gmail-message", { subject })).labels;
+
+/** Switches the demo Gmail account on and shows its Inbox (four conversations). */
+async function openGmailInbox(page: Page) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(server.url);
   await expect(rows(page)).toHaveCount(17, { timeout: 30_000 });
@@ -222,6 +229,28 @@ test("a Gmail conversation archives from the reader's toolbar", async ({ page })
   await expect(gmail).toHaveAttribute("data-status", "online", { timeout: 30_000 });
   await sectionInbox(gmail).click();
   await expect(rows(page)).toHaveCount(4, { timeout: 30_000 });
+}
+
+test("labels (l) go on the whole Gmail conversation as one undoable change", async ({ page }) => {
+  await openGmailInbox(page);
+  await select(page, "Lunch on Friday?");
+  await list(page).press("l");
+  const apply = page.getByRole("dialog", { name: "Apply labels" });
+  await apply.getByRole("checkbox", { name: "Receipts" }).check();
+  await apply.getByRole("button", { name: "Apply" }).click();
+  await expect(apply).toBeHidden();
+  await expect(toast(page)).toContainText("Conversation labelled");
+  await expect.poll(() => labelsOf("Lunch on Friday?"), { timeout: 20_000 }).toContain("Label_2");
+  await toast(page).getByRole("button", { name: "Undo" }).click();
+  await expect
+    .poll(async () => (await labelsOf("Lunch on Friday?")).includes("Label_2"), {
+      timeout: 20_000,
+    })
+    .toBe(false);
+});
+
+test("a Gmail conversation archives from the reader's toolbar", async ({ page }) => {
+  await openGmailInbox(page);
   await select(page, "Autumn sale");
   await readerAction(page, "Archive");
   await expect(toast(page)).toContainText("Conversation archived");

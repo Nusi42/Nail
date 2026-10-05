@@ -233,7 +233,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
   await loadMainWindow(page, server.url);
   await screen.open(page);
   await settle(page);
-  return captureStable(() =>
+  const shot = await captureStable(() =>
     page.screenshot({
       animations: "disabled",
       caret: "hide",
@@ -241,6 +241,8 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
       mask: screen.mask?.(page) ?? [],
     }),
   );
+  await screen.close?.(page);
+  return shot;
 }
 
 /** Saves a screenshot under the actual directory; answers its path. */

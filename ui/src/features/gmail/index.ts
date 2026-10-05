@@ -15,6 +15,7 @@
 import type { Event as NailEvent } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { findSummary } from "../../state/mailOps";
+import { rememberTagTargets } from "../mail-actions/tags";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
 import { CategoryTabs } from "./CategoryTabs";
@@ -71,9 +72,10 @@ export const actions: Feature["actions"] = {
     },
     enabled: activeGmail,
   },
-  /** Labels of the selected message. */
+  /** Labels of the selected conversation (or picked rows / a card: one undoable batch). */
   "gmail.apply-labels": {
     run: (ctx) => {
+      rememberTagTargets(ctx.store);
       ctx.store.getState().openWindow(APPLY_LABELS_DIALOG);
     },
     enabled: selectedGmail,

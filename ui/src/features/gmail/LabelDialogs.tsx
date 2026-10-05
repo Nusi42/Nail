@@ -19,7 +19,8 @@ import type {
 import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { findSummary, patchSummaries, queued } from "../../state/mailOps";
+import { findSummary } from "../../state/mailOps";
+import { applyTags } from "../mail-actions/tags";
 import { useClient } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
@@ -409,27 +410,9 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
     }
     setBusy(true);
     setProblem(null);
-    patchSummaries(queryClient, [summary.id], (m) => ({
-      ...m,
-      tags: [...new Set([...m.tags.filter((tag) => !remove.includes(tag)), ...add])].sort(),
-    }));
     try {
-      await queued(
-        { client, store, queryClient },
-        {
-          type: "UpdateFlags",
-          message_ids: [summary.id],
-          change: {
-            seen: null,
-            flagged: null,
-            answered: null,
-            draft: null,
-            add_tags: add,
-            remove_tags: remove,
-          },
-        },
-      );
-      close();
+      // The whole conversation (or the picked rows / the card), as one undoable batch.
+      if ((await applyTags({ client, store, queryClient }, add, remove)) !== null) close();
     } catch (error) {
       setProblem(errorMessageOf(error));
     } finally {

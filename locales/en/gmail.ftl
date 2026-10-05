@@ -9,7 +9,7 @@
 
 window-gmail-label-editor = Label
 window-gmail-label-delete = Delete label
-window-gmail-apply-labels = Labels of this message
+window-gmail-apply-labels = Apply labels
 
 ## Actions (layout labels @gmail.action.*)
 

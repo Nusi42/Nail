@@ -66,6 +66,8 @@ export interface Screen {
   viewport?: { width: number; height: number };
   /** Opens the screen on a freshly loaded main window. */
   open(page: Page): Promise<void>;
+  /** Undoes what `open` changed on the server, after the capture (the server is shared by the screens). */
+  close?(page: Page): Promise<void>;
   /** Parts that legitimately differ between runs (none so far). */
   mask?(page: Page): Locator[];
 }
@@ -442,13 +444,36 @@ export const SCREENS: readonly Screen[] = [
   {
     id: "confirmation",
     title: "Modal confirmation (Delete permanently?)",
+    // P3 (ADR 0164): it asks only in Trash / Junk, with the message count;
+    // the sample conversation goes to Trash first and comes back afterwards.
     async open(page) {
       await selectSample(page);
-      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
+      const row = rows(page).filter({ hasText: SAMPLE_MESSAGE }).first();
+      const account = (await row.getAttribute("data-account")) ?? "";
+      await page.keyboard.press("Delete");
+      await expect(rows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
+      // The undo toast times out; the screen shows without it.
+      await page
+        .locator('[data-part="mail-actions.toast"]')
+        .getByRole("button", { name: "Dismiss" })
+        .click();
+      await page
+        .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account}"]`)
+        .first()
+        .click();
+      await selectMessage(page, SAMPLE_MESSAGE);
       await page.keyboard.press("Shift+Delete");
       const confirm = layoutWindow(page, "mail-delete-permanently");
       await expect(confirm).toBeVisible();
       await expect(page.locator('[data-part="window-scrim"]')).toBeVisible();
+    },
+    async close(page) {
+      const confirm = layoutWindow(page, "mail-delete-permanently");
+      await confirm.getByRole("button", { name: "Cancel" }).click();
+      await expect(confirm).toBeHidden();
+      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
+      await page.keyboard.press("z");
+      await expect(rows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
     },
   },
   // M5d: the in-app editors (nothing is written: no screen changes a file).

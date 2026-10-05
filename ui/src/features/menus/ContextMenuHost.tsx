@@ -14,7 +14,7 @@ import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useUiStoreApi } from "../../state/uiStore";
 import { ContextMenu } from "./ContextMenu";
-import { withoutDisabled } from "./resolve";
+import { withoutConversationShortcuts, withoutDisabled } from "./resolve";
 import { menuStoreFor, openContextMenu, useMenu } from "./store";
 
 export function ContextMenuHost() {
@@ -57,7 +57,9 @@ export function ContextMenuHost() {
   );
 
   // Actions that do not apply to the target are hidden, not greyed out.
-  const items = open ? withoutDisabled(open.menu.items, isEnabled) : [];
+  const enabled = open ? withoutDisabled(open.menu.items, isEnabled) : [];
+  // A card's actions act on its message, not on the conversation the keys reach.
+  const items = open?.target.card ? withoutConversationShortcuts(enabled) : enabled;
   useEffect(() => {
     if (open && items.length === 0) close(true);
   }, [open, items.length, close]);

@@ -183,8 +183,9 @@ widget):
 In Nail, Gmail labels are tags with the same name: rules, search
 (`tag:Travel`) and the tag commands work with them. A new tag on a Gmail
 message creates the label in Gmail. The command `gmail.apply-labels`
-(**Labels…** in the reader's toolbar) lets you tick the labels of the
-selected message. Label changes made while offline are sent when the
+(**Labels…** in the reader's toolbar, key `l`) lets you tick the labels of
+the selected conversation, like Gmail: every message of it gets them, and
+**Undo** takes them off again. Label changes made while offline are sent when the
 account is back online.
 
 ## Gmail categories

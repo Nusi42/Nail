@@ -213,7 +213,8 @@ the **whole conversation**, like Gmail:
 **Reply**, **Reply all**, **Forward** and **More** buttons (and its own
 right-click menu): **Delete this message**, **Archive this message**,
 **Move this message**, **Mark this message unread**, … act on that card's
-message alone. In a list that opens conversations into their messages
+message alone; that is why the card's menu shows no keys next to them (the
+keys act on the whole conversation). In a list that opens conversations into their messages
 (`threads="expandable"`), a selected message row acts on that message, and a
 list without conversations (`threads="off"`) acts on messages anyway.
 

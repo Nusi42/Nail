@@ -109,8 +109,8 @@ counts; choose one to see its messages in every folder. **New category**,
 - Category names cannot contain commas or semicolons.
 
 **Categories…** in the message toolbar (and in its right-click menu) sets
-the categories of the selected message: they are written to the server as
-the message's categories.
+the categories of the selected conversation (every message of it; **Undo**
+reverts them): they are written to the server as the messages' categories.
 
 ## Focused Inbox
 

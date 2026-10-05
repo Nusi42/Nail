@@ -9,6 +9,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
 import type { MessageSummary, Request, Response } from "../../api/generated";
+import { listSelectionFor } from "../../actions/mailTargets";
 import type { ActionContext } from "../../actions/registry";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -252,7 +253,7 @@ describe("label dialogs", () => {
     expect(requests(env, "DeleteGmailLabel")[0]?.label_id).toBe("Label_2");
   });
 
-  it("applies and removes labels on the selected message through the queue", async () => {
+  it("applies and removes labels on the selected message as one mail action", async () => {
     const user = userEvent.setup();
     const env = setup();
     const summary = message(env, "Your train tickets to Lisbon");
@@ -272,11 +273,41 @@ describe("label dialogs", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "UpdateFlags")[0]?.change).toMatchObject({
-      add_tags: ["Receipts"],
-      remove_tags: ["Travel"],
+    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+      targets: [{ kind: "message", message_id: summary.id }],
+      action: { type: "tags", add: ["Receipts"], remove: ["Travel"] },
     });
-    expect(env.store.getState().pendingOps.length).toBe(1);
+    expect(requests(env, "UpdateFlags")).toEqual([]);
+    expect(env.store.getState().pendingOps.length).toBeGreaterThan(0);
+  });
+
+  it("labels the whole selected conversation when the list shows conversations", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    const summary = message(env, "Your train tickets to Lisbon");
+    cacheList(env, summary);
+    listSelectionFor(env.store).setState({
+      scope: { conversations: true, folderId: summary.folder_id },
+    });
+    act(() => {
+      env.store.getState().selectMessage(summary.id);
+      env.store.getState().selectThread(summary.thread_id);
+    });
+    await actions["gmail.apply-labels"]?.run(ctx(env), []);
+    const Apply = dialog(APPLY_LABELS_DIALOG);
+    const close = vi.fn();
+    renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+    await user.click(await screen.findByRole("checkbox", { name: "Receipts" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
+    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+      targets: [
+        { kind: "conversation", thread_id: summary.thread_id, folder_id: summary.folder_id },
+      ],
+      action: { type: "tags", add: ["Receipts"], remove: [] },
+    });
   });
 
   it("apply labels without a Gmail message explains itself", () => {

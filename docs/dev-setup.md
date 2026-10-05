@@ -532,6 +532,10 @@ expandable conversation list; `e2e/visual/screens.ts`) for every built-in theme
 (Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.
+The screens of a worker share one `nail serve`: a screen that changes data
+undoes it in its `close` hook after the capture (P3: the modal confirmation
+moves the sample to Trash, because Delete permanently asks only there, and
+undoes the move).
 
 ```text
 npm run build -w ui && cargo build -p nail-cli   # prerequisites (or NAIL_BIN=<nail.exe>)

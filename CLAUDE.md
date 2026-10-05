@@ -267,6 +267,14 @@ crates/nail-store      SQLite metadata (v17), blob store, per-account operation 
                        v17 (P3, ADR 0164): thread_activity (per folder + thread order key incl. the Sent join;
                        thread/activity.rs PAGE_SQL / COUNT_SQL; WP-perf maintains it from v18), mail_batches /
                        mail_batch_ops (mail actions with inverses for undo; mail_batches.rs)
+                       v18 (P3 WP-perf, ADR 0166): five triggers keep thread_activity equal to the backfill
+                       (activity.rs MAINTENANCE_SQL; a later migration that rebuilds messages / folders must recreate
+                       them); ListThreads pages are index ranges on the table, one batched read per page
+                       (listed_page_sql), narrowed remote Sent grants fall back to GROUPING_PAGE_SQL; activity_tests.rs
+                       random-write consistency; P3 WP-actions-core (ADR 0165): thread/targets.rs conversation_targets
+                       (every stored copy per reach), mail_batches.rs apply_mail_batch / undo_mail_batch (one
+                       transaction, purged after 1 h / beyond 50, actor-owned), queue.rs group keys (replay hands
+                       consecutive same-key operations to an engine at once; tests/queue_groups.rs)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -505,7 +513,12 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        WithConversations: the seeds of `nail serve` add nail-testkit's demo conversations; seed_demo_with,
                        start_demo_imap_with, start_demo_multi_with);
                        P3 (ADR 0164): mail_actions.rs (ApplyMailAction / ResolveMailTargets / UndoMailAction; conversation
-                       targets resolved per reach, within a remote grant)
+                       targets resolved per reach, within a remote grant); WP-actions-core (ADR 0165): one batch per
+                       action sorted by (account, folder), undo per actor (`user`, `remote:<session>`, `mcp:<client>`,
+                       `plugin:<id>`), plan_snooze / plan_mark_junk (undo cancels wake timers / training), replay.rs
+                       grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
+                       exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
+                       tests/mail_actions.rs
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -543,7 +556,9 @@ crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (dem
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
                        lan.rs: LAN address from the interfaces, no socket (ADR 0057);
-                       M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048)
+                       M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048);
+                       P3 (ADR 0168): sandbox.rs HEIGHT_SCRIPT (hash-pinned script-src, posts the height to `parent`,
+                       which must be a frame-ancestor, else 400)
 crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
                        (`--config-dir`, `--no-start`, `--mcp-port`; prints waiting confirmations to stderr, M4a),
                        serve holds the data-dir lock (its clock-set / clock-advance controls run due plug-in jobs);
@@ -687,7 +702,13 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (ADR 0151); UiState.messageThreads (j / k continue from a conversation's row; ADR 0153);
                        P3 (ADR 0164): features/mail-actions (conversation actions, undo toast), api/mockMailActions.ts (the
                        contract with undo), theme/frameHeight.ts (mail frames report their height: srcdoc allow-same-origin
-                       without scripts, sandbox origin hashed script + postMessage);
+                       without scripts, sandbox origin hashed script + postMessage); P3 packages: actions/mailTargets.ts
+                       (currentTargets: context menu → picked rows → selection; conversation + listed folder),
+                       features/mail-actions run.ts / store.ts / Toast.tsx / move.ts / skin.ts (MAIL_ACTIONS_SKIN_CSS in
+                       theme/compile.ts; one ApplyMailAction per action, undo toast + `mail.undo` = z, card More menus;
+                       ADR 0167), widgets/DeletePermanently.tsx asks with the count; widgets/MailFrame.tsx
+                       (LocalMailFrame / RemoteMailFrame sized by a geometry rule; FrameHeightGuard in theme/frameHeight.ts,
+                       frameHeightOf accepts origin "null" from the opaque sandbox origin; ADR 0168);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -1226,6 +1247,13 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   it. Schema v17: `thread_activity` (WP-perf: v18 maintenance, `ListThreads` on it, `thread-page-p95-ms` ≤ 10).
   Mail frames: local `sandbox="allow-same-origin"` (never scripts), remote a hash-pinned height script on the sandbox
   origin (never same-origin).
+- P3 integration (ADR 0169; packages ADRs 0165 actions core, 0166 thread-activity speed, 0167 actions UI, 0168 card
+  height): every row / toolbar / key / menu action acts on the conversation through one `ApplyMailAction` batch with
+  undo (toast, `z`); a card's own actions (its More menu) act on that message; Delete permanently only in Trash /
+  Junk, asked with the count. New default keys `#` delete, Shift+I / Shift+U read / unread, `!` junk, `l` labels,
+  `z` undo. MCP `update_messages` / `delete_messages` and plug-in `nail.mail.update` / `delete` take
+  `conversations` (SDK `PluginMailTargets`). Schema stays v18 (no v19). HTML mail frames are as tall as their mail
+  (no 40vh minimum). E2E: `p3-actions.spec.ts`, `p3-card-height.spec.ts`; `thread-page-p95-ms` budget 10.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -249,7 +249,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
   // Tags are categories on the message.
   await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
   await readerAction(page, "Categories…");
-  const apply = page.getByRole("dialog", { name: "Categories of this message" });
+  const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Urgent" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
   await expect(apply).toBeHidden();
@@ -423,7 +423,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   // A category of the server's master list, set as a tag.
   await rows(page).filter({ hasText: "Password expires in 7 days" }).click();
   await readerAction(page, "Categories…");
-  const apply = page.getByRole("dialog", { name: "Categories of this message" });
+  const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Work" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
   await expect(apply).toBeHidden();

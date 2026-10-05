@@ -175,7 +175,13 @@ describe("conversation actions (P3)", () => {
     const id = must(card.dataset.message);
     await user.click(within(card).getByRole("button", { name: "More actions for this message" }));
     const menu = await screen.findByRole("menu");
-    await user.click(within(menu).getByRole("menuitem", { name: "Delete this message" }));
+    // The global keys act on the whole conversation: the card's items show none, Reply keeps its.
+    const deleteItem = within(menu).getByRole("menuitem", { name: "Delete this message" });
+    expect(deleteItem).not.toHaveAttribute("aria-keyshortcuts");
+    expect(within(menu).getByRole("menuitem", { name: /^Reply$/ })).toHaveAttribute(
+      "aria-keyshortcuts",
+    );
+    await user.click(deleteItem);
     await eventually(() => {
       expect(actions(env).at(-1)).toEqual({
         type: "ApplyMailAction",

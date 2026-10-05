@@ -151,3 +151,41 @@ export function withoutDisabled(
   if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
   return out;
 }
+
+/**
+ * Actions whose keys act on the whole selected conversation (P3, ADR 0164):
+ * on a message card's menu, where they act on that one message, their key
+ * would be misleading, so the card's menu shows none (ADR 0169). Reply,
+ * reply all and forward keep theirs: their keys answer the card one is on.
+ */
+export const CONVERSATION_KEY_ACTIONS: ReadonlySet<string> = new Set([
+  "mail.archive",
+  "mail.delete",
+  "mail.delete-permanently",
+  "mail.move",
+  "mail.move-to",
+  "mail.toggle-flag",
+  "mail.toggle-read",
+  "mail.mark-read",
+  "mail.mark-unread",
+  "junk.mark",
+  "junk.not-junk",
+  "snooze.open",
+  "gmail.apply-labels",
+  "exchange.apply-categories",
+]);
+
+/** A card's menu: the entries without the keys of {@link CONVERSATION_KEY_ACTIONS}. */
+export function withoutConversationShortcuts(
+  items: readonly ResolvedMenuEntry[],
+): ResolvedMenuEntry[] {
+  return items.map((entry) => {
+    if (entry.type === "action" && CONVERSATION_KEY_ACTIONS.has(entry.action)) {
+      return { ...entry, shortcut: null };
+    }
+    if (entry.type === "submenu") {
+      return { ...entry, items: withoutConversationShortcuts(entry.items) };
+    }
+    return entry;
+  });
+}

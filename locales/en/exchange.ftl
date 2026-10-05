@@ -14,7 +14,7 @@ window-exchange-category-editor = Category
 window-exchange-category-delete = Delete category
 window-exchange-automatic-replies = Automatic replies
 window-exchange-classify = Focused Inbox
-window-exchange-apply-categories = Categories of this message
+window-exchange-apply-categories = Apply categories
 
 ## Actions (layout labels @exchange.action.*)
 

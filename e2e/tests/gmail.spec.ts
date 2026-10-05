@@ -76,7 +76,7 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
   // A label on a message: a tag here, a label change on Gmail.
   await rows(page).filter({ hasText: "Lunch on Friday?" }).click();
   await readerAction(page, "Labels…");
-  const apply = page.getByRole("dialog", { name: "Labels of this message" });
+  const apply = page.getByRole("dialog", { name: "Apply labels" });
   await apply.getByRole("checkbox", { name: "Receipts" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
   await expect(apply).toBeHidden();
