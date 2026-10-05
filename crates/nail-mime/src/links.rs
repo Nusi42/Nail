@@ -734,6 +734,7 @@ mod tests {
                     mime: "application/pdf".into(),
                     size: 10,
                     inline: false,
+                    shown_in_body: false,
                 },
                 AttachmentInfo {
                     index: 1,
@@ -741,6 +742,7 @@ mod tests {
                     mime: "application/javascript".into(),
                     size: 10,
                     inline: false,
+                    shown_in_body: false,
                 },
                 AttachmentInfo {
                     index: 2,
@@ -748,6 +750,7 @@ mod tests {
                     mime: "application/x-msdownload".into(),
                     size: 10,
                     inline: false,
+                    shown_in_body: false,
                 },
             ],
             remote_content_blocked: false,

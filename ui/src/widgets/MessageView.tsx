@@ -15,7 +15,7 @@ import { useReaderCss } from "../theme/ThemeProvider";
 import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
 import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
-import { AttachmentCard } from "./AttachmentCard";
+import { AttachmentList } from "./AttachmentList";
 import { splitQuotes } from "./ThreadViewModel";
 import { cardShowsSubject, useReaderCard } from "./ThreadViewScope";
 
@@ -209,20 +209,7 @@ export function MessageView({ node }: WidgetProps) {
         {summaryOf(ctx, message.id)}
         <InvitationCard messageId={message.id} invitation={message.invitation ?? null} />
         <PluginBanners messageId={message.id} />
-        {message.attachments.length > 0 && (
-          <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>
-            {message.attachments.map((a) => (
-              <AttachmentCard
-                key={a.index}
-                messageId={message.id}
-                attachment={a}
-                accountId={accountId}
-                warnings={message.warnings ?? []}
-                previewId={previewId(a.index)}
-              />
-            ))}
-          </ul>
-        )}
+        <AttachmentList message={message} accountId={accountId} previewId={previewId} />
         <Body message={message} quotesFold={inCard} />
         {message.attachments
           .filter((a) => !a.inline)

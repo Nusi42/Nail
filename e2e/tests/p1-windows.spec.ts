@@ -56,8 +56,8 @@ function featureDialogs(): string[] {
 
 /**
  * Windows another P1 package checks: the main window, the mail view and the
- * PIM views with their dialogs (WP190 `p1-mail.spec.ts`, WP192
- * `p1-views.spec.ts`), and the M5d editors (WP192).
+ * PIM views (WP190 `p1-mail.spec.ts`, WP192 `p1-views.spec.ts`), and the M5d
+ * editors (WP192). The PIM dialogs are the `pim` group's below (ADR 0160).
  */
 const OTHER_PACKAGES = [
   "main",
@@ -65,14 +65,6 @@ const OTHER_PACKAGES = [
   "calendar",
   "contacts",
   "tasks",
-  "pim-event-editor",
-  "pim-edit-scope",
-  "pim-contact-editor",
-  "pim-contact-groups",
-  "pim-merge-contacts",
-  "pim-task-editor",
-  "pim-import",
-  "pim-sources",
   "toolbar-customizer",
   "theme-editor",
   "theme-new",
@@ -207,6 +199,46 @@ async function stickyRows(
 
 /** The largest standard size; window resizing is checked there. */
 const LARGE: Size = { width: 1600, height: 1000 };
+
+/**
+ * ADR 0160: the controls of one form column line up — every one starts at
+ * the same left edge and ends at the same right edge (± 2 px), at the
+ * current viewport size. `controls` are checked in the given order.
+ */
+async function expectLinedUp(what: string, controls: readonly Locator[]): Promise<void> {
+  const boxes = [];
+  for (const control of controls) {
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    if (!box) throw new Error(`${what}: a control has no box`);
+    boxes.push({
+      name: (await control.getAttribute("aria-label")) ?? (await control.evaluate((el) => el.id)),
+      left: Math.round(box.x),
+      right: Math.round(box.x + box.width),
+    });
+  }
+  const first = boxes[0];
+  if (first === undefined) throw new Error(`${what}: no controls`);
+  const off = boxes.filter(
+    (b) => Math.abs(b.left - first.left) > 2 || Math.abs(b.right - first.right) > 2,
+  );
+  expect(off, `${what}: ${JSON.stringify(boxes)}`).toEqual([]);
+}
+
+/** Lines the controls up at the large, a medium and the narrow standard width. */
+async function expectLinedUpAtWidths(
+  page: Page,
+  what: string,
+  controls: () => readonly Locator[],
+): Promise<void> {
+  for (const width of [1600, 1024, 800]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await settle(page);
+    await expectLinedUp(`${what} at ${String(width)} px`, controls());
+  }
+  await page.setViewportSize(LARGE);
+  await settle(page);
+}
 
 /** Waits two frames (measured toolbars and lists settle). */
 const settle = (page: Page) =>
@@ -404,6 +436,14 @@ const GROUPS: Record<string, Group> = {
           .getByRole("textbox", { name, exact: true })
           .evaluate((el) => Math.round(el.getBoundingClientRect().right));
       expect(Math.abs((await right("To")) - (await right("Subject")))).toBeLessThanOrEqual(2);
+      // ADR 0160: with Cc and Bcc shown, To / Cc / Bcc / Subject share both edges at every width.
+      await composer.getByRole("button", { name: "Add Cc" }).click();
+      await composer.getByRole("button", { name: "Add Bcc" }).click();
+      const textbox = (name: string) => composer.getByRole("textbox", { name, exact: true });
+      await expectLinedUpAtWidths(page, "composer To / Cc / Bcc / Subject", () =>
+        ["To", "Cc", "Bcc", "Subject"].map(textbox),
+      );
+      await sweep.sizes("composer-cc-bcc", `[data-part="window"][data-window^="composer:"]`);
       await composer.getByRole("radio", { name: "HTML" }).click();
       await expect(composer.locator('[data-part="composer.html.content"]')).toBeVisible();
       // P1 review: the rich editor fills the height down to the footer like the textarea.
@@ -428,10 +468,84 @@ const GROUPS: Record<string, Group> = {
       await sweep.window("rules").getByRole("button", { name: "New rule" }).click();
       await expect(sweep.window("rules").getByRole("form", { name: "Rule" })).toBeVisible();
       await sweep.checkWindow("rules", "rules-editor");
+      // ADR 0160: a rule with conditions and actions — every control of a row fills its row.
+      const rulesWindow = sweep.window("rules");
+      const addCondition = rulesWindow.getByRole("button", { name: "Add condition" });
+      await addCondition.click();
+      // The "add" row's choosers (each added row has its own selects).
+      const adders = rulesWindow.locator('[data-part="rules.add"]');
+      await adders
+        .first()
+        .getByRole("combobox", { name: "Condition" })
+        .selectOption({ label: "Subject" });
+      await addCondition.click();
+      await rulesWindow.getByRole("button", { name: "Add action" }).click();
+      await adders.last().getByRole("combobox", { name: "Action" }).selectOption({ index: 2 });
+      await rulesWindow.getByRole("button", { name: "Add action" }).click();
+      await sweep.checkWindow("rules", "rules-editor-filled");
+      // The condition group's rows span its Match select: the first condition's
+      // controls together, and the "add" row's chooser with its button.
+      for (const width of [1600, 1024, 800]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await settle(page);
+        const edges = await rulesWindow
+          .locator('[data-part="rules.group"]')
+          .first()
+          .evaluate((group) => {
+            const span = (els: Element[]) => {
+              const rects = els.map((el) => el.getBoundingClientRect());
+              return {
+                left: Math.round(Math.min(...rects.map((r) => r.left))),
+                right: Math.round(Math.max(...rects.map((r) => r.right))),
+              };
+            };
+            const controls = (row: Element | null) =>
+              row === null
+                ? []
+                : Array.from(row.querySelectorAll("select, input:not([type=checkbox]), button"));
+            const match = group.querySelector("select");
+            return {
+              match: match === null ? null : span([match]),
+              condition: span(controls(group.querySelector('[data-part="rules.condition"]'))),
+              add: span(controls(group.querySelector('[data-part="rules.add"]'))),
+            };
+          });
+        const near = (
+          a: { left: number; right: number } | null,
+          b: { left: number; right: number } | null,
+        ) =>
+          a !== null &&
+          b !== null &&
+          Math.abs(a.left - b.left) <= 2 &&
+          Math.abs(a.right - b.right) <= 2;
+        expect(
+          near(edges.condition, edges.match),
+          `rule condition at ${String(width)} px: ${JSON.stringify(edges)}`,
+        ).toBe(true);
+        expect(
+          near(edges.add, edges.match),
+          `rule "add" row at ${String(width)} px: ${JSON.stringify(edges)}`,
+        ).toBe(true);
+      }
+      await page.setViewportSize(LARGE);
       await sweep.close("rules");
 
       await runFromPalette(page, "add account", "Add account");
       await sweep.checkWindow("account-setup");
+      // ADR 0160: the server step (settings to check by hand) with its server fields.
+      const setupWindow = sweep.window("account-setup");
+      await setupWindow.getByRole("textbox", { name: "Your name" }).fill("Bob");
+      await setupWindow
+        .getByRole("textbox", { name: "Email address" })
+        .fill("bob@elsewhere.example");
+      await setupWindow.getByRole("button", { name: "Continue" }).click();
+      const incoming = setupWindow.getByRole("group", { name: "Incoming mail" });
+      await expect(incoming.getByRole("textbox", { name: "Server" })).toBeVisible();
+      await sweep.checkWindow("account-setup", "account-setup-servers");
+      await expectLinedUpAtWidths(page, "account setup (address step)", () => [
+        incoming.getByRole("textbox", { name: "Server" }),
+        incoming.getByRole("textbox", { name: "User name" }),
+      ]);
       await sweep.close("account-setup");
 
       await runFromPalette(page, "snoozed", "Snoozed messages");
@@ -579,6 +693,83 @@ const GROUPS: Record<string, Group> = {
         await sweep.checkWindow(name);
         await sweep.close(name);
       }
+    },
+  },
+  pim: {
+    windows: [
+      "pim-event-editor",
+      "pim-edit-scope",
+      "pim-task-editor",
+      "pim-contact-editor",
+      "pim-import",
+      "pim-sources",
+      "pim-contact-groups",
+      "pim-merge-contacts",
+    ],
+    run: async (sweep) => {
+      const page = sweep.page;
+      await showView(page, "Calendar");
+      const calendar = page.locator('[data-part="view-host.view"][data-window="calendar"]');
+      await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
+      const teamSync = calendar.getByRole("button", { name: /^Team sync,/ }).first();
+      await expect(teamSync).toBeVisible();
+      await teamSync.click();
+      const event = sweep.window("pim-event-editor");
+      await sweep.checkWindow("pim-event-editor");
+      // ADR 0160: the event's text fields share both edges.
+      await expectLinedUpAtWidths(page, "event editor", () => [
+        event.getByRole("textbox", { name: "Title", exact: true }),
+        event.getByRole("textbox", { name: "Location", exact: true }),
+        event.getByRole("textbox", { name: "Description", exact: true }),
+      ]);
+      await sweep.close("pim-event-editor");
+      await calendar
+        .getByRole("button", { name: /^Project kickoff,/ })
+        .first()
+        .click();
+      await expect(event.getByRole("region", { name: "Meeting: Project kickoff" })).toBeVisible();
+      await sweep.checkWindow("pim-event-editor", "pim-event-editor-meeting");
+      await sweep.close("pim-event-editor");
+      await teamSync.focus();
+      await page.keyboard.press("Delete");
+      await sweep.checkWindow("pim-edit-scope");
+      await sweep.close("pim-edit-scope");
+      const calendarActions = page.getByRole("toolbar", { name: "Calendar actions" });
+      for (const [button, name] of [
+        ["New task", "pim-task-editor"],
+        ["New contact", "pim-contact-editor"],
+        ["Import calendar or contacts", "pim-import"],
+        ["Calendars and address books", "pim-sources"],
+      ] as const) {
+        await toolbarAction(page, calendarActions, button);
+        // The editors load their item first ("Loading…").
+        const ready = { "pim-task-editor": "Title", "pim-contact-editor": "First name" } as const;
+        if (name in ready) {
+          const label = ready[name as keyof typeof ready];
+          await expect(
+            sweep.window(name).getByRole("textbox", { name: label, exact: true }),
+          ).toBeVisible();
+        }
+        await sweep.checkWindow(name);
+        if (name === "pim-contact-editor") {
+          const contact = sweep.window(name);
+          await expectLinedUpAtWidths(page, "contact editor", () => [
+            contact.getByRole("textbox", { name: "First name", exact: true }),
+            contact.getByRole("textbox", { name: "Last name", exact: true }),
+            contact.getByRole("textbox", { name: "Shown as", exact: true }),
+          ]);
+        }
+        await sweep.close(name);
+      }
+      await showView(page, "Contacts");
+      const contacts = page.locator('[data-part="view-host.view"][data-window="contacts"]');
+      await contacts.getByRole("option", { name: /Grace Hopper/ }).click();
+      await toolbarAction(page, contacts, "Groups…");
+      await sweep.checkWindow("pim-contact-groups");
+      await sweep.close("pim-contact-groups");
+      await toolbarAction(page, contacts, "Find duplicates…");
+      await sweep.checkWindow("pim-merge-contacts");
+      await sweep.close("pim-merge-contacts");
     },
   },
   gmail: {

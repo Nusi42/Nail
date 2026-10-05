@@ -18,5 +18,7 @@ font_size?: number,
 radius?: number, 
 /**
  * Accent colour, `#rgb` or `#rrggbb` (lowercase after normalizing).
+ * Not applied while a high-contrast theme is active
+ * ([`accent_ignored`]); it stays stored.
  */
 accent?: string, };

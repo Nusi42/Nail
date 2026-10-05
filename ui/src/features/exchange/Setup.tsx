@@ -392,6 +392,7 @@ export function ExchangeOptionsFields({
         <input
           id={ids.poll}
           data-part="form.input"
+          data-width="short"
           type="number"
           inputMode="numeric"
           min={10}
@@ -412,6 +413,7 @@ export function ExchangeOptionsFields({
         <input
           id={ids.max}
           data-part="form.input"
+          data-width="short"
           type="number"
           inputMode="numeric"
           min={10}

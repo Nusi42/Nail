@@ -26,7 +26,7 @@ appearance-density-title = Density
 appearance-density-hint = Compact shows more messages at once: smaller rows and text, and no tag line in the message list.
 
 appearance-overrides-title = Accent, text size and corners
-appearance-overrides-hint = These apply to every theme. The sliders and the colour picker change the app as you move them; type a colour and choose Apply.
+appearance-overrides-hint = These apply to every theme (High contrast keeps its own accent). The sliders and the colour picker change the app as you move them; type a colour and choose Apply.
 appearance-font-size = Text size
 appearance-radius = Corner radius
 # $value (number) — a size in pixels
@@ -35,6 +35,7 @@ appearance-pixels = { $value } px
 appearance-pixels-default = { $value } px (theme default)
 appearance-accent = Accent colour
 appearance-accent-pick = Pick the accent colour
+appearance-accent-high-contrast = High contrast uses its own colours.
 appearance-override-default = Theme default
 appearance-overrides-not-a-number = Enter whole numbers for the text size and the corner radius.
 appearance-overrides-reset = Use theme defaults

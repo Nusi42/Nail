@@ -14,7 +14,8 @@
  * - buttons: `form.button` with `data-variant` = (none) default, `primary`,
  *   `danger`, `ghost`, `icon`; `toolbar.button` (ghost); `form.button.icon`
  * - inputs and selects: `form.input`, `form.select`, `form.textarea`,
- *   `search-bar.field`
+ *   `search-bar.field`; they fill their field's column or row (ADR 0160)
+ *   unless `data-width` sizes them ({@link CONTROL_WIDTHS})
  * - checks and switches: `form.check`, `switch` (+ `.thumb`)
  * - chips (`chip`, `message-list.row.chip`), tags (`tag`, `tag.dot`,
  *   `tag.icon`), badges (`badge`)
@@ -221,7 +222,40 @@ ${p("window.close.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} + ${p("composer.format.label")} { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }`;
 
+/**
+ * ADR 0160: the widths of controls that are small on purpose. A control (or
+ * its picker's root) says so with `data-width`; every other text-like
+ * control (`form.input`, `form.select`, `form.textarea`) fills the column its
+ * field, card or block gives it (`width: 100%`). In a flex row its basis
+ * stays its content (`flex-basis: content`, so a wrapping row does not put
+ * each control on a line of its own, and a column flex box does not grow it
+ * taller): a row of controls that should share the row is listed in
+ * `FIELD_ROWS` (`./skinResponsive.ts`).
+ *
+ * - `short`: a number, a port, minutes, a time of day (about ten characters);
+ * - `medium`: a filter or chooser in a header or toolbar (the settings
+ *   cards' control column);
+ * - `content`: as wide as its content (a view switcher, an option among
+ *   toggles).
+ */
+export const CONTROL_WIDTHS = {
+  short: `calc(7 * ${T.lg})`,
+  medium: `calc(16 * ${T.lg})`,
+  content: "auto",
+} as const;
+
+/** The custom property a `data-width` control sets for its width (`width: var(…, 100%)`). */
+export const CONTROL_WIDTH_VAR = "--nail-skin-control-width";
+
+const WIDTHS = Object.entries(CONTROL_WIDTHS)
+  .map(
+    ([name, width]) =>
+      `[data-part][data-width="${name}"] { ${CONTROL_WIDTH_VAR}: ${width}; width: var(${CONTROL_WIDTH_VAR}); max-width: 100%; flex: 0 ${name === "medium" ? "1" : "0"} auto; }`,
+  )
+  .join("\n");
+
 const INPUTS = `${ps("form.input", "form.select", "form.textarea")} {
+  width: var(${CONTROL_WIDTH_VAR}, 100%); flex-basis: content; min-width: 0; max-width: 100%;
   min-height: ${T.control}; padding: 0 ${T.sm};
   border: ${T.controlBorder}; border-radius: ${T.rSm};
   font-family: ${T.fontUi}; font-size: ${T.body}; color: ${T.fg}; background-color: ${T.subtle};
@@ -236,6 +270,7 @@ ${p("form.label")} { font-size: ${T.small}; font-weight: ${T.medium}; color: ${T
 ${p("form.hint")} { font-size: ${T.small}; color: ${T.muted}; }
 ${p("form.check")} { display: inline-flex; align-items: center; gap: ${T.sm}; min-height: ${T.control}; font-size: ${T.body}; }
 ${p("form.checkbox")} { width: ${T.icon}; height: ${T.icon}; margin: 0; accent-color: ${T.accent}; }
+${WIDTHS}
 ${p("search-bar.field")} { display: flex; align-items: center; gap: ${T.sm}; min-height: calc(${T.control} + ${T.xs}); padding: 0 ${T.md}; border: ${T.controlBorder}; border-radius: ${T.rMd}; color: ${T.muted}; background-color: ${T.subtle}; }
 ${p("search-bar.field")}:focus-within { outline: 2px solid ${T.focus}; outline-offset: 0; border-color: ${T.accent}; }
 ${p("search-bar.input")} { flex: 1 1 auto; min-width: 0; border: none; outline: none; font-size: ${T.body}; color: ${T.fg}; background: transparent; }
@@ -422,6 +457,16 @@ ${p("message-view.column")}:has(> ${p("message-view.body")}[data-state~="designe
   ${ps(...READER_SLOTS)} { width: calc(100% - 2 * ${T.pane}); }
 }
 ${p("message-view.attachments")} { display: flex; flex-wrap: wrap; gap: ${T.sm}; margin: 0; padding: 0; list-style: none; }
+${p("message-view.attachment-list")} { display: grid; justify-items: start; gap: ${T.sm}; min-width: 0; }
+${p("message-view.attachment-list")} > ${p("message-view.attachments")} { justify-self: stretch; }
+${p("message-view.attachments.toggle")} {
+  display: inline-flex; align-items: center; gap: ${T.xs}; min-height: ${T.control}; padding: 0 ${T.sm};
+  border: none; border-radius: ${T.rMd}; background-color: transparent; cursor: default;
+  font-family: ${T.fontUi}; font-size: ${T.small}; font-weight: ${T.medium}; color: ${T.accent};
+}
+${p("message-view.attachments.toggle")}:hover { background-color: ${T.accentSoft}; }
+${p("message-view.attachments.toggle")}:focus-visible { ${focusRing} }
+${p("message-view.attachments.toggle.icon")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
 ${p("attachment-card")} {
   display: grid; grid-template-columns: calc(${T.control} + ${T.xs}) minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
   min-width: calc(14 * ${T.lg}); max-width: 100%; padding: ${T.sm} ${T.sm} ${T.sm} ${T.sm};

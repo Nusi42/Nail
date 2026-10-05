@@ -158,6 +158,7 @@ describe("reader: attachments and links", () => {
       mime: "application/zip",
       size: 1,
       inline: false,
+      shown_in_body: false,
     };
     const { container } = renderWithProviders(
       <AttachmentPreviewPane messageId="m" attachment={att} />,

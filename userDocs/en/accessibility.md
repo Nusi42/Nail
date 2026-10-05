@@ -94,8 +94,10 @@ yellow bar on the left, hovered items a dark yellow fill, and avatars and
 file-type badges are white with black letters. Nail checks the contrast of
 every theme automatically.
 
-Your own changes still apply on top: the text size, corner radius and
-accent colour on the Appearance page, and your part rules in `theme.kdl`.
+The accent colour on the Appearance page does not apply here: High contrast
+keeps its own yellow, and your accent stays saved for the other themes.
+Your other changes still apply on top: the text size and corner radius on
+the Appearance page, and your part rules in `theme.kdl`.
 For example, an even thicker focus ring on toolbar buttons:
 
 ```kdl

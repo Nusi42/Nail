@@ -4,7 +4,8 @@
  * themes; a user theme's card shows its own colours as soon as the editor
  * changes them) and "New theme", Follow Windows with its light / dark pair,
  * Comfortable / Compact density, the accent / text-size / corner-radius
- * overrides (live: the app restyles while you pick), "Edit theme" for the
+ * overrides (live: the app restyles while you pick; the accent is off with
+ * a note while a high-contrast theme is active, ADR 0161), "Edit theme" for the
  * full theme editor, and Undo / Redo of the appearance history.
  * Everything is written by the core into the user's `theme.kdl` (or the
  * theme's file); this page only asks for it.
@@ -28,7 +29,7 @@ import { Icon } from "../../widgets/Icon";
 import { Segmented, Switch } from "../../widgets/primitives";
 import { openNewTheme, openThemeEditor } from "./editorStore";
 import { HistoryButtons } from "./HistoryButtons";
-import { FONT_SIZE_RANGE, RADIUS_RANGE, overrideIssues } from "./model";
+import { FONT_SIZE_RANGE, RADIUS_RANGE, accentIgnored, overrideIssues } from "./model";
 import { preferencesOf, useAppearance, useSetTheme, useSetThemePreferences } from "./queries";
 import { useThemeName } from "./ThemeEditor";
 import { previewColors } from "./themes";
@@ -308,6 +309,10 @@ function OverridesForm({
   const radius = pixels(theme.tokens.radius?.md) ?? RADIUS_RANGE[0];
   const picked =
     pickerColor(draft.accent) ?? pickerColor(theme.tokens.color?.accent ?? "") ?? "#000000";
+  // A high-contrast theme keeps its own accent (ADR 0161): the stored
+  // value stays and is shown, but cannot be changed here.
+  const accentOff = accentIgnored(appearance.active, appearance.themes);
+  const accentNote = accentOff ? `${id}-accent-note` : undefined;
   return (
     <form
       data-part="appearance.overrides"
@@ -336,6 +341,8 @@ function OverridesForm({
             spellCheck={false}
             placeholder={t("appearance-override-default")}
             value={draft.accent}
+            disabled={accentOff}
+            aria-describedby={accentNote}
             onChange={(event) => {
               setDraft((d) => ({ ...d, accent: event.target.value }));
             }}
@@ -345,12 +352,18 @@ function OverridesForm({
             type="color"
             aria-label={t("appearance-accent-pick")}
             value={picked}
-            disabled={busy}
+            disabled={busy || accentOff}
+            aria-describedby={accentNote}
             onChange={(event) => {
               live("accent")(event.target.value);
             }}
           />
         </span>
+        {accentNote && (
+          <p data-part="appearance.accent-note" id={accentNote}>
+            {t("appearance-accent-high-contrast")}
+          </p>
+        )}
       </div>
       <PixelSlider
         name="font-size"

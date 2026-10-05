@@ -139,6 +139,7 @@ export function DateTimeInput({
           {time !== null && (
             <TimeField
               data-part="pim.datetime.time"
+              data-width="short"
               value={new Time(time.hour, time.minute)}
               isDisabled={disabled}
               isInvalid={invalid}

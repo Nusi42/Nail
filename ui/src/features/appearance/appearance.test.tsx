@@ -7,7 +7,7 @@ import { App } from "../../App";
 import type { Request, ThemeInfo } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
-import { builtinThemes, setMockSystemAppearance } from "./mock";
+import { accentIgnored, builtinThemes, mockConfigTheme, setMockSystemAppearance } from "./mock";
 import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } from "./themes";
 import { overridesOf } from "./AppearanceSettings";
 import { must } from "../../test/must";
@@ -294,6 +294,99 @@ describe("appearance-settings widget", () => {
       expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
     });
     await settleQueries(env);
+  });
+
+  it("turns the accent off with a note while a high-contrast theme is active (ADR 0161)", async () => {
+    const env = createEnv();
+    const state = env.transport.data.features.appearance;
+    state.settings.overrides = { accent: "#ff0066", font_size: 15 };
+    const ownAccent = () => mockConfigTheme(env.transport).tokens.color?.accent;
+    const note = "High contrast uses its own colours.";
+    renderNode(widget("appearance-settings"), env);
+    const accent = await screen.findByRole("textbox", { name: "Accent colour" });
+    const picker = screen.getByLabelText("Pick the accent colour");
+    expect(accent).toHaveValue("#ff0066");
+    expect(accent).toBeEnabled();
+    expect(picker).not.toHaveAccessibleDescription();
+    expect(screen.queryByText(note)).toBeNull();
+    expect(ownAccent()).toBe("#ff0066");
+
+    // High contrast picked: its own accent, the stored value kept and shown.
+    fireEvent.click(screen.getByRole("radio", { name: /High contrast/ }));
+    expect(await screen.findByText(note)).toHaveAttribute("data-part", "appearance.accent-note");
+    await waitFor(() => {
+      expect(accent).toBeDisabled();
+    });
+    expect(picker).toBeDisabled();
+    expect(accent).toHaveAccessibleDescription(note);
+    expect(picker).toHaveAccessibleDescription(note);
+    expect(accent).toHaveValue("#ff0066");
+    expect(state.settings.overrides).toEqual({ accent: "#ff0066", font_size: 15 });
+    const hcAccent = BUILTIN_THEME_FILES.get("high-contrast")?.tokens.color?.accent;
+    expect(hcAccent).toBe("#ffff00");
+    expect(ownAccent()).toBe(hcAccent);
+    expect(mockConfigTheme(env.transport).tokens["font-size"]?.body).toBe("15px");
+    // The text size can still be changed.
+    expect(screen.getByLabelText("Text size")).toBeEnabled();
+
+    // Another theme: the accent applies again.
+    fireEvent.click(screen.getByRole("radio", { name: /Sage/ }));
+    await waitFor(() => {
+      expect(accent).toBeEnabled();
+    });
+    expect(screen.queryByText(note)).toBeNull();
+    expect(ownAccent()).toBe("#ff0066");
+
+    await settleQueries(env);
+  });
+
+  it("shows the note when Follow Windows picks High contrast", async () => {
+    const env = createEnv();
+    const state = env.transport.data.features.appearance;
+    state.settings.overrides = { accent: "#ff0066" };
+    act(() => {
+      setMockSystemAppearance(env.transport, { scheme: "dark", high_contrast: true });
+    });
+    expect(state.settings.follow_system).toBe(true);
+    expect(mockConfigTheme(env.transport).tokens.color?.accent).toBe("#ffff00");
+    renderNode(widget("appearance-settings"), env);
+    const note = await screen.findByText("High contrast uses its own colours.");
+    const accent = screen.getByRole("textbox", { name: "Accent colour" });
+    expect(accent).toBeDisabled();
+    expect(accent).toHaveAttribute("aria-describedby", note.id);
+    expect(accent).toHaveValue("#ff0066");
+    act(() => {
+      setMockSystemAppearance(env.transport, { scheme: "light", high_contrast: false });
+    });
+    expect(mockConfigTheme(env.transport).tokens.color?.accent).toBe("#ff0066");
+    await settleQueries(env);
+  });
+
+  it("ignores the accent for user themes of the high-contrast kind", () => {
+    const themes: ThemeInfo[] = [
+      ...builtinThemes(),
+      {
+        id: "ink",
+        name: "Ink",
+        kind: "high-contrast",
+        source: "user",
+        extends: "high-contrast",
+        file: "themes/ink.kdl",
+      },
+      {
+        id: "ocean",
+        name: "Ocean",
+        kind: "dark",
+        source: "user",
+        extends: "graphite",
+        file: "themes/ocean.kdl",
+      },
+    ];
+    expect(accentIgnored("high-contrast", themes)).toBe(true);
+    expect(accentIgnored("ink", themes)).toBe(true);
+    for (const id of ["frost", "graphite", "ocean", "missing"]) {
+      expect(accentIgnored(id, themes), id).toBe(false);
+    }
   });
 
   it("applies the text size and corner radius sliders live, after a pause", async () => {

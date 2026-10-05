@@ -1166,6 +1166,21 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
 - P1 verify (ADR 0147): a one-line (`nowrap`) label belongs in a column sized by its text (`max-content`), never in a
   `minmax(0, 1fr)` column that can shrink under it (the text runs under the next control; the helper's `overflowing`
   check finds it).
+- Control widths (ADR 0160): text-like controls (`form.input` / `form.select` / `form.textarea`) fill their field's
+  column or block by default (`theme/skin.ts`: `width: 100%`, `flex-basis: content` so a flex row keeps their content
+  as basis); a control that is small on purpose carries `data-width="short" | "medium" | "content"` (on the control or
+  its picker's root; `CONTROL_WIDTHS`, `SelectField width=`, `NumberField` and number / time inputs are `short`); rows
+  of controls side by side are listed in `skinResponsive.ts` `FIELD_ROWS`. The responsive helper's `undersized-control`
+  check fails a control left at the browser's default width (free room beside it, or short of its column's shared right
+  edge); `p1-windows.spec.ts` has a `pim` group (the PIM dialogs) and `expectLinedUp` for To / Cc / Bcc / Subject,
+  account setup, rule editor, event and contact editor fields.
+- Accent in High contrast (ADR 0161): the user's accent override is dropped while the active theme's kind is
+  `high-contrast` (fixed, Follow Windows, user themes extending it; `nail_api::appearance::accent_ignored`, UI
+  `accentIgnored`); `theme.kdl` keeps the value; Settings → Appearance disables the accent with a note.
+- Inline images (ADR 0162): `AttachmentInfo.shown_in_body` = the sanitized HTML body keeps a `cid:` reference to the
+  part and it is an image the reader embeds (`SanitizedHtml::inline_shown`); the reader's `widgets/AttachmentList.tsx`
+  hides those cards behind "Show all attachments (N)" (`aria-expanded`); `has_attachments`, plug-in bodies and the
+  print view leave them out too. `inline` stays the header guess.
 - P2 contract (ADR 0148): a conversation listed in a folder = the thread's messages there + the user's own messages
   of the thread from the same accounts' Sent folders (`from_me`); drafts never join (Drafts lists each draft alone);
   without a folder every folder but Drafts / Trash / Junk. "me" comes from the accounts' identities. The default

@@ -28,9 +28,9 @@
 //! `nail-proxy:` URL, [`crate::remote_content`]) instead of removing it.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use ammonia::{Builder, UrlRelative};
 
@@ -46,10 +46,15 @@ pub struct SanitizedHtml {
     /// Remote references found (`src` / `background` attributes and CSS
     /// `url(...)` in `style`), whether removed or rewritten.
     pub remote_resources: u32,
+    /// Normalized Content-IDs (see [`InlineImages`]) of the inline images
+    /// the sanitized document refers to (ADR 0162): references that were
+    /// kept or embedded, never removed ones. Empty for fragments.
+    pub inline_shown: BTreeSet<String>,
 }
 
 /// The `data:` URLs of a message's inline image parts by `Content-ID`
-/// (without `cid:` and angle brackets), for [`sanitize_mail_html`].
+/// (without `cid:` and angle brackets, ignoring case), for
+/// [`sanitize_mail_html`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InlineImages {
     by_cid: HashMap<String, String>,
@@ -61,9 +66,12 @@ impl InlineImages {
         self.by_cid.insert(normalize_cid(cid), data_url);
     }
 
-    /// The `data:` URL of `cid` (with or without `cid:` / angle brackets).
+    /// The `data:` URL of `cid` (with or without `cid:` / angle brackets;
+    /// a `cid:` URL's percent escapes are decoded, RFC 2392).
     pub fn get(&self, cid: &str) -> Option<&str> {
-        self.by_cid.get(&normalize_cid(cid)).map(String::as_str)
+        self.by_cid
+            .get(&normalize_cid(&percent_decode(cid)))
+            .map(String::as_str)
     }
 
     /// Whether no image is known.
@@ -72,11 +80,45 @@ impl InlineImages {
     }
 }
 
-/// A Content-ID without `cid:`, angle brackets and surrounding blanks.
+/// A Content-ID without `cid:` (any case), angle brackets and surrounding
+/// blanks, in lower case: mail clients match Content-IDs ignoring case.
 pub(crate) fn normalize_cid(cid: &str) -> String {
     let cid = cid.trim();
-    let cid = cid.strip_prefix("cid:").unwrap_or(cid);
-    cid.trim_start_matches('<').trim_end_matches('>').to_owned()
+    let cid = match cid.get(..4) {
+        Some(scheme) if scheme.eq_ignore_ascii_case("cid:") => cid.get(4..).unwrap_or_default(),
+        _ => cid,
+    };
+    cid.trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>')
+        .to_lowercase()
+}
+
+/// `value` with its `%XX` escapes decoded (a `cid:` URL is the percent-encoded
+/// Content-ID, RFC 2392). Invalid escapes and non-UTF-8 results stay as
+/// written.
+fn percent_decode(value: &str) -> Cow<'_, str> {
+    if !value.contains('%') {
+        return Cow::Borrowed(value);
+    }
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while let Some(&byte) = bytes.get(i) {
+        let escaped = (byte == b'%')
+            .then(|| bytes.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|hex| std::str::from_utf8(hex).ok())
+            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+        if let Some(decoded) = escaped {
+            out.push(decoded);
+            i += 3;
+        } else {
+            out.push(byte);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_or(Cow::Borrowed(value), Cow::Owned)
 }
 
 /// What the filters record and use while one body is sanitized.
@@ -90,6 +132,8 @@ pub(crate) struct Context {
     document: bool,
     inline: InlineImages,
     embed: bool,
+    /// The normalized Content-IDs of the inline images kept so far.
+    shown: Mutex<BTreeSet<String>>,
 }
 
 impl Context {
@@ -101,6 +145,7 @@ impl Context {
             document: false,
             inline: InlineImages::default(),
             embed: true,
+            shown: Mutex::new(BTreeSet::new()),
         }
     }
 
@@ -130,6 +175,14 @@ impl Context {
         self.blocked.load(Ordering::Relaxed)
     }
 
+    /// The normalized Content-IDs of the inline images kept so far.
+    pub(crate) fn shown(&self) -> BTreeSet<String> {
+        self.shown
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// Counts one remote reference and returns its replacement, or marks
     /// the content blocked and returns `None`.
     fn replace(&self, value: &str) -> Option<String> {
@@ -153,6 +206,10 @@ impl Context {
             return Some(Cow::Borrowed(value));
         }
         let url = self.inline.get(value)?;
+        self.shown
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(normalize_cid(&percent_decode(value)));
         Some(if self.embed {
             Cow::Owned(url.to_owned())
         } else {
@@ -251,6 +308,7 @@ pub fn sanitize_html_with(html: &str, rewriter: Option<ProxyRewriter>) -> Saniti
         html,
         remote_content_blocked: ctx.blocked(),
         remote_resources: ctx.remote_count(),
+        inline_shown: ctx.shown(),
     }
 }
 
@@ -303,6 +361,7 @@ fn sanitize_document(html: &str, ctx: Context) -> SanitizedHtml {
         html,
         remote_content_blocked: ctx.blocked(),
         remote_resources: ctx.remote_count(),
+        inline_shown: ctx.shown(),
     }
 }
 
@@ -861,6 +920,45 @@ mod tests {
     }
 
     #[test]
+    fn documents_report_the_inline_images_they_keep() {
+        let shown = |html: &str| mail(html).inline_shown.into_iter().collect::<Vec<_>>();
+        let logo = vec!["logo@shop.example".to_owned()];
+        assert_eq!(shown(NEWSLETTER), logo);
+        // Any case, angle brackets, percent escapes; in attributes and styles.
+        assert_eq!(shown(r#"<img src="CID:%3CLogo%40Shop.example%3E">"#), logo);
+        assert_eq!(
+            shown(r#"<div style="background: url(cid:logo@shop.example)">x</div>"#),
+            logo
+        );
+        assert_eq!(
+            shown(
+                r#"<style>.a { background: url(cid:logo@shop.example) }</style><p class="a">x</p>"#
+            ),
+            logo
+        );
+        assert_eq!(
+            shown(r#"<body background="cid:logo@shop.example"><p>x</p></body>"#),
+            logo
+        );
+        // Removed content shows nothing; unknown parts are not reported.
+        assert!(shown(r#"<script>document.write('<img src="cid:logo@shop.example">')</script><svg><image href="cid:logo@shop.example"/></svg><p>x</p>"#).is_empty());
+        assert!(
+            shown(r#"<img src="cid:gone@shop.example"><a href="cid:logo@shop.example">x</a>"#)
+                .is_empty()
+        );
+        // The portable variant (cid: references kept) reports the same.
+        let mut images = InlineImages::default();
+        images.insert(
+            "<logo@shop.example>",
+            "data:image/png;base64,iVBORw0KGgo=".to_owned(),
+        );
+        let out = sanitize_mail_html_portable(NEWSLETTER, None, images);
+        assert_eq!(out.inline_shown.into_iter().collect::<Vec<_>>(), logo);
+        // Fragments report nothing.
+        assert!(clean(NEWSLETTER).inline_shown.is_empty());
+    }
+
+    #[test]
     fn mail_documents_proxy_remote_style_sheet_urls_when_allowed() {
         let rewriter: ProxyRewriter =
             Arc::new(|url: &str| Some(format!("nail-proxy:{}", url.len())));
@@ -940,6 +1038,12 @@ mod tests {
         assert!(images.is_empty());
         images.insert(" <A@b> ", "data:image/gif;base64,R0lG".to_owned());
         assert_eq!(images.get("cid:A@b"), Some("data:image/gif;base64,R0lG"));
-        assert_eq!(images.get("a@b"), None);
+        // Case, the scheme's case and RFC 2392 percent escapes do not matter.
+        assert_eq!(images.get("a@b"), Some("data:image/gif;base64,R0lG"));
+        assert_eq!(images.get("CID:a%40B"), Some("data:image/gif;base64,R0lG"));
+        assert_eq!(images.get("cid:b@a"), None);
+        assert_eq!(percent_decode("a%4"), "a%4");
+        assert_eq!(percent_decode("a%zz%41"), "a%zzA");
+        assert_eq!(percent_decode("%ff"), "%ff");
     }
 }

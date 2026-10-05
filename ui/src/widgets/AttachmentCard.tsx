@@ -150,6 +150,7 @@ export function AttachmentCard({
       data-part="attachment-card"
       data-mime={attachment.mime}
       data-inline={attachment.inline ? "" : undefined}
+      data-embedded={attachment.shown_in_body ? "" : undefined}
       data-state={save === "idle" ? undefined : save}
     >
       <span data-part="attachment-card.type" data-kind={type.kind} aria-hidden="true">

@@ -157,7 +157,14 @@ function addMessage(
     text,
     sanitized_html: null,
     attachments: [
-      { index: 0, filename: "invite.ics", mime: "text/calendar", size: 1_204, inline: false },
+      {
+        index: 0,
+        filename: "invite.ics",
+        mime: "text/calendar",
+        size: 1_204,
+        inline: false,
+        shown_in_body: false,
+      },
     ],
     remote_content_blocked: false,
   };

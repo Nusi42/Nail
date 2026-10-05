@@ -199,6 +199,7 @@ export function ComposerSecurity({
         <SelectField
           labelId="security-compose-technology"
           name="compose-technology"
+          width="content"
           value={effective.technology ?? ""}
           onChange={(v) => {
             set({ technology: v === "" ? null : (v as CryptoTechnology) });

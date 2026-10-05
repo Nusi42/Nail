@@ -576,6 +576,22 @@ pub fn theme_overrides(file: &ThemeFile) -> ThemeOverrides {
     }
 }
 
+/// Removes the accent override (the base value of [`ACCENT_TOKEN`]) from
+/// the user's file; per-mode values the user wrote by hand stay.
+fn drop_accent_override(file: &mut ThemeFile) {
+    let (category, name) = ACCENT_TOKEN;
+    let Some(tokens) = file.tokens.get_mut(category) else {
+        return;
+    };
+    let Some(def) = tokens.get_mut(name) else {
+        return;
+    };
+    def.value = None;
+    if def.modes.is_empty() {
+        tokens.shift_remove(name);
+    }
+}
+
 /// `"15px"` / `"15"` → 15; anything else (fractions, other units,
 /// references, negative numbers) → `None`.
 pub(crate) fn whole_pixels(value: &str) -> Option<u32> {
@@ -604,6 +620,10 @@ pub struct Selected {
 /// file (with `extends`) is merged onto the active theme's chain; its
 /// `extends` and `appearance` only select. A complete file (no `extends`)
 /// is used as it is, as before M5 (only its density setting applies).
+/// While the active theme is a high-contrast one
+/// ([`appearance::accent_ignored`], ADR 0161) a sparse file's accent
+/// override is left out, so the theme's own accent applies; the file
+/// itself is not changed.
 /// Errors are those of the user's file merged onto the active theme (e.g.
 /// a reference to a token no theme in the chain defines).
 pub fn resolve_selected(
@@ -612,7 +632,8 @@ pub fn resolve_selected(
     system: Option<SystemAppearance>,
 ) -> Result<Selected, Vec<ConfigError>> {
     let settings = appearance_settings(user);
-    let active = appearance::active_theme(&settings, system, &catalog.themes());
+    let themes = catalog.themes();
+    let active = appearance::active_theme(&settings, system, &themes);
     let base = catalog
         .merged(&active)
         .or_else(|| catalog.merged(appearance::DEFAULT_LIGHT_THEME))
@@ -620,7 +641,13 @@ pub fn resolve_selected(
     let file = match user {
         None => base,
         Some(user) if user.extends.is_none() => user.clone(),
-        Some(user) => base.merge(user.clone()),
+        Some(user) => {
+            let mut user = user.clone();
+            if appearance::accent_ignored(&active, &themes) {
+                drop_accent_override(&mut user);
+            }
+            base.merge(user)
+        }
     };
     let mut theme = file.resolve_all()?;
     theme.density = settings.density;
@@ -718,6 +745,41 @@ mod tests {
             kind_of_mode(ThemeMode::HighContrast),
             ThemeKind::HighContrast
         );
+    }
+
+    #[test]
+    fn dropping_the_accent_override_keeps_hand_written_modes() {
+        let parse = |text: &str| ThemeFile::parse(text, "theme.kdl").unwrap();
+        let mut only = parse(
+            "theme \"Mine\" extends=\"frost\" {
+    tokens {
+        color \"accent\" \"#ff0066\"
+        color \"bg\" \"#ffffff\"
+    }
+}
+",
+        );
+        drop_accent_override(&mut only);
+        let colors = &only.tokens["color"];
+        assert!(colors.get("accent").is_none());
+        assert!(colors.get("bg").is_some(), "other tokens stay");
+        let mut with_modes = parse(
+            "theme \"Mine\" extends=\"frost\" {
+    tokens {
+        color \"accent\" \"#ff0066\" print=\"#000000\"
+    }
+}
+",
+        );
+        drop_accent_override(&mut with_modes);
+        let accent = &with_modes.tokens["color"]["accent"];
+        assert!(accent.value.is_none());
+        assert_eq!(accent.modes["print"].value, "#000000");
+        // Nothing to drop: unchanged.
+        let mut none = parse("theme \"Mine\" extends=\"frost\"");
+        let before = none.clone();
+        drop_accent_override(&mut none);
+        assert_eq!(none, before);
     }
 
     #[test]

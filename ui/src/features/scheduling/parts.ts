@@ -1,7 +1,8 @@
 /**
  * Structure of the scheduling parts every theme needs (like
  * `PIM_BASE_CSS`): the free/busy tracks are positioning layers (blocks and
- * the planned meeting are placed by geometry), lists without bullets.
+ * the planned meeting are placed by geometry; an hour label that does not
+ * fit its column ends in an ellipsis), lists without bullets.
  * Colours, borders, spacing and fonts come from the theme.
  *
  * The integrator appends this to the compiled theme's base CSS
@@ -28,6 +29,7 @@ export const SCHEDULING_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; marg
 [data-part="invitation.detail.value"] { margin: 0; }
 [data-part="freebusy.scale"], [data-part="freebusy.track"] { position: relative; min-height: 1.5em; }
 [data-part="freebusy.hour"], [data-part="freebusy.busy"], [data-part="freebusy.meeting"] { position: absolute; top: 0; bottom: 0; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
+[data-part="freebusy.hour"] { text-overflow: ellipsis; }
 [data-part="freebusy.meeting"] { pointer-events: none; }
 [data-part="freebusy.busy"][data-kind="tentative"] { z-index: 1; }
 [data-part="freebusy.busy"][data-kind="busy"] { z-index: 2; }

@@ -253,6 +253,7 @@ function Finder({
               <input
                 id={ids.capacity}
                 data-part="form.input"
+                data-width="short"
                 type="number"
                 inputMode="numeric"
                 min={1}

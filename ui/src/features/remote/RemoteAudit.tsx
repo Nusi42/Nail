@@ -67,6 +67,7 @@ export function RemoteAuditWidget({ node }: WidgetProps) {
         <SelectField
           labelId="remote-audit-filter-user"
           name="audit-user"
+          width="medium"
           value={userId ?? ""}
           onChange={(v) => {
             setUserId(v === "" ? null : v);

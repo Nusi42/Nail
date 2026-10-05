@@ -358,6 +358,88 @@ fn the_users_overrides_apply_on_top_of_every_theme() {
     assert!(theme.parts.iter().any(|p| p.selector == "message-list.row"));
 }
 
+/// A user theme on top of High contrast (its kind is high contrast).
+const INK: &str = r##"theme "Ink" extends="high-contrast" {
+    tokens { color "bg" "#000011"; }
+}
+"##;
+
+/// The user's `theme.kdl` with every override, on `extends`.
+fn with_overrides(extends: &str, follow: bool) -> ThemeFile {
+    parse(&format!(
+        r##"theme "Mine" extends="{extends}" {{
+    appearance follow-system={}
+    tokens {{
+        color "accent" "#ff0066"
+        font-size "body" 15
+        radius "md" 8
+    }}
+}}"##,
+        if follow { "#true" } else { "#false" }
+    ))
+}
+
+#[test]
+fn the_accent_override_is_ignored_while_a_high_contrast_theme_is_active() {
+    // ADR 0161.
+    let catalog = ThemeCatalog::with_user_themes(vec![user("ink", INK)]);
+    assert_eq!(catalog.get("ink").unwrap().kind, ThemeKind::HighContrast);
+    let hc = builtin("high-contrast");
+    let hc_accent = token(&hc, "color", "accent");
+    assert_eq!(hc_accent, Some("#ffff00"));
+    let check_ignored = |file: &ThemeFile, system, active: &str| {
+        let selected = resolve_selected(&catalog, Some(file), system).unwrap();
+        assert_eq!(selected.active, active);
+        let theme = &selected.theme;
+        assert_eq!(token(theme, "color", "accent"), hc_accent, "{active}");
+        // The theme's own per-mode values (the print view) stay too.
+        assert_eq!(
+            theme.modes["print"].get("color", "accent"),
+            hc.modes["print"].get("color", "accent"),
+            "{active}"
+        );
+        // Text size and radius still apply.
+        assert_eq!(token(theme, "font-size", "body"), Some("15px"));
+        assert_eq!(token(theme, "radius", "md"), Some("8px"));
+        // The stored value is kept.
+        assert_eq!(
+            selected.settings.overrides.accent.as_deref(),
+            Some("#ff0066")
+        );
+        selected
+    };
+    // High contrast picked as the fixed theme.
+    check_ignored(
+        &with_overrides("high-contrast", false),
+        Some(SystemAppearance::LIGHT),
+        "high-contrast",
+    );
+    // Follow Windows with a Windows contrast theme on.
+    let following = with_overrides("default", true);
+    check_ignored(&following, Some(HIGH_CONTRAST), "high-contrast");
+    // A user theme extending High contrast.
+    let ink = check_ignored(
+        &with_overrides("ink", false),
+        Some(SystemAppearance::DARK),
+        "ink",
+    );
+    assert_eq!(token(&ink.theme, "color", "bg"), Some("#000011"));
+
+    // Any other theme: the override applies again.
+    let light =
+        resolve_selected(&catalog, Some(&following), Some(SystemAppearance::LIGHT)).unwrap();
+    assert_eq!(light.active, "frost");
+    assert_eq!(token(&light.theme, "color", "accent"), Some("#ff0066"));
+    let fixed = resolve_selected(
+        &catalog,
+        Some(&with_overrides("graphite", false)),
+        Some(HIGH_CONTRAST),
+    )
+    .unwrap();
+    assert_eq!(fixed.active, "graphite", "a fixed theme ignores the OS");
+    assert_eq!(token(&fixed.theme, "color", "accent"), Some("#ff0066"));
+}
+
 #[test]
 fn a_broken_or_missing_fixed_theme_falls_back_by_kind() {
     let catalog = ThemeCatalog::with_user_themes(vec![
@@ -837,6 +919,67 @@ fn set_theme_preferences_writes_the_appearance_node_and_overrides() {
         text,
         "nothing written"
     );
+}
+
+#[test]
+fn the_manager_ignores_the_accent_in_high_contrast_and_keeps_it_stored() {
+    // ADR 0161: the host following Windows, and a remote session's own OS state.
+    let dir = tempfile::tempdir().unwrap();
+    let manager = ConfigManager::load(dir.path());
+    manager.set_system_appearance(Some(SystemAppearance::LIGHT));
+    let preferences = ThemePreferences {
+        overrides: ThemeOverrides {
+            font_size: Some(16),
+            radius: None,
+            accent: Some("#ff0066".into()),
+        },
+        ..prefs(true, "frost", "graphite")
+    };
+    manager.set_theme_preferences(&preferences).unwrap();
+    assert_eq!(token(&manager.theme(), "color", "accent"), Some("#ff0066"));
+    let stored = std::fs::read_to_string(dir.path().join("theme.kdl")).unwrap();
+    assert!(stored.contains(r##"color "accent" "#ff0066""##), "{stored}");
+
+    // A remote session in a contrast theme: its own theme without the accent.
+    let (appearance, theme) = manager.appearance_for(Some(HIGH_CONTRAST));
+    assert_eq!(appearance.active, "high-contrast");
+    assert_eq!(token(&theme, "color", "accent"), Some("#ffff00"));
+    assert_eq!(token(&theme, "font-size", "body"), Some("16px"));
+    assert_eq!(
+        token(&manager.theme(), "color", "accent"),
+        Some("#ff0066"),
+        "the host is unchanged"
+    );
+
+    // Windows switches to a contrast theme.
+    let updates = manager.set_system_appearance(Some(HIGH_CONTRAST));
+    let [
+        ConfigUpdate::ThemeChanged { appearance },
+        ConfigUpdate::Changed { theme, .. },
+    ] = updates.as_slice()
+    else {
+        panic!("{updates:?}")
+    };
+    assert_eq!(appearance.active, "high-contrast");
+    assert_eq!(
+        appearance.settings.overrides.accent.as_deref(),
+        Some("#ff0066")
+    );
+    assert!(nail_api::appearance::accent_ignored(
+        &appearance.active,
+        &appearance.themes
+    ));
+    assert_eq!(token(theme, "color", "accent"), Some("#ffff00"));
+    assert_eq!(token(theme, "font-size", "body"), Some("16px"));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("theme.kdl")).unwrap(),
+        stored,
+        "nothing written"
+    );
+
+    // Back to light: the accent applies again.
+    manager.set_system_appearance(Some(SystemAppearance::LIGHT));
+    assert_eq!(token(&manager.theme(), "color", "accent"), Some("#ff0066"));
 }
 
 #[test]

@@ -383,6 +383,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
           <input
             id={ids.percent}
             data-part="form.input"
+            data-width="short"
             type="number"
             inputMode="numeric"
             min={0}

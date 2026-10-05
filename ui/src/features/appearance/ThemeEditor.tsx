@@ -161,6 +161,8 @@ function EditorBody({
   // The Appearance overrides win over the theme: the preview and the
   // contrast check show what the app will really wear (ADR 0138).
   const overrides = overrideTokens(appearance.settings.overrides);
+  // A high-contrast theme keeps its own accent (ADR 0161).
+  if (theme.kind === "high-contrast") overrides.delete("color.accent");
   const shownDrafts = withOverrides(edits.drafts, overrides, mode);
   const problem = contrastProblems(resolveTokenValues(d.tokens, mode, shownDrafts))[0];
   const clearOverride = (token: string) => {

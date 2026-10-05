@@ -18,7 +18,18 @@
  *   other — a text leaf counts with the text that sticks out of it sideways, so
  *   a label running under the select beside it is an overlap;
  * - `misaligned`: the labels of one form column do not share a left edge
- *   (only for the groups a test names in `aligned`).
+ *   (only for the groups a test names in `aligned`);
+ * - `undersized-control` (ADR 0160): a text-like control (a text / email /
+ *   number / date … input, a textarea, a select, a combo box, a
+ *   contenteditable editor, a date / time segment group) left at the browser's
+ *   intrinsic width (about 20 characters) although its row offers room: the
+ *   free space beside it on its line is at least {@link UNDERSIZED_MIN_FREE}
+ *   px and it uses less than {@link UNDERSIZED_RATIO} of the width it could
+ *   have, or it stops short of the right edge its column siblings share.
+ *   Controls that are small on purpose (a port, minutes, a time, a search box
+ *   with its own width) carry `data-width="short" | "medium" | "content"` on
+ *   the control or its picker's root; the skin sizes those and the check skips
+ *   them.
  *
  * The checks look at visible `[data-part]` elements (and the controls and
  * text leaves among them) inside `scope`. Screenshots go to
@@ -51,7 +62,15 @@ export type IssueKind =
   | "overflowing"
   | "offscreen"
   | "overlap"
-  | "misaligned";
+  | "misaligned"
+  | "undersized-control";
+
+/** Free space (px) beside a control on its line that makes it `undersized-control`. */
+export const UNDERSIZED_MIN_FREE = 48;
+/** A control using less than this share of the width it could have is `undersized-control`. */
+export const UNDERSIZED_RATIO = 0.85;
+/** A control this far (px) short of its column siblings' shared right edge is `undersized-control`. */
+export const UNDERSIZED_EDGE = 24;
 
 export interface ResponsiveIssue {
   kind: IssueKind;
@@ -85,11 +104,14 @@ export interface CheckOptions {
 /** The raw facts a page reports; shaped like {@link ResponsiveIssue}. */
 type RawIssue = ResponsiveIssue;
 
+/** What the page-side check gets: the options plus the `undersized-control` limits. */
+type PageOptions = Required<CheckOptions> & { minFree: number; ratio: number; edge: number };
+
 /**
  * Runs inside the page: collects the issues of the current layout. It is
  * self-contained (serialized by Playwright), so it uses no imports.
  */
-function collectIssues(options: Required<CheckOptions>): RawIssue[] {
+function collectIssues(options: PageOptions): RawIssue[] {
   const tol = options.tolerance;
   const issues: RawIssue[] = [];
   const skip = new Set(options.skip);
@@ -108,8 +130,8 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
     const text = el.textContent.replace(/\s+/g, " ").trim().slice(0, 40);
     const label = el.getAttribute("aria-label") ?? "";
     return `${parts.join(" > ") || tag}${el.getAttribute("data-part") === null ? ` ${tag}` : ""}${
-      text ? ` "${text}"` : label ? ` [${label}]` : ""
-    }`;
+      text ? ` "${text}"` : ""
+    }${label ? ` [${label}]` : ""}`;
   };
   const fmt = (r: { left: number; top: number; width: number; height: number }) =>
     `${String(Math.round(r.left))},${String(Math.round(r.top))} ${String(Math.round(r.width))}×${String(Math.round(r.height))}`;
@@ -353,7 +375,188 @@ function collectIssues(options: Required<CheckOptions>): RawIssue[] {
       });
     }
   }
+
+  // Controls left at the browser's intrinsic width although their row has room.
+  if (!skip.has("undersized-control")) {
+    issues.push(...undersizedControls());
+  }
   return issues;
+
+  /** The `undersized-control` issues (see the module comment). */
+  function undersizedControls(): RawIssue[] {
+    const found: RawIssue[] = [];
+    // Layout, not visibility: a field scrolled out of its pane still has its row.
+    const layoutRect = (r: DOMRect): Box => ({
+      left: r.left,
+      top: r.top,
+      right: r.right,
+      bottom: r.bottom,
+      width: r.width,
+      height: r.height,
+    });
+    const layoutBox = (el: Element) => layoutRect(el.getBoundingClientRect());
+    const editable =
+      '[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]';
+    const candidates = Array.from(
+      root.querySelectorAll(
+        [
+          'input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"])',
+          "textarea",
+          "select",
+          '[role="combobox"]',
+          editable,
+          // A date / time field drawn as segments (react-aria's DateInput).
+          '[role="group"]:has(> [role="spinbutton"])',
+        ].join(", "),
+      ),
+    ).filter(
+      (el) =>
+        visible(el) &&
+        !ignored(el) &&
+        el.closest("[data-width]") === null &&
+        // The segments of a date / time field: the field (their group) is checked.
+        !el.matches('[role="spinbutton"]') &&
+        // A library's hidden form proxy (react-aria's date input), not shown to anyone.
+        el.closest('[aria-hidden="true"]') === null &&
+        // An editor's inner editable nodes; a combo box's own input inside its root.
+        el.parentElement?.closest(`${editable}, [role="combobox"]`) == null,
+    );
+    if (candidates.length === 0) return found;
+
+    /** What occupies a line: controls (their box), text (its glyphs), pictures. */
+    interface Occupant {
+      el: Element;
+      box: Box;
+    }
+    const occupants: Occupant[] = [];
+    for (const el of Array.from(root.querySelectorAll("*"))) {
+      if (!visible(el) || ignored(el)) continue;
+      if (isControl(el) || el.matches("img, svg, canvas, video, [role='img']")) {
+        if (el.parentElement?.closest("svg") != null) continue;
+        occupants.push({ el, box: layoutRect(el.getBoundingClientRect()) });
+        continue;
+      }
+      for (const node of Array.from(el.childNodes)) {
+        if (node.nodeType !== Node.TEXT_NODE || (node.textContent ?? "").trim() === "") continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const text = union(Array.from(range.getClientRects()).map(layoutRect));
+        if (text && text.width > tol && text.height > tol) occupants.push({ el, box: text });
+      }
+    }
+    /** Occupants of `within` on the horizontal band of `box` (half its height at least). */
+    const onBand = (box: Box, within: Element, except: Element) =>
+      occupants.filter((o) => {
+        if (!within.contains(o.el) || except.contains(o.el) || o.el.contains(except)) return false;
+        const shared = Math.min(o.box.bottom, box.bottom) - Math.max(o.box.top, box.top);
+        return shared >= Math.min(box.height, o.box.height) / 2;
+      });
+    /** `el`'s content box (inside border, padding and scroll bar). */
+    const contentBox = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      const left = r.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft);
+      const right =
+        r.left + parseFloat(s.borderLeftWidth) + el.clientWidth - parseFloat(s.paddingRight);
+      return { left, right };
+    };
+    /** Whether `el`'s width comes from its content rather than from its container. */
+    const shrinkWraps = (el: Element) => {
+      const s = getComputedStyle(el);
+      if (s.display.startsWith("inline") || s.float !== "none") return true;
+      if (s.position === "absolute" || s.position === "fixed") return true;
+      const parent = el.parentElement;
+      if (!parent) return false;
+      const ps = getComputedStyle(parent);
+      if (ps.display === "flex" || ps.display === "inline-flex") {
+        if (ps.flexDirection.startsWith("row")) return parseFloat(s.flexGrow) === 0;
+        const align = s.alignSelf === "auto" ? ps.alignItems : s.alignSelf;
+        return !["normal", "stretch"].includes(align);
+      }
+      if (ps.display === "grid" || ps.display === "inline-grid") {
+        const justify = s.justifySelf === "auto" ? ps.justifyItems : s.justifySelf;
+        return !["normal", "stretch", "legacy", "auto"].includes(justify);
+      }
+      return false;
+    };
+    /** Layers that bound the walk up from a control. */
+    const boundary =
+      '[data-part="window"], [data-part="view-host.view"], [role="dialog"], [role="menu"], [role="listbox"], body';
+
+    for (const control of candidates) {
+      const own = layoutBox(control);
+      if (own.width <= tol) continue;
+      // Rule 1: free room beside the control (or the content-sized box around it).
+      let item: Element = control;
+      let reason: string | null = null;
+      for (let depth = 0; depth < 8; depth += 1) {
+        const parent = item.parentElement;
+        if (!parent || item.matches(boundary)) break;
+        if (shrinkWraps(parent) && !parent.matches(boundary)) {
+          item = parent;
+          continue;
+        }
+        const ps = getComputedStyle(parent);
+        const s = getComputedStyle(item);
+        const flexRow =
+          (ps.display === "flex" || ps.display === "inline-flex") &&
+          ps.flexDirection.startsWith("row");
+        // Stretched by its grid area, or growing in its flex row: it takes what it gets.
+        const grid = ps.display === "grid" || ps.display === "inline-grid";
+        if (grid && !shrinkWraps(item)) break;
+        if (flexRow && parseFloat(s.flexGrow) > 0) break;
+        if (!shrinkWraps(item) && !flexRow && !item.matches("input, select, textarea")) break;
+        const box = layoutBox(item);
+        const room = contentBox(parent);
+        const middle = (box.left + box.right) / 2;
+        const band = onBand(box, parent, item);
+        const next = Math.min(
+          room.right,
+          ...band
+            .filter((o) => (o.box.left + o.box.right) / 2 > middle)
+            .map((o) => Math.max(o.box.left, box.right)),
+        );
+        const previous = Math.max(
+          room.left,
+          ...band
+            .filter((o) => (o.box.left + o.box.right) / 2 <= middle)
+            .map((o) => Math.min(o.box.right, box.left)),
+        );
+        const right = Math.max(0, next - box.right);
+        const free = right > tol ? right : Math.max(0, box.left - previous);
+        if (free >= options.minFree && own.width < options.ratio * (own.width + free)) {
+          reason = `${String(Math.round(own.width))}px wide with ${String(Math.round(free))}px free beside it in ${describe(parent)}`;
+        }
+        break;
+      }
+      // Rule 2: short of the right edge its column siblings share.
+      if (reason === null) {
+        const layer = control.closest(
+          'form, fieldset, [role="form"], [data-part="card"], [data-part="form.section"], [data-part="window"], [data-part="view-host.view"]',
+        );
+        const column = candidates.filter((other) => {
+          if (other === control) return false;
+          if (!(layer ?? document.body).contains(other)) return false;
+          return Math.abs(layoutBox(other).left - own.left) <= 2;
+        });
+        const rights = column.map((other) => layoutBox(other).right);
+        const shared = rights.filter((r) => rights.filter((x) => Math.abs(x - r) <= 2).length >= 2);
+        const edge = shared.length > 0 ? Math.max(...shared) : undefined;
+        if (edge !== undefined && edge - own.right >= options.edge) {
+          const band = onBand(own, layer ?? document.body, control).filter(
+            (o) => o.box.left < edge && o.box.right > own.right + tol,
+          );
+          if (band.length === 0) {
+            reason = `ends at ${String(Math.round(own.right))}, its column's controls at ${String(Math.round(edge))}`;
+          }
+        }
+      }
+      if (reason !== null) {
+        found.push({ kind: "undersized-control", element: describe(control), detail: reason });
+      }
+    }
+    return found;
+  }
 }
 
 /** The issues of the page's current layout (no resizing). */
@@ -367,6 +570,9 @@ export async function layoutIssues(
     skip: options.skip ?? [],
     aligned: options.aligned ?? [],
     tolerance: options.tolerance ?? 1,
+    minFree: UNDERSIZED_MIN_FREE,
+    ratio: UNDERSIZED_RATIO,
+    edge: UNDERSIZED_EDGE,
   });
 }
 

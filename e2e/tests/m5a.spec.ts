@@ -115,6 +115,54 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
   await expect.poll(themeFile).not.toContain('color "accent"');
 });
 
+test("High contrast keeps its own accent; the override applies again afterwards", async ({
+  page,
+}) => {
+  // ADR 0161: the accent override is ignored while a high-contrast theme is active.
+  await open(page);
+  const appearance = await openAppearance(page);
+  const field = appearance.getByRole("textbox", { name: "Accent colour", exact: true });
+  const picker = appearance.getByLabel("Pick the accent colour", { exact: true });
+  const noteText = "High contrast uses its own colours.";
+  const note = appearance.getByText(noteText, { exact: true });
+  await field.fill("#ff0066");
+  await appearance.getByRole("button", { name: "Apply" }).click();
+  await expectAccent(page, "#ff0066");
+  await expect.poll(themeFile).toContain('color "accent" "#ff0066"');
+  await expect(note).toBeHidden();
+  await expect(field).toBeEnabled();
+
+  // High contrast picked: its own accent, the control off with the note.
+  const gallery = appearance.getByRole("radiogroup", { name: "Themes" });
+  await gallery.getByRole("radio", { name: /High contrast/ }).click();
+  await expect.poll(themeFile).toContain('extends="high-contrast"');
+  await expectAccent(page, ACCENT["high-contrast"]);
+  await expect(note).toBeVisible();
+  await expect(field).toBeDisabled();
+  await expect(picker).toBeDisabled();
+  await expect(field).toHaveAccessibleDescription(noteText);
+  // The stored value is kept and shown.
+  await expect(field).toHaveValue("#ff0066");
+  expect(themeFile()).toContain('color "accent" "#ff0066"');
+
+  // Another theme: the override applies again.
+  await gallery.getByRole("radio", { name: /Sage/ }).click();
+  await expectAccent(page, "#ff0066");
+  await expect(note).toBeHidden();
+  await expect(field).toBeEnabled();
+
+  // Follow Windows choosing High contrast does the same.
+  await appearance.getByRole("switch", { name: "Follow Windows" }).click();
+  await expect.poll(themeFile).toContain("follow-system=#true");
+  await control(server, "system-appearance", { scheme: "dark", high_contrast: true });
+  await expectAccent(page, ACCENT["high-contrast"]);
+  await expect(note).toBeVisible();
+  await expect(field).toBeDisabled();
+  await control(server, "system-appearance", { scheme: "light" });
+  await expectAccent(page, "#ff0066");
+  await expect(note).toBeHidden();
+});
+
 test("Compact density applies to every theme and hides the tag line", async ({ page }) => {
   await open(page);
   const tagLines = page.locator('[data-part="message-list.row.tag-line"]');

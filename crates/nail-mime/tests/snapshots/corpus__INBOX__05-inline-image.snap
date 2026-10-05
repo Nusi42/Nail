@@ -10,6 +10,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
         "index": 0,
         "inline": true,
         "mime": "image/png",
+        "shown_in_body": true,
         "size": 70
       }
     ],

@@ -89,6 +89,7 @@ function QuietHoursEditor({
               <input
                 id={`${ids}-start`}
                 data-part="form.input"
+                data-width="short"
                 type="time"
                 value={quiet.start}
                 onChange={(e) => {
@@ -103,6 +104,7 @@ function QuietHoursEditor({
               <input
                 id={`${ids}-end`}
                 data-part="form.input"
+                data-width="short"
                 type="time"
                 value={quiet.end}
                 onChange={(e) => {

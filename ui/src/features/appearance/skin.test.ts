@@ -67,6 +67,7 @@ describe("appearance skin", () => {
       "theme-dialog",
       "appearance.history",
       "appearance.slider",
+      "appearance.accent-note",
     ]) {
       expect(emitted, part).toContain(part);
       expect(APPEARANCE_SKIN_CSS, part).toContain(`[data-part="${part}"]`);

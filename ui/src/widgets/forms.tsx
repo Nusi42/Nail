@@ -14,6 +14,12 @@ import type {
 } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
 
+/**
+ * A control that is small on purpose (ADR 0160): the skin sizes it
+ * (`theme/skin.ts` `CONTROL_WIDTHS`) instead of filling its field's column.
+ */
+export type ControlWidth = "short" | "medium" | "content";
+
 interface FieldProps {
   /** Fluent id of the label. */
   labelId: string;
@@ -122,6 +128,7 @@ export function NumberField({
       <input
         id={id}
         data-part="form.input"
+        data-width="short"
         type="number"
         name={name}
         min={min}
@@ -156,7 +163,14 @@ export function SelectField({
   value,
   choices,
   onChange,
-}: FieldProps & { value: string; choices: readonly Choice[]; onChange: (value: string) => void }) {
+  width,
+}: FieldProps & {
+  value: string;
+  choices: readonly Choice[];
+  onChange: (value: string) => void;
+  /** Leave out to fill the field's column. */
+  width?: ControlWidth;
+}) {
   const t = useT();
   const id = useId();
   return (
@@ -167,6 +181,7 @@ export function SelectField({
       <select
         id={id}
         data-part="form.select"
+        data-width={width}
         name={name}
         value={value}
         onChange={(event) => {
