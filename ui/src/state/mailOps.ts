@@ -14,6 +14,8 @@ import type {
   MoveTarget,
   Response,
   SearchHit,
+  ThreadId,
+  ThreadSummary,
 } from "../api/generated";
 import { queryKeys } from "./queries";
 import type { UiStore } from "./uiStore";
@@ -247,4 +249,57 @@ export async function deleteMessages(
   if (ids.length === 0) return;
   removeFromLists(ctx, ids);
   await queued(ctx, { type: "DeleteMessages", message_ids: [...ids], permanent });
+}
+
+/** Looks a conversation row up in the cached conversation lists (P3). */
+export function findThread(queryClient: QueryClient, id: ThreadId): ThreadSummary | undefined {
+  for (const [, data] of queryClient.getQueriesData<InfiniteData<ThreadsPage>>({
+    queryKey: queryKeys.allThreads,
+  })) {
+    for (const page of data?.pages ?? []) {
+      const found = page.threads.find((t) => t.id === id);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Rewrites cached conversation rows of `ids` with `patch`; a `null` result
+ * takes the row out of the list (archived, deleted; P3).
+ */
+export function patchThreads(
+  queryClient: QueryClient,
+  ids: readonly ThreadId[],
+  patch: (t: ThreadSummary) => ThreadSummary | null,
+): void {
+  if (ids.length === 0) return;
+  const wanted = new Set(ids);
+  queryClient.setQueriesData<InfiniteData<ThreadsPage>>(
+    { queryKey: queryKeys.allThreads },
+    (data) =>
+      data && {
+        ...data,
+        pages: data.pages.map((page) => {
+          const threads = page.threads.flatMap((thread) => {
+            if (!wanted.has(thread.id)) return [thread];
+            const next = patch(thread);
+            return next ? [next] : [];
+          });
+          return {
+            ...page,
+            threads,
+            total: page.total - (page.threads.length - threads.length),
+          };
+        }),
+      },
+  );
+}
+
+/** Refetches everything a mail action may have changed (lists, folders, conversations). */
+export function refreshAfterAction(queryClient: QueryClient): void {
+  refresh(queryClient);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allMessages });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allSearches });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allThreadDetails });
 }

@@ -76,7 +76,10 @@ function select(ui: UiStore, target: ContextTarget): void {
     target.messageId !== null
   ) {
     state.selectMessage(target.messageId);
-    if (target.part === "message-list.row") state.selectThread(target.threadId);
+    // A Design B child row stands for its message alone (P3).
+    if (target.part === "message-list.row") {
+      state.selectThread(target.child ? null : target.threadId);
+    }
   }
 }
 
@@ -85,6 +88,11 @@ const FOCUSABLE = '[tabindex]:not([tabindex="-1"]), button, a[href], input, sele
 export interface OpenOptions {
   /** Pointer position; `null` = next to the element (keyboard). */
   point: { x: number; y: number } | null;
+  /**
+   * Opened with the keyboard although a position is given (a "More"
+   * button activated with Enter / Space): the first item gets the focus.
+   */
+  keyboard?: boolean;
 }
 
 /**
@@ -95,7 +103,7 @@ export function openContextMenu(
   ui: UiStore,
   layout: ResolvedLayout,
   element: Element | null,
-  { point }: OpenOptions,
+  { point, keyboard }: OpenOptions,
 ): boolean {
   const target = findContextTarget(element);
   if (!target) return false;
@@ -108,7 +116,8 @@ export function openContextMenu(
     active instanceof HTMLElement && active !== element?.ownerDocument.body ? active : null;
   // By keyboard: back to what had focus; by pointer: the focusable around the target.
   const around = target.element.closest<HTMLElement>(FOCUSABLE);
-  const returnFocus = point === null && focused ? focused : (around ?? focused);
+  const returnFocus =
+    (point === null || keyboard === true) && focused ? focused : (around ?? focused);
   menuStoreFor(ui)
     .getState()
     .show({
@@ -117,7 +126,7 @@ export function openContextMenu(
       x: Math.round(point?.x ?? rect.left),
       y: Math.round(point?.y ?? rect.bottom),
       returnFocus,
-      keyboard: point === null,
+      keyboard: keyboard ?? point === null,
     });
   return true;
 }

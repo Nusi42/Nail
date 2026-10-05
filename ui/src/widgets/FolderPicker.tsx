@@ -4,7 +4,7 @@ import type { Folder } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { useComposeContext } from "../state/hooks";
-import { moveMessages } from "../state/mailOps";
+import { moveToFolder } from "../features/mail-actions/move";
 import { useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { flattenFolders } from "./FolderTree";
@@ -43,9 +43,10 @@ export function FolderPicker({ node }: WidgetProps) {
 
   const move = async (folder: Folder) => {
     if (selectedId === null) return;
+    // P3: the conversation (or card) the window opened for; the undo
+    // toast reports a failure.
     try {
-      await moveMessages(ctx, [selectedId], { folder_id: folder.id });
-      closeWindow(MOVE_WINDOW);
+      if (await moveToFolder(ctx, folder.id)) closeWindow(MOVE_WINDOW);
     } catch (e) {
       setError(errorMessageIdOf(e));
     }

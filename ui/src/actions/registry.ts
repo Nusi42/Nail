@@ -19,8 +19,18 @@ import {
   startRichCompose,
   startRichReply,
 } from "../features/composer/flows";
-import { deleteMessages, findSummary, moveMessages, setFlags } from "../state/mailOps";
 import { askDeletePermanently } from "../widgets/DeletePermanently";
+import {
+  allFlagged,
+  anyUnread,
+  canMark,
+  canUndo,
+  folderRole,
+  runMailAction,
+  undoLast,
+} from "../features/mail-actions/run";
+import { setPendingMove } from "../features/mail-actions/move";
+import { currentTargets, hasTargets, listSelectionFor } from "./mailTargets";
 import type { UiStore } from "../state/uiStore";
 
 export interface ActionContext {
@@ -50,7 +60,16 @@ function selected(ctx: ActionContext): string[] {
   return id === null ? [] : [id];
 }
 
-const hasSelection = (ctx: ActionContext) => ctx.store.getState().selectedMessageId !== null;
+/** Whether a mail action has a target (the selection, a menu's row or card). */
+const hasSelection = (ctx: ActionContext) => hasTargets(ctx.store);
+
+/** The role of the folder the list shows (`null` while searching or unknown). */
+function listedRole(ctx: ActionContext): FolderRole | null {
+  const ui = ctx.store.getState();
+  if (ui.search !== null) return null;
+  const scope = listSelectionFor(ctx.store).getState().scope;
+  return folderRole(ctx, scope.folderId ?? ui.activeFolderId);
+}
 const hasComposer = (ctx: ActionContext) => ctx.store.getState().composer !== null;
 
 /** `mail.move-to "archive"` (a role) or `mail.move-to "<folder id>"`. */
@@ -120,49 +139,78 @@ export const builtinActions: Record<string, ActionHandler> = {
   },
 
   // ---- Message writes (queued by the core) ----
+  // P3 (ADR 0164): Gmail-like — the selected conversation (or the picked
+  // rows, or a card's own message) through `ApplyMailAction`, one batch
+  // with one undo (`./mailTargets.ts`, `features/mail-actions`).
   "mail.archive": {
-    run: (ctx) => moveMessages(ctx, selected(ctx), { role: "archive" }),
+    run: async (ctx) => {
+      await runMailAction(ctx, currentTargets(ctx.store), { type: "archive" });
+    },
     enabled: hasSelection,
   },
   "mail.delete": {
-    run: (ctx) => deleteMessages(ctx, selected(ctx), false),
+    run: async (ctx) => {
+      const targets = currentTargets(ctx.store);
+      // In Trash, Delete deletes for good: ask first, with the count.
+      if (listedRole(ctx) === "trash") {
+        await askDeletePermanently(ctx, targets);
+        return;
+      }
+      await runMailAction(ctx, targets, { type: "trash" });
+    },
     enabled: hasSelection,
   },
   "mail.delete-permanently": {
-    // Asks first (a modal confirmation, M5c).
-    run: (ctx) => {
-      askDeletePermanently(ctx, selected(ctx));
-    },
+    // Asks first (a modal confirmation with the message count).
+    run: (ctx) => askDeletePermanently(ctx, currentTargets(ctx.store)),
     enabled: hasSelection,
   },
   "mail.toggle-read": {
-    run: (ctx) => {
-      const ids = selected(ctx);
-      const summary = ids[0] === undefined ? undefined : findSummary(ctx.queryClient, ids[0]);
-      return setFlags(ctx, ids, { seen: !(summary?.flags.seen ?? false) });
+    run: async (ctx) => {
+      const targets = currentTargets(ctx.store);
+      const read = anyUnread(ctx, targets.targets);
+      await runMailAction(ctx, targets, { type: "mark-read", read });
     },
     enabled: hasSelection,
   },
+  "mail.mark-read": {
+    run: async (ctx) => {
+      await runMailAction(ctx, currentTargets(ctx.store), { type: "mark-read", read: true });
+    },
+    enabled: (ctx) => canMark(ctx, currentTargets(ctx.store).targets, true),
+  },
+  "mail.mark-unread": {
+    run: async (ctx) => {
+      await runMailAction(ctx, currentTargets(ctx.store), { type: "mark-read", read: false });
+    },
+    enabled: (ctx) => canMark(ctx, currentTargets(ctx.store).targets, false),
+  },
   "mail.toggle-flag": {
-    run: (ctx) => {
-      const ids = selected(ctx);
-      const summary = ids[0] === undefined ? undefined : findSummary(ctx.queryClient, ids[0]);
-      return setFlags(ctx, ids, { flagged: !(summary?.flags.flagged ?? false) });
+    run: async (ctx) => {
+      const targets = currentTargets(ctx.store);
+      const flagged = !allFlagged(ctx, targets.targets);
+      await runMailAction(ctx, targets, { type: "flag", flagged });
     },
     enabled: hasSelection,
   },
   "mail.move": {
     run: (ctx) => {
+      // The move window acts on what was the target when it opened.
+      setPendingMove(ctx.store, currentTargets(ctx.store));
       ctx.store.getState().openWindow(WINDOWS.move);
     },
     enabled: hasSelection,
   },
   "mail.move-to": {
-    run: (ctx, args) => {
+    run: async (ctx, args) => {
       const target = moveTargetOf(args[0]);
-      if (target) return moveMessages(ctx, selected(ctx), target);
+      if (target) await runMailAction(ctx, currentTargets(ctx.store), { type: "move", target });
     },
     enabled: (ctx, args) => hasSelection(ctx) && moveTargetOf(args[0]) !== null,
+  },
+  "mail.undo": {
+    run: (ctx) => undoLast(ctx),
+    enabled: (ctx) => canUndo(ctx.store),
   },
 
   // ---- Composer ----

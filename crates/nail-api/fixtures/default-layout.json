@@ -857,6 +857,24 @@
       "alias_of": null,
       "args": []
     },
+    "mail.mark-read": {
+      "label": "@mail-actions.action-mark-read",
+      "icon": "mail-open",
+      "alias_of": null,
+      "args": []
+    },
+    "mail.mark-unread": {
+      "label": "@mail-actions.action-mark-unread",
+      "icon": "mail",
+      "alias_of": null,
+      "args": []
+    },
+    "mail.undo": {
+      "label": "@mail-actions.action-undo",
+      "icon": "undo-2",
+      "alias_of": null,
+      "args": []
+    },
     "composer.send": {
       "label": "@composer.action.send",
       "icon": "send",
@@ -1785,6 +1803,12 @@
     },
     {
       "context": "global",
+      "key": "#",
+      "action": "mail.delete",
+      "args": []
+    },
+    {
+      "context": "global",
       "key": "delete",
       "action": "mail.delete",
       "args": []
@@ -1799,6 +1823,36 @@
       "context": "global",
       "key": "u",
       "action": "mail.toggle-read",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "shift+i",
+      "action": "mail.mark-read",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "shift+u",
+      "action": "mail.mark-unread",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "!",
+      "action": "junk.mark",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "l",
+      "action": "gmail.apply-labels",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "z",
+      "action": "mail.undo",
       "args": []
     },
     {
@@ -2494,16 +2548,54 @@
       },
       {
         "type": "action",
-        "action": "mail.toggle-read",
+        "action": "mail.mark-unread",
         "args": [],
-        "label": null,
+        "label": "@mail-actions.card-mark-unread",
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.mark-read",
+        "args": [],
+        "label": "@mail-actions.card-mark-read",
         "icon": null
       },
       {
         "type": "action",
         "action": "mail.toggle-flag",
         "args": [],
-        "label": null,
+        "label": "@mail-actions.card-toggle-flag",
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "mail.archive",
+        "args": [],
+        "label": "@mail-actions.card-archive",
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.move",
+        "args": [],
+        "label": "@mail-actions.card-move",
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.delete",
+        "args": [],
+        "label": "@mail-actions.card-delete",
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "junk.mark",
+        "args": [],
+        "label": "@mail-actions.card-junk",
         "icon": null
       }
     ],

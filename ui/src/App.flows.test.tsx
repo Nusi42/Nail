@@ -230,24 +230,36 @@ describe("M1a flows", () => {
     const rows = await ready();
     const first = must(rows[0]);
     const firstId = first.dataset.message ?? "";
+    // P3 (ADR 0164): the keys act on the selected conversation.
+    const conversation = (row: HTMLElement) => ({
+      kind: "conversation",
+      thread_id: row.dataset.thread,
+      folder_id: env.store.getState().activeFolderId,
+    });
+    const firstTarget = conversation(first);
     fireEvent.click(first);
     fireEvent.keyDown(first, { key: "s" });
     await eventually(() => {
       expect(env.transport.requests).toContainEqual(
-        expect.objectContaining({ type: "UpdateFlags", message_ids: [firstId] }),
+        expect.objectContaining({
+          type: "ApplyMailAction",
+          targets: [firstTarget],
+          action: expect.objectContaining({ type: "flag" }) as unknown,
+        }),
       );
     });
     fireEvent.keyDown(document.body, { key: "e" });
     await eventually(() => {
       expect(env.transport.requests).toContainEqual({
-        type: "MoveMessages",
-        message_ids: [firstId],
-        target: { role: "archive" },
+        type: "ApplyMailAction",
+        targets: [firstTarget],
+        action: { type: "archive" },
       });
     });
     const next = env.store.getState().selectedMessageId;
     expect(next).not.toBe(firstId);
     expect(next).not.toBeNull();
+    const nextThread = env.store.getState().selectedThreadId;
 
     fireEvent.keyDown(document.body, { key: "v" });
     const picker = await settleUntil(
@@ -264,9 +276,15 @@ describe("M1a flows", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     expect(env.transport.requests).toContainEqual({
-      type: "MoveMessages",
-      message_ids: [next],
-      target: { folder_id: "all/trash" },
+      type: "ApplyMailAction",
+      targets: [
+        {
+          kind: "conversation",
+          thread_id: nextThread,
+          folder_id: env.store.getState().activeFolderId,
+        },
+      ],
+      action: { type: "move", target: { folder_id: "all/trash" } },
     });
     // The mock core replays the writes with OpStatus events; the status bar
     // follows them until the queue is empty.

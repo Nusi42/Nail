@@ -313,7 +313,8 @@ test("two composers side by side: each edits and sends on its own", async ({ pag
 
 test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await lengthenAutosave(page);
-  await open(page);
+  // P3: demo-multi has a Trash ("Delete permanently?" asks only there).
+  await open(page, "demo-multi");
   await rows(page).first().click();
   await page.keyboard.press("c");
   const composer = composerWindow(page);
@@ -347,9 +348,8 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
     y: 400,
   });
   await expect(own).toHaveAttribute("data-snap", "right");
-  await rows(page)
-    .first()
-    .click({ position: { x: 40, y: 20 } });
+  // P3: "Delete permanently?" asks only for mail in Trash.
+  await selectInTrash(page, "Your weekly garden digest");
   await page.keyboard.press("Shift+Delete");
   const remove = win(page, "mail-delete-permanently");
   await expect(remove).toBeVisible();
@@ -398,3 +398,23 @@ test("Escape closes the focused window, not windows behind the main window", asy
   await expect(own.locator('[data-part="window.pop-out"]')).toHaveCount(0);
   await expect(win(page, "rules").locator('[data-part="window.pop-out"]')).toHaveCount(0);
 });
+
+/**
+ * P3 (ADR 0164): "Delete permanently?" asks only for mail in Trash / Junk.
+ * Moves the conversation `subject` to Trash and selects it there.
+ */
+async function selectInTrash(page: Page, subject: string): Promise<void> {
+  const row = rows(page).filter({ hasText: subject }).first();
+  const account = await row.getAttribute("data-account");
+  await row.click({ position: { x: 40, y: 20 } });
+  await page.keyboard.press("Delete");
+  await expect(row).toHaveCount(0);
+  await page
+    .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account ?? ""}"]`)
+    .first()
+    .click();
+  await rows(page)
+    .filter({ hasText: subject })
+    .first()
+    .click({ position: { x: 40, y: 20 } });
+}

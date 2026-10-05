@@ -24,7 +24,9 @@ import {
   toRfc3339,
   type SnoozePreset,
 } from "./model";
-import { snooze, unsnooze, useSnoozed } from "./queries";
+import { threadIdsOf } from "../../actions/mailTargets";
+import { runMailAction } from "../mail-actions/run";
+import { snooze, triageKeys, unsnooze, useSnoozed } from "./queries";
 import { useTriage } from "./store";
 import { formatDateTime } from "../../i18n/format";
 import { nonEmpty } from "../../text/empty";
@@ -68,6 +70,8 @@ export function SnoozeDialog({ close }: DialogProps) {
   const locale = useLocale();
   const ctx = useWriteContext();
   const ids = useTriage((s) => s.snoozing);
+  const targets = useTriage((s) => s.targets);
+  const conversations = targets === null ? 0 : threadIdsOf(targets.targets).length;
   const nowMs = useNow();
   const now = useMemo(() => new Date(nowMs), [nowMs]);
   const fieldId = useId();
@@ -86,8 +90,19 @@ export function SnoozeDialog({ close }: DialogProps) {
     setBusy(true);
     setProblem(null);
     try {
-      await snooze(ctx, ids, toRfc3339(date));
-      close();
+      if (targets === null) {
+        await snooze(ctx, ids, toRfc3339(date));
+        close();
+      } else {
+        // P3: one batch with one undo (the toast reports a refusal).
+        const result = await runMailAction(ctx, targets, {
+          type: "snooze",
+          until: toRfc3339(date),
+          wake_folder_id: null,
+        });
+        void ctx.queryClient.invalidateQueries({ queryKey: triageKeys.snoozed });
+        if (result !== null) close();
+      }
     } catch (error) {
       setProblem(errorMessageOf(error));
     } finally {
@@ -112,7 +127,11 @@ export function SnoozeDialog({ close }: DialogProps) {
 
   return (
     <form data-part="snooze" onSubmit={submit} aria-busy={busy} noValidate>
-      <p data-part="snooze.intro">{t("snooze-intro", { count: ids.length })}</p>
+      <p data-part="snooze.intro">
+        {conversations > 0 && conversations === ids.length
+          ? t("snooze-intro-conversations", { count: conversations })
+          : t("snooze-intro", { count: ids.length })}
+      </p>
       <ul data-part="snooze.presets" aria-label={t("snooze-presets-label")}>
         {SNOOZE_PRESETS.map((preset: SnoozePreset) => {
           const time = presetTime(preset, now);

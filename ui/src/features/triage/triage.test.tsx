@@ -151,8 +151,13 @@ describe("junk and snooze actions", () => {
     const actions = dispatcher(env);
     expect(actions.isEnabled("junk.mark")).toBe(true);
     await actions.dispatch("junk.mark");
-    expect(sent(env, "MarkJunk")).toEqual([
-      { type: "MarkJunk", message_ids: [message.id], junk: true },
+    // P3: one mail action (one batch with one undo) on the selection.
+    expect(sent(env, "ApplyMailAction")).toEqual([
+      {
+        type: "ApplyMailAction",
+        targets: [{ kind: "message", message_id: message.id }],
+        action: { type: "junk", junk: true },
+      },
     ]);
     expect(env.store.getState().selectedMessageId).toBeNull();
     expect(env.store.getState().pendingOps.length).toBe(1);
@@ -173,10 +178,13 @@ describe("junk and snooze actions", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    const [request] = sent(env, "SnoozeMessages");
+    const [request] = sent(env, "ApplyMailAction");
     const expected = presetTime("tomorrow", new Date());
-    expect(Date.parse(request?.until ?? "")).toBe(expected?.getTime());
-    expect(request?.message_ids).toEqual([message.id]);
+    expect(request?.action.type).toBe("snooze");
+    expect(Date.parse(request?.action.type === "snooze" ? request.action.until : "")).toBe(
+      expected?.getTime(),
+    );
+    expect(request?.targets).toEqual([{ kind: "message", message_id: message.id }]);
   });
 
   it("rejects a custom time in the past", async () => {
@@ -231,10 +239,10 @@ describe("triage widgets", () => {
     expect(bar).toHaveTextContent("Marked by you");
     await user.click(within(bar).getByRole("button", { name: "Not junk" }));
     await waitFor(() => {
-      expect(sent(env, "MarkJunk").at(-1)).toEqual({
-        type: "MarkJunk",
-        message_ids: [message.id],
-        junk: false,
+      expect(sent(env, "ApplyMailAction").at(-1)).toEqual({
+        type: "ApplyMailAction",
+        targets: [{ kind: "message", message_id: message.id }],
+        action: { type: "junk", junk: false },
       });
     });
   });

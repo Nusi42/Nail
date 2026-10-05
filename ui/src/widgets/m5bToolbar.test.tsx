@@ -192,7 +192,7 @@ describe("reader action bar (M5b)", () => {
     ).toHaveTextContent("Ctrl+P");
     fireEvent.click(toggle);
     await waitFor(() => {
-      expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(true);
+      expect(env.transport.requests.some((r) => r.type === "ApplyMailAction")).toBe(true);
     });
     expect(screen.queryByRole("menu")).toBeNull();
     expect(more).toHaveFocus();

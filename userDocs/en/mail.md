@@ -196,29 +196,59 @@ in the message** puts the list back.
 
 ## Flag, archive, move, delete
 
-The action bar above the message, the message's right-click menu (or
-**Shift+F10** / the menu key on the selected message) and these keys act on
-the selected message.
+The action bar above the reader, a row's right-click menu (or
+**Shift+F10** / the menu key on the selected row) and the keys below act on
+the **whole conversation**, like Gmail:
+
+| Action | What it acts on |
+| --- | --- |
+| Archive, Move, Snooze, Mark as junk | The conversation's messages in the folder you are looking at. Your own replies stay in Sent. |
+| Delete | Every message of the conversation, your replies in Sent included (never your drafts). |
+| Mark as read / unread, labels and categories | Every message of the conversation. |
+| Flag | The newest message you did not write (so the flag shows in the Inbox). |
+| Unflag | Every flagged message of the conversation. |
+| Delete permanently | Only in Trash or Junk: the conversation's messages there, after a question that says how many messages go. |
+
+**One message only.** Each message card in the reader has its own
+**Reply**, **Reply all**, **Forward** and **More** buttons (and its own
+right-click menu): **Delete this message**, **Archive this message**,
+**Move this message**, **Mark this message unread**, … act on that card's
+message alone. In a list that opens conversations into their messages
+(`threads="expandable"`), a selected message row acts on that message, and a
+list without conversations (`threads="off"`) acts on messages anyway.
+
+**Several conversations.** **Ctrl+click** rows to pick them one by one,
+**Shift+click** (or **Shift+↑** / **Shift+↓**) to pick a range; the next
+action acts on all of them.
+
+**Undo.** After each action a message at the bottom of the window says what
+happened ("Conversation archived", "3 conversations moved to Trash") with
+**Undo**. Undo — or `z` up to an hour later — puts every message back where
+it was, flags and labels included. Deleting permanently cannot be undone.
+
+After you archive, move or delete a conversation, the next one is selected.
 
 ### Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
 | `u` | Mark as read / unread |
+| `Shift+I`, `Shift+U` | Mark as read, mark as unread |
 | `s` | Flag / unflag |
 | `e` | Archive (to the account's Archive folder) |
 | `v` | Move to a folder: type part of its name, then click it or press Enter |
-| `Delete` | Move to Trash (in Trash: delete for good) |
-| `Shift+Delete` | Delete for good (asks first: **Delete permanently?**) |
-| `r`, `a`, `f` | Reply, reply all, forward |
+| `Delete`, `#` | Move to Trash (in Trash: delete for good, after a question) |
+| `Shift+Delete` | Delete for good (only in Trash or Junk; asks first: **Delete permanently?**) |
+| `z` | Undo the last action |
+| `r`, `a`, `f` | Reply, reply all, forward (to the newest message, or the card you are on) |
 | `b` | Snooze (see below) |
-| `Shift+J` | Mark as junk |
-| `Shift+F10`, menu key | The context menu of the selected message or focused folder |
+| `Shift+J`, `!` | Mark as junk |
+| `l` | Labels (Gmail accounts) |
+| `Shift+F10`, menu key | The context menu of the selected row or focused folder |
 | `Ctrl+P` | Print the selected message (see [Printing](printing.md)) |
 | `Ctrl+K` | The command palette: every action, searchable (see [Command palette](command-palette.md)) |
 
-Opening a message marks it as read. The next message is selected after you
-archive, move or delete one.
+Opening a message marks it as read.
 
 ## Snooze
 

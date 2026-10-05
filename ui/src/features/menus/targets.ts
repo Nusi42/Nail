@@ -34,6 +34,13 @@ export interface ContextTarget {
   accountId: string | null;
   /** Attachment index (`message-view.attachment`). */
   attachment: number | null;
+  /** A Design B child row (P3: acts on its message, never the conversation). */
+  child: boolean;
+  /**
+   * A card of the reader's feed, or something inside one (P3, ADR 0164: a
+   * card's own actions act on its message).
+   */
+  card: boolean;
 }
 
 /** Whether an element takes text input (it keeps the browser's own menu). */
@@ -72,6 +79,8 @@ function targetOf(element: HTMLElement, part: string): ContextTarget {
     folderId: attr(element, "data-folder"),
     accountId: attr(element, "data-account"),
     attachment: part === "message-view.attachment" && index !== null ? Number(index) : null,
+    child: element.getAttribute("data-part") === "message-list.child",
+    card: element.closest('[data-part="thread-view.card"]') !== null,
   };
 }
 

@@ -402,9 +402,9 @@ describe("folder-picker", () => {
       expect(env.store.getState().windows).toEqual([]);
     });
     expect(env.transport.requests).toContainEqual({
-      type: "MoveMessages",
-      message_ids: [`${INBOX}#2`],
-      target: { folder_id: "acc-personal/Inbox/Receipts" },
+      type: "ApplyMailAction",
+      targets: [{ kind: "message", message_id: `${INBOX}#2` }],
+      action: { type: "move", target: { folder_id: "acc-personal/Inbox/Receipts" } },
     });
   });
 
@@ -420,9 +420,9 @@ describe("folder-picker", () => {
     await user.type(screen.getByRole("textbox"), "arch{Enter}");
     await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
-        type: "MoveMessages",
-        message_ids: [`${INBOX}#3`],
-        target: { folder_id: "acc-personal/Archive" },
+        type: "ApplyMailAction",
+        targets: [{ kind: "message", message_id: `${INBOX}#3` }],
+        action: { type: "move", target: { folder_id: "acc-personal/Archive" } },
       });
     });
   });

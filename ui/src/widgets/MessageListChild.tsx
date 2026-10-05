@@ -20,7 +20,8 @@ export interface ChildRowProps {
   setsize: number;
   locale: string;
   now: number;
-  onChoose: () => void;
+  /** A click (Ctrl / Shift + click pick it besides others; P3). */
+  onChoose: (event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void;
 }
 
 /**

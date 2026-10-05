@@ -13,6 +13,8 @@ import type {
 } from "../../api/generated";
 import { queryKeys, useClient } from "../../state/queries";
 import { queued, removeFromLists, type WriteContext } from "../../state/mailOps";
+import type { ActionTargets } from "../../actions/mailTargets";
+import { runMailAction } from "../mail-actions/run";
 
 export const triageKeys = {
   junk: (accountId: AccountId | null) => ["triage", "junk", accountId] as const,
@@ -58,22 +60,20 @@ export function activeFolderRole(ctx: WriteContext): FolderRole | null {
 }
 
 /**
- * "Mark as junk / not junk": trains the classifier, sets `$Junk` /
- * `$NotJunk` and moves the mail (to Junk, or out of it) — one queued write.
- * The messages leave the list at once when they will leave its folder.
+ * "Mark as junk / not junk" on conversations (P3, ADR 0164): the selected
+ * conversation's messages in the listed folder (or a card's message) in
+ * one batch with one undo; the reader shows the new verdict.
  */
-export async function markJunk(
+export async function markJunkTargets(
   ctx: WriteContext,
-  ids: readonly MessageId[],
+  targets: ActionTargets,
   junk: boolean,
 ): Promise<void> {
-  if (ids.length === 0) return;
-  const inJunk = activeFolderRole(ctx) === "junk";
-  if (junk !== inJunk && ctx.store.getState().search === null) removeFromLists(ctx, ids);
-  await queued(ctx, { type: "MarkJunk", message_ids: [...ids], junk });
+  const result = await runMailAction(ctx, targets, { type: "junk", junk });
   invalidateJunk(ctx.queryClient);
-  // The reader shows the new verdict.
-  for (const id of ids) void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.message(id) });
+  for (const id of result?.message_ids ?? []) {
+    void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.message(id) });
+  }
 }
 
 /** Snoozes messages until a time; they leave every list until they wake. */

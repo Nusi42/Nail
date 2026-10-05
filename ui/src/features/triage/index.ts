@@ -11,14 +11,14 @@
  * `locales/{en,de}/triage.ftl`). The central registry (`../registry.ts`)
  * merges these exports into the app; see `../README.md`.
  */
-import type { MessageBody, MessageId } from "../../api/generated";
+import type { JsonValue, MessageBody } from "../../api/generated";
+import { currentTargets, type ActionTargets } from "../../actions/mailTargets";
 import type { ActionContext } from "../../actions/registry";
 import { queryKeys } from "../../state/queries";
-import { contextTarget } from "../menus";
 import type { Feature, FeatureEventHandler } from "../types";
 import { JunkSettingsWidget, JunkVerdictBar } from "./Junk";
 import { NotificationSettingsWidget, WebNotifications } from "./Notifications";
-import { invalidateJunk, markJunk, triageKeys } from "./queries";
+import { invalidateJunk, markJunkTargets, triageKeys } from "./queries";
 import { SNOOZED_WINDOW, SNOOZE_DIALOG, SnoozeDialog, SnoozeList, SnoozedDialog } from "./Snooze";
 import { triageStoreFor } from "./store";
 
@@ -32,14 +32,20 @@ export const widgets: Feature["widgets"] = {
   "notification-settings": NotificationSettingsWidget,
 };
 
-/** The messages an action is about: the context menu's, else the selection. */
-function targets(ctx: ActionContext): MessageId[] {
-  const fromMenu = contextTarget(ctx.store)?.messageId ?? null;
-  const id = fromMenu ?? ctx.store.getState().selectedMessageId;
-  return id === null ? [] : [id];
+/**
+ * What an action is about (P3, ADR 0164): the context menu's row or card,
+ * else the picked rows, else the selected conversation (or message).
+ */
+function targets(ctx: ActionContext, args: readonly JsonValue[] = []): ActionTargets {
+  // A message's own widget (the reader's junk verdict) names its message.
+  const id = args[0];
+  if (typeof id === "string" && id !== "") {
+    return { targets: [{ kind: "message", message_id: id }], source: "card" };
+  }
+  return currentTargets(ctx.store);
 }
 
-const hasTarget = (ctx: ActionContext) => targets(ctx).length > 0;
+const hasTarget = (ctx: ActionContext) => targets(ctx).targets.length > 0;
 
 /** Whether the list shows a Junk folder (of one account or All accounts). */
 function inJunkFolder(ctx: ActionContext): boolean {
@@ -52,10 +58,10 @@ function inJunkFolder(ctx: ActionContext): boolean {
 }
 
 /** Whether the target is junk: shown in a Junk folder, or the classifier says so. */
-function looksJunk(ctx: ActionContext): boolean {
+function looksJunk(ctx: ActionContext, args: readonly JsonValue[] = []): boolean {
   if (inJunkFolder(ctx)) return true;
-  const id = targets(ctx)[0];
-  if (id === undefined) return false;
+  const id = typeof args[0] === "string" ? args[0] : ctx.store.getState().selectedMessageId;
+  if (id === null) return false;
   const body = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
   return body?.junk?.junk === true;
 }
@@ -64,19 +70,19 @@ function looksJunk(ctx: ActionContext): boolean {
 export const actions: Feature["actions"] = {
   /** Marks the selected message as junk (trains the classifier, moves it to Junk). */
   "junk.mark": {
-    run: (ctx) => markJunk(ctx, targets(ctx), true),
+    run: (ctx) => markJunkTargets(ctx, targets(ctx), true),
     enabled: (ctx) => hasTarget(ctx) && !inJunkFolder(ctx),
   },
   /** Marks it as not junk (trains the classifier, moves it out of Junk). */
   "junk.not-junk": {
-    run: (ctx) => markJunk(ctx, targets(ctx), false),
+    run: (ctx, args) => markJunkTargets(ctx, targets(ctx, args), false),
     // Only for mail in Junk or flagged as junk (M5b review: hidden otherwise).
-    enabled: (ctx) => hasTarget(ctx) && looksJunk(ctx),
+    enabled: (ctx, args) => targets(ctx, args).targets.length > 0 && looksJunk(ctx, args),
   },
   /** Opens the snooze picker for the selected message. */
   "snooze.open": {
     run: (ctx) => {
-      triageStoreFor(ctx.store).getState().setSnoozing(targets(ctx));
+      triageStoreFor(ctx.store).getState().setSnoozeTargets(targets(ctx));
       ctx.store.getState().openWindow(SNOOZE_DIALOG);
     },
     enabled: hasTarget,
