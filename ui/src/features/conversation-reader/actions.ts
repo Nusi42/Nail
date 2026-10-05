@@ -9,6 +9,10 @@
  * The actions work on the feed in the document: the one around the focus,
  * else the first one shown. Without a feed (a layout of the strip, a lone
  * message) j / k step through the list like `mail.next` / `mail.previous`.
+ *
+ * From the list, Enter / o (`conversation.open-in-reader`, `keys
+ * context="list"`) move the focus into the reader: onto the selected card's
+ * header, else the newest open card, else the message shown alone.
  */
 import type { ActionInfo } from "../../actions/palette";
 import { builtinActions, type ActionContext, type ActionHandler } from "../../actions/registry";
@@ -22,6 +26,7 @@ export const CONVERSATION_ACTIONS = {
   toggleCard: "conversation.toggle-card",
   expandAll: "conversation.expand-all",
   collapseAll: "conversation.collapse-all",
+  openInReader: "conversation.open-in-reader",
 } as const;
 
 const FEED = '[data-part="thread-view"][data-mode="cards"]';
@@ -79,6 +84,27 @@ function stepMessages(delta: 1 | -1): void {
   }
 }
 
+/**
+ * Moves the focus from the list into the reader: the selected card's header
+ * (the conversation's primary message), else the newest open card, else
+ * the message shown alone. `false` when the reader shows nothing to focus.
+ */
+export function focusReader(doc: Document = document): boolean {
+  const feed = doc.querySelector<HTMLElement>(FEED);
+  if (feed !== null) {
+    const open = [...feed.querySelectorAll<HTMLElement>(`${CARD}[data-state~="expanded"]`)];
+    const card = feed.querySelector<HTMLElement>(`${CARD}[aria-current="true"]`) ?? open.at(-1);
+    const toggle = card?.querySelector<HTMLElement>(TOGGLE) ?? null;
+    if (toggle !== null) {
+      toggle.focus();
+      return true;
+    }
+  }
+  const view = doc.querySelector<HTMLElement>('[data-part="message-view"][data-message]');
+  view?.focus();
+  return view !== null;
+}
+
 function setAll(open: boolean): void {
   const feed = activeFeed();
   const threadId = feed?.dataset.thread;
@@ -127,6 +153,11 @@ export const conversationActions: Record<string, ActionHandler> = {
       setAll(false);
     },
   },
+  [CONVERSATION_ACTIONS.openInReader]: {
+    run: () => {
+      focusReader();
+    },
+  },
 };
 
 const reader = ["reader"] as const;
@@ -167,5 +198,10 @@ export const conversationActionInfo: Record<string, ActionInfo> = {
     title: "thread-view-action-collapse-all",
     availability: reader,
     icon: "minimize-2",
+  },
+  [CONVERSATION_ACTIONS.openInReader]: {
+    title: "thread-view-action-open-in-reader",
+    availability: ["list"],
+    icon: "mail-open",
   },
 };

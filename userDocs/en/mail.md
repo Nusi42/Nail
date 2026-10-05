@@ -64,8 +64,11 @@ message (your own replies count as activity):
 
 1. **Who** takes part — at most three names, the first ones and whoever
    wrote last, with "me" for you and in bold the people whose mail you have
-   not read yet ("Linus, Marie … Ada") — then a small **count** of the
-   messages (none for a single message) and the date of the newest one.
+   not read yet ("Linus, Marie … Ada"; first names when several people are
+   named, the full name shows when you point at one) — then a small
+   **count** of the messages (none for a single message) and the date of
+   the newest one. When the list is too narrow for the names, it leaves out
+   names before cutting them short: whoever wrote last and "me" stay.
 2. The **subject**.
 3. **Sender: preview** — who wrote the newest message and its first words.
 
@@ -92,7 +95,9 @@ first, under a header with the subject and the people taking part:
   the sender's avatar, name, date and the first words. Click a line (or
   press Enter) to open the card; click its header again to collapse it.
 - When more than four read messages lie between the first and the newest,
-  they fold into **N older messages**. Click it to show them.
+  they fold into **N older messages**, a line between the cards. Click it
+  (or press Enter on it) to show them; the focus moves to the first card it
+  revealed.
 - **Expand all** opens every card; **Collapse all** closes all but the
   newest.
 - Your own messages say "me" and are marked as sent by you.
@@ -118,8 +123,8 @@ Layout & toolbars; **Not now** keeps the strip and does not ask again.
 
 ### Keyboard
 
-In the reader (click a card, or press Tab until the conversation has the
-focus):
+In the list, `Enter` or `o` moves the focus into the reader, onto the
+conversation's open card. In the reader (or after clicking a card):
 
 | Key | Action |
 | --- | --- |
@@ -130,8 +135,10 @@ focus):
 | `n`, `p` | The next / previous message, also across a fold |
 | `r`, `a`, `f` | Reply, reply all, forward to the focused card's message |
 
-In the list, `j` / `k` and the arrow keys move between conversations. The
-keys can be changed in your [`layout.kdl`](layout-reference.md#keys).
+In the list, `j` / `k` and the arrow keys move between conversations, and
+`Enter` / `o` go to the reader. The account of a row is named on its last
+line only when the list mixes several accounts (the unified inbox, a search
+across accounts). The keys can be changed in your [`layout.kdl`](layout-reference.md#keys).
 
 ### Conversations that open in the list
 

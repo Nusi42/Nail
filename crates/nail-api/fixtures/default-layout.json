@@ -785,6 +785,12 @@
       "alias_of": null,
       "args": []
     },
+    "conversation.open-in-reader": {
+      "label": "@thread-view.action.open-in-reader",
+      "icon": "mail-open",
+      "alias_of": null,
+      "args": []
+    },
     "mail.compose": {
       "label": "@mail.action.compose",
       "icon": "square-pen",
@@ -1543,6 +1549,18 @@
       "context": "list",
       "key": "arrowleft",
       "action": "list.collapse",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "enter",
+      "action": "conversation.open-in-reader",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "o",
+      "action": "conversation.open-in-reader",
       "args": []
     },
     {

@@ -63,8 +63,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
             ("group-by", OptionType::OneOf(&["none", "date", "sender"])),
             // P2 (ADR 0148): one row per conversation (`collapsed`, the
             // default layout's), or rows that open into their messages
-            // (`expandable`, Design B). `expanded` is the pre-P2 spelling of
-            // `expandable`, still accepted.
+            // (`expandable`, Design B). `expanded` keeps its pre-P2 meaning,
+            // one row per message (like `off`), still accepted.
             (
                 "threads",
                 OptionType::OneOf(&["off", "collapsed", "expandable", "expanded"]),

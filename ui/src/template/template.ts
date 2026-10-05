@@ -25,8 +25,13 @@ export type TemplateValue =
 
 /** One name of a `names(N)` segment (P2, ADR 0148). */
 export interface NameItem {
-  /** The display name (the context's `me` text for the user). */
+  /**
+   * The display name (the context's `me` text for the user); the first name
+   * (or the address's local part) when the segment names several people.
+   */
   text: string;
+  /** The full name or address (the name's tooltip). */
+  full: string;
   /** The user's own address. */
   me: boolean;
   /** The person sent an unread message (shown bold). */
@@ -335,10 +340,20 @@ export function fieldPart(path: readonly string[]): string {
   return (path[0] ?? "field").toLowerCase().replaceAll("_", "-");
 }
 
+/** A person's short name: the first word of the name, else the address's local part. */
+function shortName(person: { name: string | null; email: string }): string {
+  const name = nonEmpty(person.name?.trim());
+  if (name !== undefined) return name.split(/\s+/u)[0] ?? name;
+  const at = person.email.indexOf("@");
+  return at > 0 ? person.email.slice(0, at) : person.email;
+}
+
 /**
  * The names of a list of people (`ThreadParticipant`s or plain addresses):
  * at most `max`, the first `max - 1` and the newest when there are more
- * (P2, ADR 0148).
+ * (P2, ADR 0148). With several names each is the first name ("Ada, Linus"),
+ * unless two people would share it (P2 review: full names were cut into
+ * fragments at ordinary window widths).
  */
 export function nameItems(
   value: unknown,
@@ -346,22 +361,46 @@ export function nameItems(
   me: string | undefined,
 ): { items: NameItem[]; skipped: number } {
   const people = (Array.isArray(value) ? value : [value]).filter(isAddress);
-  const item = (person: { name: string | null; email: string }): NameItem => {
+  const shown =
+    people.length <= max ? people : [...people.slice(0, Math.max(0, max - 1)), ...people.slice(-1)];
+  const short = shown.length > 1;
+  const firstNames = shown.map(shortName);
+  const item = (person: { name: string | null; email: string }, index: number): NameItem => {
     const flags = person as { me?: unknown; unread?: unknown };
     const mine = flags.me === true;
+    const full = display(person);
+    const first = firstNames[index] ?? full;
+    const unique = firstNames.filter((n) => n === first).length === 1;
     return {
-      text: mine && me !== undefined ? me : display(person),
+      text: mine && me !== undefined ? me : short && unique ? first : full,
+      full,
       me: mine,
       unread: flags.unread === true,
     };
   };
-  if (people.length <= max) return { items: people.map(item), skipped: 0 };
-  const head = people.slice(0, Math.max(0, max - 1)).map(item);
-  const last = people[people.length - 1];
-  return {
-    items: last ? [...head, item(last)] : head,
-    skipped: people.length - head.length - 1,
-  };
+  return { items: shown.map(item), skipped: people.length - shown.length };
+}
+
+/**
+ * The names of a `names(N)` segment with one more left out because they do
+ * not fit (P2 review: drop names before cutting them): the name just before
+ * the newest goes into the gap; the newest and the user always stay. `null`
+ * when nothing more can go.
+ */
+export function fewerNames(segment: {
+  items: readonly NameItem[];
+  skipped: number;
+}): { items: NameItem[]; skipped: number } | null {
+  const last = segment.items.length - 1;
+  for (let i = last - 1; i >= 0; i--) {
+    if (segment.items[i]?.me !== true) {
+      return {
+        items: segment.items.filter((_, j) => j !== i),
+        skipped: segment.skipped + 1,
+      };
+    }
+  }
+  return null;
 }
 
 /** Renders a compiled template against a data object. */

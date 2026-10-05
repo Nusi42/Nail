@@ -26,13 +26,23 @@ pub(crate) type FolderFilter = Arc<dyn Fn(&ScopeFolder) -> bool + Send + Sync>;
 impl Service {
     /// The user's addresses per account: the configured accounts' addresses
     /// and identities, and the stored accounts' addresses (local and
-    /// registered accounts).
+    /// registered accounts). An identity that sends as or on behalf of
+    /// another mailbox (`send-as=`, ADR 0094) names a shared or delegate
+    /// mailbox, not the user: colleagues write from it too, so only its
+    /// `sender=` address counts (P2 review).
     pub(crate) async fn own_addresses_by_account(&self) -> Result<OwnAddresses> {
         let mut own = OwnAddresses::new();
         for account in &self.inner.accounts.config().accounts {
             own.add(&account.id, &account.email);
             for identity in &account.identities {
-                own.add(&account.id, &identity.email);
+                match &identity.send_as {
+                    None => own.add(&account.id, &identity.email),
+                    Some(send_as) => {
+                        if let Some(sender) = &send_as.sender {
+                            own.add(&account.id, sender);
+                        }
+                    }
+                }
             }
         }
         for account in self.stored_accounts().await? {
@@ -98,10 +108,23 @@ impl Service {
         };
         let own = self.own_addresses_by_account().await?;
         let thread = thread.clone();
+        // Without a folder the copies are read everywhere: the grant drops
+        // the copies it does not cover before copies collapse.
+        let keep = if scope.is_none() {
+            filter.cloned()
+        } else {
+            None
+        };
         Ok(self
             .inner
             .store
-            .call(move |s| s.conversation(&thread, scope.as_ref(), &own))
+            .call(move |s| {
+                let keep: Option<&dyn Fn(&ScopeFolder) -> bool> = match &keep {
+                    Some(k) => Some(k.as_ref()),
+                    None => None,
+                };
+                s.conversation_within(&thread, scope.as_ref(), &own, keep)
+            })
             .await?)
     }
 

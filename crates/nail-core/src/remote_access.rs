@@ -177,9 +177,21 @@ impl Service {
                 thread_id,
                 folder_id,
             } if !full(&access) => {
-                let (thread, messages) = self
+                let narrowed = self
                     .get_conversation(&thread_id, folder_id.as_ref(), Some(&grant_filter(&access)))
-                    .await?;
+                    .await;
+                let (thread, messages) = match narrowed {
+                    // Read everywhere, every copy lies outside the grant:
+                    // refused like a thread outside it, not "not found".
+                    Err(err)
+                        if folder_id.is_none()
+                            && err.code() == ErrorCode::NotFound
+                            && self.get_conversation(&thread_id, None, None).await.is_ok() =>
+                    {
+                        return Err(forbidden(format!("thread {thread_id} is not granted")).into());
+                    }
+                    other => other?,
+                };
                 Response::Conversation {
                     thread: Box::new(thread),
                     messages,

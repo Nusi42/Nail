@@ -181,7 +181,8 @@ function setup(older = 0) {
   return { env, messages, extra, newest, ...view };
 }
 
-const cards = () => screen.getAllByRole("article");
+const cards = () =>
+  screen.getAllByRole("article").filter((a) => a.dataset.part === "thread-view.card");
 
 describe("thread-view mode=cards", () => {
   it("shows the conversation as cards, oldest first, the unread and newest open", async () => {
@@ -290,6 +291,46 @@ describe("thread-view mode=cards", () => {
     await user.click(fold);
     expect(cards()).toHaveLength(10);
     expect(screen.queryByRole("button", { name: /older message/ })).toBeNull();
+    await settleQueries(env);
+  });
+
+  it("draws the fold as its own article between cards", async () => {
+    const { env } = setup(4);
+    const feed = await screen.findByRole("feed");
+    const fold = screen.getByRole("button", { name: "7 older messages" });
+    const row = must(fold.closest("article"));
+    expect(row).toHaveAttribute("data-part", "thread-view.fold-row");
+    expect(row.parentElement).toBe(feed);
+    expect(screen.getByRole("article", { name: "7 older messages" })).toBe(row);
+    // Every card stays a card: no fold inside one.
+    expect(cards().some((c) => c.querySelector('[data-part="thread-view.fold"]') !== null)).toBe(
+      false,
+    );
+    await settleQueries(env);
+  });
+
+  it("keeps the focus in the feed when the fold opens from the keyboard", async () => {
+    const user = userEvent.setup();
+    const { env, extra } = setup(4);
+    await screen.findByRole("feed");
+    const fold = screen.getByRole("button", { name: "7 older messages" });
+    act(() => {
+      fold.focus();
+    });
+    await user.keyboard("{Enter}");
+    const toggleOf = (card: HTMLElement) =>
+      must(card.querySelector<HTMLElement>('[data-part="thread-view.card.toggle"]'));
+    await waitFor(() => {
+      expect(cards()).toHaveLength(10);
+    });
+    // The first card the fold revealed holds the focus, so j goes on.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(toggleOf(must(cards()[1])));
+    });
+    expect(env.store.getState().selectedMessageId).toBe(must(extra[1]).id);
+    await user.keyboard("j");
+    expect(document.activeElement).toBe(toggleOf(must(cards()[2])));
+    expect(env.store.getState().selectedMessageId).toBe(must(extra[2]).id);
     await settleQueries(env);
   });
 

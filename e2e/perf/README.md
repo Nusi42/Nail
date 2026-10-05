@@ -9,7 +9,8 @@ ADR 0094, package ADR 0097). Two harnesses check them:
   it from `nail-testkit`'s mock IMAP server in a child process (its memory
   does not count), and measures through `nail_core::Service`:
   `initial-sync-secs`, `incremental-sync-ms` (200 new Inbox messages),
-  `list-page-p95-ms`, `search-p95-ms` (typical queries: sender, subject,
+  `list-page-p95-ms`, `thread-page-p95-ms` (a page of the conversation list,
+  `ListThreads`, the default list since P2), `search-p95-ms` (typical queries: sender, subject,
   body word, phrase, attachments, unread, a word that occurs once …),
   `cold-start-ms` (reopen + first Inbox page) and `peak-memory-mib`.
   `cargo run -p nail-bench --release -- --corpus small` (add `--tolerant`

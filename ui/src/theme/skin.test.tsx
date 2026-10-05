@@ -320,6 +320,42 @@ describe("conversations (P2 quick win, ADR 0148)", () => {
   });
 });
 
+describe("conversations (P2 review fixes)", () => {
+  /** The declarations of the first rule whose selector is exactly `selector`. */
+  const rule = (css: string, selector: string) =>
+    css
+      .split("}")
+      .map((block) => block.split("{"))
+      .find(([sel = ""]) => sel.trim() === selector)?.[1] ?? "";
+
+  it("never stretches the last open card, and keeps the quote toggle under the text", () => {
+    // The last open card grew to the pane's height and the text grid shared
+    // the extra height between the text and the quote block.
+    expect(THREAD_VIEW_SKIN_CSS).not.toMatch(/:last-child\[data-state~="expanded"\]/);
+    expect(
+      rule(
+        THREAD_VIEW_SKIN_CSS,
+        '[data-part="thread-view.card.body"] [data-part="message-view.text"]',
+      ),
+    ).toContain("align-content: start;");
+  });
+
+  it("draws the fold as a line of its own between cards", () => {
+    expect(THREAD_VIEW_SKIN_CSS).not.toContain(
+      '[data-part="thread-view.card"] > [data-part="thread-view.fold"]',
+    );
+    expect(rule(THREAD_VIEW_SKIN_CSS, '[data-part="thread-view.fold-row"]')).toContain(
+      "display: flex;",
+    );
+  });
+
+  it("gives Design B child rows body-size text and padding from the row token", () => {
+    const child = rule(MESSAGE_LIST_SKIN_CSS, '[data-part="message-list.child"]');
+    expect(child).toContain("font-size: var(--nail-font-size-body);");
+    expect(child).toContain("padding: calc(var(--nail-space-row) * 5 / 6) var(--nail-space-pane);");
+  });
+});
+
 describe("density in the compiler (ADR 0102)", () => {
   const compactTheme = (): ResolvedTheme => ({ ...defaultTheme(), density: "compact" });
 

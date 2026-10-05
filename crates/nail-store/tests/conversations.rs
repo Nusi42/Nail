@@ -312,6 +312,49 @@ fn a_copy_in_the_inbox_and_in_sent_counts_once_as_the_listed_copy() {
 }
 
 #[test]
+fn a_narrowed_read_everywhere_drops_hidden_copies_before_they_collapse() {
+    // P2 review: without a folder a remote grant narrowed the collapsed
+    // answer, so a hidden copy either stood for the visible one (which then
+    // vanished) or showed up in `duplicates`.
+    let store = store();
+    let mut sent = mail("s3-sent", "a1", "sent", "me@a1", &["a"], 12);
+    sent.meta.as_mut().unwrap().message_id = Some("s3@x".into());
+    let mut inbox = mail("s3-inbox", "a1", "inbox", "me@a1", &["a"], 12);
+    inbox.meta.as_mut().unwrap().message_id = Some("s3@x".into());
+    store.merge_messages(&[sent, inbox]).unwrap();
+    let scope = folders(&store, &["inbox"]);
+    let thread = store
+        .list_conversations(&scope, &own(), 0, 50)
+        .unwrap()
+        .threads[0]
+        .id
+        .clone();
+    let last = |keep: Option<&dyn Fn(&nail_store::ScopeFolder) -> bool>| {
+        let (_, messages) = store
+            .conversation_within(&thread, None, &own(), keep)
+            .unwrap();
+        messages
+            .into_iter()
+            .find(|m| m.message.id.as_str().starts_with("s3-"))
+            .unwrap()
+    };
+    // Everything visible: the Inbox copy stands for both.
+    let all = last(None);
+    assert_eq!(all.message.id, MessageId::from("s3-inbox"));
+    assert_eq!(all.message.duplicates.len(), 1);
+    // The Inbox hidden: the Sent copy shows, nothing about the Inbox one.
+    let no_inbox = |f: &nail_store::ScopeFolder| f.id.as_str() != "inbox";
+    let shown = last(Some(&no_inbox));
+    assert_eq!(shown.message.id, MessageId::from("s3-sent"));
+    assert!(shown.message.duplicates.is_empty());
+    // Sent hidden: the Inbox copy without its hidden duplicate.
+    let no_sent = |f: &nail_store::ScopeFolder| f.id.as_str() != "sent";
+    let shown = last(Some(&no_sent));
+    assert_eq!(shown.message.id, MessageId::from("s3-inbox"));
+    assert!(shown.message.duplicates.is_empty());
+}
+
+#[test]
 fn a_unified_inbox_joins_every_accounts_sent_and_narrowing_drops_folders() {
     let store = store();
     store

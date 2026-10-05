@@ -46,7 +46,8 @@ test.afterEach(async () => {
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const rowOf = (page: Page, subject: string) => rows(page).filter({ hasText: subject });
 const feed = (page: Page) => page.getByRole("feed");
-const cards = (page: Page) => feed(page).getByRole("article");
+/** The message cards (the fold "N older messages" is an article of its own). */
+const cards = (page: Page) => feed(page).locator('[data-part="thread-view.card"]');
 const fold = (page: Page) => page.locator('[data-part="thread-view.fold"]');
 /** The state words of an element (`data-state="expanded unread"`). */
 const hasState = (state: string) => new RegExp(`(^|\\s)${state}(\\s|$)`);
@@ -125,6 +126,39 @@ test.describe("conversation rows (Design A)", () => {
     await expect(rowOf(page, READING).locator('[data-part="message-list.row.count"]')).toHaveText(
       "5",
     );
+  });
+
+  test("names stay whole at ordinary window sizes: fewer names, not fragments", async ({
+    page,
+  }) => {
+    for (const size of [
+      { width: 1280, height: 800 },
+      { width: 1024, height: 700 },
+    ]) {
+      await openApp(page, size);
+      const cut = await page
+        .locator('[data-part="message-list.row.participant"]')
+        .evaluateAll((names) =>
+          names.filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
+        );
+      // At most a lone name may be cut (the newest sender, or "me" beside it).
+      const rowsWithCuts = await rows(page).evaluateAll(
+        (all) =>
+          all.filter((row) => {
+            const names = [
+              ...row.querySelectorAll<HTMLElement>(
+                '[data-part="message-list.row.participants"] [data-part="message-list.row.participant"]',
+              ),
+            ];
+            return names.length > 2 && names.some((n) => n.scrollWidth > n.clientWidth + 1);
+          }).length,
+      );
+      expect(rowsWithCuts, `${String(size.width)}: ${cut.join(" | ")}`).toBe(0);
+      // First names when a row names several people.
+      await expect(
+        rowOf(page, LAB).locator('[data-part="message-list.row.participant"]').first(),
+      ).toHaveText("Linus");
+    }
   });
 
   test("Compact rows have two lines and no preview", async ({ page }) => {
@@ -294,6 +328,66 @@ test.describe("the card feed (Design A)", () => {
     await discardComposer(page, composer);
   });
 
+  test("from the list, Enter goes to the open card; the fold opens from the keyboard", async ({
+    page,
+  }) => {
+    await openApp(page);
+    const row = await openConversation(page, LAB);
+    const toggleOf = (card: Locator) => card.locator('[data-part="thread-view.card.toggle"]');
+    // The list has the focus after the click: Enter moves it to the
+    // conversation's selected (open) card, the newest, without Tab stops.
+    await expect(row).toHaveAttribute("data-state", hasState("selected"));
+    await page.locator('[data-part="message-list"]').focus();
+    await page.keyboard.press("Enter");
+    await expect(toggleOf(cards(page).last())).toBeFocused();
+    // Back to the list, o does the same.
+    await page.locator('[data-part="message-list"]').focus();
+    await page.keyboard.press("o");
+    await expect(toggleOf(cards(page).last())).toBeFocused();
+
+    // The fold is a line between two cards, not part of a card.
+    await expect(fold(page)).toHaveCount(1);
+    await expect(
+      page.locator('[data-part="thread-view.card"] [data-part="thread-view.fold"]'),
+    ).toHaveCount(0);
+    await expect(fold(page).locator("xpath=..")).toHaveAttribute(
+      "data-part",
+      "thread-view.fold-row",
+    );
+    // Opening it from the keyboard keeps the focus in the feed: on the first
+    // card it revealed, so j goes on from there.
+    const before = await cards(page).count();
+    await fold(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(cards(page)).toHaveCount(LAB_TOTAL);
+    const revealed = cards(page).nth(1);
+    await expect(toggleOf(revealed)).toBeFocused();
+    expect(before).toBeLessThan(LAB_TOTAL);
+    await page.keyboard.press("j");
+    await expect(toggleOf(cards(page).nth(2))).toBeFocused();
+  });
+
+  test("an open card is as tall as its message: the quote link sits under the text", async ({
+    page,
+  }) => {
+    await openApp(page);
+    await openConversation(page, LAB);
+    const newest = cards(page).last();
+    await expect(newest).toHaveAttribute("data-state", hasState("expanded"));
+    const text = newest.locator('[data-part="message-view.text-block"]').first();
+    const toggle = newest.locator('[data-part="message-view.quote-toggle"]').first();
+    await expect(toggle).toBeVisible();
+    const textBox = await text.boundingBox();
+    const toggleBox = await toggle.boundingBox();
+    const cardBox = await newest.boundingBox();
+    if (textBox === null || toggleBox === null || cardBox === null) throw new Error("no boxes");
+    // "Show quoted text" follows the text closely (it floated ~270 px below
+    // it when the last card stretched to the reader's height), and the card
+    // ends shortly after it.
+    expect(toggleBox.y - (textBox.y + textBox.height)).toBeLessThan(40);
+    expect(cardBox.y + cardBox.height - (toggleBox.y + toggleBox.height)).toBeLessThan(60);
+  });
+
   test("the feed keeps to the responsive standard", async ({ page }) => {
     for (const size of [
       { width: 1600, height: 1000 },
@@ -351,6 +445,10 @@ test.describe("conversations that open in the list (Design B, opt-in)", () => {
     await expander.click();
     await expect(lab).toHaveAttribute("data-state", hasState("expanded"));
     await expect(children).toHaveCount(LAB_TOTAL);
+    // Child rows are roomy: about 40 px with body-size text (P2 review: they
+    // were 27 px with small text, below the pointer minimum).
+    const childBox = await children.first().boundingBox();
+    expect(childBox?.height ?? 0).toBeGreaterThanOrEqual(36);
     // Marie's unread message ("One more thing: …") is unread among them.
     await expect(children.filter({ hasText: "One more thing" })).toHaveAttribute(
       "data-state",

@@ -406,3 +406,55 @@ async fn identities_from_accounts_kdl_are_me_case_insensitively() {
     assert!(!ada.from_me);
     assert_eq!(messages.iter().filter(|m| m.from_me).count(), 6);
 }
+
+#[tokio::test]
+async fn a_send_as_identity_is_a_shared_mailbox_not_me() {
+    // Grace's address as a shared mailbox the user sends as (ADR 0094):
+    // colleagues write from it too, so her mail stays someone else's, and
+    // the row acts on her newest message, not on an older one (P2 review).
+    let f = setup_with(Some(&format!(
+        "account \"{DEMO_ACCOUNT_ID}\" email=\"{ME}\" name=\"Demo\" {{
+             imap host=\"127.0.0.1\" port=1 tls=\"plaintext\"
+             smtp host=\"127.0.0.1\" port=1 tls=\"plaintext\"
+             identity \"{ME}\" name=\"Sam\"
+             identity \"GRACE@navy.example\" name=\"Navy\" send-as=\"send-as\"
+             identity \"ada@analytical.example\" name=\"Ada's desk\" send-as=\"on-behalf\" sender=\"{ME}\"
+}}
+"
+    )));
+    let inbox = folder(&f, FolderRole::Inbox);
+    let (_, rows) = threads(f.service.handle(list(&inbox.id)).await);
+    let row = nightingale(&rows);
+    let grace = row
+        .participants
+        .iter()
+        .find(|p| p.address.email == "grace@navy.example")
+        .unwrap();
+    assert!(!grace.me);
+    let latest = row.latest_from.as_ref().unwrap();
+    assert_eq!(latest.address.email, "grace@navy.example");
+    assert!(!latest.me);
+    assert_eq!(
+        row.latest_message.from.as_ref().map(|a| a.email.as_str()),
+        Some("grace@navy.example"),
+        "the row acts on Grace's newest message"
+    );
+    let (_, messages) = conversation(
+        f.service
+            .handle(Request::GetConversation {
+                thread_id: row.id.clone(),
+                folder_id: Some(inbox.id.clone()),
+            })
+            .await,
+    );
+    // Only the replies from Sent are the user's; Ada's on-behalf mailbox
+    // and Grace's shared one are not.
+    let mine: Vec<_> = messages.iter().filter(|m| m.from_me).collect();
+    assert!(!mine.is_empty());
+    assert!(mine.iter().all(|m| {
+        m.message
+            .from
+            .as_ref()
+            .is_some_and(|a| a.email.eq_ignore_ascii_case(ME))
+    }));
+}

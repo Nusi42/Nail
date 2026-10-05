@@ -130,8 +130,9 @@ const inCard = (part: string) => `${p("thread-view.card.body")} ${p(part)}`;
  * The card feed (P2 Design A, `thread-view mode="cards"`, WP203): the
  * reader pane scrolls as a whole; the subject header and the cards share one
  * centred column; cards are bordered boxes without indentation, a
- * collapsed card one line; the newest open card stretches to the end of the
- * pane so a short conversation still fills the reader. Inside a card the
+ * collapsed card one line, each card as tall as its content (the quote
+ * toggle sits right under the text); a fold "N older messages" is a line of
+ * its own between cards (`thread-view.fold-row`). Inside a card the
  * reader's widgets lose their own column, scroll area and subject (the
  * frame of an HTML body keeps a minimum height and scrolls itself).
  * `data-mode="single"` is the selected message alone (no conversation).
@@ -170,9 +171,12 @@ ${p("thread-view.card")} {
 }
 ${p("thread-view.card")}:focus { outline: none; }
 ${p("thread-view.card")}[data-state~="selected"] { border-color: ${T.accent}; }
-${p("thread-view.card")}:last-child[data-state~="expanded"] { flex: 1 0 auto; }
-${p("thread-view.card")} > ${p("thread-view.fold")} {
-  width: 100%; padding: ${ROW_PAD} ${T.md}; border-bottom: 1px dashed ${T.border}; border-radius: ${T.rLg} ${T.rLg} 0 0;
+${p("thread-view.fold-row")} { display: flex; align-items: center; gap: ${T.sm}; }
+${p("thread-view.fold-row")}::before, ${p("thread-view.fold-row")}::after {
+  content: ""; flex: 1 1 0; border-top: 1px dashed ${T.border};
+}
+${p("thread-view.fold-row")} > ${p("thread-view.fold")} {
+  flex: 0 0 auto; width: auto; padding: ${ROW_PAD} ${T.md}; border-radius: ${T.rLg};
 }
 ${p("thread-view.card.header")} { display: flex; align-items: center; gap: ${T.xs}; min-width: 0; padding-inline-end: ${T.sm}; }
 ${p("thread-view.card.toggle")} {
@@ -216,7 +220,7 @@ ${p("thread-view.card.body")} > ${p("message-view")} {
 }
 ${inCard("message-view.column")} { flex: 1 0 auto; max-width: none; margin: 0; padding: 0; gap: ${T.md}; }
 ${inCard("message-view.header")}:empty { display: none; }
-${inCard("message-view.text")} { display: grid; gap: ${T.xs}; padding-bottom: 0; white-space: normal; }
+${inCard("message-view.text")} { display: grid; align-content: start; gap: ${T.xs}; padding-bottom: 0; white-space: normal; }
 ${inCard("message-view.text-block")}, ${inCard("message-view.quote")} {
   margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere;
 }

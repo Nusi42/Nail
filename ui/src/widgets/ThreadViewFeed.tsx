@@ -48,7 +48,6 @@ import {
   initiallyOpen,
   primaryMessage,
   useFeed,
-  type FeedItem,
 } from "./ThreadViewModel";
 import { CardScope } from "./ThreadViewScope";
 
@@ -127,8 +126,6 @@ interface CardProps {
   total: number;
   open: boolean;
   selected: boolean;
-  /** The fold standing for the collapsed cards right before this one. */
-  fold: ConversationMessage[] | null;
   mine: ReadonlySet<string>;
   nodes: readonly WidgetNode[];
   nodeKey: string;
@@ -142,7 +139,6 @@ function Card({
   total,
   open,
   selected,
-  fold,
   mine,
   nodes,
   nodeKey,
@@ -158,11 +154,6 @@ function Card({
   const me = t("conversations-me");
   const select = () => {
     if (store.getState().selectedMessageId !== m.id) store.getState().selectMessage(m.id);
-  };
-  // Not for the fold at the card's top: it stands for other messages (and
-  // selecting this card would move it away under the pointer).
-  const selectFrom = (target: EventTarget) => {
-    if (!(target instanceof Element && target.closest('[data-part="thread-view.fold"]'))) select();
   };
   const states = [
     open ? "expanded" : null,
@@ -185,26 +176,9 @@ function Card({
       aria-labelledby={`${ids}-toggle`}
       aria-current={selected ? "true" : undefined}
       tabIndex={-1}
-      onPointerDownCapture={(event) => {
-        selectFrom(event.target);
-      }}
-      onFocusCapture={(event) => {
-        selectFrom(event.target);
-      }}
+      onPointerDownCapture={select}
+      onFocusCapture={select}
     >
-      {fold !== null && (
-        <button
-          type="button"
-          data-part="thread-view.fold"
-          data-feed-stop=""
-          aria-expanded={false}
-          onClick={() => {
-            feedStore.getState().unfold(threadId);
-          }}
-        >
-          {t("conversations-older", { count: fold.length })}
-        </button>
-      )}
       <div data-part="thread-view.card.header">
         <button
           type="button"
@@ -281,24 +255,39 @@ function Card({
   );
 }
 
-/** Cards with the fold (if any) that precedes each one. */
-function withFolds(items: readonly FeedItem<ConversationMessage>[]): {
-  item: Extract<FeedItem<ConversationMessage>, { kind: "card" }>;
-  fold: ConversationMessage[] | null;
-}[] {
-  const out: {
-    item: Extract<FeedItem<ConversationMessage>, { kind: "card" }>;
-    fold: ConversationMessage[] | null;
-  }[] = [];
-  let fold: ConversationMessage[] | null = null;
-  for (const item of items) {
-    if (item.kind === "fold") fold = item.messages;
-    else {
-      out.push({ item, fold });
-      fold = null;
-    }
-  }
-  return out;
+/**
+ * "N older messages": a line of its own between two cards (an `article` of
+ * the feed, so the feed owns only articles). Opening it moves the focus to
+ * the first card it revealed, so the keyboard stays in the feed.
+ */
+function Fold({
+  threadId,
+  messages,
+}: {
+  threadId: string;
+  messages: readonly ConversationMessage[];
+}) {
+  const t = useT();
+  const ids = useId();
+  const first = messages[0];
+  return (
+    <article data-part="thread-view.fold-row" aria-labelledby={`${ids}-fold`}>
+      <button
+        type="button"
+        id={`${ids}-fold`}
+        data-part="thread-view.fold"
+        data-feed-stop=""
+        aria-expanded={false}
+        onClick={() => {
+          const s = feedStore.getState();
+          s.unfold(threadId);
+          if (first !== undefined) s.requestFocus(threadId, first.id);
+        }}
+      >
+        {t("conversations-older", { count: messages.length })}
+      </button>
+    </article>
+  );
 }
 
 /** `thread-view mode="cards"`. */
@@ -457,22 +446,25 @@ export function ThreadFeed({ node, nodeKey }: WidgetProps) {
         aria-labelledby={`${ids}-subject`}
         aria-busy={query.isFetching}
       >
-        {withFolds(items).map(({ item, fold }) => (
-          <Card
-            key={item.message.id}
-            threadId={threadId}
-            subject={thread.subject}
-            message={item.message}
-            index={item.index}
-            total={messages.length}
-            open={isOpen(item.message)}
-            selected={item.message.id === selectedId}
-            fold={fold}
-            mine={mine}
-            nodes={feedNodes}
-            nodeKey={nodeKey}
-          />
-        ))}
+        {items.map((item) =>
+          item.kind === "fold" ? (
+            <Fold key={`fold-${String(item.index)}`} threadId={threadId} messages={item.messages} />
+          ) : (
+            <Card
+              key={item.message.id}
+              threadId={threadId}
+              subject={thread.subject}
+              message={item.message}
+              index={item.index}
+              total={messages.length}
+              open={isOpen(item.message)}
+              selected={item.message.id === selectedId}
+              mine={mine}
+              nodes={feedNodes}
+              nodeKey={nodeKey}
+            />
+          ),
+        )}
       </div>
     </section>
   );

@@ -451,16 +451,38 @@ impl Store {
         folders: Option<&ConversationFolders>,
         own: &OwnAddresses,
     ) -> Result<(ThreadSummary, Vec<ConversationMessage>)> {
+        self.conversation_within(thread, folders, own, None)
+    }
+
+    /// [`Store::conversation`] over the copies in the folders `keep`
+    /// accepts only (a remote session's grant): copies outside are dropped
+    /// before copies with the same Message-ID collapse, so a hidden copy
+    /// neither stands for a visible one nor shows up in `duplicates`.
+    pub fn conversation_within(
+        &self,
+        thread: &ThreadId,
+        folders: Option<&ConversationFolders>,
+        own: &OwnAddresses,
+        keep: Option<&dyn Fn(&ScopeFolder) -> bool>,
+    ) -> Result<(ThreadSummary, Vec<ConversationMessage>)> {
         let listed = folders.map(|f| ConversationFolders::json(&f.threaded));
         let sent = folders.map(|f| ConversationFolders::json(&f.sent));
         let messages = self.with_tx(|tx| {
-            let rows = if let Some(message) = thread.as_str().strip_prefix(SINGLE_PREFIX) {
+            let mut rows = if let Some(message) = thread.as_str().strip_prefix(SINGLE_PREFIX) {
                 read_rows(tx, &single_sql(), message, "[]", "[]")?
             } else if let (Some(listed), Some(sent)) = (listed, sent) {
                 read_rows(tx, &listed_sql(), thread.as_str(), &listed?, &sent?)?
             } else {
                 read_rows(tx, &everywhere_sql(), thread.as_str(), "[]", "[]")?
             };
+            if let Some(keep) = keep {
+                rows.retain(|r| {
+                    keep(&ScopeFolder {
+                        id: r.summary.folder_id.clone(),
+                        account_id: r.summary.account_id.clone(),
+                    })
+                });
+            }
             collapse(tx, rows, own)
         })?;
         let summary = summarize_conversation(thread.as_str(), &messages, own)

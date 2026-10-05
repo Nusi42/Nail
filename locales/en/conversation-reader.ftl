@@ -18,6 +18,7 @@ thread-view-action-previous-message = Previous message in the conversation
 thread-view-action-toggle-card = Open or close message card
 thread-view-action-expand-all = Open all message cards
 thread-view-action-collapse-all = Close all message cards
+thread-view-action-open-in-reader = Read the selected conversation (move to the reader)
 
 ## The reader stack's migration (layouts of your own)
 

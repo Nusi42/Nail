@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -43,6 +44,7 @@ import {
 import { useUi, useUiStoreApi } from "../state/uiStore";
 import {
   compileTemplate,
+  fewerNames,
   fieldPart,
   renderTemplate,
   type CompiledTemplate,
@@ -200,8 +202,9 @@ export function threadTemplateData(thread: ThreadSummary) {
 /**
  * The list's conversation mode (`threads` option; P2, ADR 0148): `off`
  * lists messages, `collapsed` one row per conversation, `expandable`
- * rows that open into their messages (Design B; `expanded` is its pre-P2
- * spelling).
+ * rows that open into their messages (Design B). `expanded` keeps its
+ * pre-P2 meaning, one row per message (P2 review: it is not a spelling of
+ * `expandable`).
  */
 export type ThreadMode = "off" | "collapsed" | "expandable";
 
@@ -210,7 +213,6 @@ export function threadModeOf(node: WidgetNode): ThreadMode {
     case "collapsed":
       return "collapsed";
     case "expandable":
-    case "expanded":
       return "expandable";
     default:
       return "off";
@@ -399,14 +401,34 @@ export function accountTags(
 const MAX_LABELS = 3;
 
 /**
- * The tag line: account colour (with the name when several accounts are
- * set up), attachments, invitation, warning, flag and labels. Nothing when
- * there is nothing to say.
+ * Whether the rows' account tags say anything: only when the listed rows
+ * come from more than one account (a unified folder, a search across
+ * accounts). Inside one account's folder every row would repeat the same
+ * account (P2 review: a fourth line on every conversation row).
  */
-function TagLine({ tags, accounts }: { tags: RowTags; accounts: ReadonlyMap<string, AccountTag> }) {
+export function showsAccounts(rows: readonly { tags: RowTags }[]): boolean {
+  const ids = new Set<string>();
+  for (const row of rows) for (const id of row.tags.accountIds) ids.add(id);
+  return ids.size > 1;
+}
+
+/**
+ * The tag line: account colour (with the name when several accounts are
+ * set up and the list mixes them; `withAccounts`), attachments, invitation,
+ * warning, flag and labels. Nothing when there is nothing to say.
+ */
+function TagLine({
+  tags,
+  accounts,
+  withAccounts,
+}: {
+  tags: RowTags;
+  accounts: ReadonlyMap<string, AccountTag>;
+  withAccounts: boolean;
+}) {
   const t = useT();
   const items: ReactNode[] = [];
-  if (accounts.size > 1) {
+  if (withAccounts && accounts.size > 1) {
     for (const id of tags.accountIds) {
       const account = accounts.get(id);
       items.push(
@@ -582,8 +604,88 @@ function useExpansion(listKey: string, folderId: string | null, enabled: boolean
   return { expanded, setExpanded, children, loading };
 }
 
-function SegmentView({ segment }: { segment: Segment }) {
+type NamesSegment = Extract<Segment, { kind: "names" }>;
+
+/** What a names segment shows (a new one starts measuring afresh). */
+function namesIdentity(segment: NamesSegment): string {
+  const items = segment.items.map((i) => `${i.text}|${String(i.me)}|${String(i.unread)}`);
+  return `${items.join("\n")}#${String(segment.skipped)}#${segment.suffix ?? ""}`;
+}
+
+/** Whether a name in `el` is cut short (ellipsized). */
+function namesCut(el: HTMLElement): boolean {
+  return [...el.querySelectorAll<HTMLElement>('[data-part="message-list.row.participant"]')].some(
+    (name) => name.scrollWidth > name.clientWidth + 1,
+  );
+}
+
+/**
+ * `{participants | names(N)}` (P2): the skipped people sit between the first
+ * names and the newest one. When a name would be cut short, names before the
+ * newest move into the gap first (the newest and "me" stay), so a narrow
+ * list shows fewer whole names instead of fragments of each (P2 review).
+ */
+function NamesView({ segment }: { segment: NamesSegment }) {
   const t = useT();
+  const ref = useRef<HTMLSpanElement>(null);
+  // `width` = the line's width the names were fitted to (a new width fits afresh).
+  const [{ drop, width }, setFit] = useState({ drop: 0, width: -1 });
+  let shown: { items: NamesSegment["items"]; skipped: number } = segment;
+  for (let i = 0; i < drop; i++) shown = fewerNames(shown) ?? shown;
+  const canDrop = fewerNames(shown) !== null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el !== null && canDrop && namesCut(el)) setFit((f) => ({ ...f, drop: f.drop + 1 }));
+  }, [canDrop, drop, width]);
+  // A wider or narrower line fits the names afresh.
+  useEffect(() => {
+    const line = ref.current?.parentElement;
+    if (!line || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const width = line.clientWidth;
+      setFit((f) => (f.width === width ? f : { drop: f.width < 0 ? f.drop : 0, width }));
+    });
+    observer.observe(line);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return (
+    <span ref={ref} data-part={`message-list.row.${segment.field}`}>
+      {shown.items.map((item, index) => {
+        const states = [item.me ? "me" : null, item.unread ? "unread" : null].filter(
+          (state) => state !== null,
+        );
+        const gap = shown.skipped > 0 && index === shown.items.length - 1;
+        return (
+          <span
+            key={index}
+            data-part="message-list.row.participant-group"
+            data-state={item.me ? "me" : undefined}
+          >
+            {index > 0 && (
+              <span data-part="message-list.row.separator">
+                {t(gap ? "conversations-names-gap" : "conversations-names-separator")}
+              </span>
+            )}
+            <span
+              data-part="message-list.row.participant"
+              data-state={states.length > 0 ? states.join(" ") : undefined}
+              title={item.full !== item.text ? item.full : undefined}
+            >
+              {item.text}
+            </span>
+          </span>
+        );
+      })}
+      {segment.suffix !== undefined && (
+        <span data-part="message-list.row.suffix">{segment.suffix}</span>
+      )}
+    </span>
+  );
+}
+
+function SegmentView({ segment }: { segment: Segment }) {
   switch (segment.kind) {
     case "text":
       return <span data-part="message-list.row.text">{segment.text}</span>;
@@ -610,40 +712,7 @@ function SegmentView({ segment }: { segment: Segment }) {
         </span>
       );
     case "names":
-      // P2: `{participants | names(N)}`; the skipped people sit between the
-      // first names and the newest one.
-      return (
-        <span data-part={`message-list.row.${segment.field}`}>
-          {segment.items.map((item, index) => {
-            const states = [item.me ? "me" : null, item.unread ? "unread" : null].filter(
-              (state) => state !== null,
-            );
-            const gap = segment.skipped > 0 && index === segment.items.length - 1;
-            return (
-              <span
-                key={index}
-                data-part="message-list.row.participant-group"
-                data-state={item.me ? "me" : undefined}
-              >
-                {index > 0 && (
-                  <span data-part="message-list.row.separator">
-                    {t(gap ? "conversations-names-gap" : "conversations-names-separator")}
-                  </span>
-                )}
-                <span
-                  data-part="message-list.row.participant"
-                  data-state={states.length > 0 ? states.join(" ") : undefined}
-                >
-                  {item.text}
-                </span>
-              </span>
-            );
-          })}
-          {segment.suffix !== undefined && (
-            <span data-part="message-list.row.suffix">{segment.suffix}</span>
-          )}
-        </span>
-      );
+      return <NamesView key={namesIdentity(segment)} segment={segment} />;
   }
 }
 
@@ -712,6 +781,7 @@ export function MessageList({ node }: WidgetProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const accountList = useAccounts().data;
   const accountNames = useMemo(() => accountTags(accountList ?? []), [accountList]);
+  const mixedAccounts = useMemo(() => showsAccounts(rows), [rows]);
 
   const order = useMemo(() => messageOrderOf(rows), [rows]);
   const orderThreads = useMemo(() => messageThreadsOf(rows), [rows]);
@@ -735,7 +805,7 @@ export function MessageList({ node }: WidgetProps) {
     // the real height afterwards).
     estimateSize: (index) =>
       rows[index]?.kind === "child"
-        ? 20 + 12
+        ? 40
         : 20 * (columns.length > 0 ? 1 : templates.length + 1) + 24,
     overscan: LIST_OVERSCAN,
     measureElement: exactRowSize,
@@ -988,7 +1058,7 @@ export function MessageList({ node }: WidgetProps) {
                       ))}
                     </div>
                   ))}
-                  <TagLine tags={row.tags} accounts={accountNames} />
+                  <TagLine tags={row.tags} accounts={accountNames} withAccounts={mixedAccounts} />
                 </div>
                 {expandable && (
                   // The list's keyboard (→ / ←) opens and closes the

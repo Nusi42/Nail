@@ -147,6 +147,9 @@ pub enum MetricName {
     SearchP95Ms,
     /// One message-list page (`ListMessages`), 95th percentile (ms).
     ListPageP95Ms,
+    /// One conversation-list page (`ListThreads`, the default list since
+    /// P2), 95th percentile (ms).
+    ThreadPageP95Ms,
     /// Core start on the synced data dir until the first list answers (ms).
     ColdStartMs,
     /// Peak working set of the process (MiB).
@@ -163,11 +166,12 @@ pub enum MetricName {
 
 impl MetricName {
     /// Every metric.
-    pub const ALL: [MetricName; 9] = [
+    pub const ALL: [MetricName; 10] = [
         Self::InitialSyncSecs,
         Self::IncrementalSyncMs,
         Self::SearchP95Ms,
         Self::ListPageP95Ms,
+        Self::ThreadPageP95Ms,
         Self::ColdStartMs,
         Self::PeakMemoryMib,
         Self::ScrollFrameP95Ms,
@@ -190,6 +194,7 @@ impl MetricName {
             Self::IncrementalSyncMs => "incremental-sync-ms",
             Self::SearchP95Ms => "search-p95-ms",
             Self::ListPageP95Ms => "list-page-p95-ms",
+            Self::ThreadPageP95Ms => "thread-page-p95-ms",
             Self::ColdStartMs => "cold-start-ms",
             Self::PeakMemoryMib => "peak-memory-mib",
             Self::ScrollFrameP95Ms => "scroll-frame-p95-ms",

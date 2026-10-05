@@ -4,7 +4,7 @@ import { MockTransport } from "../api/mock";
 import { createMockData, defaultLayout } from "../api/mockData";
 import { queryKeys } from "../state/queries";
 import { createUiStore } from "../state/uiStore";
-import { contextsOf, isFieldCombo } from "./ActionsProvider";
+import { contextsOf, isActivation, isFieldCombo } from "./ActionsProvider";
 import { createDispatcher, moveTargetOf, type ActionContext } from "./registry";
 import { DELETE_PERMANENTLY_DIALOG, confirmDeletePermanently } from "../widgets/DeletePermanently";
 
@@ -158,6 +158,19 @@ describe("key contexts", () => {
     expect(isFieldCombo("escape")).toBe(true);
     expect(isFieldCombo("j")).toBe(false);
     expect(isFieldCombo("shift+a")).toBe(false);
+    document.body.innerHTML = "";
+  });
+
+  it("leave Enter and Space on buttons and links to the control itself", () => {
+    document.body.innerHTML =
+      '<div data-key-context="list" tabindex="0" id="list"><button id="b"><span id="in">x</span></button><a href="#" id="a">a</a></div>';
+    const el = (id: string) => document.getElementById(id);
+    expect(isActivation("enter", el("b"))).toBe(true);
+    expect(isActivation("enter", el("in"))).toBe(true);
+    expect(isActivation(" ", el("a"))).toBe(true);
+    // The list itself (rows are its options): Enter is a binding there.
+    expect(isActivation("enter", el("list"))).toBe(false);
+    expect(isActivation("o", el("b"))).toBe(false);
     document.body.innerHTML = "";
   });
 });

@@ -227,14 +227,16 @@ describe("message-list with search and threads", () => {
     });
   });
 
-  it("reads the conversation mode, the pre-P2 `expanded` as `expandable`", () => {
+  it("reads the conversation mode, the pre-P2 `expanded` as one row per message", () => {
     const mode = (threads?: string) =>
       threadModeOf(widget("message-list", threads ? { options: { threads } } : {}));
     expect(mode()).toBe("off");
     expect(mode("off")).toBe("off");
     expect(mode("collapsed")).toBe("collapsed");
     expect(mode("expandable")).toBe("expandable");
-    expect(mode("expanded")).toBe("expandable");
+    // Before P2 `expanded` meant one row per message (layout reference):
+    // a user layout with it keeps its flat list (P2 review).
+    expect(mode("expanded")).toBe("off");
   });
 
   it("shows a conversation's people and its count pill (P2)", async () => {
@@ -255,7 +257,7 @@ describe("message-list with search and threads", () => {
       ...row.querySelectorAll<HTMLElement>('[data-part="message-list.row.participant"]'),
     ];
     // Four people: the first two and the newest, the user written "me".
-    expect(names.map((n) => n.textContent)).toEqual(["Grace Hopper", "me", "Katherine Johnson"]);
+    expect(names.map((n) => n.textContent)).toEqual(["Grace", "me", "Katherine"]);
     expect(names.map((n) => n.dataset.state ?? "")).toEqual(["unread", "me", ""]);
     expect(row.querySelectorAll('[data-part="message-list.row.separator"]')[1]).toHaveTextContent(
       "…",

@@ -48,7 +48,7 @@ Filters follow the field, separated by `|`. You can chain several.
 | `truncate(n)` | At most `n` characters, then `…` |
 | `bold-if-unread` | Shows the field in bold while the message is unread |
 | `chips` | Shows a list as separate chips (`message-list.row.chip`) |
-| `names(n)` | At most `n` names of a list of people: with more, the first `n - 1` and the newest, with `…` between them. You are written "me"; people who sent unread mail are bold (`message-list.row.participant`, states `me` and `unread`) |
+| `names(n)` | At most `n` names of a list of people: with more, the first `n - 1` and the newest, with `…` between them. With several names each is the first name (the full name is the tooltip) unless two people share it; in a narrow list names before the newest are left out rather than cut short (the newest and "me" stay). You are written "me"; people who sent unread mail are bold (`message-list.row.participant`, states `me` and `unread`) |
 | `if-many` | Shows a number only when it is more than 1 (for `count`: the conversation's count pill, empty for a single message) |
 | `then("text")` | Writes `text` after a value that is not empty, inside the field's element (`message-list.row.suffix`): `{latest_from \| names(1) \| then(":")}{preview}` gives "Grace Hopper: All set for…", and no colon when there is no sender |
 

@@ -2,11 +2,13 @@ import {
   PIPES,
   TemplateError,
   compileTemplate,
+  fewerNames,
   formatRelative,
   lookup,
   renderTemplate,
   type TemplateContext,
 } from "./template";
+import { must } from "../test/must";
 
 const NOW = Date.parse("2026-09-29T12:00:00Z");
 const ctx: TemplateContext = { locale: "en", now: NOW, unread: false };
@@ -157,9 +159,9 @@ describe("template language", () => {
         kind: "names",
         field: "participants",
         items: [
-          { text: "P1", me: false, unread: true },
-          { text: "me", me: true, unread: false },
-          { text: "P3", me: false, unread: false },
+          { text: "P1", full: "P1", me: false, unread: true },
+          { text: "me", full: "P2", me: true, unread: false },
+          { text: "P3", full: "P3", me: false, unread: false },
         ],
         skipped: 0,
       });
@@ -185,9 +187,53 @@ describe("template language", () => {
       });
       expect(row("{from | names(2)}", { from: { name: null, email: "a@x" } })[0]).toMatchObject({
         field: "from",
-        items: [{ text: "a@x", me: false, unread: false }],
+        items: [{ text: "a@x", full: "a@x", me: false, unread: false }],
       });
       expect(row("{nothing | names(2)}", {})[0]).toMatchObject({ items: [], skipped: 0 });
+    });
+
+    it("writes first names when it names several people, full names when they would clash", () => {
+      const named = [
+        { name: "Linus Pauling", email: "linus@x" },
+        { name: "Marie Curie", email: "marie@x" },
+        { name: null, email: "grace.hopper@navy.example" },
+        { name: "Ada Lovelace", email: "ada@x" },
+      ];
+      const segment = row("{participants | names(3)}", { participants: named })[0];
+      expect(segment?.kind === "names" && segment.items.map((i) => [i.text, i.full])).toEqual([
+        ["Linus", "Linus Pauling"],
+        ["Marie", "Marie Curie"],
+        ["Ada", "Ada Lovelace"],
+      ]);
+      const twoAdas = [
+        { name: "Ada Lovelace", email: "ada@x" },
+        { name: "Ada King", email: "king@x" },
+        { name: null, email: "grace.hopper@navy.example" },
+      ];
+      const clash = row("{participants | names(3)}", { participants: twoAdas })[0];
+      expect(clash?.kind === "names" && clash.items.map((i) => i.text)).toEqual([
+        "Ada Lovelace",
+        "Ada King",
+        "grace.hopper",
+      ]);
+      // One person keeps the whole name.
+      expect(
+        row("{participants | names(3)}", { participants: named.slice(0, 1) })[0],
+      ).toMatchObject({
+        items: [{ text: "Linus Pauling" }],
+      });
+    });
+
+    it("leaves out the names before the newest, never the newest or me", () => {
+      const item = (text: string, me = false) => ({ text, full: text, me, unread: false });
+      const start = { items: [item("A"), item("me", true), item("C")], skipped: 0 };
+      const once = must(fewerNames(start));
+      expect(once.items.map((i) => i.text)).toEqual(["me", "C"]);
+      expect(once.skipped).toBe(1);
+      expect(fewerNames(once)).toBeNull();
+      const two = must(fewerNames({ items: [item("A"), item("B"), item("C")], skipped: 2 }));
+      expect(two).toEqual({ items: [item("A"), item("C")], skipped: 3 });
+      expect(fewerNames({ items: [item("C")], skipped: 0 })).toBeNull();
     });
 
     it("shows a count only when there is more than one", () => {

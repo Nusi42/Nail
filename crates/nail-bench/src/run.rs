@@ -198,6 +198,26 @@ async fn list_page(
     }
 }
 
+/// One page of the folder's conversations (`ListThreads`): the total and
+/// how many rows came back.
+async fn thread_page(
+    service: &Service,
+    folder: &Folder,
+    offset: u32,
+) -> Result<(u32, usize), BenchError> {
+    match service
+        .handle(Request::ListThreads {
+            folder_id: folder.id.clone(),
+            offset,
+            limit: PAGE_SIZE,
+        })
+        .await
+    {
+        Response::Threads { total, threads, .. } => Ok((total, threads.len())),
+        other => Err(unexpected("ListThreads", &other)),
+    }
+}
+
 async fn search(service: &Service, text: &str) -> Result<u32, BenchError> {
     match service
         .handle(Request::Search {
@@ -373,6 +393,31 @@ pub async fn run(options: &RunOptions) -> Result<(Vec<Metric>, RunFacts), BenchE
         metric: MetricName::ListPageP95Ms,
         value: percentile(&list_ms, 95.0),
         samples: u32::try_from(list_ms.len()).unwrap_or(u32::MAX),
+    });
+
+    // --- Conversation pages (P2: the default list) ----------------------------
+    let mut thread_ms = Vec::new();
+    for (i, folder) in all.iter().take(3).enumerate() {
+        let started = Instant::now();
+        let (conversations, _) = thread_page(&service, folder, 0).await?;
+        thread_ms.push(ms(started.elapsed()));
+        let samples = options.list_samples / 3 + u32::from(i == 0) * (options.list_samples % 3);
+        for offset in list_offsets(conversations, samples, options.spec.seed + i as u64) {
+            let started = Instant::now();
+            let (total, got) = thread_page(&service, folder, offset).await?;
+            thread_ms.push(ms(started.elapsed()));
+            if total != conversations || (got == 0 && total > 0) {
+                return Err(BenchError::Core(format!(
+                    "{}: conversation page at {offset} has {got} of {total}",
+                    folder.path
+                )));
+            }
+        }
+    }
+    metrics.push(Metric {
+        metric: MetricName::ThreadPageP95Ms,
+        value: percentile(&thread_ms, 95.0),
+        samples: u32::try_from(thread_ms.len()).unwrap_or(u32::MAX),
     });
 
     // --- Search -----------------------------------------------------------

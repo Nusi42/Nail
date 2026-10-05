@@ -77,13 +77,15 @@ describe("conversation rows (Design A)", () => {
     const names = within(people)
       .getAllByText(/./, { selector: '[data-part="message-list.row.participant"]' })
       .map((n) => [n.textContent, n.getAttribute("data-state")]);
-    // Grace, me (Ada), Alan, Katherine: the first two and the newest sender.
+    // Grace, me (Ada), Alan, Katherine: the first two and the newest sender,
+    // by first name (the full name is the tooltip).
     expect(names).toEqual([
-      ["Grace Hopper", "unread"],
+      ["Grace", "unread"],
       ["me", "me"],
-      ["Katherine Johnson", null],
+      ["Katherine", null],
     ]);
-    expect(people).toHaveTextContent("Grace Hopper, me … Katherine Johnson");
+    expect(people).toHaveTextContent("Grace, me … Katherine");
+    expect(within(people).getByText("Grace")).toHaveAttribute("title", "Grace Hopper");
     // "me" never shrinks when the names do not fit (its group carries the state).
     const groups = people.querySelectorAll('[data-part="message-list.row.participant-group"]');
     expect([...groups].map((g) => g.getAttribute("data-state"))).toEqual([null, "me", null]);
@@ -99,6 +101,43 @@ describe("conversation rows (Design A)", () => {
     );
     expect(row).toHaveAttribute("role", "option");
     await settleQueries(env);
+  });
+
+  it("drops whole names before cutting them short in a narrow list (the newest and me stay)", async () => {
+    // A name fits in 48 px; at 8 px a letter "Katherine" (72 px) is cut.
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth");
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    const isName = (el: HTMLElement) => el.dataset.part === "message-list.row.participant";
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return isName(this) ? this.textContent.length * 8 : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return isName(this) ? 48 : 0;
+      },
+    });
+    try {
+      const env = setup("collapsed");
+      const row = await nightingale();
+      const people = part(row, "message-list.row.participants");
+      await waitFor(() => {
+        expect(people).toHaveTextContent("me … Katherine");
+      });
+      expect(
+        within(people)
+          .getAllByText(/./, { selector: '[data-part="message-list.row.participant"]' })
+          .map((n) => n.textContent),
+      ).toEqual(["me", "Katherine"]);
+      await settleQueries(env);
+    } finally {
+      cleanup();
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollWidth", scroll);
+      if (client) Object.defineProperty(HTMLElement.prototype, "clientWidth", client);
+    }
   });
 
   it("hides the count and the chevron of a single message", async () => {

@@ -223,6 +223,7 @@ layout "default" {
         action "conversation.toggle-card" label="@thread-view.action.toggle-card" icon="rows-2"
         action "conversation.expand-all" label="@thread-view.action.expand-all" icon="maximize-2"
         action "conversation.collapse-all" label="@thread-view.action.collapse-all" icon="minimize-2"
+        action "conversation.open-in-reader" label="@thread-view.action.open-in-reader" icon="mail-open"
         action "mail.compose"     label="@mail.action.compose"     icon="square-pen"
         action "mail.reply"       label="@mail.action.reply"       icon="reply"
         action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
@@ -476,6 +477,9 @@ layout "default" {
         // threads="expandable": open / close the selected conversation.
         bind "arrowright" "list.expand"
         bind "arrowleft" "list.collapse"
+        // Into the reader: the conversation's open card (P2).
+        bind "enter" "conversation.open-in-reader"
+        bind "o" "conversation.open-in-reader"
         bind "ctrl+p" "print.message"
     }
 

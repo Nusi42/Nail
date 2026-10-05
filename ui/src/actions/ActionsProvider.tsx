@@ -49,6 +49,20 @@ export function isFieldCombo(combo: string): boolean {
   return /^(ctrl|alt|meta)\+/.test(combo) || combo === "escape";
 }
 
+/** Controls whose own Enter / Space activation must win over key bindings. */
+const ACTIVATABLE =
+  'button, a[href], summary, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="radio"], [role="switch"]';
+
+/**
+ * Whether a key is a control's own activation (Enter or Space on a button,
+ * link, menu item …): bindings never take it (P2: the list's `enter`
+ * binding must not swallow a focused button's Enter).
+ */
+export function isActivation(combo: string, target: EventTarget | null): boolean {
+  if (combo !== "enter" && combo !== " ") return false;
+  return target instanceof Element && target.closest(ACTIVATABLE) !== null;
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -100,7 +114,7 @@ export function ActionsProvider({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       const combo = comboFromEvent(event);
-      if (!combo) return;
+      if (!combo || isActivation(combo, event.target)) return;
       const focused =
         event.target instanceof Element && event.target !== document.body ? event.target : null;
       const around = contextsOf(focused);

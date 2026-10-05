@@ -59,8 +59,36 @@ describe("message list rows (M5a)", () => {
     ).not.toBeNull();
   });
 
-  it("puts account, attachments, flag and labels on the tag line", async () => {
+  it("puts attachments, flag and labels on the tag line, no account inside one account's folder", async () => {
     const env = listEnv();
+    const { container } = renderNode(widget("message-list"), env);
+    await waitFor(() => {
+      expect(
+        row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
+      ).not.toBeNull();
+    });
+    const line = must(
+      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
+    );
+    const kinds = [...line.querySelectorAll('[data-part="tag"]')].map((t) =>
+      t.getAttribute("data-kind"),
+    );
+    // P2 review: every row of one account's folder would repeat the account.
+    expect(kinds).toEqual(["attachments", "flagged", "label"]);
+    expect(within(line).getByText("Attachment")).toBeInTheDocument();
+    expect(within(line).getByText("Flagged")).toBeInTheDocument();
+    expect(within(line).getByText("work")).toBeInTheDocument();
+    // A plain read message without attachments has no tag line at all.
+    expect(
+      row(container, `${INBOX}#2`).querySelector('[data-part="message-list.row.tag-line"]'),
+    ).toBeNull();
+    await settleQueries(env);
+  });
+
+  it("names the account on every row when the list mixes accounts", async () => {
+    const env = listEnv();
+    const first = must(env.transport.data.messages.find((m) => m.id === FIRST));
+    env.transport.data.messages.push({ ...first, id: `${INBOX}#work`, account_id: "acc-work" });
     const { container } = renderNode(widget("message-list"), env);
     await waitFor(() => {
       expect(
@@ -78,14 +106,12 @@ describe("message list rows (M5a)", () => {
     // M5b: the account colour follows the account order, like the folder
     // pane's sections (Personal is the first account: slot 1, data-color 0).
     expect(account?.querySelector('[data-part="tag.dot"]')).toHaveAttribute("data-color", "0");
-    expect(within(line).getByText("Attachment")).toBeInTheDocument();
-    expect(within(line).getByText("Flagged")).toBeInTheDocument();
-    expect(within(line).getByText("work")).toBeInTheDocument();
     // A plain read message without attachments still names its account.
     const plain = row(container, `${INBOX}#2`).querySelector(
       '[data-part="message-list.row.tag-line"]',
     );
     expect(plain?.querySelectorAll('[data-part="tag"]')).toHaveLength(1);
+    await settleQueries(env);
   });
 
   it("shows the attachment count, invitation and warning when the core sends them", () => {

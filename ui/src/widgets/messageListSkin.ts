@@ -20,7 +20,9 @@
  *   single message), child rows (`message-list.child`) one line each with
  *   a rail (`.rail`) under the conversation's avatar, the sender (`.from`,
  *   bold while unread), the preview (`.preview`) and the date (`.date`);
- *   selected children take the selection colours like rows.
+ *   selected children take the selection colours like rows. Child rows
+ *   use body-size text and padding from `space.row` (about 40 px tall in
+ *   Comfortable, 32 px in Compact).
  * Colours: only `fg` / `fg-muted` / `border` on `bg` / `bg-subtle` and
  * `selection-fg` on `selection` — pairs `tests/theme_contrast.rs` checks.
  */
@@ -38,6 +40,7 @@ const T = {
   muted: "var(--nail-color-fg-muted)",
   border: "var(--nail-color-border)",
   small: "var(--nail-font-size-small)",
+  body: "var(--nail-font-size-body)",
   semibold: "var(--nail-font-weight-semibold)",
   xxs: "var(--nail-space-xxs)",
   xs: "var(--nail-space-xs)",
@@ -54,6 +57,12 @@ const T = {
 
 const ROW = p("message-list.row");
 const CHILD = p("message-list.child");
+/**
+ * A child row's padding: five sixths of the list's row padding, so a child
+ * row is about 40 px tall in Comfortable and 32 px in Compact (one line of
+ * body text; the proposal's density table), never below the pointer minimum.
+ */
+const CHILD_PAD = `calc(${T.row} * 5 / 6)`;
 const EXPANDER = p("message-list.row.expander");
 const COMPACT = [':root[data-nail-density="compact"]', `${p("app")}[data-density="compact"]`];
 const HC = ':root[data-nail-mode="high-contrast"]';
@@ -94,16 +103,16 @@ ${ROW}[data-state~="expanded"] { border-bottom-color: transparent; }
 ${CHILD} {
   position: relative; display: grid; grid-template-columns: ${T.avatar} minmax(0, max-content) minmax(0, 1fr) auto;
   align-items: baseline; column-gap: ${T.md};
-  padding: ${T.xs} ${T.pane}; border-bottom: 1px solid transparent;
-  font-size: ${T.small}; line-height: ${T.normal}; color: ${T.fg}; background-color: ${T.bg}; cursor: default;
+  padding: ${CHILD_PAD} ${T.pane}; border-bottom: 1px solid transparent;
+  font-size: ${T.body}; line-height: ${T.normal}; color: ${T.fg}; background-color: ${T.bg}; cursor: default;
 }
-${CHILD}:has(+ :not(${CHILD})) { border-bottom-color: ${T.border}; padding-block-end: ${T.sm}; }
+${CHILD}:has(+ :not(${CHILD})) { border-bottom-color: ${T.border}; }
 ${CHILD}:hover { background-color: ${T.subtle}; }
 ${CHILD}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("message-list")}:focus-visible ${CHILD}[aria-selected="true"] { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${HC} ${p("message-list")}:focus-visible ${CHILD}[aria-selected="true"] { outline: 3px solid ${T.focus}; }
 ${p("message-list.child.rail")} {
-  justify-self: center; align-self: stretch; width: 2px; margin-block: calc(-1 * ${T.xs});
+  justify-self: center; align-self: stretch; width: 2px; margin-block: calc(-1 * ${CHILD_PAD});
   border-radius: 1px; background-color: ${T.border};
 }
 ${CHILD}[data-state~="selected"] ${p("message-list.child.rail")} { background-color: currentColor; }
@@ -111,5 +120,5 @@ ${p("message-list.child.from")}, ${p("message-list.child.preview")} { min-width:
 ${p("message-list.child.from")} { max-width: calc(12 * ${T.lg}); }
 ${CHILD}[data-state~="unread"] ${p("message-list.child.from")} { font-weight: ${T.semibold}; }
 ${p("message-list.child.preview")} { color: ${T.muted}; }
-${p("message-list.child.date")} { white-space: nowrap; font-variant-numeric: tabular-nums; color: ${T.muted}; }
+${p("message-list.child.date")} { font-size: ${T.small}; white-space: nowrap; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${CHILD}[data-state~="selected"] ${p("message-list.child.preview")}, ${CHILD}[data-state~="selected"] ${p("message-list.child.date")} { color: inherit; }`;
