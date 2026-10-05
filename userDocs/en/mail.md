@@ -53,23 +53,94 @@ The message's right-click menu has the same actions in the same groups.
 
 ## Conversations
 
-Replies are grouped into conversations. The message list shows one row
-per conversation: the sender of its newest message, the number of messages
-when there are several, the subject and the newest message's preview.
-Choosing a row shows the newest message.
+Replies are grouped into conversations: a message and every answer to it,
+however many people take part. Your own replies are part of the
+conversation even though they sit in the Sent folder.
 
-When the selected message belongs to a conversation, the reader shows the
-conversation above it, oldest first: the newest three messages, with the
-older ones folded into **N earlier messages** (click it to see them all).
-Your own replies from Sent are part of the conversation and say "me".
-Click a message's line to open it in place (quoted text stays folded;
-**Show quoted text** unfolds it), or **Open** to show it in the reader.
+### Conversations in the list
+
+The message list shows one row per conversation, ordered by its newest
+message (your own replies count as activity):
+
+1. **Who** takes part — at most three names, the first ones and whoever
+   wrote last, with "me" for you and in bold the people whose mail you have
+   not read yet ("Linus, Marie … Ada") — then a small **count** of the
+   messages (none for a single message) and the date of the newest one.
+2. The **subject**.
+3. **Sender: preview** — who wrote the newest message and its first words.
+
+In the Compact density a row has two lines and no preview (Settings →
+Appearance, see [Appearance](appearance.md#density)).
+
+A conversation listed in a folder holds that folder's messages of the
+conversation plus your own replies from Sent. Drafts never join a
+conversation: in Drafts every draft is listed on its own. While you search,
+a conversation is made of its messages in every folder except Drafts, Trash
+and Junk.
+
+The row's actions (flag, archive, move, delete, the right-click menu) act on
+the conversation's newest message, like the reader.
+
+### The conversation in the reader
+
+Choosing a conversation shows it in the reader as a column of cards, oldest
+first, under a header with the subject and the people taking part:
+
+- The newest unread message is open (if you have read everything: the
+  newest one). Older messages you have read are collapsed to one line with
+  the sender's avatar, name, date and the first words. Click a line (or
+  press Enter) to open the card; click its header again to collapse it.
+- When more than four read messages lie between the first and the newest,
+  they fold into **N older messages**. Click it to show them.
+- **Expand all** opens every card; **Collapse all** closes all but the
+  newest.
+- Your own messages say "me" and are marked as sent by you.
+- Quoted text in a reply stays folded (**Show quoted text** unfolds it), so
+  each card shows what is new. Cards are not indented: who answered whom is
+  in the quote.
+- An open card is a full message: its own security badges, the
+  remote-content banner, attachments and actions (**Reply**, **Reply all**,
+  **Forward**, its right-click menu).
+
+Screen readers hear the conversation as a feed: each card is an article
+("3 of 12"), collapsed cards are buttons that say whether they are open.
 
 For Gmail and Exchange accounts the server's own conversations count too:
 messages the server keeps together stay together in Nail.
 
-To list single messages instead of conversations, set `threads="off"` on
-the `message-list` in your [`layout.kdl`](layout-reference.md#widgets).
+### Keyboard
+
+In the reader (click a card, or press Tab until the conversation has the
+focus):
+
+| Key | Action |
+| --- | --- |
+| `j`, `k` | The next / previous card |
+| `Enter`, `o` | Open or collapse the focused card |
+| `;` | Expand all |
+| `Shift+;` | Collapse all |
+| `n`, `p` | The next / previous message, also across a fold |
+| `r`, `a`, `f` | Reply, reply all, forward to the focused card's message |
+
+In the list, `j` / `k` and the arrow keys move between conversations. The
+keys can be changed in your [`layout.kdl`](layout-reference.md#keys).
+
+### Conversations that open in the list
+
+If you prefer to see the messages of a conversation in the list itself, set
+`threads="expandable"` on the `message-list` in your
+[`layout.kdl`](layout-reference.md#widgets):
+
+```kdl
+message-list id="list" threads="expandable"
+```
+
+A conversation row then gets a chevron. Click it (or press `→` on the row;
+`←` closes it again) to show the conversation's messages as rows beneath
+it, one level deep: sender, first words and date of each message. Choosing
+such a message shows just that message in the reader.
+
+To list single messages instead of conversations, set `threads="off"`.
 
 ## The message list and the reader
 

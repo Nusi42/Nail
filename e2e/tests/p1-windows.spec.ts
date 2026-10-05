@@ -669,7 +669,7 @@ test.describe("P1: every window and dialog is responsive", () => {
       const sweep = new Sweep(page, group);
       await page.setViewportSize(LARGE);
       await page.goto(server.url);
-      await expect(rowsOf(page)).toHaveCount(14);
+      await expect(rowsOf(page)).toHaveCount(17);
       try {
         await run(sweep, server);
       } finally {

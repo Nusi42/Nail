@@ -1,0 +1,2 @@
+# Keep the mail corpus byte-exact (8-bit charsets, no line-ending conversion).
+*.eml -text

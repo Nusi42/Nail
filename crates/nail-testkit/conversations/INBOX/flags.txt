@@ -1,0 +1,16 @@
+# <file> <IMAP flags...>; files not listed have no flags (P2 demo conversations)
+15-lab-move-01.eml \Seen
+16-lab-move-02.eml \Seen \Answered
+17-lab-move-04.eml \Seen
+18-lab-move-05.eml \Seen
+19-lab-move-06.eml \Seen \Answered
+# 20-lab-move-08.eml stays unread: the unread message in the middle
+21-lab-move-09.eml \Seen
+22-lab-move-10.eml \Seen \Answered
+23-lab-move-12.eml \Seen
+24-dinner-reply.eml \Seen \Answered
+# 25-dinner-confirmed.eml stays unread: the newest of its conversation
+26-reading-group-1.eml \Seen
+27-reading-group-2.eml \Seen
+28-reading-group-3.eml \Seen \Answered
+29-reading-group-5.eml \Seen

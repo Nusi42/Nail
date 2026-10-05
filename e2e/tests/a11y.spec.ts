@@ -81,7 +81,7 @@ test.describe("windows and dialogs of demo-multi", () => {
   test("have no accessibility violations", async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto(server.url);
-    await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
+    await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
     const close = async (name: string) => {
       await page
         .getByRole("dialog", { name })

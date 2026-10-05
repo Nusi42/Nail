@@ -1,0 +1,7 @@
+# <file> <IMAP flags...>; files not listed have no flags (P2 demo conversations)
+05-lab-move-03.eml \Seen
+06-lab-move-07.eml \Seen
+07-lab-move-11.eml \Seen
+08-dinner-booked.eml \Seen
+09-reading-group-4.eml \Seen
+10-talk-proposal-2.eml \Seen

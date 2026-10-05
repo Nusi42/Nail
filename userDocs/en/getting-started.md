@@ -27,9 +27,11 @@ To look around without an account, start Nail with the demo mailbox:
 nail serve --seed demo --open
 ```
 
-The demo contains about twenty messages in *INBOX*, *Sent* and *Archive*:
-newsletters, a conversation thread, attachments, and a few deliberately
-broken or hostile messages. They show how Nail protects you.
+The demo contains about forty messages in *INBOX*, *Sent* and *Archive*:
+newsletters, attachments, several conversations (a long one with five
+people and an unread message in the middle, your own replies in *Sent*),
+and a few deliberately broken or hostile messages. They show how Nail
+protects you.
 
 ## Find your way around
 
@@ -53,8 +55,9 @@ The Mail view has three panes:
    bold.
 3. **Message** (right): the action bar for the message (Reply, Reply all
    and Forward with labels, the common actions as icons, the rest under
-   **More**), the other messages of its conversation, and the selected
-   message with its headers, attachments and text.
+   **More**) and the selected conversation as a column of messages, oldest
+   first, with the newest unread one open (see
+   [Conversations](mail.md#conversations)).
 
 The status bar at the bottom shows whether Nail is up to date, the progress
 of a running check for new mail, and the number of messages in the folder.

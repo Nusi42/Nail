@@ -40,7 +40,7 @@ const sieveScripts = () => control<SieveScripts>(server, "sieve-scripts");
 const nailScript = async () =>
   (await sieveScripts()).scripts.find((s) => s.name === "nail")?.content ?? "";
 
-async function open(page: Page, rows = 14) {
+async function open(page: Page, rows = 17) {
   await page.goto(server.url);
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(rows);
 }
@@ -113,7 +113,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   const spam =
     "Congratulations winner! Claim your lottery prize money now, cheap pills, exclusive casino bonus, click here to claim the prize today";
   await deliver("You are a lottery winner", spam, "spam-1");
-  await open(page, 15);
+  await open(page, 18);
   await expect(rows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(1, {
     timeout: 20_000,
   });

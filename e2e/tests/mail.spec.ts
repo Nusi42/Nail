@@ -54,13 +54,13 @@ test("seeded folders and messages appear", async ({ page }) => {
     folders.filter({ hasText: "Inbox" }).locator('[data-part="folder-tree.item.unread-count"]'),
   ).toHaveText(/\d+/);
 
-  await expect(rows).toHaveCount(11);
+  await expect(rows).toHaveCount(14);
   await expect(rows.first()).toContainText("Reminder: Nightingale review");
-  await expect(page.locator('[data-item="folder-counts"]')).toContainText("14");
+  await expect(page.locator('[data-item="folder-counts"]')).toContainText("29");
 
-  // Four sent messages in two conversations (P2: one row per conversation).
+  // Ten sent messages in five conversations (P2: one row per conversation).
   await folders.filter({ hasText: "Sent" }).click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(5);
   await expect(rows.filter({ hasText: "Dinner" })).toHaveCount(1);
 });
 

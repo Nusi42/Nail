@@ -17,7 +17,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 async function ready(page: Page) {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(14);
+  await expect(rows(page)).toHaveCount(17);
 }
 
 test("search with the query language", async ({ page }) => {
@@ -51,7 +51,7 @@ test("search with the query language", async ({ page }) => {
   // Escape clears the search: back to the folder.
   await input.press("Escape");
   await expect(list).not.toHaveAttribute("data-state", "search");
-  await expect(rows(page)).toHaveCount(14);
+  await expect(rows(page)).toHaveCount(17);
 });
 
 test("the thread view shows a conversation across folders", async ({ page }) => {

@@ -14,7 +14,7 @@ use mail_parser::MessageParser;
 use nail_api::FolderRole;
 use tokio::sync::watch;
 
-use crate::corpus::{CorpusFolder, demo_corpus, to_crlf};
+use crate::corpus::{CorpusFolder, demo_corpus, demo_corpus_with_conversations, to_crlf};
 
 /// Default internal date for messages without a usable `Date` header.
 const FALLBACK_INTERNAL_DATE: &str = "01-Jan-2026 00:00:00 +0000";
@@ -174,6 +174,13 @@ impl MailStore {
     /// A store filled with the embedded demo corpus.
     pub fn demo() -> Self {
         Self::from_folders(demo_corpus())
+    }
+
+    /// A store filled with the demo corpus plus the P2 demo conversations
+    /// ([`crate::demo_corpus_with_conversations`]): what the seeds of
+    /// `nail serve` serve.
+    pub fn demo_with_conversations() -> Self {
+        Self::from_folders(demo_corpus_with_conversations())
     }
 
     /// A store loaded from a directory (see [`crate::load_mail_dir`]).
@@ -630,6 +637,22 @@ mod tests {
         assert_eq!(uids, expected);
         assert_eq!(inbox.uid_next, u32::try_from(expected.len() + 1).unwrap());
         assert_eq!(store.mailboxes().len(), 3);
+    }
+
+    #[test]
+    fn demo_with_conversations_appends_after_the_demo_corpus() {
+        let base = MailStore::demo();
+        let rich = MailStore::demo_with_conversations();
+        assert_eq!(rich.mailboxes().len(), 3);
+        for name in ["INBOX", "Sent", "Archive"] {
+            let small = base.mailbox(name).unwrap();
+            let large = rich.mailbox(name).unwrap();
+            assert!(large.messages.len() > small.messages.len(), "{name}");
+            for (a, b) in small.messages.iter().zip(&large.messages) {
+                assert_eq!((a.uid, &a.raw), (b.uid, &b.raw), "{name}");
+            }
+        }
+        assert_eq!(rich.mailbox("Sent").unwrap().uid_next, 11);
     }
 
     #[test]
