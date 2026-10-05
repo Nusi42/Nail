@@ -188,7 +188,7 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
       raw: htmlMail(
         "Red letter day",
         "red",
-        '<style>.alert { color: #c92a2a; font-weight: bold; }</style><p class="alert">Red letters</p><p>Black letters</p>',
+        '<style>.alert { color: #c92a2a; font-weight: bold; }</style><p class="alert">Red letters</p><p>Black letters and <a href="https://tea.example/guide">a guide</a></p>',
       ),
     });
     await control(server, "imap-deliver", {
@@ -204,13 +204,19 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     await expect(frame.getByText("Red letters")).toBeVisible();
     expect(await frameStyle(frame, "body", "background-color")).toBe("rgb(255, 255, 255)");
     expect(await frameStyle(frame, ".alert", "color")).toBe("rgb(201, 42, 42)");
-    expect(await frameStyle(frame, "p:not(.alert)", "color")).toBe("rgb(31, 31, 31)");
+    // Graphite's print colours: black text, a dark link colour readable on
+    // the white paper (not the dark scheme's pale LinkText), and a light
+    // colour scheme for the frame (scrollbars, controls).
+    expect(await frameStyle(frame, "p:not(.alert)", "color")).toBe("rgb(0, 0, 0)");
+    expect(await frameStyle(frame, "a", "color")).toBe("rgb(59, 91, 219)");
+    expect(await frameStyle(frame, "html", "color-scheme")).toBe("light");
 
     await openMessage(page, "Plain greetings");
     await expect(frame.getByText("plain words")).toBeVisible();
     const background = await frameStyle(frame, "body", "background-color");
     const text = await frameStyle(frame, "p", "color");
     expect(background).not.toBe("rgb(255, 255, 255)");
+    expect(await frameStyle(frame, "html", "color-scheme")).toBe("dark");
     // Light text on the dark theme background.
     expect(luminance(text)).toBeGreaterThan(luminance(background));
     // Plain mail keeps the reading width.

@@ -98,6 +98,11 @@ impl Service {
             Request::GetMessage { id } => {
                 let mut message = self.message_body(id.clone()).await?;
                 message.render_url = self.remote_render_url(&id, &ctx.session.id);
+                // The sandbox origin embeds the inline images; the session
+                // need not receive them twice.
+                if message.render_url.is_some() {
+                    message.reader_html = None;
+                }
                 Response::Message {
                     message: Box::new(message),
                 }

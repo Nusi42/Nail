@@ -263,6 +263,8 @@ crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rul
                        sanitize_html unchanged for plug-ins / quoting), document.rs (html5ever tokenizer: style blocks,
                        body attributes → `body` rules), css.rs (style-sheet filter: only @media / @supports, remote url()
                        counted / proxied, no position fixed / content text), cid: images → capped data: URLs (2 / 8 MiB)
+                       only in ParsedMessage / MessageBody.reader_html (sanitized_html keeps cid: for quotes, MCP,
+                       plug-ins; sanitize_mail_html_portable); no `{` / `}` in kept declarations (ADR 0145)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018);
                        bodies.rs (BodyFetch, fetch_batch_with, fetch_body), search.rs (SearchKey,
                        search_messages) (ADR 0046)

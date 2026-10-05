@@ -64,8 +64,10 @@ function renderSrc(renderUrl: string, css: string): string {
  */
 function Body({ message }: { message: MessageBody }) {
   const t = useT();
-  const css = useReaderCss();
-  const html = message.sanitized_html;
+  // The reader's form (inline images embedded as data: URLs) when the core sends one.
+  const html = message.reader_html ?? message.sanitized_html;
+  const designed = html !== null && isDesignedMail(html);
+  const css = useReaderCss(designed);
   const renderUrl = message.render_url ?? null;
   const srcDoc = useMemo(
     () => (html === null || renderUrl !== null ? null : readerDocument(html, css, proxyBase())),
@@ -76,7 +78,7 @@ function Body({ message }: { message: MessageBody }) {
     if (frame.current && srcDoc !== null) setSrcdoc(frame.current, srcDoc);
   }, [srcDoc]);
   const title = t("message-view-body-title", { subject: message.headers.subject });
-  const state = html !== null && isDesignedMail(html) ? "designed" : undefined;
+  const state = designed ? "designed" : undefined;
   if (html !== null && renderUrl !== null) {
     return (
       <iframe

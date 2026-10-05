@@ -46,8 +46,9 @@ pub type HtmlLookup<'a> = Pin<Box<dyn Future<Output = Option<String>> + Send + '
 
 /// Where the sandbox gets a message's sanitized HTML.
 pub trait MailSource: Send + Sync + 'static {
-    /// The sanitized HTML of `message_id`, `None` for text-only or unknown
-    /// messages.
+    /// The sanitized HTML of `message_id` as the reader renders it
+    /// (`MessageBody::reader_html`, else `sanitized_html`), `None` for
+    /// text-only or unknown messages.
     fn sanitized_html<'a>(&'a self, message_id: &'a str) -> HtmlLookup<'a>;
 
     /// Whether the request's cookies belong to the live remote session
@@ -62,7 +63,8 @@ impl MailSource for Service {
                 id: MessageId::from(message_id),
             };
             match self.handle(request).await {
-                ApiResponse::Message { message } => message.sanitized_html,
+                // The reader's form (inline images embedded) when there is one.
+                ApiResponse::Message { message } => message.reader_html.or(message.sanitized_html),
                 _ => None,
             }
         })

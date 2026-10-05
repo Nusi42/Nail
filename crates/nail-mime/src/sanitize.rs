@@ -85,9 +85,11 @@ pub(crate) struct Context {
     count: AtomicU32,
     rewriter: Option<ProxyRewriter>,
     /// A whole mail document (P1): classes, ids and style sheets are kept,
-    /// `cid:` references are resolved through `inline` (or removed).
+    /// `cid:` references to parts in `inline` are kept (or, with `embed`,
+    /// resolved to their `data:` URLs); others are removed.
     document: bool,
     inline: InlineImages,
+    embed: bool,
 }
 
 impl Context {
@@ -98,14 +100,22 @@ impl Context {
             rewriter,
             document: false,
             inline: InlineImages::default(),
+            embed: true,
         }
     }
 
-    /// The context of [`sanitize_mail_html`].
+    /// The context of [`sanitize_mail_html`] (inline images embedded).
+    #[cfg(test)]
     pub(crate) fn document(rewriter: Option<ProxyRewriter>, inline: InlineImages) -> Self {
+        Self::document_with(rewriter, inline, true)
+    }
+
+    /// The context of [`sanitize_mail_html`] / [`sanitize_mail_html_portable`].
+    fn document_with(rewriter: Option<ProxyRewriter>, inline: InlineImages, embed: bool) -> Self {
         Self {
             document: true,
             inline,
+            embed,
             ..Self::fragment(rewriter)
         }
     }
@@ -134,15 +144,20 @@ impl Context {
         replaced
     }
 
-    /// What a `cid:` reference becomes: kept as written in a fragment, the
-    /// inline image's `data:` URL in a document (`None` = remove it: the
-    /// part is missing or too large, and the reader shows a placeholder).
+    /// What a `cid:` reference becomes: kept as written in a fragment; in a
+    /// document the inline image's `data:` URL (`embed`) or the reference
+    /// itself (`None` = remove it: the part is missing or too large, and the
+    /// reader shows a placeholder).
     fn cid<'u>(&self, value: &'u str) -> Option<Cow<'u, str>> {
-        if self.document {
-            self.inline.get(value).map(|url| Cow::Owned(url.to_owned()))
-        } else {
-            Some(Cow::Borrowed(value))
+        if !self.document {
+            return Some(Cow::Borrowed(value));
         }
+        let url = self.inline.get(value)?;
+        Some(if self.embed {
+            Cow::Owned(url.to_owned())
+        } else {
+            Cow::Borrowed(value)
+        })
     }
 }
 
@@ -253,7 +268,23 @@ pub fn sanitize_mail_html(
     rewriter: Option<ProxyRewriter>,
     inline: InlineImages,
 ) -> SanitizedHtml {
-    let ctx = Arc::new(Context::document(rewriter, inline));
+    sanitize_document(html, Context::document_with(rewriter, inline, true))
+}
+
+/// [`sanitize_mail_html`] for everything but the reader (quoting, MCP,
+/// plug-ins; P1 review): references to the parts in `inline` stay `cid:`
+/// links instead of `data:` URLs of up to megabytes; references to missing
+/// parts are removed as there.
+pub fn sanitize_mail_html_portable(
+    html: &str,
+    rewriter: Option<ProxyRewriter>,
+    inline: InlineImages,
+) -> SanitizedHtml {
+    sanitize_document(html, Context::document_with(rewriter, inline, false))
+}
+
+fn sanitize_document(html: &str, ctx: Context) -> SanitizedHtml {
+    let ctx = Arc::new(ctx);
     let extracted = crate::document::extract(html);
     let mut css = String::new();
     let (body_rules, body_style) = body_rules(&extracted.body, &ctx);
@@ -465,6 +496,10 @@ const FORBIDDEN_IN_DECLARATIONS: &[&str] = &[
     "\\",
     "/*",
     "<",
+    // A `<body style>` becomes a rule in the mail's style sheet: a brace
+    // would end that rule and start new ones past the checks below.
+    "{",
+    "}",
 ];
 
 /// The declarations of a `style` attribute or rule block that may be kept
@@ -481,6 +516,11 @@ pub(crate) fn filter_declarations(block: &str, ctx: &Context) -> Vec<String> {
         }
         let lower = declaration.to_ascii_lowercase();
         if FORBIDDEN_IN_DECLARATIONS.iter().any(|f| lower.contains(f)) {
+            continue;
+        }
+        // An unclosed string would swallow the end of the rule it lands in
+        // (escapes are refused above, so counting quotes is enough).
+        if lower.matches('"').count() % 2 != 0 || lower.matches('\'').count() % 2 != 0 {
             continue;
         }
         let compact: String = lower.chars().filter(|c| !c.is_whitespace()).collect();
@@ -863,6 +903,35 @@ mod tests {
     fn fixed_boxes_and_generated_text_are_dropped_from_styles() {
         let out = clean(r#"<p style="position: fixed; top: 0; content: 'x'; color: red">t</p>"#);
         assert_eq!(out.html, r#"<p style="top: 0; color: red">t</p>"#);
+    }
+
+    #[test]
+    fn body_style_cannot_start_rules_of_its_own() {
+        // P1 review: the body's style attribute lands in the style sheet, so
+        // a brace would end `body { … }` and smuggle in fixed boxes and
+        // generated link text.
+        let out = mail(
+            r#"<body style="color:red} .x{position:fixed;top:0} a::after{content:'https://bank.example'"><a class="x" href="https://evil.example">x</a></body>"#,
+        );
+        let (css, _) = out
+            .html
+            .split_once("</style>")
+            .unwrap_or(("", out.html.as_str()));
+        assert_eq!(css.matches('{').count(), css.matches('}').count(), "{css}");
+        assert!(!css.contains("position:fixed"), "{css}");
+        assert!(!css.contains("bank.example"), "{css}");
+        assert!(!css.contains(".x"), "{css}");
+        // The same braces in an element's own style attribute are refused too.
+        let out = clean(r#"<p style="color: red} p{color: blue">t</p>"#);
+        assert!(!out.html.contains('{'), "{}", out.html);
+    }
+
+    #[test]
+    fn unclosed_strings_are_dropped_from_styles() {
+        let out = mail(r#"<body style="font-family: 'Georgia; color: red"><p>t</p></body>"#);
+        assert!(!out.html.contains("Georgia"), "{}", out.html);
+        let out = clean(r#"<p style="font-family: &quot;Georgia&quot;; color: red">t</p>"#);
+        assert!(out.html.contains("Georgia"), "{}", out.html);
     }
 
     #[test]

@@ -726,6 +726,7 @@ mod tests {
             headers: nail_api::MessageHeaders::default(),
             text: "ignored when there is HTML: https://1.2.3.4".into(),
             sanitized_html: Some("<a href=\"https://evil.example\">bank.example</a>".into()),
+            reader_html: None,
             attachments: vec![
                 AttachmentInfo {
                     index: 0,

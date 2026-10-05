@@ -292,6 +292,95 @@ async fn replies_and_forwards_are_quoted_in_every_mode() {
     f.service.shutdown().await;
 }
 
+/// P1 review: inline images reach only the reader as `data:` URLs
+/// (`MessageBody::reader_html`); `sanitized_html`, which quoting, MCP and
+/// plug-ins use, keeps the small `cid:` reference, so a reply carries no
+/// megabytes of base64.
+#[tokio::test]
+async fn inline_images_are_embedded_for_the_reader_only() {
+    const PNG_1X1: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let f = setup().await;
+    synced(&f).await;
+    let raw = [
+        "From: Shop <news@shop.example>",
+        "To: ada@work.example",
+        "Subject: Logo inside",
+        "Message-ID: <logo-inside@shop.example>",
+        "Date: Mon, 05 Oct 2026 09:00:00 +0000",
+        "MIME-Version: 1.0",
+        "Content-Type: multipart/related; boundary=\"rel\"",
+        "",
+        "--rel",
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        "<p>Hi <img alt=\"Logo\" src=\"cid:logo@shop.example\"></p>",
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo@shop.example>",
+        "Content-Transfer-Encoding: base64",
+        "",
+        PNG_1X1,
+        "--rel--",
+        "",
+    ]
+    .join(
+        "
+",
+    );
+    control(&f, "imap-deliver", &json!({ "raw": raw }));
+    eventually("the inline-image mail arrived", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .iter()
+            .any(|s| s == "Logo inside")
+    })
+    .await;
+    let original = find(&f.service, FolderRole::Inbox, "Logo inside").await;
+    let Response::Message { message } = request(
+        &f.service,
+        Request::GetMessage {
+            id: original.id.clone(),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let portable = message.sanitized_html.unwrap();
+    assert!(
+        portable.contains(r#"src="cid:logo@shop.example""#),
+        "{portable}"
+    );
+    assert!(!portable.contains("data:"), "{portable}");
+    let reader = message.reader_html.unwrap();
+    assert!(
+        reader.contains(r#"src="data:image/png;base64,"#),
+        "{reader}"
+    );
+
+    for mode in [ComposerMode::Markdown, ComposerMode::Html] {
+        let Response::Draft { draft } = request(
+            &f.service,
+            Request::NewDraft {
+                identity_id: None,
+                account_id: Some(MULTI_WORK_ID.into()),
+                mode: Some(mode),
+                context: Some(DraftContext {
+                    mode: DraftContextMode::Reply,
+                    message_id: original.id.clone(),
+                }),
+            },
+        )
+        .await
+        else {
+            panic!()
+        };
+        let body = format!("{:?} {:?}", draft.markdown, draft.html);
+        assert!(!body.contains("data:image"), "{body}");
+    }
+    f.service.shutdown().await;
+}
+
 #[tokio::test]
 async fn html_markdown_and_attachments_reach_the_smtp_server() {
     let f = setup().await;

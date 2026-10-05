@@ -73,8 +73,18 @@ export function isDesignedMail(sanitizedHtml: string): boolean {
   );
 }
 
-/** Reader stylesheet for `mode`, with all token references resolved. */
-export function readerCss(theme: ResolvedTheme, mode: string): string {
+/** The token mode whose colours paint designed mail's light paper. */
+const PAPER_MODE = "print";
+
+/**
+ * Reader stylesheet for `mode`, with all token references resolved.
+ * `designed` = the mail brings its own design (`isDesignedMail`, decided
+ * outside the frame: CSS cannot nest `:has()`, so the document cannot test
+ * it on `:root`). In the smart dark mode such mail is drawn on a light
+ * "paper" in the theme's print colours, with a light colour scheme for its
+ * links, scrollbars and form controls.
+ */
+export function readerCss(theme: ResolvedTheme, mode: string, designed = false): string {
   const r = (value: string, fallback: string) =>
     safe(resolveTokenRefs(value, theme, mode), fallback);
   const m = theme.message;
@@ -84,8 +94,9 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
   const subtle = r("var(--nail-color-bg-subtle)", "Canvas");
   const accent = r("var(--nail-color-accent)", "LinkText");
   const dark = mode === "dark" || mode === "high-contrast";
+  const paper = designed && mode === "dark" && m.html_dark_mode === "smart";
   const rules = [
-    `:root { color-scheme: ${dark ? "dark" : "light"}; }`,
+    `:root { color-scheme: ${dark && !paper ? "dark" : "light"}; }`,
     `body { margin: 0; padding: 0 0 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; overflow-wrap: anywhere; }`,
     // Colours at zero specificity: the mail's own rules always win.
     `:where(body) { color: ${fg}; background-color: ${bg}; }`,
@@ -116,15 +127,33 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
     rules.push(
       "html { filter: invert(1) hue-rotate(180deg); } img { filter: invert(1) hue-rotate(180deg); }",
     );
-  } else if (dark && m.html_dark_mode === "smart") {
-    // Plain mail takes the theme's colours; designed mail keeps its own on a
-    // light "paper", as its author drew it.
+  } else if (mode === "high-contrast" && m.html_dark_mode !== "off") {
+    // High contrast forces the theme's colours on every mail, designed or not.
     rules.push(
-      `body:not(${DESIGNED}) * { background-color: transparent !important; color: ${fg} !important; }`,
-      `:root:has(> body${DESIGNED}) { color-scheme: light; }`,
-      `:where(body${DESIGNED}) { color: #1f1f1f; background-color: #ffffff; }`,
-      `:where(body${DESIGNED} a) { color: LinkText; }`,
+      `html, body { background-color: ${bg} !important; color: ${fg} !important; }`,
+      `body * { background-color: transparent !important; color: ${fg} !important; }`,
+      `a, a * { color: ${accent} !important; }`,
     );
+  } else if (dark && m.html_dark_mode === "smart") {
+    if (paper) {
+      // Designed mail keeps its own colours on a light "paper", as its author
+      // drew it: the theme's print colours (white paper, dark text, a link
+      // colour readable on white), after the rules above so they win.
+      // A theme without print colours gets a plain white paper.
+      const p = (value: string, fallback: string) =>
+        !(PAPER_MODE in theme.modes)
+          ? fallback
+          : safe(resolveTokenRefs(value, theme, PAPER_MODE), fallback);
+      rules.push(
+        `:where(body) { color: ${p("var(--nail-color-fg)", "#1f1f1f")}; background-color: ${p("var(--nail-color-bg)", "#ffffff")}; }`,
+        `:where(a) { color: ${p("var(--nail-color-accent)", "#0b57d0")}; }`,
+      );
+    } else {
+      // Plain mail takes the theme's colours.
+      rules.push(
+        `body:not(${DESIGNED}) * { background-color: transparent !important; color: ${fg} !important; }`,
+      );
+    }
   }
   return rules.join("\n");
 }

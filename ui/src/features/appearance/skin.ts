@@ -54,12 +54,25 @@ const T = {
 
 /** The container the editor's layout query measures. */
 export const THEME_EDITOR_CONTAINER = "nail-theme-editor";
-/** Below this width the preview goes below the panel. */
-export const THEME_EDITOR_NARROW = "64rem";
+/**
+ * Below this width the tabs go above the panel and the preview beside it at
+ * a larger share (P1 review: at 1280 px the third column squeezed it).
+ */
+export const THEME_EDITOR_MEDIUM = "80rem";
+/**
+ * Below this width everything is one column with the preview *above* the
+ * panel, so it stays in sight while tokens are edited (P1 review: below the
+ * token list it was off screen).
+ */
+export const THEME_EDITOR_NARROW = "52rem";
 /** The container the preview's narrow rule measures (P1 WP192). */
 export const THEME_PREVIEW_CONTAINER = "nail-theme-preview";
 /** Below this width a token's value field goes below its name (P1 WP192). */
 export const THEME_EDITOR_STACKED = "40rem";
+/** The container the token rows measure: the panel beside the preview (P1 review). */
+export const THEME_PANEL_CONTAINER = "nail-theme-panel";
+/** Below this panel width a token's value field goes below its name (P1 review). */
+export const THEME_PANEL_STACKED = "40rem";
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 
@@ -71,6 +84,8 @@ ${p("appearance.actions")}[data-actions="themes"] { justify-content: flex-start;
    label and select on one line. */
 ${p("appearance.pair")} > ${p("form.field")} + ${p("form.field")} { border-top: 0; }
 ${p("appearance.pair")} > ${p("form.field")} > ${p("form.select")} { grid-row: 1; }
+/* P1 review: "Light theme" / "Dark theme" stay on one line beside their select at laptop widths. */
+${p("appearance.pair")} > ${p("form.field")} > ${p("form.label")} { white-space: nowrap; }
 ${p("appearance.slider")} { display: flex; align-items: center; gap: ${T.md}; }
 ${p("appearance.range")} { flex: 1 1 auto; min-width: 0; accent-color: ${T.accent}; }
 ${p("appearance.range")}:focus-visible { ${focusRing} }
@@ -84,10 +99,12 @@ ${e("actions")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.
 ${e("status")} { margin-inline-start: auto; font-size: ${T.small}; color: ${T.muted}; }
 ${e("notice")} { margin: 0; padding: ${T.sm} ${T.md}; border-radius: ${T.rMd}; background-color: ${T.accentSoft}; color: ${T.fg}; }
 ${e("notice")}[data-tone="warning"] { border: 1px solid ${T.warning}; background-color: color-mix(in srgb, ${T.warning} 14%, ${T.bg}); }
-${e("body")} { display: grid; grid-template-columns: minmax(calc(8 * ${T.lg}), auto) minmax(0, 2fr) minmax(calc(15 * ${T.lg}), 0.8fr); gap: ${T.lg}; align-items: start; min-height: 0; }
-${e("body")} > ${p("tabs.tab-list")} { display: flex; flex-direction: column; gap: ${T.xxs}; border: 0; }
+${e("body")} { display: grid; grid-template-columns: minmax(calc(8 * ${T.lg}), auto) minmax(0, 3fr) minmax(calc(18 * ${T.lg}), 2fr); grid-template-areas: "tabs panel preview"; gap: ${T.lg}; align-items: start; min-height: 0; }
+${e("body")} > ${p("tabs.tab-list")} { grid-area: tabs; display: flex; flex-direction: column; gap: ${T.xxs}; border: 0; }
+${e("body")} > ${e("panel")} { grid-area: panel; }
+${e("body")} > ${e("preview")} { grid-area: preview; }
 ${e("body")} > ${p("tabs.tab-list")} > ${p("tabs.tab")} { justify-content: flex-start; text-align: start; }
-${e("panel")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; }
+${e("panel")} { container: ${THEME_PANEL_CONTAINER} / inline-size; display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; }
 ${e("tokens")} { display: flex; flex-direction: column; gap: ${T.sm}; }
 ${e("token-list")}, ${e("part-list")} { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid ${T.border}; border-radius: ${T.rMd}; }
 /* P1 (WP192): one grid per row — name, origin tag, controls — with the controls at a fixed share of
@@ -158,10 +175,19 @@ ${p("theme-dialog.note")}, ${p("theme-dialog.gone")} { margin: 0; color: ${T.mut
   ${e("token")} { grid-template-columns: minmax(0, 1fr) auto; }
   ${e("token.controls")} { grid-column: 1 / -1; grid-row: auto; }
 }
-@container ${THEME_EDITOR_CONTAINER} (max-width: ${THEME_EDITOR_NARROW}) {
-  ${e("body")} { grid-template-columns: minmax(0, 1fr); }
+/* The panel shares its row with the preview: its rows stack by the panel's own width. */
+@container ${THEME_PANEL_CONTAINER} (max-width: ${THEME_PANEL_STACKED}) {
+  ${e("token")} { grid-template-columns: minmax(0, 1fr) auto; }
+  ${e("token.controls")} { grid-column: 1 / -1; grid-row: auto; }
+}
+@container ${THEME_EDITOR_CONTAINER} (max-width: ${THEME_EDITOR_MEDIUM}) {
+  ${e("body")} { grid-template-columns: minmax(0, 3fr) minmax(calc(16 * ${T.lg}), 2fr); grid-template-areas: "tabs tabs" "panel preview"; }
   ${e("body")} > ${p("tabs.tab-list")} { flex-direction: row; flex-wrap: wrap; }
   ${e("parts")} { grid-template-columns: minmax(0, 1fr); }
+}
+@container ${THEME_EDITOR_CONTAINER} (max-width: ${THEME_EDITOR_NARROW}) {
+  ${e("body")} { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tabs" "preview" "panel"; }
   ${e("preview")} { position: static; }
+  ${v("frame")} { min-height: calc(10 * ${T.lg}); }
 }
 `;

@@ -24,7 +24,8 @@ interface ThemeContextValue {
   theme: ResolvedTheme;
   mode: EffectiveMode;
   manager: StyleManager;
-  readerCss: string;
+  /** Reader stylesheets for plain and for designed mail. */
+  readerCss: { plain: string; designed: string };
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -87,7 +88,12 @@ export function ThemeProvider({ theme, modeOverride = null, children }: ThemePro
   }, [density]);
 
   const value = useMemo(
-    () => ({ theme, mode, manager, readerCss: readerCss(theme, mode) }),
+    () => ({
+      theme,
+      mode,
+      manager,
+      readerCss: { plain: readerCss(theme, mode), designed: readerCss(theme, mode, true) },
+    }),
     [theme, mode, manager],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -116,9 +122,13 @@ export function useThemeMode(): EffectiveMode {
   return useThemeContext().mode;
 }
 
-/** Stylesheet for the reader iframe document. */
-export function useReaderCss(): string {
-  return useThemeContext().readerCss;
+/**
+ * Stylesheet for the reader iframe document; `designed` = the mail brings its
+ * own design (`isDesignedMail`).
+ */
+export function useReaderCss(designed = false): string {
+  const css = useThemeContext().readerCss;
+  return designed ? css.designed : css.plain;
 }
 
 /**

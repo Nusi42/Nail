@@ -8,7 +8,7 @@ import {
   screenshotPath,
   type CheckOptions,
 } from "../support/responsive";
-import { openSettings, rail, readerToolbar, runFromPalette, showView } from "../support/views";
+import { openApp, openSettings, readerToolbar, runFromPalette, showView } from "../support/views";
 
 /**
  * Wave P1 WP192 (ADR 0139's responsive standard) against `nail serve`: the
@@ -32,8 +32,7 @@ test.afterEach(async () => {
 
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
   server = await startNail({ seed });
-  await page.goto(server.url);
-  await expect(rail(page)).toBeVisible();
+  await openApp(page, server.url);
 }
 
 /** Every calendar view, by its label (the switch or, when it does not fit, the menu). */

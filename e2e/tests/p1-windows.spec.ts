@@ -392,8 +392,17 @@ const GROUPS: Record<string, Group> = {
       await newMessageButton(page).click();
       const composer = sweep.window("composer");
       await sweep.checkWindow("composer", "composer-plain");
+      const bottom = (part: string) =>
+        composer
+          .locator(`[data-part="${part}"]`)
+          .evaluate((el) => Math.round(el.getBoundingClientRect().bottom));
+      const plainBottom = await bottom("composer.body");
       await composer.getByRole("radio", { name: "HTML" }).click();
       await expect(composer.locator('[data-part="composer.html.content"]')).toBeVisible();
+      // P1 review: the rich editor fills the height down to the footer like the textarea.
+      expect(Math.abs((await bottom("composer.html.content")) - plainBottom)).toBeLessThanOrEqual(
+        16,
+      );
       await sweep.sizes("composer-html", `[data-part="window"][data-window^="composer:"]`);
       await composer.getByRole("radio", { name: "Markdown" }).click();
       await expect(composer.locator('[data-part="composer.markdown.content"]')).toBeVisible();
@@ -483,6 +492,8 @@ const GROUPS: Record<string, Group> = {
             await expect(p.locator('[data-part="settings-page.title"]')).toHaveText(name);
           },
         });
+        // Rows of controls (a key list, a device list) draw no browser bullets (P1 review).
+        expect(await bulletedRows(page.locator(SETTINGS_VIEW)), `bullets in ${name}`).toEqual([]);
         sweep.sections.push(name);
       }
       sweep.checked.add("settings");
@@ -600,6 +611,25 @@ const GROUPS: Record<string, Group> = {
 
 // Fail a missing control fast instead of after the whole test budget.
 test.use({ actionTimeout: 20_000 });
+
+/**
+ * The parts of list items under `scope` that hold a control but still show a
+ * list marker (a browser bullet beside a row of the list).
+ */
+function bulletedRows(scope: Locator): Promise<string[]> {
+  return scope.evaluate((root) =>
+    Array.from(root.querySelectorAll("ul > li, ol > li"))
+      .filter((li) => {
+        const style = getComputedStyle(li);
+        return (
+          style.display === "list-item" &&
+          style.listStyleType !== "none" &&
+          li.querySelector("button, input, select, a[href]") !== null
+        );
+      })
+      .map((li) => li.parentElement?.getAttribute("data-part") ?? "(no part)"),
+  );
+}
 
 test.describe("P1: every window and dialog is responsive", () => {
   let server: NailServer;

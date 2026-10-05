@@ -10,7 +10,11 @@ import { defaultTheme } from "../../api/mockData";
 import {
   APPEARANCE_SKIN_CSS,
   THEME_EDITOR_CONTAINER,
+  THEME_EDITOR_MEDIUM,
+  THEME_EDITOR_NARROW,
   THEME_EDITOR_STACKED,
+  THEME_PANEL_CONTAINER,
+  THEME_PANEL_STACKED,
   THEME_PREVIEW_CONTAINER,
 } from "./skin";
 
@@ -97,12 +101,52 @@ describe("appearance skin", () => {
         ),
       );
       expect(APPEARANCE_SKIN_CSS).toContain(`container: ${THEME_PREVIEW_CONTAINER} / inline-size;`);
+      // Beside the preview the panel itself is the measure (P1 review: long values were cut off).
+      expect(APPEARANCE_SKIN_CSS).toContain(
+        `\n[data-part="theme-editor.panel"] { container: ${THEME_PANEL_CONTAINER} / inline-size;`,
+      );
+      expect(APPEARANCE_SKIN_CSS).toMatch(
+        new RegExp(
+          `@container ${THEME_PANEL_CONTAINER} \\(max-width: ${THEME_PANEL_STACKED}\\) \\{[^@]*theme-editor\\.token.controls"\\] \\{ grid-column: 1 / -1;`,
+        ),
+      );
     });
 
     it("keeps the light and dark theme fields on one line without a separator", () => {
       expect(
         rule('[data-part="appearance.pair"] > [data-part="form.field"] + [data-part="form.field"]'),
       ).toMatch(/border-top: 0;/);
+      // P1 review: the labels do not wrap beside their selects at 1024 px.
+      expect(
+        rule('[data-part="appearance.pair"] > [data-part="form.field"] > [data-part="form.label"]'),
+      ).toMatch(/white-space: nowrap;/);
+    });
+
+    it("keeps the live preview in sight at every width (P1 review)", () => {
+      /** The body of the `@container` block for `width`. */
+      const block = (width: string) => {
+        const head = `@container ${THEME_EDITOR_CONTAINER} (max-width: ${width}) {`;
+        const start = APPEARANCE_SKIN_CSS.indexOf(head);
+        expect(start, width).toBeGreaterThanOrEqual(0);
+        return APPEARANCE_SKIN_CSS.slice(start, APPEARANCE_SKIN_CSS.indexOf("\n}", start));
+      };
+      // Wide: tabs, panel, preview side by side, the preview at a real share.
+      expect(rule('[data-part="theme-editor.body"]')).toMatch(
+        /grid-template-columns: [^;]*minmax\(0, 3fr\) minmax\([^;]*, 2fr\);[^}]*grid-template-areas: "tabs panel preview";/,
+      );
+      // Medium: tabs above, panel and preview side by side.
+      expect(block(THEME_EDITOR_MEDIUM)).toContain(
+        `grid-template-areas: "tabs tabs" "panel preview";`,
+      );
+      // Narrow: one column with the preview above the panel, never after the token list.
+      expect(block(THEME_EDITOR_NARROW)).toContain(
+        `grid-template-areas: "tabs" "preview" "panel";`,
+      );
+      expect(parseFloat(THEME_EDITOR_NARROW)).toBeLessThan(parseFloat(THEME_EDITOR_MEDIUM));
+      // The narrow block comes last, so it wins over the medium one.
+      expect(APPEARANCE_SKIN_CSS.lastIndexOf(THEME_EDITOR_NARROW)).toBeGreaterThan(
+        APPEARANCE_SKIN_CSS.lastIndexOf(THEME_EDITOR_MEDIUM),
+      );
     });
   });
 });

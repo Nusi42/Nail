@@ -10,6 +10,21 @@ export type ViewName = "Mail" | "Calendar" | "Contacts" | "Tasks" | "Settings";
 /** The navigation rail. */
 export const rail = (page: Page) => page.getByRole("navigation", { name: "Sections", exact: true });
 
+/**
+ * The first load of the app from a freshly started `nail serve`: a cold
+ * bundle, the seeded core's first answers and a busy machine can take far
+ * longer than the default 5 s expect timeout (P1 review: a known flake), so
+ * the wait for the shell is explicit and generous. Later waits keep the
+ * default.
+ */
+export const FIRST_LOAD_TIMEOUT = 30_000;
+
+/** Opens the app at `url` and waits until the shell (the navigation rail) shows. */
+export async function openApp(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await expect(rail(page)).toBeVisible({ timeout: FIRST_LOAD_TIMEOUT });
+}
+
 /** A rail button by its view label (its name may carry a badge: "Mail, 3 unread messages"). */
 export const railButton = (page: Page, name: ViewName) =>
   rail(page).getByRole("button", { name: new RegExp(`^${name}(,|$)`) });

@@ -44,6 +44,7 @@ pub use remote_content::ProxyRewriter;
 use sanitize::normalize_cid;
 pub use sanitize::{
     InlineImages, SanitizedHtml, sanitize_html, sanitize_html_with, sanitize_mail_html,
+    sanitize_mail_html_portable,
 };
 pub use text::{PREVIEW_CHARS, preview_text};
 
@@ -69,8 +70,13 @@ pub struct ParsedMessage {
     pub references: Vec<String>,
     /// Plain-text body (derived from HTML when there is no text part).
     pub text: String,
-    /// Sanitized HTML, `None` for text-only mail.
+    /// Sanitized HTML, `None` for text-only mail. Inline images stay
+    /// `cid:` references (see `reader_html`).
     pub sanitized_html: Option<String>,
+    /// The HTML the reader renders when it differs from `sanitized_html`:
+    /// inline images embedded as `data:` URLs (P1). `None` = render
+    /// `sanitized_html`.
+    pub reader_html: Option<String>,
     /// Whether the sanitizer removed remote content.
     pub remote_content_blocked: bool,
     /// Remote references in the HTML body (removed, or rewritten by the
@@ -129,6 +135,7 @@ impl ParsedMessage {
             headers: self.headers,
             text: self.text,
             sanitized_html: self.sanitized_html,
+            reader_html: self.reader_html,
             attachments: self.attachments,
             remote_content_blocked: self.remote_content_blocked,
             // Filled by the core (M2a): decryption / verification, trusted
@@ -350,11 +357,18 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
         Some(source) if !has_plain => source.clone(),
         _ => body_text(message),
     };
-    let html = body_html(message)
+    // The reader gets inline images as `data:` URLs; everything else
+    // (quoting, MCP, plug-ins) keeps the small `cid:` references.
+    let (html, reader_html) = body_html(message)
         .or_else(|| markdown_source.as_deref().map(markdown::to_html))
-        .map(|html| {
+        .map_or((None, None), |html| {
             let inline = inline_images(message, &html);
-            sanitize_mail_html(&html, rewriter, inline)
+            let reader = (!inline.is_empty())
+                .then(|| sanitize_mail_html(&html, rewriter.clone(), inline.clone()).html);
+            (
+                Some(sanitize_mail_html_portable(&html, rewriter, inline)),
+                reader,
+            )
         });
     let preview = preview_text(&text, PREVIEW_CHARS);
     let attachments = message
@@ -379,6 +393,7 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
         remote_content_blocked: html.as_ref().is_some_and(|h| h.remote_content_blocked),
         remote_resources: html.as_ref().map_or(0, |h| h.remote_resources),
         sanitized_html: html.map(|h| h.html),
+        reader_html,
         attachments,
         preview,
     }

@@ -74,7 +74,9 @@ on margins (the reader's stack is a size container; below 640 px the column and 
   `e2e/tests/p1-mail.spec.ts` checks computed colours, inline and proxied images inside the frame on all three.
 - `MessageBody.sanitized_html` can start with a `<style>` element and carry `class` / `id`. Consumers that embed it
   next to other content must sanitize it as a fragment again (the composer's quote does: `sanitize_outgoing`);
-  MCP and plug-ins receive it as before (plug-ins never render it in the app's DOM).
+  MCP and plug-ins receive it as before (plug-ins never render it in the app's DOM). *Amended by ADR 0145:*
+  inline images stay `cid:` in `sanitized_html`; only the new `reader_html` embeds them, and "designed" is decided
+  outside the frame (nested `:has()` is invalid CSS).
 - A mail can style anything inside its own frame (hide text, colour links). That is what every mail client allows;
   the protections that matter stay: no script, no network except the user-allowed proxy, no fixed overlays, no
   generated link text, the app's warnings outside the frame.

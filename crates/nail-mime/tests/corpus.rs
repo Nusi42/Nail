@@ -126,14 +126,19 @@ fn attachments_are_listed_and_decodable() {
 fn inline_cid_image_is_embedded_as_data_url() {
     let raw = corpus_message("INBOX", "05-inline-image.eml").unwrap();
     let parsed = parse_message(&raw);
-    let html = parsed.sanitized_html.as_deref().unwrap();
-    // Resolved when the body is built (P1 WP190): every transport shows it
-    // without allowing `cid:` in a CSP.
+    let html = parsed.reader_html.as_deref().unwrap();
+    // Resolved for the reader when the body is built (P1 WP190): every
+    // transport shows it without allowing `cid:` in a CSP.
     assert!(
         html.contains(r#"src="data:image/png;base64,iVBORw0KGgo"#),
         "{html}"
     );
     assert!(!html.contains("cid:"), "{html}");
+    // Everything else (quoting, MCP, plug-ins) keeps the small reference
+    // (P1 review).
+    let portable = parsed.sanitized_html.as_deref().unwrap();
+    assert!(portable.contains(r#"src="cid:"#), "{portable}");
+    assert!(!portable.contains("data:"), "{portable}");
     assert!(!parsed.remote_content_blocked);
     assert_eq!(parsed.attachments.len(), 1);
     assert!(parsed.attachments[0].inline);

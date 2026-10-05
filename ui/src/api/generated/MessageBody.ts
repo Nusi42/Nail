@@ -33,6 +33,14 @@ text: string,
  */
 sanitized_html: string | null, 
 /**
+ * The HTML body as the reader renders it, when it differs from
+ * `sanitized_html` (P1): inline (`cid:`) images embedded as `data:` URLs,
+ * because the reader frame can load nothing else. Only for the reader:
+ * quoting, MCP and plug-ins use `sanitized_html`, where inline images
+ * stay small `cid:` references. Absent = render `sanitized_html`.
+ */
+reader_html?: string, 
+/**
  * Attachments in MIME order.
  */
 attachments: Array<AttachmentInfo>, 

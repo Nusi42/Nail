@@ -54,6 +54,10 @@ ${p("composer")} > ${p("composer.footer")} {
   position: sticky; bottom: calc(-1 * ${T.md}); z-index: 1; display: flex; flex-direction: column; gap: ${T.sm};
   margin-top: auto; padding-block: ${T.sm} ${T.md}; border-top: 1px solid ${T.border}; background-color: ${T.bg};
 }
+/* P1 review: the rich editor fills the window's height like the plain textarea (the editor
+   library's wrapper element between composer.html.editor and the content carries no part). */
+${inComposer("composer.html.editor")} > * { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+${inComposer("composer.html.content")}, ${inComposer("composer.html.source")} { flex: 1 1 auto; }
 ${inComposer("composer.actions")} { flex-wrap: wrap; }
 ${inComposer("composer.toolbar")} { flex-wrap: wrap; min-width: 0; }
 ${inComposer("composer.send-later")} { flex-wrap: wrap; }

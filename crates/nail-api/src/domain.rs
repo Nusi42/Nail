@@ -269,6 +269,14 @@ pub struct MessageBody {
     /// resources removed), `null` for text-only mail. Must only ever be
     /// rendered inside the sandboxed reader iframe.
     pub sanitized_html: Option<String>,
+    /// The HTML body as the reader renders it, when it differs from
+    /// `sanitized_html` (P1): inline (`cid:`) images embedded as `data:` URLs,
+    /// because the reader frame can load nothing else. Only for the reader:
+    /// quoting, MCP and plug-ins use `sanitized_html`, where inline images
+    /// stay small `cid:` references. Absent = render `sanitized_html`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reader_html: Option<String>,
     /// Attachments in MIME order.
     pub attachments: Vec<AttachmentInfo>,
     /// `true` when the sanitizer removed or neutralized remote content

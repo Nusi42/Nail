@@ -216,6 +216,16 @@ ${[
   "merge-dialog.backup-list",
   "config-errors.list",
   "smart-folders.list",
+  "security-keys.list",
+  "account-settings.list",
+  "remote-users.list",
+  "remote-devices.list",
+  "remote-sessions.list",
+  "remote-allows.list",
+  "remote-passkeys",
+  "smartcards.tokens",
+  "smartcards.modules",
+  "smartcards.objects",
 ]
   .map((part) => `[data-part="${part}"]`)
   .join(", ")} { list-style: none; }

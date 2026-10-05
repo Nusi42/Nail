@@ -356,11 +356,15 @@ mod tests {
 
     #[test]
     fn strings_with_braces_and_semicolons_stay_in_their_rule() {
-        let (out, _) = sheet(".q { font-family: \"A;B\", 'C}D'; color: red } .r { color: blue }");
+        let (out, _) = sheet(".q { font-family: \"A;B\", 'C D'; color: red } .r { color: blue }");
         assert_eq!(
             out,
-            ".q { font-family: \"A;B\", 'C}D'; color: red }\n.r { color: blue }\n"
+            ".q { font-family: \"A;B\", 'C D'; color: red }\n.r { color: blue }\n"
         );
+        // A brace, even inside a string, drops the declaration (P1 review:
+        // the same filter guards the `<body style>` rule); the rules stay.
+        let (out, _) = sheet(".q { font-family: 'C}D'; color: red } .r { color: blue }");
+        assert_eq!(out, ".q { color: red }\n.r { color: blue }\n");
     }
 
     #[test]

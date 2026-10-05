@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HtmlDarkMode, ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
+import { resolveTokenRefs } from "./compile";
 import { READER_CSP, isDesignedMail, readerCsp, readerCss, readerDocument } from "./reader";
 
 /** The default theme with another dark-mode handling of HTML mail. */
@@ -43,19 +44,62 @@ describe("reader stylesheet (P1 WP190)", () => {
     expect(css).not.toMatch(/img\[src\] \{ height: auto; \}/);
   });
 
-  it("keeps designed mail's colours on a light paper in the smart dark mode", () => {
+  it("recolours plain mail in the smart dark mode", () => {
     const css = readerCss(withDarkMode("smart"), "dark");
-    expect(css).toContain("color-scheme: dark");
+    expect(css).toContain(":root { color-scheme: dark; }");
     expect(css).toContain(
       "body:not(:has(> style, table, [bgcolor], [background], [style*='background'])) * { background-color: transparent !important;",
     );
-    expect(css).toContain(
-      ":root:has(> body:has(> style, table, [bgcolor], [background], [style*='background'])) { color-scheme: light; }",
-    );
-    expect(css).toContain(
-      ":where(body:has(> style, table, [bgcolor], [background], [style*='background'])) { color: #1f1f1f; background-color: #ffffff; }",
-    );
+    // No nested :has() (CSS forbids it; Chromium drops the whole rule).
+    expect(css).not.toMatch(/:has\([^)]*:has\(/);
     expect(css).not.toContain("var(--nail");
+  });
+
+  it("draws designed mail on a light paper in the theme's print colours", () => {
+    const theme = withDarkMode("smart");
+    const css = readerCss(theme, "dark", true);
+    expect(css).toContain(":root { color-scheme: light; }");
+    expect(css).not.toContain("color-scheme: dark");
+    expect(css).not.toContain("!important");
+    expect(css).not.toMatch(/:has\([^)]*:has\(/);
+    const print = (name: string) => resolveTokenRefs(`var(--nail-color-${name})`, theme, "print");
+    // The paper rules come after the theme's dark ones, so they win.
+    const paper = `:where(body) { color: ${print("fg")}; background-color: ${print("bg")}; }`;
+    const link = `:where(a) { color: ${print("accent")}; }`;
+    expect(css).toContain(paper);
+    expect(css).toContain(link);
+    expect(css.lastIndexOf(":where(a)")).toBe(css.indexOf(link));
+    expect(css.indexOf(paper)).toBeGreaterThan(css.indexOf(":where(body) {"));
+    // A light link colour on white paper would be unreadable (≥ 4.5:1 wanted).
+    expect(contrast(print("accent"), print("bg"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("falls back to a white paper for a theme without print colours", () => {
+    const theme = withDarkMode("smart");
+    const modes = Object.fromEntries(Object.entries(theme.modes).filter(([m]) => m !== "print"));
+    const css = readerCss({ ...theme, modes }, "dark", true);
+    expect(css).toContain(":where(body) { color: #1f1f1f; background-color: #ffffff; }");
+    expect(css).toContain(":where(a) { color: #0b57d0; }");
+  });
+
+  it("does not use the paper in light mode", () => {
+    expect(readerCss(withDarkMode("smart"), "light", true)).toBe(
+      readerCss(withDarkMode("smart"), "light"),
+    );
+  });
+
+  it("forces the theme's colours on every mail in high contrast", () => {
+    const theme = withDarkMode("smart");
+    const fg = resolveTokenRefs("var(--nail-color-fg)", theme, "high-contrast");
+    for (const designed of [false, true]) {
+      const css = readerCss(theme, "high-contrast", designed);
+      expect(css).toContain(":root { color-scheme: dark; }");
+      expect(css).toContain(
+        `body * { background-color: transparent !important; color: ${fg} !important; }`,
+      );
+      expect(css).not.toContain("#ffffff; }");
+    }
+    expect(readerCss(withDarkMode("off"), "high-contrast", true)).not.toContain("!important");
   });
 
   it("keeps the invert and off dark modes", () => {
@@ -93,3 +137,16 @@ describe("designed mail", () => {
     expect(isDesignedMail(html)).toBe(designed);
   });
 });
+
+/** WCAG contrast ratio of two `#rrggbb` colours. */
+function contrast(a: string, b: string): number {
+  const lum = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (bl ?? 0);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+}

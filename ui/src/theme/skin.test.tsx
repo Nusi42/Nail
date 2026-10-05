@@ -299,3 +299,14 @@ describe("density in the compiler (ADR 0102)", () => {
     expect(document.documentElement.dataset.nailDensity).toBe("compact");
   });
 });
+
+describe("lists of rows", () => {
+  it("draws no bullets beside the key list's rows (P1 review)", () => {
+    // The line of the rule whose selector list names the key list (jsdom
+    // expands no `list-style` shorthand, so the rule itself is checked).
+    const rule = BASE_CSS.split("\n").find((line) =>
+      line.includes('[data-part="security-keys.list"]'),
+    );
+    expect(rule).toMatch(/\{ list-style: none;/);
+  });
+});

@@ -75,6 +75,13 @@ describe("composer skin", () => {
     expect(css).toContain(
       `[data-part="composer"] > :not([data-part="composer.body"]) { flex-shrink: 0; }`,
     );
+    // P1 review: the rich editor (and its source view) fills the height like the textarea.
+    expect(css).toContain(
+      `[data-part="composer"] [data-part="composer.html.editor"] > * { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }`,
+    );
+    expect(css).toContain(
+      `[data-part="composer"] [data-part="composer.html.content"], [data-part="composer"] [data-part="composer.html.source"] { flex: 1 1 auto; }`,
+    );
     const narrow = css.slice(css.indexOf(`(max-width: ${COMPOSER_NARROW})`));
     // Labels above their fields; the Markdown preview below the source.
     expect(narrow).toMatch(/composer\.field"\] \{ grid-template-columns: minmax\(0, 1fr\);/);
