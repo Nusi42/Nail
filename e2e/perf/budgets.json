@@ -7,7 +7,7 @@
     { "metric": "incremental-sync-ms", "max": 3000 },
     { "metric": "search-p95-ms", "max": 250 },
     { "metric": "list-page-p95-ms", "max": 50 },
-    { "metric": "thread-page-p95-ms", "max": 50 },
+    { "metric": "thread-page-p95-ms", "max": 10 },
     { "metric": "cold-start-ms", "max": 3000 },
     { "metric": "peak-memory-mib", "max": 800 },
     { "metric": "scroll-frame-p95-ms", "max": 20 },

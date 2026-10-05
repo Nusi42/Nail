@@ -84,12 +84,26 @@ impl Service {
         limit: u32,
         filter: Option<&FolderFilter>,
     ) -> Result<ThreadPage> {
-        let scope = self.conversation_scope(folder, filter).await?;
+        // One store hop for the folder check, the scope and the page (as
+        // `conversation_scope` + the listing): the list is the hot path
+        // (P3, `thread-page-p95-ms`).
+        let resolved = self.resolve_folder(folder).await?;
         let own = self.own_addresses_by_account().await?;
+        let id = folder.clone();
+        let filter = filter.cloned();
         Ok(self
             .inner
             .store
-            .call(move |s| s.list_conversations(&scope, &own, offset, limit))
+            .call(move |s| {
+                if !resolved.is_virtual {
+                    s.get_folder(&id)?;
+                }
+                let mut scope = s.conversation_folders(&resolved.sources)?;
+                if let Some(keep) = &filter {
+                    scope.retain(|f| keep(f));
+                }
+                s.list_conversations(&scope, &own, offset, limit)
+            })
             .await?)
     }
 

@@ -1663,7 +1663,7 @@ pub(crate) struct Migration {
 /// * `messages_folder_thread` — a folder's messages by thread, newest last:
 ///   a conversation list groups a folder by thread, counts its threads and
 ///   joins the Sent folders' messages of the listed threads from this index
-///   alone (no row reads; `thread::conversation::PAGE_SQL`).
+///   alone (no row reads; `thread::activity::GROUPING_PAGE_SQL`).
 const V16: &str = r"
 CREATE INDEX messages_folder_thread ON messages(folder_id, thread_id, date_sort);
 ";
@@ -1789,6 +1789,9 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::rebuild(V15),
     Migration::sql(V16),
     Migration::sql(V17),
+    // Schema v18 (P3 WP-perf): triggers keep `thread_activity` current, and
+    // the table is rebuilt once (`thread::activity::MAINTENANCE_SQL`).
+    Migration::sql(crate::thread::activity::MAINTENANCE_SQL),
 ];
 
 /// The schema version this build creates and understands.
