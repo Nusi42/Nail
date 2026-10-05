@@ -78,6 +78,14 @@ The reader keeps the header, the attachments and the text in one centred
 column at a comfortable reading width; plain-text mail uses the normal UI
 font and keeps its line breaks.
 
+HTML mail shows the way its sender designed it: its own style sheet,
+colours, backgrounds and pictures sent inside the message. Such a
+newsletter keeps its colours on a white page, also in a dark theme, and
+gets a wider column; a mail wider than the reader scrolls sideways inside
+the message. Pictures from the internet stay blocked until you allow them
+(see [Remote content in messages](remote-access.md#remote-content-in-messages)); until then a frame with the picture's
+description shows where each one goes.
+
 Attachments are cards with the file type, name and size. **Save** asks
 where to save the file in the desktop app (the Save dialog asks before
 replacing a file); in a browser the file is downloaded. The card then says

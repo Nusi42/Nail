@@ -30,6 +30,13 @@ package boundaries.
 - **One button row in the diagnostics dialog.** The dialog had three button rows
   (preview, save, close); only the last stays at the window's bottom
   (`DIALOG_BUTTON_ROWS`). The three buttons now share one row at the end.
+- **Loaded images keep their height attribute.** The integration's screenshot
+  review found a remote banner (`width="200" height="50"`, a 1 × 1 picture)
+  growing to 200 × 200 after "Load once": the reader's `img[src] { height:
+  auto }` let the picture's own proportions win. The rule now applies only to
+  images without a `height` attribute (`img[src]:not([height])`), as other mail
+  programs do; spacer images and pictures with other proportions keep the box
+  the mail asked for. `p1-mail.spec.ts` checks the banner's 200 × 50 box.
 - **Window clamping.** WP191's window manager keeps a window that was placed
   on the page inside it when the app shrinks, which also covers WP192's request
   (a theme editor opened at 1600 px stays reachable at 800 px).

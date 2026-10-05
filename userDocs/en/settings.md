@@ -37,6 +37,10 @@ Which sections exist, their order, names and icons come from the
 [The settings page](layout-reference.md#the-settings-page)), so your
 layout can move a setting to another section or add your own section.
 
+In a browser (`nail serve` or the remote UI) the desktop-only cards —
+Updates, Tray and startup, Default apps — say that the setting is available
+in the Nail desktop app.
+
 ### Where the old tabs went
 
 Earlier versions of Nail showed the settings as tabs. Every tab is now in a section:

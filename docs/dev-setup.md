@@ -231,6 +231,22 @@ one). Prefer fixing the cause:
 `NAIL_CONSOLE_STACK=1 npx vitest run <file>` adds the call stack to each
 reported line, which shows the state update behind an act(...) warning.
 
+### Fast and stable UI tests (P1, ADR 0143)
+
+- `ui/src/test/setup.ts` installs `ui/src/test/fastStyles.ts`: jsdom's
+  `getComputedStyle` skips theme rules whose subject needs another
+  `data-part`. `fastStyles.test.tsx` compares computed styles with and
+  without the filter; if it fails after a jsdom upgrade, adapt the filter.
+- Before unmounting, `setup.ts`'s `afterEach` waits (at most 3 s, never
+  failing, skipped under fake timers) until every env made by `createEnv` is
+  idle (`ui/src/test/liveEnvs.ts`), so late answers do not cause act(...)
+  warnings.
+- The axe helper (`ui/src/test/axe.ts`) reports violations only.
+- Prefer `userEvent.setup({ delay: null })` in widget tests.
+- Do not raise a test's timeout to hide load flakiness; find the cost (a CPU
+  profile of the slow test) instead. Avoid `:has()` with a descendant search
+  in skins: jsdom's style matching (and so every axe check) pays for it.
+
 The catalog coverage test (`ui/src/i18n/coverage.test.ts`) also types every
 template-string message id with the TypeScript checker: for
 ``t(`pim-view-${view}`)`` with a literal union type every value needs a

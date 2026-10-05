@@ -21,6 +21,12 @@ please keep a [backup](backup-restore.md) of your data.
   titled by its subject; in the desktop app a window can pop out into its
   own window on your desktop.
 - **Delete permanently?** now asks before deleting.
+- **HTML mail as designed** — newsletters and mail from Outlook or Gmail
+  keep their style sheets, colours and pictures sent inside the message.
+- **Every window size** — the views, windows, dialogs and Settings adapt
+  when you make Nail's window smaller or larger: windows stay on screen,
+  form fields line up, and each dialog keeps its buttons visible at the
+  bottom.
 - **Import from other programs** — Thunderbird profiles (local folders,
   address books, and your accounts and filters as suggestions; passwords
   are never imported), mbox and Maildir files, folders of `.eml` files,

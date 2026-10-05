@@ -169,6 +169,13 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     // "Load once": the banner arrives through the core's proxy.
     await bar.getByRole("button", { name: "Load once" }).click();
     await expect.poll(() => naturalWidth(frame, "Banner"), { timeout: 15_000 }).toBe(1);
+    // Loaded, it keeps the size its attributes give (200 × 50), not its own proportions (1 × 1).
+    expect(
+      await frame.getByAltText("Banner").evaluate((img) => {
+        const box = img.getBoundingClientRect();
+        return [Math.round(box.width), Math.round(box.height)];
+      }),
+    ).toEqual([200, 50]);
     expect(await frameStyle(frame, ".hero", "background-color")).toBe("rgb(11, 114, 133)");
     const requested = await control<RemoteHosts>(server, "remote-content");
     expect(requested.requests).toContain("/logo.png");

@@ -38,6 +38,9 @@ describe("reader stylesheet (P1 WP190)", () => {
     expect(css).toContain("img[alt]::after { content: attr(alt);");
     expect(css).toContain('img:not([src])[alt]:not([alt=""]) { outline: 1px dashed');
     expect(css).toContain('img[alt=""]::after { border: none; background-color: transparent; }');
+    // A loaded image keeps its height attribute (a 1×1 spacer at width 200 / height 50 stays 50 high).
+    expect(css).toContain("img[src]:not([height]) { height: auto; }");
+    expect(css).not.toMatch(/img\[src\] \{ height: auto; \}/);
   });
 
   it("keeps designed mail's colours on a light paper in the smart dark mode", () => {

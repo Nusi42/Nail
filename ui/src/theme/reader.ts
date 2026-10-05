@@ -94,7 +94,9 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
     `body:not(${DESIGNED}) > * { max-width: ${r(m.max_width, "none")}; }`,
     `img { max-width: 100%; }`,
     // Without a source (blocked, missing) an image keeps its width / height attributes as a placeholder box.
-    `img[src] { height: auto; }`,
+    // An image with a height attribute keeps it after loading too, like other mail programs: spacers and
+    // pictures whose own proportions differ from the attributes must not grow (ADR 0144).
+    `img[src]:not([height]) { height: auto; }`,
     // Blocked, missing or failed images: their alt text in a quiet frame
     // instead of the browser's broken-image icon (Chromium draws ::after
     // only for images that did not load).

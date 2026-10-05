@@ -258,7 +258,11 @@ crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rul
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
                        warnings) (ADR 0032); remote_content.rs: ProxyRewriter, parse_message_with
                        (remote references counted, rewritten to nail-proxy: URLs; ADR 0041);
-                       markdown.rs: text/markdown alternatives as bodies (comrak; ADR 0046)
+                       markdown.rs: text/markdown alternatives as bodies (comrak; ADR 0046);
+                       P1 (ADR 0140): sanitize_mail_html for mail bodies (keeps class / id and `<style>` blocks;
+                       sanitize_html unchanged for plug-ins / quoting), document.rs (html5ever tokenizer: style blocks,
+                       body attributes → `body` rules), css.rs (style-sheet filter: only @media / @supports, remote url()
+                       counted / proxied, no position fixed / content text), cid: images → capped data: URLs (2 / 8 MiB)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018);
                        bodies.rs (BodyFetch, fetch_batch_with, fetch_body), search.rs (SearchKey,
                        search_messages) (ADR 0046)
@@ -629,6 +633,15 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        colour picker / undo on the page, theme editor window `theme-editor` + `theme-new` / `theme-rename` /
                        `theme-delete`, themeEditMock.ts, APPEARANCE_SKIN_CSS); features/palette/infos.ts (paletteInfos /
                        pluginTitles shared with the customizer); the three skins are in theme/compile.ts (ADR 0137);
+                       P1 (ADRs 0140–0144): theme/reader.ts (mail's own rules win; "designed" mail keeps its colours on a
+                       white page, reading width / smart dark only for plain mail; image placeholders), theme/skinResponsive.ts
+                       (RESPONSIVE_SKIN_CSS: container `nail-fields` on window bodies / settings cards, DIALOG_BUTTON_ROWS =
+                       sticky last button rows, GROWING_DIALOGS, INLINE_FIELD_ROWS, two panes stack when narrow),
+                       features/windows/geometry.ts shownRect(placedOnPage) (windows placed on the page follow it when the app
+                       shrinks), layout/engine.ts flexForSize (fixed pane sizes shrink to their min-sizes), features/pim
+                       initialScroll.ts, skin constants CALENDAR_CONTAINER / THEME_EDITOR_STACKED / CUSTOMIZER_*,
+                       features/system/QueryProblem.tsx (desktop-only cards say so in the browser); test/fastStyles.ts +
+                       test/liveEnvs.ts (WP193);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -791,7 +804,11 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   instead: await the state the UI settles into (`findBy*`, `waitFor`, `settleQueries(env)` from the harness),
   wrap direct store updates / events / waits in `act`, unmount (`cleanup()`) before resetting module-level
   stores in `afterEach`, mock what the test triggers, give fixture ids catalog entries; axe checks use
-  `ui/src/test/axe.ts` (runs inside `act`). `NAIL_CONSOLE_STACK=1` adds the call stack to each reported line.
+  `ui/src/test/axe.ts` (runs inside `act`, violations only). `NAIL_CONSOLE_STACK=1` adds the call stack to each reported line.
+  P1 (ADR 0143): `setup.ts` installs `ui/src/test/fastStyles.ts` (a `data-part` pre-filter for jsdom's
+  `getComputedStyle`; if `fastStyles.test.tsx` fails after a jsdom upgrade, adapt the filter) and, before unmounting,
+  waits up to 3 s until every `createEnv` env is idle (`ui/src/test/liveEnvs.ts`). Prefer
+  `userEvent.setup({ delay: null })` in widget tests; never raise a timeout to hide load flakiness.
 - `ui/src/i18n/coverage.test.ts` types every template-string message id (``t(`x-${v}`)``) with the TypeScript
   checker: a literal-union `${v}` must have a message for every value; a plain-`string` `${v}` must be listed in
   its `OPEN_TEMPLATES` (values covered by a feature's `runtimeIds()`). Key contexts: every `data-key-context`,
@@ -1103,6 +1120,12 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   responsive standard (8 viewport sizes, windows at min-size and resized; no clipped text, overlaps, page scroll) is
   checked with `e2e/support/responsive.ts` plus a screenshot review; shared dialog / form rules go into
   `ui/src/theme/skinResponsive.ts` (after every feature skin, before the theme's part rules).
+- P1 integration (ADR 0144; packages ADRs 0140 HTML mail, 0141 windows / dialogs / settings, 0142 views + editors, 0143
+  test stability): mail bodies go through `nail_mime::sanitize_mail_html` (style sheets, classes, `cid:` → `data:`);
+  layouts follow their window / card width through container queries, never the viewport; split panes with a fixed
+  size shrink to their `min-sizes`; a dialog's last button row is sticky (one row at the end, not several). E2E:
+  `p1-mail.spec.ts`, `p1-windows.spec.ts` (coverage = the a11y window sweep's dialog list), `p1-views.spec.ts`; a new
+  dialog must be listed in one of them. Avoid `:has()` with descendant searches in skins (jsdom / axe cost).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,
