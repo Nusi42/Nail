@@ -235,6 +235,10 @@ layout "default" {
         action "mail.delete-permanently" label="@mail.action.delete-permanently" icon="trash"
         action "mail.toggle-read" label="@mail.action.toggle-read" icon="mail-open"
         action "mail.toggle-flag" label="@mail.action.toggle-flag" icon="flag"
+        // P3 (ADR 0164): Gmail's Shift+I / Shift+U and z.
+        action "mail.mark-read"   label="@mail-actions.action-mark-read" icon="mail-open"
+        action "mail.mark-unread" label="@mail-actions.action-mark-unread" icon="mail"
+        action "mail.undo"        label="@mail-actions.action-undo" icon="undo-2"
         action "composer.send"    label="@composer.action.send"    icon="send"
         action "composer.save"    label="@composer.action.save" icon="save"
         action "composer.discard" label="@composer.action.discard" icon="trash"
@@ -539,9 +543,17 @@ layout "default" {
         bind "f" "mail.forward"
         bind "e" "mail.archive"
         bind "v" "mail.move"
+        // Gmail's # deletes too (P3); Del stays the one the tooltips name.
+        bind "#" "mail.delete"
         bind "delete" "mail.delete"
         bind "shift+delete" "mail.delete-permanently"
         bind "u" "mail.toggle-read"
+        // P3 (ADR 0164): Gmail's keys, on the selected conversation.
+        bind "shift+i" "mail.mark-read"
+        bind "shift+u" "mail.mark-unread"
+        bind "!" "junk.mark"
+        bind "l" "gmail.apply-labels"
+        bind "z" "mail.undo"
         bind "s" "mail.toggle-flag"
         bind "/" "search.focus"
         bind "f5" "sync.now"
@@ -677,13 +689,21 @@ layout "default" {
         item "rules.create-from-message"
     }
 
+    // A card of the reader's feed (right-click, or its "More" button): its
+    // actions act on that one message, not on the conversation (P3).
     menu "context:thread-view.message" {
         item "mail.reply"
         item "mail.reply-all"
         item "mail.forward"
         separator
-        item "mail.toggle-read"
-        item "mail.toggle-flag"
+        item "mail.mark-unread" label="@mail-actions.card-mark-unread"
+        item "mail.mark-read" label="@mail-actions.card-mark-read"
+        item "mail.toggle-flag" label="@mail-actions.card-toggle-flag"
+        separator
+        item "mail.archive" label="@mail-actions.card-archive"
+        item "mail.move" label="@mail-actions.card-move"
+        item "mail.delete" label="@mail-actions.card-delete"
+        item "junk.mark" label="@mail-actions.card-junk"
     }
 
     menu "context:message-view" {

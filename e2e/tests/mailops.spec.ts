@@ -63,6 +63,11 @@ test("flag, move and delete reach the IMAP server", async ({ page }) => {
   await expect(trashed).toHaveCount(1);
   await trashed.click();
   await page.keyboard.press("Delete");
+  // P3: in Trash, Delete asks first ("Delete permanently?").
+  await page
+    .getByRole("dialog", { name: "Delete permanently?" })
+    .getByRole("button", { name: "Delete permanently" })
+    .click();
   await expect(rows(page)).toHaveCount(0);
   await expect.poll(() => flagsOnServer("Trash", "Release notes for M1")).toBeNull();
 });

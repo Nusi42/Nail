@@ -220,10 +220,14 @@ for (const mode of MODES) {
       await rows.filter({ hasText: "Welcome to Nail" }).click();
       await expect(page.locator(READER_SUBJECT)).toContainText("Welcome to Nail");
       await sweep.scan("reader");
-      // M5c: "Delete permanently?" is a modal confirmation (cancelled here).
+      // M5c: "Delete permanently?" is a modal confirmation (cancelled here);
+      // P3: it asks only in Trash (a plain-text message: axe waits for HTML
+      // mail frames of the reader without end).
+      await selectInTrash(page, "Grüße aus München");
       await page.keyboard.press("Shift+Delete");
       await sweep.scanWindow("mail-delete-permanently");
       await sweep.close("mail-delete-permanently");
+      await showAllInboxes(page);
 
       // The composer in each mode (with its security panel).
       await newMessageButton(page).click();
@@ -513,4 +517,26 @@ for (const mode of MODES) {
       );
     });
   });
+}
+
+/**
+ * P3 (ADR 0164): "Delete permanently?" asks only for mail in Trash / Junk.
+ * Moves the conversation `subject` to Trash and selects it there.
+ */
+async function selectInTrash(page: Page, subject: string): Promise<void> {
+  const row = page.locator('[data-part="message-list.row"]').filter({ hasText: subject }).first();
+  const account = await row.getAttribute("data-account");
+  await row.click();
+  await page.keyboard.press("Delete");
+  await expect(row).toHaveCount(0);
+  await page
+    .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account ?? ""}"]`)
+    .first()
+    .click();
+  await page.locator('[data-part="message-list.row"]').filter({ hasText: subject }).first().click();
+}
+
+/** Back to the unified inbox (Favorites → All inboxes). */
+async function showAllInboxes(page: Page): Promise<void> {
+  await page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]').click();
 }

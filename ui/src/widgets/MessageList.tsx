@@ -13,6 +13,13 @@ import {
   type ReactNode,
 } from "react";
 import { comboFromEvent, normalizeCombo } from "../actions/keys";
+import {
+  listSelectionFor,
+  prunePicked,
+  rangePick,
+  togglePick,
+  useListSelection,
+} from "../actions/mailTargets";
 import { errorMessageIdOf } from "../api/client";
 import type {
   Address,
@@ -535,7 +542,17 @@ function useRows(node: WidgetNode, pageSize: number) {
   // Design B: conversation rows open into their messages (not while
   // searching: hits are messages).
   const expandable = mode === "expandable" && threadRows;
-  return { rows, query, activeSearch, searchError, total, filtered, listFilter, expandable };
+  return {
+    rows,
+    query,
+    activeSearch,
+    searchError,
+    total,
+    filtered,
+    listFilter,
+    expandable,
+    conversations: threadMode,
+  };
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -745,6 +762,7 @@ export function MessageList({ node }: WidgetProps) {
     filtered,
     listFilter,
     expandable,
+    conversations,
   } = useRows(node, pageSize);
   const { expanded, setExpanded, children, loading } = useExpansion(
     node.id ?? "message-list",
@@ -788,6 +806,23 @@ export function MessageList({ node }: WidgetProps) {
   useEffect(() => {
     setMessageOrder(order, orderThreads);
   }, [order, orderThreads, setMessageOrder]);
+
+  // P3 (ADR 0164): what the rows' actions act on — the conversations in
+  // the listed folder (none while searching) — and the rows picked with
+  // Ctrl / Shift (`../actions/mailTargets.ts`).
+  const uiStore = useUiStoreApi();
+  const selection = listSelectionFor(uiStore);
+  const listedFolder = activeSearch ? null : folderId;
+  useEffect(() => {
+    selection.getState().setScope({ conversations, folderId: listedFolder });
+  }, [selection, conversations, listedFolder]);
+  const picked = useListSelection((s) => s.picked);
+  const pickedKeys = useMemo(() => new Set(picked.map((p) => p.key)), [picked]);
+  useEffect(() => {
+    const kept = prunePicked(picked, rows);
+    if (kept.length !== picked.length) selection.getState().setPicked(kept);
+  }, [picked, rows, selection]);
+  const anchorKey = useRef<string | null>(null);
 
   // Report a query the core rejected to the search bar (its positions refer
   // to the typed text only without a filter term).
@@ -850,6 +885,7 @@ export function MessageList({ node }: WidgetProps) {
   const choose = useCallback(
     (row: Row | undefined) => {
       if (!row) return;
+      anchorKey.current = row.key;
       setChosenKey(row.key);
       selectMessage(row.messageId);
       selectThread(row.threadId);
@@ -905,11 +941,58 @@ export function MessageList({ node }: WidgetProps) {
     });
   }, [expandable]);
 
+  /**
+   * A click on a row (P3): Ctrl / Cmd + click picks it besides the others,
+   * Shift + click picks the rows from the last chosen one to it, a plain
+   * click chooses it alone.
+   */
+  const clickRow = (
+    row: Row,
+    index: number,
+    event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
+  ) => {
+    const state = selection.getState();
+    if (event.ctrlKey || event.metaKey) {
+      const next = togglePick(state.picked, rows[selectedIndex], row);
+      state.setPicked(next);
+      if (next.some((p) => p.key === row.key)) choose(row);
+      else {
+        const last = next[next.length - 1];
+        choose(rows.find((r) => r.key === last?.key));
+      }
+    } else if (event.shiftKey) {
+      const anchor = rows.findIndex((r) => r.key === anchorKey.current);
+      const from = anchor >= 0 ? anchor : selectedIndex;
+      state.setPicked(rangePick(rows, from, index));
+      setChosenKey(row.key);
+      selectMessage(row.messageId);
+      selectThread(row.threadId);
+    } else {
+      state.setPicked([]);
+      choose(row);
+    }
+    scrollRef.current?.focus({ preventScroll: true });
+  };
+
   // Design B: j / k (or what the list context binds to mail.next /
-  // mail.previous) step through the rows, children included.
+  // mail.previous) step through the rows, children included. Shift + ↑ / ↓
+  // picks rows besides the selection (P3).
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!expandable || event.defaultPrevented || event.target !== event.currentTarget) return;
+    if (event.defaultPrevented || event.target !== event.currentTarget) return;
     const combo = comboFromEvent(event.nativeEvent);
+    if ((combo === "shift+arrowdown" || combo === "shift+arrowup") && selectedIndex >= 0) {
+      event.preventDefault();
+      const target = stepIndex(rows.length, selectedIndex, combo === "shift+arrowdown" ? 1 : -1);
+      const row = rows[target];
+      if (!row) return;
+      const anchor = rows.findIndex((r) => r.key === anchorKey.current);
+      selection.getState().setPicked(rangePick(rows, anchor >= 0 ? anchor : selectedIndex, target));
+      setChosenKey(row.key);
+      selectMessage(row.messageId);
+      selectThread(row.threadId);
+      return;
+    }
+    if (!expandable) return;
     const delta = combo === null ? null : listStep(layout?.keys ?? [], combo);
     if (delta === null) return;
     event.preventDefault();
@@ -947,6 +1030,7 @@ export function MessageList({ node }: WidgetProps) {
       data-state={activeSearch ? "search" : undefined}
       data-filter={filtered ? listFilter : undefined}
       role={expandable ? "tree" : "listbox"}
+      aria-multiselectable="true"
       tabIndex={0}
       onKeyDown={onKeyDown}
       aria-label={node.label ? label(node.label) : t("message-list-label")}
@@ -976,7 +1060,7 @@ export function MessageList({ node }: WidgetProps) {
       {items.map((item) => {
         const row = rows[item.index];
         if (!row) return null;
-        const selected = item.index === selectedIndex;
+        const selected = item.index === selectedIndex || pickedKeys.has(row.key);
         const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
         if (row.child) {
           const position = siblingPosition(rows, item.index);
@@ -994,9 +1078,8 @@ export function MessageList({ node }: WidgetProps) {
               setsize={position?.setsize ?? 1}
               locale={locale}
               now={now}
-              onChoose={() => {
-                choose(row);
-                scrollRef.current?.focus({ preventScroll: true });
+              onChoose={(event) => {
+                clickRow(row, item.index, event);
               }}
             />
           );
@@ -1023,9 +1106,8 @@ export function MessageList({ node }: WidgetProps) {
             data-account={row.accountId}
             data-message={row.messageId}
             data-thread={row.threadId ?? undefined}
-            onClick={() => {
-              choose(row);
-              scrollRef.current?.focus({ preventScroll: true });
+            onClick={(event) => {
+              clickRow(row, item.index, event);
             }}
           >
             {columns.length > 0 ? (

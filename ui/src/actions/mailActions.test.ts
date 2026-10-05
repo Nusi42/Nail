@@ -62,12 +62,13 @@ describe("mail actions", () => {
     ctx.store.getState().selectMessage(`${INBOX}#1`); // unread and flagged
     await dispatch("mail.toggle-read");
     await dispatch("mail.toggle-flag");
-    const changes = ctx.transport.requests
-      .filter((r) => r.type === "UpdateFlags")
-      .map((r) => r.change);
-    expect(changes).toEqual([
-      expect.objectContaining({ seen: true, flagged: null }),
-      expect.objectContaining({ seen: null, flagged: false }),
+    const actions = ctx.transport.requests.flatMap((r) =>
+      r.type === "ApplyMailAction" ? [{ targets: r.targets, action: r.action }] : [],
+    );
+    const target = [{ kind: "message", message_id: `${INBOX}#1` }];
+    expect(actions).toEqual([
+      { targets: target, action: { type: "mark-read", read: true } },
+      { targets: target, action: { type: "flag", flagged: false } },
     ]);
   });
 
@@ -78,26 +79,31 @@ describe("mail actions", () => {
     await dispatch("mail.archive");
     expect(ctx.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
     await dispatch("mail.move-to", ["acc-personal/Inbox/Receipts"]);
+    expect(ctx.store.getState().selectedMessageId).toBe(`${INBOX}#3`);
     await dispatch("mail.delete");
+    expect(ctx.store.getState().selectedMessageId).toBe(`${INBOX}#4`);
+    // Delete permanently only from Trash, and it asks first with the count:
+    // nothing is written until confirmed.
+    ctx.store.getState().selectMessage(`${INBOX}#3`);
     await dispatch("mail.delete-permanently");
-    // Permanent deletes ask first: nothing is written until confirmed.
     expect(ctx.store.getState().windows).toEqual([DELETE_PERMANENTLY_DIALOG]);
-    expect(ctx.transport.requests.some((r) => r.type === "DeleteMessages" && r.permanent)).toBe(
-      false,
-    );
+    expect(
+      ctx.transport.requests.some(
+        (r) => r.type === "ApplyMailAction" && r.action.type === "delete-permanently",
+      ),
+    ).toBe(false);
     ctx.store.getState().selectMessage(`${INBOX}#9`);
     await confirmDeletePermanently(ctx);
     expect(ctx.store.getState().windows).toEqual([]);
-    const writes = ctx.transport.requests.filter((r) => r.type !== "ListMessages");
+    const writes = ctx.transport.requests.flatMap((r) =>
+      r.type === "ApplyMailAction" ? [[r.targets, r.action]] : [],
+    );
+    const one = (n: number) => [{ kind: "message", message_id: `${INBOX}#${String(n)}` }];
     expect(writes).toEqual([
-      { type: "MoveMessages", message_ids: [`${INBOX}#1`], target: { role: "archive" } },
-      {
-        type: "MoveMessages",
-        message_ids: [`${INBOX}#2`],
-        target: { folder_id: "acc-personal/Inbox/Receipts" },
-      },
-      { type: "DeleteMessages", message_ids: [`${INBOX}#3`], permanent: false },
-      { type: "DeleteMessages", message_ids: [`${INBOX}#4`], permanent: true },
+      [one(1), { type: "archive" }],
+      [one(2), { type: "move", target: { folder_id: "acc-personal/Inbox/Receipts" } }],
+      [one(3), { type: "trash" }],
+      [one(3), { type: "delete-permanently" }],
     ]);
   });
 

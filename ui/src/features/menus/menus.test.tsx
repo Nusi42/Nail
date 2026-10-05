@@ -187,7 +187,10 @@ describe("context menu", () => {
       expect(screen.queryByRole("menu")).toBeNull();
     });
     expect(env.transport.requests).toContainEqual(
-      expect.objectContaining({ type: "UpdateFlags", message_ids: [id] }),
+      expect.objectContaining({
+        type: "ApplyMailAction",
+        targets: [{ kind: "message", message_id: id }],
+      }),
     );
     // Focus went back to the list (the focusable around the row).
     expect(container.querySelector('[data-part="message-list"]')).toHaveFocus();

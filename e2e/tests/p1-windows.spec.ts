@@ -416,10 +416,13 @@ const GROUPS: Record<string, Group> = {
     run: async (sweep, server) => {
       const page = sweep.page;
       const rows = rowsOf(page);
-      await rows.filter({ hasText: "Welcome to Nail" }).click();
+      // P3: "Delete permanently?" asks only in Trash.
+      await selectInTrash(page, "Your weekly garden digest");
       await page.keyboard.press("Shift+Delete");
       await sweep.checkWindow("mail-delete-permanently");
       await sweep.close("mail-delete-permanently");
+      await showAllInboxes(page);
+      await rows.filter({ hasText: "Welcome to Nail" }).click();
 
       await newMessageButton(page).click();
       const composer = sweep.window("composer");
@@ -877,3 +880,25 @@ test.describe("P1: every window and dialog is responsive", () => {
     });
   }
 });
+
+/**
+ * P3 (ADR 0164): "Delete permanently?" asks only for mail in Trash / Junk.
+ * Moves the conversation `subject` to Trash and selects it there.
+ */
+async function selectInTrash(page: Page, subject: string): Promise<void> {
+  const row = page.locator('[data-part="message-list.row"]').filter({ hasText: subject }).first();
+  const account = await row.getAttribute("data-account");
+  await row.click();
+  await page.keyboard.press("Delete");
+  await expect(row).toHaveCount(0);
+  await page
+    .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account ?? ""}"]`)
+    .first()
+    .click();
+  await page.locator('[data-part="message-list.row"]').filter({ hasText: subject }).first().click();
+}
+
+/** Back to the unified inbox (Favorites → All inboxes). */
+async function showAllInboxes(page: Page): Promise<void> {
+  await page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]').click();
+}

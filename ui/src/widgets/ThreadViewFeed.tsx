@@ -24,6 +24,7 @@
 import { Fragment, useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import type { Address, ConversationMessage, ThreadParticipant } from "../api/generated";
 import { useActions } from "../actions/ActionsProvider";
+import { openContextMenu } from "../features/menus";
 import { FULL_DATE_TIME, formatDateTime, formatRelative } from "../i18n/format";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
@@ -150,7 +151,8 @@ function Card({
   const ids = useId();
   const store = useUiStoreApi();
   const { dispatch } = useActions();
-  const actionDefs = useLayoutConfig().actions;
+  const layout = useLayoutConfig();
+  const actionDefs = layout.actions;
   const me = t("conversations-me");
   const select = () => {
     if (store.getState().selectedMessageId !== m.id) store.getState().selectMessage(m.id);
@@ -241,6 +243,26 @@ function Card({
                 </button>
               );
             })}
+            {/* P3: the card's own menu (`context:thread-view.message`):
+                its actions act on this message, not the conversation. */}
+            <button
+              type="button"
+              data-part="thread-view.card.action"
+              data-action="more"
+              aria-label={t("mail-actions-card-more")}
+              title={t("mail-actions-card-more")}
+              aria-haspopup="menu"
+              onClick={(event) => {
+                select();
+                const rect = event.currentTarget.getBoundingClientRect();
+                openContextMenu(store, layout, event.currentTarget, {
+                  point: { x: rect.left, y: rect.bottom },
+                  keyboard: event.detail === 0,
+                });
+              }}
+            >
+              <Icon name="ellipsis" part="thread-view.card.action.icon" />
+            </button>
           </div>
         )}
       </div>

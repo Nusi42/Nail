@@ -1,42 +1,84 @@
 /**
- * "Delete permanently?" (M5c, plan section 10): `mail.delete-permanently`
- * asks before it deletes, in a modal confirmation window
- * (`mail-delete-permanently`, `{ confirmation: true }` in `./feature.ts`).
- * The messages are the selection when the action ran (kept per UI store),
- * so a selection change behind the window cannot change what is deleted.
+ * "Delete permanently?" (M5c, plan section 10; P3, ADR 0164):
+ * `mail.delete-permanently` (and Delete in Trash) asks before it deletes, in
+ * a modal confirmation window (`mail-delete-permanently`,
+ * `{ confirmation: true }` in `./feature.ts`). The targets are the
+ * selection when the action ran — the selected conversation, the picked
+ * rows or a card's message (kept per UI store), so a selection change
+ * behind the window cannot change what is deleted — and the question names
+ * the number of messages the core resolved them to (`ResolveMailTargets`).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import type { MessageId } from "../api/generated";
+import type { ActionTargets } from "../actions/mailTargets";
+import { errorMessageOf } from "../api/client";
+import { mailActionsStoreFor } from "../features/mail-actions/store";
+import { runMailAction } from "../features/mail-actions/run";
 import { useT } from "../i18n/I18nProvider";
 import type { DialogProps } from "../layout/dialogRegistry";
-import { deleteMessages, type WriteContext } from "../state/mailOps";
+import type { WriteContext } from "../state/mailOps";
 import { useClient } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
 
 /** The confirmation's window kind (dialog name). */
 export const DELETE_PERMANENTLY_DIALOG = "mail-delete-permanently";
 
-const pending = new WeakMap<UiStore, readonly MessageId[]>();
-
-/** The messages the open confirmation would delete. */
-export function pendingPermanentDelete(store: UiStore): readonly MessageId[] {
-  return pending.get(store) ?? [];
+/** What the open confirmation would delete. */
+export interface PendingDelete {
+  targets: ActionTargets;
+  /** Messages the targets resolve to. */
+  messages: number;
+  /** Conversations among the targets that resolve to a message. */
+  conversations: number;
 }
 
-/** Asks before deleting `ids` permanently (nothing to ask for no messages). */
-export function askDeletePermanently(ctx: WriteContext, ids: readonly MessageId[]): void {
-  if (ids.length === 0) return;
-  pending.set(ctx.store, [...ids]);
+const pending = new WeakMap<UiStore, PendingDelete>();
+
+/** What the open confirmation would delete (`null` = nothing). */
+export function pendingPermanentDelete(store: UiStore): PendingDelete | null {
+  return pending.get(store) ?? null;
+}
+
+/**
+ * Asks before deleting `targets` permanently: resolves them first (the
+ * count; a refusal such as "not in Trash" shows in the toast instead).
+ */
+export async function askDeletePermanently(
+  ctx: WriteContext,
+  targets: ActionTargets,
+): Promise<void> {
+  if (targets.targets.length === 0) return;
+  try {
+    const { resolution } = await ctx.client.request(
+      {
+        type: "ResolveMailTargets",
+        targets: [...targets.targets],
+        action: { type: "delete-permanently" },
+      },
+      "MailTargets",
+    );
+    if (resolution.message_ids.length === 0) return;
+    pending.set(ctx.store, {
+      targets,
+      messages: resolution.message_ids.length,
+      conversations: resolution.conversations,
+    });
+  } catch (error) {
+    mailActionsStoreFor(ctx.store)
+      .getState()
+      .show({ kind: "error", message: errorMessageOf(error) });
+    return;
+  }
   ctx.store.getState().openWindow(DELETE_PERMANENTLY_DIALOG);
 }
 
-/** Deletes the pending messages permanently and closes the confirmation. */
+/** Deletes the pending targets permanently and closes the confirmation. */
 export async function confirmDeletePermanently(ctx: WriteContext): Promise<void> {
-  const ids = pendingPermanentDelete(ctx.store);
+  const what = pendingPermanentDelete(ctx.store);
   pending.delete(ctx.store);
   ctx.store.getState().closeWindow(DELETE_PERMANENTLY_DIALOG);
-  await deleteMessages(ctx, ids, true);
+  if (what === null) return;
+  await runMailAction(ctx, what.targets, { type: "delete-permanently" });
 }
 
 /** The confirmation window's content. */
@@ -45,23 +87,29 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const store = useUiStoreApi();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [count] = useState(() => pendingPermanentDelete(store).length);
+  const [what] = useState(() => pendingPermanentDelete(store));
   const [busy, setBusy] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
+  const messages = what?.messages ?? 0;
+  const conversations = what?.conversations ?? 0;
   // The safe choice has the focus (after the frame focused its first button).
   useEffect(() => {
     queueMicrotask(() => cancel.current?.focus());
   }, []);
   return (
     <div data-part="mail-confirm" data-confirm="delete-permanently" aria-busy={busy}>
-      <p data-part="mail-confirm.question">{t("mail-delete-permanently-question", { count })}</p>
+      <p data-part="mail-confirm.question">
+        {conversations > 0 && messages > 1
+          ? t("mail-actions-delete-permanently-conversations", { messages, conversations })
+          : t("mail-delete-permanently-question", { count: messages })}
+      </p>
       <p data-part="mail-confirm.note">{t("mail-delete-permanently-note")}</p>
       <div data-part="mail-confirm.actions">
         <button
           type="button"
           data-part="form.button"
           data-variant="danger"
-          disabled={busy || count === 0}
+          disabled={busy || messages === 0}
           onClick={() => {
             setBusy(true);
             void confirmDeletePermanently({ client, store, queryClient }).finally(() => {

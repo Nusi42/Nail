@@ -45,7 +45,8 @@ export function JunkVerdictBar({ node }: WidgetProps) {
         type="button"
         data-part="form.button"
         data-action="junk.not-junk"
-        onClick={() => void dispatch("junk.not-junk")}
+        // This message alone, also inside a card of a conversation (P3).
+        onClick={() => void dispatch("junk.not-junk", [message.id])}
       >
         {t("junk-action-not-junk")}
       </button>
