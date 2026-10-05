@@ -297,6 +297,8 @@ impl McpData for FakeData {
                 date: latest.date.clone(),
                 preview: latest.preview.clone(),
                 latest_message_id: latest.id.clone(),
+                latest_message: Box::new(latest.clone()),
+                latest_from: None,
                 account_ids: vec!["work".into(), "home".into()],
             },
             messages,

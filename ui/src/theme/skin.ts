@@ -148,9 +148,22 @@ export function colorSlot(key: string): number {
   return stableHash(key.trim().toLowerCase()) % AVATAR_COLORS.length;
 }
 
+/**
+ * Parts drawn in the avatar palette (`data-color`): P2 (ADR 0148) adds the
+ * reader's conversation avatars (the strip's, and the card feed's).
+ */
+const PALETTE_PARTS = [
+  "message-list.row.avatar",
+  "tag.dot",
+  "avatar",
+  "folder-tree.section.dot",
+  "thread-view.item.avatar",
+  "thread-view.card.avatar",
+] as const;
+
 const avatarColors = AVATAR_COLORS.map(
   (color, i) =>
-    `[data-color="${String(i)}"]${p("message-list.row.avatar")}, [data-color="${String(i)}"]${p("tag.dot")}, [data-color="${String(i)}"]${p("avatar")}, [data-color="${String(i)}"]${p("folder-tree.section.dot")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
+    `${PALETTE_PARTS.map((part) => `[data-color="${String(i)}"]${p(part)}`).join(", ")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
 ).join("\n");
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;

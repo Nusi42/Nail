@@ -54,7 +54,7 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
   page,
 }) => {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
   await enableGmail(page);
   const gmail = accountSectionNamed(page, "Gmail");
   await expect(gmail).toHaveAttribute("data-status", "online", { timeout: 30_000 });

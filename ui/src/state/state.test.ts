@@ -120,6 +120,25 @@ describe("message writes", () => {
     );
   });
 
+  it("finds and patches a conversation row's newest message (P2)", async () => {
+    const ctx = context();
+    const page = await ctx.client.request(
+      { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
+      "Threads",
+    );
+    ctx.queryClient.setQueryData(queryKeys.threads("acc-personal/Inbox", 100), {
+      pages: [page],
+      pageParams: [0],
+    });
+    const row = must(page.threads.find((t) => !t.latest_message.flags.flagged));
+    const id = row.latest_message_id;
+    expect(row.latest_message.id).toBe(id);
+    // Choosing the row selects this message: actions see it at once.
+    expect(findSummary(ctx.queryClient, id)).toEqual(row.latest_message);
+    await setFlags(ctx, [id], { flagged: true });
+    expect(findSummary(ctx.queryClient, id)?.flags.flagged).toBe(true);
+  });
+
   it("reports a rejected write and shows the core's state again", async () => {
     const ctx = context();
     await loadFolder(ctx, "acc-personal/Inbox");

@@ -17,7 +17,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 async function ready(page: Page) {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
 }
 
 test("search with the query language", async ({ page }) => {
@@ -51,7 +51,7 @@ test("search with the query language", async ({ page }) => {
   // Escape clears the search: back to the folder.
   await input.press("Escape");
   await expect(list).not.toHaveAttribute("data-state", "search");
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
 });
 
 test("the thread view shows a conversation across folders", async ({ page }) => {
@@ -63,10 +63,15 @@ test("the thread view shows a conversation across folders", async ({ page }) => 
   await expect(thread.locator('[data-part="thread-view.subject"]')).toContainText(
     "Project Nightingale kickoff",
   );
-  // Four messages in the inbox, three replies in Sent.
+  // Four messages in the inbox, three replies in Sent: the newest three are
+  // shown, the older four folded (P2 quick win, ADR 0148).
   const items = thread.locator('[data-part="thread-view.item"]');
-  await expect(items).toHaveCount(7);
+  await expect(items).toHaveCount(3);
   await expect(items.and(page.locator('[aria-current="true"]'))).toHaveCount(1);
+  await expect(thread.locator('[data-part="thread-view.item.avatar"]')).toHaveCount(3);
+  await thread.getByRole("button", { name: "4 earlier messages" }).click();
+  await expect(items).toHaveCount(7);
+  await expect(thread.locator('[data-part="thread-view.fold"]')).toHaveCount(0);
 
   // Opening another message of the conversation shows it in the reader.
   const first = items.first();

@@ -371,10 +371,24 @@ fn list_threads_summarizes_per_folder() {
     assert_eq!(
         t.participants
             .iter()
-            .map(|p| p.email.as_str())
+            .map(|p| p.address.email.as_str())
             .collect::<Vec<_>>(),
         ["ada@x", "bob@x"]
     );
+    // P2 (ADR 0148): senders of unread messages are marked; "me" is the
+    // core's to resolve; the newest sender comes with the row.
+    assert_eq!(
+        t.participants
+            .iter()
+            .map(|p| (p.unread, p.me))
+            .collect::<Vec<_>>(),
+        [(true, false), (false, false)]
+    );
+    let latest_from = t.latest_from.as_ref().unwrap();
+    assert_eq!(latest_from.address.email, "bob@x");
+    assert!(!latest_from.unread);
+    assert_eq!(t.latest_message.id, MessageId::from("b"));
+    assert!(t.latest_message.flags.flagged);
     assert_eq!(
         t.account_ids,
         [AccountId::from("a1"), AccountId::from("a2")]

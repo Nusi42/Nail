@@ -17,6 +17,7 @@ import type {
   MoveTarget,
   Response,
   SearchQuery,
+  ThreadParticipant,
   ThreadSummary,
   VirtualAccountConfig,
 } from "./generated";
@@ -362,16 +363,59 @@ export function deleteMessages(core: MockCore, ids: MessageId[], permanent: bool
 
 const threadKey = (m: MessageSummary) => m.thread_id ?? `single-${m.id}`;
 
-function summarize(id: string, messages: MessageSummary[]): ThreadSummary {
+/**
+ * Folder roles whose messages are never part of a conversation (P2; the
+ * Outbox is no folder: its messages are never listed).
+ */
+const NOT_IN_CONVERSATIONS: readonly FolderRole[] = ["drafts"];
+/** Also left out of a conversation shown without a folder. */
+const NOT_IN_ANY_CONVERSATION: readonly FolderRole[] = [...NOT_IN_CONVERSATIONS, "trash", "junk"];
+
+function roleOf(d: MockData, folderId: FolderId): FolderRole | undefined {
+  return d.folders.find((f) => f.id === folderId)?.role;
+}
+
+/** The user's addresses per account (identities, else the account address), lower case. */
+function myAddresses(d: MockData): Map<AccountId, Set<string>> {
+  const out = new Map<AccountId, Set<string>>();
+  for (const account of d.accountsConfig.accounts) {
+    out.set(account.id, new Set(account.identities.map((i) => i.email.toLowerCase())));
+  }
+  for (const account of d.accounts) {
+    const set = out.get(account.id) ?? new Set<string>();
+    if (account.email) set.add(account.email.toLowerCase());
+    out.set(account.id, set);
+  }
+  return out;
+}
+
+/** Whether the user wrote a message: it is in Sent, or its sender is one of the account's identities. */
+function isFromMe(d: MockData, mine: Map<AccountId, Set<string>>, m: MessageSummary): boolean {
+  if (roleOf(d, m.folder_id) === "sent") return true;
+  const from = m.from?.email.toLowerCase();
+  return from !== undefined && (mine.get(m.account_id)?.has(from) ?? false);
+}
+
+function summarize(d: MockData, id: string, messages: MessageSummary[]): ThreadSummary {
   const sorted = [...messages].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   const latest = sorted.at(-1);
   if (latest === undefined) throw new Error(`thread ${id} has no messages`);
-  const participants = new Map<string, MessageSummary["from"]>();
-  for (const m of sorted) if (m.from) participants.set(m.from.email, m.from);
+  const mine = myAddresses(d);
+  const accounts = new Set(messages.map((m) => m.account_id));
+  const isMe = (email: string) =>
+    [...accounts].some((a) => mine.get(a)?.has(email.toLowerCase()) ?? false);
+  const participants = new Map<string, ThreadParticipant>();
+  for (const m of sorted) {
+    if (!m.from) continue;
+    const key = m.from.email.toLowerCase();
+    const known = participants.get(key);
+    if (known) known.unread ||= !m.flags.seen;
+    else participants.set(key, { ...m.from, me: isMe(m.from.email), unread: !m.flags.seen });
+  }
   return {
     id,
     subject: (sorted[0]?.subject ?? "").replace(/^((re|fwd?|aw|wg):\s*)+/i, ""),
-    participants: [...participants.values()].filter((a) => a !== null),
+    participants: [...participants.values()],
     message_count: messages.length,
     unread_count: messages.filter((m) => !m.flags.seen).length,
     flagged: messages.some((m) => m.flags.flagged),
@@ -379,20 +423,56 @@ function summarize(id: string, messages: MessageSummary[]): ThreadSummary {
     date: latest.date,
     preview: latest.preview,
     latest_message_id: latest.id,
-    account_ids: [...new Set(messages.map((m) => m.account_id))],
+    latest_message: latest,
+    latest_from: latest.from
+      ? { ...latest.from, me: isMe(latest.from.email), unread: !latest.flags.seen }
+      : null,
+    account_ids: [...accounts],
   };
 }
 
+/**
+ * The user's own messages of the given threads from the Sent folders of
+ * `accounts`, not already among `listed` (P2: they join the conversation).
+ */
+function sentReplies(
+  d: MockData,
+  threads: ReadonlySet<string>,
+  accounts: ReadonlySet<AccountId>,
+  listed: readonly MessageSummary[],
+): MessageSummary[] {
+  const ids = new Set(listed.map((m) => m.id));
+  return d.messages.filter(
+    (m) =>
+      !ids.has(m.id) &&
+      accounts.has(m.account_id) &&
+      roleOf(d, m.folder_id) === "sent" &&
+      threads.has(threadKey(m)),
+  );
+}
+
+/**
+ * The conversations of a folder (P2, ADR 0148): its messages grouped by
+ * thread plus the user's replies from the accounts' Sent folders; in Drafts
+ * and Outbox every message stands alone.
+ */
 export function listThreads(d: MockData, folderId: FolderId): ThreadSummary[] | null {
   const messages = folderMessages(d, folderId);
   if (!messages) return null;
+  const flat = messages.length > 0 && messages.every((m) => roleOf(d, m.folder_id) === "drafts");
+  const key = (m: MessageSummary) => (flat ? `single-${m.id}` : threadKey(m));
   const groups = new Map<string, MessageSummary[]>();
   for (const m of messages) {
-    const key = threadKey(m);
-    groups.set(key, [...(groups.get(key) ?? []), m]);
+    groups.set(key(m), [...(groups.get(key(m)) ?? []), m]);
+  }
+  if (!flat) {
+    const accounts = new Set(messages.map((m) => m.account_id));
+    for (const m of sentReplies(d, new Set(groups.keys()), accounts, messages)) {
+      groups.get(threadKey(m))?.push(m);
+    }
   }
   return [...groups]
-    .map(([id, list]) => summarize(id, list))
+    .map(([id, list]) => summarize(d, id, list))
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
@@ -401,7 +481,47 @@ export function getThread(d: MockData, threadId: string): Response {
     .filter((m) => threadKey(m) === threadId)
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   if (messages.length === 0) return errorResponse("not_found", `thread ${threadId} not found`);
-  return { type: "Thread", thread: summarize(threadId, messages), messages };
+  return { type: "Thread", thread: summarize(d, threadId, messages), messages };
+}
+
+/**
+ * `GetConversation` (P2, ADR 0148): the thread's messages in the folder plus
+ * the user's from Sent, or without a folder every message but drafts,
+ * Outbox, Trash and Junk; oldest first, the user's marked `from_me`.
+ */
+export function getConversation(
+  d: MockData,
+  threadId: string,
+  folderId: FolderId | null,
+): Response {
+  let messages: MessageSummary[];
+  if (folderId === null) {
+    messages = d.messages.filter(
+      (m) =>
+        threadKey(m) === threadId &&
+        !NOT_IN_ANY_CONVERSATION.includes(roleOf(d, m.folder_id) ?? "other"),
+    );
+  } else {
+    const listed = folderMessages(d, folderId);
+    if (!listed) return errorResponse("not_found", `folder ${folderId} not found`);
+    const own = listed.filter(
+      (m) =>
+        threadKey(m) === threadId &&
+        !NOT_IN_CONVERSATIONS.includes(roleOf(d, m.folder_id) ?? "other"),
+    );
+    const accounts = new Set(
+      d.messages.filter((m) => threadKey(m) === threadId).map((m) => m.account_id),
+    );
+    messages = [...own, ...sentReplies(d, new Set([threadId]), accounts, own)];
+  }
+  if (messages.length === 0) return errorResponse("not_found", `thread ${threadId} not found`);
+  messages.sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || a.id.localeCompare(b.id));
+  const mine = myAddresses(d);
+  return {
+    type: "Conversation",
+    thread: summarize(d, threadId, messages),
+    messages: messages.map((m) => ({ ...m, from_me: isFromMe(d, mine, m) })),
+  };
 }
 
 // ---------------------------------------------------------------------------

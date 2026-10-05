@@ -26,6 +26,9 @@ import { PORTABILITY_BASE_CSS } from "../features/portability/parts";
 import { PALETTE_BASE_CSS } from "../features/palette/parts";
 import { PRINT_BASE_CSS } from "../features/print/parts";
 import { SKIN_CSS } from "./skin";
+import { aliasedRule } from "./partAliases";
+import { MESSAGE_LIST_SKIN_CSS } from "../widgets/messageListSkin";
+import { THREAD_VIEW_SKIN_CSS } from "../widgets/threadViewSkin";
 import { SHELL_SKIN_CSS } from "../features/shell/skin";
 import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
@@ -335,10 +338,14 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   // packages' skins (shell, settings page, calendar view; ADR 0109) and the
   // M5c window manager / composer skins (ADRs 0117, 0118) follow it, and
   // the P1 responsive rules of the windows and dialogs (ADR 0139) come last.
+  // P2 (ADR 0148): the conversation list's and the reader strip's skins
+  // follow the shared skin directly.
   const sections: string[] = [
     BASE_CSS,
     SKIN_CSS,
     ...[
+      MESSAGE_LIST_SKIN_CSS,
+      THREAD_VIEW_SKIN_CSS,
       SHELL_SKIN_CSS,
       SETTINGS_SKIN_CSS,
       PIM_SKIN_CSS,
@@ -358,7 +365,12 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   }
   for (const rule of theme.parts) {
     try {
-      sections.push(`${ruleSelector(rule)} {\n${declarationBlock(rule.declarations)}\n}`);
+      // A renamed part's old name still styles the new part (P2, ./partAliases.ts).
+      const alias = aliasedRule(rule);
+      const selector = alias
+        ? `${ruleSelector(rule)},\n${ruleSelector(alias)}`
+        : ruleSelector(rule);
+      sections.push(`${selector} {\n${declarationBlock(rule.declarations)}\n}`);
     } catch (error) {
       const where = rule.source ? ` (${rule.source.file}:${String(rule.source.line)})` : "";
       warnings.push(`${(error as Error).message}${where}`);

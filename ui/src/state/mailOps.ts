@@ -26,6 +26,8 @@ export interface WriteContext {
 
 type MessagesPage = Extract<Response, { type: "Messages" }>;
 type ThreadResponse = Extract<Response, { type: "Thread" }>;
+/** A page of conversation rows (P2: each carries its newest message). */
+type ThreadsPage = Extract<Response, { type: "Threads" }>;
 interface SearchPage {
   hits: SearchHit[];
 }
@@ -53,6 +55,15 @@ export function findSummary(queryClient: QueryClient, id: MessageId): MessageSum
   })) {
     const found = data?.messages.find((m) => m.id === id);
     if (found) return found;
+  }
+  // A conversation row selects its newest message (P2, ADR 0148).
+  for (const [, data] of queryClient.getQueriesData<InfiniteData<ThreadsPage>>({
+    queryKey: queryKeys.allThreads,
+  })) {
+    for (const page of data?.pages ?? []) {
+      const found = page.threads.find((t) => t.latest_message.id === id);
+      if (found) return found.latest_message;
+    }
   }
   return undefined;
 }
@@ -106,6 +117,23 @@ export function patchSummaries(
   queryClient.setQueriesData<ThreadResponse>(
     { queryKey: queryKeys.allThreadDetails },
     (data) => data && { ...data, messages: apply(data.messages) },
+  );
+  // Conversation rows keep their newest message; a removed one is left to
+  // the refetch (the row then shows the next newest).
+  queryClient.setQueriesData<InfiniteData<ThreadsPage>>(
+    { queryKey: queryKeys.allThreads },
+    (data) =>
+      data && {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          threads: page.threads.map((thread) => {
+            if (!wanted.has(thread.latest_message.id)) return thread;
+            const next = patch(thread.latest_message);
+            return next ? { ...thread, latest_message: next } : thread;
+          }),
+        })),
+      },
   );
 }
 

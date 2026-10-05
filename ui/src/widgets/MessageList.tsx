@@ -1,7 +1,7 @@
 import { measureElement, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
-import type { Address, MessageSummary, ThreadSummary } from "../api/generated";
+import type { Address, MessageSummary, ThreadParticipant, ThreadSummary } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import {
   optionBool,
@@ -125,18 +125,48 @@ function templateData(message: MessageSummary) {
     flagged: message.flags.flagged,
     account: message.account_id,
     count: 1 + message.duplicates.length,
+    // P2: a message row's people are its sender (`{participants | names(N)}`).
+    participants: message.from ? [{ ...message.from, me: false, unread: !message.flags.seen }] : [],
   };
 }
 
-/** Template data of a thread row: the fields a message row offers, plus `count`. */
+/** The sender a thread row stands for: the newest message's, else the last participant. */
+export function threadSender(thread: ThreadSummary): ThreadParticipant | null {
+  return thread.latest_from ?? thread.participants[thread.participants.length - 1] ?? null;
+}
+
+/**
+ * Template data of a thread row: the fields a message row offers (`from` =
+ * the newest message's sender), plus `count` and `participants` (P2).
+ */
 export function threadTemplateData(thread: ThreadSummary) {
   return {
     ...thread,
-    from: thread.participants[thread.participants.length - 1] ?? null,
+    from: threadSender(thread),
     unread: thread.unread_count > 0,
     account: thread.account_ids.join(" "),
     count: thread.message_count,
   };
+}
+
+/**
+ * The list's conversation mode (`threads` option; P2, ADR 0148): `off`
+ * lists messages, `collapsed` one row per conversation, `expandable`
+ * rows that open into their messages (Design B; `expanded` is its pre-P2
+ * spelling).
+ */
+export type ThreadMode = "off" | "collapsed" | "expandable";
+
+export function threadModeOf(node: WidgetNode): ThreadMode {
+  switch (optionString(node, "threads", "off")) {
+    case "collapsed":
+      return "collapsed";
+    case "expandable":
+    case "expanded":
+      return "expandable";
+    default:
+      return "off";
+  }
 }
 
 /**
@@ -223,7 +253,7 @@ function threadRow(thread: ThreadSummary): Row {
     states: (selected) => threadStates(thread, selected),
     data: threadTemplateData(thread),
     unread: thread.unread_count > 0,
-    from: thread.participants[thread.participants.length - 1] ?? null,
+    from: threadSender(thread),
     tags: {
       accountIds: thread.account_ids,
       attachments: thread.has_attachments,
@@ -354,7 +384,9 @@ function useRows(node: WidgetNode, pageSize: number) {
   // to the user's search.
   const filterSearch = filteredScope(listFilter, activeSearch, accountId, folderId);
   const searching = filterSearch ?? activeSearch;
-  const threadMode = optionString(node, "threads", "off") === "collapsed";
+  // Design B's child rows (`expandable`) are WP-list's: until then such a
+  // list shows its conversations collapsed.
+  const threadMode = threadModeOf(node) !== "off";
   const threads = useThreads(folderId, pageSize, threadMode && searching === null);
   const threadRows = threadMode && searching === null && !isUnsupported(threads.error);
   const messages = useMessages(searching === null && !threadRows ? folderId : null, pageSize);
@@ -378,6 +410,7 @@ function useRows(node: WidgetNode, pageSize: number) {
 }
 
 function SegmentView({ segment }: { segment: Segment }) {
+  const t = useT();
   switch (segment.kind) {
     case "text":
       return <span data-part="message-list.row.text">{segment.text}</span>;
@@ -398,6 +431,34 @@ function SegmentView({ segment }: { segment: Segment }) {
               {item}
             </span>
           ))}
+        </span>
+      );
+    case "names":
+      // P2: `{participants | names(N)}`; the skipped people sit between the
+      // first names and the newest one.
+      return (
+        <span data-part={`message-list.row.${segment.field}`}>
+          {segment.items.map((item, index) => {
+            const states = [item.me ? "me" : null, item.unread ? "unread" : null].filter(
+              (state) => state !== null,
+            );
+            const gap = segment.skipped > 0 && index === segment.items.length - 1;
+            return (
+              <span key={index} data-part="message-list.row.participant-group">
+                {index > 0 && (
+                  <span data-part="message-list.row.separator">
+                    {t(gap ? "conversations-names-gap" : "conversations-names-separator")}
+                  </span>
+                )}
+                <span
+                  data-part="message-list.row.participant"
+                  data-state={states.length > 0 ? states.join(" ") : undefined}
+                >
+                  {item.text}
+                </span>
+              </span>
+            );
+          })}
         </span>
       );
   }
@@ -556,7 +617,7 @@ export function MessageList({ node }: WidgetProps) {
         const row = rows[item.index];
         if (!row) return null;
         const selected = row.messageId === selectedId;
-        const ctx = { locale, now, unread: row.unread };
+        const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
         return (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
           <div

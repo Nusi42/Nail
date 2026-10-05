@@ -392,7 +392,7 @@ fn node_errors() {
     check(
         "message-list threads=\"sometimes\"",
         18,
-        "must be one of off, collapsed, expanded",
+        "must be one of off, collapsed, expandable, expanded",
     );
     check("message-list page-size=-1", 18, "non-negative whole number");
     check("toolbar", 5, "needs the option `toolbar`");

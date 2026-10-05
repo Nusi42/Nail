@@ -25,7 +25,7 @@ const rulesFile = () => readFileSync(path.join(server.configDir, "rules.kdl"), "
 
 async function openRules(page: Page): Promise<Locator> {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
   await runFromPalette(page, "filter rules", "Filter rules");
   const window = page.getByRole("dialog", { name: "Filter rules" });
   await expect(window).toBeVisible();
@@ -138,7 +138,7 @@ test("a rule is created from a message", async ({ page }) => {
   await page.goto(server.url);
   const row = page
     .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "[nail-users] Release notes for M1" });
+    .filter({ hasText: "Release notes for M1" });
   await row.click();
   await readerAction(page, "Create rule from message");
   const window = page.getByRole("dialog", { name: "Filter rules" });

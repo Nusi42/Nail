@@ -19,11 +19,27 @@ import { nonEmpty } from "../text/empty";
 export type TemplateValue =
   string | number | boolean | null | TemplateValue[] | { [key: string]: TemplateValue };
 
+/** One name of a `names(N)` segment (P2, ADR 0148). */
+export interface NameItem {
+  /** The display name (the context's `me` text for the user). */
+  text: string;
+  /** The user's own address. */
+  me: boolean;
+  /** The person sent an unread message (shown bold). */
+  unread: boolean;
+}
+
 /** A rendered piece of a template line. */
 export type Segment =
   | { kind: "text"; text: string }
   | { kind: "field"; field: string; text: string; strong: boolean }
-  | { kind: "chips"; field: string; items: string[] };
+  | { kind: "chips"; field: string; items: string[] }
+  /**
+   * `{participants | names(N)}`: at most N names; with more people the
+   * first N - 1 and the newest, `skipped` = how many are left out between
+   * them.
+   */
+  | { kind: "names"; field: string; items: NameItem[]; skipped: number };
 
 /** Formatting context for pipes. */
 export interface TemplateContext {
@@ -33,6 +49,8 @@ export interface TemplateContext {
   now: number;
   /** Whether the current item is unread (for `bold-if-unread`). */
   unread: boolean;
+  /** How `names` writes the user ("me"; P2). Absent: the address's name. */
+  me?: string;
 }
 
 interface Pipe {
@@ -76,6 +94,9 @@ export const PIPES: Readonly<Record<string, PipeSpec>> = {
   truncate: { args: "positive-int" },
   "bold-if-unread": { args: "none" },
   chips: { args: "none" },
+  // P2 (ADR 0148): the conversation row's people and its count pill.
+  names: { args: "positive-int" },
+  "if-many": { args: "none" },
 };
 
 const IDENT_START = /[A-Za-z_]/;
@@ -291,6 +312,35 @@ export function fieldPart(path: readonly string[]): string {
   return (path[0] ?? "field").toLowerCase().replaceAll("_", "-");
 }
 
+/**
+ * The names of a list of people (`ThreadParticipant`s or plain addresses):
+ * at most `max`, the first `max - 1` and the newest when there are more
+ * (P2, ADR 0148).
+ */
+export function nameItems(
+  value: unknown,
+  max: number,
+  me: string | undefined,
+): { items: NameItem[]; skipped: number } {
+  const people = (Array.isArray(value) ? value : [value]).filter(isAddress);
+  const item = (person: { name: string | null; email: string }): NameItem => {
+    const flags = person as { me?: unknown; unread?: unknown };
+    const mine = flags.me === true;
+    return {
+      text: mine && me !== undefined ? me : display(person),
+      me: mine,
+      unread: flags.unread === true,
+    };
+  };
+  if (people.length <= max) return { items: people.map(item), skipped: 0 };
+  const head = people.slice(0, Math.max(0, max - 1)).map(item);
+  const last = people[people.length - 1];
+  return {
+    items: last ? [...head, item(last)] : head,
+    skipped: people.length - head.length - 1,
+  };
+}
+
 /** Renders a compiled template against a data object. */
 export function renderTemplate(
   template: CompiledTemplate,
@@ -306,6 +356,7 @@ export function renderTemplate(
     let value = lookup(data, node.path);
     let strong = false;
     let chips: string[] | null = null;
+    let names: { items: NameItem[]; skipped: number } | null = null;
     for (const pipe of node.pipes) {
       switch (pipe.name) {
         case "relative": {
@@ -333,10 +384,18 @@ export function renderTemplate(
             Boolean,
           );
           break;
+        case "names":
+          names = nameItems(value, pipe.args[0] as number, ctx.me);
+          break;
+        case "if-many":
+          value = typeof value === "number" && value > 1 ? value : "";
+          break;
       }
     }
     const field = fieldPart(node.path);
-    if (chips) {
+    if (names) {
+      out.push({ kind: "names", field, ...names });
+    } else if (chips) {
       out.push({ kind: "chips", field, items: chips });
     } else {
       out.push({ kind: "field", field, text: display(value), strong });

@@ -2,9 +2,14 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, stubElementSizes, widget } from "../test/harness";
 import { filterFolders } from "./FolderPicker";
-import { initiallyExpanded, splitQuotes } from "./ThreadView";
+import { initiallyExpanded, splitQuotes, visibleMessages } from "./ThreadView";
 import { applyHint, hintMessageId, hintsFor } from "./SearchBar";
-import { threadStates, threadTemplateData } from "./MessageList";
+import { threadModeOf, threadStates, threadTemplateData } from "./MessageList";
+import {
+  addMockConversation,
+  MOCK_CONVERSATION_ID,
+  MOCK_CONVERSATION_SUBJECT,
+} from "../api/mockConversations";
 import { must } from "../test/must";
 
 const INBOX = "acc-personal/Inbox";
@@ -181,8 +186,8 @@ describe("message-list with search and threads", () => {
       id: "t",
       subject: "S",
       participants: [
-        { name: "A", email: "a@x" },
-        { name: "B", email: "b@x" },
+        { name: "A", email: "a@x", me: false, unread: true },
+        { name: "B", email: "b@x", me: true, unread: false },
       ],
       message_count: 3,
       unread_count: 1,
@@ -191,15 +196,72 @@ describe("message-list with search and threads", () => {
       date: "2026-09-29T08:00:00Z",
       preview: "p",
       latest_message_id: "m3",
+      latest_message: {
+        id: "m3",
+        folder_id: "f",
+        account_id: "a",
+        subject: "Re: S",
+        from: { name: "A", email: "a@x" },
+        to: [],
+        date: "2026-09-29T08:00:00Z",
+        flags: { seen: false, flagged: false, answered: false, draft: false },
+        has_attachments: false,
+        preview: "p",
+        thread_id: "t",
+        tags: [],
+        duplicates: [],
+      },
+      latest_from: { name: "A", email: "a@x", me: false, unread: true },
       account_ids: ["a", "b"],
     };
     expect(threadStates(thread, true)).toBe("selected unread has-attachments thread");
+    // `from` is the newest message's sender (P2), else the last participant.
     expect(threadTemplateData(thread)).toMatchObject({
-      from: { name: "B" },
+      from: { name: "A" },
       count: 3,
       unread: true,
       account: "a b",
     });
+    expect(threadTemplateData({ ...thread, latest_from: null })).toMatchObject({
+      from: { name: "B" },
+    });
+  });
+
+  it("reads the conversation mode, the pre-P2 `expanded` as `expandable`", () => {
+    const mode = (threads?: string) =>
+      threadModeOf(widget("message-list", threads ? { options: { threads } } : {}));
+    expect(mode()).toBe("off");
+    expect(mode("off")).toBe("off");
+    expect(mode("collapsed")).toBe("collapsed");
+    expect(mode("expandable")).toBe("expandable");
+    expect(mode("expanded")).toBe("expandable");
+  });
+
+  it("shows a conversation's people and its count pill (P2)", async () => {
+    const env = createEnv({ inboxSize: 12, state: { activeFolderId: INBOX } });
+    addMockConversation(env.transport.data);
+    const { container } = renderNode(
+      widget("message-list", {
+        options: { threads: "collapsed" },
+        rows: ["{participants | names(3)}  {count | if-many}", "{subject}"],
+      }),
+      env,
+    );
+    await screen.findAllByRole("option");
+    const row = must(
+      container.querySelector<HTMLElement>(`[data-thread="${MOCK_CONVERSATION_ID}"]`),
+    );
+    const names = [
+      ...row.querySelectorAll<HTMLElement>('[data-part="message-list.row.participant"]'),
+    ];
+    // Four people: the first two and the newest, the user written "me".
+    expect(names.map((n) => n.textContent)).toEqual(["Grace Hopper", "me", "Katherine Johnson"]);
+    expect(names.map((n) => n.dataset.state ?? "")).toEqual(["unread", "me", ""]);
+    expect(row.querySelectorAll('[data-part="message-list.row.separator"]')[1]).toHaveTextContent(
+      "…",
+    );
+    expect(row.querySelector('[data-part="message-list.row.count"]')).toHaveTextContent("6");
+    expect(row).toHaveTextContent(MOCK_CONVERSATION_SUBJECT);
   });
 });
 
@@ -248,11 +310,61 @@ describe("thread-view", () => {
       env.store.getState().selectThread(list?.thread_id ?? null);
     });
     await waitFor(() => {
-      expect(env.queryClient.getQueryState(["thread", list?.thread_id ?? null])?.status).toBe(
-        "success",
-      );
+      expect(
+        env.queryClient
+          .getQueryCache()
+          .findAll({ queryKey: ["thread", list?.thread_id ?? null] })
+          .map((q) => q.state.status),
+      ).toContain("success");
     });
     expect(container.querySelector('[data-part="thread-view"]')).toBeNull();
+  });
+
+  it("shows the newest three messages and folds the earlier ones (P2 quick win)", async () => {
+    const user = userEvent.setup();
+    const env = createEnv({ inboxSize: 12, state: { activeFolderId: INBOX } });
+    const messages = addMockConversation(env.transport.data);
+    const newest = must(messages[5]);
+    act(() => {
+      env.store.getState().selectMessage(newest.id);
+      env.store.getState().selectThread(MOCK_CONVERSATION_ID);
+    });
+    const { container } = renderNode(widget("thread-view", { options: { expand: "none" } }), env);
+    const view = await screen.findByRole("region", { name: "Conversation" });
+    // The conversation as listed in the Inbox: four there, two from Sent.
+    expect(within(view).getByText("6 messages")).toBeInTheDocument();
+    expect(env.transport.requests).toContainEqual({
+      type: "GetConversation",
+      thread_id: MOCK_CONVERSATION_ID,
+      folder_id: INBOX,
+    });
+    const items = () => [
+      ...container.querySelectorAll<HTMLElement>('[data-part="thread-view.item"]'),
+    ];
+    expect(items().map((i) => i.dataset.message)).toEqual(messages.slice(3, 6).map((m) => m.id));
+    // The user's own reply from Sent: marked and written "me".
+    const mine = must(items()[1]);
+    expect(mine.dataset.state?.split(" ")).toContain("from-me");
+    expect(within(mine).getByText("me")).toHaveAttribute("data-part", "thread-view.item.from");
+    expect(mine.querySelector('[data-part="thread-view.item.avatar"]')).toHaveTextContent("AL");
+    const fold = screen.getByRole("button", { name: "3 earlier messages" });
+    expect(fold).toHaveAttribute("data-part", "thread-view.fold");
+    expect(fold).toHaveAttribute("aria-expanded", "false");
+    await user.click(fold);
+    expect(items()).toHaveLength(6);
+    expect(screen.queryByRole("button", { name: /earlier message/ })).toBeNull();
+  });
+
+  it("chooses which messages the strip shows", () => {
+    const list = ["a", "b", "c", "d", "e"].map((id) => ({ id }));
+    expect(visibleMessages(list, "e", false)).toEqual({ shown: list.slice(2), folded: 2 });
+    // The selected message is never folded away.
+    expect(visibleMessages(list, "a", false)).toEqual({ shown: list, folded: 0 });
+    expect(visibleMessages(list, null, true)).toEqual({ shown: list, folded: 0 });
+    expect(visibleMessages(list.slice(0, 3), null, false)).toEqual({
+      shown: list.slice(0, 3),
+      folded: 0,
+    });
   });
 
   it("splits quoted text and chooses expanded messages", () => {

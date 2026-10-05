@@ -199,8 +199,8 @@ pub use desktop::{
     UpdateSettings, UpdateState, UpdateStatus,
 };
 pub use domain::{
-    Account, AccountKind, Address, AttachmentInfo, Flags, Folder, FolderRole, MessageBody,
-    MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
+    Account, AccountKind, Address, AttachmentInfo, ConversationMessage, Flags, Folder, FolderRole,
+    MessageBody, MessageHeaders, MessageLocation, MessageSummary, ThreadParticipant, ThreadSummary,
 };
 pub use error::{ApiError, ErrorCode};
 pub use exchange::{

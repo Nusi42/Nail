@@ -27,6 +27,7 @@ mod bodies;
 mod clock;
 mod composer;
 mod context;
+mod conversations;
 mod creds;
 mod crypto;
 mod customize;

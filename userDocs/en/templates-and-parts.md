@@ -32,6 +32,7 @@ message-list page-size=100 {
 | `account` | The account the message belongs to |
 | `tags` | The message's tags (use `chips`) |
 | `count` | Messages in the conversation (`threads="collapsed"`), or copies of the message in a virtual account |
+| `participants` | The people of the conversation, oldest first (use `names(n)`); for a single message its sender |
 
 An unknown field shows nothing.
 
@@ -46,6 +47,8 @@ Filters follow the field, separated by `|`. You can chain several.
 | `truncate(n)` | At most `n` characters, then `…` |
 | `bold-if-unread` | Shows the field in bold while the message is unread |
 | `chips` | Shows a list as separate chips (`message-list.row.chip`) |
+| `names(n)` | At most `n` names of a list of people: with more, the first `n - 1` and the newest, with `…` between them. You are written "me"; people who sent unread mail are bold (`message-list.row.participant`, states `me` and `unread`) |
+| `if-many` | Shows a number only when it is more than 1 (for `count`: the conversation's count pill, empty for a single message) |
 
 A misspelled filter, a missing argument (`truncate` needs a whole number) or
 unbalanced braces make Nail skip that row and log a warning; if no row is
@@ -79,7 +82,7 @@ listed in the theme reference, the UI renders these:
 | `folder-tree.list` | The list inside the folder tree |
 | `message-list.loading`, `message-view.loading` | Waiting for data |
 | `message-list.spacer` | Invisible space above and below the visible rows |
-| `message-list.row.text`, `message-list.row.chip` | See "Row templates" |
+| `message-list.row.text`, `message-list.row.chip`, `message-list.row.count`, `message-list.row.participants`, `message-list.row.participant`, `message-list.row.separator` | See "Row templates" |
 | `message-view.header.label`, `message-view.header.value` | Label ("From") and value of a header line |
 | `message-view.text` | The body of plain-text mail |
 | `message-view.attachment.name`, `message-view.attachment.size` | Inside an attachment |

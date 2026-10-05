@@ -145,6 +145,9 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        ResolvedLayout.presets; UpdateLayout.base_revision; GetEditHistory / UndoEdit / RedoEdit →
                        EditHistory, EditHistoryChanged; GetThemeDetails, EditTheme, DuplicateTheme / RenameTheme →
                        ThemeSaved, DeleteTheme
+                       P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
+                       ThreadSummary.participants, ThreadSummary.latest_from / latest_message, ConversationMessage
+                       (MessageSummary flattened + from_me); GetConversation {thread_id, folder_id?} → Conversation
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -482,6 +485,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M5d (ADR 0131): editing.rs (GetEditHistory / UndoEdit / RedoEdit, the theme editor's requests;
                        broadcast_history after every theme / layout write; the watcher sends EditHistoryChanged when the
                        files change on disk)
+                       P2 (ADR 0148): conversations.rs (GetConversation; contract stub = GetThread's messages until WP201:
+                       the Sent join, "me" from the identities, counts over the conversation)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -647,6 +652,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        initialScroll.ts, skin constants CALENDAR_CONTAINER / THEME_EDITOR_STACKED / CUSTOMIZER_*,
                        features/system/QueryProblem.tsx (desktop-only cards say so in the browser); test/fastStyles.ts +
                        test/liveEnvs.ts (WP193);
+                       P2 (ADR 0148): widgets/messageListSkin.ts (count pill, participants) + widgets/threadViewSkin.ts (the
+                       reader's strip / card feed; `thread-view.*` left defaults/theme.kdl), theme/partAliases.ts (renamed
+                       parts: old-name rules also style the new part for one release), template filters `names(n)` /
+                       `if-many` + field `{participants}`, state/queries.ts useConversation, mailOps findSummary over thread
+                       rows' latest_message, api/mockConversations.ts addMockConversation (Inbox + Sent + a draft), slots
+                       features/conversation-list (WP202) / features/conversation-reader (WP203);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -688,6 +699,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        chips, settings search, calendar menu, dates in a German browser, layout offer, remote dark mode);
                        tests/m5c.spec.ts (window manager scenarios) + tests/desktop-m5c.spec.ts (pop-out composer);
                        tests/m5d.spec.ts (in-app editors: layout.kdl / theme.kdl / themes/*.kdl, undo, conflicts);
+                       tests/p2-quickwin.spec.ts (P2 quick win: conversation rows + count, the folded strip; screenshots in
+                       <build dir>/screens/p2/quickwin/);
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
                        support/responsive.ts (P1, ADR 0139: STANDARD_SIZES 1600/1280/1024/800 × 1000/700,
@@ -719,7 +732,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        halves, instances, window-state / pop-out issues, pop-out changes), windows.ftl (WP171), popout.ftl
                        (WP173); M5d: core-editors.ftl (contract ids: history scopes, edit kinds, edit issues, preset names,
                        config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182), appearance.ftl (WP183
-                       theme editor); every file is embedded in
+                       theme editor); P2: conversations.ftl (contract: "me", separators, counts / folds, modes),
+                       conversation-list.ftl (WP202), conversation-reader.ftl (WP203); every file is embedded in
                        nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
@@ -1135,6 +1149,18 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
 - P1 verify (ADR 0147): a one-line (`nowrap`) label belongs in a column sized by its text (`max-content`), never in a
   `minmax(0, 1fr)` column that can shrink under it (the text runs under the next control; the helper's `overflowing`
   check finds it).
+- P2 contract (ADR 0148): a conversation listed in a folder = the thread's messages there + the user's own messages
+  of the thread from the same accounts' Sent folders (`from_me`); drafts never join (Drafts lists each draft alone);
+  without a folder every folder but Drafts / Trash / Junk. "me" comes from the accounts' identities. The default
+  layout lists conversations (`message-list threads="collapsed"`; `expandable` = Design B, `expanded` its old name);
+  a conversation row selects its newest message (`ThreadSummary.latest_message`, found by `findSummary`). The
+  reader's strip shows the newest three messages and folds the rest ("N earlier messages"), styled by the UI skin
+  (no `thread-view.*` rules in defaults/theme.kdl). E2E row counts are conversation counts (demo-multi unified
+  inbox 14, demo inbox 11). Slots: WP201 core (nail-store, nail-core conversations.rs / mail.rs), WP202 list
+  (widgets/MessageList*, messageListSkin.ts, template/, features/conversation-list, list keys), WP203 reader
+  (widgets/ThreadView*, threadViewSkin.ts, features/conversation-reader, reader stack + keys), WP204 e2e
+  (p2.spec.ts, visual screens, richer demo threads, userDocs mail); both UI packages regenerate the layout
+  fixtures / goldens, the integrator regenerates them after merging.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

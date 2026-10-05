@@ -45,7 +45,7 @@ async function mailWith(subject: string): Promise<string> {
 
 async function openApp(page: Page) {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
 }
 
 async function newMessage(page: Page, subject: string): Promise<Locator> {
@@ -213,7 +213,7 @@ test("drafts are autosaved to the server and continued after a reload", async ({
 
   // A reload forgets the open composer; the outbox window lists the draft.
   await page.reload();
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
   await runFromPalette(page, "outbox", "Outbox");
   const drafts = page.getByRole("region", { name: "Drafts" });
   const item = drafts.locator('[data-part="outbox.item"]').filter({ hasText: "Plans for Friday" });

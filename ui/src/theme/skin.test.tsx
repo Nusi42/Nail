@@ -10,6 +10,8 @@ import { SHELL_SKIN_CSS } from "../features/shell/skin";
 import { WINDOWS_SKIN_CSS } from "../features/windows/skin";
 import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
+import { MESSAGE_LIST_SKIN_CSS } from "../widgets/messageListSkin";
+import { THREAD_VIEW_SKIN_CSS } from "../widgets/threadViewSkin";
 import { must } from "../test/must";
 
 /** WCAG relative luminance of `#rrggbb`. */
@@ -89,6 +91,8 @@ describe("M5a skin (theme/skin.ts)", () => {
       WINDOWS_SKIN_CSS,
       COMPOSER_SKIN_CSS,
       POPOUT_BASE_CSS,
+      MESSAGE_LIST_SKIN_CSS,
+      THREAD_VIEW_SKIN_CSS,
     })) {
       let depth = 0;
       for (const char of css) {
@@ -101,7 +105,14 @@ describe("M5a skin (theme/skin.ts)", () => {
   });
 
   it("takes colours only from tokens (literal colours only as token fallbacks)", () => {
-    for (const css of [SKIN_CSS, WINDOWS_SKIN_CSS, COMPOSER_SKIN_CSS, POPOUT_BASE_CSS]) {
+    for (const css of [
+      SKIN_CSS,
+      WINDOWS_SKIN_CSS,
+      COMPOSER_SKIN_CSS,
+      POPOUT_BASE_CSS,
+      MESSAGE_LIST_SKIN_CSS,
+      THREAD_VIEW_SKIN_CSS,
+    ]) {
       const withoutFallbacks = css.replace(/var\(--nail-[a-z0-9-]+, #[0-9a-f]{3,8}\)/gi, "");
       expect(withoutFallbacks).not.toMatch(/#[0-9a-f]{3,8}\b/i);
       expect(css).not.toMatch(/url\(|@import/);
@@ -276,6 +287,36 @@ describe("M5a skin (theme/skin.ts)", () => {
     );
     expect(slots.size).toBeGreaterThan(3);
     for (const slot of slots) expect(slot).toBeLessThan(AVATAR_COLORS.length);
+  });
+});
+
+describe("conversations (P2 quick win, ADR 0148)", () => {
+  const css = compileTheme(defaultTheme()).css;
+
+  it("styles the reader's strip on tokens after the shared skin: no band, no scroll area", () => {
+    const skin = css.indexOf(SKIN_CSS);
+    const list = css.indexOf(MESSAGE_LIST_SKIN_CSS);
+    const strip = css.indexOf(THREAD_VIEW_SKIN_CSS);
+    expect(list).toBeGreaterThan(skin);
+    expect(strip).toBeGreaterThan(list);
+    // The default theme no longer styles the strip (it was a grey band of
+    // at most 40vh with its own scroll bar).
+    expect(css).not.toMatch(/\[data-part="thread-view"\] \{[^}]*40vh/);
+    const strip0 = must(/\[data-part="thread-view"\] \{[^}]*\}/.exec(THREAD_VIEW_SKIN_CSS))[0];
+    expect(strip0).toContain("background-color: var(--nail-color-bg);");
+    expect(strip0).not.toMatch(/overflow|max-height/);
+    expect(THREAD_VIEW_SKIN_CSS).toContain("var(--nail-space-row)");
+    expect(THREAD_VIEW_SKIN_CSS).toContain(
+      "--nail-skin-avatar-sm: calc(var(--nail-size-avatar) * 28 / 34)",
+    );
+  });
+
+  it("draws the strip's avatars in the avatar palette and hides an empty count pill", () => {
+    expect(SKIN_CSS).toContain('[data-color="0"][data-part="thread-view.item.avatar"]');
+    expect(SKIN_CSS).toContain('[data-color="7"][data-part="thread-view.card.avatar"]');
+    expect(MESSAGE_LIST_SKIN_CSS).toContain(
+      '[data-part="message-list.row.count"]:empty { display: none; }',
+    );
   });
 });
 

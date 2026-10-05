@@ -189,7 +189,15 @@ pub struct MessageLocation {
     pub folder_id: FolderId,
 }
 
-/// One row of a threaded message list ([`crate::Request::ListThreads`]).
+/// One row of a threaded message list ([`crate::Request::ListThreads`]):
+/// a conversation (P2, ADR 0148).
+///
+/// A conversation listed in a folder is the thread's messages in that folder
+/// (or the member folders of a virtual folder) plus the user's own messages
+/// of the thread from the same accounts' Sent folders, which carry
+/// `from_me` ([`ConversationMessage`]); drafts never join one. In Drafts
+/// every message is a conversation of its own (the Outbox is no folder).
+/// Copies with the same Message-ID count once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadSummary {
     /// The thread.
@@ -197,9 +205,12 @@ pub struct ThreadSummary {
     /// Subject of the thread's first message (without `Re:` / `Fwd:`
     /// prefixes); empty when missing.
     pub subject: String,
-    /// Distinct senders, oldest first.
-    pub participants: Vec<Address>,
-    /// Messages of the thread in the listed folder (or virtual folder).
+    /// Distinct senders of the conversation, oldest first, with "me"
+    /// resolved from the identities of the messages' accounts and the
+    /// senders of unread messages marked (P2: the row's first line,
+    /// template field `{participants}`).
+    pub participants: Vec<ThreadParticipant>,
+    /// Messages of the conversation (the count pill; 1 = no pill).
     pub message_count: u32,
     /// Unread messages among them.
     pub unread_count: u32,
@@ -213,9 +224,62 @@ pub struct ThreadSummary {
     pub preview: String,
     /// The newest of them.
     pub latest_message_id: MessageId,
+    /// The newest message's summary (P2): what choosing the row selects, so
+    /// the UI's actions see its flags, tags and account at once, without a
+    /// second request.
+    pub latest_message: Box<MessageSummary>,
+    /// The sender of the newest message (P2: "Sender: preview" on the row's
+    /// third line); `null` when it has no `From`. Absent from older cores.
+    #[serde(default)]
+    pub latest_from: Option<ThreadParticipant>,
     /// Accounts the messages come from (more than one only in virtual
     /// accounts).
     pub account_ids: Vec<AccountId>,
+}
+
+/// A sender in a conversation ([`ThreadSummary::participants`]): the
+/// address plus what the row needs to show it (P2, ADR 0148). On the wire
+/// the address fields sit beside `me` / `unread` (`{name, email, me,
+/// unread}`), so older readers that expect an [`Address`] still work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadParticipant {
+    /// The sender.
+    #[serde(flatten)]
+    pub address: Address,
+    /// The address is one of the user's identities of the conversation's
+    /// accounts (compared case-insensitively): the UI writes "me".
+    #[serde(default)]
+    pub me: bool,
+    /// The participant sent at least one unread message of the
+    /// conversation (shown bold).
+    #[serde(default)]
+    pub unread: bool,
+}
+
+impl ThreadParticipant {
+    /// A participant that is neither the user nor unread.
+    #[must_use]
+    pub const fn new(address: Address) -> Self {
+        Self {
+            address,
+            me: false,
+            unread: false,
+        }
+    }
+}
+
+/// One message of a conversation ([`crate::Request::GetConversation`]):
+/// the summary plus where it stands in the conversation (P2, ADR 0148). On
+/// the wire the summary's fields sit beside `from_me`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ConversationMessage {
+    /// The message.
+    #[serde(flatten)]
+    pub message: MessageSummary,
+    /// The user wrote it: it is in a Sent folder, or its sender is one of
+    /// the identities of its account (the reader marks the card `from-me`).
+    #[serde(default)]
+    pub from_me: bool,
 }
 
 /// The header subset shown in the message view.
@@ -341,6 +405,49 @@ mod tests {
             serde_json::to_value(AccountKind::Pop3).unwrap(),
             json!("pop3")
         );
+    }
+
+    /// P2 (ADR 0148): participants and conversation messages keep the
+    /// shape older readers know, with the new flags beside it.
+    #[test]
+    fn conversation_types_flatten_their_address_and_summary() {
+        let participant = ThreadParticipant {
+            me: true,
+            ..ThreadParticipant::new(Address {
+                name: Some("Ada".into()),
+                email: "ada@x".into(),
+            })
+        };
+        let value = serde_json::to_value(&participant).unwrap();
+        assert_eq!(
+            value,
+            json!({"name": "Ada", "email": "ada@x", "me": true, "unread": false})
+        );
+        // An old core's plain address still reads.
+        let old: ThreadParticipant =
+            serde_json::from_value(json!({"name": null, "email": "b@x"})).unwrap();
+        assert_eq!(
+            old,
+            ThreadParticipant::new(Address {
+                name: None,
+                email: "b@x".into()
+            })
+        );
+        let address: Address = serde_json::from_value(value).unwrap();
+        assert_eq!(address.email, "ada@x");
+
+        let message: ConversationMessage = serde_json::from_value(json!({
+            "id": "m1", "folder_id": "f1", "account_id": "a1", "subject": "Hi",
+            "from": null, "to": [], "date": "2026-10-05T08:00:00Z",
+            "flags": {}, "has_attachments": false, "preview": "",
+            "thread_id": "t1", "tags": [], "duplicates": [], "from_me": true
+        }))
+        .unwrap();
+        assert!(message.from_me);
+        assert_eq!(message.message.subject, "Hi");
+        let back = serde_json::to_value(&message).unwrap();
+        assert_eq!(back["from_me"], json!(true));
+        assert_eq!(back["id"], json!("m1"));
     }
 
     #[test]

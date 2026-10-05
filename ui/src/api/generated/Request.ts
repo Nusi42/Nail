@@ -296,7 +296,16 @@ limit: number, } | { "type": "GetThread",
 /**
  * The thread.
  */
-thread_id: ThreadId, } | { "type": "Search", 
+thread_id: ThreadId, } | { "type": "GetConversation", 
+/**
+ * The thread.
+ */
+thread_id: ThreadId, 
+/**
+ * The folder (real or virtual) the conversation is shown for;
+ * `null` = every folder but Drafts, Trash and Junk.
+ */
+folder_id: FolderId | null, } | { "type": "Search", 
 /**
  * The query.
  */

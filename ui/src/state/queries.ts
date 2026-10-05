@@ -53,6 +53,9 @@ export const queryKeys = {
     ["threads", folderId, pageSize] as const,
   allThreads: ["threads"] as const,
   thread: (id: ThreadId | null) => ["thread", id] as const,
+  /** P2: under the thread's key, so invalidating the thread refetches it. */
+  conversation: (id: ThreadId | null, folderId: FolderId | null) =>
+    ["thread", id, "conversation", folderId] as const,
   allThreadDetails: ["thread"] as const,
   search: (text: string, accountId: AccountId | null, folderId: FolderId | null, size: number) =>
     ["search", text, accountId, folderId, size] as const,
@@ -238,6 +241,24 @@ export function useThread(id: ThreadId | null) {
   return useQuery({
     queryKey: queryKeys.thread(id),
     queryFn: () => client.request({ type: "GetThread", thread_id: id ?? "" }, "Thread"),
+    enabled: id !== null,
+  });
+}
+
+/**
+ * The conversation of a thread as the list shows it in `folderId` (P2, ADR
+ * 0148): oldest first, the user's replies from Sent marked `from_me`.
+ * Without a folder, every folder but Drafts, Trash and Junk.
+ */
+export function useConversation(id: ThreadId | null, folderId: FolderId | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.conversation(id, folderId),
+    queryFn: () =>
+      client.request(
+        { type: "GetConversation", thread_id: id ?? "", folder_id: folderId },
+        "Conversation",
+      ),
     enabled: id !== null,
   });
 }

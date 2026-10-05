@@ -126,7 +126,7 @@ async function finishSetup(page: Page, dialog: Locator) {
 
 test("an Exchange Online account is added through Autodiscover and syncs", async ({ page }) => {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
   // Another address of the demo tenant (Ada's is configured already).
   const dialog = await lookUp(page, "grace@contoso.example");
   // Autodiscover: Exchange Online → Microsoft Graph.
@@ -190,7 +190,7 @@ test("an on-premises Exchange account is added through Autodiscover (EWS)", asyn
 
 test("Exchange mail syncs, takes flags, moves, categories as tags and sends", async ({ page }) => {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
   await enableContoso(page);
 
   // Focused Inbox tabs filter the inbox.

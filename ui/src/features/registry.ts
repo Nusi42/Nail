@@ -16,6 +16,8 @@ import type { WindowTitleFn, WindowTitleRegistry } from "../layout/windowSpecs";
 import * as agents from "./agents";
 import * as appearance from "./appearance";
 import * as composer from "./composer";
+import * as conversationList from "./conversation-list";
+import * as conversationReader from "./conversation-reader";
 import * as customization from "./customization";
 import * as exchange from "./exchange";
 import * as gmail from "./gmail";
@@ -79,6 +81,10 @@ export const features: Readonly<Record<string, Feature>> = {
   // (WP182); Appearance and the theme editor (WP183) live in `appearance`.
   layoutEditor,
   toolbarEditor,
+  // P2 (ADR 0148): the conversation list (WP-list) and the reader's card
+  // feed (WP-reader); their widgets stay message-list / thread-view.
+  conversationList,
+  conversationReader,
 };
 
 /** The merged registries. */

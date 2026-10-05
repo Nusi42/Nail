@@ -34,11 +34,11 @@ describe("theme compiler", () => {
   });
 
   it("keys part rules on data-part with states, pseudo-classes and conditions", () => {
-    expect(css).toContain('[data-part="thread-view.item"][data-state~="selected"] {');
+    expect(css).toContain('[data-part="smart-folders.item"][data-state~="selected"] {');
     expect(css).toContain('[data-part="split.divider"]:hover {');
     expect(css).toContain('[data-part="rules.list.item"][data-enabled~="false"] {');
     expect(css).toContain(
-      '[data-part="thread-view.item"][data-state~="unread"] [data-part="thread-view.item.from"] {\n  font-weight: var(--nail-font-weight-bold);',
+      '[data-part="sieve-status.state"][data-state~="failed"] [data-part="sieve-status.state.text"] {\n  color: var(--nail-color-danger);',
     );
   });
 

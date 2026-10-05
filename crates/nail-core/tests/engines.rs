@@ -943,6 +943,32 @@ async fn search_threads_and_query_errors() {
     };
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].duplicates.len(), 1);
+    // P2 (ADR 0148): the conversation request answers for a listed folder
+    // (contract stub: GetThread's messages, none marked as the user's) and
+    // refuses an unknown folder.
+    let Response::Conversation { thread, messages } = request(
+        &f.service,
+        Request::GetConversation {
+            thread_id: list.id.clone(),
+            folder_id: Some(FolderId::new("all/inbox")),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert_eq!(thread.id, list.id);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].message.duplicates.len(), 1);
+    assert!(!messages[0].from_me);
+    let refused = f
+        .service
+        .handle(Request::GetConversation {
+            thread_id: list.id.clone(),
+            folder_id: Some(FolderId::new("no-such-folder")),
+        })
+        .await;
+    assert!(matches!(refused, Response::Error { .. }), "{refused:?}");
     f.service.shutdown().await;
 }
 

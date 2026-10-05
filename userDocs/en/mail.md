@@ -53,18 +53,23 @@ The message's right-click menu has the same actions in the same groups.
 
 ## Conversations
 
-Replies are grouped into conversations. When the selected message belongs
-to a conversation, the reader shows the other messages above it, oldest
-first. Click a message's line to open it in place (quoted text stays
-folded; **Show quoted text** unfolds it), or **Open** to show it in the
-reader.
+Replies are grouped into conversations. The message list shows one row
+per conversation: the sender of its newest message, the number of messages
+when there are several, the subject and the newest message's preview.
+Choosing a row shows the newest message.
+
+When the selected message belongs to a conversation, the reader shows the
+conversation above it, oldest first: the newest three messages, with the
+older ones folded into **N earlier messages** (click it to see them all).
+Your own replies from Sent are part of the conversation and say "me".
+Click a message's line to open it in place (quoted text stays folded;
+**Show quoted text** unfolds it), or **Open** to show it in the reader.
 
 For Gmail and Exchange accounts the server's own conversations count too:
 messages the server keeps together stay together in Nail.
 
-To list whole conversations instead of single messages, set
-`threads="collapsed"` on the `message-list` in your
-[`layout.kdl`](layout-reference.md#widgets).
+To list single messages instead of conversations, set `threads="off"` on
+the `message-list` in your [`layout.kdl`](layout-reference.md#widgets).
 
 ## The message list and the reader
 

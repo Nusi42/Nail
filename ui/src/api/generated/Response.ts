@@ -23,6 +23,7 @@ import type { ContactGroup } from "./ContactGroup";
 import type { ContactId } from "./ContactId";
 import type { ContactMatch } from "./ContactMatch";
 import type { ContactSummary } from "./ContactSummary";
+import type { ConversationMessage } from "./ConversationMessage";
 import type { CryptoKey } from "./CryptoKey";
 import type { DefaultAppsStatus } from "./DefaultAppsStatus";
 import type { DesktopSettings } from "./DesktopSettings";
@@ -281,7 +282,15 @@ thread: ThreadSummary,
 /**
  * Its messages, oldest first.
  */
-messages: Array<MessageSummary>, } | { "type": "SearchResults", 
+messages: Array<MessageSummary>, } | { "type": "Conversation", 
+/**
+ * The conversation's row (counts and participants over `messages`).
+ */
+thread: ThreadSummary, 
+/**
+ * Its messages, oldest first.
+ */
+messages: Array<ConversationMessage>, } | { "type": "SearchResults", 
 /**
  * Offset of the first hit in `hits`.
  */

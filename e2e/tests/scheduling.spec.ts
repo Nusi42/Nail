@@ -28,7 +28,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 async function openApp(page: Page) {
   await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await expect(rows(page)).toHaveCount(14);
 }
 
 /** Today + `days` at `hour`:00 UTC, as an iCalendar UTC time. */

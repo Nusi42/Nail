@@ -264,6 +264,8 @@ export class MockTransport implements Transport, MockCore {
       }
       case "GetThread":
         return mail.getThread(d, request.thread_id);
+      case "GetConversation":
+        return mail.getConversation(d, request.thread_id, request.folder_id);
       case "Search":
         return mail.search(d, request.query);
       case "CheckQuery":

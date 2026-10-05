@@ -40,7 +40,7 @@ const sieveScripts = () => control<SieveScripts>(server, "sieve-scripts");
 const nailScript = async () =>
   (await sieveScripts()).scripts.find((s) => s.name === "nail")?.content ?? "";
 
-async function open(page: Page, rows = 17) {
+async function open(page: Page, rows = 14) {
   await page.goto(server.url);
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(rows);
 }
@@ -113,7 +113,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   const spam =
     "Congratulations winner! Claim your lottery prize money now, cheap pills, exclusive casino bonus, click here to claim the prize today";
   await deliver("You are a lottery winner", spam, "spam-1");
-  await open(page, 18);
+  await open(page, 15);
   await expect(rows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(1, {
     timeout: 20_000,
   });
@@ -255,15 +255,17 @@ test("server search finds mail without a local body, and opening fetches it", as
   await expect(newsletters).toBeVisible({ timeout: 20_000 });
   await newsletters.click();
   const row = rows(page).filter({ hasText: "This week in nature" });
-  await expect(row).toHaveAttribute("data-state", /headers-only/);
+  await expect(row).toHaveCount(1);
 
   // "platypus" is only in the body, which is not stored locally: the
-  // server search finds it.
+  // server search finds it. (Search hits are message rows; the folder lists
+  // conversations, P2.)
   const search = page.getByRole("searchbox");
   await search.fill("platypus");
   await search.press("Enter");
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await expect(rows(page)).toHaveCount(1);
+  await expect(row).toHaveAttribute("data-state", /headers-only/);
 
   // Opening it fetches the body.
   await row.click();

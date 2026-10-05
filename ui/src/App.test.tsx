@@ -188,14 +188,17 @@ describe("App", () => {
   it("refetches folders and messages on MailChanged", async () => {
     const { env } = renderApp();
     await screen.findAllByRole("option");
-    const before = env.transport.requests.filter((r) => r.type === "ListMessages").length;
+    // The default list shows conversations (P2): one row per thread.
+    const lists = () =>
+      env.transport.requests.filter((r) => r.type === "ListMessages" || r.type === "ListThreads")
+        .length;
+    const before = lists();
+    expect(before).toBeGreaterThan(0);
     act(() => {
       env.transport.emit({ type: "MailChanged", folder_ids: [INBOX] });
     });
     await waitFor(() => {
-      expect(
-        env.transport.requests.filter((r) => r.type === "ListMessages").length,
-      ).toBeGreaterThan(before);
+      expect(lists()).toBeGreaterThan(before);
     });
   });
 

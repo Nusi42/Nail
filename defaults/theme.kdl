@@ -300,82 +300,10 @@ theme "default" mode="system" {
     part "status-bar.button:hover" { background-color "$color.bg-raised"; }
 
     // ---- Thread view ----
-
-    part "thread-view" {
-        max-height "40vh"
-        overflow-y "auto"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "thread-view.header" {
-        display "flex"
-        gap "$space.sm"
-        align-items "baseline"
-        padding "$space.xs" "$space.lg"
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "thread-view.subject" {
-        flex-grow 1
-        font-weight "$font-weight.medium"
-        color "$color.fg"
-    }
-    part "thread-view.item" { border-top "$border.thin"; }
-    part "thread-view.item:selected" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
-    part "thread-view.item.header" {
-        display "flex"
-        align-items "center"
-        gap "$space.sm"
-        padding-right "$space.lg"
-    }
-    part "thread-view.item.toggle" {
-        display "flex"
-        flex-grow 1
-        gap "$space.sm"
-        min-width 0
-        padding "$space.xs" "$space.lg"
-        border "none"
-        text-align "left"
-        color "inherit"
-        background-color "transparent"
-        white-space "nowrap"
-        overflow "hidden"
-    }
-    part "thread-view.item.toggle:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset -2
-    }
-    part "thread-view.item:unread .from" { font-weight "$font-weight.bold"; }
-    part "thread-view.item.date" { font-size "$font-size.sm"; }
-    part "thread-view.item.preview" {
-        overflow "hidden"
-        text-overflow "ellipsis"
-        font-size "$font-size.sm"
-    }
-    part "thread-view.item.open" {
-        padding 0 "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        font-size "$font-size.sm"
-        color "$color.fg"
-        background-color "$color.bg"
-    }
-    part "thread-view.item.open:disabled" { opacity "$opacity.disabled"; }
-    part "thread-view.text" { padding "$space.xs" "$space.lg" "$space.sm"; }
-    part "thread-view.body" { font-family "$font.reader"; }
-    part "thread-view.quote" {
-        padding-left "$space.sm"
-        border-left "3px solid $color.quote-1"
-        color "$color.fg-muted"
-    }
-    part "thread-view.quote-toggle" {
-        font-size "$font-size.sm"
-        color "$color.accent"
-        cursor "pointer"
-    }
+    //
+    // The reader's conversation strip / card feed is styled by the UI skin on
+    // tokens since P2 (ui/src/widgets/threadViewSkin.ts, ADR 0148): no band,
+    // no scroll area of its own. Rules here (part "thread-view.*") override it.
 
     // Window sizes come from the window spec (layout `size=` / `min-size=`,
     // the features' window registrations; M5c ADR 0116), not from here.

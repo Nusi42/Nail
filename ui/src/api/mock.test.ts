@@ -5,6 +5,11 @@
 import { TransportClient } from "./client";
 import type { Draft, Event as NailEvent } from "./generated";
 import { MockTransport } from "./mock";
+import {
+  addMockConversation,
+  MOCK_CONVERSATION_ID,
+  MOCK_CONVERSATION_SUBJECT,
+} from "./mockConversations";
 import { createMockData, LIST_MESSAGE_ID } from "./mockData";
 import { must } from "../test/must";
 
@@ -231,6 +236,69 @@ describe("threads and search in the mock core", () => {
     expect(await client.call({ type: "GetThread", thread_id: "nope" })).toMatchObject({
       code: "not_found",
     });
+  });
+
+  it('lists conversations with the user\'s replies from Sent and "me" resolved (P2)', async () => {
+    const { client, transport } = setup(12);
+    const added = addMockConversation(transport.data);
+    const page = await client.request(
+      { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
+      "Threads",
+    );
+    const row = must(page.threads.find((t) => t.id === MOCK_CONVERSATION_ID));
+    // Four in the Inbox plus two replies from Sent; never the draft.
+    expect(row.message_count).toBe(6);
+    expect(row.unread_count).toBe(1);
+    expect(row.subject).toBe(MOCK_CONVERSATION_SUBJECT);
+    expect(row.participants.map((p) => [p.email, p.me, p.unread])).toEqual([
+      ["grace@navy.example", false, true],
+      ["ada@example.org", true, false],
+      ["alan@bletchley.example", false, false],
+      ["katherine@nasa.example", false, false],
+    ]);
+    expect(row.latest_from).toMatchObject({ email: "grace@navy.example", unread: true });
+    expect(row.latest_message_id).toBe(added[5]?.id);
+
+    const conversation = await client.request(
+      { type: "GetConversation", thread_id: MOCK_CONVERSATION_ID, folder_id: "acc-personal/Inbox" },
+      "Conversation",
+    );
+    expect(conversation.messages.map((m) => m.id)).toEqual(added.slice(0, 6).map((m) => m.id));
+    expect(conversation.messages.map((m) => m.from_me)).toEqual([
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    // Without a folder: every folder but Drafts, Trash and Junk.
+    const anywhere = await client.request(
+      { type: "GetConversation", thread_id: MOCK_CONVERSATION_ID, folder_id: null },
+      "Conversation",
+    );
+    expect(anywhere.messages).toHaveLength(6);
+    expect(
+      await client.call({ type: "GetConversation", thread_id: "nope", folder_id: null }),
+    ).toMatchObject({ code: "not_found" });
+    expect(
+      await client.call({
+        type: "GetConversation",
+        thread_id: MOCK_CONVERSATION_ID,
+        folder_id: "acc-personal/Nope",
+      }),
+    ).toMatchObject({ code: "not_found" });
+  });
+
+  it("lists every draft on its own (P2)", async () => {
+    const { client, transport } = setup(12);
+    const draft = must(addMockConversation(transport.data).at(-1));
+    transport.data.messages.push({ ...draft, id: `${draft.id}-2` });
+    const page = await client.request(
+      { type: "ListThreads", folder_id: "acc-personal/Drafts", offset: 0, limit: 100 },
+      "Threads",
+    );
+    expect(page.threads.map((t) => t.message_count)).toEqual([1, 1]);
   });
 
   it("searches within a scope and reports invalid queries", async () => {

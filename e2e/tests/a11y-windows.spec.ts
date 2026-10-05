@@ -209,7 +209,7 @@ for (const mode of MODES) {
 
       await page.goto(new URL(mode.query, server.url).toString());
       const rows = page.locator('[data-part="message-list.row"]');
-      await expect(rows).toHaveCount(17);
+      await expect(rows).toHaveCount(14);
       await sweep.scan("main window");
       // The main window (rail + view host) shows the mail view's window.
       sweep.windows.add("main");

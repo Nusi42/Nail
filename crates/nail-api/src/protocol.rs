@@ -41,7 +41,9 @@ use crate::desktop::{
     DefaultAppsStatus, DesktopSettings, FirstRunState, InstallationInfo, UpdateSettings,
     UpdateStatus,
 };
-use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
+use crate::domain::{
+    Account, Address, ConversationMessage, Folder, MessageBody, MessageSummary, ThreadSummary,
+};
 use crate::error::{ApiError, ErrorCode};
 use crate::exchange::rules::ExchangeRulesStatus;
 use crate::exchange::{
@@ -336,6 +338,22 @@ pub enum Request {
     GetThread {
         /// The thread.
         thread_id: ThreadId,
+    },
+    /// The conversation of a thread as a list row shows it (P2, ADR 0148):
+    /// its messages oldest first, the user's own replies from Sent among
+    /// them (`from_me`), never drafts (Outbox messages are no folder's).
+    /// With `folder_id` the conversation is the one listed in that folder
+    /// (its messages there plus the user's from the accounts' Sent folders,
+    /// the same set [`Self::ListThreads`] counts); without, it spans every
+    /// folder but Drafts, Trash and Junk. Answered with
+    /// [`Response::Conversation`].
+    GetConversation {
+        /// The thread.
+        thread_id: ThreadId,
+        /// The folder (real or virtual) the conversation is shown for;
+        /// `null` = every folder but Drafts, Trash and Junk.
+        #[serde(default)]
+        folder_id: Option<FolderId>,
     },
     /// Run a query. Answered with [`Response::SearchResults`], or with
     /// [`Response::InvalidQuery`] when the query does not parse.
@@ -3136,6 +3154,13 @@ pub enum Response {
         thread: Box<ThreadSummary>,
         /// Its messages, oldest first.
         messages: Vec<MessageSummary>,
+    },
+    /// Answer to [`Request::GetConversation`] (P2, ADR 0148).
+    Conversation {
+        /// The conversation's row (counts and participants over `messages`).
+        thread: Box<ThreadSummary>,
+        /// Its messages, oldest first.
+        messages: Vec<ConversationMessage>,
     },
     /// Answer to [`Request::Search`].
     SearchResults {

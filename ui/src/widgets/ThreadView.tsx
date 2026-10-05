@@ -1,13 +1,38 @@
 import { useState } from "react";
 import { errorMessageIdOf } from "../api/client";
-import type { MessageSummary } from "../api/generated";
+import type { ConversationMessage, MessageSummary } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegistry";
 import { displayName } from "../state/addresses";
 import { useNow } from "../state/clock";
-import { isUnsupported, useMessage, useThread } from "../state/queries";
+import { isUnsupported, useConversation, useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { formatRelative } from "../template/template";
+import { Avatar } from "./primitives";
+
+/**
+ * How many of the newest messages the strip shows; older ones fold into
+ * "N earlier messages" (P2 quick win, ADR 0148).
+ */
+export const SHOWN_LATEST = 3;
+
+/**
+ * The messages the strip shows: the newest `SHOWN_LATEST`, or all of them
+ * once unfolded or when the selected message is older than those. `folded`
+ * is how many older ones the fold stands for.
+ */
+export function visibleMessages<T extends { id: string }>(
+  messages: readonly T[],
+  selectedId: string | null,
+  unfolded: boolean,
+): { shown: readonly T[]; folded: number } {
+  const start = Math.max(0, messages.length - SHOWN_LATEST);
+  const selectedIndex = messages.findIndex((m) => m.id === selectedId);
+  if (unfolded || start === 0 || (selectedIndex >= 0 && selectedIndex < start)) {
+    return { shown: messages, folded: 0 };
+  }
+  return { shown: messages.slice(start), folded: start };
+}
 
 /** Which messages of a conversation start expanded (`expand` option). */
 export type ExpandMode = "latest" | "unread" | "all" | "none";
@@ -67,9 +92,11 @@ function MessageText({ id }: { id: string }) {
 }
 
 /**
- * The conversation of the selected message: every message of its thread,
- * oldest first, each expandable in place with quoted text collapsed.
- * Choosing a message opens it in the message view.
+ * The conversation of the selected message: its messages oldest first (the
+ * user's replies from Sent among them), each expandable in place with
+ * quoted text collapsed, older ones folded into "N earlier messages".
+ * Choosing a message opens it in the message view. No scroll area of its
+ * own: the strip is at most the fold plus three lines (P2 quick win).
  */
 export function ThreadView({ node }: WidgetProps) {
   const t = useT();
@@ -79,12 +106,15 @@ export function ThreadView({ node }: WidgetProps) {
   const threadId = useUi((s) => s.selectedThreadId);
   const selectedId = useUi((s) => s.selectedMessageId);
   const selectMessage = useUi((s) => s.selectMessage);
-  const query = useThread(threadId);
+  // The conversation as the list shows it; while searching, across folders.
+  const folderId = useUi((s) => (s.search === null ? s.activeFolderId : null));
+  const query = useConversation(threadId, folderId);
   const hideSingle = optionBool(node, "hide-single", true);
   const mode = optionString(node, "expand", "latest") as ExpandMode;
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [unfolded, setUnfolded] = useState<string | null>(null);
 
-  const messages = query.data?.messages ?? [];
+  const messages: readonly ConversationMessage[] = query.data?.messages ?? [];
   // Nothing to show: no thread, the core cannot thread yet, or a lone message.
   if (
     threadId === null ||
@@ -96,6 +126,7 @@ export function ThreadView({ node }: WidgetProps) {
   }
   const latestId = messages[messages.length - 1]?.id ?? "";
   const isExpanded = (m: MessageSummary) => toggled[m.id] ?? initiallyExpanded(mode, m, latestId);
+  const { shown, folded } = visibleMessages(messages, selectedId, unfolded === threadId);
 
   return (
     <section
@@ -116,14 +147,27 @@ export function ThreadView({ node }: WidgetProps) {
               {t("thread-view-count", { count: messages.length })}
             </span>
           </div>
+          {folded > 0 && (
+            <button
+              type="button"
+              data-part="thread-view.fold"
+              aria-expanded={false}
+              onClick={() => {
+                setUnfolded(threadId);
+              }}
+            >
+              {t("conversations-earlier", { count: folded })}
+            </button>
+          )}
           <ol data-part="thread-view.list">
-            {messages.map((m) => {
+            {shown.map((m) => {
               const expanded = isExpanded(m);
               const states = [
                 m.id === selectedId ? "selected" : null,
                 m.flags.seen ? null : "unread",
                 m.flags.flagged ? "flagged" : null,
                 expanded ? "expanded" : null,
+                m.from_me ? "from-me" : null,
               ].filter((s) => s !== null);
               const date = new Date(m.date);
               return (
@@ -144,8 +188,15 @@ export function ThreadView({ node }: WidgetProps) {
                         setToggled((old) => ({ ...old, [m.id]: !expanded }));
                       }}
                     >
+                      <Avatar
+                        part="thread-view.item.avatar"
+                        name={m.from?.name ?? null}
+                        email={m.from?.email ?? ""}
+                      />
                       <span data-part="thread-view.item.from">
-                        {displayName(m.from) || t("composer-unknown-sender")}
+                        {m.from_me
+                          ? t("conversations-me")
+                          : displayName(m.from) || t("composer-unknown-sender")}
                       </span>
                       <span data-part="thread-view.item.date">
                         {Number.isNaN(date.getTime()) ? m.date : formatRelative(date, now, locale)}

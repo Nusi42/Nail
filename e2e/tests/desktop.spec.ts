@@ -59,7 +59,7 @@ test("the desktop app shows the demo mail through Tauri IPC", async () => {
   // ADR 0146: the test app's window never reaches the developer's screen.
   await expectWindowsInBackground(page);
   const rows = page.locator('[data-part="message-list.row"]');
-  await expect(rows).toHaveCount(14, { timeout: 60_000 });
+  await expect(rows).toHaveCount(11, { timeout: 60_000 });
   await expect(page.locator('[data-part="folder-tree.item"]')).toHaveCount(3);
   // The built UI from the custom protocol, not a dev server.
   expect(page.url()).toMatch(/^(tauri:\/\/localhost|https?:\/\/tauri\.localhost)/);

@@ -156,6 +156,18 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("popout.ftl", include_str!("../../../locales/en/popout.ftl")),
     (
+        "conversations.ftl",
+        include_str!("../../../locales/en/conversations.ftl"),
+    ),
+    (
+        "conversation-list.ftl",
+        include_str!("../../../locales/en/conversation-list.ftl"),
+    ),
+    (
+        "conversation-reader.ftl",
+        include_str!("../../../locales/en/conversation-reader.ftl"),
+    ),
+    (
         "portability.ftl",
         include_str!("../../../locales/en/portability.ftl"),
     ),
@@ -320,6 +332,18 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/plugins.ftl"),
     ),
     ("popout.ftl", include_str!("../../../locales/de/popout.ftl")),
+    (
+        "conversations.ftl",
+        include_str!("../../../locales/de/conversations.ftl"),
+    ),
+    (
+        "conversation-list.ftl",
+        include_str!("../../../locales/de/conversation-list.ftl"),
+    ),
+    (
+        "conversation-reader.ftl",
+        include_str!("../../../locales/de/conversation-reader.ftl"),
+    ),
     (
         "portability.ftl",
         include_str!("../../../locales/de/portability.ftl"),

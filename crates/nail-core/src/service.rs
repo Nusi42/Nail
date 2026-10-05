@@ -1047,6 +1047,18 @@ impl Service {
                     messages,
                 }
             }
+            Request::GetConversation {
+                thread_id,
+                folder_id,
+            } => {
+                let (thread, messages) = self
+                    .get_conversation(&thread_id, folder_id.as_ref())
+                    .await?;
+                Response::Conversation {
+                    thread: Box::new(thread),
+                    messages,
+                }
+            }
             Request::Search { query } => self.search(query).await?,
             Request::CheckQuery { text } => Response::QueryChecked {
                 error: nail_search::parse_query(&text).err(),

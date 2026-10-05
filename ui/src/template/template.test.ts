@@ -130,9 +130,77 @@ describe("template language", () => {
     expect(Object.keys(PIPES).sort()).toEqual([
       "bold-if-unread",
       "chips",
+      "if-many",
+      "names",
       "relative",
       "short-date",
       "truncate",
     ]);
+  });
+
+  describe("conversation rows (P2)", () => {
+    const people = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        name: `P${String(i + 1)}`,
+        email: `p${String(i + 1)}@x`,
+        me: i === 1,
+        unread: i === 0,
+      }));
+    const row = (source: string, data: object, context: TemplateContext = ctx) =>
+      renderTemplate(compileTemplate(source), data, context);
+
+    it("names the participants, the user as `me` and unread senders marked", () => {
+      expect(
+        row("{participants | names(3)}", { participants: people(3) }, { ...ctx, me: "me" })[0],
+      ).toEqual({
+        kind: "names",
+        field: "participants",
+        items: [
+          { text: "P1", me: false, unread: true },
+          { text: "me", me: true, unread: false },
+          { text: "P3", me: false, unread: false },
+        ],
+        skipped: 0,
+      });
+    });
+
+    it("keeps the first names and the newest when there are more", () => {
+      const segment = row("{participants | names(3)}", { participants: people(6) })[0];
+      expect(segment).toMatchObject({ kind: "names", skipped: 3 });
+      expect(segment?.kind === "names" && segment.items.map((i) => i.text)).toEqual([
+        "P1",
+        "P2",
+        "P6",
+      ]);
+      expect(row("{participants | names(1)}", { participants: people(4) })[0]).toMatchObject({
+        items: [{ text: "P4" }],
+        skipped: 3,
+      });
+    });
+
+    it("writes the address when there is no `me` text, and takes one address", () => {
+      expect(row("{participants | names(2)}", { participants: people(2) })[0]).toMatchObject({
+        items: [{ text: "P1" }, { text: "P2", me: true }],
+      });
+      expect(row("{from | names(2)}", { from: { name: null, email: "a@x" } })[0]).toMatchObject({
+        field: "from",
+        items: [{ text: "a@x", me: false, unread: false }],
+      });
+      expect(row("{nothing | names(2)}", {})[0]).toMatchObject({ items: [], skipped: 0 });
+    });
+
+    it("shows a count only when there is more than one", () => {
+      expect(row("{count | if-many}", { count: 4 })[0]).toMatchObject({
+        field: "count",
+        text: "4",
+      });
+      expect(row("{count | if-many}", { count: 1 })[0]).toMatchObject({ text: "" });
+      expect(row("{count | if-many}", {})[0]).toMatchObject({ text: "" });
+    });
+
+    it("checks the pipes' arguments", () => {
+      expect(() => compileTemplate("{participants | names}")).toThrow(/positive whole number/);
+      expect(() => compileTemplate("{count | if-many(2)}")).toThrow(/takes no arguments/);
+    });
   });
 });

@@ -39,7 +39,7 @@ async function compose(page: Page, subject: string) {
 
 test("a plain-text mail is sent, once cancelled by undo and once for real", async ({ page }) => {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
   const status = page.getByRole("status", { name: "Status" });
 
   // Send, then undo within the delay: nothing reaches the server and the
@@ -82,7 +82,7 @@ test("a plain-text mail is sent, once cancelled by undo and once for real", asyn
 
 test("the Sent copy of a mail sent while IMAP is down is filed later", async ({ page }) => {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
   await control(server, "imap-offline", { offline: true });
   await expect(
     page.locator('[data-part="folder-tree.section"][data-account-kind="imap"]'),

@@ -41,7 +41,9 @@ pub mod subject;
 
 use std::collections::{BTreeSet, HashMap};
 
-use nail_api::{AccountId, Address, FolderId, MessageId, MessageSummary, ThreadId, ThreadSummary};
+use nail_api::{
+    AccountId, FolderId, MessageId, MessageSummary, ThreadId, ThreadParticipant, ThreadSummary,
+};
 use rusqlite::{OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
 
@@ -369,15 +371,22 @@ pub struct ThreadTreeEntry {
 fn summarize(thread_id: &str, messages: &[MessageSummary]) -> Option<ThreadSummary> {
     let first = messages.first()?;
     let latest = messages.last()?;
-    let mut participants: Vec<Address> = Vec::new();
+    let mut participants: Vec<ThreadParticipant> = Vec::new();
     let mut accounts: Vec<AccountId> = Vec::new();
     for m in messages {
-        if let Some(from) = &m.from
-            && !participants
-                .iter()
-                .any(|p| p.email.eq_ignore_ascii_case(&from.email))
-        {
-            participants.push(from.clone());
+        if let Some(from) = &m.from {
+            let unread = !m.flags.seen;
+            if let Some(known) = participants
+                .iter_mut()
+                .find(|p| p.address.email.eq_ignore_ascii_case(&from.email))
+            {
+                known.unread |= unread;
+            } else {
+                participants.push(ThreadParticipant {
+                    unread,
+                    ..ThreadParticipant::new(from.clone())
+                });
+            }
         }
         if !accounts.contains(&m.account_id) {
             accounts.push(m.account_id.clone());
@@ -395,6 +404,12 @@ fn summarize(thread_id: &str, messages: &[MessageSummary]) -> Option<ThreadSumma
         date: latest.date.clone(),
         preview: latest.preview.clone(),
         latest_message_id: latest.id.clone(),
+        latest_message: Box::new(latest.clone()),
+        // "me" is resolved by the core (identities live in accounts.kdl).
+        latest_from: latest.from.clone().map(|from| ThreadParticipant {
+            unread: !latest.flags.seen,
+            ..ThreadParticipant::new(from)
+        }),
         account_ids: accounts,
     })
 }

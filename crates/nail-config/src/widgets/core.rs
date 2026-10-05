@@ -49,9 +49,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
         &[
             ("page-size", OptionType::UInt),
             ("group-by", OptionType::OneOf(&["none", "date", "sender"])),
+            // P2 (ADR 0148): one row per conversation (`collapsed`, the
+            // default layout's), or rows that open into their messages
+            // (`expandable`, Design B). `expanded` is the pre-P2 spelling of
+            // `expandable`, still accepted.
             (
                 "threads",
-                OptionType::OneOf(&["off", "collapsed", "expanded"]),
+                OptionType::OneOf(&["off", "collapsed", "expandable", "expanded"]),
             ),
             ("follow-search", OptionType::Bool),
             // Column ids in display order, e.g. "from subject date"; written
@@ -162,5 +166,34 @@ mod m5b_tests {
             "layout.kdl",
         )
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod p2_tests {
+    fn layout(widget: &str) -> String {
+        format!(
+            "layout \"x\" extends=\"default\" {{
+    window \"w\" {{
+        {widget}
+    }}
+}}
+"
+        )
+    }
+
+    /// P2 (ADR 0148): the conversation modes of the message list.
+    #[test]
+    fn message_list_thread_modes_are_checked() {
+        for mode in ["off", "collapsed", "expandable", "expanded"] {
+            crate::parse_layout(
+                &layout(&format!("message-list threads=\"{mode}\"")),
+                "layout.kdl",
+            )
+            .unwrap();
+        }
+        assert!(
+            crate::parse_layout(&layout("message-list threads=\"tree\""), "layout.kdl").is_err()
+        );
     }
 }

@@ -32,8 +32,10 @@ layout "custom" extends="default" {
                     category-tabs id="gmail-categories"
                     // Exchange Focused Inbox tabs (nothing for other accounts).
                     focused-tabs id="exchange-focused"
-                    message-list id="list" page-size=100 {
-                        row "{from.name}  {date | relative}"
+                    // One row per conversation (P2): the newest sender, the
+                    // number of messages when there are several, the date.
+                    message-list id="list" page-size=100 threads="collapsed" {
+                        row "{from.name}  {count | if-many}  {date | relative}"
                         row "{subject}"
                         row "{preview}"
                     }
@@ -73,8 +75,8 @@ layout "custom" extends="default" {
                     automatic-replies-banner id="automatic-replies"
                     category-tabs id="gmail-categories"
                     focused-tabs id="exchange-focused"
-                    message-list id="list" page-size=100 {
-                        row "{from.name}  {date | relative}"
+                    message-list id="list" page-size=100 threads="collapsed" {
+                        row "{from.name}  {count | if-many}  {date | relative}"
                         row "{subject}"
                     }
                 }

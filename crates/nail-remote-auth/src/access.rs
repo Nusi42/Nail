@@ -112,6 +112,7 @@ pub fn required_access(request: &Request) -> RequestAccess {
         // --- Threads and search ---
         Request::ListThreads { .. } => ("ListThreads", Scope(S::Read)),
         Request::GetThread { .. } => ("GetThread", Scope(S::Read)),
+        Request::GetConversation { .. } => ("GetConversation", Scope(S::Read)),
         Request::Search { .. } => ("Search", Scope(S::Read)),
         Request::CheckQuery { .. } => ("CheckQuery", Session),
 

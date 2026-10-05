@@ -399,6 +399,12 @@ impl Service {
             Request::ListMessages { folder_id, .. } | Request::ListThreads { folder_id, .. } => {
                 self.check_folder(access, folder_id).await
             }
+            // P2: the conversation's messages are narrowed afterwards; a
+            // folder it is shown for must be granted.
+            Request::GetConversation { folder_id, .. } => match folder_id {
+                Some(folder) => self.check_folder(access, folder).await,
+                None => Ok(()),
+            },
             Request::Search { query } => {
                 if let Some(id) = &query.account_id {
                     check_account(access, id)?;
@@ -1120,6 +1126,16 @@ impl Service {
                     return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
                 }
                 Response::Thread { thread, messages }
+            }
+            Response::Conversation {
+                thread,
+                mut messages,
+            } => {
+                messages.retain(|m| keep(&m.message));
+                if messages.is_empty() {
+                    return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
+                }
+                Response::Conversation { thread, messages }
             }
             Response::SearchResults {
                 offset,

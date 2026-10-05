@@ -225,10 +225,11 @@
                   "label": null,
                   "kind": "message-list",
                   "options": {
-                    "page-size": 100
+                    "page-size": 100,
+                    "threads": "collapsed"
                   },
                   "rows": [
-                    "{from.name}  {date | relative}",
+                    "{from.name}  {count | if-many}  {date | relative}",
                     "{subject}",
                     "{preview}"
                   ],
@@ -454,10 +455,11 @@
                   "label": null,
                   "kind": "message-list",
                   "options": {
-                    "page-size": 100
+                    "page-size": 100,
+                    "threads": "collapsed"
                   },
                   "rows": [
-                    "{from.name}  {date | relative}",
+                    "{from.name}  {count | if-many}  {date | relative}",
                     "{subject}"
                   ],
                   "source": null
