@@ -2,7 +2,9 @@
 //! TLS test material.
 //!
 //! * [`corpus`]: realistic, malformed and hostile `.eml` messages in
-//!   `INBOX` / `Sent` / `Archive`, embedded at build time ([`demo_corpus`]).
+//!   `INBOX` / `Sent` / `Archive`, embedded at build time ([`demo_corpus`]),
+//!   and the P2 demo conversations the seeds of `nail serve` add to them
+//!   ([`demo_corpus_with_conversations`], [`DEMO_CONVERSATIONS`]).
 //! * [`MailStore`]: the mailbox state a mock server serves. Tests change it
 //!   while clients are connected ([`MailStore::add_message`],
 //!   [`MailStore::remove_message`], [`MailStore::set_flags`], ...); every
@@ -30,8 +32,10 @@ pub mod mailstore;
 pub mod tls;
 
 pub use corpus::{
-    CRYPTO_FIXTURE_DIR, CorpusFolder, CorpusMessage, CryptoFixtures, corpus_dir, corpus_message,
-    crypto_fixture, crypto_fixture_dir, demo_corpus, demo_corpus_raw, load_mail_dir,
+    CRYPTO_FIXTURE_DIR, CorpusFolder, CorpusMessage, CryptoFixtures, DEMO_CONVERSATIONS,
+    DEMO_USER_EMAIL, DemoConversation, conversation_corpus, conversations_dir, corpus_dir,
+    corpus_message, crypto_fixture, crypto_fixture_dir, demo_corpus, demo_corpus_raw,
+    demo_corpus_with_conversations, load_mail_dir,
 };
 pub use imap::{
     ClientId, MockCapabilities, MockImapConfig, MockImapServer, MockServerError, MockTls,

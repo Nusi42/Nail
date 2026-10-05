@@ -54,12 +54,12 @@ test("the unified inbox shows both accounts and their status", async ({ page }) 
   await expect(
     page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]'),
   ).toHaveAttribute("aria-selected", "true");
-  // One row per conversation (P2): work's 15 messages are 12 conversations,
+  // One row per conversation (P2): work's 30 messages are 15 conversations,
   // home has 3; the mailing-list post in both accounts is one row (listed
   // under the home copy).
-  await expect(rows(page)).toHaveCount(12 + 3 - 1);
+  await expect(rows(page)).toHaveCount(15 + 3 - 1);
   await expect(rows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
-  await expect(rows(page).and(page.locator('[data-account="work"]'))).toHaveCount(11);
+  await expect(rows(page).and(page.locator('[data-account="work"]'))).toHaveCount(14);
   await expect(rows(page).and(page.locator('[data-account="home"]'))).toHaveCount(3);
 
   // Each account's own folders are in its section.
@@ -153,7 +153,7 @@ test("a virtual account merges folders and dedupes a mailing-list message", asyn
   await expect(folders.filter({ hasText: "Inbox" }).first()).toHaveAttribute("data-role", "inbox");
   await folders.and(page.locator('[data-role="inbox"]')).first().click();
   // Both inboxes merged; the list message both accounts got is one row.
-  await expect(rows(page)).toHaveCount(14);
+  await expect(rows(page)).toHaveCount(17);
   await expect(rows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
   await expect(rows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
   await expect(rows(page).filter({ hasText: "Welcome to Nail" })).toHaveCount(1);

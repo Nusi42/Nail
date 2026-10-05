@@ -23,7 +23,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 async function openWorkInbox(page: Page) {
   await page.goto(server.url);
   await sectionInbox(accountSectionNamed(page, "Work")).click();
-  await expect(rows(page)).toHaveCount(12);
+  await expect(rows(page)).toHaveCount(15);
 }
 
 async function flagsOnServer(mailbox: string, subject: string): Promise<string[] | null> {

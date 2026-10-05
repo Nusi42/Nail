@@ -22,7 +22,7 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
     await expect(inbox).toBeVisible();
     await inbox.click();
     const rows = page.locator('[data-part="message-list.row"]');
-    await expect(rows).toHaveCount(11);
+    await expect(rows).toHaveCount(14);
 
     const status = page.locator('[data-item="sync-progress"]');
     await page.locator('[data-part="message-list"]').focus();
@@ -31,7 +31,7 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
     await expect.poll(() => received.some((f) => f.includes('"SyncStarted"'))).toBe(true);
     await expect(status).toHaveAttribute("data-state", "idle");
     await expect(status).toHaveText("Up to date");
-    await expect(rows).toHaveCount(11);
+    await expect(rows).toHaveCount(14);
 
     await rows.filter({ hasText: "Welcome to Nail" }).click();
     await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(

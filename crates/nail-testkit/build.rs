@@ -1,5 +1,7 @@
 //! Embeds the mail corpus (`corpus/<folder>/*.eml` plus optional `flags.txt`)
-//! into the crate, so `demo_corpus()` works without access to the source tree.
+//! and the P2 demo conversations (`conversations/<folder>/…`, the same
+//! layout) into the crate, so `demo_corpus()` and
+//! `demo_corpus_with_conversations()` work without access to the source tree.
 //! `corpus/crypto/` holds OpenPGP / S/MIME test vectors, not demo mail; it
 //! is not embedded (tests read it from the source tree).
 
@@ -33,14 +35,15 @@ fn file_name(path: &Path) -> Result<String, Box<dyn Error>> {
         .into_owned())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
-    let corpus = Path::new(&manifest_dir).join("corpus");
-    println!("cargo::rerun-if-changed={}", corpus.display());
+/// The Rust source of an `&[EmbeddedFolder]` for the corpus directory `dir`.
+fn embed_dir(dir: &Path) -> Result<String, Box<dyn Error>> {
+    println!("cargo::rerun-if-changed={}", dir.display());
+    let folders = sorted_entries(dir, |path| path.is_dir() && !path.ends_with("crypto"))?;
 
-    let folders = sorted_entries(&corpus, |path| path.is_dir() && !path.ends_with("crypto"))?;
-
-    let mut out = String::from("&[\n");
+    let mut out = String::from(
+        "&[
+",
+    );
     for folder in folders {
         println!("cargo::rerun-if-changed={}", folder.display());
         let name = file_name(&folder)?;
@@ -65,11 +68,29 @@ fn main() -> Result<(), Box<dyn Error>> {
                 file.display().to_string()
             )?;
         }
-        out.push_str("    ] },\n");
+        out.push_str(
+            "    ] },
+",
+        );
     }
-    out.push_str("]\n");
+    out.push_str(
+        "]
+",
+    );
+    Ok(out)
+}
 
+fn main() -> Result<(), Box<dyn Error>> {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
     let out_dir = env::var("OUT_DIR")?;
-    fs::write(Path::new(&out_dir).join("corpus.rs"), out)?;
+    // `corpus/`: the demo corpus; `conversations/`: the P2 demo
+    // conversations the seeds of `nail serve` add to it.
+    for (dir, target) in [
+        ("corpus", "corpus.rs"),
+        ("conversations", "conversations.rs"),
+    ] {
+        let source = embed_dir(&Path::new(&manifest_dir).join(dir))?;
+        fs::write(Path::new(&out_dir).join(target), source)?;
+    }
     Ok(())
 }

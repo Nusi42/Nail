@@ -45,7 +45,7 @@ const pgpFixture = (name: string) =>
 
 async function openApp(page: Page) {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(14);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
 }
 
 /** The SMTP data of the first received mail whose data matches `pattern`. */

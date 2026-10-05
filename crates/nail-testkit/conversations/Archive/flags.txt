@@ -1,0 +1,3 @@
+# <file> <IMAP flags...>; files not listed have no flags (P2 demo conversations)
+05-talk-proposal-1.eml \Seen \Answered
+06-talk-proposal-3.eml \Seen

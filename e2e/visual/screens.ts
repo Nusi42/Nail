@@ -6,7 +6,8 @@
  * and the calendar at 1024 px (M5b review), a context menu, HTML and
  * attachment messages, a dialog and a modal confirmation (M5c), and the M5d
  * editors (customize layout, the toolbar customizer, Settings → Appearance,
- * the theme editor). Each starts from a freshly
+ * the theme editor) and the P2 conversation (its row and the card feed,
+ * collapsed and expanded). Each starts from a freshly
  * loaded main window (so one screen never leaks state into the next) and
  * ends with the screen open and its content present; `support.ts` then
  * settles and captures it.
@@ -130,6 +131,30 @@ export async function loadMainWindow(page: Page, url: string): Promise<void> {
 export const HTML_MESSAGE = "Your weekly garden digest";
 /** The demo invoice with a PDF and a CSV attachment. */
 export const ATTACHMENT_MESSAGE = "Your invoice for September 2026";
+
+/**
+ * The demo's long conversation (P2, ADR 0148): 12 messages, five people, the
+ * user's three replies from Sent, the 8th message unread.
+ */
+export const CONVERSATION = "Lab move: timeline and packing";
+/** Search query for the conversation's unread message (Marie Curie's 8th). */
+export const CONVERSATION_UNREAD = `subject:"${CONVERSATION}" from:marie@radium.example calibration`;
+
+/**
+ * Selects the long conversation: its row in the list, the reader's card
+ * feed with the unread card open (P2 Design A).
+ */
+async function selectConversation(page: Page) {
+  await rows(page).filter({ hasText: CONVERSATION }).first().click();
+  const feed = page.getByRole("feed");
+  await expect(feed).toBeVisible();
+  await expect(page.locator('[data-part="thread-view.subject"]')).toContainText(CONVERSATION);
+  await expect(
+    feed.getByRole("article").and(page.locator('[data-state~="expanded"]')),
+  ).toContainText("calibration");
+  await pinListScroll(page, CONVERSATION);
+  return feed;
+}
 
 async function selectMessage(page: Page, subject: string) {
   await rows(page).filter({ hasText: subject }).first().click();
@@ -462,6 +487,24 @@ export const SCREENS: readonly Screen[] = [
         .getByRole("button", { name: "Appearance", exact: true })
         .click();
       await expect(settings.getByRole("radiogroup", { name: "Themes" })).toBeVisible();
+    },
+  },
+  {
+    id: "conversation",
+    title: "A long conversation: its row in the list and the reader's card feed (P2)",
+    async open(page) {
+      await selectConversation(page);
+    },
+  },
+  {
+    id: "conversation-expanded",
+    title: "The long conversation with every card open (Expand all, P2)",
+    async open(page) {
+      const feed = await selectConversation(page);
+      await page.getByRole("button", { name: "Expand all" }).click();
+      await expect(
+        feed.getByRole("article").and(page.locator('[data-state~="expanded"]')),
+      ).toHaveCount(12);
     },
   },
   {

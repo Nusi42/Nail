@@ -36,6 +36,7 @@ import { actualDir, manifestDir, VIEWPORT } from "./lib/paths.ts";
 import {
   ATTACHMENT_MESSAGE,
   CALENDAR_EVENTS,
+  CONVERSATION_UNREAD,
   HTML_MESSAGE,
   MAIN_TIME,
   calendarEventIcs,
@@ -146,17 +147,17 @@ export async function preparePage(page: Page, time: Date = MAIN_TIME): Promise<v
 }
 
 /**
- * Marks the messages with these subjects unread again. The screens that
- * open them (HTML, attachments) mark them read, and the worker's server is
+ * Marks the messages these searches find unread again. The screens that
+ * open them (HTML, attachments, the conversation's unread card) mark them read, and the worker's server is
  * shared by every variant: without this, whether the main window shows
  * them read depended on which variants ran before on that worker.
  */
-async function markUnread(server: NailServer, subjects: readonly string[]): Promise<void> {
-  for (const subject of subjects) {
+async function markUnread(server: NailServer, queries: readonly string[]): Promise<void> {
+  for (const query of queries) {
     const found = await rpc(server, {
       type: "Search",
       query: {
-        text: `subject:"${subject}"`,
+        text: query,
         account_id: null,
         folder_id: null,
         offset: 0,
@@ -224,7 +225,11 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
   await page.goto("about:blank");
   const reset = await rpc(server, { type: "SetUiState", key: "shell.view", value: null });
   expect(reset.type, `SetUiState: ${JSON.stringify(reset)}`).toBe("UiState");
-  await markUnread(server, [HTML_MESSAGE, ATTACHMENT_MESSAGE]);
+  await markUnread(server, [
+    `subject:"${HTML_MESSAGE}"`,
+    `subject:"${ATTACHMENT_MESSAGE}"`,
+    CONVERSATION_UNREAD,
+  ]);
   await loadMainWindow(page, server.url);
   await screen.open(page);
   await settle(page);

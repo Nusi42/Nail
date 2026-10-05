@@ -53,8 +53,8 @@ test("conversations show as one row with a count, the strip folds older messages
 }) => {
   await page.setViewportSize(SIZES[0]);
   await page.goto(server.url);
-  // 17 messages in the unified inbox are 14 conversations.
-  await expect(rows(page)).toHaveCount(14);
+  // 32 messages in the unified inbox are 17 conversations (P2 demo threads).
+  await expect(rows(page)).toHaveCount(17);
   const { row, strip } = await openNightingale(page);
   await expect(row).toHaveAttribute("data-state", /\bthread\b/);
   // Four in the Inbox (the contract stub; WP201 joins the three replies from
@@ -87,7 +87,7 @@ for (const theme of THEMES) {
     for (const size of SIZES) {
       await page.setViewportSize(size);
       await page.goto(server.url);
-      await expect(rows(page)).toHaveCount(14);
+      await expect(rows(page)).toHaveCount(17);
       const { strip } = await openNightingale(page);
       await expect(strip.locator('[data-part="thread-view.item"]')).toHaveCount(3);
       await expect(page.locator('[data-part="message-view.header.subject"]')).toBeVisible();
