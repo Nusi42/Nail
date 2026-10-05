@@ -32,6 +32,7 @@ import { EventItem, type DragMode } from "./EventItem";
 import { dayDate, formatDay, formatHour, formatInstant, zoneLabel } from "./fmt";
 import { usePimStore } from "./store";
 import { openNewEvent } from "./newEvent";
+import { keepInitialScroll } from "./initialScroll";
 import {
   dateString,
   initialScrollTop,
@@ -154,13 +155,16 @@ export function TimeGrid({
 
   // Only when the view is shown or its hours change, not on every render.
   const hourCount = hours.length;
+  // (P1: and again while the layout settles, until the user scrolls.)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = initialScrollTop(
-      scrollTo - hourStart,
-      el.scrollHeight / Math.max(1, hourCount),
-      el.scrollHeight - el.clientHeight,
+    return keepInitialScroll(el, () =>
+      initialScrollTop(
+        scrollTo - hourStart,
+        el.scrollHeight / Math.max(1, hourCount),
+        el.scrollHeight - el.clientHeight,
+      ),
     );
   }, [scrollTo, hourStart, hourCount]);
 

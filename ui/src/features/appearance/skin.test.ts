@@ -7,7 +7,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultTheme } from "../../api/mockData";
-import { APPEARANCE_SKIN_CSS } from "./skin";
+import {
+  APPEARANCE_SKIN_CSS,
+  THEME_EDITOR_CONTAINER,
+  THEME_EDITOR_STACKED,
+  THEME_PREVIEW_CONTAINER,
+} from "./skin";
 
 const dir = resolve(process.cwd(), "src/features/appearance");
 
@@ -60,5 +65,44 @@ describe("appearance skin", () => {
       expect(emitted, part).toContain(part);
       expect(APPEARANCE_SKIN_CSS, part).toContain(`[data-part="${part}"]`);
     }
+  });
+
+  describe("P1 (WP192)", () => {
+    /** The declarations of the first rule whose selector is exactly `selector`. */
+    const rule = (selector: string) => {
+      const start = APPEARANCE_SKIN_CSS.indexOf(`${selector} {`);
+      expect(start, selector).toBeGreaterThanOrEqual(0);
+      return APPEARANCE_SKIN_CSS.slice(start, APPEARANCE_SKIN_CSS.indexOf("}", start));
+    };
+
+    it("lines the token rows up: name, origin tag, then the controls at a fixed share", () => {
+      const row = rule('[data-part="theme-editor.token"]');
+      expect(row).toMatch(/display: grid;/);
+      // The controls column is a share of the row (not `auto`), so every
+      // row's tag ends at the same edge whatever the value's length.
+      expect(row).toMatch(/grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, \d+%\);/);
+      expect(rule('[data-part="theme-editor.token.text"]')).toMatch(/display: contents;/);
+      const tag = rule(
+        '[data-part="theme-editor.token.text"] > [data-part="tag"][data-kind="origin"]',
+      );
+      expect(tag).toMatch(/grid-column: 2;/);
+      expect(tag).toMatch(/white-space: nowrap;/);
+      expect(rule('[data-part="theme-editor.token.controls"]')).toMatch(/grid-column: 3;/);
+    });
+
+    it("stacks a token's controls under its name in a narrow editor", () => {
+      expect(APPEARANCE_SKIN_CSS).toMatch(
+        new RegExp(
+          `@container ${THEME_EDITOR_CONTAINER} \\(max-width: ${THEME_EDITOR_STACKED}\\) \\{[^@]*theme-editor\\.token.controls"\\] \\{ grid-column: 1 / -1;`,
+        ),
+      );
+      expect(APPEARANCE_SKIN_CSS).toContain(`container: ${THEME_PREVIEW_CONTAINER} / inline-size;`);
+    });
+
+    it("keeps the light and dark theme fields on one line without a separator", () => {
+      expect(
+        rule('[data-part="appearance.pair"] > [data-part="form.field"] + [data-part="form.field"]'),
+      ).toMatch(/border-top: 0;/);
+    });
   });
 });

@@ -14,7 +14,12 @@ import { violations } from "../../test/axe";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { must } from "../../test/must";
 import { compileTheme } from "../../theme/compile";
-import { TOOLBAR_CUSTOMIZER_SKIN_CSS } from "./skin";
+import {
+  CUSTOMIZER_CONTAINER,
+  CUSTOMIZER_NARROW,
+  CUSTOMIZER_SHORT,
+  TOOLBAR_CUSTOMIZER_SKIN_CSS,
+} from "./skin";
 
 async function settle(env: Env): Promise<void> {
   await waitFor(() => {
@@ -117,5 +122,25 @@ describe("toolbar customizer skin", () => {
       expect(TOOLBAR_CUSTOMIZER_SKIN_CSS).toContain(state);
     }
     expect(TOOLBAR_CUSTOMIZER_SKIN_CSS).toContain('[data-part="toolbar"][data-customizing]');
+  });
+
+  // P1 (WP192): the narrow layout follows the window, not the page; the
+  // lists keep a few rows and the body scrolls below that; the italic
+  // Separator / Flexible space labels keep room for their overhang.
+  it("adapts to the window's width and height and does not cut italic labels", () => {
+    const css = TOOLBAR_CUSTOMIZER_SKIN_CSS;
+    expect(css).not.toContain("@media");
+    expect(css).toContain(`container: ${CUSTOMIZER_CONTAINER} / size;`);
+    expect(css).toContain(`@container ${CUSTOMIZER_CONTAINER} (max-width: ${CUSTOMIZER_NARROW})`);
+    const start = css.indexOf(
+      `@container ${CUSTOMIZER_CONTAINER} (max-height: ${CUSTOMIZER_SHORT}) {`,
+    );
+    expect(start).toBeGreaterThanOrEqual(0);
+    const short = css.slice(start, css.indexOf("\n}", start));
+    expect(short).toMatch(/\[data-part="toolbar-customizer\.body"\] \{ overflow: auto; \}/);
+    expect(short).toMatch(/min-height: auto;/);
+    expect(css).toMatch(
+      /\[data-kind="separator"\] \[data-part="toolbar-customizer\.item\.label"\][^{]*\{[^}]*padding-inline-end: 0\.2em;/,
+    );
   });
 });

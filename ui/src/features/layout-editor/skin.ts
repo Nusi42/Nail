@@ -82,7 +82,8 @@ ${p("layout-editor.banner")} {
 ${p("layout-editor.banner-icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 ${p("layout-editor.title")} { margin: 0; font-size: ${T.body}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("layout-editor.title")}:focus-visible { outline: 2px solid ${T.accentFg}; outline-offset: 2px; }
-${p("layout-editor.hint")} { flex: 1 1 16em; min-width: 0; }
+/* P1: the hint takes a wide line; when the buttons do not fit beside it they wrap to their own row. */
+${p("layout-editor.hint")} { flex: 1 1 28em; min-width: 0; }
 ${p("layout-editor.banner-actions")} { display: inline-flex; flex-wrap: wrap; gap: ${T.xs}; margin-inline-start: auto; }
 ${p("layout-editor.banner")} ${p("form.button")} {
   min-height: calc(${T.control} - ${T.xs}); padding: 0 ${T.sm};
@@ -97,9 +98,11 @@ ${p("layout-editor.body")} {
 }
 ${p("layout-editor.canvas")} {
   display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); min-width: 0; min-height: 0;
-  padding: ${T.sm}; overflow: hidden; background-color: ${T.subtle};
+  padding: ${T.sm}; overflow: auto; background-color: ${T.subtle};
 }
-${p("layout-editor.canvas")} > * { min-width: 0; min-height: 0; }
+/* P1: the window keeps the width its panes need beside the palette; the canvas scrolls sideways
+   to the last pane instead of cutting it off. */
+${p("layout-editor.canvas")} > * { min-width: min-content; min-height: 0; }
 ${p("layout-editor.footer")} {
   display: flex; align-items: center; flex-wrap: wrap; gap: ${T.sm};
   min-height: ${T.control}; padding: ${T.xxs} ${T.pane}; border-top: 1px solid ${T.border}; background-color: ${T.bg};

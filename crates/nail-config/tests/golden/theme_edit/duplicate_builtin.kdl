@@ -1,15 +1,8 @@
-// Nail built-in theme: Sage (light).
+// My Sage: a copy of the built-in theme Sage, made in Nail.
 //
-// Soft green-grey neutrals with a green accent.
-// Colours only: spacing, type, corners, elevation and density come from
-// the base theme (defaults/theme.kdl). Pick it in Settings → Appearance.
-// See userDocs/en/theme-reference.md for every token.
-//
-// The palette is the approved M5 proposal's. The accent, tertiary text and
-// the state colours are a little darker than the proposal's swatches so
-// every text passes WCAG AA (4.5:1) on every surface, the selection
-// included; the contrast test (crates/nail-config/tests/theme_contrast.rs)
-// checks each pair. `print=` is the print view (white paper, black text).
+// Change it in Settings → Appearance → Edit theme, or here. Spacing,
+// type, corners and density come from the base theme unless set below.
+// See the theme reference in the user documentation for every token.
 
 theme "My Sage" extends="default" mode="light" {
     tokens {

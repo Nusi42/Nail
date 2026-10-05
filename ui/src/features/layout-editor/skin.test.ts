@@ -3,6 +3,7 @@
  * parts it styles are checked against the rendered editor in
  * `editor.test.tsx`.
  */
+import { must } from "../../test/must";
 import { LAYOUT_EDITOR_SKIN_CSS } from "./skin";
 
 describe("layout editor skin", () => {
@@ -34,5 +35,18 @@ describe("layout editor skin", () => {
     expect(LAYOUT_EDITOR_SKIN_CSS).toContain(
       '[data-part="layout-editor.pane"][data-state~="hidden"]',
     );
+  });
+  // P1 (WP192): at 1024 px the palette leaves the window less room than its
+  // panes need; the canvas scrolls sideways instead of cutting the last pane.
+  it("lets the canvas scroll to panes that do not fit beside the palette", () => {
+    const canvas = must(
+      /\[data-part="layout-editor\.canvas"\] \{[^}]*\}/.exec(LAYOUT_EDITOR_SKIN_CSS),
+    )[0];
+    expect(canvas).toMatch(/overflow: auto;/);
+    expect(LAYOUT_EDITOR_SKIN_CSS).toContain(
+      '[data-part="layout-editor.canvas"] > * { min-width: min-content; min-height: 0; }',
+    );
+    // The hint takes a wide line; the buttons wrap below it when needed.
+    expect(LAYOUT_EDITOR_SKIN_CSS).toContain('[data-part="layout-editor.hint"] { flex: 1 1 28em;');
   });
 });

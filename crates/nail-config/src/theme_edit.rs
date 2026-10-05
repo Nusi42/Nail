@@ -553,6 +553,33 @@ fn id_from_name(name: &str) -> String {
     id.trim_end_matches('-').to_owned()
 }
 
+/// `text` with its leading comment block (the `//` lines and blank lines
+/// before the first node) replaced by the header of a copied built-in
+/// theme. Comment-only text in a configuration file, so English like the
+/// other headers Nail writes (`// Changes made in Nail. …`).
+fn with_copy_header(text: &str, name: &str, source_name: &str) -> String {
+    let mut rest = text;
+    while !rest.is_empty() {
+        let (line, after) = rest.split_once('\n').unwrap_or((rest, ""));
+        let trimmed = line.trim();
+        if !(trimmed.is_empty() || trimmed.starts_with("//")) {
+            break;
+        }
+        rest = after;
+    }
+    // A name is one line of user text; keep the comment on one line.
+    let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    format!(
+        "// {}: a copy of the built-in theme {}, made in Nail.\n\
+         //\n\
+         // Change it in Settings → Appearance → Edit theme, or here. Spacing,\n\
+         // type, corners and density come from the base theme unless set below.\n\
+         // See the theme reference in the user documentation for every token.\n\n{rest}",
+        one_line(name),
+        one_line(source_name),
+    )
+}
+
 /// The default theme of a kind (where a deleted theme's selection goes).
 fn default_of_kind(kind: ThemeKind) -> &'static str {
     match kind {
@@ -864,7 +891,16 @@ impl ConfigManager {
         let file = user_theme_file(&new_id);
         let mut editor = ThemeEditor::open(Some(&source), &file)?;
         editor.set_name(name);
-        let text = editor.finish(&file)?;
+        let mut text = editor.finish(&file)?;
+        if is_builtin_theme(theme_id) {
+            // The built-in file's header describes the built-in theme
+            // ("Nail built-in theme: Frost …"); the copy gets its own. A user
+            // theme's comments are the user's and stay.
+            let source_name = catalog
+                .get(theme_id)
+                .map_or_else(|| theme_id.to_owned(), |info| info.name.clone());
+            text = with_copy_header(&text, name, &source_name);
+        }
         let changes = vec![FileChange::new(file, None, Some(text))];
         let updates =
             self.commit_theme_changes(EditKind::DuplicateTheme, &new_id, changes, updates)?;
@@ -1011,6 +1047,49 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_builtin_themes_get_their_own_header() {
+        let source = "// Nail built-in theme: Frost (light).\n//\n// Cool neutrals.\n\n\
+                      theme \"Mine\" extends=\"default\" {\n    // tokens\n}\n";
+        let text = with_copy_header(source, "My\nFrost", "Frost");
+        assert!(
+            text.starts_with("// My Frost: a copy of the built-in theme Frost, made in Nail.\n"),
+            "{text}"
+        );
+        assert!(!text.contains("Nail built-in theme"), "{text}");
+        assert!(!text.contains("Cool neutrals"), "{text}");
+        // The theme node and the comments inside it stay as they were.
+        assert!(
+            text.ends_with("\n\ntheme \"Mine\" extends=\"default\" {\n    // tokens\n}\n"),
+            "{text}"
+        );
+        // Without a header the copy still gets one; nothing else changes.
+        let bare = "theme \"X\" {\n}\n";
+        let header = with_copy_header(bare, "X", "Sage");
+        assert!(header.ends_with("\n\ntheme \"X\" {\n}\n"), "{header}");
+        // Every line of the header is a comment.
+        let head = header.split("\n\ntheme").next().unwrap_or_default();
+        assert!(head.lines().all(|l| l.starts_with("//")), "{head}");
+    }
+
+    #[test]
+    fn duplicating_a_builtin_rewrites_its_header() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::load(dir.path());
+        let (id, _, _) = manager.duplicate_theme("frost", "Ocean").unwrap();
+        let copy =
+            std::fs::read_to_string(dir.path().join("themes").join(format!("{id}.kdl"))).unwrap();
+        assert!(
+            copy.starts_with("// Ocean: a copy of the built-in theme Frost"),
+            "{copy}"
+        );
+        assert!(!copy.contains("Nail built-in theme"), "{copy}");
+        assert!(
+            copy.contains("theme \"Ocean\" extends=\"default\""),
+            "{copy}"
+        );
+    }
 
     #[test]
     fn plain_numbers() {

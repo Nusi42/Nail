@@ -11,7 +11,8 @@ import { compileTheme } from "../../theme/compile";
 import { AVATAR_COLORS, SKIN_CSS } from "../../theme/skin";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PIM_SKIN_CSS, PIM_SKIN_PARTS } from "./skin";
+import { PIM_BASE_CSS } from "./parts";
+import { CALENDAR_CONTAINER, CALENDAR_NARROW, PIM_SKIN_CSS, PIM_SKIN_PARTS } from "./skin";
 
 /** The top-level rules of a stylesheet text (brace depth 0 → 0). */
 function topLevelRules(css: string): string[] {
@@ -227,6 +228,73 @@ describe("PIM skin", () => {
       const clash = PIM_SKIN_PARTS.filter((part) => themed.has(part));
       expect(clash).toEqual([]);
       expect(theme).not.toMatch(/part "calendar" \{[^}]*display/);
+    });
+  });
+
+  describe("P1 (WP192): the calendar, contacts and tasks at every window size", () => {
+    it("makes the calendar a size container, so its content never widens its pane", () => {
+      const calendar = PIM_BASE_CSS.split("\n").find((l) =>
+        l.startsWith('[data-part="calendar"] {'),
+      );
+      expect(calendar).toContain(`container: ${CALENDAR_CONTAINER} / inline-size;`);
+      // The calendar window's panes give way down to their min-sizes.
+      expect(PIM_SKIN_CSS).toContain(
+        '[data-part="split"][data-node-id="calendar-panes"] > [data-part="split.pane"] { flex-shrink: 1; }',
+      );
+    });
+
+    it("puts the toolbar on two rows in a narrow calendar, keeping every name", () => {
+      const narrow = topLevelRules(PIM_SKIN_CSS).find((r) =>
+        r.startsWith(`@container ${CALENDAR_CONTAINER} (max-width: ${CALENDAR_NARROW})`),
+      );
+      expect(narrow).toBeDefined();
+      expect(narrow).toMatch(/\[data-part="calendar.toolbar"\] \{ flex-wrap: wrap;/);
+      expect(narrow).toMatch(/> \[data-part="calendar.title"\] \{ order: 99; flex: 1 0 100%;/);
+      // Labels are hidden visually only: the select and the button keep their names.
+      expect(narrow).toMatch(
+        /\[data-part="calendar.view-menu"\] > \[data-part="form.label"\] \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/,
+      );
+      expect(narrow).toMatch(
+        /\[data-field="calendar-new-event"\] > \[data-part="form.button.label"\] \{ position: absolute;/,
+      );
+      expect(narrow).not.toMatch(/display: none/);
+    });
+
+    it("keeps an event's time on a whole line and clamps long titles", () => {
+      const title = ruleOf('[data-part="calendar.event"] > [data-part="event-card.title"]');
+      expect(title).toMatch(/-webkit-line-clamp: 3;/);
+      expect(title).toMatch(/overflow: hidden;/);
+      expect(PIM_SKIN_CSS).toContain(
+        '[data-part="calendar.event"] > [data-part="event-card.time"], [data-part="calendar.event"] > [data-part="event-card.location"] { flex: 0 0 auto; }',
+      );
+      expect(PIM_SKIN_CSS).toContain(
+        '[data-part="calendar.event"] { container: nail-event / size; }',
+      );
+      expect(PIM_SKIN_CSS).toMatch(
+        /@container nail-event \(max-height: [^)]+\) \{[^}]*-webkit-line-clamp: 1;/,
+      );
+      // The free-time slots cut their label with an ellipsis.
+      expect(PIM_BASE_CSS).toMatch(/calendar\.free-time\.slot"\] \{[^}]*text-overflow: ellipsis;/);
+    });
+
+    it("lets the contact filters share the list's width and stops cards at a reading width", () => {
+      expect(PIM_SKIN_CSS).toContain(
+        '[data-part="contact-list"] > [data-part="contact-list.toolbar"] > [data-part="form.field"] > [data-part="form.select"] { width: 100%;',
+      );
+      expect(ruleOf('[data-part="task-list"] > *')).toMatch(/max-width: 56rem;/);
+      expect(PIM_SKIN_CSS).toMatch(
+        /\[data-part="contact-card"\] > \[data-part="contact-card.header"\][^{]*\{[^}]*max-width: 56rem;/,
+      );
+      // All-day chips do not repeat "All day".
+      expect(PIM_SKIN_CSS).toContain(
+        '[data-part="calendar.all-day.item"] > [data-part="calendar.chip"] > [data-part="event-card.time"] { display: none; }',
+      );
+    });
+
+    it("selects through two parts in its responsive rules, so the clash list leaves them out", () => {
+      for (const part of ["calendar", "contact-card", "contact-list.toolbar", "split.pane"]) {
+        expect(PIM_SKIN_PARTS, part).not.toContain(part);
+      }
     });
   });
 });

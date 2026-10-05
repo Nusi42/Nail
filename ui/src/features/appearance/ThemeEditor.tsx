@@ -334,8 +334,13 @@ function EditorBody({
   );
 }
 
-/** The editor: theme chooser, history, and the body of the chosen theme. */
-export function ThemeEditorView() {
+/**
+ * The editor: theme chooser, history, and the body of the chosen theme.
+ * `titled`: whether it shows its own heading — a layout widget does; the
+ * window does not, its title bar already names it (P1 WP192), and the
+ * region is labelled by the same text instead.
+ */
+export function ThemeEditorView({ titled = true }: { titled?: boolean }) {
   const t = useT();
   const id = useId();
   const ui = useUiStoreApi();
@@ -361,11 +366,18 @@ export function ThemeEditorView() {
     a.themes.find((th) => th.id === (themeId ?? a.active)) ??
     a.themes.find((th) => th.id === a.active);
   return (
-    <div data-part="theme-editor" aria-labelledby={`${id}-title`} role="region">
+    <div
+      data-part="theme-editor"
+      role="region"
+      aria-labelledby={titled ? `${id}-title` : undefined}
+      aria-label={titled ? undefined : t("theme-editor-title")}
+    >
       <div data-part="theme-editor.header">
-        <h2 data-part="form.section.title" id={`${id}-title`}>
-          {t("theme-editor-title")}
-        </h2>
+        {titled && (
+          <h2 data-part="form.section.title" id={`${id}-title`}>
+            {t("theme-editor-title")}
+          </h2>
+        )}
         <div data-part="form.field" data-field="theme">
           <label data-part="form.label" htmlFor={`${id}-theme`}>
             {t("theme-editor-theme")}
@@ -425,5 +437,5 @@ export function ThemeEditorWidget({ node }: WidgetProps) {
 
 /** Window `theme-editor`. */
 export function ThemeEditorDialog() {
-  return <ThemeEditorView />;
+  return <ThemeEditorView titled={false} />;
 }
