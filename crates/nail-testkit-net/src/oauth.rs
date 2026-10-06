@@ -596,7 +596,7 @@ mod tests {
         assert!(bad.contains("invalid_grant"), "{bad}");
         let reused = post(encode(&form(&verifier))).await;
         assert!(reused.contains("invalid_grant"), "{reused}");
-        assert!(server.issued().is_empty());
+        assert_eq!(server.issued().len(), 0);
         assert_eq!(server.token_requests().len(), 2);
     }
 

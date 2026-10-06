@@ -44,8 +44,8 @@ function message(env: Env, subject: string): MessageSummary {
   return found;
 }
 
-/** Puts a message into the list cache, as the message list would. */
-function cacheList(env: Env, summary: MessageSummary): void {
+/** Puts messages (of one folder) into the list cache, as the message list would. */
+function cacheList(env: Env, summary: MessageSummary, ...more: MessageSummary[]): void {
   env.queryClient.setQueryData<InfiniteData<Extract<Response, { type: "Messages" }>>>(
     queryKeys.messages(summary.folder_id, 50),
     {
@@ -54,8 +54,8 @@ function cacheList(env: Env, summary: MessageSummary): void {
           type: "Messages",
           folder_id: summary.folder_id,
           offset: 0,
-          total: 1,
-          messages: [summary],
+          total: 1 + more.length,
+          messages: [summary, ...more],
         },
       ],
       pageParams: [0],
@@ -263,7 +263,9 @@ describe("label dialogs", () => {
     const close = vi.fn();
     renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
     const travel = await screen.findByRole("checkbox", { name: "Travel" });
-    expect(travel).toBeChecked();
+    await waitFor(() => {
+      expect(travel).toBeChecked();
+    });
     await user.type(screen.getByLabelText("Find a label"), "rec");
     expect(screen.queryByRole("checkbox", { name: "Travel" })).toBeNull();
     await user.click(screen.getByRole("checkbox", { name: "Receipts" }));
@@ -307,6 +309,60 @@ describe("label dialogs", () => {
         { kind: "conversation", thread_id: summary.thread_id, folder_id: summary.folder_id },
       ],
       action: { type: "tags", add: ["Receipts"], remove: [] },
+    });
+  });
+
+  it("shows labels some picked messages have as mixed and applies the user's choice to all", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    const lisbon = message(env, "Your train tickets to Lisbon");
+    const receipt = message(env, "Receipt for your order #4711");
+    expect(receipt.folder_id).toBe(lisbon.folder_id);
+    cacheList(env, lisbon, receipt);
+    act(() => {
+      env.store.getState().selectMessage(lisbon.id);
+    });
+    listSelectionFor(env.store).setState({
+      scope: { conversations: false, folderId: lisbon.folder_id },
+      picked: [lisbon, receipt].map((m) => ({
+        key: m.id,
+        messageId: m.id,
+        threadId: null,
+        child: false,
+      })),
+    });
+    await actions["gmail.apply-labels"]?.run(ctx(env), []);
+    const Apply = dialog(APPLY_LABELS_DIALOG);
+    const close = vi.fn();
+    renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+    const travel = await screen.findByRole("checkbox", { name: "Travel" });
+    const receipts = screen.getByRole("checkbox", { name: "Receipts" });
+    await waitFor(() => {
+      expect(travel).toHaveAttribute("data-mixed", "true");
+    });
+    expect(receipts).toHaveAttribute("data-mixed", "true");
+    expect((travel as HTMLInputElement).indeterminate).toBe(true);
+    expect(travel).not.toBeChecked();
+    // A selection change behind the window changes nothing in it.
+    act(() => {
+      env.store.getState().selectMessage(message(env, "Hotel confirmation").id);
+    });
+    expect(travel).toHaveAttribute("data-mixed", "true");
+    await user.click(travel);
+    await user.click(receipts);
+    await user.click(receipts);
+    expect(travel).toBeChecked();
+    expect(receipts).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
+    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+      targets: [
+        { kind: "message", message_id: lisbon.id },
+        { kind: "message", message_id: receipt.id },
+      ],
+      action: { type: "tags", add: ["Travel"], remove: ["Receipts"] },
     });
   });
 

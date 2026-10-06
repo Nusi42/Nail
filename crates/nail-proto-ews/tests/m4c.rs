@@ -254,7 +254,7 @@ async fn conversation_ids_are_thread_ids() {
     else {
         panic!("delta");
     };
-    assert!(!delta.added.is_empty());
+    assert!(!delta.added.is_empty(), "{:?}", delta.added);
     for m in &delta.added {
         let conversation = m.exchange.as_ref().and_then(|e| e.conversation_id.clone());
         assert_eq!(m.thread_id, conversation);

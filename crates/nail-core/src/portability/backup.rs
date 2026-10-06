@@ -894,7 +894,7 @@ mod tests {
         let value = |r: &SecretRef| secrets.get(r).unwrap().map(|v| v.as_str().to_owned());
         assert_eq!(value(&password).as_deref(), Some("the real password"));
         assert_eq!(value(&vault_key).as_deref(), Some("the data key"));
-        assert!(service.store().list_keys(None, false).unwrap().is_empty());
+        assert_eq!(service.store().list_keys(None, false).unwrap().len(), 0);
 
         // The key's own entry is restored.
         let own = nail_pgp::keyring::keychain_ref("ABCDEF0123456789");

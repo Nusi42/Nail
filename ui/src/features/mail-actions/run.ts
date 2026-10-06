@@ -34,7 +34,7 @@ import {
 } from "../../state/mailOps";
 import { queryKeys } from "../../state/queries";
 import type { UiStore } from "../../state/uiStore";
-import { mailActionsStoreFor, type SelectionBefore } from "./store";
+import { mailActionsStoreFor, type SelectionBefore, type TagToast } from "./store";
 
 type ConversationResponse = Extract<Response, { type: "Conversation" }>;
 
@@ -212,6 +212,57 @@ function showError(ctx: WriteContext, error: unknown): void {
   if (!(error instanceof NailError)) console.error("nail: mail action failed", error);
 }
 
+/** Most targets one `ApplyMailAction` may name (`MAX_MAIL_ACTION_TARGETS`). */
+export const MAX_MAIL_ACTION_TARGETS = 500;
+
+/** Applies `action` to `apply`, at most `MAX_MAIL_ACTION_TARGETS` targets per request. */
+async function applyInChunks(
+  ctx: WriteContext,
+  apply: readonly MessageTarget[],
+  action: MailAction,
+): Promise<MailActionResult> {
+  const results: MailActionResult[] = [];
+  for (let start = 0; start < apply.length; start += MAX_MAIL_ACTION_TARGETS) {
+    const { result } = await ctx.client.request(
+      {
+        type: "ApplyMailAction",
+        targets: apply.slice(start, start + MAX_MAIL_ACTION_TARGETS),
+        action,
+      },
+      "MailActionQueued",
+    );
+    results.push(result);
+  }
+  const [first, ...rest] = results;
+  if (first === undefined) throw new Error("nothing to apply");
+  if (rest.length === 0) return first;
+  return {
+    ...first,
+    // Several requests are several batches: no single undo.
+    batch_id: null,
+    undo_until: null,
+    op_ids: results.flatMap((r) => r.op_ids),
+    message_ids: results.flatMap((r) => r.message_ids),
+  };
+}
+
+/** Options of {@link runMailAction}. */
+export interface RunOptions {
+  /**
+   * What the core acts on instead of `targets` (the list and the reader
+   * still update for `targets`): the exact messages a confirmation counted,
+   * so nothing that arrived meanwhile is acted on unasked.
+   */
+  apply?: readonly MessageTarget[];
+  /** The conversations the confirmation named (the toast's count). */
+  conversations?: number;
+  /** What a tag change calls its tags in the toast (Gmail labels, Exchange categories). */
+  tagNoun?: TagNoun;
+}
+
+/** What the toast calls the tags of a `tags` action. */
+export type TagNoun = "label" | "category" | "tag";
+
 /**
  * Applies `action` to `targets` through the core (one batch) and reports
  * it in the undo toast. Returns the core's answer, `null` on failure (the
@@ -221,6 +272,7 @@ export async function runMailAction(
   ctx: WriteContext,
   { targets, source }: ActionTargets,
   action: MailAction,
+  options: RunOptions = {},
 ): Promise<MailActionResult | null> {
   if (targets.length === 0) return null;
   const ui = ctx.store.getState();
@@ -236,10 +288,17 @@ export async function runMailAction(
   }
   let result: MailActionResult;
   try {
-    ({ result } = await ctx.client.request(
-      { type: "ApplyMailAction", targets: [...targets], action },
-      "MailActionQueued",
-    ));
+    if (options.apply === undefined) {
+      ({ result } = await ctx.client.request(
+        { type: "ApplyMailAction", targets: [...targets], action },
+        "MailActionQueued",
+      ));
+    } else {
+      result = await applyInChunks(ctx, options.apply, action);
+      if (options.conversations !== undefined) {
+        result = { ...result, conversations: options.conversations };
+      }
+    }
   } catch (error) {
     showError(ctx, error);
     void ctx.queryClient.invalidateQueries();
@@ -255,6 +314,7 @@ export async function runMailAction(
     conversations: result.conversations,
     messages: result.message_ids.length,
     batchId: result.batch_id,
+    tags: action.type === "tags" ? tagToast(action.add, action.remove, options.tagNoun) : undefined,
   });
   if (result.batch_id !== null) {
     const until = result.undo_until === null ? NaN : Date.parse(result.undo_until);
@@ -265,6 +325,16 @@ export async function runMailAction(
     });
   }
   return result;
+}
+
+/** What the toast says about a tag change. */
+export function tagToast(
+  add: readonly string[],
+  remove: readonly string[],
+  noun: TagNoun = "tag",
+): TagToast {
+  const change = remove.length === 0 ? "added" : add.length === 0 ? "removed" : "changed";
+  return { change, noun, count: add.length + remove.length };
 }
 
 /** Whether `mail.undo` has a batch to undo. */

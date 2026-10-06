@@ -64,7 +64,7 @@ fn markdown_and_html_show_the_markdown_source_as_text() {
             .unwrap()
             .contains("<b>M2c</b>")
     );
-    assert!(parsed.attachments.is_empty());
+    assert!(parsed.attachments.is_empty(), "{:?}", parsed.attachments);
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn plain_and_markdown_render_the_markdown() {
     let html = parsed.sanitized_html.unwrap();
     assert!(html.contains("<h1>Plan</h1>"), "{html}");
     assert!(html.contains("<strong>M2c</strong>"), "{html}");
-    assert!(parsed.attachments.is_empty());
+    assert!(parsed.attachments.is_empty(), "{:?}", parsed.attachments);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn a_lone_markdown_body_is_text_and_rendered_safely() {
     assert!(html.contains("<em>world</em>"), "{html}");
     assert!(!html.contains("<script"), "{html}");
     assert!(html.contains("https://example.org/"), "{html}");
-    assert!(parsed.attachments.is_empty());
+    assert!(parsed.attachments.is_empty(), "{:?}", parsed.attachments);
 }
 
 #[test]

@@ -655,7 +655,7 @@ mod tests {
     fn renders_with_arguments_and_plurals() {
         let en = Catalog::english();
         assert!(en.has("error-not-found"));
-        assert!(!en.render(&msg("error-not-found")).is_empty());
+        assert_ne!(en.render(&msg("error-not-found")).len(), 0);
         let text = en.render(
             &msg("config-unknown-property-hint")
                 .arg("key", "colr")

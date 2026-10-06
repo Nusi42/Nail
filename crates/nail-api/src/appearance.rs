@@ -870,7 +870,7 @@ mod tests {
 
     #[test]
     fn override_issues() {
-        assert!(ThemeOverrides::default().issues().is_empty());
+        assert_eq!(ThemeOverrides::default().issues().len(), 0);
         let ok = ThemeOverrides {
             font_size: Some(15),
             radius: Some(0),

@@ -300,7 +300,7 @@ fn google_cancels_one_occurrence() {
     // Afterwards the card shows it as cancelled.
     let inv = card(&cancel, &senders, &bob, Some(copy(&updated)));
     assert_eq!(inv.state, InvitationState::Cancelled);
-    assert!(inv.actions.is_empty());
+    assert!(inv.actions.is_empty(), "{:?}", inv.actions);
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn outlook_invitation_with_a_windows_zone() {
     let inv = card(&object, &senders, &bob, None);
     assert_eq!(inv.role, InvitationRole::Attendee);
     assert_eq!(inv.my_address.as_deref(), Some("bob@example.org"));
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
     assert!(inv.allows(InvitationAction::ProposeNewTime));
 
     // Tentative with a comment: the reply keeps Outlook's CN and zone.
@@ -345,7 +345,7 @@ fn outlook_invitation_with_a_windows_zone() {
     assert!(reply.contains("TZID:W. Europe Standard Time"));
     assert!(reply.contains("CN=Bob Builder"));
     let parsed = nail_itip::parse_itip(&reply, None);
-    assert!(parsed.issues.is_empty());
+    assert!(parsed.issues.is_empty(), "{:?}", parsed.issues);
     assert_eq!(
         parsed.main().unwrap().attendees[0].attendee.status,
         ParticipationStatus::Tentative
@@ -568,7 +568,7 @@ fn spoofed_invitations_are_flagged_and_refresh_works() {
     )
     .unwrap();
     let refresh = nail_itip::parse_itip(&refresh, None);
-    assert!(refresh.issues.is_empty());
+    assert!(refresh.issues.is_empty(), "{:?}", refresh.issues);
     let ada = me("ada@example.org");
     let (ada_copy, _) = store(&real, "ada-ev");
     let inv = card(
@@ -612,5 +612,5 @@ fn server_scheduling_means_no_imip() {
         caldav,
     );
     assert_eq!(plan.transport(), SchedulingTransport::Server);
-    assert!(plan.imip.is_empty());
+    assert!(plan.imip.is_empty(), "{:?}", plan.imip);
 }

@@ -743,7 +743,7 @@ mod tests {
         assert!(rx.has_changed().unwrap());
         let inbox = store.mailbox("INBOX").unwrap();
         assert_eq!(inbox.expunged, [(uid, inbox.highest_modseq)]);
-        assert!(store.expunge_uids("INBOX", &[uid]).is_empty());
+        assert_eq!(store.expunge_uids("INBOX", &[uid]).len(), 0);
     }
 
     #[test]

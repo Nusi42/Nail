@@ -92,8 +92,12 @@ fn encrypted_to_bob_decrypts_with_his_keychain_protected_key() {
         let encryption = status.encryption.unwrap();
         assert_eq!(encryption.state, DecryptionState::Decrypted, "{name}");
         assert!(encryption.key_id.is_some());
-        assert!(!encryption.recipients.is_empty());
-        assert!(status.signatures.is_empty());
+        assert!(
+            !encryption.recipients.is_empty(),
+            "{:?}",
+            encryption.recipients
+        );
+        assert!(status.signatures.is_empty(), "{:?}", status.signatures);
         let (subject, text) = subject_and_text(&outcome.display.unwrap());
         assert_eq!(subject, "Encrypted");
         assert!(text.contains("Only Bob can read this."), "{name}: {text}");

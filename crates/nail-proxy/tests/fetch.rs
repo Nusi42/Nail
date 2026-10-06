@@ -139,7 +139,7 @@ async fn literal_private_addresses_never_connect() {
         }
     }
     assert_eq!(up.connections(), 0);
-    assert!(dns.lookups().is_empty());
+    assert_eq!(dns.lookups().len(), 0);
 }
 
 #[tokio::test]

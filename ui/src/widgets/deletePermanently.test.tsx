@@ -69,8 +69,9 @@ describe("Delete permanently? (M5c, P3)", () => {
       targets: [{ kind: "conversation", thread_id: MOCK_CONVERSATION_ID, folder_id: TRASH }],
       source: "list",
     };
+    let added: { id: string }[] = [];
     const { env } = await setup(target, (e) => {
-      const added = addMockConversation(e.transport.data);
+      added = addMockConversation(e.transport.data);
       // Three of its messages (not the draft) are in Trash.
       toTrash(
         e,
@@ -81,14 +82,19 @@ describe("Delete permanently? (M5c, P3)", () => {
     expect(
       within(dialog).getByText("Delete this conversation's 3 messages permanently?"),
     ).toBeInTheDocument();
+    // A fourth message reaches Trash while the question is open: it was not
+    // counted, so it is not deleted.
+    const late = must(env.transport.data.messages.find((m) => m.id === added[3]?.id));
+    late.folder_id = TRASH;
     await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => {
       expect(env.transport.requests).toContainEqual({
         type: "ApplyMailAction",
-        targets: target.targets,
+        targets: added.slice(0, 3).map((m) => ({ kind: "message", message_id: m.id })),
         action: { type: "delete-permanently" },
       });
     });
+    expect(env.transport.data.messages).toContain(late);
   });
 
   it("Cancel deletes nothing", async () => {

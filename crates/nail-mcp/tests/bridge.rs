@@ -126,18 +126,22 @@ impl rmcp::ClientHandler for Approving {
         config
     }
 
-    async fn create_elicitation(
+    fn create_elicitation(
         &self,
         request: rmcp::model::ElicitRequestParams,
         _context: rmcp::service::RequestContext<rmcp::RoleClient>,
-    ) -> Result<rmcp::model::ElicitResult, rmcp::model::ErrorData> {
-        if let rmcp::model::ElicitRequestParams::FormElicitationParams { message, .. } = request {
-            self.0.lock().unwrap().push(message);
-        }
-        Ok(
-            rmcp::model::ElicitResult::new(rmcp::model::ElicitationAction::Accept)
-                .with_content(serde_json::json!({"approve": true})),
-        )
+    ) -> impl Future<Output = Result<rmcp::model::ElicitResult, rmcp::model::ErrorData>> + Send
+    {
+        std::future::ready({
+            if let rmcp::model::ElicitRequestParams::FormElicitationParams { message, .. } = request
+            {
+                self.0.lock().unwrap().push(message);
+            }
+            Ok(
+                rmcp::model::ElicitResult::new(rmcp::model::ElicitationAction::Accept)
+                    .with_content(serde_json::json!({"approve": true})),
+            )
+        })
     }
 }
 

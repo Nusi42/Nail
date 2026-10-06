@@ -62,7 +62,7 @@ mod tests {
                 Event::RemoteContentPolicyChanged
             ]
         );
-        assert!(sink.take().is_empty());
+        assert_eq!(sink.take().len(), 0);
         NoEvents.emit(Event::RemoteAccessChanged);
     }
 }

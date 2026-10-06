@@ -176,7 +176,7 @@ async fn incremental_fetch_only_returns_new_messages() {
     // Nothing new: `UID 5:*` matches the highest UID on the server; the client
     // must not return it again.
     let none = client.fetch_new("Sent", Some(state)).await.unwrap();
-    assert!(none.messages.is_empty());
+    assert!(none.messages.is_empty(), "{:?}", none.messages);
     assert_eq!(none.next_state, state);
 
     let uid = server
@@ -201,7 +201,11 @@ async fn incremental_fetch_only_returns_new_messages() {
         .fetch_new("Sent", Some(new.next_state))
         .await
         .unwrap();
-    assert!(after_expunge.messages.is_empty());
+    assert!(
+        after_expunge.messages.is_empty(),
+        "{:?}",
+        after_expunge.messages
+    );
     assert_eq!(after_expunge.next_state.uid_next, 6);
 }
 
@@ -418,7 +422,7 @@ async fn refused_fetch_and_search_are_errors_not_empty_results() {
     assert!(matches!(err, ImapError::No(_)), "{err:?}");
 
     server.fail_on(None);
-    assert!(!client.fetch_range(UidRange::ALL).await.unwrap().is_empty());
+    assert_ne!(client.fetch_range(UidRange::ALL).await.unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -480,6 +484,6 @@ async fn plans_are_batched_by_size_and_fetched_batch_by_batch() {
         .plan_fetch("INBOX", Some(plan.final_state))
         .await
         .unwrap();
-    assert!(done.batches.is_empty());
+    assert!(done.batches.is_empty(), "{:?}", done.batches);
     assert_eq!(done.final_state, plan.final_state);
 }

@@ -1168,7 +1168,7 @@ mod tests {
         assert!(settings.is_loopback());
         assert_eq!(settings.tls, RemoteTlsMode::SelfSigned);
         assert_eq!(settings.port, DEFAULT_REMOTE_UI_PORT);
-        assert!(settings.issues().is_empty());
+        assert_eq!(settings.issues().len(), 0);
         let value = serde_json::to_value(&settings).unwrap();
         assert_eq!(value["tls"], json!("self-signed"));
         assert_eq!(
@@ -1230,7 +1230,7 @@ mod tests {
             allowed_networks: vec!["192.168.1.0/24".into(), "fd00::/8".into()],
             ..RemoteUiSettings::default()
         };
-        assert!(lan.issues().is_empty());
+        assert_eq!(lan.issues().len(), 0);
         let public = RemoteUiSettings {
             allowed_networks: vec!["192.168.1.0/24".into(), "0.0.0.0/0".into()],
             ..lan
@@ -1257,13 +1257,13 @@ mod tests {
             tls: RemoteTlsMode::SelfSigned,
             ..lan
         };
-        assert!(lan.issues().is_empty());
+        assert_eq!(lan.issues().len(), 0);
         let local_plain = RemoteUiSettings {
             bind_address: "::1".into(),
             tls: RemoteTlsMode::Off,
             ..RemoteUiSettings::default()
         };
-        assert!(local_plain.issues().is_empty());
+        assert_eq!(local_plain.issues().len(), 0);
 
         let internet = RemoteUiSettings {
             internet_mode: true,

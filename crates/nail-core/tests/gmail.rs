@@ -741,3 +741,64 @@ async fn mail_actions_replay_as_one_batch_modify() {
     .await;
     assert_eq!(calls("/batchModify"), 2);
 }
+
+/// P3 review: Delete reaches the user's replies in Sent; undoing it on a
+/// Gmail account takes `TRASH` off them again (Trash → Sent is an untrash,
+/// not an unsupported move), so the server agrees with the local Sent.
+#[tokio::test(flavor = "multi_thread")]
+async fn undoing_a_delete_returns_sent_mail_on_gmail() {
+    let env = setup().await;
+    synced(&env).await;
+    let sent = messages(&env.service, FolderRole::Sent).await;
+    let reply = sent.first().expect("a sent message").clone();
+    let remote = env
+        .service
+        .store()
+        .message_remote_id(&reply.id)
+        .unwrap()
+        .unwrap();
+    let result = match request(
+        &env.service,
+        Request::ApplyMailAction {
+            targets: vec![nail_api::MessageTarget::message(reply.id.clone())],
+            action: nail_api::MailAction::Trash,
+        },
+    )
+    .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("unexpected {other:?}"),
+    };
+    until("in Trash on Gmail", || async {
+        env.gmail.labels_of(&remote).contains(&"TRASH".to_owned())
+    })
+    .await;
+    request(
+        &env.service,
+        Request::UndoMailAction {
+            batch_id: result.batch_id.unwrap(),
+        },
+    )
+    .await;
+    until("out of Trash on Gmail", || async {
+        let labels = env.gmail.labels_of(&remote);
+        !labels.contains(&"TRASH".to_owned()) && labels.contains(&"SENT".to_owned())
+    })
+    .await;
+    until("no failed operation", || async {
+        env.service.store().pending_op_count().unwrap() == 0
+    })
+    .await;
+    let failed = env
+        .service
+        .store()
+        .list_ops(Some(nail_store::OpState::Failed))
+        .unwrap();
+    assert!(failed.is_empty(), "{failed:?}");
+    assert!(
+        messages(&env.service, FolderRole::Sent)
+            .await
+            .iter()
+            .any(|m| m.id == reply.id)
+    );
+}

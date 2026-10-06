@@ -325,7 +325,7 @@ async fn remote_sessions_are_authorized_and_narrowed() {
     let message = remote_message(&f).await;
 
     match service.handle_remote(&ctx, Request::ListAccounts).await {
-        Response::Accounts { accounts } => assert!(!accounts.is_empty()),
+        Response::Accounts { accounts } => assert!(!accounts.is_empty(), "{accounts:?}"),
         other => panic!("{other:?}"),
     }
     match service
@@ -1278,7 +1278,9 @@ async fn m2c_requests_respect_the_grant() {
         .handle_remote(&narrow, Request::GetNotificationSettings)
         .await
     {
-        Response::NotificationSettings { settings } => assert!(settings.overrides.is_empty()),
+        Response::NotificationSettings { settings } => {
+            assert!(settings.overrides.is_empty(), "{:?}", settings.overrides);
+        }
         other => panic!("{other:?}"),
     }
     match service
@@ -1315,7 +1317,7 @@ async fn remote_content_can_be_loaded_once() {
     );
     assert!(!shown.remote_content_blocked);
     let tokens = proxy_tokens(&shown.sanitized_html.unwrap());
-    assert!(!tokens.is_empty());
+    assert!(!tokens.is_empty(), "{tokens:?}");
     let proxy = f.service.remote_proxy().unwrap();
     // The proxy's check lets it through (the fetch itself fails offline).
     assert_eq!(proxy.serve(&tokens[0]).await.unwrap_err().status(), 502);

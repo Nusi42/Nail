@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(page.value[0].flag.as_ref().unwrap().flag_status, "flagged");
         assert_eq!(page.value[1].removed.as_ref().unwrap().reason, "deleted");
         let empty: Page<Message> = serde_json::from_value(json!({})).unwrap();
-        assert!(empty.value.is_empty());
+        assert!(empty.value.is_empty(), "{:?}", empty.value);
         assert!(is_removed(&json!({"id": "x", "@removed": {}})));
         assert_eq!(id_of(&json!({"id": "x"})), "x");
         assert_eq!(id_of(&json!({})), "");

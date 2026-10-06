@@ -13,6 +13,14 @@ import type {
 } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 
+/** What a tag change did, for the toast. */
+export interface TagToast {
+  change: "added" | "removed" | "changed";
+  noun: "label" | "category" | "tag";
+  /** Tags added and removed. */
+  count: number;
+}
+
 /** What the toast says. */
 export type MailToast =
   | {
@@ -24,6 +32,8 @@ export type MailToast =
       messages: number;
       /** `null` = nothing to undo (Delete permanently). */
       batchId: MailBatchId | null;
+      /** A tag change: what it did, to how many tags, and what they are called. */
+      tags?: TagToast | undefined;
     }
   | { kind: "undone"; seq: number }
   | { kind: "error"; seq: number; message: LocalizedMessage };

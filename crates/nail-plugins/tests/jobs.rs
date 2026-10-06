@@ -85,7 +85,7 @@ async fn schedules_run_on_the_cores_clock() {
     .await;
     // Nothing is due yet.
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(fake.results("sched", "RUN ").is_empty());
+    assert_eq!(fake.results("sched", "RUN ").len(), 0);
 
     fake.set_now("2026-10-02T10:15:20Z");
     host.run_due_jobs();
@@ -345,8 +345,8 @@ async fn jobs_need_the_background_permission() {
     assert_eq!(err.code, ErrorCode::Unavailable);
     host.deliver_event(PluginEventName::MessageReceived, &[MessageId::from("m1")]);
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(fake.results("nobg", "RUN ").is_empty());
-    assert!(fake.job_runs("nobg").is_empty());
+    assert_eq!(fake.results("nobg", "RUN ").len(), 0);
+    assert_eq!(fake.job_runs("nobg").len(), 0);
     // Granting it later starts the jobs (app.started once).
     assert!(host.update_grants(&plugin_id("nobg"), &[grant("background", None)]));
     assert_eq!(

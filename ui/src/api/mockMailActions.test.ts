@@ -13,6 +13,8 @@ import { must } from "../test/must";
 
 const INBOX = "acc-personal/Inbox";
 const SENT = "acc-personal/Sent";
+const ARCHIVE = "acc-personal/Archive";
+const TRASH = "acc-personal/Trash";
 
 function setup() {
   const transport = new MockTransport({ data: createMockData(8) });
@@ -29,7 +31,7 @@ const row: MessageTarget = {
 describe("mail actions on conversations in the mock core", () => {
   it("mirrors the core's reach rules", () => {
     expect(reachOf({ type: "archive" })).toBe("listed");
-    expect(reachOf({ type: "trash" })).toBe("whole");
+    expect(reachOf({ type: "trash" })).toBe("thread");
     expect(reachOf({ type: "flag", flagged: true })).toBe("newest");
     expect(reachOf({ type: "flag", flagged: false })).toBe("whole");
     expect(reachOf({ type: "mark-read", read: true })).toBe("whole");
@@ -63,6 +65,38 @@ describe("mail actions on conversations in the mock core", () => {
     );
     expect(resolution.message_ids).toHaveLength(6);
     expect(resolution.message_ids).not.toContain(must(added.at(-1)).id);
+  });
+
+  it("deletes the whole thread like Gmail, never expunges from Trash, restores replies to Sent", async () => {
+    const { client, transport, added } = setup();
+    const byId = (id: string) => must(transport.data.messages.find((m) => m.id === id));
+    // One message was archived on its own.
+    byId(must(added[0]).id).folder_id = ARCHIVE;
+    const { result } = await client.request(
+      { type: "ApplyMailAction", targets: [row], action: { type: "trash" } },
+      "MailActionQueued",
+    );
+    expect(result.message_ids).toHaveLength(6);
+    expect(result.message_ids).toContain(must(added[0]).id);
+    for (const id of result.message_ids) expect(byId(id).folder_id).toBe(TRASH);
+    // Delete in Trash leaves the Trash copies (only Delete permanently removes them).
+    const inTrash = { ...row, folder_id: TRASH };
+    expect(
+      await client.call({ type: "ApplyMailAction", targets: [inTrash], action: { type: "trash" } }),
+    ).toMatchObject({ localized: { id: "mail-action-issue-no-messages" } });
+    expect(transport.data.messages.filter((m) => m.folder_id === TRASH)).toHaveLength(6);
+    // Move to Inbox from Trash: the user's replies go back to Sent.
+    await client.request(
+      {
+        type: "ApplyMailAction",
+        targets: [inTrash],
+        action: { type: "move", target: { role: "inbox" } },
+      },
+      "MailActionQueued",
+    );
+    const folders = added.slice(0, 6).map((m) => byId(m.id).folder_id);
+    expect(folders.filter((f) => f === SENT)).toHaveLength(2);
+    expect(folders.filter((f) => f === INBOX)).toHaveLength(4);
   });
 
   it("flags the newest message and unflags every one", async () => {

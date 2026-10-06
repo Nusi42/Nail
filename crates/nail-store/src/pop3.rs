@@ -183,6 +183,6 @@ mod tests {
             .pop3_record(&home, "u1", &MessageId::new("m1"), 1)
             .unwrap();
         store.delete_account(&home).unwrap();
-        assert!(store.pop3_uids(&home).unwrap().is_empty());
+        assert_eq!(store.pop3_uids(&home).unwrap().len(), 0);
     }
 }

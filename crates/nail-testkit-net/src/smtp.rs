@@ -862,7 +862,7 @@ mod tests {
         assert!(c.send("RCPT TO:<b@y>").await[0].starts_with("250"));
         assert!(c.send("DATA").await[0].starts_with("354"));
         assert!(c.send("0123456789abc\r\n.").await[0].starts_with("552"));
-        assert!(server.messages().is_empty());
+        assert_eq!(server.messages().len(), 0);
 
         server.fail("CONNECT", 554, "5.3.2 No service", Some(1));
         let mut c = Client::connect(server.addr()).await;

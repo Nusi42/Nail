@@ -231,7 +231,11 @@ async fn an_mbox_and_a_maildir_import_into_local_folders_with_flags() {
     let report = wait_report(&mut events, &job).await;
     assert_eq!(report.state, JobState::Completed, "{:?}", report.issues);
     assert_eq!(report.counts.messages, 2);
-    assert!(!report.created_folders.is_empty());
+    assert!(
+        !report.created_folders.is_empty(),
+        "{:?}",
+        report.created_folders
+    );
     let Response::Accounts { accounts } = ok(&service, Request::ListAccounts).await else {
         panic!("accounts expected");
     };

@@ -424,7 +424,7 @@ mod tests {
                 ("pageToken", "p2".to_owned()),
             ]
         );
-        assert!(ListQuery::default().params().is_empty());
+        assert_eq!(ListQuery::default().params().len(), 0);
         assert_eq!(after_query(-5), "after:0");
     }
 

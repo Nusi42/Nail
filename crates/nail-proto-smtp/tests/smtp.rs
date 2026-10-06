@@ -431,7 +431,11 @@ async fn dsn_and_8bit_parameters() {
         .await
         .unwrap()
         .remove(0);
-    assert!(mail.recipients[0].params.is_empty());
+    assert!(
+        mail.recipients[0].params.is_empty(),
+        "{:?}",
+        mail.recipients[0].params
+    );
 }
 
 #[tokio::test]
@@ -666,11 +670,11 @@ async fn test_login_reports_results() {
     )
     .await;
     assert_eq!(bad.error, Some(ErrorCode::AuthFailed));
-    assert!(!bad.capabilities.is_empty());
+    assert!(!bad.capabilities.is_empty(), "{:?}", bad.capabilities);
     assert!(!bad.message.unwrap_or_default().contains("nope"));
 
     drop(server);
     let down = test_login(&config, &SmtpAuth::None).await;
     assert_eq!(down.error, Some(ErrorCode::Network));
-    assert!(down.capabilities.is_empty());
+    assert!(down.capabilities.is_empty(), "{:?}", down.capabilities);
 }

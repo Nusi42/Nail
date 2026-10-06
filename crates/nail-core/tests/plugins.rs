@@ -289,7 +289,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     let manifest = preview.manifest.clone().expect("a valid manifest");
     assert_eq!(manifest.name, "Follow-up reminders");
     assert_eq!(manifest.contributes.commands[0].title, "Follow up…");
-    assert!(preview.issues.is_empty());
+    assert!(preview.issues.is_empty(), "{:?}", preview.issues);
     assert_eq!(preview.size, bytes.len() as u64);
     assert_eq!(preview.installed_version, None);
 
@@ -514,7 +514,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
             incoming, preview, ..
         } => {
             assert_eq!(incoming, "");
-            assert!(preview.sections.is_empty());
+            assert!(preview.sections.is_empty(), "{:?}", preview.sections);
         }
         other => panic!("{other:?}"),
     }
@@ -775,7 +775,7 @@ async fn dev_folders_load_and_reload() {
     })
     .await;
     let names = reload_names(&dev_logs(&f).await);
-    assert!(!names.is_empty());
+    assert!(!names.is_empty(), "{names:?}");
     assert!(
         names.iter().all(|n| n == "Follow-up reminders"),
         "resolved names: {names:?}"

@@ -456,7 +456,7 @@ fn apple_calendar_and_reminders() {
         Some("6D1F7C2A-1B2C-4D3E-9F8A-7B6C5D4E3F2A")
     );
     // Acknowledged on another device: it does not fire again.
-    assert!(
+    assert_eq!(
         event_firings(
             &event(night),
             &[],
@@ -464,7 +464,8 @@ fn apple_calendar_and_reminders() {
             utc("2026-11-02T00:00:00Z"),
             Tz::UTC
         )
-        .is_empty()
+        .len(),
+        0
     );
     assert!(
         night

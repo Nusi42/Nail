@@ -248,7 +248,7 @@ async fn free_busy_through_the_outbox() {
     );
     assert_eq!(answers[1].email, "carol@example.org");
     assert_eq!(answers[1].error, Some(ErrorCode::Forbidden));
-    assert!(answers[1].periods.is_empty());
+    assert!(answers[1].periods.is_empty(), "{:?}", answers[1].periods);
     assert_eq!(
         answers[1].localized.as_ref().unwrap().id,
         "dav-freebusy-no-access"
@@ -378,7 +378,7 @@ async fn schedule_inbox_items_are_read_processed_and_deleted() {
     let server = server(false).await;
     let inbox = url(&server, &server.inbox_path("ada"));
     let client = login("ada");
-    assert!(list_inbox(&client, &inbox).await.unwrap().is_empty());
+    assert_eq!(list_inbox(&client, &inbox).await.unwrap().len(), 0);
     server
         .deliver(
             "ada",
@@ -543,7 +543,7 @@ async fn auto_scheduling_delivers_requests_replies_and_cancels() {
             ("REQUEST".into(), "ext@other.example".into(), false),
         ]
     );
-    assert!(server.inbox("carol").is_empty());
+    assert_eq!(server.inbox("carol").len(), 0);
 
     // Bob finds the invitation in his inbox and his calendar.
     let bob_inbox = url(&server, &server.inbox_path("bob"));
@@ -664,8 +664,8 @@ async fn client_scheduling_and_servers_that_do_not_schedule() {
             data: None
         }
     ));
-    assert!(server.scheduled_messages().is_empty());
-    assert!(server.inbox("bob").is_empty());
+    assert_eq!(server.scheduled_messages().len(), 0);
+    assert_eq!(server.inbox("bob").len(), 0);
 
     // With auto-scheduling off, plain meetings are not delivered either.
     server.set_auto_schedule(false);
@@ -685,7 +685,7 @@ async fn client_scheduling_and_servers_that_do_not_schedule() {
             data: None
         }
     ));
-    assert!(server.scheduled_messages().is_empty());
+    assert_eq!(server.scheduled_messages().len(), 0);
     let info = discover_scheduling(&ada, &url(&server, &server.principal_path()), None)
         .await
         .unwrap();

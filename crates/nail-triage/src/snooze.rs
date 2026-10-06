@@ -713,7 +713,7 @@ mod tests {
         let mut again = req("m1", T0 + 7200);
         again.folder_id = "snoozed".into();
         let plan = s.snooze(&[again]).unwrap();
-        assert!(plan.ops.is_empty());
+        assert!(plan.ops.is_empty(), "{:?}", plan.ops);
         assert_eq!(plan.entries[0].wake_folder_id, FolderId::from("projects"));
         clock.advance(Duration::seconds(61));
         assert!(s.poll(&all_exist).unwrap().is_empty(), "old time is gone");
@@ -734,7 +734,7 @@ mod tests {
         assert_eq!(forgotten.len(), 1);
         assert_eq!(store.len(), 1);
         assert_eq!(s.next_wake(), Some(T0 + 90));
-        assert!(s.forget(&[]).unwrap().is_empty());
+        assert_eq!(s.forget(&[]).unwrap().len(), 0);
     }
 
     #[test]

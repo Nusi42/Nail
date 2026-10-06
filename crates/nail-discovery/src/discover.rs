@@ -855,7 +855,7 @@ mod tests {
                 DiscoveryWarning::ForeignHosts
             ]
         );
-        assert!(all[1].warnings.is_empty());
+        assert!(all[1].warnings.is_empty(), "{:?}", all[1].warnings);
         assert!(under("IMAP.Example.org.", "example.org"));
         assert!(!under("example.org.evil.example", "example.org"));
         assert!(!under("badexample.org", "example.org"));

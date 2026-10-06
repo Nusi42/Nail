@@ -298,6 +298,8 @@ async fn the_store_keeps_exchange_state() {
         store
             .exchange_mailboxes(&account, false)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.exchange_mailboxes(&account, false).unwrap()
     );
 }

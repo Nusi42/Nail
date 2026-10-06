@@ -205,7 +205,7 @@ mod tests {
         let manager = AccountManager::load(dir.path());
         assert_eq!(manager.config().accounts.len(), 1);
         assert!(manager.error().is_none());
-        assert!(manager.all_errors().is_empty());
+        assert_eq!(manager.all_errors().len(), 0);
 
         let ((), config) = manager
             .edit(|doc| {
@@ -227,7 +227,7 @@ mod tests {
         std::fs::write(&path, "account \"work\" {").unwrap();
         let manager = AccountManager::load(dir.path());
         assert!(manager.error().is_some());
-        assert!(manager.config().accounts.is_empty());
+        assert_eq!(manager.config().accounts.len(), 0);
         let err = manager.edit(|_| Ok(())).unwrap_err();
         assert_eq!(err.code(), ErrorCode::Config);
         // The broken file is untouched.
@@ -242,7 +242,7 @@ mod tests {
 
         std::fs::write(&path, "account").unwrap();
         assert!(matches!(manager.reload(), Reload::Invalid(_)));
-        assert!(!manager.all_errors().is_empty());
+        assert_ne!(manager.all_errors().len(), 0);
         assert_eq!(manager.reload(), Reload::Unchanged, "reported once");
         assert_eq!(manager.config().accounts.len(), 1, "last valid kept");
     }

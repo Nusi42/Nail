@@ -176,7 +176,7 @@ async fn exchange_online_gets_graph_without_credentials() {
         hosts,
         ["autodiscover.contoso.example", "contoso.example", GLOBAL]
     );
-    assert!(server.hosts_with_credentials().is_empty());
+    assert_eq!(server.hosts_with_credentials().len(), 0);
 
     // Without Microsoft's endpoint nothing answers.
     let outcome = discoverer(&server, false)
@@ -232,7 +232,7 @@ async fn on_premises_via_v2_with_windows_sign_in() {
         endpoint.auth,
         AuthConfig::Windows { username: None, .. }
     ));
-    assert!(options.issues(endpoint).is_empty());
+    assert_eq!(options.issues(endpoint).len(), 0);
     // The IMAP fallback from the POX answer.
     assert_eq!(found.candidates[1].incoming.protocol(), MailProtocol::Imap);
     assert!(found.candidates.iter().all(|c| c.warnings.is_empty()));
@@ -403,7 +403,7 @@ async fn redirect_addr_to_another_domain_asks_before_signing_in() {
     };
     assert_eq!(confirm.host, "other.example");
     assert_eq!(confirm.reason, RedirectReason::RedirectAddr);
-    assert!(server.hosts_with_credentials().is_empty());
+    assert_eq!(server.hosts_with_credentials().len(), 0);
 }
 
 #[tokio::test]
@@ -470,7 +470,7 @@ async fn http_method_and_srv_targets_always_ask() {
     };
     assert_eq!(confirm.reason, RedirectReason::Srv);
     assert_eq!(confirm.host, "mail.srv.example");
-    assert!(srv_server.hosts_with_credentials().is_empty());
+    assert_eq!(srv_server.hosts_with_credentials().len(), 0);
 }
 
 async fn server_for_srv() -> MockAutodiscoverServer {

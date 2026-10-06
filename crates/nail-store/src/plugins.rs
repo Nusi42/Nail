@@ -724,7 +724,7 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let m = manifest(&json!(["mail.read", "mail.read.body", "storage"]));
         install(&store, &m, &[]);
-        assert!(store.plugin_grants(&id()).unwrap().is_empty());
+        assert_eq!(store.plugin_grants(&id()).unwrap().len(), 0);
 
         let limited = PluginGrant {
             permission: PluginPermission::MailRead,
@@ -788,7 +788,7 @@ mod tests {
         m2.contributes.settings.pop();
         let record = install(&store, &m2, &[]);
         assert_eq!(record.manifest.version, "2.0.0");
-        assert!(store.plugin_grants(&id()).unwrap().is_empty());
+        assert_eq!(store.plugin_grants(&id()).unwrap().len(), 0);
         assert_eq!(
             store.plugin_settings(&id()).unwrap(),
             BTreeMap::from([("days".to_owned(), json!(3))])
@@ -1024,7 +1024,7 @@ mod tests {
             .unwrap();
         assert!(cut_line.message.len() <= MAX_LOG_MESSAGE);
         store.clear_plugin_logs(&id()).unwrap();
-        assert!(store.plugin_logs(Some(&id()), None, 10).unwrap().is_empty());
+        assert_eq!(store.plugin_logs(Some(&id()), None, 10).unwrap().len(), 0);
         // Removing the plug-in removes its log.
         store
             .append_plugin_log(&PluginLogLine {
@@ -1037,6 +1037,6 @@ mod tests {
             })
             .unwrap();
         store.remove_plugin(&id()).unwrap();
-        assert!(store.plugin_logs(None, None, 10).unwrap().is_empty());
+        assert_eq!(store.plugin_logs(None, None, 10).unwrap().len(), 0);
     }
 }

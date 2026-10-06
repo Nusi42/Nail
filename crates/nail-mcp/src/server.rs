@@ -853,19 +853,21 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         Ok(ListResourcesResult::with_all_items(resources))
     }
 
-    async fn list_resource_templates(
+    fn list_resource_templates(
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourceTemplatesResult, ErrorData> {
-        Ok(ListResourceTemplatesResult::with_all_items(
+    ) -> impl Future<Output = Result<ListResourceTemplatesResult, ErrorData>>
+    + rmcp::service::MaybeSendFuture
+    + '_ {
+        std::future::ready(Ok(ListResourceTemplatesResult::with_all_items(
             uri::TEMPLATES
                 .iter()
                 .map(|(template, name, description)| {
                     ResourceTemplate::new(*template, *name).with_description(*description)
                 })
                 .collect(),
-        ))
+        )))
     }
 
     async fn read_resource(
@@ -1013,14 +1015,15 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         crate::tools::call(&self.shared, &client, request, &context).await
     }
 
-    async fn list_prompts(
+    fn list_prompts(
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListPromptsResult, ErrorData> {
-        Ok(ListPromptsResult::with_all_items(
+    ) -> impl Future<Output = Result<ListPromptsResult, ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        std::future::ready(Ok(ListPromptsResult::with_all_items(
             crate::prompts::definitions(self.shared.data.as_ref()),
-        ))
+        )))
     }
 
     async fn get_prompt(

@@ -445,7 +445,7 @@ async fn snooze_and_junk_undo_their_side_effects() {
         })
         .await;
     assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
-    assert!(f.service.store().list_snoozed(None).unwrap().is_empty());
+    assert_eq!(f.service.store().list_snoozed(None).unwrap().len(), 0);
     assert_eq!(where_are(&f, &row.id), before);
     let tags = |f: &Fixture| -> Vec<String> {
         let (_, messages) = f.service.store().get_thread(&row.id, None).unwrap();
@@ -839,7 +839,7 @@ async fn the_lab_move_conversation_on_the_imap_server() {
     // Read state: one UID STORE for the whole conversation.
     demo.work.clear_commands();
     let unread = act(MailAction::MarkRead { read: false }).await;
-    assert!(!unread.op_ids.is_empty());
+    assert!(!unread.op_ids.is_empty(), "{:?}", unread.op_ids);
     eventually("unread on the server", || async {
         demo.work.store().mailboxes().iter().all(|m| {
             m.messages
@@ -853,5 +853,149 @@ async fn the_lab_move_conversation_on_the_imap_server() {
         demo.work.command_count("UID STORE") <= 2,
         "one per folder: {:?}",
         demo.work.commands()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// P3 review fixes
+
+/// Trash never deletes for good: Delete on a conversation listed in Trash
+/// leaves its Trash copies (only Delete permanently removes them, with its
+/// own scope and question).
+#[tokio::test]
+async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let trash = folder(&f, FolderRole::Trash);
+    let row = nightingale(&f, &inbox).await;
+    apply(
+        &f,
+        vec![MessageTarget::conversation(
+            row.id.clone(),
+            Some(inbox.id.clone()),
+        )],
+        MailAction::Trash,
+    )
+    .await;
+    let in_trash = where_are(&f, &row.id);
+    assert_eq!(in_trash, vec![(trash.id.clone(), 7)]);
+    let trash_row = nightingale(&f, &trash).await;
+    let again = f
+        .service
+        .handle(Request::ApplyMailAction {
+            targets: vec![MessageTarget::conversation(
+                trash_row.id.clone(),
+                Some(trash.id.clone()),
+            )],
+            action: MailAction::Trash,
+        })
+        .await;
+    assert_eq!(
+        issue_of(&again),
+        (
+            ErrorCode::InvalidRequest,
+            Some("mail-action-issue-no-messages".into())
+        )
+    );
+    // A single message in Trash too.
+    let one = f
+        .service
+        .handle(Request::ApplyMailAction {
+            targets: vec![MessageTarget::message(trash_row.latest_message_id.clone())],
+            action: MailAction::Trash,
+        })
+        .await;
+    assert_eq!(issue_of(&one).0, ErrorCode::InvalidRequest);
+    assert_eq!(where_are(&f, &row.id), in_trash, "nothing was expunged");
+
+    // A remote session without the permanent-delete scope cannot expunge
+    // through the older DeleteMessages either.
+    let mut grant = RemoteAccessPreset::NoSend.grant();
+    grant
+        .mail
+        .scopes
+        .retain(|s| *s != nail_api::mcp::McpScope::PermanentDelete);
+    let ctx = remote_session(&f, "organize-only", grant).await;
+    let refused = f
+        .service
+        .handle_remote(
+            &ctx,
+            Request::DeleteMessages {
+                message_ids: vec![trash_row.latest_message_id.clone()],
+                permanent: false,
+            },
+        )
+        .await;
+    assert_eq!(issue_of(&refused).0, ErrorCode::Forbidden);
+    assert_eq!(where_are(&f, &row.id), in_trash);
+}
+
+/// Delete is Gmail's: the whole thread goes to Trash, also its archived
+/// messages; restoring it from Trash to the Inbox puts the user's replies
+/// back into Sent, not into the Inbox.
+#[tokio::test]
+async fn delete_takes_the_whole_thread_and_a_restore_returns_replies_to_sent() {
+    let f = setup();
+    let inbox = folder(&f, FolderRole::Inbox);
+    let archive = folder(&f, FolderRole::Archive);
+    let sent = folder(&f, FolderRole::Sent);
+    let trash = folder(&f, FolderRole::Trash);
+    let row = nightingale(&f, &inbox).await;
+    // The account's configured address is not the one its mail is sent
+    // from: the addresses in Sent still tell which messages are the user's.
+    let store = f.service.store();
+    let mut account = store.get_account(&AccountId::new(DEMO_ACCOUNT_ID)).unwrap();
+    account.email = "someone-else@example.org".into();
+    store.upsert_account(&account).unwrap();
+    // One message of the conversation was archived on its own earlier.
+    let (_, messages) = f.service.store().get_thread(&row.id, None).unwrap();
+    let archived = messages
+        .iter()
+        .find(|m| m.folder_id == inbox.id)
+        .unwrap()
+        .id
+        .clone();
+    apply(
+        &f,
+        vec![MessageTarget::message(archived.clone())],
+        MailAction::Archive,
+    )
+    .await;
+    let before = where_are(&f, &row.id);
+    assert!(before.contains(&(archive.id.clone(), 1)), "{before:?}");
+    let deleted = apply(
+        &f,
+        vec![MessageTarget::conversation(
+            row.id.clone(),
+            Some(inbox.id.clone()),
+        )],
+        MailAction::Trash,
+    )
+    .await;
+    assert_eq!(deleted.message_ids.len(), 7, "inbox, archive and Sent");
+    assert_eq!(where_are(&f, &row.id), vec![(trash.id.clone(), 7)]);
+
+    // Restored without the undo: Move to Inbox from Trash.
+    let trash_row = nightingale(&f, &trash).await;
+    apply(
+        &f,
+        vec![MessageTarget::conversation(
+            trash_row.id.clone(),
+            Some(trash.id.clone()),
+        )],
+        MailAction::Move {
+            target: MoveTarget::Role(FolderRole::Inbox),
+        },
+    )
+    .await;
+    let restored = where_are(&f, &row.id);
+    assert_eq!(
+        restored,
+        {
+            let mut v = vec![(inbox.id.clone(), 4), (sent.id.clone(), 3)];
+            v.sort();
+            v
+        },
+        "the user's replies go back to Sent"
     );
 }

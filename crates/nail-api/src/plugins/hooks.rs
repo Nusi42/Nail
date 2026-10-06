@@ -604,11 +604,11 @@ mod tests {
             "addContent": [{"text": "Ticket 4711"}]
         }))
         .unwrap();
-        assert!(ok.problems().is_empty());
+        assert_eq!(ok.problems().len(), 0);
         assert_eq!(ok.add_content[0].position, PluginContentPosition::Bottom);
         let veto: PluginBeforeSendResult =
             serde_json::from_value(json!({"veto": {"reason": "No attachment"}})).unwrap();
-        assert!(veto.problems().is_empty());
+        assert_eq!(veto.problems().len(), 0);
         let bad = PluginBeforeSendResult {
             veto: Some(PluginVetoSpec { reason: " ".into() }),
             headers: vec![
@@ -647,7 +647,7 @@ mod tests {
             "badges": [{"text": "VIP", "icon": "star"}]
         }))
         .unwrap();
-        assert!(ok.problems().is_empty());
+        assert_eq!(ok.problems().len(), 0);
         let bad = PluginOpenResult {
             banners: vec![PluginBannerSpec {
                 id: "Bad Id".into(),

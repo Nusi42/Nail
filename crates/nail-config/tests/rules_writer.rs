@@ -317,7 +317,7 @@ fn single_line_blocks_are_merged() {
 fn files_survive_a_save_and_load() {
     let dir = tempfile::tempdir().unwrap();
     let missing = RulesDocument::load(dir.path()).unwrap();
-    assert!(missing.rules().is_empty());
+    assert_eq!(missing.rules().len(), 0);
     let d = doc();
     d.save(dir.path()).unwrap();
     let loaded = RulesDocument::load(dir.path()).unwrap();

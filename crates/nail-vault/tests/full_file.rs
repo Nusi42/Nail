@@ -369,7 +369,7 @@ fn a_failed_delivery_keeps_the_old_recovery_key() {
     let err = ready
         .vault
         .create_recovery_key_with(|key, created| {
-            assert!(!created.is_empty());
+            assert!(!created.is_empty(), "{created:?}");
             offered = key.to_owned();
             Err(VaultError::VaultFile("the kit cannot be written".into()))
         })

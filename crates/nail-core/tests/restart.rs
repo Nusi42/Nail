@@ -132,7 +132,7 @@ async fn an_encrypted_profile_reads_again_after_a_restart() {
 
     // Every blob on disk is sealed.
     let blobs = files(&data.path().join("blobs"));
-    assert!(!blobs.is_empty());
+    assert!(!blobs.is_empty(), "{blobs:?}");
     assert!(
         blobs.iter().all(|p| std::fs::read(p)
             .unwrap()

@@ -25,7 +25,7 @@ fn all_errors_of_a_file_are_kept_and_reported() {
     write(dir.path(), "theme.kdl", TWO_ERRORS);
     let manager = ConfigManager::load(dir.path());
     assert_eq!(manager.file_errors(ConfigKind::Theme).len(), 2);
-    assert!(manager.file_errors(ConfigKind::Layout).is_empty());
+    assert_eq!(manager.file_errors(ConfigKind::Layout).len(), 0);
     // The M1a view: the first error per file.
     assert_eq!(manager.errors().len(), 1);
     assert_eq!(manager.errors()[0].line, 2);
@@ -185,7 +185,7 @@ fn update_layout_writes_the_file_and_reloads() {
             .any(|k| k.context == "list" && k.key == "e")
     );
     // The same edit again changes nothing.
-    assert!(manager.update_layout(&[patch]).unwrap().is_empty());
+    assert_eq!(manager.update_layout(&[patch]).unwrap().len(), 0);
     // A patch that does not fit.
     let err = manager
         .update_layout(&[LayoutPatch::SplitSizes {
@@ -221,7 +221,7 @@ fn merge_apply_backup_and_revert() {
     let incoming = "theme \"Theirs\" extends=\"default\" {\n    tokens {\n        color \"accent\" \"#0000ff\"\n    }\n}\n";
 
     let preview = manager.preview_merge(ConfigFile::Theme, incoming).unwrap();
-    assert!(!preview.sections.is_empty());
+    assert!(!preview.sections.is_empty(), "{:?}", preview.sections);
     let resolved = manager
         .resolve_merge(ConfigFile::Theme, incoming, &[], MergeTake::Theirs)
         .unwrap();

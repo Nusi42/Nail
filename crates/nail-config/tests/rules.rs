@@ -313,7 +313,7 @@ fn every_condition_kind_parses() {
     assert_eq!(conditions, &expected);
     // A rule without triggers, scope or actions is valid.
     assert!(rules[0].triggers.is_empty() && rules[0].scope.is_empty());
-    assert!(rules[0].actions.is_empty());
+    assert!(rules[0].actions.is_empty(), "{:?}", rules[0].actions);
 }
 
 /// Every action, trigger and scope kind.
@@ -706,8 +706,8 @@ fn text_form_of_one_rule() {
 
 #[test]
 fn an_empty_file_has_no_rules() {
-    assert!(parse("").is_empty());
-    assert!(parse("// only a comment\n").is_empty());
+    assert_eq!(parse("").len(), 0);
+    assert_eq!(parse("// only a comment\n").len(), 0);
     assert_eq!(render_rules(&[]), "");
 }
 

@@ -293,7 +293,9 @@ mod tests {
                 policy
                     .record_failure(&store, &keys, now)
                     .unwrap()
-                    .is_empty()
+                    .is_empty(),
+                "{:?}",
+                policy.record_failure(&store, &keys, now).unwrap()
             );
         }
         // The fourth failure makes the next attempt wait one second.
@@ -301,7 +303,9 @@ mod tests {
             policy
                 .record_failure(&store, &keys, now)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            policy.record_failure(&store, &keys, now).unwrap()
         );
         assert_eq!(
             policy.check(&store, &keys, now).unwrap(),
@@ -410,7 +414,9 @@ mod tests {
             policy
                 .record_failure(&store, &keys, 501)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            policy.record_failure(&store, &keys, 501).unwrap()
         );
     }
 

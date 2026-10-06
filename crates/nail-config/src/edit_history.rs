@@ -349,7 +349,7 @@ mod tests {
                 Some("a".into()),
             )],
         );
-        assert!(manager.edit_history(HistoryScope::Layout).undo.is_empty());
+        assert_eq!(manager.edit_history(HistoryScope::Layout).undo.len(), 0);
         for i in 0..(MAX_EDIT_HISTORY + 3) {
             manager.record_edit(
                 HistoryScope::Layout,
@@ -366,7 +366,9 @@ mod tests {
             manager
                 .edit_history(HistoryScope::Appearance)
                 .undo
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            manager.edit_history(HistoryScope::Appearance).undo
         );
     }
 

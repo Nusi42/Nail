@@ -757,7 +757,7 @@ fn missing_extensions_keep_rules_on_the_client() {
     );
     let wire = to_crlf(&compiled.script);
     nail_testkit_net::validate_script(&wire, &["fileinto".to_owned()]).unwrap();
-    assert!(compiled.required.is_empty());
+    assert!(compiled.required.is_empty(), "{:?}", compiled.required);
 }
 
 #[test]

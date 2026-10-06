@@ -610,7 +610,7 @@ mod tests {
         assert_eq!(all[0].sequence, 1);
         assert_eq!(all[0].status, Some(ParticipationStatus::Tentative));
         assert_eq!(store.forget_itip_state("uid-1").unwrap(), 1);
-        assert!(store.itip_states("uid-1").unwrap().is_empty());
+        assert_eq!(store.itip_states("uid-1").unwrap().len(), 0);
     }
 
     #[test]

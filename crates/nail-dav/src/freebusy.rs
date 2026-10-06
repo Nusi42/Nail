@@ -639,8 +639,8 @@ mod tests {
             "clipped at the range end"
         );
         assert_eq!(parsed[1].attendees, ["carol@example.org"]);
-        assert!(parsed[1].periods.is_empty());
-        assert!(parse("not a calendar").is_empty());
+        assert!(parsed[1].periods.is_empty(), "{:?}", parsed[1].periods);
+        assert_eq!(parse("not a calendar").len(), 0);
     }
 
     #[test]
@@ -756,6 +756,6 @@ mod tests {
                 .iter()
                 .any(|p| p.start == "2026-10-01T00:00:00Z" && p.end == "2026-10-02T00:00:00Z")
         );
-        assert!(own_busy_periods(&[], &all, |_| None).is_empty());
+        assert_eq!(own_busy_periods(&[], &all, |_| None).len(), 0);
     }
 }

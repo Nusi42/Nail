@@ -695,7 +695,7 @@ ORGANIZER:mailto:ada@example.org\r\nEND:VEVENT\r\n"
             ),
             None,
         );
-        assert!(publish.issues.is_empty());
+        assert!(publish.issues.is_empty(), "{:?}", publish.issues);
         let huge = parse_itip(&"x".repeat(MAX_ITIP_BYTES + 1), None);
         assert_eq!(huge.issues, [ItipIssue::Unparsable]);
     }
@@ -717,7 +717,9 @@ ORGANIZER:mailto:ada@example.org\r\n{attendees}END:VEVENT\r\n"
         assert!(
             reply("ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.org\r\n")
                 .issues
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            reply("ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.org\r\n").issues
         );
         assert_eq!(reply("").issues, [ItipIssue::AttendeeCount]);
         assert_eq!(

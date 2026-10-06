@@ -925,7 +925,10 @@ mod tests {
         assert_eq!(tokyo[1].start_utc, "2026-10-01T09:00:00Z");
         assert_eq!(expander.calls.load(Ordering::Relaxed), calls);
         // The day after in Tokyo has nothing.
-        assert!(day("Asia/Tokyo", "2026-10-01T15:00:00Z", "2026-10-02T15:00:00Z").is_empty());
+        assert_eq!(
+            day("Asia/Tokyo", "2026-10-01T15:00:00Z", "2026-10-02T15:00:00Z").len(),
+            0
+        );
         assert!(
             store
                 .list_event_instances(0, 10, None, "Not/AZone", &expander)
@@ -951,11 +954,12 @@ mod tests {
         store
             .update_calendar_settings(&CAL.into(), &settings)
             .unwrap();
-        assert!(
+        assert_eq!(
             store
                 .list_event_instances(range.0, range.1, None, "UTC", &expander)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         // Asked for by id, hidden calendars still answer.
         assert_eq!(
@@ -966,7 +970,7 @@ mod tests {
             1
         );
         // A range touching only the end is empty.
-        assert!(
+        assert_eq!(
             store
                 .list_event_instances(
                     at("2026-10-01T08:00:00Z"),
@@ -976,13 +980,15 @@ mod tests {
                     &expander
                 )
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
-        assert!(
+        assert_eq!(
             store
                 .list_event_instances(range.1, range.0, None, "UTC", &expander)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 
@@ -1062,11 +1068,12 @@ mod tests {
         store
             .delete_pim_item(&PimItem::Event(e).item_ref(), 2)
             .unwrap();
-        assert!(
+        assert_eq!(
             store
                 .list_event_instances(range.0, range.1, None, "UTC", &expander)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 

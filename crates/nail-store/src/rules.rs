@@ -736,7 +736,7 @@ mod tests {
             store.get_rule_run(&run).unwrap().state,
             RuleRunState::Running
         );
-        assert!(store.list_ops(None).unwrap().is_empty());
+        assert_eq!(store.list_ops(None).unwrap().len(), 0);
         assert!(
             store
                 .undo_rule_run(&"run-9".into())
@@ -817,10 +817,10 @@ mod tests {
         store.queue_for_rules(&["m1".into()], 9).unwrap();
         assert_eq!(store.rule_inbox(10).unwrap(), [MessageId::from("m1")]);
         store.clear_rule_inbox(&["m1".into()]).unwrap();
-        assert!(store.rule_inbox(10).unwrap().is_empty());
+        assert_eq!(store.rule_inbox(10).unwrap().len(), 0);
         // Deleting a message drops it from the inbox.
         store.queue_for_rules(&["m1".into()], 11).unwrap();
         store.delete_message(&"m1".into()).unwrap();
-        assert!(store.rule_inbox(10).unwrap().is_empty());
+        assert_eq!(store.rule_inbox(10).unwrap().len(), 0);
     }
 }

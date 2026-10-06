@@ -176,7 +176,7 @@ mod tests {
                 })
                 .await,
         );
-        assert!(start.undo.is_empty());
+        assert!(start.undo.is_empty(), "{:?}", start.undo);
         assert_eq!(start.revision, nail_api::editing::NO_REVISION);
 
         let answer = service
@@ -265,7 +265,7 @@ mod tests {
                 })
                 .await,
         );
-        assert!(forced.undo.is_empty());
+        assert!(forced.undo.is_empty(), "{:?}", forced.undo);
     }
 
     #[tokio::test]

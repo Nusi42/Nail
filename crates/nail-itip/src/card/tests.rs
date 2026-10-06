@@ -108,7 +108,7 @@ fn a_new_invitation_for_an_attendee() {
             A::Forward
         ]
     );
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
     assert!(inv.event_id.is_none());
 }
 
@@ -151,10 +151,10 @@ fn spoofed_invitations_are_flagged() {
         &bob(),
         None,
     );
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
     // No sender known: no check.
     let inv = card(&text, &[], &bob(), None);
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn cancellations() {
     assert_eq!(inv.actions, [A::RemoveFromCalendar, A::OpenEvent]);
     let inv = card(&text, &["ada@example.org"], &bob(), None);
     assert_eq!(inv.state, InvitationState::Cancelled);
-    assert!(inv.actions.is_empty());
+    assert!(inv.actions.is_empty(), "{:?}", inv.actions);
     // Equal SEQUENCE still cancels; an older one does not.
     let same = text.replace("SEQUENCE:2", "SEQUENCE:1");
     assert_eq!(
@@ -410,7 +410,7 @@ fn replies_on_the_organizer_side() {
     assert_eq!(from.status, ParticipationStatus::Accepted);
     assert_eq!(inv.comment.as_deref(), Some("See you"));
     assert_eq!(inv.actions, [A::ApplyReply, A::OpenEvent]);
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
 
     // Already recorded: current.
     let needs_action = reply("NEEDS-ACTION", 1, "20261001T090000Z");
@@ -451,7 +451,7 @@ fn replies_on_the_organizer_side() {
     // Unknown event.
     let inv = card(&accepted, &["bob@example.org"], &ada(), None);
     assert_eq!(inv.state, InvitationState::UnknownEvent);
-    assert!(inv.actions.is_empty());
+    assert!(inv.actions.is_empty(), "{:?}", inv.actions);
 }
 
 #[test]
@@ -517,7 +517,7 @@ SUMMARY:Webinar\r\nEND:VEVENT\r\n",
     assert_eq!(inv.role, InvitationRole::Observer);
     assert_eq!(inv.state, InvitationState::New);
     assert_eq!(inv.actions, [A::AddToCalendar]);
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
 
     let add = cal(
         "ADD",
@@ -545,7 +545,7 @@ ORGANIZER:mailto:ada@example.org\r\nATTENDEE:mailto:bob@example.org\r\nEND:VEVEN
 
     let broken = card("not a calendar", &[], &bob(), None);
     assert_eq!(broken.state, InvitationState::Invalid);
-    assert!(broken.actions.is_empty());
+    assert!(broken.actions.is_empty(), "{:?}", broken.actions);
     assert!(broken.issues.contains(&ItipIssue::Unparsable));
 }
 
@@ -585,7 +585,7 @@ fn conflicts_only_where_they_matter() {
         object: &cancel,
         ..input
     });
-    assert!(inv.conflicts.is_empty());
+    assert!(inv.conflicts.is_empty(), "{:?}", inv.conflicts);
 }
 
 #[test]
@@ -668,7 +668,7 @@ fn a_sent_by_claim_is_not_trusted() {
     assert_eq!(inv.issues, [ItipIssue::SentOnBehalf]);
     // The organizer sending themselves stays clean.
     let inv = card(&text, &["ceo@work.example"], &bob(), None);
-    assert!(inv.issues.is_empty());
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
 }
 
 #[test]
@@ -689,7 +689,9 @@ fn answers_from_uninvited_people_are_flagged() {
     assert!(
         card(&ok, &["bob@example.org"], &ada(), stored)
             .issues
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        card(&ok, &["bob@example.org"], &ada(), stored).issues
     );
     // A delegate an attendee declared is expected.
     let mut delegating = event.clone();
@@ -706,6 +708,8 @@ fn answers_from_uninvited_people_are_flagged() {
     assert!(
         card(&delegate, &["dan@example.org"], &ada(), stored)
             .issues
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        card(&delegate, &["dan@example.org"], &ada(), stored).issues
     );
 }

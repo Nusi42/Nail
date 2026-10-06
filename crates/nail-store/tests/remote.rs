@@ -182,7 +182,7 @@ fn passkeys_belong_to_users() {
     let user = store.rename_passkey(&found.passkey.id, "Laptop").unwrap();
     assert_eq!(user.passkeys[0].name, "Laptop");
     let user = store.delete_passkey(&found.passkey.id).unwrap();
-    assert!(user.passkeys.is_empty());
+    assert!(user.passkeys.is_empty(), "{:?}", user.passkeys);
     assert!(
         store
             .delete_passkey(&found.passkey.id)
@@ -307,11 +307,12 @@ fn sessions_rotate_expire_and_end() {
             .unwrap()
             .is_none()
     );
-    assert!(
+    assert_eq!(
         store
             .list_remote_sessions(&RemoteSessionFilter::default(), T0 + 1_001)
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
     let all = store
         .list_remote_sessions(
@@ -360,7 +361,9 @@ fn revoking_and_disabling_end_sessions() {
         store
             .revoke_remote_device(&phone.id, T0 + 2)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.revoke_remote_device(&phone.id, T0 + 2).unwrap()
     );
     assert!(
         store
@@ -419,7 +422,7 @@ fn revoking_and_disabling_end_sessions() {
     // Deleting a user removes devices, sessions and passkeys.
     assert!(store.delete_remote_user(&ada.id).unwrap());
     assert!(!store.delete_remote_user(&ada.id).unwrap());
-    assert!(store.list_remote_devices(Some(&ada.id)).unwrap().is_empty());
+    assert_eq!(store.list_remote_devices(Some(&ada.id)).unwrap().len(), 0);
     assert_eq!(store.list_remote_devices(None).unwrap().len(), 1);
 }
 

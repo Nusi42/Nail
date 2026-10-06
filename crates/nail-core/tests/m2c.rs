@@ -503,8 +503,8 @@ async fn mcp_settings_and_rules_from_messages() {
     else {
         panic!("no rule");
     };
-    assert!(rule.id.as_str().is_empty());
-    assert!(!rule.name.is_empty());
+    assert_eq!(rule.id.as_str().len(), 0);
+    assert!(!rule.name.is_empty(), "{:?}", rule.name);
     assert_eq!(
         error(
             s.handle(Request::RuleFromMessage {

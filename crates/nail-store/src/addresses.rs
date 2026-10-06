@@ -122,8 +122,8 @@ mod tests {
             "bob@example.org"
         );
         assert_eq!(store.suggest_addresses("B", 1).unwrap().len(), 1);
-        assert!(store.suggest_addresses("", 10).unwrap().is_empty());
-        assert!(store.suggest_addresses("z", 10).unwrap().is_empty());
+        assert_eq!(store.suggest_addresses("", 10).unwrap().len(), 0);
+        assert_eq!(store.suggest_addresses("z", 10).unwrap().len(), 0);
     }
 
     #[test]
@@ -137,6 +137,6 @@ mod tests {
             .unwrap();
         let hits = store.suggest_addresses("a_", 10).unwrap();
         assert_eq!(hits, [addr(None, "a_b@example.org")]);
-        assert!(store.suggest_addresses("%", 10).unwrap().is_empty());
+        assert_eq!(store.suggest_addresses("%", 10).unwrap().len(), 0);
     }
 }

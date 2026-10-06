@@ -114,7 +114,7 @@ fn accounts_reference_examples_are_valid() {
 #[test]
 fn accounts_guide_examples_are_valid() {
     let blocks = kdl_blocks("accounts.md");
-    assert!(!blocks.is_empty());
+    assert!(!blocks.is_empty(), "{blocks:?}");
     for block in blocks {
         if let Err(e) = nail_config::parse_accounts(&block, "accounts.kdl") {
             panic!("{e}\nin example:\n{block}");
@@ -137,7 +137,7 @@ fn customization_guide_examples_are_valid() {
 #[test]
 fn markdown_mail_examples_are_valid() {
     let blocks = kdl_blocks("markdown-mail.md");
-    assert!(!blocks.is_empty());
+    assert!(!blocks.is_empty(), "{blocks:?}");
     for block in blocks {
         let config = nail_config::parse_accounts(&block, "accounts.kdl")
             .unwrap_or_else(|e| panic!("{e}\nin example:\n{block}"));

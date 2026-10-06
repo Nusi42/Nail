@@ -466,7 +466,7 @@ async fn serves_blobs_by_hash() {
     )
     .await;
     assert_eq!(rebound.status(), StatusCode::FORBIDDEN);
-    assert!(body(rebound).await.is_empty());
+    assert_eq!(body(rebound).await.len(), 0);
 
     let bad = get(&f.service, None, "/api/blob/xyz").await;
     assert_eq!(bad.status(), StatusCode::BAD_REQUEST);

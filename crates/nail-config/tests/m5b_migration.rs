@@ -51,8 +51,8 @@ fn an_old_layout_keeps_its_main_window_and_inherits_the_views() {
         ["mail", "calendar", "contacts", "tasks", "settings"]
     );
     assert!(layout.windows.contains_key("mail"));
-    assert!(!layout.rail.is_empty());
-    assert!(!layout.settings.is_empty());
+    assert!(!layout.rail.is_empty(), "{:?}", layout.rail);
+    assert!(!layout.settings.is_empty(), "{:?}", layout.settings);
     assert!(layout.toolbars.contains_key("main"));
 }
 

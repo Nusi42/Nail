@@ -883,7 +883,7 @@ async fn hijacks_by_uid_are_never_applied() {
         get_event(&f, &event_id).await.fields.title == "Probe meeting (moved)"
     })
     .await;
-    assert!(card(&f, &update).await.issues.is_empty());
+    assert_eq!(card(&f, &update).await.issues.len(), 0);
     assert_eq!(card(&f, &original).await.state, InvitationState::Outdated);
 }
 

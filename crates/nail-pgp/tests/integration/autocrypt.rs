@@ -205,13 +205,13 @@ fn invalid_senders_and_headers_are_ignored() {
     );
     let update =
         process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
-    assert!(update.keys.is_empty());
+    assert!(update.keys.is_empty(), "{:?}", update.keys);
     // Two headers for the sender: none counts.
     let two = format!("Autocrypt: {value}\r\nAutocrypt: {value}\r\n");
     let msg = plain("alice@example.org", "bob@example.net", jan1, &two);
     let update =
         process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
-    assert!(update.keys.is_empty());
+    assert!(update.keys.is_empty(), "{:?}", update.keys);
     let peer = env
         .store
         .autocrypt_peer(&account(), "alice@example.org")
@@ -319,7 +319,7 @@ fn gossip_about_recipients_discourages() {
         &[gossip],
     )
     .unwrap();
-    assert!(update.keys.is_empty());
+    assert!(update.keys.is_empty(), "{:?}", update.keys);
 }
 
 #[test]
@@ -648,11 +648,12 @@ fn autocrypt_keys_vouch_only_for_the_header_address() {
     );
     let update =
         process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
-    assert!(update.keys.is_empty());
-    assert!(
+    assert!(update.keys.is_empty(), "{:?}", update.keys);
+    assert_eq!(
         ring.list(&nail_api::security::KeyFilter::default())
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
 
     // Gossip is bound to its address the same way.

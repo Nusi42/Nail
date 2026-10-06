@@ -201,7 +201,7 @@ mod tests {
     fn task_defaults_and_issues() {
         let fields: TaskFields = serde_json::from_value(json!({"title": "Pay rent"})).unwrap();
         assert_eq!(fields, TaskFields::titled("Pay rent"));
-        assert!(fields.issues().is_empty());
+        assert_eq!(fields.issues().len(), 0);
         let mut f = fields;
         f.start = Some(PimTime::date("2026-10-05"));
         f.due = Some(PimTime::date("2026-10-01"));

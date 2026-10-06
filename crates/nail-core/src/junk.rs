@@ -442,6 +442,6 @@ mod tests {
             tokens.iter().any(|t| t.contains("lottery.example")),
             "{tokens:?}"
         );
-        assert!(tokens_of(b"").is_empty());
+        assert_eq!(tokens_of(b"").len(), 0);
     }
 }

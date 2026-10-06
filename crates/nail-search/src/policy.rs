@@ -143,7 +143,11 @@ Content-Disposition: inline; filename=\"encrypted.asc\"\r\n\r\n\
         assert_eq!(doc.subject, "...");
         assert!(doc.from.contains("ada@example.org"));
         assert!(doc.body.is_empty(), "{:?}", doc.body);
-        assert!(doc.attachment_names.is_empty());
+        assert!(
+            doc.attachment_names.is_empty(),
+            "{:?}",
+            doc.attachment_names
+        );
     }
 
     #[test]

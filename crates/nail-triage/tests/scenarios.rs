@@ -159,7 +159,7 @@ fn marking_junk_trains_and_the_next_similar_message_lands_in_junk() {
     let class = classifier::classify(&store, &params, &account, &settings, &work).unwrap();
     let decision = plan_arrival(&settings, &facts, &account, Some(&class));
     assert!(!decision.verdict.unwrap().junk);
-    assert!(decision.ops.is_empty());
+    assert!(decision.ops.is_empty(), "{:?}", decision.ops);
 
     // Undoing the junk training takes the classifier back below readiness.
     for r in &receipts {
@@ -260,5 +260,5 @@ fn new_mail_notifies_and_quiet_hours_suppress_it() {
         end: "12:30".into(),
         days: vec![],
     });
-    assert!(notify::notifying(&settings, &[arrival], &noon).is_empty());
+    assert_eq!(notify::notifying(&settings, &[arrival], &noon).len(), 0);
 }

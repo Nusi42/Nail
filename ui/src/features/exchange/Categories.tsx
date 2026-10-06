@@ -24,7 +24,8 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { findSummary } from "../../state/mailOps";
-import { applyTags } from "../mail-actions/tags";
+import { TagCheckbox } from "../mail-actions/TagCheckbox";
+import { NO_TAGS, applyTags, tagChange, tagMark, useTargetTags } from "../mail-actions/tags";
 import { useClient } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
@@ -416,19 +417,25 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
   );
 }
 
-/** Dialog `exchange-apply-categories`: the categories of the selected message as check boxes. */
+/**
+ * Dialog `exchange-apply-categories`: the categories as check boxes over
+ * what the window opened for (the conversation, the picked rows or a card):
+ * checked when every message has the category, mixed when some have it.
+ */
 export function ApplyCategoriesDialog({ close }: DialogProps) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const store = useUiStoreApi();
-  const messageId = useUi((s) => s.selectedMessageId);
+  // What the window opened with: a selection change behind it changes nothing.
+  const [messageId] = useState(() => store.getState().selectedMessageId);
   const summary = useMemo(
     () => (messageId ? findSummary(queryClient, messageId) : undefined),
     [messageId, queryClient],
   );
   const categories = useCategories(summary?.exchange ? summary.account_id : null);
-  const [chosen, setChosen] = useState<Set<string> | null>(null);
+  const { counts } = useTargetTags();
+  const [decided, setDecided] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   if (!summary?.exchange) {
@@ -442,17 +449,13 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
     );
   }
   const list = categories.data ?? [];
-  const has = (name: string) =>
-    summary.tags.some((tag) => tag.toLowerCase() === name.toLowerCase());
-  const selected = chosen ?? new Set(list.filter((c) => has(c.name)).map((c) => c.name));
 
   const apply = async (event: SubmitEvent) => {
     event.preventDefault();
-    const add = list.filter((c) => selected.has(c.name) && !has(c.name)).map((c) => c.name);
-    const remove = summary.tags.filter(
-      (tag) =>
-        list.some((c) => c.name.toLowerCase() === tag.toLowerCase()) &&
-        ![...selected].some((s) => s.toLowerCase() === tag.toLowerCase()),
+    const { add, remove } = tagChange(
+      list.map((c) => c.name),
+      counts ?? NO_TAGS,
+      decided,
     );
     if (add.length === 0 && remove.length === 0) {
       close();
@@ -462,7 +465,9 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
     setProblem(null);
     try {
       // The whole conversation (or the picked rows / the card), as one undoable batch.
-      if ((await applyTags({ client, store, queryClient }, add, remove)) !== null) close();
+      if ((await applyTags({ client, store, queryClient }, add, remove, "category")) !== null) {
+        close();
+      }
     } catch (error) {
       setProblem(errorMessageOf(error));
     } finally {
@@ -483,14 +488,11 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
         {list.length === 0 && <p data-part="exchange.hint">{t("exchange-categories-none")}</p>}
         {list.map((c) => (
           <label key={c.id} data-part="form.check" data-color={c.color}>
-            <input
-              type="checkbox"
-              checked={selected.has(c.name)}
-              onChange={(e) => {
-                const next = new Set(selected);
-                if (e.target.checked) next.add(c.name);
-                else next.delete(c.name);
-                setChosen(next);
+            <TagCheckbox
+              mark={tagMark(counts ?? NO_TAGS, c.name)}
+              decided={decided.get(c.name)}
+              onDecide={(checked) => {
+                setDecided(new Map(decided).set(c.name, checked));
               }}
             />
             <CategorySwatch color={c.color} />

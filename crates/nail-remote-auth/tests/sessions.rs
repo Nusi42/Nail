@@ -175,7 +175,7 @@ async fn sweep_ends_idle_sessions_and_announces_them() {
     let mut browser = h.paired(&ada, "192.0.2.10").await;
     let id = browser.resolve(&h).unwrap().session.id;
     h.events();
-    assert!(h.auth.sweep().is_empty());
+    assert_eq!(h.auth.sweep().len(), 0);
     h.clock
         .advance(i64::from(h.auth.settings().session_idle_minutes) * 60);
     assert_eq!(h.auth.sweep(), std::slice::from_ref(&id));

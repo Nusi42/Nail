@@ -249,7 +249,7 @@ mod tests {
             Some(ExchangeDateTime::utc("2026-10-08T07:00:00"))
         );
         assert_eq!(task.created.as_deref(), Some("2026-09-01T10:00:00Z"));
-        assert!(task.checklist.is_empty());
+        assert!(task.checklist.is_empty(), "{:?}", task.checklist);
         let xml = task_create_xml(&task).unwrap();
         assert!(xml.contains("<t:DueDate>2026-10-09T22:00:00Z</t:DueDate>"));
         assert!(xml.contains("<t:Status>InProgress</t:Status>"));

@@ -348,8 +348,8 @@ mod tests {
             assert!(t.contains(&want.to_owned()), "{want} missing in {t:?}");
         }
         // Not a link: no host with a dot.
-        assert!(url_tokens("http://localhost/x").is_empty());
-        assert!(url_tokens("plain").is_empty());
+        assert_eq!(url_tokens("http://localhost/x").len(), 0);
+        assert_eq!(url_tokens("plain").len(), 0);
         assert_eq!(
             url_tokens("<https://user:pw@Mail.Example.org:8443/a>"),
             ["url:host:mail.example.org", "url:domain:example.org"]
@@ -417,7 +417,7 @@ mod tests {
             prop_assert!(t.len() <= tok.max_tokens);
             for token in &t {
                 prop_assert!(!token.is_empty());
-                prop_assert!(!token.chars().any(char::is_whitespace), "{:?}", token);
+                prop_assert!(!token.chars().any(char::is_whitespace), "{token:?}");
                 prop_assert_eq!(&token.to_lowercase(), token);
             }
             // Deterministic.
@@ -431,7 +431,7 @@ mod tests {
                 if token.starts_with("url:") {
                     continue;
                 }
-                prop_assert!(token.chars().count() <= tok.max_word_len.max(10), "{:?}", token);
+                prop_assert!(token.chars().count() <= tok.max_word_len.max(10), "{token:?}");
             }
         }
 

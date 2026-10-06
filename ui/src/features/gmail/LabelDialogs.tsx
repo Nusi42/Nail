@@ -20,9 +20,10 @@ import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { findSummary } from "../../state/mailOps";
-import { applyTags } from "../mail-actions/tags";
+import { TagCheckbox } from "../mail-actions/TagCheckbox";
+import { NO_TAGS, applyTags, tagChange, tagMark, useTargetTags } from "../mail-actions/tags";
 import { useClient } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { isWithin, labelIssues, leafOf, parentOf } from "./model";
 import { LABEL_EDITOR_DIALOG } from "./names";
@@ -367,21 +368,27 @@ export function LabelDeleteDialog({ close }: DialogProps) {
   );
 }
 
-/** Dialog `gmail-apply-labels`: the user labels of the selected message as check boxes. */
+/**
+ * Dialog `gmail-apply-labels`: the user labels as check boxes over what the
+ * window opened for (the conversation, the picked rows or a card): checked
+ * when every message has the label, mixed when some have it (P3 review).
+ */
 export function ApplyLabelsDialog({ close }: DialogProps) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const store = useUiStoreApi();
-  const messageId = useUi((s) => s.selectedMessageId);
+  // What the window opened with: a selection change behind it changes nothing.
+  const [messageId] = useState(() => store.getState().selectedMessageId);
   const summary = useMemo(
     () => (messageId ? findSummary(queryClient, messageId) : undefined),
     [messageId, queryClient],
   );
   const labels = useGmailLabels(summary?.gmail ? summary.account_id : null);
+  const { counts } = useTargetTags();
   const ids = { filter: useId() };
   const [filter, setFilter] = useState("");
-  const [chosen, setChosen] = useState<Set<string> | null>(null);
+  const [decided, setDecided] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   if (!summary?.gmail) {
@@ -396,14 +403,11 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
   }
   const user = (labels.data ?? []).filter((l) => l.kind === "user");
   const tagOf = (l: GmailLabel) => l.tag ?? l.name;
-  const has = (l: GmailLabel) =>
-    summary.tags.some((tag) => tag.toLowerCase() === tagOf(l).toLowerCase());
-  const selected = chosen ?? new Set(user.filter(has).map(tagOf));
+  const mark = (l: GmailLabel) => tagMark(counts ?? NO_TAGS, tagOf(l));
   const shown = user.filter((l) => l.name.toLowerCase().includes(filter.trim().toLowerCase()));
 
   const apply = async () => {
-    const add = user.filter((l) => selected.has(tagOf(l)) && !has(l)).map(tagOf);
-    const remove = user.filter((l) => !selected.has(tagOf(l)) && has(l)).map(tagOf);
+    const { add, remove } = tagChange(user.map(tagOf), counts ?? NO_TAGS, decided);
     if (add.length === 0 && remove.length === 0) {
       close();
       return;
@@ -412,7 +416,9 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
     setProblem(null);
     try {
       // The whole conversation (or the picked rows / the card), as one undoable batch.
-      if ((await applyTags({ client, store, queryClient }, add, remove)) !== null) close();
+      if ((await applyTags({ client, store, queryClient }, add, remove, "label")) !== null) {
+        close();
+      }
     } catch (error) {
       setProblem(errorMessageOf(error));
     } finally {
@@ -452,14 +458,11 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
         {shown.length === 0 && <p data-part="gmail.hint">{t("gmail-apply-none")}</p>}
         {shown.map((l) => (
           <label key={l.id} data-part="form.check" data-label={l.id}>
-            <input
-              type="checkbox"
-              checked={selected.has(tagOf(l))}
-              onChange={(e) => {
-                const next = new Set(selected);
-                if (e.target.checked) next.add(tagOf(l));
-                else next.delete(tagOf(l));
-                setChosen(next);
+            <TagCheckbox
+              mark={mark(l)}
+              decided={decided.get(tagOf(l))}
+              onDecide={(checked) => {
+                setDecided(new Map(decided).set(tagOf(l), checked));
               }}
             />
             <LabelSwatch label={l} />

@@ -21,9 +21,23 @@ import { useMailActions, type MailToast } from "./store";
 export const TOAST_MS = { done: 8000, undone: 4000, error: 8000 } as const;
 
 /** The toast's text: Fluent id and arguments. */
-export function toastMessage(toast: MailToast): { id: string; args?: Record<string, number> } {
+export function toastMessage(toast: MailToast): {
+  id: string;
+  args?: Record<string, number | string>;
+} {
   switch (toast.kind) {
     case "done":
+      if (toast.tags !== undefined) {
+        return {
+          id: `mail-actions-done-tags-${toast.tags.change}`,
+          args: {
+            conversations: toast.conversations,
+            messages: toast.messages,
+            noun: toast.tags.noun,
+            tags: toast.tags.count,
+          },
+        };
+      }
       return {
         id: `mail-actions-done-${toast.action}`,
         args: { conversations: toast.conversations, messages: toast.messages },

@@ -954,11 +954,12 @@ mod tests {
             ]
         );
         // Restricted to the DAV book: nothing.
-        assert!(
+        assert_eq!(
             store
                 .find_duplicate_contacts(Some(&[DAV_BOOK.into()]))
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 
@@ -983,7 +984,7 @@ mod tests {
             &store,
             &testing::contact("s2", "us2", "Other", &["some@example.org"]),
         );
-        assert!(store.find_duplicate_contacts(None).unwrap().is_empty());
+        assert_eq!(store.find_duplicate_contacts(None).unwrap().len(), 0);
     }
 
     #[test]
@@ -1038,7 +1039,7 @@ mod tests {
             .unwrap();
         assert_eq!(ids(&dav_only), ["o"]);
         // No longer duplicates.
-        assert!(store.find_duplicate_contacts(None).unwrap().is_empty());
+        assert_eq!(store.find_duplicate_contacts(None).unwrap().len(), 0);
         // Unlinking shows it on its own again.
         assert_eq!(
             store.unlink_contact(&"o".into()).unwrap(),
@@ -1046,7 +1047,7 @@ mod tests {
         );
         assert_eq!(store.list_contacts(None, None, 0, 10).unwrap().0, 2);
         // The server book's link queued nothing; the merged primary is local.
-        assert!(outcome.op_ids.is_empty());
+        assert!(outcome.op_ids.is_empty(), "{:?}", outcome.op_ids);
     }
 
     #[test]
@@ -1107,7 +1108,9 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .linked_ids
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.contact(&"a".into()).unwrap().unwrap().linked_ids
         );
     }
 
@@ -1286,11 +1289,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(object.raw.contains("FN:Eve\\; Admin"));
-        assert!(
+        assert_eq!(
             store
                 .collect_addresses(&[addr(None, "eve@example.org")], 12, "C")
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         // The usage was counted.
         assert_eq!(store.suggest_addresses("eve", 5).unwrap().len(), 1);
@@ -1362,7 +1366,7 @@ mod tests {
             store.suggest_recipients("turing", 10, now).unwrap().len(),
             1
         );
-        assert!(store.suggest_recipients(" ", 10, now).unwrap().is_empty());
+        assert_eq!(store.suggest_recipients(" ", 10, now).unwrap().len(), 0);
         assert_eq!(store.suggest_recipients("a", 1, now).unwrap().len(), 1);
         // Books with autocomplete off are skipped.
         let mut book = store.address_book(&BOOK.into()).unwrap().unwrap();
@@ -1378,6 +1382,6 @@ mod tests {
             .collect();
         assert!(!emails.contains(&"alan@example.org".to_owned()));
         // LIKE wildcards are literal.
-        assert!(store.suggest_recipients("%", 10, now).unwrap().is_empty());
+        assert_eq!(store.suggest_recipients("%", 10, now).unwrap().len(), 0);
     }
 }

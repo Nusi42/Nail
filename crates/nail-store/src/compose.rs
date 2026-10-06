@@ -857,7 +857,7 @@ mod tests {
             store.save_draft_at(&footer, &approved),
             Err(Error::DraftChanged(_))
         ));
-        assert!(store.list_outbox().unwrap().is_empty());
+        assert_eq!(store.list_outbox().unwrap().len(), 0);
         assert!(!store.get_draft(&id).unwrap().text.ends_with("footer"));
 
         // At the expected revision: the checked save returns the next
@@ -969,7 +969,7 @@ mod tests {
         store.save_draft(&fewer).unwrap();
         assert_eq!(store.draft_blob_hashes().unwrap().len(), 1);
         assert!(store.delete_draft(&id).unwrap());
-        assert!(store.draft_blob_hashes().unwrap().is_empty());
+        assert_eq!(store.draft_blob_hashes().unwrap().len(), 0);
 
         // A bad blob reference is refused and nothing is saved.
         let bad = Draft {
@@ -977,7 +977,7 @@ mod tests {
             ..draft("Bad")
         };
         assert!(matches!(store.save_draft(&bad), Err(Error::InvalidHash(_))));
-        assert!(store.list_drafts().unwrap().is_empty());
+        assert_eq!(store.list_drafts().unwrap().len(), 0);
     }
 
     #[test]
@@ -1050,7 +1050,7 @@ mod tests {
 
         // Undo send.
         assert_eq!(store.cancel_send(&entry.id).unwrap(), id);
-        assert!(store.list_outbox().unwrap().is_empty());
+        assert_eq!(store.list_outbox().unwrap().len(), 0);
         assert!(matches!(
             store.cancel_send(&entry.id),
             Err(Error::Conflict(_))
@@ -1058,7 +1058,7 @@ mod tests {
 
         // Send for real.
         let entry = store.schedule_send(&id, &"a1".into(), 2_000).unwrap();
-        assert!(store.claim_due_sends(1_999).unwrap().is_empty());
+        assert_eq!(store.claim_due_sends(1_999).unwrap().len(), 0);
         let claimed = store.claim_due_sends(2_000).unwrap();
         assert_eq!(claimed.len(), 1);
         assert_eq!(

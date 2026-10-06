@@ -193,7 +193,7 @@ fn plain_text_reply_is_flowed_and_threaded() {
         ["root@example.org", "parent@example.org"]
     );
     assert_eq!(parsed.sanitized_html, None);
-    assert!(parsed.attachments.is_empty());
+    assert!(parsed.attachments.is_empty(), "{:?}", parsed.attachments);
     let text = parsed.text.replace("\r\n", "\n");
     assert!(
         text.starts_with("Hallo Bob,\n\nThis paragraph is long enough"),

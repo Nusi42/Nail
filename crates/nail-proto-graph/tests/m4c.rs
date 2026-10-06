@@ -194,7 +194,7 @@ async fn large_messages_go_up_in_upload_sessions_with_progress() {
         .await
         .unwrap();
     assert_eq!(server.sent()[1].via, "sendMail");
-    assert!(reports.into_inner().unwrap().is_empty());
+    assert_eq!(reports.into_inner().unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -351,7 +351,7 @@ async fn the_own_address_is_looked_up_once_when_not_configured() {
     let configured = engine_for(&server).with_own_address(" Ada@Contoso.example ");
     server.clear_requests();
     assert_eq!(configured.own_address().await.unwrap(), ME);
-    assert!(server.requests().is_empty());
+    assert_eq!(server.requests().len(), 0);
 }
 
 #[tokio::test]
@@ -527,7 +527,7 @@ async fn conversation_ids_are_thread_ids() {
     else {
         panic!("delta");
     };
-    assert!(!delta.added.is_empty());
+    assert!(!delta.added.is_empty(), "{:?}", delta.added);
     for m in &delta.added {
         let conversation = m.exchange.as_ref().and_then(|e| e.conversation_id.clone());
         assert!(conversation.is_some());

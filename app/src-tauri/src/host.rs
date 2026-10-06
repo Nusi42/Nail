@@ -754,7 +754,10 @@ mod tests {
 
         // The OS close button: closed, the kind stays popped out.
         fake.user_closes("popout-composer:d1");
-        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
+        assert_eq!(
+            pop_outs(f.service.handle(Request::ListPopOuts).await).len(),
+            0
+        );
         assert!(window_states(&f.service).await["composer"].popped_out);
 
         // Reopened (no title from the UI): the remembered place, the
@@ -782,8 +785,8 @@ mod tests {
                 })
                 .await,
         );
-        assert!(list.is_empty());
-        assert!(fake.labels().is_empty());
+        assert!(list.is_empty(), "{list:?}");
+        assert_eq!(fake.labels().len(), 0);
         assert!(!window_states(&f.service).await["composer"].popped_out);
 
         // The main window closes: every pop-out goes with it.
@@ -792,8 +795,11 @@ mod tests {
         }
         assert_eq!(fake.labels(), ["popout-rules", "popout-settings"]);
         f.host.main_window_closing();
-        assert!(fake.labels().is_empty());
-        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
+        assert_eq!(fake.labels().len(), 0);
+        assert_eq!(
+            pop_outs(f.service.handle(Request::ListPopOuts).await).len(),
+            0
+        );
 
         let mut changes = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -830,7 +836,10 @@ mod tests {
             ),
             "{response:?}"
         );
-        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
+        assert_eq!(
+            pop_outs(f.service.handle(Request::ListPopOuts).await).len(),
+            0
+        );
         f.service.shutdown().await;
     }
 

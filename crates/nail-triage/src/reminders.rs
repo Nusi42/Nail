@@ -1013,10 +1013,16 @@ mod tests {
             ["2026-10-05T09:00:00Z"]
         );
         fields.status = TaskStatus::Completed;
-        assert!(plan_alarms(&[Occurrence::task(&fields)], &berlin(), 0, i64::MAX).is_empty());
+        assert_eq!(
+            plan_alarms(&[Occurrence::task(&fields)], &berlin(), 0, i64::MAX).len(),
+            0
+        );
         let mut no_dates = TaskFields::titled("Someday");
         no_dates.alarms = vec![Alarm::minutes_before(5)];
-        assert!(plan_alarms(&[Occurrence::task(&no_dates)], &berlin(), 0, i64::MAX).is_empty());
+        assert_eq!(
+            plan_alarms(&[Occurrence::task(&no_dates)], &berlin(), 0, i64::MAX).len(),
+            0
+        );
         // Malformed times are skipped.
         assert_eq!(OccurrenceTime::of(&PimTime::date("2026-02-30")), None);
         assert!(matches!(
@@ -1045,7 +1051,7 @@ mod tests {
         let plan = plan_alarms(&occurrences, &berlin(), clock.unix(), i64::MAX);
         s.replan(&event("standup"), &plan).unwrap();
         assert_eq!(s.next_wake(), Some(at("2026-03-27T07:45:00Z")));
-        assert!(s.poll().unwrap().is_empty());
+        assert_eq!(s.poll().unwrap().len(), 0);
         clock.set(DateTime::from_timestamp(at("2026-03-27T07:45:00Z"), 0).unwrap());
         let fired = s.poll().unwrap();
         assert_eq!(fired.len(), 1);
@@ -1103,7 +1109,7 @@ mod tests {
         // Fired reminders survive another restart (listed, not re-fired).
         let mut s = scheduler(&store, &clock);
         assert_eq!(s.list().len(), 2);
-        assert!(s.poll().unwrap().is_empty());
+        assert_eq!(s.poll().unwrap().len(), 0);
         assert_eq!(s.next_wake(), None);
     }
 
@@ -1173,14 +1179,14 @@ mod tests {
         let ops = s.dismiss(&ids).unwrap();
         assert_eq!(ops.len(), 2);
         assert!(matches!(ops[0], ReminderOp::Acknowledge { .. }));
-        assert!(s.list().is_empty());
-        assert!(s.dismiss(&ids).unwrap().is_empty());
+        assert_eq!(s.list().len(), 0);
+        assert_eq!(s.dismiss(&ids).unwrap().len(), 0);
         // Dismissed stays dismissed across restarts and re-plans.
         let mut s = scheduler(&store, &clock);
-        assert!(s.list().is_empty());
+        assert_eq!(s.list().len(), 0);
         s.replan(&event("e"), &plan_alarms(&[occ], &berlin(), 0, i64::MAX))
             .unwrap();
-        assert!(s.list().is_empty());
+        assert_eq!(s.list().len(), 0);
         assert_eq!(
             store
                 .all()
@@ -1358,7 +1364,7 @@ mod tests {
             alarm_key: "0".into(),
         }];
         assert_eq!(limit_plan(small.clone(), now), small);
-        assert!(limit_plan(Vec::new(), now).is_empty());
+        assert_eq!(limit_plan(Vec::new(), now).len(), 0);
     }
 
     #[test]

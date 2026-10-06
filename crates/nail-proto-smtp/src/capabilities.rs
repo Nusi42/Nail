@@ -117,7 +117,9 @@ mod tests {
         assert!(
             Capabilities::from_lines(Vec::<&str>::new())
                 .auth_mechanisms()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            Capabilities::from_lines(Vec::<&str>::new()).auth_mechanisms()
         );
     }
 }

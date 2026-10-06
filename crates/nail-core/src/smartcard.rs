@@ -476,7 +476,7 @@ mod tests {
         .await
         .unwrap()
         .unwrap();
-        assert!(!signature.is_empty());
+        assert!(!signature.is_empty(), "{signature:?}");
         let (prompts, closed) = answering.await.unwrap();
         assert_eq!(prompts.len(), 2);
         assert_eq!(prompts[0].token_label, "Test card");

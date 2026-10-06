@@ -374,8 +374,8 @@ mod tests {
         let defaults: McpRateLimits = serde_json::from_value(json!({})).unwrap();
         assert_eq!(defaults, McpRateLimits::default());
         assert_eq!(defaults.writes_per_minute, Some(20));
-        assert!(defaults.issues().is_empty());
-        assert!(McpRateLimits::unlimited().issues().is_empty());
+        assert_eq!(defaults.issues().len(), 0);
+        assert_eq!(McpRateLimits::unlimited().issues().len(), 0);
         let off: McpRateLimits =
             serde_json::from_value(json!({"requests_per_minute": null})).unwrap();
         assert_eq!(off.requests_per_minute, None);
@@ -405,8 +405,8 @@ mod tests {
     fn mcp_settings_validate_the_port() {
         let s: McpSettings = serde_json::from_value(json!({})).unwrap();
         assert_eq!(s.port, None);
-        assert!(s.issues().is_empty());
-        assert!(McpSettings { port: Some(4799) }.issues().is_empty());
+        assert_eq!(s.issues().len(), 0);
+        assert_eq!(McpSettings { port: Some(4799) }.issues().len(), 0);
         assert_eq!(
             McpSettings { port: Some(80) }.issues(),
             [McpSettingsIssue::Port]

@@ -203,7 +203,7 @@ the **whole conversation**, like Gmail:
 | Action | What it acts on |
 | --- | --- |
 | Archive, Move, Snooze, Mark as junk | The conversation's messages in the folder you are looking at. Your own replies stay in Sent. |
-| Delete | Every message of the conversation, your replies in Sent included (never your drafts). |
+| Delete | The whole conversation in that account: its messages in every folder (archived ones too), your replies in Sent included — never your drafts, and nothing in Junk. Messages already in Trash stay there. |
 | Mark as read / unread, labels and categories | Every message of the conversation. |
 | Flag | The newest message you did not write (so the flag shows in the Inbox). |
 | Unflag | Every flagged message of the conversation. |
@@ -226,6 +226,11 @@ action acts on all of them.
 happened ("Conversation archived", "3 conversations moved to Trash") with
 **Undo**. Undo — or `z` up to an hour later — puts every message back where
 it was, flags and labels included. Deleting permanently cannot be undone.
+
+**Restore from Trash.** Without Undo (later than an hour, or after the
+message has gone), open Trash, select the conversation and move it to the
+Inbox (`v`): the mail you received goes to the Inbox, your own replies go
+back to Sent.
 
 After you archive, move or delete a conversation, the next one is selected.
 

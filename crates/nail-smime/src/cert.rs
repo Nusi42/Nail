@@ -527,7 +527,7 @@ mod tests {
         assert!(alice.can_encrypt());
         assert!(!alice.is_ca());
         assert!(alice.is_mail_certificate());
-        assert!(alice.unhandled_critical_extensions().is_empty());
+        assert_eq!(alice.unhandled_critical_extensions().len(), 0);
         let summary = alice.summary();
         assert_eq!(summary.not_before, "2020-01-01T00:00:00Z");
         assert_eq!(summary.not_after, "2125-01-01T00:00:00Z");

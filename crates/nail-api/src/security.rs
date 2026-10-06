@@ -1405,7 +1405,11 @@ mod tests {
         let settings: SecuritySettings = serde_json::from_value(json!({})).unwrap();
         assert_eq!(settings, SecuritySettings::default());
         assert_eq!(settings.key_lookup, KeyLookupPolicy::OnDemand);
-        assert!(settings.index_decrypted.is_empty());
+        assert!(
+            settings.index_decrypted.is_empty(),
+            "{:?}",
+            settings.index_decrypted
+        );
         let vault = VaultStatus::plain();
         assert_eq!(vault.state, VaultState::Plain);
         let parsed: VaultStatus = serde_json::from_value(json!({"state": "encrypted"})).unwrap();

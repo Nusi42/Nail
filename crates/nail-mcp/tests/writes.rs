@@ -15,7 +15,7 @@ mod common;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use common::{FakeData, create_client, grant, start, start_with_settings};
+use common::{FakeData, create_client, grant, start, start_with_settings, summary};
 use nail_api::agents::{
     ActionActor, ActionKind, ActionPolicyMode, ActionTargetKind, Confirmation, ConfirmationFilter,
     ConfirmationSource, ConfirmationState,
@@ -80,19 +80,21 @@ impl ClientHandler for Answering {
         config
     }
 
-    async fn create_elicitation(
+    fn create_elicitation(
         &self,
         request: ElicitRequestParams,
         _context: RequestContext<RoleClient>,
-    ) -> Result<ElicitResult, ErrorData> {
-        if let ElicitRequestParams::FormElicitationParams { message, .. } = request {
-            self.asked.lock().unwrap().push(message);
-        }
-        let mut result = ElicitResult::new(self.action.clone());
-        if let Some(content) = &self.content {
-            result = result.with_content(content.clone());
-        }
-        Ok(result)
+    ) -> impl Future<Output = Result<ElicitResult, ErrorData>> + Send {
+        std::future::ready({
+            if let ElicitRequestParams::FormElicitationParams { message, .. } = request {
+                self.asked.lock().unwrap().push(message);
+            }
+            let mut result = ElicitResult::new(self.action.clone());
+            if let Some(content) = &self.content {
+                result = result.with_content(content.clone());
+            }
+            Ok(result)
+        })
     }
 }
 
@@ -547,7 +549,11 @@ async fn policies_relax_or_tighten_confirmations() {
         env.store
             .list_confirmations(ConfirmationFilter::All, None, None, 10)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        env.store
+            .list_confirmations(ConfirmationFilter::All, None, None, 10)
+            .unwrap()
     );
     let waiting = {
         let client = client.clone();
@@ -604,7 +610,7 @@ async fn unanswered_confirmations_expire() {
     assert_eq!(result.is_error, Some(true));
     let v = value(&result);
     assert_eq!(v["status"], "expired", "{v}");
-    assert!(env.data.written().is_empty());
+    assert!(env.data.written().is_empty(), "{:?}", env.data.written());
     let decided = env
         .store
         .list_confirmations(ConfirmationFilter::Decided, None, None, 10)
@@ -786,7 +792,7 @@ async fn declining_the_form_denies_even_a_delete() {
     .await
     .unwrap();
     assert_eq!(value(&result)["status"], "denied");
-    assert!(env.data.written().is_empty());
+    assert!(env.data.written().is_empty(), "{:?}", env.data.written());
     drop(client.cancel().await);
 }
 
@@ -1462,7 +1468,7 @@ async fn an_orphaned_confirmation_under_a_key_is_cancelled() {
         .get_confirmation(&orphan.confirmation().id)
         .unwrap();
     assert_eq!(ended.state, ConfirmationState::Cancelled);
-    assert!(env.data.written().is_empty());
+    assert!(env.data.written().is_empty(), "{:?}", env.data.written());
 }
 
 /// Review M4a: moving into Trash with `update_messages` is a delete: it
@@ -1501,7 +1507,7 @@ async fn moving_to_trash_asks_like_a_delete() {
         .unwrap()
         .unwrap();
     assert_eq!(value(&result)["status"], "denied");
-    assert!(env.data.written().is_empty());
+    assert!(env.data.written().is_empty(), "{:?}", env.data.written());
 }
 
 /// P3 (ADR 0164): conversations resolve per action in the core and run as
@@ -1609,4 +1615,66 @@ async fn conversations_act_within_the_grant_and_confirm_with_counts() {
     )
     .await;
     assert_eq!(r.is_error, Some(true));
+}
+
+/// P3 review: the confirmation counts only conversations with a message
+/// the grant covers (a thread wholly outside the grant is neither counted
+/// nor hinted at).
+#[tokio::test]
+async fn conversation_counts_leave_out_conversations_outside_the_grant() {
+    let mut data = FakeData::default();
+    data.messages
+        .push(summary("m9", "home", "home-inbox", "t9"));
+    let env = start_with_settings(
+        data,
+        WriteSettings {
+            poll_interval: Duration::from_millis(50),
+            ..WriteSettings::default()
+        },
+    )
+    .await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let waiting = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            call(
+                &client,
+                "delete_messages",
+                json!({"conversations": [{"thread_id": "t9"}, {"thread_id": "t3"}]}),
+            )
+            .await
+        })
+    };
+    let confirmation = pending(&env.store).await;
+    let arg = |name: &str| serde_json::to_value(&confirmation.summary.args).unwrap()[name].clone();
+    assert_eq!(arg("conversations"), json!(1));
+    assert_eq!(arg("count"), json!(1));
+    decide(&env.store, &confirmation, false);
+    drop(tokio::time::timeout(Duration::from_secs(10), waiting).await);
+}
+
+/// P3 review: "to Trash" on a message already in Trash would delete it for
+/// good, so it is refused without `permanent`.
+#[tokio::test]
+async fn trash_of_a_message_in_trash_needs_permanent() {
+    let mut data = FakeData::default();
+    data.messages
+        .push(summary("m8", "work", "work-trash", "t8"));
+    let env = start_with_settings(
+        data,
+        WriteSettings {
+            poll_interval: Duration::from_millis(50),
+            ..WriteSettings::default()
+        },
+    )
+    .await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+    let client = plain(env.server.url(), &token).await;
+    let r = call(&client, "delete_messages", json!({"message_ids": ["m8"]})).await;
+    assert_eq!(r.is_error, Some(true), "{r:?}");
+    let written = env.data.written();
+    assert!(written.is_empty(), "{written:?}");
 }

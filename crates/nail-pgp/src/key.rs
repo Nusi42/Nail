@@ -813,7 +813,7 @@ mod tests {
         assert!(keys.is_empty());
 
         let (keys, issues) = parse_keys(&fixture("bob.sec.asc"));
-        assert!(issues.is_empty());
+        assert!(issues.is_empty(), "{issues:?}");
         assert!(matches!(keys[0], ParsedKey::Secret(_)));
     }
 

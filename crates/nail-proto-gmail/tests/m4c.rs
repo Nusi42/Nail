@@ -49,7 +49,7 @@ async fn every_listed_message_carries_its_gmail_thread() {
     let server = MockGmailServer::start_demo().await.unwrap();
     let engine = engine(&server);
     let (cursor, messages) = listing(&engine).await;
-    assert!(!messages.is_empty());
+    assert!(!messages.is_empty(), "{messages:?}");
     for m in &messages {
         let info = m.gmail.as_ref().expect("gmail data");
         assert_eq!(m.thread_id.as_deref(), Some(info.thread_id.as_str()));

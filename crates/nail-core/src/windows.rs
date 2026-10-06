@@ -574,7 +574,10 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let config = tempfile::tempdir().unwrap();
         let service = service(config.path(), data.path(), None);
-        assert!(pop_outs(service.handle(Request::ListPopOuts).await).is_empty());
+        assert_eq!(
+            pop_outs(service.handle(Request::ListPopOuts).await).len(),
+            0
+        );
         assert_eq!(
             error(
                 service
@@ -718,7 +721,10 @@ mod tests {
             change: PopOutChange::Moved,
             geometry: Some(geometry(1)),
         });
-        assert!(pop_outs(service.handle(Request::ListPopOuts).await).is_empty());
+        assert_eq!(
+            pop_outs(service.handle(Request::ListPopOuts).await).len(),
+            0
+        );
         let seen = drain(&mut events);
         assert!(seen.iter().any(|e| matches!(
             e,

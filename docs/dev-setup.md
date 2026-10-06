@@ -8,7 +8,7 @@ is the primary platform. User-facing documentation lives in
 
 | Tool | Version | Notes |
 | --- | --- | --- |
-| Rust | 1.97, `x86_64-pc-windows-msvc` | `rustup component add rustfmt clippy` |
+| Rust | stable (1.99; `rust-version` 1.97), `x86_64-pc-windows-msvc` | `rustup component add rustfmt clippy` |
 | Visual Studio Build Tools | 2022, "Desktop development with C++" | MSVC linker; SQLite and zstd are compiled from source |
 | Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`, `packages/*`); **not** pnpm (ADR 0001) |
 | WebView2 runtime | evergreen | Preinstalled on Windows 11; needed by the desktop app only |

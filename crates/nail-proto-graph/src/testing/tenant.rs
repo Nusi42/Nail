@@ -1169,9 +1169,9 @@ mod tests {
             mb.changed_since(&format!("msgs:{archive}"), start, now),
             [moved.as_str()]
         );
-        assert!(
-            mb.changed_since(&format!("msgs:{archive}"), now, now)
-                .is_empty()
+        assert_eq!(
+            mb.changed_since(&format!("msgs:{archive}"), now, now).len(),
+            0
         );
         assert!(mb.token_valid(start));
         mb.expire_deltas();
@@ -1205,7 +1205,7 @@ mod tests {
         let own = &tenant.mailboxes[&tenant.me];
         assert!(own.messages.len() >= 3);
         assert!(!own.events.is_empty() && !own.contacts.is_empty() && !own.tasks.is_empty());
-        assert!(own.changes.is_empty());
+        assert!(own.changes.is_empty(), "{:?}", own.changes);
         assert!(Tenant::from_fixture("{}").is_err());
         assert!(Tenant::from_fixture(r#"{"me": "a@b.example", "mailboxes": []}"#).is_err());
     }

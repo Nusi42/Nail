@@ -500,7 +500,7 @@ mod tests {
             ..MessageData::new("m", "a", "f")
         };
         assert_eq!(msg.header_values("RECEIVED"), ["a", "b"]);
-        assert!(msg.header_values("X-None").is_empty());
+        assert_eq!(msg.header_values("X-None").len(), 0);
         assert_eq!(msg.addresses(AddressField::Recipients).len(), 2);
     }
 }

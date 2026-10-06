@@ -273,7 +273,7 @@ mod tests {
             mail_scopes(GOOGLE, &[MailProtocol::Pop3]),
             ["https://mail.google.com/"]
         );
-        assert!(mail_scopes("other", &[MailProtocol::Imap]).is_empty());
+        assert_eq!(mail_scopes("other", &[MailProtocol::Imap]).len(), 0);
         assert_eq!(
             mail_scopes(GOOGLE, &[MailProtocol::Gmail]),
             ["https://mail.google.com/"]

@@ -74,11 +74,76 @@ mail-actions-done-unflag = { $conversations ->
 }
 mail-actions-done-tags = { $conversations ->
     [0] { $messages ->
-        [one] Message labelled
-       *[other] { $messages } messages labelled
+        [one] Tags of the message changed
+       *[other] Tags of { $messages } messages changed
     }
-    [one] Conversation labelled
-   *[other] { $conversations } conversations labelled
+    [one] Tags of the conversation changed
+   *[other] Tags of { $conversations } conversations changed
+}
+# A tag change: $noun = label (Gmail), category (Exchange) or tag; $tags = how
+# many were added or removed.
+mail-actions-done-tags-added = { $noun ->
+    [label] { $tags ->
+        [one] Label
+       *[other] Labels
+    }
+    [category] { $tags ->
+        [one] Category
+       *[other] Categories
+    }
+   *[tag] { $tags ->
+        [one] Tag
+       *[other] Tags
+    }
+} added to { $conversations ->
+    [0] { $messages ->
+        [one] the message
+       *[other] { $messages } messages
+    }
+    [one] the conversation
+   *[other] { $conversations } conversations
+}
+mail-actions-done-tags-removed = { $noun ->
+    [label] { $tags ->
+        [one] Label
+       *[other] Labels
+    }
+    [category] { $tags ->
+        [one] Category
+       *[other] Categories
+    }
+   *[tag] { $tags ->
+        [one] Tag
+       *[other] Tags
+    }
+} removed from { $conversations ->
+    [0] { $messages ->
+        [one] the message
+       *[other] { $messages } messages
+    }
+    [one] the conversation
+   *[other] { $conversations } conversations
+}
+mail-actions-done-tags-changed = { $noun ->
+    [label] { $tags ->
+        [one] Label
+       *[other] Labels
+    }
+    [category] { $tags ->
+        [one] Category
+       *[other] Categories
+    }
+   *[tag] { $tags ->
+        [one] Tag
+       *[other] Tags
+    }
+} changed on { $conversations ->
+    [0] { $messages ->
+        [one] the message
+       *[other] { $messages } messages
+    }
+    [one] the conversation
+   *[other] { $conversations } conversations
 }
 mail-actions-done-snooze = { $conversations ->
     [0] { $messages ->

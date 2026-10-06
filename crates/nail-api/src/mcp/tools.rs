@@ -221,9 +221,10 @@ pub struct DeleteMessagesArgs {
     /// The messages (at most 500).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub message_ids: Vec<String>,
-    /// Conversations as listed (P3, ADR 0164; at most 500): to Trash with
-    /// the user's replies from Sent; `permanent` only their messages in
-    /// Trash or Junk.
+    /// Conversations as listed (P3, ADR 0164; at most 500): to Trash the
+    /// whole thread in its account (archived messages and the user's
+    /// replies in Sent too; messages already in Trash stay); `permanent`
+    /// only their messages in Trash or Junk.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conversations: Vec<McpConversationArg>,
     /// Delete for good instead of moving to Trash (needs the

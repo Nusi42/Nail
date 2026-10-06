@@ -448,6 +448,6 @@ mod tests {
         buffer.push_str("ope><x>Envelope></x></soap11:Envelope>");
         let docs = split_envelopes(&mut buffer);
         assert_eq!(docs.len(), 1);
-        assert!(buffer.is_empty());
+        assert!(buffer.is_empty(), "{buffer:?}");
     }
 }

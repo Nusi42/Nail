@@ -351,7 +351,7 @@ mod tests {
         assert_eq!(to, [addr("Bob", "bob@x.org")]);
         assert_eq!(cc, [addr("", "carol@x.org"), addr("", "dave@x.org")]);
         let (_, cc) = reply_recipients(&original(), DraftContextMode::Reply, &own);
-        assert!(cc.is_empty());
+        assert!(cc.is_empty(), "{cc:?}");
         let mut mine = original();
         mine.from = vec![addr("Ada", "ada@work.example")];
         mine.reply_to = vec![];
@@ -415,7 +415,7 @@ mod tests {
             &own,
         );
         assert_eq!(forward.subject, "Fwd: Plans");
-        assert!(forward.to.is_empty());
+        assert!(forward.to.is_empty(), "{:?}", forward.to);
         assert_eq!(forward.attachments.len(), 1);
         assert_eq!(forward.replied_message(), None);
         assert!(

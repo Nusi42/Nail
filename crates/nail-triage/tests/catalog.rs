@@ -41,5 +41,5 @@ fn produced_ids_exist_in_english() {
         assert!(FLUENT_IDS.contains(&e.message_id()), "{}", e.message_id());
     }
     // German stays empty for now (per-key English fallback).
-    assert!(defined(&catalog("de").unwrap()).is_empty());
+    assert_eq!(defined(&catalog("de").unwrap()).len(), 0);
 }

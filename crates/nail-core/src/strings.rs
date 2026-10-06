@@ -82,7 +82,7 @@ mod tests {
             ),
             "On 1 May 2026, Bob wrote:"
         );
-        assert!(!message(None, "composer-forward-header").is_empty());
+        assert_ne!(message(None, "composer-forward-header").len(), 0);
         assert_eq!(message(None, "message-header-from"), "From");
     }
 

@@ -748,7 +748,11 @@ mod tests {
             assert_eq!(outcome.content, content, "{file}");
             assert!(outcome.status.encryption.is_none());
             assert_eq!(outcome.status.technology, CryptoTechnology::Smime);
-            assert!(!outcome.certificates.is_empty());
+            assert!(
+                !outcome.certificates.is_empty(),
+                "{:?}",
+                outcome.certificates
+            );
             assert_eq!(sig.signed_at.is_none(), file.contains("noattr"), "{file}");
         }
     }
@@ -852,9 +856,13 @@ mod tests {
             let enc = outcome.status.encryption.as_ref().expect("encryption");
             assert_eq!(enc.state, DecryptionState::Decrypted, "{file} as {who}");
             assert_eq!(enc.algorithm.as_deref(), Some(algorithm), "{file}");
-            assert!(!enc.recipients.is_empty());
+            assert!(!enc.recipients.is_empty(), "{:?}", enc.recipients);
             assert_eq!(outcome.content, content, "{file} as {who}");
-            assert!(outcome.status.signatures.is_empty());
+            assert!(
+                outcome.status.signatures.is_empty(),
+                "{:?}",
+                outcome.status.signatures
+            );
             let expected = if who == "alice" { &w.alice.0 } else { &w.bob.0 };
             assert_eq!(
                 outcome.decrypted_with.as_deref(),

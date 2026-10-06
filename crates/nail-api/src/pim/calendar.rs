@@ -958,7 +958,7 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(fields, meeting());
-        assert!(fields.issues().is_empty());
+        assert_eq!(fields.issues().len(), 0);
         let value = serde_json::to_value(&fields).unwrap();
         assert_eq!(value["status"], "confirmed");
         assert_eq!(value["transparency"], "busy");
@@ -995,7 +995,7 @@ mod tests {
         // Different zones are compared by the core, not here.
         let mut f = meeting();
         f.end = PimTime::utc("2026-10-01T07:10:00");
-        assert!(f.issues().is_empty());
+        assert_eq!(f.issues().len(), 0);
     }
 
     #[test]
@@ -1068,7 +1068,7 @@ mod tests {
         let mut rec = Recurrence::rule(rule.clone());
         rec.exceptions
             .push(PimTime::zoned("2026-10-03T09:00:00", "Europe/Berlin"));
-        assert!(rec.issues(&start).is_empty());
+        assert_eq!(rec.issues(&start).len(), 0);
         assert!(!rec.is_empty());
         rec.exceptions.push(PimTime::date("2026-10-04"));
         assert_eq!(rec.issues(&start), [PimIssue::MixedAllDay]);
@@ -1087,7 +1087,7 @@ mod tests {
             serde_json::to_value(&alarm.trigger).unwrap(),
             json!({"type": "relative", "offset_secs": -900, "related": "start"})
         );
-        assert!(alarm.issues().is_empty());
+        assert_eq!(alarm.issues().len(), 0);
         let absolute = Alarm {
             trigger: AlarmTrigger::Absolute {
                 at: "2026-10-01T08:00:00".into(),
@@ -1104,7 +1104,7 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(parsed.action, AlarmAction::Display);
-        assert!(parsed.issues().is_empty());
+        assert_eq!(parsed.issues().len(), 0);
     }
 
     #[test]

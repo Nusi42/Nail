@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(plan.len(), 1);
         assert_eq!(plan[0].fire_at, at("2026-10-05T11:30:00Z"));
         task.fields.status = nail_api::pim::TaskStatus::Completed;
-        assert!(plan_task(&task, Tz::UTC, window.0, window.1).is_empty());
+        assert_eq!(plan_task(&task, Tz::UTC, window.0, window.1).len(), 0);
     }
 
     /// Series repeating every minute or second plan no reminders at all;
@@ -711,9 +711,15 @@ mod tests {
         };
         let window = (at("2026-10-05T00:00:00Z"), at("2026-10-06T00:00:00Z"));
         let budget = nail_ical::expand::ScanBudget::default();
-        assert!(plan_event(&event, Tz::UTC, window.0, window.1, &budget).is_empty());
+        assert_eq!(
+            plan_event(&event, Tz::UTC, window.0, window.1, &budget).len(),
+            0
+        );
         event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Minutely)));
-        assert!(plan_event(&event, Tz::UTC, window.0, window.1, &budget).is_empty());
+        assert_eq!(
+            plan_event(&event, Tz::UTC, window.0, window.1, &budget).len(),
+            0
+        );
         event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Hourly)));
         let plan = plan_event(&event, Tz::UTC, window.0, window.1, &budget);
         assert_eq!(plan.len(), 15);

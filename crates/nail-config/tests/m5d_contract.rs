@@ -222,7 +222,9 @@ fn layout_writes_are_undone_and_redone() {
         manager
             .edit_history(HistoryScope::Appearance)
             .undo
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        manager.edit_history(HistoryScope::Appearance).undo
     );
 
     let (history, updates) = manager.undo_edit(HistoryScope::Layout, false).unwrap();
@@ -297,7 +299,7 @@ fn appearance_writes_share_one_history() {
     );
 
     let (_, updates) = manager.undo_edit(HistoryScope::Appearance, false).unwrap();
-    assert!(!updates.is_empty());
+    assert!(!updates.is_empty(), "{updates:?}");
     assert_eq!(manager.appearance().settings.density, Density::Comfortable);
     assert_eq!(manager.appearance().active, "sage");
     manager.undo_edit(HistoryScope::Appearance, false).unwrap();

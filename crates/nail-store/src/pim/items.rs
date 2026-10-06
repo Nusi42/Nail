@@ -1530,7 +1530,7 @@ mod tests {
         let write = store
             .save_pim_item(&PimItem::Event(event.clone()), &raw("e1"), 10)
             .unwrap();
-        assert!(write.op_ids.is_empty());
+        assert!(write.op_ids.is_empty(), "{:?}", write.op_ids);
         let stored = store.event(&"ev1".into()).unwrap().unwrap();
         assert_eq!(stored, event);
         let object = store.pim_object(&write.item).unwrap().unwrap();
@@ -1545,7 +1545,7 @@ mod tests {
         assert_eq!(store.event(&"ev1".into()).unwrap().unwrap(), edited);
         assert_eq!(store.events(Some(&[CAL.into()])).unwrap().len(), 1);
         let deleted = store.delete_pim_item(&write.item, 12).unwrap();
-        assert!(deleted.op_ids.is_empty());
+        assert!(deleted.op_ids.is_empty(), "{:?}", deleted.op_ids);
         assert!(store.event(&"ev1".into()).unwrap().is_none());
         assert!(store.pim_object(&write.item).unwrap().is_none());
         assert!(store.delete_pim_item(&write.item, 13).is_err());
@@ -1618,8 +1618,8 @@ mod tests {
         assert_eq!(again.op_ids, write.op_ids);
         // Deleting an item that never reached the server drops everything.
         let deleted = store.delete_pim_item(&write.item, 12).unwrap();
-        assert!(deleted.op_ids.is_empty());
-        assert!(store.pim_ops(None).unwrap().is_empty());
+        assert!(deleted.op_ids.is_empty(), "{:?}", deleted.op_ids);
+        assert_eq!(store.pim_ops(None).unwrap().len(), 0);
         assert!(store.pim_object(&write.item).unwrap().is_none());
     }
 
@@ -1825,7 +1825,9 @@ mod tests {
             store
                 .pim_ops(Some(crate::OpState::Pending))
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.pim_ops(Some(crate::OpState::Pending)).unwrap()
         );
     }
 
@@ -1938,7 +1940,9 @@ mod tests {
                 .move_pim_item(&reference, BOOK, 4)
                 .unwrap()
                 .op_ids
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.move_pim_item(&reference, BOOK, 4).unwrap().op_ids
         );
         assert!(store.move_pim_item(&reference, CAL, 4).is_err());
     }

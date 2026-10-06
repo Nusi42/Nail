@@ -659,7 +659,7 @@ mod tests {
             answer(json!({"actions": [{"type": "addTag", "tag": "x"}]})).unwrap();
         assert_eq!(arrival_problems(&ok), None);
         let nothing: PluginArrivalResult = answer(Value::Null).unwrap();
-        assert!(nothing.actions.is_empty());
+        assert!(nothing.actions.is_empty(), "{:?}", nothing.actions);
         let empty_tag: PluginArrivalResult =
             answer(json!({"actions": [{"type": "addTag", "tag": " "}]})).unwrap();
         assert!(arrival_problems(&empty_tag).is_some());

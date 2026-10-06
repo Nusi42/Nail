@@ -1670,7 +1670,7 @@ END:VCARD\r\n";
         assert_eq!(photo.mime_type.as_deref(), Some("image/jpeg"));
         assert_eq!(photo.sha256, c.photo.as_ref().map(|p| p.sha256.clone()));
         assert_eq!(c.updated_at.as_deref(), Some("2026-09-30T10:00:00Z"));
-        assert!(f.issues().is_empty(), "{:?}", f.issues());
+        assert_eq!(f.issues().len(), 0);
     }
 
     #[test]
@@ -1868,7 +1868,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Suppliers\r\nMEMBER:urn:uuid:ACME
         let back = parse_cards(&out).contacts.remove(0);
         assert_eq!(back.fields.title.as_deref(), Some("Ingenieur"));
         assert_eq!(back.fields.display_name, "Jürgen Müller");
-        assert!(!text.is_empty());
+        assert!(!text.is_empty(), "{text:?}");
     }
 
     #[test]

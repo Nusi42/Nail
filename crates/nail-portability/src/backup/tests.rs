@@ -425,7 +425,11 @@ fn backup_inspect_verify_plan_restore() {
     let mut archive = BackupArchive::open(&path, PASSPHRASE).unwrap();
     let mut verify = ctx(JobKind::VerifyBackup);
     archive.verify(&mut verify).unwrap();
-    assert!(verify.report.issues.is_empty());
+    assert!(
+        verify.report.issues.is_empty(),
+        "{:?}",
+        verify.report.issues
+    );
     assert_eq!(verify.report.counts.files, manifest.entries.len() as u64);
 
     // The dry run against an empty Nail: everything is added, nothing written.
@@ -564,7 +568,7 @@ fn only_chosen_items_are_restored_and_keys_when_included() {
     )
     .unwrap();
     assert_eq!(manifest.entries.len(), 2);
-    assert!(manifest.accounts.is_empty());
+    assert!(manifest.accounts.is_empty(), "{:?}", manifest.accounts);
     let mut archive = BackupArchive::open(&path, PASSPHRASE).unwrap();
     let mut target = Target::default();
     let only_theme = BackupContents {
@@ -579,7 +583,7 @@ fn only_chosen_items_are_restored_and_keys_when_included() {
         .find(|a| a.item == BackupItem::Keys)
         .unwrap();
     assert_eq!(keys.effect, RestoreEffect::Skip);
-    assert!(target.merged.is_empty());
+    assert!(target.merged.is_empty(), "{:?}", target.merged);
     assert!(!report.restart_required);
     let all = BackupContents::all();
     let plan = archive.plan(&all, &mut target).unwrap();

@@ -851,7 +851,7 @@ mod tests {
             from: "2026-10-05T00:00:00Z".into(),
             to: "2026-10-12T00:00:00Z".into(),
         };
-        assert!(ok.issues().is_empty());
+        assert_eq!(ok.issues().len(), 0);
         let bad = FreeBusyQuery {
             attendees: vec!["bob".into()],
             from: "2026-10-12T00:00:00Z".into(),

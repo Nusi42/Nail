@@ -1103,7 +1103,7 @@ mod tests {
         // No proxy (no key): nothing is served.
         let none = proxy_response(None, "/abc.def").await;
         assert_eq!(none.status(), 404);
-        assert!(none.body().is_empty());
+        assert_eq!(none.body().len(), 0);
         assert_eq!(none.headers()["x-content-type-options"], "nosniff");
 
         let data = tempfile::tempdir().unwrap();
@@ -1154,7 +1154,7 @@ mod tests {
         };
         // "All accounts" and the demo account.
         assert_eq!(accounts.len(), 2);
-        assert!(events.is_empty());
+        assert!(events.is_empty(), "{events:?}");
 
         let (response, events) = call(&service, Request::GetConfig).await;
         assert!(matches!(response, Response::Config { .. }));

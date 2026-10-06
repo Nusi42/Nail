@@ -125,7 +125,7 @@ async fn consecutive_operations_with_one_key_replay_together() {
             vec!["m5"],
         ]
     );
-    assert!(store.list_ops(Some(OpState::Pending)).unwrap().is_empty());
+    assert_eq!(store.list_ops(Some(OpState::Pending)).unwrap().len(), 0);
 }
 
 #[tokio::test]

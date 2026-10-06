@@ -860,7 +860,7 @@ mod tests {
         assert_eq!(preset.label, None);
         let layout: ResolvedLayout =
             serde_json::from_value(json!({"name": "x", "windows": {}})).unwrap();
-        assert!(layout.presets.is_empty());
+        assert!(layout.presets.is_empty(), "{:?}", layout.presets);
     }
 
     #[test]
@@ -868,7 +868,7 @@ mod tests {
         let key: KeyBinding =
             serde_json::from_value(json!({"key": "j", "action": "mail.next"})).unwrap();
         assert_eq!(key.context, "global");
-        assert!(key.args.is_empty());
+        assert!(key.args.is_empty(), "{:?}", key.args);
     }
 
     #[test]

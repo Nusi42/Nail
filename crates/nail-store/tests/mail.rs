@@ -11,7 +11,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn accounts_crud_and_order() {
     let store = Store::open_in_memory().unwrap();
-    assert!(store.list_accounts().unwrap().is_empty());
+    assert_eq!(store.list_accounts().unwrap().len(), 0);
 
     store.upsert_account(&account("b")).unwrap();
     store.upsert_account(&account("a")).unwrap();
@@ -291,10 +291,10 @@ fn list_messages_pages_newest_first() {
 
     let past_end = store.list_messages(&"inbox".into(), 10, 5).unwrap();
     assert_eq!(past_end.total, 6);
-    assert!(past_end.messages.is_empty());
+    assert!(past_end.messages.is_empty(), "{:?}", past_end.messages);
 
     let empty = store.list_messages(&"inbox".into(), 0, 0).unwrap();
-    assert!(empty.messages.is_empty());
+    assert!(empty.messages.is_empty(), "{:?}", empty.messages);
 
     assert!(
         store
@@ -639,6 +639,8 @@ fn sync_lookups_find_ids_moved_rows_and_flags() {
         store
             .folder_uid_flags(&"archive".into())
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.folder_uid_flags(&"archive".into()).unwrap()
     );
 }

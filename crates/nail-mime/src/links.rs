@@ -578,7 +578,7 @@ mod tests {
                 },
             ]
         );
-        assert!(html_links("<a href=\"x\"").is_empty());
+        assert_eq!(html_links("<a href=\"x\"").len(), 0);
         assert_eq!(
             decode_entities("&bogus; & &#9999999999;"),
             "&bogus; & &#9999999999;"
@@ -683,8 +683,11 @@ mod tests {
             .collect();
         assert_eq!(links, [0, 1, 2, 3, 4]);
         // mailto / tel links are not links for these checks.
-        assert!(html_warnings("<a href=\"mailto:a@evil.example\">a@bank.example</a>").is_empty());
-        assert!(html_warnings("<a href=\"not a url\">x</a>").is_empty());
+        assert_eq!(
+            html_warnings("<a href=\"mailto:a@evil.example\">a@bank.example</a>").len(),
+            0
+        );
+        assert_eq!(html_warnings("<a href=\"not a url\">x</a>").len(), 0);
     }
 
     #[test]

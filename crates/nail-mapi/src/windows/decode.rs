@@ -578,7 +578,7 @@ mod tests {
         assert_eq!(files[0].path, r"C:\a.txt");
         assert_eq!(files[0].file_name.as_deref(), Some("A.txt"));
         assert_eq!(files[1].file_name, None);
-        assert!(split_documents("", None, ';').is_empty());
+        assert_eq!(split_documents("", None, ';').len(), 0);
         let files = split_documents(r"C:\a|C:\b", None, '|');
         assert_eq!(files[1].path, r"C:\b");
     }

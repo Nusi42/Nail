@@ -123,7 +123,7 @@ async fn categories_live_in_the_category_list() {
 
     // A mailbox without a list yet.
     server.set_category_list(None);
-    assert!(engine.categories().await.unwrap().is_empty());
+    assert_eq!(engine.categories().await.unwrap().len(), 0);
     engine
         .create_category(&ExchangeCategorySettings::named("First"))
         .await
@@ -893,7 +893,7 @@ async fn meeting_responses() {
         .await
         .unwrap();
     assert_eq!(server.meeting_messages().len(), 1);
-    assert!(server.items_in(&drafts).is_empty());
+    assert_eq!(server.items_in(&drafts).len(), 0);
     assert!(server.items_in(&calendar).iter().all(|i| i.id != review.id));
     assert_eq!(
         engine

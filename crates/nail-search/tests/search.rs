@@ -240,7 +240,7 @@ fn free_text_and_fields() {
         "attachment names and body are searched"
     );
     assert_eq!(f.ids("\"new place\""), ["lunch"]);
-    assert!(f.ids("\"place new\"").is_empty());
+    assert_eq!(f.ids("\"place new\"").len(), 0);
     assert_eq!(f.ids("grusse"), ["grandma"], "ASCII folding");
     assert_eq!(f.ids("from:muller"), ["grandma"]);
     assert_eq!(f.ids("!!!"), f.ids(""), "text without words is ignored");
@@ -264,7 +264,7 @@ fn flags_tags_accounts_folders() {
         "virtual account by id"
     );
     assert_eq!(f.ids("account:all").len(), 4);
-    assert!(f.ids("account:nobody").is_empty());
+    assert_eq!(f.ids("account:nobody").len(), 0);
     assert_eq!(f.ids("folder:archive"), ["old"]);
     assert_eq!(f.ids("folder:inbox"), ["grandma", "lunch", "report"]);
 }
@@ -449,5 +449,5 @@ fn index_updates_are_visible_to_searches() {
     );
     // Messages the store no longer has are dropped from results.
     f.store.delete_message(&"old".into()).unwrap();
-    assert!(f.ids("revised").is_empty());
+    assert_eq!(f.ids("revised").len(), 0);
 }

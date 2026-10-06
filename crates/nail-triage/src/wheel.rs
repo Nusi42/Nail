@@ -269,7 +269,7 @@ mod tests {
         w.insert("b", 1_070);
         assert_eq!(w.len(), 3);
         assert_eq!(w.next_deadline(), Some(1_005));
-        assert!(w.advance(1_004).is_empty());
+        assert_eq!(w.advance(1_004).len(), 0);
         assert_eq!(w.advance(1_005), [("a", 1_005)]);
         assert_eq!(w.next_deadline(), Some(1_070));
         assert_eq!(w.advance(5_000), [("b", 1_070)]);
@@ -302,14 +302,14 @@ mod tests {
         // Re-inserting with the same deadline does not fire twice.
         w.insert("y", 50);
         assert_eq!(w.advance(1_000), [("y", 50)]);
-        assert!(w.advance(10_000).is_empty());
+        assert_eq!(w.advance(10_000).len(), 0);
     }
 
     #[test]
     fn time_does_not_run_backwards() {
         let mut w = TimerWheel::new(1_000);
         w.insert("a", 1_010);
-        assert!(w.advance(10).is_empty());
+        assert_eq!(w.advance(10).len(), 0);
         assert_eq!(w.now(), 1_000);
         assert_eq!(w.advance(1_010), [("a", 1_010)]);
     }

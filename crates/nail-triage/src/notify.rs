@@ -658,7 +658,7 @@ mod tests {
         let a3 = arrival("m3", "lists", FolderRole::Other);
         b.push(&s, &[&a1], 100);
         assert_eq!(b.next_due(), Some(103));
-        assert!(b.flush(102).is_empty());
+        assert_eq!(b.flush(102).len(), 0);
         b.push(&s, &[&a2, &a3, &a1], 102);
         assert_eq!(b.next_due(), Some(105));
         let out = b.flush(105);

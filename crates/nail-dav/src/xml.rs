@@ -227,12 +227,12 @@ SUMMARY:Tom &amp; Jerry &lt;3</C:calendar-data>
             "BEGIN:VCALENDAR\r\nSUMMARY:Tom & Jerry <3"
         );
         assert_eq!(prop.child_text(NS_DAV, "displayname"), Some("a <b>"));
-        assert!(prop.child(NS_DAV, "empty").unwrap().children.is_empty());
+        assert_eq!(prop.child(NS_DAV, "empty").unwrap().children.len(), 0);
         let data = prop.child(NS_CALDAV, "calendar-data").unwrap();
         assert_eq!(data.attr("content-type"), Some("text/calendar"));
         assert_eq!(data.attr("version"), Some("2.0"));
         assert_eq!(data.attr("missing"), None);
-        assert!(root.attrs.is_empty());
+        assert!(root.attrs.is_empty(), "{:?}", root.attrs);
         assert_eq!(root.children_named(NS_DAV, "response").count(), 1);
     }
 

@@ -81,7 +81,7 @@ mod tests {
     fn generates_distinct_material() {
         let a = TestTls::generate().unwrap();
         let b = TestTls::generate().unwrap();
-        assert!(!a.ca_der.is_empty());
+        assert!(!a.ca_der.is_empty(), "{:?}", a.ca_der);
         assert_ne!(a.ca_der, b.ca_der);
     }
 }

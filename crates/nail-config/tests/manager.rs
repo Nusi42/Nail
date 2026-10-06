@@ -26,7 +26,7 @@ fn an_empty_directory_uses_the_defaults() {
     let manager = ConfigManager::load(dir.path());
     assert_eq!(*manager.theme(), default_selected_theme());
     assert_eq!(*manager.layout(), default_layout());
-    assert!(manager.errors().is_empty());
+    assert_eq!(manager.errors().len(), 0);
     assert_eq!(manager.dir(), dir.path());
     // A directory that does not exist is fine, too.
     let manager = ConfigManager::load(dir.path().join("missing"));
@@ -45,7 +45,7 @@ fn user_files_are_loaded() {
         Some("#ff0000")
     );
     assert_eq!(manager.layout().windows["main"].len(), 1);
-    assert!(manager.errors().is_empty());
+    assert_eq!(manager.errors().len(), 0);
 }
 
 #[test]
@@ -115,12 +115,12 @@ fn reload_keeps_the_last_valid_configuration() {
     else {
         panic!("expected a change: {updates:?}");
     };
-    assert!(errors.is_empty());
+    assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(
         appearance.settings.overrides.accent.as_deref(),
         Some("#00ff00")
     );
-    assert!(manager.errors().is_empty());
+    assert_eq!(manager.errors().len(), 0);
     assert_eq!(
         manager.theme().tokens.get("color", "accent"),
         Some("#00ff00")
@@ -202,7 +202,7 @@ fn the_watcher_reports_changes_and_errors() {
         &rx,
         |u| matches!(u, ConfigUpdate::Changed { theme, .. } if theme.name == "Mine"),
     );
-    assert!(manager.errors().is_empty());
+    assert_eq!(manager.errors().len(), 0);
 
     // Other files in the directory are ignored.
     write(&config_dir, "notes.txt", "hello");

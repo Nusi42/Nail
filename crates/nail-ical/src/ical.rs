@@ -1473,7 +1473,7 @@ END:VEVENT\r\n");
                 at: "2026-10-04T12:00:00Z".into()
             }
         );
-        assert!(f.issues().is_empty(), "{:?}", f.issues());
+        assert_eq!(f.issues().len(), 0);
         assert_eq!(event.sequence, 3);
         assert_eq!(event.created_at.as_deref(), Some("2026-09-01T10:00:00Z"));
         assert_eq!(event.updated_at.as_deref(), Some("2026-09-02T10:00:00Z"));
@@ -1505,7 +1505,7 @@ END:VEVENT\r\n");
             "BEGIN:VEVENT\r\nUID:a\r\nDTSTART;VALUE=DATE:20261003\r\nDTEND:20261005T000000\r\nEND:VEVENT\r\n",
         );
         assert_eq!(e.fields.end, PimTime::date("2026-10-05"));
-        assert!(e.fields.issues().is_empty());
+        assert_eq!(e.fields.issues().len(), 0);
     }
 
     #[test]
@@ -1673,7 +1673,10 @@ BEGIN:VTODO\r\nUID:t2\r\nSUMMARY:Sibling of\r\nRELATED-TO;RELTYPE=SIBLING:t1\r\n
                 "https://teams.microsoft.com/l/meetup-join/1"
             ]
         );
-        assert!(conference_links_in_text("https://notzoom.us.evil.example/").is_empty());
+        assert_eq!(
+            conference_links_in_text("https://notzoom.us.evil.example/").len(),
+            0
+        );
         assert_eq!(percent_decode(&percent_encode("a b%<c>@x")), "a b%<c>@x");
         assert_eq!(percent_encode("abc@x.org"), "abc@x.org");
     }

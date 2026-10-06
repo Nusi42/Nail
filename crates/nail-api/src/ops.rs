@@ -132,7 +132,7 @@ mod tests {
         assert!(!tags_only.is_empty());
         let parsed: FlagChange = serde_json::from_value(json!({"flagged": false})).unwrap();
         assert_eq!(parsed.flagged, Some(false));
-        assert!(parsed.add_tags.is_empty());
+        assert!(parsed.add_tags.is_empty(), "{:?}", parsed.add_tags);
     }
 
     #[test]

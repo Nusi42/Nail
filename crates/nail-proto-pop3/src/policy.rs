@@ -169,14 +169,14 @@ mod tests {
     fn downloads_new_uids_once() {
         let server = msgs(&["a", "b", "c", "b"]);
         assert_eq!(uids(&plan_downloads(&server, &set(&["a"]))), ["b", "c"]);
-        assert!(plan_downloads(&server, &set(&["a", "b", "c"])).is_empty());
+        assert_eq!(plan_downloads(&server, &set(&["a", "b", "c"])).len(), 0);
     }
 
     #[test]
     fn default_policy_keeps_everything() {
         let server = msgs(&["a", "b"]);
         let downloaded = HashMap::from([("a".to_owned(), 0), ("b".to_owned(), 0)]);
-        assert!(
+        assert_eq!(
             plan_deletions(
                 &LeavePolicy::default(),
                 &server,
@@ -184,7 +184,8 @@ mod tests {
                 &set(&["a"]),
                 NOW
             )
-            .is_empty()
+            .len(),
+            0
         );
     }
 

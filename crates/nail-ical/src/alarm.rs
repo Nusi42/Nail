@@ -283,7 +283,7 @@ mod tests {
         absolute.trigger = AlarmTrigger::Absolute {
             at: "garbage".into(),
         };
-        assert!(fire_times(&absolute, start, end).is_empty());
+        assert_eq!(fire_times(&absolute, start, end).len(), 0);
     }
 
     #[test]
@@ -331,7 +331,7 @@ mod tests {
         );
         assert_eq!(late.len(), 1);
         assert_eq!(late[0].occurrence_start, "2026-10-26T08:00:00Z");
-        assert!(
+        assert_eq!(
             event_firings(
                 &event(vec![], None),
                 &[],
@@ -339,7 +339,8 @@ mod tests {
                 utc("2027-01-01T00:00:00Z"),
                 Tz::UTC
             )
-            .is_empty()
+            .len(),
+            0
         );
     }
 
@@ -375,7 +376,7 @@ mod tests {
         let times: Vec<_> = f.iter().map(|f| time::format_instant(f.fire_at)).collect();
         assert_eq!(times, ["2026-10-20T07:00:00Z", "2026-10-31T11:30:00Z"]);
         task.fields.status = TaskStatus::Completed;
-        assert!(task_firings(&task, window.0, window.1, Tz::UTC).is_empty());
+        assert_eq!(task_firings(&task, window.0, window.1, Tz::UTC).len(), 0);
         let mut undated = TaskFields::titled("Call");
         undated.alarms = vec![Alarm {
             trigger: AlarmTrigger::Absolute {

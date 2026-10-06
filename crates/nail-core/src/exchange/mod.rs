@@ -984,14 +984,14 @@ mod tests {
     #[test]
     fn a_windows_sign_in_goes_only_to_prompted_hosts() {
         let ctl = ExchangeCtl::new(ExchangeHooks::default());
-        assert!(ctl.login_hosts("ada@corp.example").is_empty());
+        assert_eq!(ctl.login_hosts("ada@corp.example").len(), 0);
         ctl.remember_login_prompt("Ada@Corp.example ", "Autodiscover.corp.example");
         ctl.remember_login_prompt("ada@corp.example", "autodiscover.corp.example");
         assert_eq!(
             ctl.login_hosts("ada@corp.example"),
             ["autodiscover.corp.example"]
         );
-        assert!(ctl.login_hosts("grace@corp.example").is_empty());
+        assert_eq!(ctl.login_hosts("grace@corp.example").len(), 0);
     }
 
     #[test]
@@ -1018,7 +1018,7 @@ mod tests {
             vec![ExchangeMailboxSettings::shared("support@contoso.example")],
         );
         assert_eq!(ctl.take_discovery("ada@contoso.example").len(), 1);
-        assert!(ctl.take_discovery("ada@contoso.example").is_empty());
+        assert_eq!(ctl.take_discovery("ada@contoso.example").len(), 0);
     }
 
     #[test]

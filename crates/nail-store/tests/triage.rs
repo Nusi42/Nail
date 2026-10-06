@@ -103,7 +103,9 @@ fn snoozes_are_recorded_listed_and_woken() {
         store
             .list_snoozed(Some(&"other".into()))
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.list_snoozed(Some(&"other".into())).unwrap()
     );
     assert_eq!(store.next_snooze_wake().unwrap(), Some(T0 + 60));
     assert_eq!(store.due_snoozes(T0 + 59).unwrap(), []);
@@ -145,7 +147,7 @@ fn snoozes_are_recorded_listed_and_woken() {
     // Deleting the account removes its snoozes.
     store.snooze(&"m1".into(), T0 + 10, &inbox, T0).unwrap();
     store.delete_account(&a1()).unwrap();
-    assert!(store.list_snoozed(None).unwrap().is_empty());
+    assert_eq!(store.list_snoozed(None).unwrap().len(), 0);
 }
 
 /// Review fix (ADR 0049): the classifier's storage stays bounded.
@@ -226,7 +228,9 @@ fn waking_removes_records_and_queues_writes_in_one_transaction() {
         store
             .pending_ops_for_message(&"m1".into())
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.pending_ops_for_message(&"m1".into()).unwrap()
     );
 
     let (removed, queued) = store.wake_snoozed(&["m1".into()], &[untag("m1")]).unwrap();
@@ -532,7 +536,7 @@ fn notification_settings_round_trip_with_overrides() {
     store.delete_folder(&"archive".into()).unwrap();
     assert_eq!(store.notification_settings().unwrap().overrides.len(), 1);
     store.delete_account(&a1()).unwrap();
-    assert!(store.notification_settings().unwrap().overrides.is_empty());
+    assert_eq!(store.notification_settings().unwrap().overrides.len(), 0);
 }
 
 #[test]

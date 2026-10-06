@@ -3,4 +3,4 @@
 /**
  * Which messages of a conversation an action reaches (ADR 0164).
  */
-export type ConversationReach = "listed" | "whole" | "newest";
+export type ConversationReach = "listed" | "whole" | "newest" | "thread";

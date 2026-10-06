@@ -1033,7 +1033,9 @@ mod tests {
         assert!(
             mb.history_after(mb.history_id(), &[], None)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            mb.history_after(mb.history_id(), &[], None).unwrap()
         );
     }
 
@@ -1075,7 +1077,9 @@ mod tests {
         assert!(
             mb.search(Some("after:2026/10/02"), &[], false)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            mb.search(Some("after:2026/10/02"), &[], false).unwrap()
         );
         assert_eq!(mb.search(Some("label:inbox"), &[], false).unwrap().len(), 1);
         assert_eq!(

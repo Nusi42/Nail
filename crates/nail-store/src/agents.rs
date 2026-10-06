@@ -681,7 +681,7 @@ mod tests {
                 10,
             )
             .unwrap();
-        assert!(others.is_empty());
+        assert!(others.is_empty(), "{others:?}");
 
         // Elicitation may not approve a destructive kind.
         assert!(matches!(
@@ -707,11 +707,12 @@ mod tests {
             .unwrap();
         assert_eq!(failed.state, ConfirmationState::Failed);
         assert_eq!(failed.error.unwrap().id, "error-network");
-        assert!(
+        assert_eq!(
             store
                 .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         assert_eq!(
             store
@@ -897,7 +898,9 @@ mod tests {
             store
                 .cancel_pending_confirmations(NOW + 6)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.cancel_pending_confirmations(NOW + 6).unwrap()
         );
     }
 

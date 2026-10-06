@@ -542,9 +542,9 @@ mod tests {
 
     #[test]
     fn corpus_specs() {
-        assert!(CorpusSpec::standard().issues().is_empty());
+        assert_eq!(CorpusSpec::standard().issues().len(), 0);
         assert_eq!(CorpusSpec::standard().messages, 100_000);
-        assert!(CorpusSpec::small().issues().is_empty());
+        assert_eq!(CorpusSpec::small().issues().len(), 0);
         assert_eq!(CorpusSpec::named("small"), Some(CorpusSpec::small()));
         assert_eq!(CorpusSpec::named("huge"), None);
         let bad = CorpusSpec {

@@ -345,7 +345,7 @@ async fn guessing_only_when_nothing_else_answers() {
 
     let nothing = mocks(DnsZone::new()).await;
     let d = discoverer(&nothing, probes).with_guessing(false);
-    assert!(discover("ada@example.org", &d).await.unwrap().is_empty());
+    assert_eq!(discover("ada@example.org", &d).await.unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -406,7 +406,7 @@ async fn invalid_addresses() {
         .await
         .unwrap_err();
     assert!(matches!(err, DiscoveryError::InvalidEmail(_)));
-    assert!(m.http.requests().is_empty());
+    assert_eq!(m.http.requests().len(), 0);
 }
 
 const FORGED: &str = r#"<clientConfig version="1.1"><emailProvider id="example.org">

@@ -222,15 +222,15 @@ mod tests {
 
     #[test]
     fn valid_settings() {
-        assert!(AutomaticRepliesSettings::default().issues().is_empty());
-        assert!(on().issues().is_empty());
+        assert_eq!(AutomaticRepliesSettings::default().issues().len(), 0);
+        assert_eq!(on().issues().len(), 0);
         let scheduled = AutomaticRepliesSettings {
             status: AutomaticRepliesStatus::Scheduled,
             start: Some("2026-10-05T07:00:00Z".into()),
             end: Some("2026-10-09T16:00:00Z".into()),
             ..on()
         };
-        assert!(scheduled.issues().is_empty());
+        assert_eq!(scheduled.issues().len(), 0);
         assert!(scheduled.active_at("2026-10-06T12:00:00Z"));
         assert!(!scheduled.active_at("2026-10-09T16:00:00Z"));
         assert!(on().active_at("2000-01-01T00:00:00Z"));
@@ -255,7 +255,7 @@ mod tests {
             external_audience: ExternalAudience::None,
             ..on()
         };
-        assert!(inside_only.issues().is_empty());
+        assert_eq!(inside_only.issues().len(), 0);
         let unscheduled = AutomaticRepliesSettings {
             status: AutomaticRepliesStatus::Scheduled,
             ..on()

@@ -602,7 +602,7 @@ mod tests {
             AccountScope::Only(vec!["work".into()])
         );
         assert_eq!(narrowed.excluded_folders(), [FolderId::from("work/hr")]);
-        assert!(gate.excluded_folders().is_empty());
+        assert_eq!(gate.excluded_folders().len(), 0);
         assert_eq!(gate.mail_scope("x", &no_expand).unwrap(), AccountScope::All);
 
         // A revoked client (empty grant) reaches no mail at all.

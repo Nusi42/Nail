@@ -234,7 +234,7 @@ fn the_users_theme_kdl_gets_overrides_and_parts() {
             None,
         )
         .unwrap();
-    assert!(!updates.is_empty());
+    assert!(!updates.is_empty(), "{updates:?}");
     assert_eq!(
         appearance.settings.overrides.accent.as_deref(),
         Some("#c2255c")
@@ -246,7 +246,9 @@ fn the_users_theme_kdl_gets_overrides_and_parts() {
         !manager
             .list_backups(nail_api::ConfigFile::Theme)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        manager.list_backups(nail_api::ConfigFile::Theme).unwrap()
     );
     // No theme.kdl yet: the sparse skeleton.
     let (dir, manager) = setup(None);
@@ -322,14 +324,16 @@ fn theme_edits_are_checked() {
     let (_, updates) = manager
         .edit_theme(&ThemeEditTarget::User, &[], None)
         .unwrap();
-    assert!(updates.is_empty());
+    assert!(updates.is_empty(), "{updates:?}");
     assert!(read(dir.path(), "theme.kdl").is_none());
     assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), PAPER);
     assert!(
         manager
             .edit_history(HistoryScope::Appearance)
             .undo
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        manager.edit_history(HistoryScope::Appearance).undo
     );
 }
 

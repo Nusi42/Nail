@@ -146,15 +146,17 @@ mod tests {
     impl BatchSource for Source {
         type Batch = usize;
 
-        async fn fetch(&mut self, index: usize) -> Result<usize> {
-            if self.fail_at == Some(index) {
-                return Err(ApiError::new(ErrorCode::Network, "connection lost").into());
-            }
-            self.fetched.lock().unwrap().push(index);
-            if index == 1 {
-                self.second.notify_one();
-            }
-            Ok(index * 10)
+        fn fetch(&mut self, index: usize) -> impl Future<Output = Result<usize>> + Send {
+            std::future::ready((|| -> Result<usize> {
+                if self.fail_at == Some(index) {
+                    return Err(ApiError::new(ErrorCode::Network, "connection lost").into());
+                }
+                self.fetched.lock().unwrap().push(index);
+                if index == 1 {
+                    self.second.notify_one();
+                }
+                Ok(index * 10)
+            })())
         }
     }
 
@@ -219,7 +221,7 @@ mod tests {
         run(0, &mut Source::new(Some(0)), |b| Ok(label(b)), &mut empty)
             .await
             .unwrap();
-        assert!(empty.stored.is_empty());
+        assert!(empty.stored.is_empty(), "{:?}", empty.stored);
     }
 
     #[tokio::test]

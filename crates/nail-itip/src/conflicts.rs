@@ -327,7 +327,7 @@ ATTENDEE:mailto:bob@example.org\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
             "2026-10-05T16:00:00Z",
             "2026-10-05T16:00:00Z",
         )];
-        assert!(find_conflicts(&spans, &outside, None).is_empty());
+        assert_eq!(find_conflicts(&spans, &outside, None).len(), 0);
     }
 
     #[test]

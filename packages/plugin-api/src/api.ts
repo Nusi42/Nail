@@ -247,8 +247,10 @@ export interface PluginMailTargets {
   /** Messages named directly. */
   messageIds?: MessageId | MessageId[];
   /**
-   * Conversations as a list row shows them: read state, tags and Trash
-   * reach every message of each, including the user's replies in Sent;
+   * Conversations as a list row shows them: read state and tags reach
+   * every message of each, including the user's replies in Sent; Trash
+   * reaches the whole thread in its account (archived messages too, never
+   * what is in Trash already);
    * moves, archive and snooze reach its messages in `folderId`;
    * `flagged: true` reaches its newest message. At most 500.
    */

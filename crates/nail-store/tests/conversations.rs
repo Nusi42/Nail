@@ -132,7 +132,7 @@ fn folders_are_classified_and_sent_joins_per_account() {
     // Listing Sent itself: nothing joins it a second time.
     let scope = folders(&store, &["sent"]);
     assert_eq!(names(&scope.threaded), ["sent"]);
-    assert!(scope.sent.is_empty());
+    assert!(scope.sent.is_empty(), "{:?}", scope.sent);
     // A unified inbox joins both accounts' Sent folders.
     let scope = folders(&store, &["inbox", "inbox2"]);
     assert_eq!(names(&scope.sent), ["sent", "sent2"]);
@@ -346,12 +346,20 @@ fn a_narrowed_read_everywhere_drops_hidden_copies_before_they_collapse() {
     let no_inbox = |f: &nail_store::ScopeFolder| f.id.as_str() != "inbox";
     let shown = last(Some(&no_inbox));
     assert_eq!(shown.message.id, MessageId::from("s3-sent"));
-    assert!(shown.message.duplicates.is_empty());
+    assert!(
+        shown.message.duplicates.is_empty(),
+        "{:?}",
+        shown.message.duplicates
+    );
     // Sent hidden: the Inbox copy without its hidden duplicate.
     let no_sent = |f: &nail_store::ScopeFolder| f.id.as_str() != "sent";
     let shown = last(Some(&no_sent));
     assert_eq!(shown.message.id, MessageId::from("s3-inbox"));
-    assert!(shown.message.duplicates.is_empty());
+    assert!(
+        shown.message.duplicates.is_empty(),
+        "{:?}",
+        shown.message.duplicates
+    );
 }
 
 #[test]
@@ -408,12 +416,13 @@ fn paging_follows_the_conversation_order() {
     assert_eq!((first.total, second.total), (2, 2));
     assert_eq!(first.threads[0].subject, "Plan");
     assert_eq!(second.threads[0].subject, "Other");
-    assert!(
+    assert_eq!(
         store
             .list_conversations(&scope, &own(), 2, 1)
             .unwrap()
             .threads
-            .is_empty()
+            .len(),
+        0
     );
 }
 

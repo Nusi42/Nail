@@ -50,7 +50,11 @@ mod tests {
     fn partial_reports_parse() {
         let ctx: UiContext = serde_json::from_value(json!({"message_id": "m1"})).unwrap();
         assert_eq!(ctx.message_id, Some(MessageId::from("m1")));
-        assert!(ctx.selected_message_ids.is_empty());
+        assert!(
+            ctx.selected_message_ids.is_empty(),
+            "{:?}",
+            ctx.selected_message_ids
+        );
         assert!(!ctx.is_empty());
         assert!(UiContext::default().is_empty());
     }

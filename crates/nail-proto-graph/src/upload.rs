@@ -813,7 +813,7 @@ mod tests {
                 .unwrap()
                 .contains("Just text")
         );
-        assert!(parts.attachments.is_empty());
+        assert!(parts.attachments.is_empty(), "{:?}", parts.attachments);
         assert!(parts.message.get("sender").is_none());
         assert!(parts.message.get("singleValueExtendedProperties").is_none());
     }

@@ -808,6 +808,48 @@ impl Store {
         })
     }
 
+    /// Tells the waiting operations of `message` that the server gave the
+    /// message a new remote id (EWS `MoveItem` answers a new `ItemId`): each
+    /// `pending` / `in_flight` move or delete whose recorded source has
+    /// `old` gets `new`, so an undo queued before the forward move replayed
+    /// does not act on an id the server no longer has. Returns how many
+    /// were updated.
+    pub fn rebase_remote_ids(&self, message: &MessageId, old: &str, new: &str) -> Result<usize> {
+        if old == new {
+            return Ok(0);
+        }
+        self.with_tx(|tx| {
+            let rows = {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT id, payload FROM op_queue
+                     WHERE message_id = ?1 AND state IN ('pending', 'in_flight')
+                     ORDER BY id",
+                )?;
+                stmt.query_map(params![message.as_str()], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            let mut updated = 0;
+            for (id, payload) in rows {
+                let mut operation: Operation = serde_json::from_str(&payload)?;
+                let Some(source) = operation.source_mut() else {
+                    continue;
+                };
+                if source.remote_id.as_deref() != Some(old) {
+                    continue;
+                }
+                source.remote_id = Some(new.to_owned());
+                tx.execute(
+                    &format!("UPDATE op_queue SET payload = ?2, updated_at = {NOW} WHERE id = ?1"),
+                    params![id, serde_json::to_string(&operation)?],
+                )?;
+                updated += 1;
+            }
+            Ok(updated)
+        })
+    }
+
     /// Number of operations waiting for replay (`pending` or `in_flight`).
     pub fn pending_op_count(&self) -> Result<u32> {
         self.with_conn(|conn| {

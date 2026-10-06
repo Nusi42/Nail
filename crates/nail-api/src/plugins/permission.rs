@@ -523,7 +523,7 @@ mod tests {
             PluginPermission::HooksArrival.requires(),
             [PluginPermission::MailRead]
         );
-        assert!(PluginPermission::MailSend.requires().is_empty());
+        assert_eq!(PluginPermission::MailSend.requires().len(), 0);
         assert!(ids.iter().all(|id| crate::localized::is_message_id(id)));
     }
 

@@ -116,7 +116,7 @@ async fn deletions_need_quit_and_rset_undoes_them() {
     client.dele(2).await.unwrap();
     client.rset().await.unwrap();
     client.quit().await.unwrap();
-    assert!(server.deleted().is_empty());
+    assert_eq!(server.deleted().len(), 0);
     assert_eq!(server.uids().len(), 2);
 }
 
@@ -394,7 +394,7 @@ async fn full_sync_round_with_policy() {
     let keys: HashSet<String> = known.keys().cloned().collect();
     for m in plan_downloads(&listing, &keys) {
         let data = client.retr(m.number).await.unwrap();
-        assert!(!data.is_empty());
+        assert!(!data.is_empty(), "{data:?}");
         known.insert(m.uid.clone(), now - 10 * 86_400);
     }
     assert_eq!(known.len(), 2);
@@ -432,7 +432,7 @@ async fn test_login_reports_results() {
     assert!(ok.capabilities.iter().any(|c| c == "UIDL"));
     let bad = test_login(&plain(&server), &Pop3Credentials::password(USER, "nope")).await;
     assert_eq!(bad.error, Some(ErrorCode::AuthFailed));
-    assert!(!bad.capabilities.is_empty());
+    assert!(!bad.capabilities.is_empty(), "{:?}", bad.capabilities);
     assert!(!bad.message.unwrap_or_default().contains("nope"));
     // Nothing was deleted by the test logins.
     assert_eq!(server.uids().len(), 2);

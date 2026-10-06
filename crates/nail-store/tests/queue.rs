@@ -117,7 +117,7 @@ fn failed_local_apply_queues_nothing() {
         change: FlagChange::default(),
     };
     assert!(matches!(store.enqueue(&empty), Err(Error::InvalidData(_))));
-    assert!(store.list_ops(None).unwrap().is_empty());
+    assert_eq!(store.list_ops(None).unwrap().len(), 0);
     assert!(store.get_op(OpId(1)).unwrap_err().is_not_found());
 }
 
@@ -169,8 +169,8 @@ async fn replay_runs_in_enqueue_order() {
         .unwrap();
 
     assert_eq!(report.done, ids);
-    assert!(report.failed.is_empty());
-    assert!(report.deferred.is_empty());
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    assert!(report.deferred.is_empty(), "{:?}", report.deferred);
     assert_eq!(replayer.replayed_messages(), ["m3", "m1", "m2", "m1"]);
     assert_eq!(store.pending_op_count().unwrap(), 0);
     let done = store.list_ops(Some(OpState::Done)).unwrap();
@@ -182,10 +182,10 @@ async fn replay_runs_in_enqueue_order() {
         .replay_pending(&replayer, ReplayPolicy::default())
         .await
         .unwrap();
-    assert!(again.done.is_empty());
+    assert!(again.done.is_empty(), "{:?}", again.done);
 
     assert_eq!(store.purge_done_ops().unwrap(), 4);
-    assert!(store.list_ops(None).unwrap().is_empty());
+    assert_eq!(store.list_ops(None).unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -200,7 +200,7 @@ async fn retry_stops_the_pass_and_keeps_order() {
         .await
         .unwrap();
     assert_eq!(report.deferred, [first]);
-    assert!(report.done.is_empty());
+    assert!(report.done.is_empty(), "{:?}", report.done);
     assert_eq!(
         replayer.replayed_messages(),
         ["m1"],
@@ -403,5 +403,5 @@ fn deleting_an_account_drops_its_queue() {
     let store = store_with_messages(&["m1"]);
     store.enqueue(&mark_seen("m1", true)).unwrap();
     store.delete_account(&"a1".into()).unwrap();
-    assert!(store.list_ops(None).unwrap().is_empty());
+    assert_eq!(store.list_ops(None).unwrap().len(), 0);
 }

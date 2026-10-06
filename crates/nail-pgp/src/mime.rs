@@ -372,7 +372,7 @@ mod tests {
         assert_eq!(e.header_value("a").unwrap(), "b");
         assert_eq!(e.body, b"x\n");
         let e = Entity::parse(b"\r\nonly body");
-        assert!(e.headers.is_empty());
+        assert!(e.headers.is_empty(), "{:?}", e.headers);
         assert_eq!(e.body, b"only body");
         assert!(Entity::parse(b"").content_type().is("text/plain"));
     }
@@ -415,7 +415,7 @@ mod tests {
             addresses("Ada <ADA@Example.org>, bob@example.net", "To"),
             vec!["ada@example.org", "bob@example.net"]
         );
-        assert!(addresses("", "From").is_empty());
+        assert_eq!(addresses("", "From").len(), 0);
         assert_eq!(date("Thu, 01 Jan 2026 12:00:00 +0000"), Some(1_767_268_800));
         assert_eq!(
             decoded_text(b"Content-Transfer-Encoding: base64\r\n\r\naGVsbG8=\r\n").unwrap(),

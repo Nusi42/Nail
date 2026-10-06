@@ -320,7 +320,9 @@ fn empty_file_is_valid() {
         parse_accounts("", "accounts.kdl")
             .unwrap()
             .accounts
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        parse_accounts("", "accounts.kdl").unwrap().accounts
     );
 }
 
@@ -672,8 +674,8 @@ fn removing_an_account_cleans_up_virtual_accounts() {
 
     // The last member gone: the virtual account goes too.
     assert!(d.remove_account(&"work".into()).unwrap());
-    assert!(d.config().virtual_accounts.is_empty());
-    assert!(d.config().accounts.is_empty());
+    assert_eq!(d.config().virtual_accounts.len(), 0);
+    assert_eq!(d.config().accounts.len(), 0);
     assert!(parse_accounts(d.text(), "accounts.kdl").is_ok());
 }
 
@@ -803,7 +805,7 @@ fn strings_with_quotes_and_newlines_survive() {
 fn save_and_load() {
     let dir = tempfile::tempdir().unwrap();
     let empty = AccountsDocument::load(dir.path()).unwrap();
-    assert!(empty.config().accounts.is_empty());
+    assert_eq!(empty.config().accounts.len(), 0);
     let d = doc(FULL);
     d.save(dir.path()).unwrap();
     let text = std::fs::read_to_string(dir.path().join(nail_config::ACCOUNTS_FILE)).unwrap();
@@ -1146,7 +1148,11 @@ fn authserv_ids_are_read_and_written() {
         ["mx.example.net", "mx2.example.net"]
     );
     let plain = parse_accounts(&account_with("    imap host=\"h\""), "accounts.kdl").unwrap();
-    assert!(plain.accounts[0].authserv_ids.is_empty());
+    assert!(
+        plain.accounts[0].authserv_ids.is_empty(),
+        "{:?}",
+        plain.accounts[0].authserv_ids
+    );
 
     let mut d = AccountsDocument::empty("accounts.kdl");
     d.set_config(config.clone()).unwrap();

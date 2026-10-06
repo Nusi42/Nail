@@ -2121,11 +2121,12 @@ mod tests {
             store.exchange_mailboxes(&account(), false).unwrap().len(),
             1
         );
-        assert!(
+        assert_eq!(
             store
                 .merge_automapped_mailboxes(&account(), std::slice::from_ref(&boss), 3)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         assert_eq!(store.exchange_mailboxes(&account(), true).unwrap().len(), 2);
         store
@@ -2486,7 +2487,7 @@ mod tests {
             ["Alpha", "Zeta"]
         );
         assert_eq!(at, Some(6));
-        assert!(store.exchange_rooms(&account(), None).unwrap().0.is_empty());
+        assert_eq!(store.exchange_rooms(&account(), None).unwrap().0.len(), 0);
         assert_eq!(store.exchange_room_lists(&account()).unwrap().0.len(), 1);
     }
 }

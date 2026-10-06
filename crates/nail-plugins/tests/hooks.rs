@@ -130,7 +130,7 @@ async fn arrival_hooks_follow_filters_grants_and_body_permissions() {
     assert_eq!(ran, ["filtered"]);
     assert_eq!(result(&fake, "filtered", "SAW ").await, "m1 body");
     // Without mail.organize the actions are dropped (and said so).
-    assert!(m1.actions.is_empty());
+    assert!(m1.actions.is_empty(), "{:?}", m1.actions);
     assert_eq!(
         fake.localized("filtered", "plugin-host-hook-actions-denied")
             .len(),
@@ -141,8 +141,8 @@ async fn arrival_hooks_follow_filters_grants_and_body_permissions() {
     let ran: Vec<&str> = m2.runs.iter().map(|r| r.plugin_id.as_str()).collect();
     assert_eq!(ran, ["home-only"]);
     // Unknown messages run nothing.
-    assert!(host.arrival_hooks(&"nope".into()).await.runs.is_empty());
-    assert!(fake.writes().is_empty());
+    assert_eq!(host.arrival_hooks(&"nope".into()).await.runs.len(), 0);
+    assert_eq!(fake.writes().len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -173,7 +173,7 @@ async fn failing_hooks_are_skipped_counted_and_never_stop_the_plugin() {
     // An invalid answer (no delete action exists) is a failure too.
     let report = host.arrival_hooks(&"m2".into()).await;
     assert_eq!(report.runs[0].outcome, PluginHookOutcome::Failed);
-    assert!(report.actions.is_empty());
+    assert!(report.actions.is_empty(), "{:?}", report.actions);
     assert_eq!(
         host.state(&plugin_id("thrower")),
         Some(PluginRunState::Running)
@@ -193,7 +193,7 @@ async fn failing_hooks_are_skipped_counted_and_never_stop_the_plugin() {
         fake.localized("thrower", "plugin-host-hook-failed").len(),
         1
     );
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes().len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -545,7 +545,7 @@ async fn hooks_without_a_registered_handler_fail_quietly() {
     .unwrap();
     let report = host.open_hooks(&"m1".into(), None).await;
     assert_eq!(report.runs[0].outcome, PluginHookOutcome::Failed);
-    assert!(report.banners.is_empty());
+    assert!(report.banners.is_empty(), "{:?}", report.banners);
     // Registering an undeclared hook is refused.
     host.start(spec(
         "undeclared",

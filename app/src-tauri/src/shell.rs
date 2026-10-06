@@ -418,7 +418,7 @@ mod tests {
         assert_eq!(second_start(&argv(&["--autostart"])), (vec![], false));
         // Flags are never targets.
         let (requests, _) = second_start(&argv(&["--locale", "de"]));
-        assert!(requests.is_empty());
+        assert!(requests.is_empty(), "{requests:?}");
     }
 
     #[test]

@@ -925,7 +925,7 @@ mod tests {
             own: &own,
         };
         let (back, notes) = event_to_exchange(&event, &ctx).unwrap();
-        assert!(notes.is_empty());
+        assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(back.remote_id, "AAMkAD");
         assert_eq!(back.change_key.as_deref(), Some("DwAAABY"));
         assert_eq!(back.kind, EventKind::SeriesMaster);

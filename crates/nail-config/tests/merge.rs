@@ -81,7 +81,7 @@ fn take(id: &str, take: MergeTake) -> MergeChoice {
 #[test]
 fn a_theme_preview_groups_items_by_section() {
     let preview = preview_merge(ConfigFile::Theme, Some(MY_THEME), THEIR_THEME).unwrap();
-    assert!(preview.errors.is_empty());
+    assert!(preview.errors.is_empty(), "{:?}", preview.errors);
     let sections: Vec<MergeSection> = preview.sections.iter().map(|s| s.section).collect();
     assert_eq!(
         sections,
@@ -109,7 +109,7 @@ fn a_theme_preview_groups_items_by_section() {
         accent.theirs.as_deref(),
         Some("color \"accent\" \"#88c0d0\"\n")
     );
-    assert!(accent.conflicts.is_empty());
+    assert!(accent.conflicts.is_empty(), "{:?}", accent.conflicts);
 
     // Named explicitly by the incoming file and equal: listed as unchanged.
     let row = item(&preview, MergeSection::Tokens, "space.row");
@@ -330,12 +330,16 @@ fn installed_plugin_items_are_not_flagged() {
     assert!(
         item(&preview, MergeSection::Keys, "list: q")
             .conflicts
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        item(&preview, MergeSection::Keys, "list: q").conflicts
     );
     assert!(
         item(&preview, MergeSection::Windows, "outbox")
             .conflicts
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        item(&preview, MergeSection::Windows, "outbox").conflicts
     );
 }
 
@@ -374,7 +378,7 @@ fn errors_are_reported() {
     // The incoming file is invalid: the preview lists every error.
     let broken = "layout \"x\" extends=\"default\" {\n    bogus\n    keys { bind \"ctrl+\" \"mail.archive\" }\n}\n";
     let preview = preview_merge(ConfigFile::Layout, Some(MY_LAYOUT), broken).unwrap();
-    assert!(preview.sections.is_empty());
+    assert!(preview.sections.is_empty(), "{:?}", preview.sections);
     assert_eq!(preview.errors.len(), 2, "{:?}", preview.errors);
     assert_eq!(preview.errors[0].line, 2);
     assert_eq!(preview.errors[1].line, 3);

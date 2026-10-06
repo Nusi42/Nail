@@ -1259,7 +1259,7 @@ mod tests {
                 ("color".to_owned(), "fg".to_owned())
             ]
         );
-        assert!(token_refs("price $5").is_empty());
+        assert_eq!(token_refs("price $5").len(), 0);
     }
 
     #[test]

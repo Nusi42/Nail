@@ -277,7 +277,7 @@ async fn pending_snoozes_survive_restarts_and_wake_on_time() {
         contains(&service, &archive.id, &second.id).await
     })
     .await;
-    assert!(snoozed(&service).await.is_empty());
+    assert_eq!(snoozed(&service).await.len(), 0);
     assert!(
         !contains(&service, &inbox.id, &second.id).await,
         "its own wake folder"
@@ -314,7 +314,7 @@ async fn unsnoozing_after_a_restart_returns_the_mail_at_once() {
         })
         .await;
     assert!(matches!(answer, Response::Queued { .. }), "{answer:?}");
-    assert!(snoozed(&service).await.is_empty());
+    assert_eq!(snoozed(&service).await.len(), 0);
     assert!(
         contains(&service, &inbox.id, &message.id).await,
         "back in the Inbox at once"
@@ -332,7 +332,7 @@ async fn unsnoozing_after_a_restart_returns_the_mail_at_once() {
     let service = f.open();
     f.demo.clock.advance(2 * 86_400);
     tokio::time::sleep(Duration::from_millis(1500)).await;
-    assert!(snoozed(&service).await.is_empty());
+    assert_eq!(snoozed(&service).await.len(), 0);
     let copies = messages(&service, &inbox.id)
         .await
         .iter()

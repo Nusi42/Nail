@@ -403,7 +403,7 @@ async fn host_requests_without_a_running_plugin() {
             incoming, preview, ..
         } => {
             assert_eq!(incoming, "");
-            assert!(preview.sections.is_empty());
+            assert!(preview.sections.is_empty(), "{:?}", preview.sections);
         }
         other => panic!("{other:?}"),
     }

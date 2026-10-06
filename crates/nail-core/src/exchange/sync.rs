@@ -1594,6 +1594,9 @@ async fn store_messages(
                 service
                     .store()
                     .call(move |s| {
+                        if let Some(old) = s.message_remote_id(&moved)? {
+                            s.rebase_remote_ids(&moved, &old, &remote)?;
+                        }
                         s.set_message_remote_id(&moved, Some(&remote))?;
                         apply_change_to(s, &id, &moved, &f, &change, &master)
                     })
@@ -1932,6 +1935,11 @@ impl ExchangeExecutor<'_> {
             self.service
                 .store()
                 .call(move |s| {
+                    // EWS gives a moved item a new id: operations queued
+                    // meanwhile (an undo) recorded the old one.
+                    if let Some(old) = s.message_remote_id(&id)? {
+                        s.rebase_remote_ids(&id, &old, &remote)?;
+                    }
                     s.set_message_remote_id(&id, Some(&remote))?;
                     // A listing of the target in progress must not take the
                     // moved message for one the server no longer has.
@@ -2368,7 +2376,7 @@ mod tests {
         for id in ["a", "b", "inbox", "c"] {
             since.synced(&id.into(), false);
         }
-        assert!(since.stale(all()).is_empty());
+        assert!(since.stale(all()).is_empty(), "{:?}", since.stale(all()));
         // The inbox reports a message gone after `a` and `b` were listed:
         // the message may have been moved there after their listings.
         let mut since = SinceRemoval::default();
@@ -2389,7 +2397,7 @@ mod tests {
         assert_eq!(ids(since.stale(all())), ["a", "inbox"]);
         since.synced(&"a".into(), false);
         since.synced(&"inbox".into(), false);
-        assert!(since.stale(all()).is_empty());
+        assert!(since.stale(all()).is_empty(), "{:?}", since.stale(all()));
     }
 
     #[test]

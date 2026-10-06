@@ -66,7 +66,7 @@ fn ids(store: &Store, filter: &F) -> Vec<String> {
 fn leaves() {
     let s = store();
     assert_eq!(ids(&s, &F::All), ["n1", "m2", "m1", "m3"], "newest first");
-    assert!(ids(&s, &F::None).is_empty());
+    assert_eq!(ids(&s, &F::None).len(), 0);
     assert_eq!(ids(&s, &F::Seen(false)), ["n1", "m1", "m3"]);
     assert_eq!(ids(&s, &F::Flagged(true)), ["m2"]);
     assert_eq!(ids(&s, &F::Answered(true)), ["m3"]);
@@ -107,7 +107,7 @@ fn boolean_combinations() {
     assert_eq!(s.count_messages(&f).unwrap(), 2);
     assert_eq!(ids(&s, &F::Not(Box::new(F::All))), Vec::<String>::new());
     assert_eq!(ids(&s, &F::And(vec![])).len(), 4);
-    assert!(ids(&s, &F::Or(vec![])).is_empty());
+    assert_eq!(ids(&s, &F::Or(vec![])).len(), 0);
 }
 
 #[test]

@@ -1404,7 +1404,7 @@ mod tests {
         assert_eq!(take(&reports), [("b".into(), PopOutChange::Closed, None)]);
         // The core closes `a` (ReturnPopOut): it knows already.
         manager.close("a").unwrap();
-        assert!(take(&reports).is_empty());
+        assert_eq!(take(&reports).len(), 0);
         assert_eq!(fake.labels(), ["popout-c"]);
         // Closing a window that is gone is fine.
         manager.close("a").unwrap();
@@ -1413,10 +1413,10 @@ mod tests {
         let err = manager.focus("c").unwrap_err();
         assert_eq!(err.code, ErrorCode::Conflict);
         assert_eq!(take(&reports), [("c".into(), PopOutChange::Closed, None)]);
-        assert!(manager.open_windows().is_empty());
+        assert_eq!(manager.open_windows().len(), 0);
         // Moves of closed windows are not reported.
         settle().await;
-        assert!(take(&reports).is_empty());
+        assert_eq!(take(&reports).len(), 0);
     }
 
     #[tokio::test(start_paused = true)]
@@ -1428,7 +1428,7 @@ mod tests {
                 .unwrap();
         }
         manager.close_all();
-        assert!(fake.labels().is_empty());
+        assert_eq!(fake.labels().len(), 0);
         let mut closed = take(&reports);
         closed.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(
@@ -1438,7 +1438,7 @@ mod tests {
                 ("settings".into(), PopOutChange::Closed, None),
             ]
         );
-        assert!(manager.open_windows().is_empty());
+        assert_eq!(manager.open_windows().len(), 0);
         settle().await;
         assert!(take(&reports).is_empty(), "no late moves");
     }
@@ -1465,10 +1465,10 @@ mod tests {
             err.localized.as_ref().map(|l| l.id.as_str()),
             Some("popout-open-failed")
         );
-        assert!(manager.open_windows().is_empty());
-        assert!(fake.labels().is_empty());
+        assert_eq!(manager.open_windows().len(), 0);
+        assert_eq!(fake.labels().len(), 0);
         settle().await;
-        assert!(take(&reports).is_empty());
+        assert_eq!(take(&reports).len(), 0);
     }
 
     fn manager_with_failing_open() -> (Arc<PopOutManager>, Arc<FakeWindows>, Reports) {

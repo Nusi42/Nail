@@ -26,50 +26,64 @@ fn none<T>() -> DataResult<T> {
 }
 
 impl McpData for Empty {
-    async fn accounts(&self) -> DataResult<Vec<Account>> {
-        Ok(vec![])
+    fn accounts(&self) -> impl Future<Output = DataResult<Vec<Account>>> + Send {
+        std::future::ready(Ok(vec![]))
     }
-    async fn virtual_accounts(&self) -> DataResult<Vec<VirtualAccountConfig>> {
-        Ok(vec![])
+    fn virtual_accounts(
+        &self,
+    ) -> impl Future<Output = DataResult<Vec<VirtualAccountConfig>>> + Send {
+        std::future::ready(Ok(vec![]))
     }
-    async fn folders(&self, _: &AccountId) -> DataResult<Vec<Folder>> {
-        none()
+    fn folders(&self, _: &AccountId) -> impl Future<Output = DataResult<Vec<Folder>>> + Send {
+        std::future::ready(none())
     }
-    async fn messages(&self, _: &FolderId, _: u32, _: u32) -> DataResult<MessagePage> {
-        none()
+    fn messages(
+        &self,
+        _: &FolderId,
+        _: u32,
+        _: u32,
+    ) -> impl Future<Output = DataResult<MessagePage>> + Send {
+        std::future::ready(none())
     }
-    async fn message_summary(&self, _: &MessageId) -> DataResult<MessageSummary> {
-        none()
+    fn message_summary(
+        &self,
+        _: &MessageId,
+    ) -> impl Future<Output = DataResult<MessageSummary>> + Send {
+        std::future::ready(none())
     }
-    async fn message_body(&self, _: &MessageId) -> DataResult<MessageBody> {
-        none()
+    fn message_body(&self, _: &MessageId) -> impl Future<Output = DataResult<MessageBody>> + Send {
+        std::future::ready(none())
     }
-    async fn raw_message(&self, _: &MessageId) -> DataResult<Vec<u8>> {
-        none()
+    fn raw_message(&self, _: &MessageId) -> impl Future<Output = DataResult<Vec<u8>>> + Send {
+        std::future::ready(none())
     }
-    async fn attachment(&self, _: &MessageId, _: u32) -> DataResult<AttachmentData> {
-        none()
+    fn attachment(
+        &self,
+        _: &MessageId,
+        _: u32,
+    ) -> impl Future<Output = DataResult<AttachmentData>> + Send {
+        std::future::ready(none())
     }
-    async fn is_encrypted(&self, _: &MessageId) -> DataResult<bool> {
-        Ok(false)
+    fn is_encrypted(&self, _: &MessageId) -> impl Future<Output = DataResult<bool>> + Send {
+        std::future::ready(Ok(false))
     }
-    async fn thread(&self, _: &ThreadId) -> DataResult<ThreadData> {
-        none()
+    fn thread(&self, _: &ThreadId) -> impl Future<Output = DataResult<ThreadData>> + Send {
+        std::future::ready(none())
     }
-    async fn search(&self, _: SearchQuery) -> DataResult<SearchOutcome> {
-        none()
+    fn search(&self, _: SearchQuery) -> impl Future<Output = DataResult<SearchOutcome>> + Send {
+        std::future::ready(none())
     }
-    async fn rules_text(&self) -> DataResult<String> {
-        Ok(String::new())
+    fn rules_text(&self) -> impl Future<Output = DataResult<String>> + Send {
+        std::future::ready(Ok(String::new()))
     }
-    async fn ui_context(&self) -> DataResult<UiContext> {
-        Ok(UiContext::default())
+    fn ui_context(&self) -> impl Future<Output = DataResult<UiContext>> + Send {
+        std::future::ready(Ok(UiContext::default()))
     }
-    async fn identities(&self) -> DataResult<Vec<nail_api::Identity>> {
-        Ok(Vec::new())
+    fn identities(&self) -> impl Future<Output = DataResult<Vec<nail_api::Identity>>> + Send {
+        std::future::ready(Ok(Vec::new()))
     }
-    async fn draft(&self, _: &DraftId) -> DataResult<Draft> {
-        none()
+    fn draft(&self, _: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send {
+        std::future::ready(none())
     }
     fn emit(&self, _: Event) {}
 }
@@ -278,7 +292,7 @@ fn nail_mcp_no_start_does_not_start_nail() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not running"), "{stderr}");
     assert!(

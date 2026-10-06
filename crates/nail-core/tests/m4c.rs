@@ -128,7 +128,7 @@ async fn recent_actions_are_stored_capped_and_validated() {
     let Response::RecentActions { recent } = service.handle(Request::GetRecentActions).await else {
         panic!("recent actions expected");
     };
-    assert!(recent.actions.is_empty());
+    assert!(recent.actions.is_empty(), "{:?}", recent.actions);
     for id in ["mail.reply", "mail.archive", "mail.reply"] {
         service
             .handle(Request::RecordActionUsed {
@@ -181,7 +181,7 @@ async fn recent_actions_are_stored_capped_and_validated() {
     else {
         panic!("recent actions expected");
     };
-    assert!(recent.actions.is_empty());
+    assert!(recent.actions.is_empty(), "{:?}", recent.actions);
 }
 
 #[tokio::test]
@@ -420,7 +420,7 @@ async fn the_m4c_requests_are_served() {
     else {
         panic!("jobs expected");
     };
-    assert!(jobs.is_empty());
+    assert!(jobs.is_empty(), "{jobs:?}");
     let source = ImportSource {
         format: ImportFormat::Mbox,
         path: std::env::temp_dir()

@@ -279,7 +279,7 @@ async fn dismissed_dialogs_and_unknown_buttons_resolve_with_null() {
     let PluginUiNode::MessageList { messages, .. } = &dialog.spec.body[2] else {
         panic!()
     };
-    assert!(messages.is_empty());
+    assert!(messages.is_empty(), "{messages:?}");
     host.respond_dialog(&dialog.dialog_id, Some("forged".into()), BTreeMap::new())
         .unwrap();
     let result = json_result(&fake, "dlg2", "RESULT ").await;

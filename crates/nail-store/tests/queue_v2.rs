@@ -367,7 +367,7 @@ fn enqueue_all_is_atomic() {
     let store = two_account_store();
     let ops = [seen("m1", true), seen("missing", true)];
     assert!(store.enqueue_all(&ops).unwrap_err().is_not_found());
-    assert!(store.list_ops(None).unwrap().is_empty());
+    assert_eq!(store.list_ops(None).unwrap().len(), 0);
     assert!(!store.get_message(&"m1".into()).unwrap().summary.flags.seen);
     let done = store
         .enqueue_all(&[seen("m1", true), seen("n1", true)])
@@ -445,7 +445,7 @@ async fn sync_merge_keeps_pending_flags_until_replayed() {
         .unwrap();
     let m1 = store.get_message(&"m1".into()).unwrap().summary;
     assert!(!m1.flags.seen);
-    assert!(m1.tags.is_empty());
+    assert!(m1.tags.is_empty(), "{:?}", m1.tags);
 }
 
 #[test]
@@ -653,6 +653,66 @@ fn later_ops_learn_where_an_earlier_one_put_the_message() {
     assert_eq!(
         store
             .rebase_later_ops(&"m1".into(), first.op.id, &"inbox".into(), 99, None)
+            .unwrap(),
+        0
+    );
+}
+
+/// P3 review: an EWS move gives the item a new id; an undo queued before
+/// the move replayed must use it, not the id it recorded at enqueue time.
+#[test]
+fn waiting_ops_learn_the_new_remote_id_of_a_moved_message() {
+    let store = two_account_store();
+    store
+        .set_message_remote_id(&"m1".into(), Some("item-1"))
+        .unwrap();
+    let forward = store
+        .enqueue(&Operation::MoveMessage {
+            message_id: "m1".into(),
+            target_folder_id: "archive".into(),
+            source: None,
+        })
+        .unwrap();
+    store.enqueue(&seen("m1", true)).unwrap();
+    let back = store
+        .enqueue(&Operation::MoveMessage {
+            message_id: "m1".into(),
+            target_folder_id: "inbox".into(),
+            source: None,
+        })
+        .unwrap();
+    let remote = |id| {
+        store
+            .get_op(id)
+            .unwrap()
+            .operation
+            .source()
+            .unwrap()
+            .remote_id
+            .clone()
+    };
+    assert_eq!(remote(back.op.id).as_deref(), Some("item-1"));
+    // The forward move replayed (still in flight here); the server answered
+    // a new id.
+    assert_eq!(
+        store
+            .rebase_remote_ids(&"m1".into(), "item-1", "item-2")
+            .unwrap(),
+        2,
+        "both moves (the flag change has no source)"
+    );
+    assert_eq!(remote(forward.op.id).as_deref(), Some("item-2"));
+    assert_eq!(remote(back.op.id).as_deref(), Some("item-2"));
+    // Another id or the same id changes nothing.
+    assert_eq!(
+        store
+            .rebase_remote_ids(&"m1".into(), "item-9", "item-3")
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        store
+            .rebase_remote_ids(&"m1".into(), "item-2", "item-2")
             .unwrap(),
         0
     );

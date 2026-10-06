@@ -325,7 +325,7 @@ async fn insecure_urls_are_refused() {
         .await
         .unwrap_err();
     assert!(matches!(err, DavError::InsecureUrl(_)));
-    assert!(server.requests().is_empty());
+    assert_eq!(server.requests().len(), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,7 +455,7 @@ async fn token_errors_pass_through() {
     let engine: EngineError = err.into();
     assert_eq!(engine.code, ErrorCode::AuthFailed);
     assert!(!engine.retryable);
-    assert!(server.requests().is_empty());
+    assert_eq!(server.requests().len(), 0);
 }
 
 #[tokio::test]
@@ -645,7 +645,7 @@ async fn multiget_runs_in_batches() {
         .await
         .unwrap();
     assert_eq!(got.objects.len(), hrefs.len());
-    assert!(got.missing.is_empty());
+    assert!(got.missing.is_empty(), "{:?}", got.missing);
     let reports = server
         .requests()
         .into_iter()
@@ -696,7 +696,7 @@ async fn sync_collection_initial_incremental_and_reset() {
     assert!(!first.token_reset);
     let changed: Vec<String> = first.changed.iter().map(|o| o.href.clone()).collect();
     assert_eq!(names(&changed), ["a.ics", "b.ics"]);
-    assert!(first.removed.is_empty());
+    assert!(first.removed.is_empty(), "{:?}", first.removed);
     assert!(first.state.sync_token.is_some());
     assert_eq!(first.state.etags.len(), 2);
 
@@ -1234,7 +1234,7 @@ async fn logins_never_follow_a_redirect_to_another_server() {
     let err = client(basic()).collection(&start).await.unwrap_err();
     assert_eq!(err, DavError::RedirectNeedsLogin("127.0.0.1".into()));
     assert_eq!(err.code(), ErrorCode::Config);
-    assert!(!dav.requests().is_empty());
+    assert_ne!(dav.requests().len(), 0);
     assert!(dav.requests().iter().all(|r| r.authorization.is_none()));
     // Discovery reports it rather than "no service".
     let found = discover(

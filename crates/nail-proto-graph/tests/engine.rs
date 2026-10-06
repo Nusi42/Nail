@@ -169,7 +169,7 @@ async fn folder_hierarchy_deltas() {
             .iter()
             .all(|f| f.name != "Top of Information Store")
     );
-    assert!(first.removed.is_empty());
+    assert!(first.removed.is_empty(), "{:?}", first.removed);
 
     // Server-side changes arrive incrementally.
     let added = server.add_folder(None, Some("inbox"), "Travel");
@@ -655,7 +655,7 @@ async fn sending_mime() {
         to: vec!["bob@contoso.example".into(), "carol@contoso.example".into()],
     };
     let receipt = engine.send(&envelope, &message).await.unwrap();
-    assert!(!receipt.response.is_empty());
+    assert!(!receipt.response.is_empty(), "{:?}", receipt.response);
     let sent = server.sent();
     assert_eq!(sent.len(), 1);
     assert!(sent[0].raw.starts_with(b"Bcc: carol@contoso.example\r\n"));
@@ -747,7 +747,7 @@ async fn throttling_and_server_errors() {
     let message = raw("ada@contoso.example", "bob@contoso.example", "x", "t1@x");
     let err = engine.send(&envelope, &message).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Unavailable);
-    assert!(server.sent().is_empty());
+    assert_eq!(server.sent().len(), 0);
     // But a throttled send is: it was refused before processing.
     server.inject(InjectedError::throttled(Some(0)).on("sendMail"));
     engine.send(&envelope, &message).await.unwrap();
@@ -886,7 +886,7 @@ async fn batches_split_and_retry_throttled_parts() {
         Some(GraphError::Throttled(Some(300)))
     );
     assert!(answers[0].ok());
-    assert!(engine.client().batch(&[]).await.unwrap().is_empty());
+    assert_eq!(engine.client().batch(&[]).await.unwrap().len(), 0);
     // The recorded answer parses.
     let recorded: serde_json::Value = serde_json::from_str(fixtures::RECORDED_BATCH).unwrap();
     assert_eq!(recorded["responses"].as_array().unwrap().len(), 4);
@@ -1374,7 +1374,7 @@ async fn calendar_deltas() {
     assert_eq!(series.start.time_zone, "W. Europe Standard Time");
     assert_eq!(series.start.date_time, "2026-10-05T09:00:00");
     assert!(series.recurrence.is_some());
-    assert!(series.exceptions.is_empty());
+    assert!(series.exceptions.is_empty(), "{:?}", series.exceptions);
     let invite = list
         .iter()
         .find(|e| e.subject == "Architecture review")

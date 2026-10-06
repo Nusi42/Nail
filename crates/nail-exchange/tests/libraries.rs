@@ -70,7 +70,7 @@ fn pox_answers_are_read_with_quick_xml() {
         Some("https://mail.corp.example/EWS/Exchange.asmx")
     );
     let mailbox = ExchangeMailboxSettings::shared(alternative.unwrap());
-    assert!(mailbox.issues("ada@corp.example").is_empty());
+    assert_eq!(mailbox.issues("ada@corp.example").len(), 0);
 }
 
 #[test]

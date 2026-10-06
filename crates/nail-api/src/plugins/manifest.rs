@@ -1326,7 +1326,7 @@ mod tests {
             "id": "x", "name": "X", "version": "0.1.0", "apiVersion": "1", "main": "index.js"
         }))
         .unwrap();
-        assert!(m.permissions.is_empty());
+        assert!(m.permissions.is_empty(), "{:?}", m.permissions);
         assert_eq!(m.contributes, PluginContributions::default());
         assert_eq!(m.contributes.keys.len(), 0);
     }
@@ -1573,7 +1573,7 @@ mod tests {
                 ("prefix".to_owned(), json!("")),
             ])
         );
-        assert!(m.invalid_settings(&defaults).is_empty());
+        assert_eq!(m.invalid_settings(&defaults).len(), 0);
         let bad = BTreeMap::from([
             ("days".to_owned(), json!(31)),
             ("list".to_owned(), json!("c")),
@@ -1585,9 +1585,10 @@ mod tests {
             m.invalid_settings(&bad),
             ["days", "list", "notify", "prefix", "unknown"]
         );
-        assert!(
+        assert_eq!(
             m.invalid_settings(&BTreeMap::from([("days".to_owned(), json!(30))]))
-                .is_empty()
+                .len(),
+            0
         );
     }
 

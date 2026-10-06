@@ -146,7 +146,7 @@ mod tests {
              <noscript><style>.n { x: y }</style></noscript><textarea><style>.t{}</style></textarea><p>x</p>",
         );
         assert!(out.styles.is_empty(), "{:?}", out.styles);
-        assert!(out.body.is_empty());
+        assert!(out.body.is_empty(), "{:?}", out.body);
     }
 
     #[test]

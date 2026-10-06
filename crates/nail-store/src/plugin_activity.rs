@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn job_runs_are_recorded() {
         let (store, id) = store_with_plugin();
-        assert!(store.plugin_job_states(&id).unwrap().is_empty());
+        assert_eq!(store.plugin_job_states(&id).unwrap().len(), 0);
         store
             .set_plugin_job_next_run(&id, "digest", Some(NOW + 60))
             .unwrap();
@@ -426,8 +426,8 @@ mod tests {
         store.add_plugin_cpu(&id, NOW, 1).unwrap();
         assert_eq!(store.plugin_cpu_last_hour(&id, NOW).unwrap(), 501);
         store.remove_plugin(&id).unwrap();
-        assert!(store.plugin_job_states(&id).unwrap().is_empty());
-        assert!(store.plugin_hook_stats(&id).unwrap().is_empty());
+        assert_eq!(store.plugin_job_states(&id).unwrap().len(), 0);
+        assert_eq!(store.plugin_hook_stats(&id).unwrap().len(), 0);
         assert_eq!(store.plugin_cpu_last_hour(&id, NOW).unwrap(), 0);
     }
 }

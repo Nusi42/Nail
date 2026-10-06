@@ -24,6 +24,8 @@ import {
  * - Delete moves all 12 to Trash (the replies too); Undo brings them back.
  * - A card's own "More" menu deletes that one message only.
  * - Delete permanently from Trash asks with the message count.
+ * - Moving the deleted conversation back to the Inbox returns the user's
+ *   replies to Sent (P3 review).
  * - Several picked conversations act together; a Gmail conversation archives
  *   and takes labels (`l`) as one undoable change.
  *
@@ -197,6 +199,33 @@ test("Delete permanently in Trash asks with the conversation's message count", a
   await expect.poll(labFolders, { timeout: 20_000 }).toEqual({});
 });
 
+test("a deleted conversation moved back to the Inbox returns the replies to Sent", async ({
+  page,
+}) => {
+  await openApp(page);
+  await select(page, LAB);
+  await list(page).press("Delete");
+  await expect.poll(labFolders, { timeout: 20_000 }).toEqual({ trash: LAB_TOTAL });
+  await accountSection(page, "work")
+    .locator('[data-part="folder-tree.item"][data-role="trash"]')
+    .first()
+    .click();
+  await select(page, LAB);
+  await readerAction(page, "Move to…");
+  const move = page.getByRole("dialog", { name: "Move to folder" });
+  await expect(move).toBeVisible();
+  await page.screenshot({ path: screenshotPath("restore-move-frost") });
+  // The picker lists the account's folders (the work account's Trash is open).
+  await move.locator('[data-part="folder-picker.button"][data-role="inbox"]').click();
+  await expect(move).toBeHidden();
+  // Like Gmail: the received mail goes to the Inbox, the user's own replies
+  // back to Sent (not into the Inbox).
+  await expect.poll(labFolders, { timeout: 20_000 }).toEqual({
+    inbox: LAB_INBOX,
+    sent: LAB_SENT,
+  });
+});
+
 test("several picked conversations act together", async ({ page }) => {
   await openApp(page);
   await select(page, LAB);
@@ -239,7 +268,7 @@ test("labels (l) go on the whole Gmail conversation as one undoable change", asy
   await apply.getByRole("checkbox", { name: "Receipts" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
   await expect(apply).toBeHidden();
-  await expect(toast(page)).toContainText("Conversation labelled");
+  await expect(toast(page)).toContainText("Label added to the conversation");
   await expect.poll(() => labelsOf("Lunch on Friday?"), { timeout: 20_000 }).toContain("Label_2");
   await toast(page).getByRole("button", { name: "Undo" }).click();
   await expect

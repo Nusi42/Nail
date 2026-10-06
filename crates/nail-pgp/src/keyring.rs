@@ -1383,7 +1383,7 @@ mod tests {
             .import(&fixture_text("alice.pub.asc"), KeyEncoding::Text)
             .unwrap();
         assert_eq!((result.created, result.updated), (1, 0));
-        assert!(result.issues.is_empty());
+        assert!(result.issues.is_empty(), "{:?}", result.issues);
         let alice = &result.keys[0];
         assert_eq!(alice.technology, CryptoTechnology::OpenPgp);
         assert_eq!(alice.emails, vec!["alice@example.org"]);
@@ -1403,7 +1403,7 @@ mod tests {
         let (keys, _) = key::parse_keys(&fixture("eve.pub.asc"));
         let mut eve = keys[0].public();
         let revocations = std::mem::take(&mut eve.details.revocation_signatures);
-        assert!(!revocations.is_empty());
+        assert!(!revocations.is_empty(), "{revocations:?}");
         let (stored, _) = ring.store_public(&eve, KeySource::Imported).unwrap();
         assert!(!stored.data.revoked);
         let result = ring
@@ -1430,7 +1430,7 @@ mod tests {
             Some("pgp-import-not-base64")
         );
         let result = ring.import("hello", KeyEncoding::Text).unwrap();
-        assert!(result.keys.is_empty());
+        assert!(result.keys.is_empty(), "{:?}", result.keys);
         assert_eq!(result.issues.len(), 1);
         // Nail's own text goes to the UI as a Fluent id (ADR 0043).
         let localized = result.issues[0].localized.as_ref().expect("localized");
@@ -1706,13 +1706,14 @@ mod tests {
             .len(),
             1
         );
-        assert!(
+        assert_eq!(
             ring.list(&KeyFilter {
                 technology: Some(CryptoTechnology::Smime),
                 ..KeyFilter::default()
             })
             .unwrap()
-            .is_empty()
+            .len(),
+            0
         );
 
         let verified = ring.set_trust(&bob.id, TrustDecision::Verified).unwrap();

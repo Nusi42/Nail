@@ -209,7 +209,7 @@ async fn the_core_s_answers_reach_the_program() {
     else {
         panic!("expected launch requests");
     };
-    assert!(requests.is_empty());
+    assert!(requests.is_empty(), "{requests:?}");
     fixture.service.shutdown().await;
 }
 

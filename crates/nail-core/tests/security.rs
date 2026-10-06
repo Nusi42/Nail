@@ -700,7 +700,7 @@ async fn key_requests() {
     else {
         panic!()
     };
-    assert!(keys.is_empty());
+    assert!(keys.is_empty(), "{keys:?}");
 
     // Import the found key (armored) and an S/MIME certificate (PEM).
     let Response::KeysImported { result } = call(Request::ImportKeys {
@@ -1009,7 +1009,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
             .starts_with(&nail_store::SEALED_MAGIC)
     };
     let files = walk(&blobs);
-    assert!(!files.is_empty());
+    assert!(!files.is_empty(), "{files:?}");
     assert!(!files.iter().any(is_sealed));
 
     let Response::VaultStatus { status } =
@@ -1030,7 +1030,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
     .await;
     // Every blob on disk is sealed now.
     let files = walk(&blobs);
-    assert!(!files.is_empty());
+    assert!(!files.is_empty(), "{files:?}");
     assert!(files.iter().all(is_sealed), "{files:?}");
 
     // Accepted at once: the state says the last switch is done.

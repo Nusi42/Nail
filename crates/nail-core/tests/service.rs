@@ -224,7 +224,7 @@ async fn lists_messages_in_pages_newest_first() {
     let Response::Messages { messages, .. } = page(&f.service, inbox.clone(), 0, 0).await else {
         panic!("expected messages");
     };
-    assert!(messages.is_empty());
+    assert!(messages.is_empty(), "{messages:?}");
     let Response::Messages { messages, .. } =
         page(&f.service, inbox.clone(), 0, MAX_PAGE_SIZE + 1).await
     else {
@@ -448,8 +448,11 @@ async fn inbox_total(service: &Service) -> u32 {
 struct FailAll;
 
 impl nail_store::Replayer for FailAll {
-    async fn replay(&self, _op: &nail_store::QueuedOp) -> nail_store::ReplayOutcome {
-        nail_store::ReplayOutcome::Fail("rejected".into())
+    fn replay(
+        &self,
+        _op: &nail_store::QueuedOp,
+    ) -> impl Future<Output = nail_store::ReplayOutcome> + Send {
+        std::future::ready(nail_store::ReplayOutcome::Fail("rejected".into()))
     }
 }
 

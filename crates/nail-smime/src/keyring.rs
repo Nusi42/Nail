@@ -1265,7 +1265,7 @@ mod tests {
             ),
             Err(Error::WrongPassphrase)
         ));
-        assert!(env.store.list_keys(None, false).unwrap().is_empty());
+        assert_eq!(env.store.list_keys(None, false).unwrap().len(), 0);
     }
 
     #[test]
@@ -1316,7 +1316,7 @@ mod tests {
                 ..KeyFilter::default()
             })
             .unwrap();
-        assert!(none.is_empty());
+        assert!(none.is_empty(), "{none:?}");
 
         let pem = keyring
             .export_public(&own[0].id, KeyEncoding::Text)
@@ -1489,7 +1489,7 @@ mod tests {
             RecipientKeyState::Usable
         );
         // Remembering twice adds nothing; the next read knows the key.
-        assert!(keyring.remember_certificates(&outcome).unwrap().is_empty());
+        assert_eq!(keyring.remember_certificates(&outcome).unwrap().len(), 0);
         let again = keyring
             .read_message(
                 &fixture("alice-signed-detached.eml"),
@@ -1504,7 +1504,7 @@ mod tests {
         let pos = tampered.windows(9).position(|w| w == b"Hello Bob").unwrap();
         tampered[pos] = b'J';
         let bad = keyring.read_message(&tampered, None).unwrap().unwrap();
-        assert!(keyring.remember_certificates(&bad).unwrap().is_empty());
+        assert_eq!(keyring.remember_certificates(&bad).unwrap().len(), 0);
         assert!(
             keyring
                 .read_message(b"Content-Type: text/plain\r\n\r\nx", None)
@@ -1537,7 +1537,7 @@ mod tests {
         // Public certificates need no flag.
         let inter = keyring.list(&KeyFilter::default()).unwrap()[0].id.clone();
         assert!(keyring.delete(&inter, false).unwrap());
-        assert!(keyring.list(&KeyFilter::default()).unwrap().is_empty());
+        assert_eq!(keyring.list(&KeyFilter::default()).unwrap().len(), 0);
     }
 
     #[test]

@@ -226,11 +226,7 @@ mod tests {
         };
         assert_eq!(server.host, GRAPH_HOST);
         assert_eq!(options.engine, ExchangeEngine::Graph);
-        assert!(
-            options.issues(server).is_empty(),
-            "{:?}",
-            options.issues(server)
-        );
+        assert_eq!(options.issues(server).len(), 0);
         assert!(
             matches!(&server.auth, AuthConfig::OAuth2 { provider, username, .. } if provider == "microsoft" && username == "ada@contoso.example")
         );
@@ -252,11 +248,7 @@ mod tests {
             ("mail.corp.example", 443)
         );
         assert_eq!(options.url, None, "the default URL is not written");
-        assert!(
-            options.issues(server).is_empty(),
-            "{:?}",
-            options.issues(server)
-        );
+        assert_eq!(options.issues(server).len(), 0);
         assert!(matches!(
             server.auth,
             AuthConfig::Windows { username: None, .. }
@@ -282,11 +274,7 @@ mod tests {
         assert!(
             matches!(&server.auth, AuthConfig::Password { username, .. } if username == "CORP\\ada")
         );
-        assert!(
-            options.issues(server).is_empty(),
-            "{:?}",
-            options.issues(server)
-        );
+        assert_eq!(options.issues(server).len(), 0);
 
         let local = ews_candidate(
             "http://127.0.0.1:9000/EWS/Exchange.asmx",
@@ -325,8 +313,16 @@ mod tests {
         ];
         flag(&mut candidates, "corp.example", false);
         assert_eq!(candidates[0].warnings, [DiscoveryWarning::ForeignHosts]);
-        assert!(candidates[1].warnings.is_empty());
-        assert!(candidates[2].warnings.is_empty());
+        assert!(
+            candidates[1].warnings.is_empty(),
+            "{:?}",
+            candidates[1].warnings
+        );
+        assert!(
+            candidates[2].warnings.is_empty(),
+            "{:?}",
+            candidates[2].warnings
+        );
         flag(&mut candidates, "corp.example", true);
         assert_eq!(candidates[1].warnings, [DiscoveryWarning::InsecureSource]);
         assert!(under_domain("Autodiscover.Corp.Example.", "corp.example"));

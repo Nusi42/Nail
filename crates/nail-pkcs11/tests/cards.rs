@@ -78,7 +78,7 @@ fn tokens_list_keys_certificates_and_usages() {
     let token = token();
     let cards = cards(&token, 0, Arc::new(FixedPin::default()));
     let (tokens, problems) = cards.list();
-    assert!(problems.is_empty());
+    assert!(problems.is_empty(), "{problems:?}");
     assert_eq!(tokens.len(), 1);
     let card = &tokens[0];
     assert_eq!(
@@ -298,7 +298,7 @@ fn removed_moved_and_unknown_tokens_and_keys() {
         key.sign(SignMechanism::RsaPkcs1, &input).unwrap_err().kind,
         SmartcardError::TokenNotPresent
     );
-    assert!(cards.list().0.is_empty());
+    assert_eq!(cards.list().0.len(), 0);
     // Inserted into another reader: found by its serial.
     token.set_present(1, true);
     token.move_token(1, 7);
@@ -363,6 +363,6 @@ fn modules_that_do_not_load_are_reported() {
         ]
     );
     let (tokens, problems) = cards.list();
-    assert!(tokens.is_empty());
+    assert!(tokens.is_empty(), "{tokens:?}");
     assert_eq!(problems.len(), 2);
 }

@@ -181,7 +181,7 @@ fn legacy_charsets_are_decoded() {
 #[test]
 fn broken_mime_is_best_effort() {
     let parsed = parse("INBOX", "08-broken-mime.eml");
-    assert!(parsed.headers.from.is_empty());
+    assert!(parsed.headers.from.is_empty(), "{:?}", parsed.headers.from);
     assert_eq!(parsed.headers.date, None);
     assert_eq!(
         parsed.headers.subject,
@@ -244,8 +244,8 @@ fn hostile_html_is_neutralized() {
 #[test]
 fn thread_headers() {
     let first = parse("INBOX", "10-thread-1.eml");
-    assert!(first.in_reply_to.is_empty());
-    assert!(first.references.is_empty());
+    assert!(first.in_reply_to.is_empty(), "{:?}", first.in_reply_to);
+    assert!(first.references.is_empty(), "{:?}", first.references);
     let last = parse("INBOX", "13-thread-7.eml");
     assert_eq!(last.in_reply_to, ["ng-6@nail.example"]);
     assert_eq!(last.references.len(), 6);

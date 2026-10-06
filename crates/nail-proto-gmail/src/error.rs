@@ -422,7 +422,7 @@ mod tests {
         for error in all() {
             let id = error.localized().id;
             assert!(GmailError::MESSAGE_IDS.contains(&id.as_str()), "{id}");
-            assert!(!error.to_string().is_empty());
+            assert_ne!(error.to_string().len(), 0);
         }
     }
 

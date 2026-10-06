@@ -1422,7 +1422,7 @@ mod tests {
             batch_uids(&[1, 2, 3, 4, 5, 6, 7, 8], &sizes, limits),
             vec![vec![1, 2, 3], vec![4, 5], vec![6], vec![7, 8]]
         );
-        assert!(batch_uids(&[], &sizes, limits).is_empty());
+        assert_eq!(batch_uids(&[], &sizes, limits).len(), 0);
         // Zero limits still make progress, one message per batch.
         let zero = FetchBatchLimits {
             max_messages: 0,

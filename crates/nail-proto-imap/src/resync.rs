@@ -300,6 +300,6 @@ mod tests {
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].uid, 2);
         assert!(in_ranges(&[1..=3, 8..=8], 8));
-        assert!(!in_ranges(&[1..=3], 4));
+        assert!(!in_ranges(std::slice::from_ref(&(1..=3)), 4));
     }
 }

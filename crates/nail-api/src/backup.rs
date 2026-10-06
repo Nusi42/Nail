@@ -337,7 +337,7 @@ mod tests {
         assert!(!contents.includes(BackupItem::Keys));
         assert!(contents.includes(BackupItem::LocalMail));
         assert_eq!(contents.items.len(), BackupItem::ALL.len() - 1);
-        assert!(contents.issues().is_empty());
+        assert_eq!(contents.issues().len(), 0);
         assert!(BackupContents::all().includes(BackupItem::Keys));
         assert_eq!(
             BackupContents { items: vec![] }.issues(),

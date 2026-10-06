@@ -451,7 +451,7 @@ mod tests {
         assert_eq!(sink.titles, vec!["Ada Lovelace", "Friends"]);
         assert_eq!(ctx.report.counts.contacts, 1);
         assert_eq!(ctx.report.counts.groups, 1);
-        assert!(ctx.report.issues.is_empty());
+        assert!(ctx.report.issues.is_empty(), "{:?}", ctx.report.issues);
     }
 
     #[test]

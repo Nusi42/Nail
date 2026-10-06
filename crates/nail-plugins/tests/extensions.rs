@@ -168,7 +168,7 @@ async fn composer_edits_need_a_composer_action_and_the_permission() {
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(composer_edits(&fake).is_empty());
+    assert_eq!(composer_edits(&fake).len(), 0);
 }
 
 const PREVIEWS: &str = r#"
@@ -282,7 +282,9 @@ async fn attachment_previews_render_trees_and_images_only() {
     assert!(
         !fake
             .localized("viewer", "plugin-host-handler-failed")
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        fake.localized("viewer", "plugin-host-handler-failed")
     );
 }
 

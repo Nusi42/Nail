@@ -456,7 +456,7 @@ mod tests {
         ))
         .unwrap();
         // Too large at the advanced host: the direct method is tried (404).
-        assert!(result.failures.is_empty());
+        assert!(result.failures.is_empty(), "{:?}", result.failures);
     }
 
     #[test]
@@ -471,7 +471,7 @@ mod tests {
             NOW,
         ))
         .unwrap();
-        assert!(result.candidates.is_empty());
+        assert!(result.candidates.is_empty(), "{:?}", result.candidates);
 
         // A secret key served by mistake yields only its public part.
         let urls = wkd_urls("bob@example.net").unwrap();

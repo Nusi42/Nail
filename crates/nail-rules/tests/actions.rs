@@ -430,7 +430,7 @@ fn rules_run_in_order_and_see_earlier_changes() {
         named("Manual only", "trigger=\"manual\"", "", "flag"),
         named("Disabled", "trigger=\"arrival\" enabled=#false", "", "flag"),
     ]);
-    assert!(set.broken().is_empty());
+    assert_eq!(set.broken().len(), 0);
     let outcome = set.process(RuleRunCause::Arrival, &newsletter(), &env(&m));
     let names: Vec<&str> = outcome
         .applied
@@ -447,7 +447,7 @@ fn rules_run_in_order_and_see_earlier_changes() {
 
     // Nothing matches a personal mail.
     let outcome = set.process(RuleRunCause::Arrival, &from_boss(), &env(&m));
-    assert!(outcome.applied.is_empty());
+    assert!(outcome.applied.is_empty(), "{:?}", outcome.applied);
     assert!(outcome.notify_or(true));
 }
 
@@ -738,5 +738,5 @@ fn the_design_example_runs() {
     assert_eq!(outcome.notify, Some(false));
     assert!(outcome.state.tags.iter().any(|t| t == "newsletter"));
     let outcome = set.process(RuleRunCause::Arrival, &at_home(), &env(&m));
-    assert!(outcome.applied.is_empty());
+    assert!(outcome.applied.is_empty(), "{:?}", outcome.applied);
 }

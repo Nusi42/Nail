@@ -744,7 +744,7 @@ mod tests {
                 .ensure_pim_source(&dav, PimSourceKind::Carddav, 7)
                 .unwrap()
         );
-        assert!(store.calendars(Some(&dav)).unwrap().is_empty());
+        assert_eq!(store.calendars(Some(&dav)).unwrap().len(), 0);
         let sources = store.pim_sources().unwrap();
         assert_eq!(sources[0].id.as_str(), LOCAL_SOURCE_ID);
         assert_eq!(sources[1].kind, PimSourceKind::Carddav);

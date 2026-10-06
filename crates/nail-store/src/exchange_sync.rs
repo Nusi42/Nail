@@ -470,7 +470,7 @@ mod tests {
                 .unwrap(),
             vec![MessageId::from("m1")]
         );
-        assert!(
+        assert_eq!(
             store
                 .exchange_removed_by_message_id(
                     &account(),
@@ -478,17 +478,19 @@ mod tests {
                     "moved@example"
                 )
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         store.clear_exchange_removed(&"m1".into()).unwrap();
-        assert!(store.exchange_removed(&account(), None).unwrap().is_empty());
+        assert_eq!(store.exchange_removed(&account(), None).unwrap().len(), 0);
         // Deleting the message drops its mark.
         store.delete_message(&"m2".into()).unwrap();
-        assert!(
+        assert_eq!(
             store
                 .exchange_removed(&account(), Some("boss@contoso.example"))
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 

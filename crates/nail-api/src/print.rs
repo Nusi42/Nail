@@ -321,8 +321,8 @@ mod tests {
             calendar_ids: vec![],
             layout: AgendaLayout::Week,
         };
-        assert!(agenda("2026-10-01", "2026-10-07").issues().is_empty());
-        assert!(agenda("2026-01-01", "2026-12-31").issues().is_empty());
+        assert_eq!(agenda("2026-10-01", "2026-10-07").issues().len(), 0);
+        assert_eq!(agenda("2026-01-01", "2026-12-31").issues().len(), 0);
         assert_eq!(
             agenda("2026-10-07", "2026-10-01").issues(),
             vec![PrintTargetIssue::EndBeforeStart]
@@ -338,7 +338,7 @@ mod tests {
         let message = PrintTarget::Message {
             message_id: "m1".into(),
         };
-        assert!(message.issues().is_empty());
+        assert_eq!(message.issues().len(), 0);
     }
 
     #[test]

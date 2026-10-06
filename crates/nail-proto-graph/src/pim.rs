@@ -1884,7 +1884,7 @@ mod tests {
             if_match(Some("W/\"x\"")),
             [("If-Match", "W/\"x\"".to_owned())]
         );
-        assert!(if_match(None).is_empty());
+        assert_eq!(if_match(None).len(), 0);
         assert_eq!(
             response_action(InvitationResponse::Tentative),
             "tentativelyAccept"

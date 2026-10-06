@@ -99,7 +99,7 @@ async fn idle_times_out_for_reissue_and_stops_on_request() {
             .await
             .unwrap();
         assert_eq!(outcome.end, IdleEnd::Timeout);
-        assert!(outcome.changes.is_empty());
+        assert!(outcome.changes.is_empty(), "{:?}", outcome.changes);
     }
     assert_eq!(server.command_count("IDLE"), 2);
 
@@ -190,7 +190,7 @@ async fn polling_reports_changes_without_idle() {
     let server = bare_server().await;
     let mut client = login(&server).await;
     client.examine("INBOX").await.unwrap();
-    assert!(client.poll().await.unwrap().is_empty());
+    assert_eq!(client.poll().await.unwrap().len(), 0);
     server.store().add_flags("INBOX", 3, &["\\Seen"]);
     server
         .store()

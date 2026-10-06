@@ -256,7 +256,7 @@ fn encrypted_only_and_wrong_key() {
     assert_eq!(subject_and_text(&sent).0, "Engine notes");
     let status = p.bob.status(&sent);
     assert_eq!(status.encryption.unwrap().state, DecryptionState::Decrypted);
-    assert!(status.signatures.is_empty());
+    assert!(status.signatures.is_empty(), "{:?}", status.signatures);
     assert_eq!(status.header_protection, HeaderProtection::None);
 
     // Ada did not encrypt to herself: no key.

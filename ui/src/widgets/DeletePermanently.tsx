@@ -7,10 +7,14 @@
  * rows or a card's message (kept per UI store), so a selection change
  * behind the window cannot change what is deleted — and the question names
  * the number of messages the core resolved them to (`ResolveMailTargets`).
+ * Confirming deletes exactly those messages: one that reached Trash or Junk
+ * while the question was open (a sync, another window) was not counted and
+ * stays.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { ActionTargets } from "../actions/mailTargets";
+import type { MessageId } from "../api/generated";
 import { errorMessageOf } from "../api/client";
 import { mailActionsStoreFor } from "../features/mail-actions/store";
 import { runMailAction } from "../features/mail-actions/run";
@@ -28,6 +32,8 @@ export interface PendingDelete {
   targets: ActionTargets;
   /** Messages the targets resolve to. */
   messages: number;
+  /** Those messages: what Delete permanently acts on. */
+  messageIds: readonly MessageId[];
   /** Conversations among the targets that resolve to a message. */
   conversations: number;
 }
@@ -61,6 +67,7 @@ export async function askDeletePermanently(
     pending.set(ctx.store, {
       targets,
       messages: resolution.message_ids.length,
+      messageIds: resolution.message_ids,
       conversations: resolution.conversations,
     });
   } catch (error) {
@@ -78,7 +85,15 @@ export async function confirmDeletePermanently(ctx: WriteContext): Promise<void>
   pending.delete(ctx.store);
   ctx.store.getState().closeWindow(DELETE_PERMANENTLY_DIALOG);
   if (what === null) return;
-  await runMailAction(ctx, what.targets, { type: "delete-permanently" });
+  await runMailAction(
+    ctx,
+    what.targets,
+    { type: "delete-permanently" },
+    {
+      apply: what.messageIds.map((id) => ({ kind: "message", message_id: id })),
+      conversations: what.conversations,
+    },
+  );
 }
 
 /** The confirmation window's content. */

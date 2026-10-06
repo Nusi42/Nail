@@ -580,7 +580,9 @@ mod tests {
             index
                 .search_text(TextField::From, "bob")
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            index.search_text(TextField::From, "bob").unwrap()
         );
         assert_eq!(
             ids(index.search_text(TextField::To, "bob").unwrap()).len(),
@@ -595,14 +597,16 @@ mod tests {
             index
                 .search_text(TextField::Body, "are numbers")
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            index.search_text(TextField::Body, "are numbers").unwrap()
         );
         // ASCII folding: Menü matches menu.
         assert_eq!(
             ids(index.search_text(TextField::Filename, "menu").unwrap()).len(),
             2
         );
-        assert!(index.search_text(TextField::Any, "!!!").unwrap().is_empty());
+        assert_eq!(index.search_text(TextField::Any, "!!!").unwrap().len(), 0);
 
         // Subject hits rank above body hits.
         let ranked = index.search_text(TextField::Any, "quarterly").unwrap();

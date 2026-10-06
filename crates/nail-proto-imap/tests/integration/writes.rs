@@ -34,7 +34,7 @@ async fn store_adds_removes_and_replaces_flags_and_keywords() {
     assert!(result.updated[0].flags.flags.flagged);
     assert_eq!(result.updated[0].flags.keywords, ["$Label1"]);
     assert!(result.updated.iter().all(|u| u.modseq.is_some()));
-    assert!(result.conflicts.is_empty());
+    assert!(result.conflicts.is_empty(), "{:?}", result.conflicts);
 
     client
         .store_flags("INBOX", &[1], StoreMode::Remove, &[Flag::Seen], None)
@@ -49,7 +49,7 @@ async fn store_adds_removes_and_replaces_flags_and_keywords() {
     assert_eq!(server_flags(&server, "INBOX", 3), ["\\Answered"]);
     assert!(server.commands().iter().any(|c| c == "UID STORE"));
     // Our own STORE results are not reported as changes by others.
-    assert!(client.take_changes().is_empty());
+    assert_eq!(client.take_changes().len(), 0);
 }
 
 #[tokio::test]
@@ -171,7 +171,7 @@ async fn move_uses_move_and_reports_the_new_uids() {
     assert_eq!(server_flags(&server, "Archive", 1), ["\\Seen"]);
     assert!(server.commands().iter().any(|c| c == "UID MOVE"));
     // Our own expunges are not reported as foreign changes.
-    assert!(client.take_changes().is_empty());
+    assert_eq!(client.take_changes().len(), 0);
 }
 
 #[tokio::test]
@@ -452,19 +452,22 @@ async fn messages_are_found_by_message_id_and_uid_validity_is_reported() {
             .unwrap(),
         [3]
     );
-    assert!(
+    assert_eq!(
         client
             .find_by_message_id("INBOX", "wo@example.org")
             .await
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
     assert!(
         client
             .find_by_message_id("INBOX", " <> ")
             .await
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        client.find_by_message_id("INBOX", " <> ").await.unwrap()
     );
 
     // After a rebuild the UIDs change and so does the UIDVALIDITY.

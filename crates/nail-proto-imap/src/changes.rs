@@ -182,6 +182,9 @@ mod tests {
     fn ranges_expand() {
         assert_eq!(expand_ranges(&[1..=3, 7..=7]), [1, 2, 3, 7]);
         assert_eq!(expand_ranges(&[]), Vec::<u32>::new());
-        assert_eq!(expand_ranges(&[1..=u32::MAX]).len(), MAX_VANISHED);
+        assert_eq!(
+            expand_ranges(std::slice::from_ref(&(1..=u32::MAX))).len(),
+            MAX_VANISHED
+        );
     }
 }

@@ -450,7 +450,7 @@ async fn a_send_as_identity_is_a_shared_mailbox_not_me() {
     // Only the replies from Sent are the user's; Ada's on-behalf mailbox
     // and Grace's shared one are not.
     let mine: Vec<_> = messages.iter().filter(|m| m.from_me).collect();
-    assert!(!mine.is_empty());
+    assert!(!mine.is_empty(), "{mine:?}");
     assert!(mine.iter().all(|m| {
         m.message
             .from

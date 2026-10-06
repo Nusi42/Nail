@@ -371,7 +371,7 @@ mod windows_dns {
                     exchange: "mx1.example.org".into(),
                 })]
             );
-            assert!(read(&mut [], Kind::Mx).is_empty());
+            assert_eq!(read(&mut [], Kind::Mx).len(), 0);
         }
 
         #[test]
@@ -410,11 +410,12 @@ mod tests {
         );
         let srv = dns.srv("_imaps._tcp.gmail.com").await.unwrap();
         assert!(srv.iter().any(|s| s.port == 993), "{srv:?}");
-        assert!(
+        assert_eq!(
             dns.srv("_imaps._tcp.nail-does-not-exist.invalid")
                 .await
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 }

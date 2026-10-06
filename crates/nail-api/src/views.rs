@@ -419,7 +419,7 @@ mod tests {
             },
         ];
         assert_eq!(overflow_order(&items), [7, 5, 4, 3, 1, 0]);
-        assert!(overflow_order(&[ToolbarItem::Spacer]).is_empty());
+        assert_eq!(overflow_order(&[ToolbarItem::Spacer]).len(), 0);
     }
 
     fn layout() -> ResolvedLayout {

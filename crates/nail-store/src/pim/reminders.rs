@@ -482,7 +482,7 @@ mod tests {
         store
             .delete_pim_item(&item_ref(PimItemKind::Event, "e"), 9)
             .unwrap();
-        assert!(store.reminder_records(&[]).unwrap().is_empty());
+        assert_eq!(store.reminder_records(&[]).unwrap().len(), 0);
     }
 
     #[test]
@@ -538,7 +538,9 @@ mod tests {
             store
                 .list_reminders(None, "Europe/Berlin")
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.list_reminders(None, "Europe/Berlin").unwrap()
         );
         let soon = store
             .list_reminders(Some(testing::at("2026-10-03T00:00:00Z")), "Europe/Berlin")

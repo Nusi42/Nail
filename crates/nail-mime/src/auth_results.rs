@@ -525,7 +525,7 @@ mod tests {
 
         // "none".
         let p = parse_header("example.org 1; none").unwrap();
-        assert!(p.results.is_empty());
+        assert!(p.results.is_empty(), "{:?}", p.results);
         // An unknown version is not understood.
         assert!(parse_header("example.org 2; spf=pass").is_none());
         assert!(parse_header("").is_none());

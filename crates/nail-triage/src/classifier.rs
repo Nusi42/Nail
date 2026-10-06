@@ -968,7 +968,7 @@ mod tests {
         };
         let d = plan_arrival(&settings(), &in_junk, &a, None);
         assert_eq!(d.train_as, Some(true));
-        assert!(d.ops.is_empty());
+        assert!(d.ops.is_empty(), "{:?}", d.ops);
         // $NotJunk wins over the folder.
         let rescued = kw(&["$NotJunk"]);
         let facts = MessageFacts {
@@ -983,7 +983,7 @@ mod tests {
         };
         let d = plan_arrival(&s, &in_junk, &a, Some(&ham_class));
         assert_eq!(d.verdict.unwrap().source, JunkSource::Classifier);
-        assert!(d.ops.is_empty());
+        assert!(d.ops.is_empty(), "{:?}", d.ops);
     }
 
     #[test]

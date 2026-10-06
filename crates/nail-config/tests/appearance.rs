@@ -741,7 +741,9 @@ fn the_manager_lists_user_themes_and_follows_the_os() {
     assert!(
         manager
             .set_system_appearance(Some(SystemAppearance::DARK))
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        manager.set_system_appearance(Some(SystemAppearance::DARK))
     );
     // High contrast wins while following Windows.
     manager.set_system_appearance(Some(HIGH_CONTRAST));
@@ -1073,7 +1075,7 @@ fn reloading_the_themes_directory() {
         panic!("{updates:?}")
     };
     assert_eq!(file, "themes/ocean.kdl");
-    assert!(!errors.is_empty());
+    assert!(!errors.is_empty(), "{errors:?}");
     assert_eq!(appearance.active, "frost");
     assert!(matches!(
         updates[0].to_event(),

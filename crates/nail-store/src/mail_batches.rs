@@ -7,7 +7,7 @@
 //! inverses newest first in one transaction and marks the batch `undone`
 //! ([`Store::undo_mail_batch`]); an inverse that no longer applies (the
 //! message moved or was deleted since) is skipped. Batches older than
-//! [`MAIL_UNDO_SECS`], and all but the newest [`MAIL_UNDO_KEEP`], are purged
+//! [`MAIL_UNDO_SECS`], and all but each actor's newest [`MAIL_UNDO_KEEP`], are purged
 //! on every write.
 //!
 //! # Inverses
@@ -216,13 +216,16 @@ fn plan_one(tx: &Transaction<'_>, op: &Operation) -> Result<Planned> {
     })
 }
 
-fn purge(tx: &Transaction<'_>, now: i64) -> Result<()> {
+/// Drops batches older than [`MAIL_UNDO_SECS`] and all but `actor`'s newest
+/// [`MAIL_UNDO_KEEP`] (the limit is per actor, so an agent's or another
+/// session's writes never evict the user's undo).
+fn purge(tx: &Transaction<'_>, actor: &str, now: i64) -> Result<()> {
     let oldest = now.saturating_sub(i64::try_from(MAIL_UNDO_SECS).unwrap_or(i64::MAX));
     tx.execute("DELETE FROM mail_batches WHERE created_at < ?1", [oldest])?;
     tx.execute(
-        "DELETE FROM mail_batches WHERE id NOT IN
-           (SELECT id FROM mail_batches ORDER BY id DESC LIMIT ?1)",
-        [i64::try_from(MAIL_UNDO_KEEP).unwrap_or(i64::MAX)],
+        "DELETE FROM mail_batches WHERE actor = ?1 AND id NOT IN
+           (SELECT id FROM mail_batches WHERE actor = ?1 ORDER BY id DESC LIMIT ?2)",
+        params![actor, i64::try_from(MAIL_UNDO_KEEP).unwrap_or(i64::MAX)],
     )?;
     Ok(())
 }
@@ -346,7 +349,7 @@ impl Store {
             } else {
                 None
             };
-            purge(tx, plan.now)?;
+            purge(tx, plan.actor, plan.now)?;
             Ok(MailBatchApplied {
                 batch,
                 queued,
@@ -368,7 +371,7 @@ impl Store {
     /// batches.
     pub fn undo_mail_batch(&self, id: i64, actor: &str, now: i64) -> Result<MailBatchUndo> {
         self.with_tx(|tx| {
-            purge(tx, now)?;
+            purge(tx, actor, now)?;
             let Some(record) = batch_in_tx(tx, id)? else {
                 return Ok(MailBatchUndo::Expired);
             };
@@ -635,6 +638,29 @@ mod tests {
     }
 
     #[test]
+    fn other_actors_never_evict_the_users_undo() {
+        let store = store();
+        let mine = store
+            .apply_mail_batch(&plan("user"), &moves(&["m1"], "a/Archive"))
+            .unwrap()
+            .batch
+            .unwrap();
+        // An agent toggling a message back and forth records many batches.
+        for n in 0..(MAIL_UNDO_KEEP + 5) {
+            let to = if n % 2 == 0 { "a/Archive" } else { "a/INBOX" };
+            store
+                .apply_mail_batch(&plan("mcp:c1"), &moves(&["m2"], to))
+                .unwrap();
+        }
+        assert!(store.mail_batch(mine).unwrap().is_some());
+        assert!(matches!(
+            store.undo_mail_batch(mine, "user", NOW).unwrap(),
+            MailBatchUndo::Undone { .. }
+        ));
+        assert_eq!(folder_of(&store, "m1"), "a/INBOX");
+    }
+
+    #[test]
     fn flag_changes_record_what_was_before_and_skip_no_ops() {
         let store = store();
         let read = |id: &str| Operation::UpdateFlags {
@@ -653,7 +679,7 @@ mod tests {
         let again = store
             .apply_mail_batch(&plan("user"), &[read("m1"), read("m2")])
             .unwrap();
-        assert!(again.queued.is_empty());
+        assert!(again.queued.is_empty(), "{:?}", again.queued);
         assert_eq!(again.batch, None);
         assert_eq!(again.unchanged.len(), 2);
         let MailBatchUndo::Undone { .. } = store
@@ -706,7 +732,7 @@ mod tests {
         ops.extend(moves(&["missing"], "a/Archive"));
         assert!(store.apply_mail_batch(&plan("user"), &ops).is_err());
         assert_eq!(folder_of(&store, "m1"), "a/INBOX");
-        assert!(store.list_ops(None).unwrap().is_empty());
+        assert_eq!(store.list_ops(None).unwrap().len(), 0);
     }
 
     #[test]

@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn without_an_editor_the_system_one_opens_the_file() {
         let (program, args) = args(&editor_command(Path::new("a.kdl"), 1, 1, None));
-        assert!(!program.is_empty());
+        assert!(!program.is_empty(), "{program:?}");
         assert_eq!(args.last().map(String::as_str), Some("a.kdl"));
         let (_, blank) = self::args(&editor_command(Path::new("a.kdl"), 1, 1, Some("  ")));
         assert_eq!(blank.last().map(String::as_str), Some("a.kdl"));
@@ -198,6 +198,6 @@ mod tests {
     #[test]
     fn words_split_like_a_shell() {
         assert_eq!(words("a 'b c' \"d\" ''"), ["a", "b c", "d", ""]);
-        assert!(words("   ").is_empty());
+        assert_eq!(words("   ").len(), 0);
     }
 }

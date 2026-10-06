@@ -1049,7 +1049,7 @@ mod tests {
 
     #[test]
     fn condition_headers_per_precondition() {
-        assert!(condition_headers(&Precondition::None).is_empty());
+        assert_eq!(condition_headers(&Precondition::None).len(), 0);
         assert_eq!(
             condition_headers(&Precondition::Create),
             [(IF_NONE_MATCH, "*".to_owned())]

@@ -34,55 +34,57 @@ fn name(request: &Request) -> String {
 }
 
 impl CoreAccess for FakeCore {
-    async fn handle(&self, request: Request) -> Response {
-        self.requests.lock().unwrap().push(name(&request));
-        match request {
-            Request::ListAccounts => Response::Accounts {
-                accounts: vec![Account {
-                    id: "work".into(),
-                    name: "Work".into(),
-                    email: "me@work.example".into(),
-                    kind: AccountKind::Imap,
-                }],
-            },
-            Request::ListVirtualAccounts => Response::VirtualAccounts {
-                virtual_accounts: vec![],
-            },
-            Request::ListRules => Response::Error {
-                code: ErrorCode::Unsupported,
-                message: "rules arrive with WP22".into(),
-                localized: None,
-            },
-            Request::GetUiContext => Response::UiContext {
-                context: UiContext {
-                    message_id: Some("m1".into()),
-                    ..UiContext::default()
+    fn handle(&self, request: Request) -> impl Future<Output = Response> + Send {
+        std::future::ready({
+            self.requests.lock().unwrap().push(name(&request));
+            match request {
+                Request::ListAccounts => Response::Accounts {
+                    accounts: vec![Account {
+                        id: "work".into(),
+                        name: "Work".into(),
+                        email: "me@work.example".into(),
+                        kind: AccountKind::Imap,
+                    }],
                 },
-            },
-            // One local hit and one found only by the server search.
-            Request::Search { query } => Response::SearchResults {
-                offset: query.offset,
-                total: 7,
-                hits: vec![
-                    nail_api::SearchHit {
-                        message: common::summary("m1", "work", "inbox", "t1"),
-                        score: 1.0,
-                        from_server: false,
+                Request::ListVirtualAccounts => Response::VirtualAccounts {
+                    virtual_accounts: vec![],
+                },
+                Request::ListRules => Response::Error {
+                    code: ErrorCode::Unsupported,
+                    message: "rules arrive with WP22".into(),
+                    localized: None,
+                },
+                Request::GetUiContext => Response::UiContext {
+                    context: UiContext {
+                        message_id: Some("m1".into()),
+                        ..UiContext::default()
                     },
-                    nail_api::SearchHit {
-                        message: common::summary("m9", "work", "lists", "t9"),
-                        score: 0.0,
-                        from_server: true,
-                    },
-                ],
-                server: Some(nail_api::search::ServerSearch {
-                    accounts: vec!["work".into()],
-                    hits: 1,
-                    failed: vec![],
-                }),
-            },
-            _ => Response::Done,
-        }
+                },
+                // One local hit and one found only by the server search.
+                Request::Search { query } => Response::SearchResults {
+                    offset: query.offset,
+                    total: 7,
+                    hits: vec![
+                        nail_api::SearchHit {
+                            message: common::summary("m1", "work", "inbox", "t1"),
+                            score: 1.0,
+                            from_server: false,
+                        },
+                        nail_api::SearchHit {
+                            message: common::summary("m9", "work", "lists", "t9"),
+                            score: 0.0,
+                            from_server: true,
+                        },
+                    ],
+                    server: Some(nail_api::search::ServerSearch {
+                        accounts: vec!["work".into()],
+                        hits: 1,
+                        failed: vec![],
+                    }),
+                },
+                _ => Response::Done,
+            }
+        })
     }
 
     fn store(&self) -> &Store {
@@ -97,13 +99,15 @@ impl CoreAccess for FakeCore {
         self.events.lock().unwrap().push(event);
     }
 
-    async fn is_encrypted(&self, id: &MessageId) -> Result<bool, ApiError> {
-        // The core answers from its reader; the fake knows m3.
-        self.requests
-            .lock()
-            .unwrap()
-            .push(format!("is_encrypted {id}"));
-        Ok(id.as_str() == "m3")
+    fn is_encrypted(&self, id: &MessageId) -> impl Future<Output = Result<bool, ApiError>> + Send {
+        std::future::ready({
+            // The core answers from its reader; the fake knows m3.
+            self.requests
+                .lock()
+                .unwrap()
+                .push(format!("is_encrypted {id}"));
+            Ok(id.as_str() == "m3")
+        })
     }
 }
 
@@ -152,7 +156,7 @@ async fn core_data_reads_through_requests_store_and_blobs() {
     let m1 = MessageId::new("m1");
 
     assert_eq!(data.accounts().await.unwrap()[0].id.as_str(), "work");
-    assert!(data.virtual_accounts().await.unwrap().is_empty());
+    assert_eq!(data.virtual_accounts().await.unwrap().len(), 0);
     assert_eq!(
         data.message_summary(&m1).await.unwrap().subject,
         "Subject of m1"

@@ -633,7 +633,7 @@ mod tests {
             .iter()
             .find(|m| m.file_name == "09-hostile-html.eml")
             .unwrap();
-        assert!(hostile.flags.is_empty());
+        assert!(hostile.flags.is_empty(), "{:?}", hostile.flags);
     }
 
     #[test]

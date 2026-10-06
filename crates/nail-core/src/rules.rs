@@ -1147,13 +1147,13 @@ mod tests {
         std::fs::write(&path, format!("// mine\n{RULE}")).unwrap();
         let manager = RulesManager::load(dir.path());
         assert_eq!(manager.rules().len(), 1);
-        assert!(manager.errors().is_empty());
+        assert_eq!(manager.errors().len(), 0);
         assert_eq!(manager.set().rules().len(), 1);
 
         manager
             .edit(|doc| doc.remove_rule(&"lists".into()).map_err(|e| rule_error(&e)))
             .unwrap();
-        assert!(manager.rules().is_empty());
+        assert_eq!(manager.rules().len(), 0);
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(!text.contains("rule \"Lists\""), "{text}");
         assert_eq!(manager.reload(), RulesReload::Unchanged);
@@ -1161,7 +1161,7 @@ mod tests {
         std::fs::write(&path, "rule \"x\" {").unwrap();
         assert_eq!(manager.reload(), RulesReload::Invalid);
         assert_eq!(manager.reload(), RulesReload::Unchanged, "reported once");
-        assert!(!manager.errors().is_empty());
+        assert_ne!(manager.errors().len(), 0);
         let err = manager.edit(|_| Ok(())).unwrap_err();
         assert_eq!(err.code(), ErrorCode::Config);
 

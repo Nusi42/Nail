@@ -966,7 +966,7 @@ mod tests {
         let PluginWrite::UpdateMessages(args) = &w else {
             panic!()
         };
-        assert!(args.message_ids.is_empty());
+        assert!(args.message_ids.is_empty(), "{:?}", args.message_ids);
         assert_eq!(
             args.conversations,
             [

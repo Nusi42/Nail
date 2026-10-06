@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(cli.message.id, "cli-plugin-dev-connect");
         let detail = cli.message.args["detail"].to_string();
         assert_ne!(detail, "no answer");
-        assert!(!detail.is_empty());
+        assert!(!detail.is_empty(), "{detail:?}");
     }
 
     #[test]

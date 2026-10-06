@@ -330,7 +330,7 @@ async fn plugin_activity_and_host_requests() {
     assert_eq!(activity.jobs.len(), 1);
     assert_eq!(activity.jobs[0].schedule.as_deref(), Some("0 8 * * *"));
     assert_eq!(activity.jobs[0].run_count, 0);
-    assert!(activity.hooks.is_empty());
+    assert!(activity.hooks.is_empty(), "{:?}", activity.hooks);
     let missing = service
         .handle(Request::GetPluginActivity {
             plugin_id: "ghost".into(),

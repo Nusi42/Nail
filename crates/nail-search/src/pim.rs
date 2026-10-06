@@ -914,7 +914,9 @@ mod tests {
             index
                 .search("ada dentist", &[], None, 10)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            index.search("ada dentist", &[], None, 10).unwrap()
         );
         // Attendees, addresses (folded), notes, organizations.
         assert_eq!(
@@ -950,9 +952,11 @@ mod tests {
             index
                 .search("quart", &[], Some(&[]), 10)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            index.search("quart", &[], Some(&[]), 10).unwrap()
         );
-        assert!(index.search("  ", &[], None, 10).unwrap().is_empty());
+        assert_eq!(index.search("  ", &[], None, 10).unwrap().len(), 0);
         assert_eq!(index.search("quart", &[], None, 1).unwrap().len(), 1);
     }
 
@@ -967,7 +971,7 @@ mod tests {
                 "{query}"
             );
         }
-        assert!(index.search("030 999", &[], None, 10).unwrap().is_empty());
+        assert_eq!(index.search("030 999", &[], None, 10).unwrap().len(), 0);
     }
 
     #[test]
@@ -996,7 +1000,7 @@ mod tests {
                 event_id: "e1".into(),
             }])
             .unwrap();
-        assert!(index.search("daily", &[], None, 10).unwrap().is_empty());
+        assert_eq!(index.search("daily", &[], None, 10).unwrap().len(), 0);
         index.remove_collection("work").unwrap();
         assert_eq!(index.doc_count().unwrap(), 1);
         index.clear().unwrap();
@@ -1169,6 +1173,6 @@ mod tests {
             phone_digit_forms("+49 (0)30 1234567"),
             ["490301234567", "301234567"]
         );
-        assert!(phone_digit_forms("n/a").is_empty());
+        assert_eq!(phone_digit_forms("n/a").len(), 0);
     }
 }

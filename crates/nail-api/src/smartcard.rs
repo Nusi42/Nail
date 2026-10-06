@@ -404,13 +404,13 @@ mod tests {
     #[test]
     fn settings_validation() {
         let mut settings = SmartcardSettings::default();
-        assert!(settings.issues().is_empty());
+        assert_eq!(settings.issues().len(), 0);
         settings.modules.push(Pkcs11Module {
             path: r"C:\Program Files\OpenSC Project\OpenSC\pkcs11\opensc-pkcs11.dll".into(),
             name: None,
             enabled: true,
         });
-        assert!(settings.issues().is_empty());
+        assert_eq!(settings.issues().len(), 0);
         settings.modules.push(Pkcs11Module {
             path: r"c:\program files\opensc project\opensc\pkcs11\OPENSC-PKCS11.dll".into(),
             name: None,

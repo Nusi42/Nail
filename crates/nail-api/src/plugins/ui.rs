@@ -829,11 +829,7 @@ mod tests {
                 style: PluginTextStyle::Body
             }
         );
-        assert!(
-            validate_tree(&body).is_empty(),
-            "{:?}",
-            validate_tree(&body)
-        );
+        assert_eq!(validate_tree(&body).len(), 0);
         assert_eq!(body[1].value_kind(), Some(PluginValueKind::OptionalText));
         assert_eq!(body[2].value_kind(), Some(PluginValueKind::Text));
     }
@@ -887,7 +883,7 @@ mod tests {
             {"type": "markdown", "value": "*hi*"},
         ]}));
         assert_eq!(stack.children().len(), 4);
-        assert!(validate_tree(std::slice::from_ref(&stack)).is_empty());
+        assert_eq!(validate_tree(std::slice::from_ref(&stack)).len(), 0);
         assert!(serde_json::from_value::<PluginUiNode>(json!({"type": "webview"})).is_err());
     }
 
@@ -939,12 +935,13 @@ mod tests {
             check(json!({"type": "date", "id": "d", "label": "D", "default": "2026-13-01"})),
             [K::InvalidDate]
         );
-        assert!(
+        assert_eq!(
             check(
                 json!({"type": "date", "id": "d", "label": "D", "time": true,
             "default": "2026-10-01T09:30", "min": "2026-01-01"})
             )
-            .is_empty()
+            .len(),
+            0
         );
         assert_eq!(
             check(json!({"type": "date", "id": "d", "label": "D", "default": "2026-10-01T09:30"})),
@@ -966,11 +963,12 @@ mod tests {
             check(json!({"type": "image", "src": "data:image/svg+xml;base64,PHN2Zz4=", "alt": ""})),
             [K::InvalidImage]
         );
-        assert!(
+        assert_eq!(
             check(
                 json!({"type": "image", "src": "data:image/png;base64,iVBORw0KGgo=", "alt": "Logo"})
             )
-            .is_empty()
+            .len(),
+            0
         );
         assert_eq!(
             check(json!({"type": "text", "value": "x".repeat(MAX_UI_TEXT + 1)})),

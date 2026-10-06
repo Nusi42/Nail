@@ -251,7 +251,7 @@ async fn bad_and_revoked_tokens_are_refused() {
     let env = start().await;
     assert!(connect_fails(env.server.url(), "nail_mcp_not-a-token").await);
     let entries = env.store.list_mcp_audit(None, None, 10).unwrap();
-    assert!(!entries.is_empty());
+    assert!(!entries.is_empty(), "{entries:?}");
     assert!(entries.iter().all(|e| e.kind == McpCallKind::Connect
         && e.outcome == McpOutcome::Denied
         && e.client_id.is_none()));

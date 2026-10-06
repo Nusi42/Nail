@@ -1442,20 +1442,23 @@ mod tests {
         assert!(
             graph
                 .issues(&endpoint(GRAPH_HOST, TlsMode::Implicit, oauth()))
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            graph.issues(&endpoint(GRAPH_HOST, TlsMode::Implicit, oauth()))
         );
         assert_eq!(
             graph.issues(&endpoint(GRAPH_HOST, TlsMode::Implicit, windows())),
             [ExchangeConfigIssue::GraphNeedsOAuth2]
         );
         let ews = ExchangeOptions::for_engine(ExchangeEngine::Ews);
-        assert!(
+        assert_eq!(
             ews.issues(&endpoint(
                 "mail.contoso.example",
                 TlsMode::Implicit,
                 windows()
             ))
-            .is_empty()
+            .len(),
+            0
         );
         assert_eq!(
             ews.issues(&endpoint(
@@ -1473,9 +1476,10 @@ mod tests {
             )),
             [ExchangeConfigIssue::PlaintextNeedsLoopback]
         );
-        assert!(
+        assert_eq!(
             ews.issues(&endpoint("127.0.0.1", TlsMode::Plaintext, windows()))
-                .is_empty()
+                .len(),
+            0
         );
         let mixed = ExchangeOptions {
             streaming: Some(true),
@@ -1508,13 +1512,14 @@ mod tests {
             ews.warnings(&endpoint(EXCHANGE_ONLINE_HOST, TlsMode::Implicit, oauth())),
             [ExchangeWarning::EwsRetiredOnline]
         );
-        assert!(
+        assert_eq!(
             ews.warnings(&endpoint(
                 "mail.contoso.example",
                 TlsMode::Implicit,
                 windows()
             ))
-            .is_empty()
+            .len(),
+            0
         );
         let via_url = ExchangeOptions {
             url: Some("https://outlook.office365.com/EWS/Exchange.asmx".into()),
@@ -1612,7 +1617,9 @@ mod tests {
         assert!(
             ExchangeMailboxSettings::shared("support@contoso.example")
                 .issues(own)
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            ExchangeMailboxSettings::shared("support@contoso.example").issues(own)
         );
         assert_eq!(
             ExchangeMailboxSettings::shared(" ").issues(own),
@@ -1679,7 +1686,9 @@ mod tests {
         assert!(
             ExchangeCategorySettings::named("Project X")
                 .issues()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            ExchangeCategorySettings::named("Project X").issues()
         );
         assert_eq!(
             ExchangeCategorySettings::named("").issues(),

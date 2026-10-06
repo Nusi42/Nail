@@ -338,7 +338,7 @@ async fn policy_disables_the_updater_and_locks_the_channel() {
         ),
         (ErrorCode::Forbidden, Some("update-channel-locked".into()))
     );
-    assert!(host.calls().is_empty());
+    assert_eq!(host.calls().len(), 0);
 }
 
 #[tokio::test]
@@ -492,12 +492,12 @@ async fn a_mapi_message_becomes_a_draft_the_ui_opens() {
     assert!(draft.text.starts_with("Please find the report attached."));
     assert_eq!(draft.attachments.len(), 1);
     assert_eq!(draft.attachments[0].filename, "Report.csv");
-    assert!(!draft.identity_id.as_str().is_empty());
+    assert_ne!(draft.identity_id.as_str().len(), 0);
     // Nothing was queued for sending.
     let Response::Outbox { entries } = service.handle(Request::ListOutbox).await else {
         panic!()
     };
-    assert!(entries.is_empty());
+    assert!(entries.is_empty(), "{entries:?}");
 }
 
 #[tokio::test]

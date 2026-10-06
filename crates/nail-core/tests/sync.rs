@@ -123,7 +123,7 @@ async fn first_sync_mirrors_the_server() {
         .iter()
         .filter(|e| matches!(e, Event::MailChanged { .. }))
         .collect();
-    assert!(!changed.is_empty());
+    assert!(!changed.is_empty(), "{changed:?}");
     assert!(!events.iter().any(|e| matches!(e, Event::SyncFailed { .. })));
 
     // Bodies are in the blob store: the reader works offline.
@@ -254,7 +254,7 @@ async fn bad_credentials_report_sync_failed() {
         }
         other => panic!("unexpected events {other:?}"),
     }
-    assert!(folder_totals(&f.service, &f.account).await.is_empty());
+    assert_eq!(folder_totals(&f.service, &f.account).await.len(), 0);
 }
 
 #[tokio::test]
@@ -379,7 +379,11 @@ async fn a_failing_folder_does_not_stop_the_others() {
     // Once the server allows it again, the folder catches up.
     f.server.deny_mailboxes(&[]);
     let report = f.service.sync_account(&f.account).await.unwrap();
-    assert!(report.failed_folders.is_empty());
+    assert!(
+        report.failed_folders.is_empty(),
+        "{:?}",
+        report.failed_folders
+    );
     assert_eq!(report.new_messages, sent);
     assert_eq!(folder_totals(&f.service, &f.account).await, expected);
 }

@@ -2090,7 +2090,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(server.collection_paths().is_empty());
+        assert_eq!(server.collection_paths().len(), 0);
         let book = server.address_book_path("b");
         server.add_address_book(&book, "B");
         server.put_object(&book, "1.vcf", "BEGIN:VCARD\r\nEND:VCARD\r\n");
@@ -2134,7 +2134,7 @@ mod tests {
         assert!(failed.to_ascii_lowercase().contains("retry-after: 1"));
         assert_eq!(status(&sync("").await), 207);
         server.clear_requests();
-        assert!(server.requests().is_empty());
+        assert_eq!(server.requests().len(), 0);
     }
 
     #[test]
@@ -2428,7 +2428,7 @@ mod tests {
         .await;
         assert_eq!(status(&quiet), 204);
         assert!(quiet.to_ascii_lowercase().contains("etag:"));
-        assert!(server.inbox("ada").is_empty());
+        assert_eq!(server.inbox("ada").len(), 0);
         assert_eq!(server.scheduled_messages().len(), 1);
         assert_eq!(
             server.requests().last().unwrap().schedule_reply.as_deref(),
@@ -2444,7 +2444,7 @@ mod tests {
         )
         .await;
         assert_eq!(status(&same), 204);
-        assert!(server.inbox("ada").is_empty());
+        assert_eq!(server.inbox("ada").len(), 0);
         // Taking Bob off the meeting cancels it for him.
         let without_bob = invite.replace(
             "ATTENDEE:mailto:bob@example.org\r\n",
@@ -2504,6 +2504,6 @@ mod tests {
         )
         .await;
         assert_eq!(status(&post), 404);
-        assert!(server.inbox("ada").is_empty());
+        assert_eq!(server.inbox("ada").len(), 0);
     }
 }

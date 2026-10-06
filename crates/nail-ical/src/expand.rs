@@ -59,10 +59,23 @@ impl ScanBudget {
 
     /// Takes one scan; `false` when the budget is spent.
     pub fn take(&self) -> bool {
-        let taken = self
-            .left
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
-            .is_ok();
+        // A compare-exchange loop (`fetch_update` is deprecated since Rust
+        // 1.99, its replacement `try_update` is newer than `rust-version`).
+        let mut current = self.left.load(Ordering::Relaxed);
+        let taken = loop {
+            let Some(next) = current.checked_sub(1) else {
+                break false;
+            };
+            match self.left.compare_exchange_weak(
+                current,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break true,
+                Err(actual) => current = actual,
+            }
+        };
         if !taken {
             self.spent_out.store(true, Ordering::Relaxed);
         }
@@ -692,7 +705,7 @@ mod tests {
         assert_eq!(list[0].recurrence_id, None);
         assert!(!list[0].recurring);
         event.fields.status = EventStatus::Cancelled;
-        assert!(instances(&event, &options).is_empty());
+        assert_eq!(instances(&event, &options).len(), 0);
     }
 
     #[test]
@@ -743,7 +756,7 @@ mod tests {
         );
         let begun = std::time::Instant::now();
         for _ in 0..200 {
-            assert!(instances(&secondly, &range).is_empty());
+            assert_eq!(instances(&secondly, &range).len(), 0);
         }
         assert!(
             begun.elapsed() < std::time::Duration::from_secs(5),
@@ -779,7 +792,7 @@ mod tests {
             PimTime::utc("2000-01-01T11:00:00"),
             "FREQ=DAILY;COUNT=9770",
         );
-        assert!(instances(&ended, &range).is_empty());
+        assert_eq!(instances(&ended, &range).len(), 0);
     }
 
     /// A shared budget bounds a whole request over many costly series and
@@ -812,6 +825,6 @@ mod tests {
             drop(instances(&daily, &options));
         }
         assert!(budget.exhausted());
-        assert!(instances(&daily, &options).is_empty());
+        assert_eq!(instances(&daily, &options).len(), 0);
     }
 }

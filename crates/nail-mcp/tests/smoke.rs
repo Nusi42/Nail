@@ -43,6 +43,10 @@ impl EchoServer {
 }
 
 #[tool_handler(router = self.tool_router)]
+#[expect(
+    clippy::unused_async_trait_impl,
+    reason = "rmcp's #[tool_handler] generates the async tool methods"
+)]
 impl ServerHandler for EchoServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())

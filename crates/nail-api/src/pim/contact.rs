@@ -570,7 +570,7 @@ mod tests {
         let fields: ContactFields =
             serde_json::from_value(json!({"display_name": "Ada Lovelace"})).unwrap();
         assert_eq!(fields, ContactFields::named("Ada Lovelace"));
-        assert!(fields.issues().is_empty());
+        assert_eq!(fields.issues().len(), 0);
         let mut f = fields;
         f.emails = vec![
             LabeledValue::new("ada@work.example"),

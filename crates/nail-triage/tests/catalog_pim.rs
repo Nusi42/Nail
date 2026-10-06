@@ -42,5 +42,5 @@ fn reminder_ids_exist_in_english() {
     }
     // The Collected book's name (nail-store) lives there too.
     assert!(en.iter().any(|d| d == "pim-address-book-collected"));
-    assert!(defined(&catalog("de").unwrap()).is_empty());
+    assert_eq!(defined(&catalog("de").unwrap()).len(), 0);
 }

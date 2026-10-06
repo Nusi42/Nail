@@ -510,9 +510,20 @@ impl Service {
 
             // Messages.
             Request::GetMessage { id } => self.check_readable(access, id).await,
-            Request::UpdateFlags { message_ids, .. }
-            | Request::DeleteMessages { message_ids, .. } => {
+            Request::UpdateFlags { message_ids, .. } => {
                 self.check_messages(access, message_ids).await
+            }
+            Request::DeleteMessages {
+                message_ids,
+                permanent,
+            } => {
+                self.check_messages(access, message_ids).await?;
+                // "To Trash" from Trash deletes for good: it needs the
+                // permanent-delete scope like `permanent`.
+                if !permanent && !access.has(McpScope::PermanentDelete) {
+                    self.check_none_in_trash(message_ids).await?;
+                }
+                Ok(())
             }
             Request::MoveMessages {
                 message_ids,
@@ -892,6 +903,31 @@ impl Service {
             Ok(())
         } else {
             self.check_messages(access, &messages).await
+        }
+    }
+
+    /// Refuses when one of `ids` is in its account's Trash.
+    async fn check_none_in_trash(&self, ids: &[MessageId]) -> Result<()> {
+        let ids = ids.to_vec();
+        let in_trash = self
+            .inner
+            .store
+            .call(move |s| {
+                for id in &ids {
+                    let folder = s.get_message(id)?.summary.folder_id;
+                    if s.get_folder(&folder)?.role == nail_api::FolderRole::Trash {
+                        return Ok(Some(id.clone()));
+                    }
+                }
+                Ok(None)
+            })
+            .await?;
+        match in_trash {
+            Some(id) => Err(forbidden(format!(
+                "message {id} is in Trash: deleting it needs the permanent-delete scope"
+            ))
+            .into()),
+            None => Ok(()),
         }
     }
 

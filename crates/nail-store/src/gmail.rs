@@ -974,8 +974,8 @@ mod tests {
         );
         // Removed on the server: the tag goes.
         store.replace_gmail_labels(&account(), &[]).unwrap();
-        assert!(tags(&store, "m2").is_empty());
-        assert!(store.gmail_labels(&account()).unwrap().is_empty());
+        assert_eq!(tags(&store, "m2").len(), 0);
+        assert_eq!(store.gmail_labels(&account()).unwrap().len(), 0);
     }
 
     #[test]
@@ -1041,7 +1041,9 @@ mod tests {
             store
                 .pending_gmail_label_ops(&account())
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            store.pending_gmail_label_ops(&account()).unwrap()
         );
     }
 
@@ -1068,7 +1070,7 @@ mod tests {
         store
             .enqueue_gmail_label_op(&account(), &"Label_1".into(), GmailLabelOp::Delete)
             .unwrap();
-        assert!(tags(&store, "m1").is_empty());
+        assert_eq!(tags(&store, "m1").len(), 0);
         assert!(
             store
                 .enqueue_gmail_label_op(&account(), &"INBOX".into(), GmailLabelOp::Delete)

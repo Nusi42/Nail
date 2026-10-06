@@ -653,7 +653,7 @@ async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
     else {
         panic!("no list")
     };
-    assert!(snoozed.is_empty());
+    assert!(snoozed.is_empty(), "{snoozed:?}");
     // A wake time in the past is refused with its text.
     let past = chrono::DateTime::from_timestamp(now - 60, 0)
         .unwrap()
@@ -1103,7 +1103,7 @@ async fn headers_only_mail_is_found_on_the_server_and_fetched_on_open() {
     let server = server.expect("the server was asked");
     assert_eq!(server.accounts, vec![AccountId::new(MULTI_WORK_ID)]);
     assert_eq!(server.hits, 1);
-    assert!(server.failed.is_empty());
+    assert!(server.failed.is_empty(), "{:?}", server.failed);
 
     // Opening it fetches the body.
     let Response::Message { message } = f

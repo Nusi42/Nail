@@ -38,7 +38,8 @@ pub const MAX_MAIL_ACTION_TARGETS: usize = 500;
 pub const MAX_MAIL_ACTION_MESSAGES: usize = 10_000;
 /// How long a batch can be undone (seconds).
 pub const MAIL_UNDO_SECS: u64 = 3600;
-/// How many batches the core keeps for undo (the oldest go first).
+/// How many batches the core keeps for undo per actor (the oldest go
+/// first; another actor's batches never evict the user's).
 pub const MAIL_UNDO_KEEP: usize = 50;
 
 /// A conversation as a list row shows it: the thread and the folder it is
@@ -100,16 +101,20 @@ impl MessageTarget {
 pub enum MailAction {
     /// Move to each account's Archive folder (messages already there stay).
     Archive,
-    /// Move to each account's Trash ("Delete"). Messages already in Trash
-    /// are deleted for good — the batch is then not undoable; the UI asks
-    /// with [`MailAction::DeletePermanently`] there instead.
+    /// Move to each account's Trash ("Delete"), like Gmail the whole
+    /// conversation ([`ConversationReach::Thread`]). Messages already in
+    /// Trash stay there: Trash never deletes for good (that is
+    /// [`MailAction::DeletePermanently`], with its own scope and
+    /// confirmation).
     Trash,
     /// Delete for good. Only messages in Trash or Junk; any other message
     /// among the targets fails the whole request
     /// ([`MailActionIssue::NotInTrash`]). Never undoable; the UI confirms
     /// first.
     DeletePermanently,
-    /// Move to a folder or a role's folder.
+    /// Move to a folder or a role's folder. Moving a conversation from
+    /// Trash to the Inbox restores the user's own messages (sent from one
+    /// of the account's addresses) to the account's Sent folder instead.
     Move {
         /// Where to.
         target: MoveTarget,
@@ -167,6 +172,11 @@ pub enum ConversationReach {
     /// One message: the conversation's newest message the user did not
     /// write, else its newest ([`crate::ThreadSummary::latest_message_id`]).
     Newest,
+    /// The whole thread like Gmail's Delete: [`ConversationReach::Whole`]
+    /// plus the thread's messages in every other folder of the listed
+    /// folders' accounts (without a folder: of every account) but Drafts,
+    /// Trash and Junk — e.g. its archived messages.
+    Thread,
 }
 
 impl MailAction {
@@ -197,10 +207,10 @@ impl MailAction {
             | Self::Junk { .. }
             | Self::DeletePermanently => ConversationReach::Listed,
             Self::Flag { flagged: true } => ConversationReach::Newest,
-            Self::Trash
-            | Self::MarkRead { .. }
-            | Self::Tags { .. }
-            | Self::Flag { flagged: false } => ConversationReach::Whole,
+            Self::Trash => ConversationReach::Thread,
+            Self::MarkRead { .. } | Self::Tags { .. } | Self::Flag { flagged: false } => {
+                ConversationReach::Whole
+            }
         }
     }
 
@@ -387,7 +397,7 @@ mod tests {
     #[test]
     fn reach_follows_gmail() {
         assert_eq!(MailAction::Archive.reach(), ConversationReach::Listed);
-        assert_eq!(MailAction::Trash.reach(), ConversationReach::Whole);
+        assert_eq!(MailAction::Trash.reach(), ConversationReach::Thread);
         assert_eq!(
             MailAction::MarkRead { read: false }.reach(),
             ConversationReach::Whole

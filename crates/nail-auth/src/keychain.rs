@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(entries(&store), ["nail/work/password"]);
         assert!(store.delete(&r).unwrap());
         assert!(!store.delete(&r).unwrap());
-        assert!(entries(&store).is_empty());
+        assert_eq!(entries(&store).len(), 0);
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod tests {
 
         store.set(&r, &long).unwrap();
         assert!(store.delete(&r).unwrap());
-        assert!(entries(&store).is_empty());
+        assert_eq!(entries(&store).len(), 0);
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
             // No credential store on this platform/session (e.g. a headless
             // Linux CI without Secret Service): the error must surface.
             let err = OsKeychain.get("nail-test", "x").unwrap_err();
-            assert!(!err.message.is_empty());
+            assert!(!err.message.is_empty(), "{:?}", err.message);
             return;
         }
         let nanos = std::time::SystemTime::now()

@@ -465,7 +465,7 @@ mod tests {
             ]
         );
         delete_occurrence(&mut event, &berlin("2026-10-06T09:00:00")).unwrap();
-        assert!(event.overrides.is_empty());
+        assert!(event.overrides.is_empty(), "{:?}", event.overrides);
         assert_eq!(starts(&event).len(), 2);
     }
 
@@ -506,7 +506,7 @@ mod tests {
             event.recurrence.as_ref().unwrap().exceptions,
             [berlin("2026-10-06T09:00:00")]
         );
-        assert!(event.overrides.is_empty());
+        assert!(event.overrides.is_empty(), "{:?}", event.overrides);
         let new_rule = &new.recurrence.as_ref().unwrap().rules[0];
         assert_eq!(new_rule.end, RecurrenceEnd::Count { count: 3 });
         assert_eq!(new.fields.start, berlin("2026-10-08T09:00:00"));

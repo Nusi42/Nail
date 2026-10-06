@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(get("List-Id"), ["Rust users <rust.lists.example>"]);
         assert_eq!(get("Authentication-Results"), ["mx.example; dkim=pass"]);
         assert_eq!(get("X-Custom"), ["one", "two"]);
-        assert!(header_fields(b"").is_empty());
+        assert_eq!(header_fields(b"").len(), 0);
     }
 
     #[test]

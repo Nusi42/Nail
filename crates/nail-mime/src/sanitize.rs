@@ -941,10 +941,11 @@ mod tests {
             logo
         );
         // Removed content shows nothing; unknown parts are not reported.
-        assert!(shown(r#"<script>document.write('<img src="cid:logo@shop.example">')</script><svg><image href="cid:logo@shop.example"/></svg><p>x</p>"#).is_empty());
-        assert!(
+        assert_eq!(shown(r#"<script>document.write('<img src="cid:logo@shop.example">')</script><svg><image href="cid:logo@shop.example"/></svg><p>x</p>"#).len(), 0);
+        assert_eq!(
             shown(r#"<img src="cid:gone@shop.example"><a href="cid:logo@shop.example">x</a>"#)
-                .is_empty()
+                .len(),
+            0
         );
         // The portable variant (cid: references kept) reports the same.
         let mut images = InlineImages::default();

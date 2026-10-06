@@ -577,7 +577,7 @@ mod tests {
         }
         assert!(md.join("cur").is_dir(), "the junction works");
         assert!(!is_maildir(&md));
-        assert!(message_files(&md).is_empty());
+        assert_eq!(message_files(&md).len(), 0);
         assert!(scan(&md).is_err(), "no maildir: nothing to import");
         // A real maildir beside a junctioned one still works.
         fs::remove_dir(md.join("new")).unwrap();

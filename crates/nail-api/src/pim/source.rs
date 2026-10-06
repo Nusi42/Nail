@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn source_configs_validate() {
-        assert!(dav(Some("work"), None).issues().is_empty());
+        assert_eq!(dav(Some("work"), None).issues().len(), 0);
         assert_eq!(
             dav(None, None).issues(),
             [PimSourceIssue::MissingUrl, PimSourceIssue::MissingAuth]
@@ -538,7 +538,9 @@ mod tests {
         assert!(
             dav(Some("work"), Some("http://127.0.0.1:5232/"))
                 .issues()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            dav(Some("work"), Some("http://127.0.0.1:5232/")).issues()
         );
         let mut local = dav(Some("work"), None);
         local.id = "local".into();

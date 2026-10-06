@@ -12,7 +12,11 @@
 //!   drafts);
 //! * `newest` — the row's own message ([`ThreadSummary::latest_message_id`]:
 //!   the newest one the user did not write) and its copies among the listed
-//!   messages.
+//!   messages;
+//! * `thread` — Gmail's Delete: `whole` plus the thread's messages in every
+//!   other folder of the listed folders' accounts (without a folder: of
+//!   every account) but Drafts, Trash and Junk (its archived messages, the
+//!   Inbox copies when Delete runs in Sent, …).
 //!
 //! Unlike the conversation view, copies with the same Message-ID are **not**
 //! collapsed here: an action reaches every stored copy. `keep` (a remote
@@ -110,9 +114,22 @@ impl Store {
                     None => !matches!(m.role.as_str(), "trash" | "junk"),
                 }
         };
+        let accounts: Option<Vec<&AccountId>> = folders.map(|f| {
+            f.threaded
+                .iter()
+                .chain(&f.sent)
+                .map(|s| &s.account_id)
+                .collect()
+        });
+        let in_thread = |m: &TargetMessage| {
+            whole(m)
+                || (!matches!(m.role.as_str(), "drafts" | "trash" | "junk")
+                    && accounts.as_ref().is_none_or(|a| a.contains(&&m.account_id)))
+        };
         Ok(match reach {
             ConversationReach::Listed => rows.into_iter().filter(|m| listed(m)).collect(),
             ConversationReach::Whole => rows.into_iter().filter(|m| whole(m)).collect(),
+            ConversationReach::Thread => rows.into_iter().filter(|m| in_thread(m)).collect(),
             ConversationReach::Newest => {
                 let (summary, messages) = match self.conversation_within(thread, folders, own, keep)
                 {
@@ -271,6 +288,83 @@ mod tests {
             ["i3"],
             "the newest message the user did not write"
         );
+        assert_eq!(
+            ids(&get(ConversationReach::Thread)),
+            ["i1", "i3", "o3", "s2", "s4"],
+            "Gmail's Delete: every folder but Drafts, Trash and Junk"
+        );
+    }
+
+    #[test]
+    fn thread_reach_from_sent_and_trash() {
+        let (store, t) = fixture();
+        let get = |folder: &str| {
+            let listed = store
+                .conversation_folders(&[FolderId(format!("a/{folder}"))])
+                .unwrap();
+            store
+                .conversation_targets(&t, Some(&listed), &own(), None, ConversationReach::Thread)
+                .unwrap()
+        };
+        // Delete in Sent takes the Inbox copies too, like Gmail.
+        assert_eq!(ids(&get("Sent")), ["i1", "i3", "o3", "s2", "s4"]);
+        // Listed in Trash: its Trash copy plus the rest of the thread.
+        assert_eq!(ids(&get("Trash")), ["i1", "i3", "o3", "s2", "s4", "t3"]);
+    }
+
+    #[test]
+    fn thread_reach_stays_in_the_listed_account() {
+        let (store, t) = fixture();
+        store
+            .upsert_account(&Account {
+                id: "b".into(),
+                name: "B".into(),
+                email: "me@example.net".into(),
+                kind: AccountKind::Local,
+            })
+            .unwrap();
+        store
+            .upsert_folder(&Folder {
+                id: FolderId("b/INBOX".into()),
+                account_id: "b".into(),
+                parent_id: None,
+                name: "INBOX".into(),
+                path: "INBOX".into(),
+                role: FolderRole::Inbox,
+                unread: 0,
+                total: 0,
+            })
+            .unwrap();
+        let mut copy = store.get_message(&MessageId("i3".into())).unwrap().summary;
+        copy.id = MessageId("b3".into());
+        copy.account_id = "b".into();
+        copy.folder_id = FolderId("b/INBOX".into());
+        store
+            .merge_messages(&[crate::SyncedMessage {
+                message: crate::StoredMessage::new(copy),
+                meta: Some(crate::MessageMeta {
+                    message_id: Some("3@x".into()),
+                    in_reply_to: vec!["1@x".into()],
+                    references: vec!["1@x".into()],
+                    size: Some(100),
+                    remote_thread_id: None,
+                }),
+            }])
+            .unwrap();
+        // Threads span accounts (the same mail received twice).
+        assert_eq!(store.thread_of(&MessageId("b3".into())).unwrap(), t);
+        let inbox = store
+            .conversation_folders(&[FolderId("a/INBOX".into())])
+            .unwrap();
+        let found = store
+            .conversation_targets(&t, Some(&inbox), &own(), None, ConversationReach::Thread)
+            .unwrap();
+        assert!(!ids(&found).contains(&"b3"), "{found:?}");
+        // Without a folder (search hits) every account's copies.
+        let everywhere = store
+            .conversation_targets(&t, None, &own(), None, ConversationReach::Thread)
+            .unwrap();
+        assert!(ids(&everywhere).contains(&"b3"));
     }
 
     #[test]
@@ -309,11 +403,12 @@ mod tests {
             .unwrap();
         assert_eq!(ids(&whole), ["i1", "i3"]);
         let nothing = |_: &ScopeFolder| false;
-        assert!(
+        assert_eq!(
             store
                 .conversation_targets(&t, None, &own(), Some(&nothing), ConversationReach::Newest)
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
     }
 

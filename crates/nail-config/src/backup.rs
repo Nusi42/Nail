@@ -255,7 +255,7 @@ mod tests {
         write_atomic(&path, "two").unwrap();
         let listed = list(dir.path(), ConfigFile::Theme).unwrap();
         assert_eq!(listed, [second.clone(), first.clone()]);
-        assert!(list(dir.path(), ConfigFile::Layout).unwrap().is_empty());
+        assert_eq!(list(dir.path(), ConfigFile::Layout).unwrap().len(), 0);
 
         // Newest: back to "one"; the current "two" is backed up first.
         let saved = restore(dir.path(), ConfigFile::Theme, None)

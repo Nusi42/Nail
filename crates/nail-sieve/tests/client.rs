@@ -58,7 +58,7 @@ async fn script_commands() {
     assert_eq!(caps.sasl, ["PLAIN", "XOAUTH2", "OAUTHBEARER"]);
     assert!(!session.is_tls());
 
-    assert!(session.list_scripts().await.unwrap().is_empty());
+    assert_eq!(session.list_scripts().await.unwrap().len(), 0);
     let script = "require \"fileinto\";\nif size :over 1M {\n  fileinto \"Big\";\n}\n";
     assert_eq!(session.check_script(script).await.unwrap(), Some(vec![]));
     assert!(
@@ -66,7 +66,9 @@ async fn script_commands() {
             .put_script("mine \"quoted\"", script)
             .await
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        session.put_script("mine \"quoted\"", script).await.unwrap()
     );
     session.set_active("mine \"quoted\"").await.unwrap();
     let listed = session.list_scripts().await.unwrap();
@@ -619,7 +621,7 @@ async fn upload_never_overwrites_a_foreign_script_with_our_name() {
     assert_eq!(err, SieveError::NotManaged("nail".into()));
     assert_eq!(err.code(), ErrorCode::Conflict);
     assert_eq!(err.localized().id, reasons::ERROR_NOT_MANAGED);
-    assert!(server.uploads().is_empty());
+    assert_eq!(server.uploads().len(), 0);
     assert_eq!(server.active(), None);
     assert!(matches!(
         remove(&mut session, "nail").await,
@@ -657,7 +659,7 @@ async fn upload_is_capability_aware() {
     assert_eq!(report.compiled.rules[0].reasons[0].id, reasons::EXTENSION);
     assert!(report.compiled.vacation.in_script());
     assert_eq!(report.compiled.included, None);
-    assert!(server.checks().is_empty());
+    assert_eq!(server.checks().len(), 0);
     let stored = server.script("nail").unwrap();
     assert!(stored.contains("# nail:previous \"theirs\""));
     assert!(!stored.contains("include"));
@@ -690,7 +692,7 @@ async fn rejected_upload_changes_nothing() {
     let engine = EngineError::from(err);
     assert_eq!(engine.code, ErrorCode::Rejected);
     assert!(!engine.retryable);
-    assert!(server.uploads().is_empty());
+    assert_eq!(server.uploads().len(), 0);
     assert_eq!(server.active(), None);
     // Nothing to reject without the vacation reply.
     upload(

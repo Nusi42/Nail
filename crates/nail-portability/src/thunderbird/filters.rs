@@ -925,6 +925,6 @@ condition="ALL"
         };
         let p = convert(&other, 0, &ctx());
         assert!(!p.complete);
-        assert!(p.rule.actions.is_empty());
+        assert!(p.rule.actions.is_empty(), "{:?}", p.rule.actions);
     }
 }

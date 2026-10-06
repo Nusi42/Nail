@@ -190,7 +190,7 @@ async fn dev_folders_load_log_api_calls_and_hot_reload() {
     host.stop(&plugin_id("devplug"), PluginStopReason::Disabled);
     write_plugin(&folder, "0.4.0", &version_js("four"));
     reloaded(&mut reloads, ReloadOutcome::SkippedDisabled).await;
-    assert!(fake.results("devplug", "VERSION four").is_empty());
+    assert_eq!(fake.results("devplug", "VERSION four").len(), 0);
     assert_eq!(
         host.state(&plugin_id("devplug")),
         Some(PluginRunState::Disabled)
@@ -224,7 +224,7 @@ async fn dev_reloads_through_the_api_run_one_at_a_time() {
     // `reload` returns once the new runtime's `activate` settled (the
     // watcher may reload once more on its own; same files, same result).
     assert_eq!(host.manifest(&id).unwrap().version, "0.2.0");
-    assert!(!fake.results("devplug", "VERSION two").is_empty());
+    assert_ne!(fake.results("devplug", "VERSION two").len(), 0);
     let notice = reloaded(&mut reloads, ReloadOutcome::Started).await;
     assert!(notice.generation.unwrap() > before);
 
@@ -284,7 +284,7 @@ async fn dev_loading_reports_folder_and_manifest_problems() {
     let DevLoadError::Manifest(issues) = &err else {
         panic!("{err:?}")
     };
-    assert!(!issues.is_empty());
+    assert!(!issues.is_empty(), "{issues:?}");
     assert_eq!(err.to_api_error().code, nail_api::ErrorCode::InvalidRequest);
     assert!(err.to_api_error().localized.is_some());
 }

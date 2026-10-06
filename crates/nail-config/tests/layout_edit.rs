@@ -1226,7 +1226,7 @@ fn editor_patches_are_undoable_and_check_the_base_revision() {
         written
     );
     let backups = manager.list_backups(nail_api::ConfigFile::Layout).unwrap();
-    assert!(!backups.is_empty());
+    assert!(!backups.is_empty(), "{backups:?}");
 }
 
 #[test]
@@ -1248,5 +1248,5 @@ fn a_failed_patch_writes_nothing_and_records_nothing() {
         std::fs::read_to_string(dir.path().join("layout.kdl")).unwrap(),
         MAIL
     );
-    assert!(manager.edit_history(HistoryScope::Layout).undo.is_empty());
+    assert_eq!(manager.edit_history(HistoryScope::Layout).undo.len(), 0);
 }

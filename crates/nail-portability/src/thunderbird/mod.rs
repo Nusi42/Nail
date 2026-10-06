@@ -508,7 +508,7 @@ mod tests {
         assert_eq!(found[0].source.format, ImportFormat::ThunderbirdProfile);
         assert!(found[0].source.path.ends_with("b.work"));
         assert!(found[0].last_used_at.is_some());
-        assert!(find_profiles(&data.join("nothing")).is_empty());
+        assert_eq!(find_profiles(&data.join("nothing")).len(), 0);
     }
 
     #[test]

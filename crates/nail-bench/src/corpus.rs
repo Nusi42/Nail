@@ -1178,7 +1178,7 @@ mod tests {
             if String::from_utf8_lossy(&m.raw).contains(RARE_WORD) {
                 rare += 1;
             }
-            assert!(!m.internal_date().is_empty());
+            assert_ne!(m.internal_date().len(), 0);
         }
         assert_eq!(rare, 1);
         assert!(replies > 0);

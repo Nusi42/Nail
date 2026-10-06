@@ -40,6 +40,10 @@ use crate::conversations::FolderFilter;
 use crate::error::Result;
 use crate::service::Service;
 
+/// How many of a Sent folder's newest messages tell which addresses the
+/// user writes from (restoring from Trash).
+const SENT_SAMPLE: u32 = 200;
+
 /// The UI's own actor.
 pub(crate) const USER_ACTOR: &str = "user";
 
@@ -175,13 +179,21 @@ impl Service {
                             s.conversation_targets(&thread, scope.as_ref(), &own, keep, reach)
                         })
                         .await?;
-                    if !picked.is_empty() {
+                    let reached = picked
+                        .iter()
+                        .any(|m| !(matches!(action, MailAction::Trash) && m.role == "trash"));
+                    if reached {
                         out.conversations += 1;
                     }
                     picked
                 }
             };
             for message in picked {
+                // Trash never deletes for good: messages already in Trash
+                // stay (Delete permanently has its own scope and question).
+                if matches!(action, MailAction::Trash) && message.role == "trash" {
+                    continue;
+                }
                 if seen.insert(message.id.clone()) {
                     out.messages.push(message);
                 }
@@ -260,7 +272,10 @@ impl Service {
                 self.plan_moves(&movable, &MoveTarget::Role(FolderRole::Archive))
                     .await?
             }
-            MailAction::Move { target } => self.plan_moves(&ids, target).await?,
+            MailAction::Move { target } => {
+                let moves = self.plan_moves(&ids, target).await?;
+                self.restore_own_to_sent(messages, moves).await?
+            }
             MailAction::Trash | MailAction::DeletePermanently => ids
                 .iter()
                 .map(|id| Operation::DeleteMessage {
@@ -312,6 +327,75 @@ impl Service {
                 self.triage_operations(ops).await?
             }
         })
+    }
+
+    /// Moves from Trash to an Inbox put the user's own messages (the
+    /// replies a Delete took from Sent) back into the account's Sent folder
+    /// instead, like Gmail's restore. "Own" = sent from one of the account's
+    /// addresses, or from an address the account's Sent folder sends from
+    /// (its newest [`SENT_SAMPLE`] messages: the addresses the user really
+    /// writes from, also when the account's configured address differs).
+    async fn restore_own_to_sent(
+        &self,
+        messages: &[TargetMessage],
+        moves: Vec<Operation>,
+    ) -> Result<Vec<Operation>> {
+        let from_trash: Vec<MessageId> = messages
+            .iter()
+            .filter(|m| m.role == "trash")
+            .map(|m| m.id.clone())
+            .collect();
+        if from_trash.is_empty() {
+            return Ok(moves);
+        }
+        let mut own = self.own_addresses_by_account().await?;
+        self.inner
+            .store
+            .call(move |s| {
+                let summaries = s.message_summaries(&from_trash)?;
+                let accounts: BTreeSet<AccountId> =
+                    summaries.iter().map(|m| m.account_id.clone()).collect();
+                for account in accounts {
+                    if let Some(sent) = s.folder_with_role(&account, FolderRole::Sent)? {
+                        for m in s.list_messages(&sent, 0, SENT_SAMPLE)?.messages {
+                            if let Some(from) = &m.from {
+                                own.add(&account, &from.email);
+                            }
+                        }
+                    }
+                }
+                let mut out = Vec::with_capacity(moves.len());
+                for op in moves {
+                    let Operation::MoveMessage {
+                        message_id,
+                        target_folder_id,
+                        source,
+                    } = op
+                    else {
+                        out.push(op);
+                        continue;
+                    };
+                    let mine = summaries.iter().find(|m| m.id == message_id).filter(|m| {
+                        m.from
+                            .as_ref()
+                            .is_some_and(|a| own.is_mine(&m.account_id, &a.email))
+                    });
+                    let sent = match mine {
+                        Some(m) if s.get_folder(&target_folder_id)?.role == FolderRole::Inbox => {
+                            s.folder_with_role(&m.account_id, FolderRole::Sent)?
+                        }
+                        _ => None,
+                    };
+                    out.push(Operation::MoveMessage {
+                        message_id,
+                        target_folder_id: sent.unwrap_or(target_folder_id),
+                        source,
+                    });
+                }
+                Ok(out)
+            })
+            .await
+            .map_err(Into::into)
     }
 
     /// `ApplyMailAction` as `actor` within `filter`.

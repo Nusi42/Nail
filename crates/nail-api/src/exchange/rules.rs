@@ -303,6 +303,6 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(status.rules[0].placement, RulePlacement::Server);
-        assert!(status.server_rules.is_empty());
+        assert!(status.server_rules.is_empty(), "{:?}", status.server_rules);
     }
 }

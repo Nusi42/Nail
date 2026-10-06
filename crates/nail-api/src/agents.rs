@@ -764,7 +764,7 @@ mod tests {
             ActionKind::Task.plugin_permissions(),
             [PluginPermission::TasksWrite]
         );
-        assert!(ActionKind::Rule.plugin_permissions().is_empty());
+        assert_eq!(ActionKind::Rule.plugin_permissions().len(), 0);
         assert_eq!(ActionKind::parse("everything"), None);
     }
 

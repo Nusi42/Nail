@@ -551,7 +551,7 @@ mod tests {
 
         // Again: nothing new, same ids.
         let again = ingest(&store, &blobs, None, &folder, 7, &[mail(1, "a@x", "")]).unwrap();
-        assert!(again.new.is_empty());
+        assert!(again.new.is_empty(), "{:?}", again.new);
         assert_eq!(again.stored, report.stored[..1]);
     }
 
@@ -563,7 +563,7 @@ mod tests {
         store.set_message_uid(&id, None).unwrap();
         let next = ingest(&store, &blobs, None, &folder, 1, &[mail(9, "m@x", "")]).unwrap();
         assert_eq!(next.stored, std::slice::from_ref(&id));
-        assert!(next.new.is_empty());
+        assert!(next.new.is_empty(), "{:?}", next.new);
         assert_eq!(store.get_message(&id).unwrap().uid, Some(9));
     }
 
@@ -617,7 +617,7 @@ mod tests {
         // The same UID again (a resync): same row, not new.
         let again = ingest(&store, &blobs, None, &folder, 5, &[mail(1, "a@x", "")]).unwrap();
         assert_eq!(again.stored, first.stored);
-        assert!(again.new.is_empty());
+        assert!(again.new.is_empty(), "{:?}", again.new);
         // Two UID-less rows with one Message-ID: the oldest is adopted.
         let older = ingest(&store, &blobs, None, &folder, 5, &[mail(2, "dup@x", "")]).unwrap();
         let newer = ingest(
@@ -637,7 +637,7 @@ mod tests {
         store.set_message_uid(&newer.stored[0], None).unwrap();
         let adopted = ingest(&store, &blobs, None, &folder, 5, &[mail(9, "dup@x", "")]).unwrap();
         assert_eq!(adopted.stored, older.stored);
-        assert!(adopted.new.is_empty());
+        assert!(adopted.new.is_empty(), "{:?}", adopted.new);
         assert_eq!(store.get_message(&older.stored[0]).unwrap().uid, Some(9));
         assert_eq!(store.get_message(&newer.stored[0]).unwrap().uid, None);
     }

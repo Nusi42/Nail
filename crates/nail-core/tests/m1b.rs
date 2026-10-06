@@ -265,7 +265,7 @@ async fn replies_and_forwards_are_quoted_in_every_mode() {
         panic!()
     };
     assert!(draft.subject.starts_with("Fwd: "), "{}", draft.subject);
-    assert!(draft.to.is_empty());
+    assert!(draft.to.is_empty(), "{:?}", draft.to);
     let html = draft.html.unwrap();
     assert!(html.contains("Forwarded message"), "{html}");
 
@@ -1740,7 +1740,7 @@ async fn sent_mail_fills_the_collected_book_and_contact_search() {
         }
     };
     // The index is built before the mail goes out.
-    assert!(search("zephyrine").await.is_empty());
+    assert_eq!(search("zephyrine").await.len(), 0);
     let mut events = f.service.subscribe();
     let mut draft = blank_draft("Collected recipients");
     draft.to = vec![Address {

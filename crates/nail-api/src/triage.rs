@@ -413,7 +413,7 @@ mod tests {
         let s: JunkSettings = serde_json::from_value(json!({})).unwrap();
         assert_eq!(s, JunkSettings::default());
         assert!(!s.enabled && s.honor_server_flags && s.move_to_junk);
-        assert!(s.issues().is_empty());
+        assert_eq!(s.issues().len(), 0);
         let bad = JunkSettings {
             threshold: 100,
             min_training: 0,

@@ -162,7 +162,7 @@ async fn every_write_needs_its_permission() {
             "{id}"
         );
     }
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes().len(), 0);
 
     // Invitations need mail.send next to calendar.write.
     let body = r#"return await nail.calendar.createEvent({title: "T", start: "a", end: "b",
@@ -351,7 +351,7 @@ async fn invalid_write_arguments_are_refused_before_the_core() {
             "{id}"
         );
     }
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes().len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

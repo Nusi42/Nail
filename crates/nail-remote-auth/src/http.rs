@@ -170,11 +170,16 @@ pub async fn require_session(
 impl<S: Send + Sync> FromRequestParts<S> for RemoteSessionCtx {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        parts
-            .extensions
-            .get::<RemoteSessionCtx>()
-            .cloned()
-            .ok_or(StatusCode::UNAUTHORIZED)
+    fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        std::future::ready(
+            parts
+                .extensions
+                .get::<RemoteSessionCtx>()
+                .cloned()
+                .ok_or(StatusCode::UNAUTHORIZED),
+        )
     }
 }

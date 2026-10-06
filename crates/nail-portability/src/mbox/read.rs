@@ -715,7 +715,7 @@ mod tests {
         };
         let entries = read_all(data.as_bytes(), options);
         assert!(entries[0].too_large);
-        assert!(entries[0].bytes.is_empty());
+        assert!(entries[0].bytes.is_empty(), "{:?}", entries[0].bytes);
         assert_eq!(entries[0].size_on_disk, (8 + 5001) as u64);
         assert!(!entries[1].too_large);
         assert_eq!(texts(&entries)[1], "S: small\n\nok\n");
@@ -810,7 +810,7 @@ mod tests {
         };
         let entries = read_all(data, options);
         assert_eq!(entries.len(), 1);
-        assert!(entries[0].bytes.is_empty());
+        assert!(entries[0].bytes.is_empty(), "{:?}", entries[0].bytes);
         assert_eq!(entries[0].size_on_disk, 11);
     }
 

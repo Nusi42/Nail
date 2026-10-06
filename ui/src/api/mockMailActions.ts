@@ -17,6 +17,7 @@ import type {
   MessageId,
   MessageSummary,
   MessageTarget,
+  MoveTarget,
   Request,
   Response,
 } from "./generated";
@@ -61,6 +62,7 @@ export function reachOf(action: MailAction): ConversationReach {
     case "delete-permanently":
       return "listed";
     case "trash":
+      return "thread";
     case "mark-read":
     case "tags":
       return "whole";
@@ -156,20 +158,37 @@ function resolve(
     if (target.kind === "message") {
       const m = d.messages.find((x) => x.id === target.message_id);
       if (!m) return errorResponse("not_found", `message ${target.message_id} not found`);
-      add(m);
+      if (action.type !== "trash" || roleOf(d, m.folder_id) !== "trash") add(m);
       continue;
     }
     const answer = getConversation(d, target.thread_id, target.folder_id);
     if (answer.type !== "Conversation") return answer;
     const sources = target.folder_id === null ? null : (resolveFolder(d, target.folder_id) ?? []);
     const reach = reachOf(action);
-    const picked = answer.messages.filter((m) => {
-      if (reach === "whole") return true;
+    const picked: MessageSummary[] = answer.messages.filter((m) => {
+      if (reach === "whole" || reach === "thread") return true;
       if (reach === "newest") return m.id === answer.thread.latest_message_id;
       return sources === null ? roleOf(d, m.folder_id) !== "sent" : sources.includes(m.folder_id);
     });
-    if (picked.length > 0) conversations += 1;
-    for (const p of picked) {
+    if (reach === "thread") {
+      // Gmail's Delete: the thread's messages in every other folder of the
+      // listed accounts but Drafts, Trash and Junk.
+      const accounts =
+        sources === null
+          ? null
+          : new Set(sources.map((f) => d.folders.find((x) => x.id === f)?.account_id));
+      for (const m of d.messages) {
+        if (m.thread_id !== target.thread_id || picked.some((p) => p.id === m.id)) continue;
+        if (["drafts", "trash", "junk"].includes(roleOf(d, m.folder_id) ?? "")) continue;
+        if (accounts === null || accounts.has(m.account_id)) picked.push(m);
+      }
+    }
+    // Trash never deletes for good: messages in Trash stay.
+    const reached = picked.filter(
+      (m) => action.type !== "trash" || roleOf(d, m.folder_id) !== "trash",
+    );
+    if (reached.length > 0) conversations += 1;
+    for (const p of reached) {
       const m = d.messages.find((x) => x.id === p.id);
       if (m) add(m);
     }
@@ -235,6 +254,56 @@ function flagChange(change: {
   };
 }
 
+/**
+ * `MailAction::Move`: moving from Trash to an Inbox puts the user's own
+ * messages (sent from the account's address) back into Sent, like the core.
+ */
+function restoreOwnToSent(
+  core: MockCore,
+  messages: MessageSummary[],
+  target: MoveTarget,
+): Response {
+  const d = core.data;
+  const own = (m: MessageSummary) => {
+    if (roleOf(d, m.folder_id) !== "trash") return false;
+    const email = d.accounts.find((a) => a.id === m.account_id)?.email.toLowerCase();
+    if (email === undefined || m.from?.email.toLowerCase() !== email) return false;
+    const to =
+      "role" in target ? target.role : d.folders.find((f) => f.id === target.folder_id)?.role;
+    return (
+      to === "inbox" && d.folders.some((f) => f.account_id === m.account_id && f.role === "sent")
+    );
+  };
+  const mine = messages.filter(own);
+  const rest = messages.filter((m) => !mine.includes(m));
+  const answers = [
+    ...(rest.length > 0
+      ? [
+          moveMessages(
+            core,
+            rest.map((m) => m.id),
+            target,
+          ),
+        ]
+      : []),
+    ...(mine.length > 0
+      ? [
+          moveMessages(
+            core,
+            mine.map((m) => m.id),
+            { role: "sent" },
+          ),
+        ]
+      : []),
+  ];
+  const failed = answers.find((a) => a.type !== "Queued");
+  if (failed) return failed;
+  return {
+    type: "Queued",
+    op_ids: answers.flatMap((a) => (a.type === "Queued" ? a.op_ids : [])),
+  };
+}
+
 function applyMailAction(core: MockCore, targets: MessageTarget[], action: MailAction): Response {
   const d = core.data;
   const resolved = resolve(core, targets, action);
@@ -244,9 +313,7 @@ function applyMailAction(core: MockCore, targets: MessageTarget[], action: MailA
     messages = messages.filter((m) => roleOf(d, m.folder_id) !== "archive");
   }
   if (messages.length === 0) return issue("no-messages", "no messages", "invalid_request");
-  const permanent =
-    action.type === "delete-permanently" ||
-    (action.type === "trash" && messages.some((m) => roleOf(d, m.folder_id) === "trash"));
+  const permanent = action.type === "delete-permanently";
   const snapshots: Snapshot[] = messages.map((m) => ({
     message: m,
     folder_id: m.folder_id,
@@ -255,7 +322,10 @@ function applyMailAction(core: MockCore, targets: MessageTarget[], action: MailA
     tags: [...m.tags],
   }));
   const ids = messages.map((m) => m.id);
-  const answer = apply(core, ids, action);
+  const answer =
+    action.type === "move"
+      ? restoreOwnToSent(core, messages, action.target)
+      : apply(core, ids, action);
   if (answer.type !== "Queued") return answer;
   let batch_id: MailBatchId | null = null;
   let undo_until: string | null = null;

@@ -230,7 +230,7 @@ async fn expired_history_asks_for_a_full_resync() {
     );
     let (fresh, messages, _) = full_sync(&engine, None).await;
     assert_eq!(messages.len(), 10);
-    assert!(delta(&engine, &fresh).await.added.is_empty());
+    assert_eq!(delta(&engine, &fresh).await.added.len(), 0);
 }
 
 #[tokio::test]
@@ -534,7 +534,7 @@ async fn appends_are_idempotent_and_drafts_use_the_drafts_api() {
     else {
         panic!("expected an id");
     };
-    assert!(server.labels_of(&archived).is_empty());
+    assert_eq!(server.labels_of(&archived).len(), 0);
 }
 
 #[tokio::test]

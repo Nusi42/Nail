@@ -324,7 +324,7 @@ async fn stored_settings_are_checked_again_before_the_listener_starts() {
             tls: nail_api::remote::RemoteTlsMode::Off,
             ..RemoteUiSettings::default()
         };
-        assert!(!settings.issues().is_empty());
+        assert_ne!(settings.issues().len(), 0);
         service
             .store()
             .set_setting(nail_store::REMOTE_UI_SETTINGS_KEY, &settings)

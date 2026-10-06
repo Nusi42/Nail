@@ -693,7 +693,7 @@ mod tests {
             scheme: ColorScheme::Dark,
             high_contrast: true,
         });
-        assert!(drain(&mut rx).is_empty());
+        assert_eq!(drain(&mut rx).len(), 0);
         assert_eq!(
             f.service.config().system_appearance(),
             Some(SystemAppearance::LIGHT)
@@ -709,7 +709,7 @@ mod tests {
         assert_eq!(drain(&mut rx).len(), 2);
         // The same state again: nothing to say.
         report_system_appearance(&f.service, Some(SystemAppearance::DARK));
-        assert!(drain(&mut rx).is_empty());
+        assert_eq!(drain(&mut rx).len(), 0);
     }
 
     #[tokio::test]

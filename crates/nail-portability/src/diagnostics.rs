@@ -674,7 +674,11 @@ mod tests {
         let mut redactor = Redactor::new(&options, None);
         let (manifest, prepared) = prepare(collected(), &options, &mut redactor, "t", "v").unwrap();
         assert_eq!(manifest.entries.len(), 1);
-        assert!(manifest.entries[0].redactions.is_empty());
+        assert!(
+            manifest.entries[0].redactions.is_empty(),
+            "{:?}",
+            manifest.entries[0].redactions
+        );
         assert_eq!(
             prepared[0].content,
             b"From: ada@example.org\r\n\r\nbody\r\n"

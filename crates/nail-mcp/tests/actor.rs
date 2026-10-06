@@ -408,19 +408,20 @@ async fn moves_to_trash_ask_and_arrival_actions_never_delete() {
         waiting.await.unwrap().unwrap(),
         McpWriteResult::Denied { .. }
     ));
-    assert!(data.written().is_empty());
+    assert_eq!(data.written().len(), 0);
 
     let mut arrival = request(to_trash(), Some(&["work"]));
     arrival.operation = "hooks.arrival".into();
     arrival.allow_destructive = false;
     let err = writes.run(arrival).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
-    assert!(data.written().is_empty());
-    assert!(
+    assert_eq!(data.written().len(), 0);
+    assert_eq!(
         store
             .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
     // Other folders stay organizing.
     let done = writes
@@ -479,7 +480,7 @@ async fn plugins_acting_for_a_client_stay_within_its_grant() {
     // Sending is not in the client's grant.
     let err = writes.run(for_client(send())).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
-    assert!(data.written().is_empty());
+    assert_eq!(data.written().len(), 0);
 
     // Within both grants it runs, attributed to the plug-in for the client.
     assert!(matches!(

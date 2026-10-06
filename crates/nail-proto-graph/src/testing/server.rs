@@ -1812,7 +1812,10 @@ mod tests {
             occurrence_dates(&daily, "2026-10-01", "2026-12-01").len(),
             3
         );
-        assert!(occurrence_dates(&json!({}), "2026-10-01", "2026-12-01").is_empty());
+        assert_eq!(
+            occurrence_dates(&json!({}), "2026-10-01", "2026-12-01").len(),
+            0
+        );
     }
 
     #[test]
@@ -1822,6 +1825,6 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].0["name"], "x.pdf");
         assert_eq!(found[0].1, b"%PDF-1");
-        assert!(attachments(b"Subject: x\r\n\r\nplain").is_empty());
+        assert_eq!(attachments(b"Subject: x\r\n\r\nplain").len(), 0);
     }
 }

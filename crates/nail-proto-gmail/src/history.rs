@@ -227,6 +227,6 @@ mod tests {
         .unwrap();
         let fold = fold_history(&records);
         assert_eq!(fold.removed, ["m"]);
-        assert!(fold.changed.is_empty());
+        assert!(fold.changed.is_empty(), "{:?}", fold.changed);
     }
 }

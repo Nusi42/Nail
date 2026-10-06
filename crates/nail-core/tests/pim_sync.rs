@@ -715,7 +715,7 @@ async fn loopback_subscriptions_are_refused_in_real_runs() {
     })
     .await;
     assert_eq!(source.error, Some(ErrorCode::Forbidden));
-    assert!(http.requests().is_empty());
+    assert_eq!(http.requests().len(), 0);
     service.shutdown().await;
 }
 

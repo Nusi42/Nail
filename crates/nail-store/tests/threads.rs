@@ -180,7 +180,11 @@ fn duplicate_message_ids_share_a_thread_and_collapse() {
         .get_thread(&thread(&store, "r"), Some(&["a1".into()]))
         .unwrap();
     assert_eq!(summary.message_count, 1);
-    assert!(messages[0].duplicates.is_empty());
+    assert!(
+        messages[0].duplicates.is_empty(),
+        "{:?}",
+        messages[0].duplicates
+    );
     assert!(
         store
             .get_thread(&thread(&store, "r"), Some(&["nobody".into()]))

@@ -188,14 +188,14 @@ mod tests {
             ..VacationSettings::default()
         };
         let mapped = automatic_replies_of(&vacation, berlin(), now(), None);
-        assert!(mapped.notes.is_empty());
+        assert!(mapped.notes.is_empty(), "{:?}", mapped.notes);
         let replies = mapped.value;
         assert_eq!(replies.status, AutomaticRepliesStatus::Scheduled);
         assert_eq!(replies.start.as_deref(), Some("2026-10-04T22:00:00Z"));
         assert_eq!(replies.end.as_deref(), Some("2026-10-09T22:00:00Z"));
         assert_eq!(replies.external_reply, "Back on Monday.");
         assert_eq!(replies.external_audience, ExternalAudience::All);
-        assert!(replies.issues().is_empty());
+        assert_eq!(replies.issues().len(), 0);
         let back = vacation_of(&replies, berlin());
         assert!(back.notes.is_empty(), "{:?}", back.notes);
         assert_eq!(back.value, vacation);
@@ -299,7 +299,7 @@ mod tests {
             ..replies
         };
         let mapped = vacation_of(&inside_only, berlin());
-        assert!(mapped.notes.is_empty());
+        assert!(mapped.notes.is_empty(), "{:?}", mapped.notes);
         assert_eq!(mapped.value.start_date, None);
         assert!(
             !vacation_of(&AutomaticRepliesSettings::default(), berlin())

@@ -594,8 +594,7 @@ impl PluginHost {
     pub fn job_running(&self, plugin: &PluginId, job: &str) -> bool {
         self.inner()
             .job_context(plugin)
-            .ok()
-            .is_some_and(|c| lock(&c.table).jobs.get(job).is_some_and(|e| e.running))
+            .is_ok_and(|c| lock(&c.table).jobs.get(job).is_some_and(|e| e.running))
     }
 
     /// When a job runs next (RFC 3339 is the caller's business).

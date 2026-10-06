@@ -140,7 +140,7 @@ mod tests {
         assert!(!recent.record("", "t"));
         assert!(!recent.record("mail reply", "t"));
         assert!(!recent.record(&"x".repeat(MAX_ACTION_ID_CHARS + 1), "t"));
-        assert!(recent.actions.is_empty());
+        assert!(recent.actions.is_empty(), "{:?}", recent.actions);
         assert!(is_action_id("plugin.follow-up.remind"));
     }
 }

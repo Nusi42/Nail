@@ -1631,7 +1631,7 @@ async fn send_later_waits_for_its_time() {
         request(&f.service, Request::DeleteDraft { draft_id: later }).await,
         Response::Done
     );
-    assert!(smtp_subjects(&f).is_empty());
+    assert_eq!(smtp_subjects(&f).len(), 0);
     f.service.shutdown().await;
 }
 

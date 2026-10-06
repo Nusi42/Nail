@@ -198,7 +198,7 @@ mod tests {
             ),
             ["INBOX", "UNREAD", "STARRED"]
         );
-        assert!(
+        assert_eq!(
             labels_for_insert(
                 GmailFolder::Archive,
                 Flags {
@@ -206,7 +206,8 @@ mod tests {
                     ..Flags::default()
                 }
             )
-            .is_empty()
+            .len(),
+            0
         );
     }
 }

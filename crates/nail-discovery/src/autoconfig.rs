@@ -264,7 +264,9 @@ mod tests {
         assert!(
             parse_client_config(no_servers, &email(), DiscoverySource::Autoconfig)
                 .unwrap()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            parse_client_config(no_servers, &email(), DiscoverySource::Autoconfig).unwrap()
         );
     }
 }

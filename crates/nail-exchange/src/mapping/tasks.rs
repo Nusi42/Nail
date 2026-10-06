@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn todo_tasks_map_to_nail() {
         let mapped = task_from_exchange(&todo());
-        assert!(mapped.notes.is_empty());
+        assert!(mapped.notes.is_empty(), "{:?}", mapped.notes);
         let f = &mapped.fields;
         assert_eq!(f.status, TaskStatus::InProcess);
         assert_eq!(f.priority, Some(1));
@@ -336,7 +336,7 @@ mod tests {
             linked_resources: &mapped.linked_resources,
         };
         let (back, notes) = task_to_exchange(&task, &pairs, &ctx).unwrap();
-        assert!(notes.is_empty());
+        assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(back.title, source.title);
         assert_eq!(back.status, source.status);
         assert_eq!(back.importance, source.importance);

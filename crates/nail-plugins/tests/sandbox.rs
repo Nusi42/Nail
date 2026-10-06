@@ -146,7 +146,7 @@ async fn a_catch_cannot_swallow_the_budget() {
     host.start(spec("sneaky", &[], js)).await.unwrap();
     assert!(run(&host, "sneaky").await.is_err());
     crashed_with(&fake, &host, "sneaky", PluginStopReason::CpuBudget);
-    assert!(fake.results("sneaky", "caught").is_empty());
+    assert_eq!(fake.results("sneaky", "caught").len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -337,7 +337,7 @@ async fn plugins_have_no_host_access() {
     );
     result(&fake, "sandboxed", "FS failed").await;
     result(&fake, "sandboxed", "PNG failed").await;
-    assert!(fake.results("sandboxed", "OS loaded").is_empty());
+    assert_eq!(fake.results("sandboxed", "OS loaded").len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -490,7 +490,7 @@ async fn dropping_the_last_host_stops_its_plugins() {
     host.start(spec("orphan", &[], HEALTHY)).await.unwrap();
     let clone = host.clone();
     drop(host);
-    assert!(stop_reasons(&fake, "orphan").is_empty());
+    assert_eq!(stop_reasons(&fake, "orphan").len(), 0);
     drop(clone);
     assert_eq!(stop_reasons(&fake, "orphan"), [PluginStopReason::Shutdown]);
 }

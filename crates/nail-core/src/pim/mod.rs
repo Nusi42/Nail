@@ -451,7 +451,7 @@ mod tests {
             PimTime::zoned("2026-10-01T09:00:00", "Europe/Berlin"),
             PimTime::utc("2026-10-01T07:30:00"),
         );
-        assert!(event_issues(&fields, None).is_empty());
+        assert_eq!(event_issues(&fields, None).len(), 0);
         fields.end = PimTime::utc("2026-10-01T06:30:00");
         assert_eq!(event_issues(&fields, None), [PimIssue::EndBeforeStart]);
         fields.end = PimTime::zoned("2026-10-01T10:00:00", "Mars/Olympus");

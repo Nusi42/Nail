@@ -199,7 +199,7 @@ async fn extensions_can_be_switched_off_or_missing() {
     assert!(!client.is_compressed());
     assert!(client.server_id().is_none());
     assert_eq!(server.compressed_sessions(), 0);
-    assert!(server.client_ids().is_empty());
+    assert_eq!(server.client_ids().len(), 0);
     assert!(
         !server
             .commands()

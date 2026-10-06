@@ -532,18 +532,17 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "the nearest rank is one of the samples, returned exactly"
-    )]
     fn percentiles_use_the_nearest_rank() {
+        // The nearest rank is one of the samples, returned exactly: compare
+        // the bits.
+        let exact = |p: f64, want: f64| assert_eq!(p.to_bits(), want.to_bits(), "{p} != {want}");
         let samples: Vec<f64> = (1..=100).map(f64::from).collect();
-        assert_eq!(percentile(&samples, 95.0), 95.0);
-        assert_eq!(percentile(&samples, 50.0), 50.0);
-        assert_eq!(percentile(&samples, 100.0), 100.0);
-        assert_eq!(percentile(&samples, 0.0), 1.0);
-        assert_eq!(percentile(&[3.0, 1.0, 2.0], 95.0), 3.0);
-        assert_eq!(percentile(&[], 95.0), 0.0);
+        exact(percentile(&samples, 95.0), 95.0);
+        exact(percentile(&samples, 50.0), 50.0);
+        exact(percentile(&samples, 100.0), 100.0);
+        exact(percentile(&samples, 0.0), 1.0);
+        exact(percentile(&[3.0, 1.0, 2.0], 95.0), 3.0);
+        exact(percentile(&[], 95.0), 0.0);
     }
 
     #[test]

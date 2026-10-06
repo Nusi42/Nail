@@ -44,7 +44,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 
 ## Tooling facts
 
-- Rust 1.97 (MSVC), Node 26 + npm 11. **npm workspaces, not pnpm** (pnpm is not installed). No docker locally: integration tests use in-process mock servers from `crates/nail-testkit`.
+- Rust stable (1.99; `rust-version` stays 1.97), MSVC, Node 26 + npm 11. **npm workspaces, not pnpm** (pnpm is not installed). No docker locally: integration tests use in-process mock servers from `crates/nail-testkit`.
 - Work folders live outside OneDrive (ADR 0132): Cargo builds into the folder's `target/`, test and build output goes to its
   gitignored `.nail-build/` (`NAIL_BUILD_DIR` overrides; the development update key stays in `%LOCALAPPDATA%\nail-dev\keys`).
   When running several cargo processes in one folder, give each its own `CARGO_TARGET_DIR` under `.nail-build/`.

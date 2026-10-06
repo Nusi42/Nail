@@ -141,7 +141,7 @@ fn layout_resolution_errors_are_all_reported() {
 fn syntax_errors_come_from_the_parser() {
     let errors =
         parse_layout_all("layout \"x\" {\n  a 1.\n  b \"open\n", "layout.kdl").unwrap_err();
-    assert!(!errors.is_empty());
+    assert!(!errors.is_empty(), "{errors:?}");
     assert!(errors.iter().all(|e| e.kind == ConfigErrorKind::Syntax));
 }
 

@@ -175,7 +175,7 @@ mod tests {
             panic!("{err:?}")
         };
         assert_eq!(p, &shown);
-        assert!(!detail.is_empty());
+        assert!(!detail.is_empty(), "{detail:?}");
         assert_eq!(err.code(), ErrorCode::NotFound);
         let localized = err.localized();
         assert_eq!(localized.id, "message-file-unreadable");

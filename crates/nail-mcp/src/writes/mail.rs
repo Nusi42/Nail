@@ -299,44 +299,61 @@ struct Reached {
 }
 
 impl Conversations<'_> {
-    fn targets(&self) -> Vec<MessageTarget> {
-        self.named
-            .iter()
-            .map(|m| MessageTarget::message(m.id.clone()))
-            .chain(self.args.iter().map(|c| {
-                MessageTarget::conversation(
-                    c.thread_id.clone(),
-                    c.folder_id.clone().map(FolderId::new),
-                )
-            }))
-            .collect()
-    }
-
-    /// The messages `action` reaches, within the grant.
+    /// The messages `action` reaches, within the grant. Each conversation
+    /// is resolved on its own, so the count names only conversations with
+    /// at least one message the grant covers (what runs, and nothing that
+    /// hints at hidden ones).
     async fn reach<D: McpData>(
         &self,
         ctx: &Ctx<'_, D>,
         action: MailAction,
     ) -> Result<Reached, Failure> {
-        let request = Request::ResolveMailTargets {
-            targets: self.targets(),
-            action: action.clone(),
-        };
-        let resolution = match ctx.shared.data.query(request).await? {
-            Response::MailTargets { resolution } => resolution,
-            other => return Err(unexpected(&other)),
-        };
-        let mut messages = Vec::with_capacity(resolution.message_ids.len());
-        for id in &resolution.message_ids {
-            let summary = ctx.shared.data.message_summary(id).await?;
-            if ctx.access.require_place(&summary).is_ok() {
-                messages.push(summary);
+        let mut messages: Vec<MessageSummary> = Vec::new();
+        let mut conversations = 0;
+        let named: Vec<MessageTarget> = self
+            .named
+            .iter()
+            .map(|m| MessageTarget::message(m.id.clone()))
+            .collect();
+        let groups = std::iter::once((named, false)).chain(self.args.iter().map(|c| {
+            (
+                vec![MessageTarget::conversation(
+                    c.thread_id.clone(),
+                    c.folder_id.clone().map(FolderId::new),
+                )],
+                true,
+            )
+        }));
+        for (targets, conversation) in groups {
+            if targets.is_empty() {
+                continue;
+            }
+            let request = Request::ResolveMailTargets {
+                targets,
+                action: action.clone(),
+            };
+            let resolution = match ctx.shared.data.query(request).await? {
+                Response::MailTargets { resolution } => resolution,
+                other => return Err(unexpected(&other)),
+            };
+            let mut granted = false;
+            for id in &resolution.message_ids {
+                let summary = ctx.shared.data.message_summary(id).await?;
+                if ctx.access.require_place(&summary).is_ok() {
+                    granted = true;
+                    if !messages.iter().any(|m| m.id == summary.id) {
+                        messages.push(summary);
+                    }
+                }
+            }
+            if conversation && granted {
+                conversations += 1;
             }
         }
         Ok(Reached {
             action,
             messages,
-            conversations: resolution.conversations,
+            conversations,
         })
     }
 }
@@ -683,6 +700,20 @@ pub(crate) async fn delete_messages<D: McpData>(
     let messages = ctx.target_messages(&a.message_ids).await?;
     let account_ids = accounts(messages.iter().map(|m| &m.account_id));
     let folders = ctx.folders_of(&account_ids).await?;
+    // Moving a message in Trash "to Trash" would delete it for good: that
+    // needs `permanent` (its own scope and confirmation text).
+    if !a.permanent
+        && let Some(m) = messages.iter().find(|m| {
+            folders
+                .get(&m.folder_id)
+                .is_some_and(|f| f.role == FolderRole::Trash)
+        })
+    {
+        return Err(invalid(format!(
+            "message {} is in Trash already; delete it with permanent=true",
+            m.id
+        )));
+    }
     let names: Vec<String> = messages
         .iter()
         .map(|m| {
@@ -736,8 +767,9 @@ pub(crate) async fn delete_messages<D: McpData>(
     })
 }
 
-/// `delete_messages` with conversations (P3): Trash reaches the user's
-/// replies in Sent too, a permanent delete only the messages in Trash or
+/// `delete_messages` with conversations (P3): Trash reaches the whole thread
+/// in its account (ADR 0170: archived copies and the user's replies in Sent
+/// too, never what is in Trash already), a permanent delete only the messages in Trash or
 /// Junk (the core refuses others: `mail-action-issue-not-in-trash`).
 async fn delete_conversations<D: McpData>(
     ctx: &Ctx<'_, D>,

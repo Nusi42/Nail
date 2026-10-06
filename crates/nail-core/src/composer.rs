@@ -948,7 +948,11 @@ mod tests {
             strings.reply_header
         );
         assert!(strings.reply_header.starts_with("On 2026-05-01"));
-        assert!(!strings.forward_intro.is_empty());
+        assert!(
+            !strings.forward_intro.is_empty(),
+            "{:?}",
+            strings.forward_intro
+        );
         let labels: Vec<&str> = strings
             .forward_fields
             .iter()

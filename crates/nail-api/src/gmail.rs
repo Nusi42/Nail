@@ -231,15 +231,18 @@ impl GmailFolder {
     /// The label change that moves a message from `self` to `to`.
     /// Moving into Trash is `users.messages.trash` on the server (the
     /// change adds `TRASH`); out of Trash or Spam removes those; into the
-    /// Archive removes `INBOX` (and `SPAM` / `TRASH`). `None` where Gmail
-    /// has no such move: Sent and Drafts as targets (their labels follow
-    /// from sending / drafting), drafts as a source (the drafts API owns
-    /// them) and Sent → Archive (sent mail stays in Sent).
+    /// Archive removes `INBOX` (and `SPAM` / `TRASH`). Trash / Spam → Sent
+    /// only removes `TRASH` / `SPAM` (the message keeps its `SENT` label:
+    /// the undo of deleting the user's replies). `None` where Gmail has no
+    /// such move: Sent from elsewhere and Drafts as targets (their labels
+    /// follow from sending / drafting), drafts as a source (the drafts API
+    /// owns them) and Sent → Archive (sent mail stays in Sent).
     pub fn move_change(self, to: GmailFolder) -> Option<LabelChange> {
         if self == to {
             return Some(LabelChange::default());
         }
-        if matches!(to, Self::Sent | Self::Drafts)
+        if to == Self::Drafts
+            || (to == Self::Sent && !matches!(self, Self::Trash | Self::Spam))
             || self == Self::Drafts
             || (self == Self::Sent && to == Self::Archive)
         {
@@ -662,8 +665,22 @@ mod tests {
         assert!(restore.remove.contains(&"TRASH".to_owned()));
         let trash = GmailFolder::Sent.move_change(GmailFolder::Trash).unwrap();
         assert_eq!(trash.add, ["TRASH"]);
-        assert!(trash.remove.is_empty());
+        assert!(trash.remove.is_empty(), "{:?}", trash.remove);
         assert!(GmailFolder::Inbox.move_change(GmailFolder::Sent).is_none());
+        assert!(
+            GmailFolder::Archive
+                .move_change(GmailFolder::Sent)
+                .is_none()
+        );
+        // Back from Trash / Spam to Sent: the label goes, SENT stays.
+        let untrash = GmailFolder::Trash.move_change(GmailFolder::Sent).unwrap();
+        assert_eq!(untrash.remove, ["TRASH"]);
+        assert!(untrash.add.is_empty(), "{:?}", untrash.add);
+        let unspam = GmailFolder::Spam.move_change(GmailFolder::Sent).unwrap();
+        assert_eq!(unspam.remove, ["SPAM"]);
+        let mut labels = vec!["SENT".to_owned(), "TRASH".to_owned()];
+        labels.retain(|l| !untrash.remove.contains(l));
+        assert_eq!(GmailFolder::for_labels(&labels), GmailFolder::Sent);
         assert!(
             GmailFolder::Inbox
                 .move_change(GmailFolder::Drafts)
@@ -742,7 +759,9 @@ mod tests {
         assert!(
             GmailLabelSettings::named("Work/Projects")
                 .issues()
-                .is_empty()
+                .is_empty(),
+            "{:?}",
+            GmailLabelSettings::named("Work/Projects").issues()
         );
         assert_eq!(
             GmailLabelSettings::named("  ").issues(),
@@ -765,7 +784,7 @@ mod tests {
             background: "#fb4c2f".into(),
             text: "#ffffff".into(),
         });
-        assert!(colored.issues().is_empty());
+        assert_eq!(colored.issues().len(), 0);
         colored.color = Some(GmailLabelColor {
             background: "red".into(),
             text: "#fff".into(),

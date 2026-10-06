@@ -124,11 +124,12 @@ fn own_keys_keep_their_secret_and_list_first() {
         [FPR_B, FPR_A]
     );
     assert_eq!(store.list_keys(None, true).unwrap().len(), 1);
-    assert!(
+    assert_eq!(
         store
             .list_keys(Some(CryptoTechnology::Smime), false)
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
     assert_eq!(
         store
@@ -141,7 +142,9 @@ fn own_keys_keep_their_secret_and_list_first() {
         store
             .keys_for_email("nobody@example.org", None)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.keys_for_email("nobody@example.org", None).unwrap()
     );
 
     // Inconsistent secret storage is refused.
@@ -264,7 +267,7 @@ fn autocrypt_peers_per_account() {
             .collect::<Vec<_>>(),
         ["home", "work"]
     );
-    assert!(store.autocrypt_peers_for_email("x@y").unwrap().is_empty());
+    assert_eq!(store.autocrypt_peers_for_email("x@y").unwrap().len(), 0);
     assert_eq!(store.delete_autocrypt_peers(&"work".into()).unwrap(), 1);
 }
 

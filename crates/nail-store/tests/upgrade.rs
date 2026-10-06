@@ -49,7 +49,7 @@ fn upgrades_a_v1_database() {
     assert!(m2.summary.flags.flagged && m2.summary.has_attachments);
     assert_eq!(m2.summary.to.len(), 1);
     assert_eq!(m2.thread_key.as_deref(), Some("root@x"));
-    assert!(m2.summary.tags.is_empty());
+    assert!(m2.summary.tags.is_empty(), "{:?}", m2.summary.tags);
     let t1 = store.thread_of(&"m1".into()).unwrap();
     assert_eq!(store.thread_of(&"m2".into()).unwrap(), t1);
     assert_ne!(store.thread_of(&"m3".into()).unwrap(), t1);

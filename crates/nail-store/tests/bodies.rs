@@ -211,7 +211,9 @@ fn aged_bodies_can_be_detached_again() {
         store
             .bodies_before(&"inbox".into(), cutoff, 10)
             .unwrap()
-            .is_empty()
+            .is_empty(),
+        "{:?}",
+        store.bodies_before(&"inbox".into(), cutoff, 10).unwrap()
     );
     assert!(store.detach_body(&"missing".into(), &headers).is_err());
     assert!(store.attach_body(&"missing".into(), &headers, 1).is_err());

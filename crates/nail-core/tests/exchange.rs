@@ -1133,7 +1133,7 @@ async fn invitations_are_answered_through_the_meeting_api() {
     })
     .await;
     // No iMIP mail: the server answered.
-    assert!(env.graph.sent().is_empty());
+    assert!(env.graph.sent().is_empty(), "{:?}", env.graph.sent());
 }
 
 // ---------------------------------------------------------------------------
@@ -1989,4 +1989,71 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
         read_on_server() == read_before
     })
     .await;
+}
+
+/// P3 review: EWS gives a moved item a new id. An undo queued while the
+/// forward move is still on its way (here: the server is busy for a
+/// moment) must move the item back by its new id — not report the old one
+/// as gone and leave the message in the target folder on the server.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
+    let env = setup(true, "").await;
+    let service = &env.service;
+    until("the EWS inbox", || async {
+        inbox(service, EWS).await.len() >= 3
+    })
+    .await;
+    let ews = env.ews.as_ref().unwrap();
+    let inbox_remote = ews.folder_id(None, "inbox").unwrap();
+    let archive = folder_at(service, EWS, "Archive").await.unwrap();
+    let archive_remote = ews.folder_named(None, "Archive").unwrap();
+    let message = inbox(service, EWS).await.into_iter().next().unwrap();
+    let subject = message.subject.clone();
+    let on_server = |folder: &str| {
+        ews.items_in(folder)
+            .iter()
+            .any(|i| i.text("Subject") == Some(subject.as_str()))
+    };
+    assert!(on_server(&inbox_remote));
+    // The move waits for the busy server, so the undo is queued before
+    // the forward move knows the item's new id.
+    ews.inject(nail_proto_ews::testing::InjectedFault::busy(
+        Some("MoveItem"),
+        1500,
+    ));
+    let moved = match request(
+        service,
+        Request::ApplyMailAction {
+            targets: vec![nail_api::MessageTarget::message(message.id.clone())],
+            action: nail_api::MailAction::Move {
+                target: MoveTarget::FolderId(archive.id.clone()),
+            },
+        },
+    )
+    .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("unexpected {other:?}"),
+    };
+    request(
+        service,
+        Request::UndoMailAction {
+            batch_id: moved.batch_id.unwrap(),
+        },
+    )
+    .await;
+    until("the forward move and its undo replayed", || async {
+        ews.operations().iter().filter(|o| *o == "MoveItem").count() >= 2
+            && service.store().pending_op_count().unwrap() == 0
+    })
+    .await;
+    assert!(on_server(&inbox_remote), "back in the inbox on the server");
+    assert!(!on_server(&archive_remote));
+    assert!(
+        inbox(service, EWS)
+            .await
+            .iter()
+            .any(|m| m.subject == subject),
+        "and locally"
+    );
 }

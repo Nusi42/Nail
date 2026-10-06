@@ -214,7 +214,7 @@ mod tests {
         let options = DiagnosticsOptions::default();
         assert!(!options.includes_mail());
         assert!(options.redact_addresses);
-        assert!(options.issues().is_empty());
+        assert_eq!(options.issues().len(), 0);
         assert_eq!(options.items.len(), DiagnosticsItem::ALL.len() - 2);
         let parsed: DiagnosticsOptions = serde_json::from_str("{}").unwrap();
         assert_eq!(parsed, options);
