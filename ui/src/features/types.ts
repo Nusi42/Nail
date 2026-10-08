@@ -47,9 +47,9 @@ export interface Feature {
    * Dialogs opened with `window.open "<name>"` when the layout has no
    * `window "<name>"`: small, fixed-purpose windows (confirmations,
    * "token shown once"). Anything the user should be able to arrange
-   * belongs in `layout.kdl` as a window of widgets instead.
+   * belongs in `layout.kdl` as a window of widgets instead. Optional.
    */
-  dialogs: DialogRegistry;
+  dialogs?: DialogRegistry;
   /**
    * The window model of this feature's windows (M5c, ADR 0116): by window
    * kind (a dialog name, or a layout window the feature owns), modal or
@@ -65,11 +65,11 @@ export interface Feature {
    * its subject. `null` = the kind's `window-<kind>` text. Optional.
    */
   windowTitles?: WindowTitleRegistry;
-  /** Handlers for the events the core pushes. */
-  events: readonly FeatureEventHandler[];
+  /** Handlers for the events the core pushes. Optional. */
+  events?: readonly FeatureEventHandler[];
   /**
    * Components mounted once inside the app shell (they render nothing) for
-   * background work, e.g. reporting the UI context to the core.
+   * background work, e.g. reporting the UI context to the core. Optional.
    */
-  effects: readonly ComponentType[];
+  effects?: readonly ComponentType[];
 }

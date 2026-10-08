@@ -9,15 +9,8 @@
  * the user (link warning, link context menu). `linkActionsFor` /
  * `runPluginAction` serve other menus (e.g. the layout's context menus).
  */
-import { useState } from "react";
 import type { NailClient } from "../../api/client";
-import { errorMessageOf } from "../../api/client";
-import type {
-  AttachmentInfo,
-  LocalizedMessage,
-  MessageId,
-  PluginActionTarget,
-} from "../../api/generated";
+import type { AttachmentInfo, MessageId, PluginActionTarget } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
@@ -26,6 +19,7 @@ import { clientIdOf, uiContextOf } from "./context";
 import { ExtensionMenu } from "./ExtensionMenu";
 import { attachmentActionsFor, linkActionsFor, type Offer } from "./extensions";
 import { usePlugins } from "./queries";
+import { useBusyAction } from "../../state/busyAction";
 
 /** Runs a plug-in action (`<plugin>.<name>`) at `target` with this UI's context. */
 export async function runPluginAction(
@@ -63,19 +57,12 @@ function ActionMenu({
   const t = useT();
   const client = useClient();
   const store = useUiStoreApi();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   if (items.length === 0) return null;
   const pick = async (item: Offer) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await runPluginAction(client, store, item.id, target);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <span data-part="plugin-actions" data-menu={kind} aria-busy={busy}>

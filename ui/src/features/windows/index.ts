@@ -91,15 +91,3 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     icon: "app-window",
   },
 };
-
-/** Dialogs by name. */
-export const dialogs: Feature["dialogs"] = {};
-
-/** Window model registrations by kind. */
-export const windows: NonNullable<Feature["windows"]> = {};
-
-/** Core event handlers. */
-export const events: Feature["events"] = [];
-
-/** Background components. */
-export const effects: Feature["effects"] = [];

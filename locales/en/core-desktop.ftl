@@ -73,9 +73,9 @@ mapi-result-attachment-too-large = An attachment is too large.
 ## Desktop shell (WP113: tray menu, dialogs)
 
 # The tray icon's tooltip (the product name).
-tray-tooltip = Nail
+tray-tooltip = { common-nail }
 tray-open = Open Nail
-tray-new-message = New message
+tray-new-message = { common-new-message }
 tray-check-mail = Check mail
 tray-quit = Quit Nail
 desktop-run-key-failed = Nail could not change “Start with Windows”.

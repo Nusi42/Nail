@@ -131,7 +131,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [IMPORT_DIALOG]: ImportWizardDialog,
   [EXPORT_DIALOG]: ExportWizardDialog,
   [BACKUP_DIALOG]: BackupWizardDialog,
@@ -166,9 +166,7 @@ export const handlePortabilityEvent: FeatureEventHandler = (event, { queryClient
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handlePortabilityEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+export const events: NonNullable<Feature["events"]> = [handlePortabilityEvent];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

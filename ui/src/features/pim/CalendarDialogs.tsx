@@ -17,10 +17,13 @@ import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { isTaskList, removalOf } from "./calendarGroups";
 import { CALENDAR_COLORS, isCssColor, paletteColorOf } from "./colors";
-import { Problem, Swatch, geomId, problemOf, useChangeContext } from "./common";
+import { Problem, Swatch, geomId, problemOf, useChangeContext, SubmitActions } from "./common";
 import { pimWrite, useCalendars, usePimSources } from "./queries";
 import { usePim } from "./store";
 import { sourceName } from "./Sources";
+import { TextField } from "../../widgets/forms";
+import { CloseButton } from "../../widgets/CloseButton";
+import { useBusyAction } from "../../state/busyAction";
 
 /** Problems of a calendar's name and colour before asking the core. */
 export function calendarFormIssues(name: string, color: string): LocalizedMessage | null {
@@ -92,38 +95,36 @@ export function ColorChoice({
   );
 }
 
-function CalendarFields({
-  name,
-  setName,
-  color,
-  setColor,
-  reminders,
-  setReminders,
-}: {
+interface CalendarForm {
   name: string;
   setName: (name: string) => void;
   color: string;
   setColor: (color: string) => void;
   reminders: boolean;
   setReminders: (on: boolean) => void;
-}) {
+}
+
+/** The name, colour and reminders of a calendar dialog, starting at `initial`. */
+function useCalendarForm(
+  initial: () => {
+    name: string;
+    color: string;
+    reminders: boolean;
+  },
+): CalendarForm {
+  const [first] = useState(initial);
+  const [name, setName] = useState(first.name);
+  const [color, setColor] = useState(first.color);
+  const [reminders, setReminders] = useState(first.reminders);
+  return { name, setName, color, setColor, reminders, setReminders };
+}
+
+function CalendarFields({ name, setName, color, setColor, reminders, setReminders }: CalendarForm) {
   const t = useT();
-  const ids = { name: useId(), reminders: useId() };
+  const ids = { reminders: useId() };
   return (
     <>
-      <div data-part="form.field" data-field="name">
-        <label data-part="form.label" htmlFor={ids.name}>
-          {t("pim-calendar-name")}
-        </label>
-        <input
-          id={ids.name}
-          data-part="form.input"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-      </div>
+      <TextField labelId="pim-calendar-name" name="name" value={name} onChange={setName} />
       <ColorChoice value={color} onChange={setColor} />
       <label data-part="form.check" data-field="reminders">
         <input
@@ -148,15 +149,13 @@ export function CalendarSettingsDialog({ close }: DialogProps) {
   const id = usePim((s) => s.calendarSettingsId);
   const calendars = useCalendars();
   const calendar = calendars.data?.find((c) => c.id === id);
-  if (calendars.isPending) return <p data-part="pim.editor.hint">{t("pim-loading")}</p>;
+  if (calendars.isPending) return <p data-part="pim.editor.hint">{t("common-loading")}</p>;
   if (!calendar) {
     return (
       <div data-part="pim.calendar-dialog">
         <Problem message={{ id: "pim-calendar-gone" }} />
         <div data-part="pim.editor.actions">
-          <button type="button" data-part="form.button" onClick={close}>
-            {t("pim-close")}
-          </button>
+          <CloseButton onClose={close} />
         </div>
       </div>
     );
@@ -167,36 +166,32 @@ export function CalendarSettingsDialog({ close }: DialogProps) {
 function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close: () => void }) {
   const t = useT();
   const ctx = useChangeContext();
-  const [name, setName] = useState(calendar.settings.name);
-  const [color, setColor] = useState(calendar.settings.color ?? "");
-  const [reminders, setReminders] = useState(calendar.settings.reminders);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const form = useCalendarForm(() => ({
+    name: calendar.settings.name,
+    color: calendar.settings.color ?? "",
+    reminders: calendar.settings.reminders,
+  }));
+  const { busy, problem, setProblem, run } = useBusyAction();
 
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
-    const issue = calendarFormIssues(name, color);
+    const issue = calendarFormIssues(form.name, form.color);
     setProblem(issue);
     if (issue) return;
-    setBusy(true);
     const settings: CalendarSettings = {
       ...calendar.settings,
-      name: name.trim(),
-      color: color.trim() || null,
-      reminders,
+      name: form.name.trim(),
+      color: form.color.trim() || null,
+      reminders: form.reminders,
     };
-    try {
+    await run(async () => {
       await pimWrite(
         ctx,
         { type: "UpdateCalendar", calendar_id: calendar.id, settings },
         "CalendarSaved",
       );
       close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -207,23 +202,13 @@ function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close: 
       onSubmit={(e) => void submit(e)}
     >
       {calendar.read_only && <p data-part="pim.editor.hint">{t("pim-calendar-read-only-hint")}</p>}
-      <CalendarFields
-        name={name}
-        setName={setName}
-        color={color}
-        setColor={setColor}
-        reminders={reminders}
-        setReminders={setReminders}
+      <CalendarFields {...form} />
+      <SubmitActions
+        problem={problem}
+        busy={busy}
+        submitLabel={t("common-save")}
+        onCancel={close}
       />
-      <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-cancel")}
-        </button>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("pim-save")}
-        </button>
-      </div>
     </form>
   );
 }
@@ -241,7 +226,7 @@ export function NewCalendarDialog({ close }: DialogProps) {
   const t = useT();
   const target = usePim((s) => s.newCalendar);
   const calendars = useCalendars();
-  if (calendars.isPending) return <p data-part="pim.editor.hint">{t("pim-loading")}</p>;
+  if (calendars.isPending) return <p data-part="pim.editor.hint">{t("common-loading")}</p>;
   return (
     <NewCalendarForm
       sourceId={target?.sourceId ?? "local"}
@@ -266,11 +251,12 @@ function NewCalendarForm({
   const t = useT();
   const ctx = useChangeContext();
   const sources = usePimSources();
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(() => unusedColor(calendars));
-  const [reminders, setReminders] = useState(true);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const form = useCalendarForm(() => ({
+    name: "",
+    color: unusedColor(calendars),
+    reminders: true,
+  }));
+  const { busy, problem, setProblem, run } = useBusyAction();
   const where = sourceName(
     t,
     sources.data?.find((s) => s.id === sourceId),
@@ -279,22 +265,21 @@ function NewCalendarForm({
 
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
-    const issue = calendarFormIssues(name, color);
+    const issue = calendarFormIssues(form.name, form.color);
     setProblem(issue);
     if (issue) return;
-    setBusy(true);
-    try {
+    await run(async () => {
       await pimWrite(
         ctx,
         {
           type: "CreateCalendar",
           source_id: sourceId,
           settings: {
-            name: name.trim(),
+            name: form.name.trim(),
             description: null,
-            color: color.trim() || null,
+            color: form.color.trim() || null,
             visible: true,
-            reminders,
+            reminders: form.reminders,
             default_alarms: [],
             order: calendars.length,
           },
@@ -303,11 +288,7 @@ function NewCalendarForm({
         "CalendarSaved",
       );
       close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const heading =
@@ -323,23 +304,13 @@ function NewCalendarForm({
       onSubmit={(e) => void submit(e)}
     >
       <p data-part="pim.editor.hint">{heading}</p>
-      <CalendarFields
-        name={name}
-        setName={setName}
-        color={color}
-        setColor={setColor}
-        reminders={reminders}
-        setReminders={setReminders}
+      <CalendarFields {...form} />
+      <SubmitActions
+        problem={problem}
+        busy={busy}
+        submitLabel={t("common-create")}
+        onCancel={close}
       />
-      <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-cancel")}
-        </button>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("pim-calendar-create")}
-        </button>
-      </div>
     </form>
   );
 }
@@ -358,7 +329,7 @@ export function RemoveCalendarDialog({ close }: DialogProps) {
   const calendar = calendars.data?.find((c) => c.id === id);
   const removal = calendar ? removalOf(calendar, sources.data ?? []) : null;
   if (calendars.isPending || sources.isPending) {
-    return <p data-part="pim.editor.hint">{t("pim-loading")}</p>;
+    return <p data-part="pim.editor.hint">{t("common-loading")}</p>;
   }
 
   const remove = async () => {
@@ -396,7 +367,7 @@ export function RemoveCalendarDialog({ close }: DialogProps) {
       <Problem message={problem} />
       <div data-part="pim.editor.actions">
         <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
         {calendar && removal !== null && (
           <button
@@ -406,7 +377,7 @@ export function RemoveCalendarDialog({ close }: DialogProps) {
             disabled={busy}
             onClick={() => void remove()}
           >
-            {removal === "unsubscribe" ? t("pim-calendar-unsubscribe") : t("pim-calendar-remove")}
+            {removal === "unsubscribe" ? t("pim-calendar-unsubscribe") : t("common-remove")}
           </button>
         )}
       </div>

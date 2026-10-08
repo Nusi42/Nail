@@ -148,7 +148,7 @@ function Row({
       </span>
       {entry.source === "plugin" && (
         <span data-part="palette.item.badge" data-badge="plugin">
-          {t("palette-source-plugin")}
+          {t("plugin-log-source-plugin")}
         </span>
       )}
       {entry.recentRank !== null && (
@@ -331,7 +331,7 @@ export function CommandPalette({ close }: { close: () => void }) {
           id={listId}
           role="listbox"
           data-part="palette.list"
-          aria-label={t("palette-list-label")}
+          aria-label={t("common-actions")}
         >
           {results.map((scored, index) => (
             <Row

@@ -27,6 +27,7 @@ import { pluginKeys, usePlugins } from "./queries";
 import { Settings } from "./Settings";
 import { pluginsStoreFor, type InstallMode } from "./store";
 import { hasText } from "../../text/empty";
+import { useBusyAction } from "../../state/busyAction";
 
 /** Dialog name. */
 export const MANAGER_DIALOG = "plugin-manager";
@@ -128,23 +129,17 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<Section | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const busyAction = useBusyAction();
+  const { busy, problem } = busyAction;
   const sections = sectionsOf(plugin);
   const source = sourceText(plugin);
   const sectionId = `plugin-${plugin.id}-section`;
 
   const run = async (work: () => Promise<unknown>) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await busyAction.run(async () => {
       await work();
       void queryClient.invalidateQueries({ queryKey: pluginKeys.all });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const toggle = () =>
@@ -166,7 +161,7 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
     >
       <div data-part="plugin-manager.header">
         <h3 data-part="plugin-manager.name">
-          {t("plugin-manager-name", {
+          {t("plugin-install-name", {
             name: plugin.manifest.name,
             version: plugin.manifest.version,
           })}
@@ -230,15 +225,11 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
             setConfirming(true);
           }}
         >
-          {t("plugin-manager-uninstall")}
+          {t("common-remove")}
         </button>
       </div>
       {confirming && (
-        <div
-          data-part="plugin-manager.confirm"
-          role="group"
-          aria-label={t("plugin-manager-uninstall")}
-        >
+        <div data-part="plugin-manager.confirm" role="group" aria-label={t("common-remove")}>
           <p data-part="plugin-manager.confirm.text">
             {t("plugin-manager-uninstall-confirm", { name: plugin.manifest.name })}
           </p>
@@ -250,7 +241,7 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
             disabled={busy}
             onClick={() => void uninstall()}
           >
-            {t("plugin-manager-uninstall-yes")}
+            {t("common-remove")}
           </button>
           <button
             type="button"

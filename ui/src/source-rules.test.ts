@@ -4,23 +4,12 @@
  * inline styles or literal class names. ESLint enforces this too; this test
  * is a second, lint-independent check over the component sources.
  */
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
+import { SRC_DIR as srcDir, sourceFiles } from "./test/sourceFiles";
 
-const srcDir = resolve(process.cwd(), "src");
-
-function componentSources(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name !== "generated") out.push(...componentSources(path));
-    } else if (entry.name.endsWith(".tsx") && !entry.name.endsWith(".test.tsx")) {
-      out.push(path);
-    }
-  }
-  return out;
-}
+const componentSources = (dir: string) =>
+  sourceFiles(dir, { include: /\.tsx$/, exclude: /\.test\.tsx$/ });
 
 describe("component sources", () => {
   const files = componentSources(srcDir);

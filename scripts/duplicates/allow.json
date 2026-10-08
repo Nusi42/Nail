@@ -2,6 +2,206 @@
   "const-value": {
     "rs CRATE = env!(\"CARGO_PKG_NAME\")": {
       "reason": "each crate's own name (the tracing target of its logs): one fact per crate, evaluated by the compiler in each crate"
+    },
+    "ts DENSITIES = [\"comfortable\", \"compact\"]": {
+      "reason": "the visual harness (e2e/visual/lib/matrix.ts) runs under plain `node --test` without the UI sources; the UI defines the list once (features/appearance/model.ts); pinned",
+      "pinnedBy": "ui/src/contractPins.test.ts"
+    },
+    "ts SANDBOX = \"https:": {
+      "reason": "two different sandbox origins (https://nail.local:4781 in frameHeight.test.ts, :50001 in MailFrame.test.tsx); the detector cuts both values at the `//` of the URL"
+    }
+  },
+  "fluent-text": {
+    "Address": {
+      "reason": "a link's web address (`composer-link-url`), the network address the remote UI listens on (`remote-settings-bind-address`) and an email address (`common-email-address-short`)"
+    },
+    "Addresses": {
+      "reason": "a contact's postal addresses (`pim-contact-addresses`), the web addresses the remote UI answers on (`remote-status-urls`) and the email addresses of a key (`security-key-addresses`)"
+    },
+    "Archive": {
+      "reason": "the Archive folder (`common-folder-archive`, a noun) vs the action that archives a message (`common-archive`, a verb)"
+    },
+    "Back": {
+      "reason": "navigating back a step (`common-back`) vs moving the free/busy timeline to the previous period (`freebusy-previous-short`)"
+    },
+    "Call": {
+      "reason": "a tool call in the MCP audit log (`mcp-audit-call`) vs an online meeting call (`invitation-call`)"
+    },
+    "Change": {
+      "reason": "what a restore changes (`portability-plan-effect`, a noun) vs the button that changes a keyboard shortcut (`customize-keys-actions`, a verb)"
+    },
+    "Check": {
+      "reason": "which authentication check a rule tests (`rules-auth-method`, a noun) vs the button that checks a recovery key (`security-recovery-verify`, a verb)"
+    },
+    "Done": {
+      "reason": "the finished state of a task, job or setup (`common-state-done`) vs the button that ends an editing step (`common-done`)"
+    },
+    "Down": {
+      "reason": "the arrow-down key (`context-menu-key-arrowdown`) vs moving an item down a list (`common-move-down`)"
+    },
+    "Download": {
+      "reason": "the button that downloads an update (`system-update-download`, a verb) vs what a folder sync downloads (`sync-bodies-label`, a noun)"
+    },
+    "End": {
+      "reason": "the End key (`context-menu-key-end`) vs the end of a time range (`common-end`)"
+    },
+    "Event": {
+      "reason": "an entry of the security log (`remote-audit-col-event`) vs a calendar event (`common-event`)"
+    },
+    "Flag": {
+      "reason": "a message flag (`rules-flag`, a noun) vs the action that flags a message (`common-flag`, a verb)"
+    },
+    "Folder": {
+      "reason": "a folder on disk (`common-disk-folder`: the data folder, an EML / Maildir import folder) vs a mail folder (`common-folder`)"
+    },
+    "From": {
+      "reason": "the sender header (`common-header-from`), the start of a time range (`common-range-from`) and where a sign-in came from (`remote-audit-col-origin`)"
+    },
+    "Keys": {
+      "reason": "the cryptographic keys of the key manager (`security-keys-list`) vs keyboard shortcuts (`customize-keys-key`)"
+    },
+    "Label": {
+      "reason": "the name of a conference link (`pim-conference-label`) vs a Gmail label (`window-gmail-label-editor`)"
+    },
+    "Left": {
+      "reason": "the arrow-left key (`context-menu-key-arrowleft`) vs the left drop zone of the layout editor (`layout-editor-zone-left`)"
+    },
+    "Message": {
+      "reason": "the text of a message (`common-message-body`, the body field) vs a message as an item (`common-message`)"
+    },
+    "Next": {
+      "reason": "the next step of a wizard (`security-recovery-next`) vs the next period of a calendar or timeline (`common-next-period`)"
+    },
+    "Read": {
+      "reason": "a read access in the MCP audit log (`mcp-audit-kind-resource`) vs the read state of a message (`action-field-read`)"
+    },
+    "Restore": {
+      "reason": "restoring a maximized window's size (`window-manager-restore`) vs restoring a backup (`common-restore`)"
+    },
+    "Right": {
+      "reason": "the arrow-right key (`context-menu-key-arrowright`) vs the right drop zone of the layout editor (`layout-editor-zone-right`)"
+    },
+    "Role": {
+      "reason": "an attendee's role in a meeting (`pim-attendee-role`: chair, required, optional) vs a contact's role in an organization (`pim-contact-role`)"
+    },
+    "Runs": {
+      "reason": "how often a plug-in job ran (`plugin-activity-runs`, a count) vs where a rule runs (`exchange-rules-placement`)"
+    },
+    "Schedule": {
+      "reason": "the composer's button that schedules a send (`composer-schedule`, a verb) vs a schedule as the cause of a run (`common-schedule`, a noun)"
+    },
+    "Search": {
+      "reason": "the label of a search field (`common-search-noun`, a noun) vs the action / button that searches (`common-search`, a verb)"
+    },
+    "Security": {
+      "reason": "the connection security (TLS mode) of a server (`server-tls`) vs the Security group of the settings page (`settings-group-security`)"
+    },
+    "Sending": {
+      "reason": "the section about sending identities of a virtual account (`virtual-identities`) vs the outbox state of a message being sent (`outbox-state-sending`)"
+    },
+    "Sent": {
+      "reason": "the Sent folder (`common-folder-sent`) vs the outbox state of a sent message (`outbox-state-sent`)"
+    },
+    "Server": {
+      "reason": "the host name field of a server (`common-server`) vs where Sieve rules run (`sieve-placement-server`, \"on the server\" as opposed to \"in Nail\")"
+    },
+    "Show": {
+      "reason": "the label in front of a filter choice (`common-show`, \"Show: ...\") vs the visibility value of a Gmail label (`common-visibility-show`)"
+    },
+    "Source": {
+      "reason": "where a key came from (`security-key-source`) vs the HTML source view of the composer (`composer-format-source-short`)"
+    },
+    "Text": {
+      "reason": "the text view of the rule editor (`rules-view-text`) vs a text value (`action-field-body`)"
+    },
+    "To": {
+      "reason": "the recipient header (`common-header-to`) vs the end of a date range (`print-agenda-end`)"
+    },
+    "Up": {
+      "reason": "the arrow-up key (`context-menu-key-arrowup`) vs moving an item up a list (`common-move-up`)"
+    },
+    "Updates": {
+      "reason": "Gmail's Updates category (`gmail-category-updates`) vs Nail's own updates (`common-updates`)"
+    },
+    "Where": {
+      "reason": "the part of the window a keyboard shortcut works in (`customize-keys-context`) vs the location of an event (`common-where`)"
+    }
+  },
+  "css-length": {
+    "1px": {
+      "reason": "the CSS hairline: border, divider and outline widths and one-pixel nudges in every skin (and theme.kdl borders); each use is its own property, not one shared fact. Widths a theme may change are tokens (border.thin / border.control, size.divider)"
+    },
+    "2px": {
+      "reason": "the CSS hairline doubled: focus-ring widths and offsets, checked-swatch rings and two-pixel paddings in every skin (and theme.kdl shadows); each use is its own property, not one shared fact. Widths a theme may change are tokens (border.thin / border.control in High contrast)"
+    }
+  },
+  "rust-ts-list": {
+    "active, focus, focus-visible, focus-within, hover": {
+      "reason": "the theme compiler runs in the browser and needs nail_api::config::PSEUDO_CLASS_STATES as `PSEUDO_STATES` (ui/src/theme/compile.ts); pinned",
+      "pinnedBy": "ui/src/contractPins.test.ts"
+    },
+    "font-size, radius, size, space": {
+      "reason": "the mock core resolves token values like nail-config (`PX_TOKEN_CATEGORIES`) in ui/src/features/appearance/tokens.ts; pinned",
+      "pinnedBy": "ui/src/contractPins.test.ts"
+    }
+  },
+  "magic-number": {
+    "WP-ui 900": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 640": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 560": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 760": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 420": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 460": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 440": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size (state/windows.ts: the default window spec and the confirmation spec are window sizes too)"
+    },
+    "WP-ui 380": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size"
+    },
+    "WP-ui 320": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size (state/windows.ts: the default window spec and the confirmation spec are window sizes too)"
+    },
+    "WP-ui 360": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size (state/windows.ts: the default window spec and the confirmation spec are window sizes too)"
+    },
+    "WP-ui 720": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size (state/windows.ts: the default window spec and the confirmation spec are window sizes too)"
+    },
+    "WP-ui 520": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size (state/windows.ts: the default window spec and the confirmation spec are window sizes too)"
+    },
+    "WP-ui 480": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size; also `MAX_PIN_CACHE_MINUTES` (security/smartcardModel.ts: 8 hours, nail_api::smartcard)"
+    },
+    "WP-ui 600": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size; also `WRITE_DELAY_MS` (customization/writeBack.ts: the pause before a settings write)"
+    },
+    "WP-ui 300": {
+      "reason": "window sizes in px: each window kind's default and minimum size is its own fact, given once in its feature's `windows` registration (or by defaults/layout.kdl, never both: features/windowSizes.test.ts); equal numbers are the 20 px grid the dialogs are sized on, not one shared size; also two unrelated named delays (`PREVIEW_DELAY_MS` of the composer preview, `RECIPIENT_CHECK_MS`) and the Exchange poll interval's default (300 s) in its hint"
+    },
+    "WP-ui 10000": {
+      "reason": "three unrelated named limits: the WebSocket's longest reconnect back-off (10 s), the highest MCP rate limit (`MAX_RATE_LIMIT`, McpRateLimits::issues) and the junk filter's highest training minimum (`MAX_MIN_TRAINING`, JunkSettings::issues)"
+    },
+    "WP-ui 4000": {
+      "reason": "three unrelated named values: the undone toast's 4 s (`TOAST_MS.undone`), the MCP indicator's 4 s (`INDICATOR_MS`) and the longest selected text reported to agents (`MAX_SELECTED_TEXT`, 4000 characters)"
+    },
+    "WP-ui 250": {
+      "reason": "three unrelated named delays: the UI-context report (`REPORT_DELAY_MS`), the query check of the search bar (`CHECK_DELAY_MS`) and the toolbar's overflow animation (`FLIP_MS`)"
+    },
+    "WP-ui 120": {
+      "reason": "unrelated named values: the default MCP request rate per minute, the longest meeting duration offered (minutes), the PIN prompt timeout (s), the smallest window edge (px) and the status bar's countdown limit (s)"
     }
   }
 }

@@ -39,6 +39,7 @@ import { defaultAgenda, defaultPrintOptions, targetIssue } from "./model";
 import { openPrintView } from "./PrintView";
 import { printStoreFor, usePrintState } from "./store";
 import { nonEmpty } from "../../text/empty";
+import { CloseButton } from "../../widgets/CloseButton";
 
 const PDF_FILTERS = [{ label_id: "print-filter-pdf", extensions: ["pdf"] }];
 
@@ -71,9 +72,9 @@ function useTargetTitle(target: PrintTarget | null): string {
   });
   switch (target?.type) {
     case "message":
-      return nonEmpty(message.data?.headers.subject) ?? t("print-no-subject");
+      return nonEmpty(message.data?.headers.subject) ?? t("common-no-subject");
     case "thread":
-      return nonEmpty(thread.data?.thread.subject) ?? t("print-no-subject");
+      return nonEmpty(thread.data?.thread.subject) ?? t("common-no-subject");
     case "event":
       return nonEmpty(event.data?.fields.title) ?? t("print-no-title");
     case "agenda":
@@ -96,10 +97,10 @@ function AgendaFields({
   const issue = targetIssue(target);
   return (
     <fieldset data-part="form.section" data-field="agenda">
-      <legend data-part="form.section.title">{t("print-agenda-days")}</legend>
+      <legend data-part="form.section.title">{t("common-days")}</legend>
       <div data-part="form.field" data-field="agenda-start">
         <label data-part="form.label" htmlFor={`${id}-start`}>
-          {t("print-agenda-start")}
+          {t("common-range-from")}
         </label>
         <input
           id={`${id}-start`}
@@ -148,7 +149,7 @@ function AgendaFields({
       </SelectField>
       {(calendars.data?.length ?? 0) > 0 && (
         <CheckGroup
-          legend={t("print-agenda-calendars")}
+          legend={t("common-calendars")}
           field="agenda-calendars"
           selected={target.calendar_ids}
           onChange={(calendar_ids) => {
@@ -360,7 +361,7 @@ export function PrintSetup({ close }: { close: () => void }) {
           )}
           {saved && (
             <p data-part="print-setup.saved" role="status">
-              {t("print-pdf-saved", {
+              {t("common-saved-to-path", {
                 path: saved.path,
                 size: formatBytes(saved.size_bytes, locale),
               })}
@@ -373,9 +374,7 @@ export function PrintSetup({ close }: { close: () => void }) {
           )}
           <WizardButtons>
             {saved ? (
-              <button type="button" data-part="form.button" data-action="close" onClick={close}>
-                {t("print-close")}
-              </button>
+              <CloseButton onClose={close} action="close" />
             ) : (
               <>
                 <button
@@ -386,7 +385,7 @@ export function PrintSetup({ close }: { close: () => void }) {
                   disabled={busy || issue !== null}
                   onClick={() => void print()}
                 >
-                  {t("print-now")}
+                  {t("common-print")}
                 </button>
                 {!noDesktop &&
                   (pdfStep ? (

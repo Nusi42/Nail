@@ -8,7 +8,7 @@
 ## Rule placement (nail_api::sieve::RulePlacement)
 
 sieve-placement-server = Server
-sieve-placement-client = Nail
+sieve-placement-client = { common-nail }
 sieve-placement-not-expressible = Nail only
 
 ## Script state (nail_api::sieve::SieveState)
@@ -41,21 +41,18 @@ sieve-settings-tab = Server rules
 sieve-status-label = Server-side rules
 sieve-intro = With ManageSieve, rules that the server understands run on the server, so they work while Nail is closed. Each rule shows where it runs.
 sieve-no-imap = Server-side rules and vacation replies need an IMAP account.
-sieve-account = Account
+sieve-account = { common-account }
 sieve-connection-title = ManageSieve
 sieve-enabled = Run rules on the server when possible
-sieve-host = Server
+sieve-host = { common-server }
 sieve-host-hint = Leave empty to use the IMAP server.
-sieve-port = Port
+sieve-port = { common-port }
 sieve-port-hint = Leave empty for 4190.
 sieve-script-name = Script name
 sieve-script-name-hint = Nail keeps its rules in this script and leaves other scripts alone. Leave empty for "nail".
-sieve-connection-save = Save
-sieve-saved = Saved to accounts.kdl.
 sieve-script = Script
 sieve-script-label = Sieve script
 sieve-uploaded = Uploaded
-sieve-uploaded-never = Never
 sieve-extensions = Server supports
 sieve-other-scripts = Other scripts on the server
 sieve-vacation-state = Vacation reply
@@ -66,23 +63,21 @@ sieve-show-script = Show script
 sieve-hide-script = Hide script
 sieve-rules-title = Where your rules run
 sieve-rules-empty = No rule applies to this account.
-sieve-rules-rule = Rule
 sieve-rules-placement = Runs in
-sieve-rules-why = Why
 
 ## Settings → Vacation reply (widget vacation-editor)
 
-vacation-settings-tab = Vacation reply
-vacation-label = Vacation reply
+vacation-settings-tab = { sieve-vacation-state }
+vacation-label = { sieve-vacation-state }
 vacation-intro = While you are away, the server answers new mail for you — also while Nail is closed.
-vacation-account = Account
+vacation-account = { common-account }
 vacation-loading = Loading the vacation reply…
 vacation-needs-sieve = Turn on server-side rules for this account (Server rules tab) so the reply reaches the server.
 vacation-exchange-hint = For a Microsoft Exchange account this sets its automatic replies (out of office), with the same text for people inside and outside your organization.
 vacation-enabled = Send a vacation reply
-vacation-subject = Subject
+vacation-subject = { common-subject }
 vacation-subject-hint = Leave empty for the server's default ("Auto:" and the original subject).
-vacation-body = Message
+vacation-body = { common-message-body }
 vacation-start = First day
 vacation-end = Last day
 vacation-days = Answer the same sender again after (days)
@@ -92,5 +87,4 @@ vacation-addresses-hint = Separate addresses with commas. Your identities are in
 vacation-from = Reply from
 vacation-from-hint = Leave empty to reply from the address the mail was sent to.
 vacation-skip-lists = Do not answer mailing lists and bulk mail
-vacation-save = Save
 vacation-saved = Saved. Nail uploads the reply with your rules.

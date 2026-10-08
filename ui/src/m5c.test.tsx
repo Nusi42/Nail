@@ -25,8 +25,10 @@ import { WindowLayer } from "./layout/WindowLayer";
 import { applyPopOuts } from "./state/windowState";
 import { createEnv, renderWithProviders, stubElementSizes, type Env } from "./test/harness";
 import { must } from "./test/must";
+import { geometry } from "./test/env";
+import { type ReactNode } from "react";
+import { INBOX } from "./test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
 const PAGE = { width: 1600, height: 1200 };
 
 let restoreSizes: () => void;
@@ -71,28 +73,33 @@ function mailEnv(): Env {
   return env;
 }
 
-/** The declarations of an element's geometry rule. */
-function geometry(element: Element): Record<string, string> {
-  const id = element.getAttribute("data-geom") ?? "";
-  const rule = [
-    ...(document.head.querySelector<HTMLStyleElement>("style[data-nail-theme]")?.sheet?.cssRules ??
-      []),
-  ].find(
-    (r): r is CSSStyleRule => r instanceof CSSStyleRule && r.selectorText === `[data-geom="${id}"]`,
-  );
-  const out: Record<string, string> = {};
-  if (!rule) return out;
-  for (let i = 0; i < rule.style.length; i++) {
-    const property = rule.style.item(i);
-    out[property] = rule.style.getPropertyValue(property);
-  }
-  return out;
-}
-
 const sizeOf = (element: Element) => ({
   width: parseFloat(geometry(element).width ?? "NaN"),
   height: parseFloat(geometry(element).height ?? "NaN"),
 });
+
+/** Renders `children` with the composer's effects (its pop-out preparer), as in the app. */
+function renderWithComposerEffects(env: Env, children: ReactNode) {
+  return renderWithProviders(
+    <>
+      {composerEffects.map((Effect, index) => (
+        <Effect key={index} />
+      ))}
+      {children}
+    </>,
+    env,
+  );
+}
+
+/** The pop-out page of window `id`: its own UI store on `main`'s core. */
+function popOutPage(main: Env, id: string): Env {
+  const page = createEnv();
+  page.transport = main.transport;
+  page.client = main.client;
+  window.location.hash = `#/window/${id}`;
+  renderWithComposerEffects(page, <PopOutHost layout={main.transport.data.layout} window={id} />);
+  return page;
+}
 
 describe("every window opens through the window manager", () => {
   const layout = createEnv().transport.data.layout;
@@ -255,15 +262,7 @@ describe("composers in pop-out windows", () => {
       subject: "Popped",
     });
     // The composer's effects register its pop-out preparer, as in the app.
-    renderWithProviders(
-      <>
-        {composerEffects.map((Effect, index) => (
-          <Effect key={index} />
-        ))}
-        <WindowLayer layout={main.transport.data.layout} />
-      </>,
-      main,
-    );
+    renderWithComposerEffects(main, <WindowLayer layout={main.transport.data.layout} />);
     const dialog = await screen.findByRole("dialog", { name: "Popped" });
     await user.click(await within(dialog).findByRole("button", { name: "Open in new window" }));
     await waitFor(() => {
@@ -277,19 +276,7 @@ describe("composers in pop-out windows", () => {
     expect(main.transport.data.drafts.get(draft ?? "")?.subject).toBe("Popped");
 
     // The pop-out page: its own UI store on the same core.
-    const page = createEnv();
-    page.transport = main.transport;
-    page.client = main.client;
-    window.location.hash = `#/window/${id}`;
-    renderWithProviders(
-      <>
-        {composerEffects.map((Effect, index) => (
-          <Effect key={index} />
-        ))}
-        <PopOutHost layout={main.transport.data.layout} window={id} />
-      </>,
-      page,
-    );
+    const page = popOutPage(main, id);
     const subject = await screen.findByRole("textbox", { name: "Subject" });
     await waitFor(() => expect(subject).toHaveValue("Popped"));
     await waitFor(() => {
@@ -330,14 +317,9 @@ describe("composers in pop-out windows", () => {
       to: "grace@navy.example",
       subject: "Popped",
     });
-    const preparer = renderWithProviders(
-      <>
-        {composerEffects.map((Effect, index) => (
-          <Effect key={index} />
-        ))}
-        <WindowLayer layout={main.transport.data.layout} />
-      </>,
+    const preparer = renderWithComposerEffects(
       main,
+      <WindowLayer layout={main.transport.data.layout} />,
     );
     const dialog = await screen.findByRole("dialog", { name: "Popped" });
     await userEvent
@@ -348,19 +330,7 @@ describe("composers in pop-out windows", () => {
     });
     preparer.unmount();
 
-    const page = createEnv();
-    page.transport = main.transport;
-    page.client = main.client;
-    window.location.hash = `#/window/${id}`;
-    renderWithProviders(
-      <>
-        {composerEffects.map((Effect, index) => (
-          <Effect key={index} />
-        ))}
-        <PopOutHost layout={main.transport.data.layout} window={id} />
-      </>,
-      page,
-    );
+    const page = popOutPage(main, id);
     const subject = await screen.findByRole("textbox", { name: "Subject" });
     await waitFor(() => expect(subject).toHaveValue("Popped"));
     const closes = () => main.transport.requests.filter((r) => r.type === "ClosePopOut");

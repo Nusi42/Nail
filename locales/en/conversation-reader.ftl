@@ -25,4 +25,3 @@ thread-view-action-open-in-reader = Read the selected conversation (move to the 
 thread-view-offer-title = Read conversations as cards
 thread-view-offer-text = Your layout shows a conversation as a strip above the message. Nail can show it as cards instead: every message with its own badges, banners and actions, oldest first. You can undo this under Settings → Layout & toolbars.
 thread-view-offer-apply = Use cards
-thread-view-offer-dismiss = Not now

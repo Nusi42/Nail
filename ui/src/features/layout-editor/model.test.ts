@@ -2,9 +2,7 @@
  * The layout editor's model (M5d WP181): panes, drop zones and their
  * patches, presets that fit and the one shown, the windows offered.
  */
-import type { LayoutNode, LayoutNodeRef, ResolvedLayout } from "../../api/generated";
-import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
-import { normalizeLayout } from "../../api/normalize";
+import type { LayoutNode } from "../../api/generated";
 import { must } from "../../test/must";
 import {
   containsRef,
@@ -25,15 +23,7 @@ import {
   zonesFor,
   type Moving,
 } from "./model";
-
-const layout = (): ResolvedLayout => normalizeLayout(defaultLayoutJson);
-const ref = (path: number[], window = "mail", breakpoint = 0): LayoutNodeRef => ({
-  window,
-  breakpoint,
-  path,
-});
-const mailRoot = (l: ResolvedLayout, breakpoint = 0): LayoutNode =>
-  must(l.windows.mail?.[breakpoint]).root;
+import { layout, mailRoot, ref } from "./testing";
 
 describe("layout editor model", () => {
   it("finds the mail view's three panes (not the widgets inside them)", () => {

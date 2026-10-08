@@ -5,11 +5,12 @@
  * card's message (P3, ADR 0169).
  */
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { currentTargets, type ActionTargets } from "../../actions/mailTargets";
 import type { NailClient } from "../../api/client";
 import type { MailActionResult, MessageSummary } from "../../api/generated";
 import { findSummary, type WriteContext } from "../../state/mailOps";
+import { useBusyAction } from "../../state/busyAction";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import { runMailAction, type TagNoun } from "./run";
@@ -147,4 +148,48 @@ export function useTargetTags(): { targets: ActionTargets; counts: TagCounts | u
     gcTime: 0,
   });
   return { targets, counts: query.data };
+}
+
+/**
+ * A label / category window's state: the message it opened for (a selection
+ * change behind it changes nothing), the user's decision per tag, and
+ * `apply`, which writes the decisions as one undoable batch on the whole
+ * conversation (or the picked rows / the card) and closes the window.
+ */
+export function useTagWindow(noun: TagNoun, close: () => void) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const store = useUiStoreApi();
+  const [messageId] = useState(() => store.getState().selectedMessageId);
+  const summary = useMemo(
+    () => (messageId ? findSummary(queryClient, messageId) : undefined),
+    [messageId, queryClient],
+  );
+  const { counts } = useTargetTags();
+  const [decided, setDecided] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const { busy, problem, run } = useBusyAction();
+  return {
+    store,
+    summary,
+    busy,
+    problem,
+    /** Whether all, some or none of the targets carry `tag`. */
+    mark: (tag: string) => tagMark(counts ?? NO_TAGS, tag),
+    /** What the user chose for `tag`, if anything. */
+    decision: (tag: string) => decided.get(tag),
+    decide: (tag: string, checked: boolean) => {
+      setDecided(new Map(decided).set(tag, checked));
+    },
+    /** Applies the decisions over `tags` (closes at once when nothing changes). */
+    apply: async (tags: readonly string[]) => {
+      const { add, remove } = tagChange(tags, counts ?? NO_TAGS, decided);
+      if (add.length === 0 && remove.length === 0) {
+        close();
+        return;
+      }
+      await run(async () => {
+        if ((await applyTags({ client, store, queryClient }, add, remove, noun)) !== null) close();
+      });
+    },
+  };
 }

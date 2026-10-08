@@ -99,14 +99,14 @@ export function EventItem({
   useGeometry(geom, { ...position, ...colorDeclarations(color) });
   const calendar = calendars?.find((c) => c.id === instance.calendar_id);
   const time = instance.all_day
-    ? t("pim-all-day")
-    : t("pim-time-range", {
+    ? t("common-all-day")
+    : t("common-time-range", {
         start: formatClock(format, instance.start_utc, tz),
         end: formatClock(format, instance.end_utc, tz),
       });
   const shownTime =
     instance.all_day || timeStyle === "range" ? time : formatClock(format, instance.start_utc, tz);
-  const title = instance.title || t("pim-event-untitled");
+  const title = instance.title || t("common-no-title");
   const label = t("pim-event-label", {
     title,
     time,
@@ -200,7 +200,7 @@ export function EventItem({
       {instance.location && <span data-part="event-card.location">{instance.location}</span>}
       {instance.recurring && (
         <span data-part="event-card.badge" data-badge="recurring">
-          {t("pim-badge-recurring")}
+          {t("common-repeats")}
         </span>
       )}
       {onDragStart && keys === "time" && !instance.read_only && (

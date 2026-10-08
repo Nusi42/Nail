@@ -184,7 +184,7 @@ function SearchBox({ query, onQuery, onFirst, onDown, focusSignal }: SearchProps
         type="search"
         data-part="settings-page.search.input"
         aria-label={t("settings-search-label")}
-        placeholder={t("settings-search-placeholder")}
+        placeholder={t("settings-search-label")}
         autoComplete="off"
         spellCheck={false}
         value={query}
@@ -327,11 +327,7 @@ export function SettingsPage({ node }: WidgetProps) {
         {t("settings-search-count", { count: hits.length, query: query.trim() })}
       </p>
       {hits.length > 0 && (
-        <ul
-          ref={results}
-          data-part="settings-page.results"
-          aria-label={t("settings-search-results")}
-        >
+        <ul ref={results} data-part="settings-page.results" aria-label={t("common-search-results")}>
           {hits.map((hit) => {
             const s = findSection(layout, hit.section);
             if (!s) return null;

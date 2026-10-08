@@ -22,10 +22,11 @@ import type {
   MessageSummary,
   Task,
 } from "../../api/generated";
-import type { MockData } from "../../api/mockData";
+import { mockBody, type MockData } from "../../api/mockData";
 import { emptyTaskFields } from "../pim/defaults";
 import { emptyActions, emptyConditions } from "./mock";
 import { exchangeSourceId } from "./model";
+import { DAY_MS } from "../../state/clock";
 
 export const EXCHANGE_ACCOUNT = "acc-exchange";
 export const EXCHANGE_EMAIL = "ada@contoso.example";
@@ -324,22 +325,13 @@ export function seedExchangeDemo(data: MockData, options: { now?: number } = {})
       },
     };
     data.messages.push(summary);
-    data.bodies.set(id, {
+    data.bodies.set(
       id,
-      headers: {
-        subject: mail.subject,
-        from: [mail.from],
-        to: summary.to,
-        cc: [],
-        reply_to: [],
-        date: summary.date,
-        message_id: `${itemId}@contoso.example`,
-      },
-      text: `${mail.subject}\n\n(mock Exchange message)`,
-      sanitized_html: null,
-      attachments: [],
-      remote_content_blocked: false,
-    });
+      mockBody(summary, {
+        text: `${mail.subject}\n\n(mock Exchange message)`,
+        messageId: `${itemId}@contoso.example`,
+      }),
+    );
     const folder = data.folders.find((f) => f.id === mail.folder);
     if (folder) {
       folder.total++;
@@ -610,7 +602,7 @@ export function seedExchangeDemo(data: MockData, options: { now?: number } = {})
   );
   pim.tasks.push(
     task("exchange-task-1", EXCHANGE_CALENDARS.tasks, "Prepare the Phoenix launch", {
-      due: { type: "date", date: iso(now + 2 * 86_400_000).slice(0, 10) },
+      due: { type: "date", date: iso(now + 2 * DAY_MS).slice(0, 10) },
       priority: 1,
     }),
     task("exchange-task-2", EXCHANGE_CALENDARS.groceries, "Coffee beans"),

@@ -5,7 +5,8 @@
  * runtime are listed by `runtimeIds`.
  */
 import type { RuleRunCause, RuleRunState } from "../../api/generated";
-import { ADDRESS_FIELDS, AUTH_METHODS, AUTH_RESULTS, FLAGS, ROLES } from "./ConditionEditor";
+import { FOLDER_ROLES } from "../../api/contract";
+import { ADDRESS_FIELDS, AUTH_METHODS, AUTH_RESULTS, FLAGS } from "./ConditionEditor";
 import { ACTION_KINDS, CONDITION_KINDS, TEXT_OPS, TRIGGER_KINDS } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
@@ -43,7 +44,7 @@ export function runtimeIds(): string[] {
     ...TRIGGER_KINDS.map((k) => `rules-when-${k}`),
     ...ADDRESS_FIELDS.map((k) => `rules-field-${k}`),
     ...FLAGS.map((k) => `rules-flag-${k}`),
-    ...ROLES.map((k) => `rules-role-${k}`),
+    ...FOLDER_ROLES.map((k) => `rules-role-${k}`),
     ...AUTH_METHODS.map((k) => `rules-auth-${k}`),
     ...AUTH_RESULTS.map((k) => `rules-auth-result-${k}`),
     ...["greater", "less"].flatMap((k) => [`rules-size-${k}`, `rules-age-${k}`]),

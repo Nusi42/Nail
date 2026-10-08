@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useT } from "../../i18n/I18nProvider";
+import { RemoveButton } from "../../widgets/RemoveButton";
 
 export interface ReorderEntry {
   /** Stable key (survives moves). */
@@ -99,7 +100,7 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
               move(index, -1, "up");
             }}
           >
-            {t("customize-move-up-short")}
+            {t("common-move-up")}
           </button>
           <button
             ref={setRef(`${entry.key}:down`)}
@@ -112,19 +113,14 @@ export function ReorderList({ entries, label, part, onMove, onRemove }: ReorderL
               move(index, 1, "down");
             }}
           >
-            {t("customize-move-down-short")}
+            {t("common-move-down")}
           </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="remove"
-            aria-label={t("customize-remove", { label: entry.label })}
-            onClick={() => {
+          <RemoveButton
+            label={t("customize-remove", { label: entry.label })}
+            onRemove={() => {
               remove(index);
             }}
-          >
-            {t("customize-remove-short")}
-          </button>
+          />
         </li>
       ))}
     </ol>

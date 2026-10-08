@@ -1,28 +1,22 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { App, overridesFromUrl } from "./App";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { overridesFromUrl } from "./App";
 import { defaultTheme } from "./api/mockData";
-import { createEnv, setWindowWidth, stubElementSizes } from "./test/harness";
+import { appWindowEachTest, renderApp } from "./test/app";
+import { createEnv } from "./test/harness";
 import { must } from "./test/must";
+import { INBOX } from "./test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
+appWindowEachTest();
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-  setWindowWidth(1200);
-});
+/** The status bar once the app is up to date. */
+async function statusBar(): Promise<HTMLElement> {
+  return must(
+    (await screen.findByText("Up to date")).closest<HTMLElement>('[data-part="status-bar"]'),
+  );
+}
 afterEach(() => {
   vi.useRealTimers();
-  restoreSizes();
-  setWindowWidth(1024);
 });
-
-function renderApp(env = createEnv({ state: { connection: "connecting" } })) {
-  const result = render(
-    <App client={env.client} queryClient={env.queryClient} store={env.store} />,
-  );
-  return { ...result, env };
-}
 
 const themeStyle = () => document.head.querySelector<HTMLStyleElement>("style[data-nail-theme]");
 
@@ -148,9 +142,7 @@ describe("App", () => {
 
   it("reports config errors and sync progress in the status bar", async () => {
     const { env } = renderApp();
-    const status = must(
-      (await screen.findByText("Up to date")).closest<HTMLElement>('[data-part="status-bar"]'),
-    );
+    const status = await statusBar();
     act(() => {
       env.transport.emit({
         type: "ConfigError",
@@ -169,9 +161,7 @@ describe("App", () => {
 
   it("reports a failed synchronization until the next one makes progress", async () => {
     const { env } = renderApp();
-    const status = must(
-      (await screen.findByText("Up to date")).closest<HTMLElement>('[data-part="status-bar"]'),
-    );
+    const status = await statusBar();
     act(() => {
       env.transport.emit({
         type: "SyncFailed",

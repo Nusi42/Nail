@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { useCallback, useState } from "react";
 import { vi } from "vitest";
 import type { AttachmentInfo, OutboxEntry } from "../../api/generated";
-import { createEnv, renderWithProviders, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders, type Env, settleQueries } from "../../test/harness";
 import {
   applyComposerEdit,
   AttachmentActionMenu,
@@ -29,7 +29,7 @@ import { installDemoExtensions } from "./extensionsSeed";
 import { PluginManagerDialog } from "./PluginManager";
 import { PluginNotifications } from "./PluginNotifications";
 import { pluginsStoreFor } from "./store";
-import { tick, wireEvents } from "./testUtil";
+import { tick, wireEvents, withAttachments } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { must } from "../../test/must";
 
@@ -38,26 +38,6 @@ function setup(): Env {
   env.transport.data.behaviour.workMs = 0;
   installDemoExtensions(env.transport);
   return env;
-}
-
-async function settle(env: Env) {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(() => tick());
-}
-
-function withAttachments(env: Env): {
-  messageId: string;
-  pdf: AttachmentInfo;
-  csv: AttachmentInfo;
-} {
-  const m = env.transport.data.messages.find(
-    (x) => (env.transport.data.bodies.get(x.id)?.attachments.length ?? 0) > 1,
-  );
-  const body = m ? env.transport.data.bodies.get(m.id) : undefined;
-  if (!m || !body?.attachments[0] || !body.attachments[1]) throw new Error("no attachments");
-  return { messageId: m.id, pdf: body.attachments[0], csv: body.attachments[1] };
 }
 
 describe("reader: banners and badges", () => {
@@ -74,7 +54,7 @@ describe("reader: banners and badges", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     const banners = screen.getByRole("list", { name: "Notes from plug-ins" });
     const banner = within(banners).getByRole("listitem");
     expect(banner).toHaveAttribute("data-plugin", "link-guard");
@@ -86,7 +66,7 @@ describe("reader: banners and badges", () => {
       within(badges).getByText("Sent from outside example.com (added by the plug-in Link guard)"),
     ).toBeInTheDocument();
     await user.click(within(banner).getByRole("button", { name: "Report as phishing" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await screen.findByText("Reported as phishing")).toBeInTheDocument();
     stop();
   });
@@ -101,7 +81,7 @@ describe("reader: banners and badges", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -117,7 +97,7 @@ describe("reader: attachments and links", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     const table = screen.getByRole("region", { name: "Preview of q3-figures.csv" });
     expect(within(table).getByText("Table, shown by the plug-in File preview")).toBeInTheDocument();
     expect(within(table).getByRole("table")).toBeInTheDocument();
@@ -140,13 +120,13 @@ describe("reader: attachments and links", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(<AttachmentPreviewPane messageId={messageId} attachment={csv} />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     // The "raw" renderer has no behaviour: the core's refusal is shown.
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Preview with" }),
       "file-preview.raw",
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
@@ -164,7 +144,7 @@ describe("reader: attachments and links", () => {
       <AttachmentPreviewPane messageId="m" attachment={att} />,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -181,7 +161,7 @@ describe("reader: attachments and links", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     const button = screen.getByRole("button", { name: "Plug-in actions for q3-figures.csv" });
     expect(button).toHaveAttribute("aria-haspopup", "menu");
     button.focus();
@@ -193,13 +173,13 @@ describe("reader: attachments and links", () => {
     expect(button).toHaveFocus();
     await user.click(button);
     await user.click(screen.getByRole("menuitem", { name: /Show file summary/ }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await screen.findByText("3 rows, 3 columns")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Plug-in actions for this link" }));
     const link = screen.getByRole("menuitem", { name: /Check link reputation/ });
     expect(within(link).getByText("Link guard")).toBeInTheDocument();
     await user.click(link);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await screen.findByText("Link looks safe")).toBeInTheDocument();
     stop();
   });
@@ -240,10 +220,10 @@ describe("composer extensions", () => {
     const stop = wireEvents(env);
     const user = userEvent.setup();
     renderWithProviders(<TestComposer draftId="d1" />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     await user.click(screen.getByRole("button", { name: "Plug-in actions" }));
     await user.click(screen.getByRole("menuitem", { name: /Make selection uppercase/ }));
-    await settle(env);
+    await settleQueries(env, 20);
     await waitFor(() => expect(screen.getByTestId("text")).toHaveTextContent("HELLO there"));
     expect(screen.getByRole("status")).toHaveTextContent(
       "Plug-in “Snippets” replaced the selected text.",
@@ -261,7 +241,7 @@ describe("composer extensions", () => {
     const env = createEnv();
     const stop = wireEvents(env);
     const { container } = renderWithProviders(<TestComposer draftId="d1" />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.queryByRole("button", { name: "Plug-in actions" })).toBeNull();
     act(() => {
       env.transport.emit({
@@ -310,7 +290,7 @@ describe("composer extensions", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(
       screen.getByText("Ticket card: rendered by the plug-in Snippets when the message is sent"),
     ).toBeInTheDocument();
@@ -351,16 +331,8 @@ describe("before-send veto", () => {
     return r.draft_id;
   }
 
-  function send(env: Env, draftId: string): Promise<OutboxEntry | null> {
-    return sendDraftChecked(env.client, env.store, {
-      type: "SendDraft",
-      draft_id: draftId,
-      delay_secs: 0,
-      send_at: null,
-    });
-  }
-
-  it("names the plug-in and its reason; Keep editing sends nothing", async () => {
+  /** A vetoed draft sent with the veto dialog on screen; the send's outcome. */
+  async function vetoedSend() {
     const env = setup();
     const id = await vetoedDraft(env);
     const user = userEvent.setup();
@@ -376,6 +348,20 @@ describe("before-send veto", () => {
       result = send(env, id);
       await tick();
     });
+    return { env, user, result: must(result) };
+  }
+
+  function send(env: Env, draftId: string): Promise<OutboxEntry | null> {
+    return sendDraftChecked(env.client, env.store, {
+      type: "SendDraft",
+      draft_id: draftId,
+      delay_secs: 0,
+      send_at: null,
+    });
+  }
+
+  it("names the plug-in and its reason; Keep editing sends nothing", async () => {
+    const { env, user, result } = await vetoedSend();
     const dialog = screen.getByRole("dialog", { name: "A plug-in stopped this message" });
     expect(within(dialog).getByText("Plug-in “Attachment check”:")).toBeInTheDocument();
     expect(
@@ -390,21 +376,7 @@ describe("before-send veto", () => {
   });
 
   it("sends anyway on request", async () => {
-    const env = setup();
-    const id = await vetoedDraft(env);
-    const user = userEvent.setup();
-    renderWithProviders(
-      <>
-        <SendVetoDialog />
-        <WindowLayer layout={env.transport.data.layout} />
-      </>,
-      env,
-    );
-    let result: Promise<OutboxEntry | null> | undefined;
-    await act(async () => {
-      result = send(env, id);
-      await tick();
-    });
+    const { user, result } = await vetoedSend();
     await user.click(screen.getByRole("button", { name: "Send anyway" }));
     const entry = await result;
     expect(entry).not.toBeNull();
@@ -413,21 +385,7 @@ describe("before-send veto", () => {
   });
 
   it("explains an expired veto and offers only Keep editing", async () => {
-    const env = setup();
-    const id = await vetoedDraft(env);
-    const user = userEvent.setup();
-    renderWithProviders(
-      <>
-        <SendVetoDialog />
-        <WindowLayer layout={env.transport.data.layout} />
-      </>,
-      env,
-    );
-    let result: Promise<OutboxEntry | null> | undefined;
-    await act(async () => {
-      result = send(env, id);
-      await tick();
-    });
+    const { env, user, result } = await vetoedSend();
     env.transport.data.features.plugins.extensions.vetoes.clear();
     await user.click(screen.getByRole("button", { name: "Send anyway" }));
     expect(
@@ -452,13 +410,13 @@ describe("plug-in manager additions", () => {
     const stop = wireEvents(env);
     const user = userEvent.setup();
     renderWithProviders(<PluginManagerDialog />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     const digest = document.querySelector<HTMLElement>('[data-plugin="digest"]');
     if (!digest) throw new Error("no digest row");
     // Digest cannot write: no confirmations section.
     expect(within(digest).queryByRole("button", { name: "Confirmations" })).toBeNull();
     await user.click(within(digest).getByRole("button", { name: "Activity" }));
-    await settle(env);
+    await settleQueries(env, 20);
     const meter = within(digest).getByRole("meter");
     expect(meter).toHaveAttribute("aria-valuetext", "18.4 s of 120 s (15 %)");
     const morning = digest.querySelector<HTMLElement>('[data-job="morning"]');
@@ -469,14 +427,14 @@ describe("plug-in manager additions", () => {
     expect(count).toHaveAttribute("data-state", "timeout");
     expect(within(must(count)).getByText("message.received")).toBeInTheDocument();
     await user.click(within(morning).getByRole("button", { name: "Run “Morning digest” now" }));
-    await settle(env);
+    await settleQueries(env, 20);
     await waitFor(() => expect(within(morning).getByText("15, 1 failed")).toBeInTheDocument());
     expect(within(digest).getByText("Tool for AI agents: digest__digest")).toBeInTheDocument();
 
     const check = document.querySelector<HTMLElement>('[data-plugin="attachment-check"]');
     if (!check) throw new Error("no attachment-check row");
     await user.click(within(check).getByRole("button", { name: "Activity" }));
-    await settle(env);
+    await settleQueries(env, 20);
     const hooks = within(check).getByRole("table", { name: "Mail hooks" });
     const row = within(hooks).getByRole("row", { name: /Before sending/ });
     expect(within(row).getByText("40")).toBeInTheDocument();
@@ -492,11 +450,11 @@ describe("plug-in manager additions", () => {
     writer.grants = [{ permission: "composer", accounts: null }];
     const user = userEvent.setup();
     renderWithProviders(<PluginManagerDialog />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     const row = document.querySelector<HTMLElement>('[data-plugin="snippets"]');
     if (!row) throw new Error("no row");
     await user.click(within(row).getByRole("button", { name: "Confirmations" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(
       within(row).getByRole("region", { name: "What Snippets may do without asking" }),
     ).toBeInTheDocument();

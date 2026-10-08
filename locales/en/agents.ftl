@@ -7,19 +7,18 @@
 
 ## Windows and layout labels (@agents.…)
 
-window-confirmation-center = Confirmations
-agents-center-tab = Confirmations
+window-confirmation-center = { common-confirmations }
+agents-center-tab = { common-confirmations }
 agents-action-open-center = Show confirmations
 
 ## Confirmation center
 
-agents-center-title = Confirmations
+agents-center-title = { common-confirmations }
 agents-center-intro = AI agents and plug-ins ask here before they delete, send or change something you have not allowed them to do on their own. Nothing happens until you approve.
 agents-center-empty = Nothing is waiting for your confirmation.
-agents-center-views = Show
 agents-center-show-pending = Waiting ({ $count })
 agents-center-show-history = History
-agents-center-pending-label = Waiting for you
+agents-center-pending-label = { confirmation-state-pending }
 agents-center-history-label = Decided
 agents-history-empty = No decisions yet.
 agents-history-more = Show older
@@ -38,16 +37,15 @@ agents-more-targets =
         [one] and 1 more
        *[other] and { $count } more
     }
-agents-target-message = Message
-agents-target-draft = Draft
-agents-target-folder = Folder
-agents-target-event = Event
-agents-target-contact = Contact
-agents-target-task = Task
-agents-target-rule = Rule
+agents-target-message = { common-message }
+agents-target-draft = { common-draft }
+agents-target-folder = { common-folder }
+agents-target-event = { common-event }
+agents-target-contact = { common-contact }
+agents-target-task = { common-task }
+agents-target-rule = { common-rule }
 agents-target-recipient = Recipient
 agents-changes = What changes
-agents-change-field = Field
 agents-change-before = Now
 agents-change-after = After
 agents-change-new = (new)
@@ -65,15 +63,13 @@ agents-via-elicitation = in the AI agent’s own prompt
 agents-via-system = by Nail (timed out or cancelled)
 agents-always-allow = From now on, let { $actor } do this without asking: { $kind }
 agents-always-asks = Deleting always asks first. This cannot be allowed without asking.
-agents-approve = Approve
+agents-approve = { mcp-tool-elicit-approve }
 agents-approve-destructive = Approve and delete
-agents-deny = Deny
 agents-decide-conflict = This was already decided, has expired or was cancelled.
 
 ## Notices ("something waits")
 
 agents-notices-label = Waiting for your confirmation
-agents-notice-review = Review
 agents-notice-dismiss = Hide this notice
 
 ## Indicator
@@ -89,10 +85,9 @@ agents-indicator-count = { $count }
 ## Confirmation policy (MCP client settings, plug-in manager)
 
 agents-policy-label = What { $name } may do without asking
-agents-policy-title = Confirmations
+agents-policy-title = { common-confirmations }
 agents-policy-intro = Choose what { $name } has to ask you about first. Deleting always asks.
 agents-policy-ask = Ask first
 agents-policy-allow = Without asking
 agents-policy-default = (default)
 agents-policy-always-asks = Always asks
-agents-policy-saved = Saved.

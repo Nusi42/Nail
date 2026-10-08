@@ -11,11 +11,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errorMessageOf, NailError } from "../../api/client";
-import type { ConfigBackup, LocalizedMessage, MergeChoice, MergeItem } from "../../api/generated";
+import type { ConfigBackup, MergeChoice, MergeItem } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { differs } from "../customization/merge";
 import { backupsKey } from "../customization/MergeDialog";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 interface Props {
   pluginId: string;
@@ -41,8 +43,7 @@ export function Placements({ pluginId, onDone }: Props) {
   const queryClient = useQueryClient();
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   const proposal = useQuery({
     queryKey: ["plugins", "placements", pluginId],
     queryFn: () =>
@@ -73,9 +74,7 @@ export function Placements({ pluginId, onDone }: Props) {
           {t(message.id, message.args)}
         </p>
         <div data-part="plugin-placements.actions">
-          <button type="button" data-part="form.button" data-action="done" onClick={onDone}>
-            {t("plugin-placements-close")}
-          </button>
+          <CloseButton onClose={onDone} action="done" />
         </div>
       </section>
     );
@@ -86,22 +85,17 @@ export function Placements({ pluginId, onDone }: Props) {
 
   if (stage.kind === "applied") {
     const undo = async () => {
-      if (!stage.backup) return;
-      setBusy(true);
-      setProblem(null);
-      try {
+      const backup = stage.backup;
+      if (!backup) return;
+      await run(async () => {
         await client.request(
-          { type: "RevertConfig", file: stage.backup.file, backup_id: stage.backup.id },
+          { type: "RevertConfig", file: backup.file, backup_id: backup.id },
           "Done",
         );
-        void queryClient.invalidateQueries({ queryKey: backupsKey(stage.backup.file) });
+        void queryClient.invalidateQueries({ queryKey: backupsKey(backup.file) });
         setStage({ kind: "applied", backup: null });
         onDone();
-      } catch (error) {
-        setProblem(errorMessageOf(error));
-      } finally {
-        setBusy(false);
-      }
+      });
     };
     return (
       <section data-part="plugin-placements" data-stage="applied">
@@ -122,12 +116,10 @@ export function Placements({ pluginId, onDone }: Props) {
               disabled={busy}
               onClick={() => void undo()}
             >
-              {t("plugin-placements-undo")}
+              {t("common-undo")}
             </button>
           )}
-          <button type="button" data-part="form.button" data-action="done" onClick={onDone}>
-            {t("plugin-placements-close")}
-          </button>
+          <CloseButton onClose={onDone} action="done" />
         </div>
       </section>
     );
@@ -147,18 +139,14 @@ export function Placements({ pluginId, onDone }: Props) {
             : t("plugin-placements-nothing")}
         </p>
         <div data-part="plugin-placements.actions">
-          <button type="button" data-part="form.button" data-action="done" onClick={onDone}>
-            {t("plugin-placements-close")}
-          </button>
+          <CloseButton onClose={onDone} action="done" />
         </div>
       </section>
     );
   }
 
   const apply = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const r = await client.request(
         {
           type: "ApplyConfigMerge",
@@ -171,11 +159,7 @@ export function Placements({ pluginId, onDone }: Props) {
       );
       void queryClient.invalidateQueries({ queryKey: backupsKey(preview.file) });
       setStage({ kind: "applied", backup: r.backup });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const taken = items.filter((i) => !skipped.has(i.id)).length;
@@ -243,7 +227,7 @@ export function Placements({ pluginId, onDone }: Props) {
           disabled={busy}
           onClick={onDone}
         >
-          {t("plugin-placements-skip")}
+          {t("common-not-now")}
         </button>
       </div>
     </section>

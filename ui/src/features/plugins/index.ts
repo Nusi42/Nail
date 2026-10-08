@@ -104,7 +104,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [INSTALL_DIALOG]: InstallDialog,
   [MANAGER_DIALOG]: PluginManagerDialog,
   // M5c: plug-in dialogs and the send veto are windows too (`./windows.ts`).
@@ -200,9 +200,13 @@ export const handlePluginsEvent: FeatureEventHandler = (event, { client, queryCl
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handlePluginsEvent];
+export const events: NonNullable<Feature["events"]> = [handlePluginsEvent];
 /** Background components: plug-in dialogs, notifications and the send veto of this UI. */
-export const effects: Feature["effects"] = [PluginDialogs, PluginNotifications, SendVetoDialog];
+export const effects: NonNullable<Feature["effects"]> = [
+  PluginDialogs,
+  PluginNotifications,
+  SendVetoDialog,
+];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

@@ -5,7 +5,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
-import type { Account, McpClient, McpGrant } from "../../api/generated";
+import type { Account, McpClient, McpGrant, McpScope } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useAccounts, useClient, useFolders } from "../../state/queries";
 import { CheckField, Section } from "../../widgets/forms";
@@ -109,35 +109,11 @@ export function GrantEditor({ client }: { client: McpClient }) {
       )}
       <fieldset data-part="mcp-grants.fields" disabled={disabled}>
         <Section titleId="mcp-grant-scopes">
-          {READ_SCOPES.map((scope) => (
-            <div key={scope} data-part="mcp-grants.scope" data-scope={scope}>
-              <CheckField
-                labelId={`mcp-scope-${scope}`}
-                name={`scope-${scope}`}
-                checked={grant.scopes.includes(scope)}
-                onChange={(on) => {
-                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) });
-                }}
-              />
-              <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
-            </div>
-          ))}
+          <ScopeChecks scopes={READ_SCOPES} write={false} grant={grant} change={change} />
         </Section>
         <Section titleId="mcp-grant-write-scopes">
           <p data-part="mcp-grants.write-intro">{t("mcp-grant-write-intro")}</p>
-          {WRITE_SCOPES.map((scope) => (
-            <div key={scope} data-part="mcp-grants.scope" data-scope={scope} data-write="">
-              <CheckField
-                labelId={`mcp-scope-${scope}`}
-                name={`scope-${scope}`}
-                checked={grant.scopes.includes(scope)}
-                onChange={(on) => {
-                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) });
-                }}
-              />
-              <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
-            </div>
-          ))}
+          <ScopeChecks scopes={WRITE_SCOPES} write={true} grant={grant} change={change} />
         </Section>
         <Section titleId="mcp-grant-accounts">
           <CheckField
@@ -186,7 +162,7 @@ export function GrantEditor({ client }: { client: McpClient }) {
           data-variant="primary"
           disabled={disabled || !dirty}
         >
-          {t("mcp-grant-save")}
+          {t("common-save-access")}
         </button>
       </div>
       {notice && (
@@ -199,5 +175,42 @@ export function GrantEditor({ client }: { client: McpClient }) {
         </div>
       )}
     </form>
+  );
+}
+
+/** The scopes' check boxes, each with what it allows. */
+function ScopeChecks({
+  scopes,
+  write,
+  grant,
+  change,
+}: {
+  scopes: readonly McpScope[];
+  write: boolean;
+  grant: McpGrant;
+  change: (next: McpGrant) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      {scopes.map((scope) => (
+        <div
+          key={scope}
+          data-part="mcp-grants.scope"
+          data-scope={scope}
+          data-write={write ? "" : undefined}
+        >
+          <CheckField
+            labelId={`mcp-scope-${scope}`}
+            name={`scope-${scope}`}
+            checked={grant.scopes.includes(scope)}
+            onChange={(on) => {
+              change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) });
+            }}
+          />
+          <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
+        </div>
+      ))}
+    </>
   );
 }

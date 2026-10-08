@@ -12,9 +12,7 @@
  * and the theme. The integrator appends this to the compiled theme's base
  * CSS (`ui/src/theme/compile.ts`).
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+import { p } from "../../theme/selectors";
 
 export const POPOUT_BASE_CSS = `${p("pop-out")} { position: fixed; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 ${p("pop-out.header")} { display: flex; align-items: center; flex: 0 0 auto; gap: var(--nail-space-sm); min-height: calc(var(--nail-size-control) + 3 * var(--nail-space-xs)); padding: 0 var(--nail-space-sm) 0 var(--nail-space-md); border-bottom: 1px solid var(--nail-color-border); background-color: var(--nail-color-bg); }

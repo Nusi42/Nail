@@ -43,7 +43,7 @@ pin-purpose-decrypt = Decrypt the message
 pin-prompt-closed-answered = Answered in another window.
 pin-prompt-closed-timed-out = Nail stopped waiting for the PIN.
 pin-prompt-closed-token-removed = The card was removed.
-pin-prompt-closed-cancelled = The operation was cancelled.
+pin-prompt-closed-cancelled = { common-operation-cancelled }
 
 ## Vault, database encryption and smartcards (WP122)
 
@@ -63,4 +63,4 @@ recovery-kit-advice = Keep this file somewhere safe and away from this computer,
 ## The core (WP125)
 
 vault-restart-needed = The key is back in the Credential Manager. Restart Nail to open your data.
-smartcard-prompt-gone = This PIN request is no longer waiting.
+smartcard-prompt-gone = { common-pin-request-gone }

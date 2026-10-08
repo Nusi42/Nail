@@ -16,11 +16,9 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
 import type {
   BackupItem,
   BackupManifest,
-  LocalizedMessage,
   RestoreAction,
   RestorePlan,
   RestoreReport,
@@ -47,6 +45,8 @@ import {
 } from "./model";
 import { PathField, useSavePath } from "./PathField";
 import { rememberJob } from "./queries";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** What an archive holds: when, by which Nail, items with sizes. */
 export function ManifestSummary({ manifest }: { manifest: BackupManifest }) {
@@ -131,8 +131,7 @@ export function BackupWizard({ close }: { close: () => void }) {
   const [repeat, setRepeat] = useState("");
   // `overwrite`: the Save dialog confirmed replacing an existing archive.
   const { path, overwrite, onChange: setPath } = useSavePath();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run: runBusy } = useBusyAction();
   const [jobId, setJobId] = useState<string | null>(null);
   const [verifyId, setVerifyId] = useState<string | null>(null);
   const contentIssue = backupContentsIssues({ items })[0];
@@ -146,9 +145,7 @@ export function BackupWizard({ close }: { close: () => void }) {
     isAbsolutePath(path);
 
   const run = async (verify: boolean) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await runBusy(async () => {
       const answer = await client.request(
         verify
           ? { type: "VerifyBackup", path: path.trim(), passphrase }
@@ -164,11 +161,7 @@ export function BackupWizard({ close }: { close: () => void }) {
       rememberJob(queryClient, answer.job);
       if (verify) setVerifyId(answer.job.job_id);
       else setJobId(answer.job.job_id);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   if (jobId) {
@@ -202,9 +195,7 @@ export function BackupWizard({ close }: { close: () => void }) {
           )}
           {problem && <Problem problem={problem} />}
           <WizardButtons>
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("portability-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </WizardButtons>
         </div>
       </div>
@@ -233,7 +224,7 @@ export function BackupWizard({ close }: { close: () => void }) {
           </p>
         )}
         <TextField
-          label={t("portability-backup-passphrase")}
+          label={t("common-passphrase")}
           field="passphrase"
           type="password"
           autoComplete="new-password"
@@ -380,19 +371,12 @@ export function RestoreWizard({ close }: { close: () => void }) {
   const [plan, setPlan] = useState<RestorePlan | null>(null);
   const [verifyId, setVerifyId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
 
   const guarded = async (work: () => Promise<void>) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await work();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const open = () =>
@@ -454,7 +438,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
             filters={BACKUP_FILTERS}
           />
           <TextField
-            label={t("portability-restore-passphrase")}
+            label={t("common-passphrase")}
             field="passphrase"
             type="password"
             autoComplete="current-password"
@@ -471,7 +455,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
               disabled={busy || passphrase === "" || !isAbsolutePath(path)}
               onClick={() => void open()}
             >
-              {t("portability-restore-open")}
+              {t("common-open")}
             </button>
           </WizardButtons>
         </div>
@@ -500,7 +484,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
             items={manifest.contents.items}
             selected={items}
             onChange={setItems}
-            legend={t("portability-restore-items")}
+            legend={t("common-restore")}
           />
           {backupContentsIssues({ items })[0] && (
             <p data-part="form.hint" data-tone="danger">
@@ -518,7 +502,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
                 setStep("open");
               }}
             >
-              {t("portability-back")}
+              {t("common-back")}
             </button>
             <button
               type="button"
@@ -565,7 +549,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
                 setStep("choose");
               }}
             >
-              {t("portability-back")}
+              {t("common-back")}
             </button>
             <button
               type="button"
@@ -587,9 +571,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
             {(report) => (report.restore ? <RestoreSummary report={report.restore} /> : null)}
           </JobView>
           <WizardButtons>
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("portability-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </WizardButtons>
         </div>
       )}

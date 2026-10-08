@@ -227,7 +227,7 @@ export function HtmlEditor({
         />
       </div>
       {linkOpen && !source && (
-        <div data-part="composer.link" role="group" aria-label={t("composer-link-label")}>
+        <div data-part="composer.link" role="group" aria-label={t("common-link")}>
           <label data-part="composer.field.label" htmlFor={`${ids}-href`}>
             {t("composer-link-url")}
           </label>
@@ -251,7 +251,7 @@ export function HtmlEditor({
             data-action="apply-link"
             onClick={applyLink}
           >
-            {t("composer-link-apply")}
+            {t("common-apply")}
           </button>
           <button
             type="button"
@@ -261,7 +261,7 @@ export function HtmlEditor({
               setLinkOpen(false);
             }}
           >
-            {t("composer-link-cancel")}
+            {t("common-cancel")}
           </button>
         </div>
       )}

@@ -13,6 +13,9 @@
 import type { ActionAvailability, JsonValue, RecentAction, ResolvedLayout } from "../api/generated";
 import { labelMessageId } from "../i18n/localizer";
 
+/** Where mail actions work: on the selected messages of the list or the reader. */
+export const MAIL_AVAILABILITY: readonly ActionAvailability[] = ["list", "reader"];
+
 /** How a feature describes one of its actions for the palette. */
 export interface ActionInfo {
   /** Fluent id of the title ("Reply to all"). */

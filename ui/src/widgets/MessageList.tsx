@@ -58,7 +58,6 @@ import {
   type Segment,
 } from "../template/template";
 import { useGeometry } from "../theme/ThemeProvider";
-import { ALL_ACCOUNTS } from "./AccountSwitcher";
 import { accountColorSlot } from "./folderPane";
 import { filteredScope } from "./listFilter";
 import { Icon } from "./Icon";
@@ -79,6 +78,7 @@ import {
   type TreeMove,
 } from "./messageListModel";
 import { Avatar, Tag } from "./primitives";
+import { ALL_ACCOUNTS } from "../api/contract";
 
 /**
  * Rows rendered beyond the viewport on each side. M5a rows are taller
@@ -456,7 +456,7 @@ function TagLine({
         icon="paperclip"
         text={
           tags.attachmentCount === null
-            ? t("message-list-tag-attachment")
+            ? t("common-attachment")
             : t("message-list-tag-attachments", { count: tags.attachmentCount })
         }
       />,
@@ -469,7 +469,7 @@ function TagLine({
         kind="invitation"
         tone="accent"
         icon="calendar"
-        text={t("message-list-tag-invitation")}
+        text={t("common-invitation")}
       />,
     );
   }
@@ -480,19 +480,13 @@ function TagLine({
         kind="warning"
         tone="warning"
         icon="triangle-alert"
-        text={t("message-list-tag-warning")}
+        text={t("common-warning")}
       />,
     );
   }
   if (tags.flagged) {
     items.push(
-      <Tag
-        key="flagged"
-        kind="flagged"
-        tone="danger"
-        icon="flag"
-        text={t("message-list-tag-flagged")}
-      />,
+      <Tag key="flagged" kind="flagged" tone="danger" icon="flag" text={t("common-flagged")} />,
     );
   }
   for (const label of tags.labels.slice(0, MAX_LABELS)) {
@@ -1033,7 +1027,7 @@ export function MessageList({ node }: WidgetProps) {
       aria-multiselectable="true"
       tabIndex={0}
       onKeyDown={onKeyDown}
-      aria-label={node.label ? label(node.label) : t("message-list-label")}
+      aria-label={node.label ? label(node.label) : t("common-messages")}
       aria-activedescendant={
         selectedIndex >= 0 && items.some((i) => i.index === selectedIndex)
           ? rowId(selectedIndex)

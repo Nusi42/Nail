@@ -45,6 +45,13 @@ function composerEnv(patch = {}, rich: Partial<RichState> = {}): Env {
 
 const rich = (env: Env) => richStoreFor(env.store).getState();
 
+/** A key report where only OpenPGP has an own key (no S/MIME, no Autocrypt, no suggestion). */
+const OPENPGP_ONLY = {
+  smime: { own_key: false, all_recipients: false },
+  autocrypt: "disable",
+  suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+} as const;
+
 describe("rich composer", () => {
   it("switches to Markdown with the core's preview", async () => {
     const user = userEvent.setup();
@@ -228,10 +235,8 @@ describe("rich composer", () => {
               lookup: "not-attempted",
             },
           ],
+          ...OPENPGP_ONLY,
           openpgp: { own_key: true, all_recipients: false },
-          smime: { own_key: false, all_recipients: false },
-          autocrypt: "disable",
-          suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
         },
       });
     });
@@ -258,10 +263,8 @@ describe("rich composer", () => {
               lookup: "not-attempted",
             },
           ],
+          ...OPENPGP_ONLY,
           openpgp: { own_key: true, all_recipients: true },
-          smime: { own_key: false, all_recipients: false },
-          autocrypt: "disable",
-          suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
         },
       });
     });

@@ -27,16 +27,19 @@ import { UI_STATE_SETTINGS_SECTION, applyUiStateChange } from "../../state/uiSta
 import { showView } from "../shell";
 import type { Feature } from "../types";
 import { BUILTIN_SETTINGS } from "./builtins";
-import { resolveSettingsTarget } from "./model";
+import { resolveSettingsTarget, SETTINGS_WINDOW } from "./model";
 import { settingsStoreFor } from "./store";
 import { SettingsPage } from "./widgets";
 
-export { FORMER_SETTINGS_TABS, highlightText, resolveSettingsTarget } from "./model";
+export {
+  FORMER_SETTINGS_TABS,
+  highlightText,
+  resolveSettingsTarget,
+  SETTINGS_WINDOW,
+} from "./model";
 export { settingsStoreFor } from "./store";
 export { SETTINGS_SKIN_CSS } from "./skin";
 
-/** The window the settings page lives in when the layout has no `settings` view. */
-const SETTINGS_WINDOW = "settings";
 /** The view that shows the settings page. */
 const SETTINGS_VIEW = "settings";
 
@@ -103,9 +106,3 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 
 /** Settings labels per widget kind: the built-in widgets (`builtins.ts`). */
 export const settings: Readonly<Record<string, SettingsWidgetInfo>> = BUILTIN_SETTINGS;
-/** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
-/** Handlers for core events. */
-export const events: Feature["events"] = [];
-/** Background components. */
-export const effects: Feature["effects"] = [];

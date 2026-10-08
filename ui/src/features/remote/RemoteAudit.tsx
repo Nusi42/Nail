@@ -12,11 +12,12 @@ import type { WidgetProps } from "../../layout/widgetRegistry";
 import { SelectField } from "../../widgets/forms";
 import { formatTime } from "./model";
 import { useRemoteAudit, useRemoteUsers } from "./queries";
+import { RefreshButton } from "../../widgets/RefreshButton";
 
 function Row({ entry }: { entry: RemoteAuditEntry }) {
   const t = useT();
   const locale = useLocale();
-  const who = entry.user_name ?? t("remote-audit-unknown-user");
+  const who = entry.user_name ?? t("common-unknown");
   return (
     <tr data-part="remote-audit.row" data-kind={entry.kind} data-outcome={entry.outcome}>
       <td data-part="remote-audit.time">{formatTime(entry.at, locale)}</td>
@@ -77,14 +78,7 @@ export function RemoteAuditWidget({ node }: WidgetProps) {
             ...users.map((u) => ({ value: u.id, label: u.name, literal: true })),
           ]}
         />
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="refresh-audit"
-          onClick={() => void audit.refetch()}
-        >
-          {t("remote-audit-refresh")}
-        </button>
+        <RefreshButton action="refresh-audit" refetch={audit.refetch} />
       </div>
       {audit.isError && (
         <p data-part="remote-audit.error" role="alert">
@@ -102,7 +96,7 @@ export function RemoteAuditWidget({ node }: WidgetProps) {
           <table data-part="remote-audit.table" aria-label={t("remote-audit-title")}>
             <thead data-part="remote-audit.head">
               <tr>
-                <th scope="col">{t("remote-audit-col-time")}</th>
+                <th scope="col">{t("common-time")}</th>
                 <th scope="col">{t("remote-audit-col-event")}</th>
                 <th scope="col">{t("remote-audit-col-user")}</th>
                 <th scope="col">{t("remote-audit-col-origin")}</th>

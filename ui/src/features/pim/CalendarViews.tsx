@@ -29,7 +29,7 @@ import {
   instantMs,
   isAllDayLike,
   rangeInstants,
-  startOfWeekFor,
+  dayGridMove,
   todayIn,
   toZoned,
   weeksOf,
@@ -82,33 +82,13 @@ export function MonthView({
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
     if (!(event.target instanceof HTMLElement) || event.target.getAttribute("role") !== "gridcell")
       return;
-    let next: CalendarDate;
-    switch (event.key) {
-      case "ArrowLeft":
-        next = focused.add({ days: -1 });
-        break;
-      case "ArrowRight":
-        next = focused.add({ days: 1 });
-        break;
-      case "ArrowUp":
-        next = focused.add({ weeks: -1 });
-        break;
-      case "ArrowDown":
-        next = focused.add({ weeks: 1 });
-        break;
-      case "Home":
-        next = startOfWeekFor(focused, locale);
-        break;
-      case "End":
-        next = startOfWeekFor(focused, locale).add({ days: 6 });
-        break;
-      case "Enter":
-        event.preventDefault();
-        onDay(focused);
-        return;
-      default:
-        return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      onDay(focused);
+      return;
     }
+    const next = dayGridMove(event.key, focused, locale);
+    if (next === null) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault();
     const first = range.start;
@@ -446,7 +426,7 @@ export function FreeTimeView({
               {slots.map((slot) => {
                 const left = Math.max(0, position(instantMs(slot.start)));
                 const right = Math.min(1, position(instantMs(slot.end)));
-                const text = t("pim-time-range", {
+                const text = t("common-time-range", {
                   start: formatClock(format, slot.start, tz),
                   end: formatClock(format, slot.end, tz),
                 });

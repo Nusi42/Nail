@@ -41,7 +41,14 @@ import {
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { wallDelta } from "./changes";
-import { NumberField, Problem, problemOf, useChangeContext } from "./common";
+import {
+  NumberField,
+  Problem,
+  problemOf,
+  useChangeContext,
+  EditorMain,
+  CalendarOptions,
+} from "./common";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
 import { deleteEvent, saveEvent, useCalendars, useEvent } from "./queries";
@@ -61,6 +68,10 @@ import {
   splitPimTime,
   timeZoneNames,
 } from "./time";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { TextField, TextAreaField } from "../../widgets/forms";
+import { RemoveButton } from "../../widgets/RemoveButton";
+import { CloseButton } from "../../widgets/CloseButton";
 
 const UNIT_SECONDS: Record<AlarmUnit, number> = {
   minutes: 60,
@@ -260,39 +271,31 @@ function zoneText(tz: string): string {
 
 /** The editor dialog. */
 export function EventEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = usePim((s) => s.eventEditor);
   if (target === null) {
     return (
-      <div data-part="pim.editor" data-state="empty">
-        <p data-part="pim.editor.empty">{t("pim-editor-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="pim.editor"
+        textPart="pim.editor.empty"
+        hintId="pim-editor-nothing"
+        close={close}
+      />
     );
   }
   return <EventEditorLoader target={target} close={close} />;
 }
 
 function EventEditorLoader({ target, close }: { target: EventEditorTarget; close: () => void }) {
-  const t = useT();
   const event = useEvent(target.mode === "edit" ? target.eventId : null);
   const calendars = useCalendars();
   if (calendars.isPending || (target.mode === "edit" && event.isPending)) {
-    return (
-      <div data-part="pim.editor" data-state="loading" aria-busy="true">
-        <p data-part="pim.editor.loading">{t("pim-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (event.isError || calendars.isError) {
     return (
       <div data-part="pim.editor" data-state="error">
         <Problem message={problemOf(event.error ?? calendars.error)} />
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     );
   }
@@ -507,8 +510,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
       aria-describedby={problem ? ids.problem : undefined}
       noValidate
     >
-      {readOnly && <p data-part="pim.editor.read-only">{t("pim-editor-read-only")}</p>}
-      <fieldset data-part="pim.editor.main" disabled={readOnly || busy}>
+      <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="title">
           <label data-part="form.label" htmlFor={ids.title}>
             {t("pim-event-title")}
@@ -526,7 +528,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         </div>
         <div data-part="form.field" data-field="calendar">
           <label data-part="form.label" htmlFor={ids.calendar}>
-            {t("pim-event-calendar")}
+            {t("common-calendar")}
           </label>
           <select
             id={ids.calendar}
@@ -536,11 +538,9 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
               update({ calendarId: e.target.value });
             }}
           >
-            {(readOnly ? calendars.filter((c) => c.id === form.calendarId) : writable).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.settings.name}
-              </option>
-            ))}
+            <CalendarOptions
+              calendars={readOnly ? calendars.filter((c) => c.id === form.calendarId) : writable}
+            />
           </select>
         </div>
 
@@ -565,7 +565,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         )}
 
         <fieldset data-part="pim.editor.when">
-          <legend data-part="form.section.title">{t("pim-event-when")}</legend>
+          <legend data-part="form.section.title">{t("common-when")}</legend>
           <label data-part="form.check" data-field="all-day">
             <input
               type="checkbox"
@@ -574,10 +574,10 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
                 update({ allDay: e.target.checked });
               }}
             />
-            <span>{t("pim-all-day")}</span>
+            <span>{t("common-all-day")}</span>
           </label>
           <DateTimeInput
-            label={t("pim-event-start")}
+            label={t("common-start")}
             field="start"
             day={form.startDay}
             time={form.allDay ? null : form.startTime}
@@ -609,7 +609,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             </p>
           )}
           <DateTimeInput
-            label={t("pim-event-end")}
+            label={t("common-end")}
             field="end"
             day={form.endDay}
             time={form.allDay ? null : form.endTime}
@@ -709,19 +709,15 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         />
         {recurrenceLocked && <p data-part="pim.editor.hint">{t("pim-recurrence-locked")}</p>}
 
-        <div data-part="form.field" data-field="location">
-          <label data-part="form.label" htmlFor={ids.location}>
-            {t("pim-event-location")}
-          </label>
-          <input
-            id={ids.location}
-            data-part="form.input"
-            value={form.location}
-            onChange={(e) => {
-              update({ location: e.target.value });
-            }}
-          />
-        </div>
+        <TextField
+          id={ids.location}
+          name="location"
+          labelId="pim-event-location"
+          value={form.location}
+          onChange={(v) => {
+            update({ location: v });
+          }}
+        />
 
         <ConferenceEditor
           value={form.conferences}
@@ -730,33 +726,25 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           }}
         />
 
-        <div data-part="form.field" data-field="description">
-          <label data-part="form.label" htmlFor={ids.description}>
-            {t("pim-event-description")}
-          </label>
-          <textarea
-            id={ids.description}
-            data-part="form.textarea"
-            value={form.description}
-            onChange={(e) => {
-              update({ description: e.target.value });
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="url">
-          <label data-part="form.label" htmlFor={ids.url}>
-            {t("pim-event-url")}
-          </label>
-          <input
-            id={ids.url}
-            data-part="form.input"
-            type="url"
-            value={form.url}
-            onChange={(e) => {
-              update({ url: e.target.value });
-            }}
-          />
-        </div>
+        <TextAreaField
+          id={ids.description}
+          name="description"
+          labelId="pim-event-description"
+          value={form.description}
+          onChange={(v) => {
+            update({ description: v });
+          }}
+        />
+        <TextField
+          id={ids.url}
+          name="url"
+          labelId="pim-event-url"
+          type="url"
+          value={form.url}
+          onChange={(v) => {
+            update({ url: v });
+          }}
+        />
 
         <AttendeePicker
           value={form.attendees}
@@ -808,7 +796,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           <legend data-part="form.section.title">{t("pim-event-flags")}</legend>
           <div data-part="form.field" data-field="status">
             <label data-part="form.label" htmlFor={ids.status}>
-              {t("pim-event-status")}
+              {t("common-status")}
             </label>
             <select
               id={ids.status}
@@ -864,7 +852,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             </select>
           </div>
         </fieldset>
-      </fieldset>
+      </EditorMain>
 
       <Problem message={problem} id={ids.problem} />
       <div data-part="pim.editor.actions">
@@ -875,7 +863,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             data-variant="primary"
             disabled={busy || form.calendarId === ""}
           >
-            {t("pim-save")}
+            {t("common-save")}
           </button>
         )}
         {event && !readOnly && (
@@ -897,7 +885,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             close();
           }}
         >
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -934,7 +922,7 @@ function ConferenceEditor({
         <div key={index} data-part="pim.editor.row" data-row="conference">
           <div data-part="form.field" data-field="conference-uri">
             <label data-part="form.label" htmlFor={`${id}-uri-${String(index)}`}>
-              {t("pim-conference-uri")}
+              {t("common-link")}
             </label>
             <input
               id={`${id}-uri-${String(index)}`}
@@ -969,17 +957,12 @@ function ConferenceEditor({
               {t("pim-conference-join")}
             </a>
           )}
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="remove"
-            aria-label={t("pim-conference-remove", { uri: conference.uri })}
-            onClick={() => {
+          <RemoveButton
+            label={t("pim-conference-remove", { uri: conference.uri })}
+            onRemove={() => {
               onChange(value.filter((_, i) => i !== index));
             }}
-          >
-            {t("pim-remove")}
-          </button>
+          />
         </div>
       ))}
       <button
@@ -1032,17 +1015,12 @@ export function AlarmEditor({
                   }),
                 })}
               </span>
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="remove"
-                aria-label={t("pim-alarm-remove", { index: index + 1 })}
-                onClick={() => {
+              <RemoveButton
+                label={t("pim-alarm-remove", { index: index + 1 })}
+                onRemove={() => {
                   onChange(value.filter((_, i) => i !== index));
                 }}
-              >
-                {t("pim-remove")}
-              </button>
+              />
             </div>
           );
         }
@@ -1092,7 +1070,7 @@ export function AlarmEditor({
             </div>
             <div data-part="form.field" data-field="alarm-when">
               <label data-part="form.label" htmlFor={`${id}-when-${String(index)}`}>
-                {t("pim-alarm-when")}
+                {t("common-when")}
               </label>
               <select
                 id={`${id}-when-${String(index)}`}
@@ -1139,17 +1117,12 @@ export function AlarmEditor({
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove"
-              aria-label={t("pim-alarm-remove", { index: index + 1 })}
-              onClick={() => {
+            <RemoveButton
+              label={t("pim-alarm-remove", { index: index + 1 })}
+              onRemove={() => {
                 onChange(value.filter((_, i) => i !== index));
               }}
-            >
-              {t("pim-remove")}
-            </button>
+            />
           </div>
         );
       })}

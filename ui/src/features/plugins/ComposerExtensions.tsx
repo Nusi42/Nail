@@ -80,7 +80,7 @@ export function ComposerExtensionBar({ draftId, ensureDraft, getSelection, onIns
   };
 
   return (
-    <div data-part="plugin-composer" role="group" aria-label={t("plugin-composer-label")}>
+    <div data-part="plugin-composer" role="group" aria-label={t("common-plug-ins")}>
       <ExtensionMenu
         kind="composer"
         labelId="plugin-composer-actions"

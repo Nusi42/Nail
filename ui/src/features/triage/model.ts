@@ -32,11 +32,14 @@ export function defaultJunkSettings(): JunkSettings {
   };
 }
 
+/** The most messages the junk filter may wait for before it decides (`JunkSettings::issues`). */
+export const MAX_MIN_TRAINING = 10_000;
+
 /** `JunkSettings::issues`. */
 export function junkIssues(s: JunkSettings): JunkIssue[] {
   const out: JunkIssue[] = [];
   if (s.threshold < 50 || s.threshold > 99) out.push("threshold");
-  if (s.min_training === 0 || s.min_training > 10000) out.push("min-training");
+  if (s.min_training === 0 || s.min_training > MAX_MIN_TRAINING) out.push("min-training");
   return out;
 }
 

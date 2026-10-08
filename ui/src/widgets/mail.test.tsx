@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, renderNode, stubElementSizes, widget } from "../test/harness";
+import { createEnv, renderNode, widget, stubElementSizesEachTest } from "../test/harness";
 import { filterFolders } from "./FolderPicker";
 import { initiallyExpanded, splitQuotes, visibleMessages } from "./ThreadView";
 import { applyHint, hintMessageId, hintsFor } from "./SearchBar";
@@ -11,24 +11,24 @@ import {
   MOCK_CONVERSATION_SUBJECT,
 } from "../api/mockConversations";
 import { must } from "../test/must";
+import { selectMockConversation } from "../test/env";
+import { INBOX } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
+stubElementSizesEachTest();
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+/** The search bar of the personal Inbox, clicked into. */
+async function focusedSearch() {
+  const user = userEvent.setup();
+  const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+  renderNode(widget("search-bar"), env);
+  const input = screen.getByRole("searchbox", { name: "Search mail" });
+  await user.click(input);
+  return { user, env, input };
+}
 
 describe("search-bar", () => {
   it("offers query-language hints that complete the word being typed", async () => {
-    const user = userEvent.setup();
-    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
-    renderNode(widget("search-bar"), env);
-    const input = screen.getByRole("searchbox", { name: "Search mail" });
-    await user.click(input);
+    const { user, input } = await focusedSearch();
     const hints = screen.getByRole("list", { name: "Search fields" });
     expect(within(hints).getByText("from:")).toHaveAttribute("data-part", "search-bar.hint.syntax");
     expect(within(hints).getByText("Sender name or address")).toBeInTheDocument();
@@ -40,11 +40,7 @@ describe("search-bar", () => {
   });
 
   it("keeps the hints while Tab moves into them, hides them when focus leaves (M5b review)", async () => {
-    const user = userEvent.setup();
-    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
-    renderNode(widget("search-bar"), env);
-    const input = screen.getByRole("searchbox", { name: "Search mail" });
-    await user.click(input);
+    const { user } = await focusedSearch();
     await user.tab();
     const hints = screen.getByRole("list", { name: "Search fields" });
     expect(document.activeElement).not.toBe(document.body);
@@ -325,12 +321,7 @@ describe("thread-view", () => {
   it("shows the newest three messages and folds the earlier ones (P2 quick win)", async () => {
     const user = userEvent.setup();
     const env = createEnv({ inboxSize: 12, state: { activeFolderId: INBOX } });
-    const messages = addMockConversation(env.transport.data);
-    const newest = must(messages[5]);
-    act(() => {
-      env.store.getState().selectMessage(newest.id);
-      env.store.getState().selectThread(MOCK_CONVERSATION_ID);
-    });
+    const messages = selectMockConversation(env);
     const { container } = renderNode(widget("thread-view", { options: { expand: "none" } }), env);
     const view = await screen.findByRole("region", { name: "Conversation" });
     // The conversation as listed in the Inbox: four there, two from Sent.

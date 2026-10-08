@@ -149,7 +149,7 @@ export function EditorFrame({ window, breakpoint, children }: EditorFrameProps) 
             }}
           >
             <Icon name="undo-2" part="form.button.icon" />
-            {t("layout-editor-undo")}
+            {t("common-undo")}
           </button>
           <button
             type="button"
@@ -167,7 +167,7 @@ export function EditorFrame({ window, breakpoint, children }: EditorFrameProps) 
             }}
           >
             <Icon name="redo-2" part="form.button.icon" />
-            {t("layout-editor-redo")}
+            {t("common-redo")}
           </button>
           <button
             type="button"
@@ -188,7 +188,7 @@ export function EditorFrame({ window, breakpoint, children }: EditorFrameProps) 
             onClick={stopEditing}
           >
             <Icon name="check" part="form.button.icon" />
-            {t("layout-editor-done")}
+            {t("common-done")}
           </button>
         </span>
       </div>

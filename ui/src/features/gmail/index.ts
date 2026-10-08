@@ -14,9 +14,8 @@
  */
 import type { Event as NailEvent } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
-import { findSummary } from "../../state/mailOps";
+import { findSummary, activeInbox } from "../../state/mailOps";
 import { rememberTagTargets } from "../mail-actions/tags";
-import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
 import { CategoryTabs } from "./CategoryTabs";
 import { ApplyLabelsDialog, LabelDeleteDialog, LabelEditorDialog } from "./LabelDialogs";
@@ -94,21 +93,16 @@ export const actions: Feature["actions"] = {
   /** `gmail.category "social"` (or no argument for the whole inbox). */
   "gmail.category": {
     run: (ctx, args) => {
-      const accountId = ctx.store.getState().activeAccountId;
-      const folders = ctx.queryClient.getQueryData<{ id: string; role: string }[]>(
-        queryKeys.folders(accountId),
-      );
-      const inbox = folders?.find((f) => f.role === "inbox");
-      if (accountId === null || !inbox) return;
+      const inbox = activeInbox(ctx);
       const category = CATEGORIES.find((c) => c === args[0]) ?? null;
-      showCategory(ctx.store, accountId, inbox.id, category);
+      if (inbox) showCategory(ctx.store, inbox.accountId, inbox.inboxId, category);
     },
     enabled: activeGmail,
   },
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [LABEL_EDITOR_DIALOG]: LabelEditorDialog,
   [LABEL_DELETE_DIALOG]: LabelDeleteDialog,
   [APPLY_LABELS_DIALOG]: ApplyLabelsDialog,
@@ -141,6 +135,4 @@ export const handleGmailEvent: FeatureEventHandler = (event, { queryClient }) =>
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleGmailEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+export const events: NonNullable<Feature["events"]> = [handleGmailEvent];

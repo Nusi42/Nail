@@ -357,21 +357,27 @@ describe("the main page", () => {
 });
 
 describe("the router", () => {
+  /** The router on a desktop where the window `kind` was popped out last time. */
+  async function lastPoppedOut(kind: string) {
+    const env = desktopEnv();
+    await env.client.call({
+      type: "SetWindowState",
+      window: kind,
+      state: { page: null, pop_out: null, popped_out: true },
+    });
+    const sent = requests(env);
+    renderRouter(env);
+    await settleQueries(env);
+    return { env, sent };
+  }
+
   function renderRouter(env: Env) {
     expect(effects).toContain(PopOutRouter);
     return renderWithProviders(<PopOutRouter />, env);
   }
 
   it("sends a window whose kind was last popped out to its OS window", async () => {
-    const env = desktopEnv();
-    await env.client.call({
-      type: "SetWindowState",
-      window: "rules",
-      state: { page: null, pop_out: null, popped_out: true },
-    });
-    const sent = requests(env);
-    renderRouter(env);
-    await settleQueries(env);
+    const { env, sent } = await lastPoppedOut("rules");
     act(() => {
       env.store.getState().openWindow("rules");
     });
@@ -389,15 +395,7 @@ describe("the router", () => {
   });
 
   it("keeps a kind in the page that was popped out before popping out became opt-in", async () => {
-    const env = desktopEnv();
-    await env.client.call({
-      type: "SetWindowState",
-      window: "pim-event-editor",
-      state: { page: null, pop_out: null, popped_out: true },
-    });
-    const sent = requests(env);
-    renderRouter(env);
-    await settleQueries(env);
+    const { env, sent } = await lastPoppedOut("pim-event-editor");
     act(() => {
       env.store.getState().openWindow("pim-event-editor");
     });

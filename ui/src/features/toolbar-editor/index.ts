@@ -104,7 +104,7 @@ export const settings: NonNullable<Feature["settings"]> = {
 };
 
 /** Dialogs by name. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [TOOLBAR_CUSTOMIZER_KIND]: ToolbarCustomizerWindow,
 };
 
@@ -118,9 +118,3 @@ export const windows: NonNullable<Feature["windows"]> = {
     pop_out: false,
   },
 };
-
-/** Core event handlers. */
-export const events: Feature["events"] = [];
-
-/** Background components. */
-export const effects: Feature["effects"] = [];

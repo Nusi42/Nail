@@ -22,7 +22,14 @@ import type {
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { Problem, problemOf, useChangeContext } from "./common";
+import {
+  Problem,
+  problemOf,
+  useChangeContext,
+  EditorMain,
+  CategoriesField,
+  OptionalSection,
+} from "./common";
 import { CONTACT_KINDS } from "./constants";
 import { DateTimeInput } from "./DateTimeInput";
 import { emptyContactFields } from "./defaults";
@@ -30,6 +37,10 @@ import { pimWrite, useAddressBooks, useContact } from "./queries";
 import { usePim, type ContactEditorTarget } from "./store";
 import { localZone, todayIn } from "./time";
 import { nonEmpty } from "../../text/empty";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { TextField, TextAreaField } from "../../widgets/forms";
+import { RemoveButton } from "../../widgets/RemoveButton";
+import { CloseButton } from "../../widgets/CloseButton";
 
 export const EMAIL_KINDS = ["home", "work", "other"] as const;
 export const PHONE_KINDS = ["cell", "home", "work", "fax", "other"] as const;
@@ -83,34 +94,27 @@ export function cleanContact(fields: ContactFields): ContactFields {
 }
 
 export function ContactEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = usePim((s) => s.contactEditor);
   const contact = useContact(target?.mode === "edit" ? target.contactId : null);
   const books = useAddressBooks();
   if (target === null) {
     return (
-      <div data-part="pim.editor" data-state="empty">
-        <p data-part="pim.editor.empty">{t("pim-editor-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="pim.editor"
+        textPart="pim.editor.empty"
+        hintId="pim-editor-nothing"
+        close={close}
+      />
     );
   }
   if (books.isPending || (target.mode === "edit" && contact.isPending)) {
-    return (
-      <div data-part="pim.editor" data-state="loading" aria-busy="true">
-        <p data-part="pim.editor.loading">{t("pim-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (contact.isError || books.isError) {
     return (
       <div data-part="pim.editor" data-state="error">
         <Problem message={problemOf(contact.error ?? books.error)} />
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     );
   }
@@ -264,8 +268,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
       aria-busy={busy}
       noValidate
     >
-      {readOnly && <p data-part="pim.editor.read-only">{t("pim-editor-read-only")}</p>}
-      <fieldset data-part="pim.editor.main" disabled={readOnly || busy}>
+      <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="address-book">
           <label data-part="form.label" htmlFor={ids.book}>
             {contact ? t("pim-contact-move-to") : t("pim-contact-book")}
@@ -287,7 +290,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
         </div>
         <div data-part="form.field" data-field="kind">
           <label data-part="form.label" htmlFor={ids.kind}>
-            {t("pim-contact-kind")}
+            {t("common-kind")}
           </label>
           <select
             id={ids.kind}
@@ -306,7 +309,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
         </div>
 
         <fieldset data-part="pim.editor.section" data-section="name">
-          <legend data-part="form.section.title">{t("pim-contact-name-legend")}</legend>
+          <legend data-part="form.section.title">{t("common-name")}</legend>
           {(
             [
               ["prefix", ids.prefix, "pim-contact-prefix"],
@@ -344,23 +347,19 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               }}
             />
           </div>
-          <div data-part="form.field" data-field="nicknames">
-            <label data-part="form.label" htmlFor={ids.nick}>
-              {t("pim-contact-nicknames")}
-            </label>
-            <input
-              id={ids.nick}
-              data-part="form.input"
-              value={fields.nicknames.join(", ")}
-              onChange={(e) => {
-                update({ nicknames: e.target.value.split(",") });
-              }}
-            />
-          </div>
+          <TextField
+            id={ids.nick}
+            name="nicknames"
+            labelId="pim-contact-nicknames"
+            value={fields.nicknames.join(", ")}
+            onChange={(v) => {
+              update({ nicknames: v.split(",") });
+            }}
+          />
         </fieldset>
 
         <fieldset data-part="pim.editor.section" data-section="work">
-          <legend data-part="form.section.title">{t("pim-contact-work-legend")}</legend>
+          <legend data-part="form.section.title">{t("common-work")}</legend>
           <div data-part="form.field" data-field="organization">
             <label data-part="form.label" htmlFor={ids.org}>
               {t("pim-contact-organization")}
@@ -397,32 +396,24 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
               }}
             />
           </div>
-          <div data-part="form.field" data-field="title">
-            <label data-part="form.label" htmlFor={ids.title}>
-              {t("pim-contact-title")}
-            </label>
-            <input
-              id={ids.title}
-              data-part="form.input"
-              value={fields.title ?? ""}
-              onChange={(e) => {
-                update({ title: e.target.value });
-              }}
-            />
-          </div>
-          <div data-part="form.field" data-field="role">
-            <label data-part="form.label" htmlFor={ids.role}>
-              {t("pim-contact-role")}
-            </label>
-            <input
-              id={ids.role}
-              data-part="form.input"
-              value={fields.role ?? ""}
-              onChange={(e) => {
-                update({ role: e.target.value });
-              }}
-            />
-          </div>
+          <TextField
+            id={ids.title}
+            name="title"
+            labelId="pim-contact-title"
+            value={fields.title ?? ""}
+            onChange={(v) => {
+              update({ title: v });
+            }}
+          />
+          <TextField
+            id={ids.role}
+            name="role"
+            labelId="pim-contact-role"
+            value={fields.role ?? ""}
+            onChange={(v) => {
+              update({ role: v });
+            }}
+          />
         </fieldset>
 
         <LabeledListEditor
@@ -489,32 +480,22 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
           }}
         />
 
-        <div data-part="form.field" data-field="notes">
-          <label data-part="form.label" htmlFor={ids.notes}>
-            {t("pim-contact-notes")}
-          </label>
-          <textarea
-            id={ids.notes}
-            data-part="form.textarea"
-            value={fields.notes ?? ""}
-            onChange={(e) => {
-              update({ notes: e.target.value });
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="categories">
-          <label data-part="form.label" htmlFor={ids.categories}>
-            {t("pim-categories")}
-          </label>
-          <input
-            id={ids.categories}
-            data-part="form.input"
-            value={fields.categories.join(", ")}
-            onChange={(e) => {
-              update({ categories: e.target.value.split(",") });
-            }}
-          />
-        </div>
+        <TextAreaField
+          id={ids.notes}
+          name="notes"
+          labelId="common-notes"
+          value={fields.notes ?? ""}
+          onChange={(v) => {
+            update({ notes: v });
+          }}
+        />
+        <CategoriesField
+          id={ids.categories}
+          categories={fields.categories}
+          onChange={(categories) => {
+            update({ categories });
+          }}
+        />
         <CustomFieldsEditor
           values={fields.custom}
           onChange={(custom) => {
@@ -555,7 +536,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             </button>
           )}
         </fieldset>
-      </fieldset>
+      </EditorMain>
 
       <Problem message={problem} />
       <div data-part="pim.editor.actions">
@@ -566,7 +547,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             data-variant="primary"
             disabled={busy || bookId === ""}
           >
-            {t("pim-save")}
+            {t("common-save")}
           </button>
         )}
         <button
@@ -577,7 +558,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
             close();
           }}
         >
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -627,7 +608,7 @@ function LabeledListEditor({
             </div>
             <div data-part="form.field" data-field="kind">
               <label data-part="form.label" htmlFor={`${id}-k-${String(index)}`}>
-                {t("pim-entry-kind")}
+                {t("common-kind")}
               </label>
               <select
                 id={`${id}-k-${String(index)}`}
@@ -660,17 +641,12 @@ function LabeledListEditor({
               />
               <span>{t("pim-entry-preferred")}</span>
             </label>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove"
-              aria-label={t("pim-entry-remove", { field: legend, index: index + 1 })}
-              onClick={() => {
+            <RemoveButton
+              label={t("pim-entry-remove", { field: legend, index: index + 1 })}
+              onRemove={() => {
                 onChange(values.filter((_, i) => i !== index));
               }}
-            >
-              {t("pim-remove")}
-            </button>
+            />
           </div>
         );
       })}
@@ -725,7 +701,7 @@ function AddressListEditor({
           <legend data-part="form.label">{t("pim-address-number", { index: index + 1 })}</legend>
           <div data-part="form.field" data-field="kind">
             <label data-part="form.label" htmlFor={`${id}-kind-${String(index)}`}>
-              {t("pim-entry-kind")}
+              {t("common-kind")}
             </label>
             <select
               id={`${id}-kind-${String(index)}`}
@@ -757,17 +733,12 @@ function AddressListEditor({
               />
             </div>
           ))}
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="remove"
-            aria-label={t("pim-address-remove", { index: index + 1 })}
-            onClick={() => {
+          <RemoveButton
+            label={t("pim-address-remove", { index: index + 1 })}
+            onRemove={() => {
               onChange(values.filter((_, i) => i !== index));
             }}
-          >
-            {t("pim-remove")}
-          </button>
+          />
         </fieldset>
       ))}
       <button
@@ -799,22 +770,19 @@ function ContactDateEditor({
   const tz = localZone();
   const day = value ? safeDay(value) : null;
   return (
-    <fieldset data-part="pim.editor.section" data-section={field}>
-      <legend data-part="form.section.title">{label}</legend>
-      <label data-part="form.check" data-field={`${field}-set`}>
-        <input
-          type="checkbox"
-          checked={value !== null}
-          onChange={(e) => {
-            if (!e.target.checked) onChange(null);
-            else {
-              const today = todayIn(tz);
-              onChange({ year: today.year, month: today.month, day: today.day });
-            }
-          }}
-        />
-        <span>{t("pim-contact-date-known", { field: label })}</span>
-      </label>
+    <OptionalSection
+      field={field}
+      label={label}
+      toggleText={t("pim-contact-date-known", { field: label })}
+      set={value !== null}
+      onToggle={(on) => {
+        if (!on) onChange(null);
+        else {
+          const today = todayIn(tz);
+          onChange({ year: today.year, month: today.month, day: today.day });
+        }
+      }}
+    >
       {value && day && (
         <>
           <DateTimeInput
@@ -843,7 +811,7 @@ function ContactDateEditor({
           </label>
         </>
       )}
-    </fieldset>
+    </OptionalSection>
   );
 }
 
@@ -898,17 +866,12 @@ function CustomFieldsEditor({
               }}
             />
           </div>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="remove"
-            aria-label={t("pim-custom-remove", { index: index + 1 })}
-            onClick={() => {
+          <RemoveButton
+            label={t("pim-custom-remove", { index: index + 1 })}
+            onRemove={() => {
               onChange(values.filter((_, i) => i !== index));
             }}
-          >
-            {t("pim-remove")}
-          </button>
+          />
         </div>
       ))}
       <button

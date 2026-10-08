@@ -523,8 +523,8 @@ export function WindowFrame({
           <button
             type="button"
             data-part="window.close"
-            aria-label={t("window-close")}
-            title={t("window-close")}
+            aria-label={t("common-close")}
+            title={t("common-close")}
             onClick={onClose}
           >
             <Icon name="x" part="window.close.icon" />

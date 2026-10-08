@@ -17,11 +17,6 @@ conversations-from-me = Sent by you
 
 ## Counts and folds
 
-# $count (Number) — messages of the conversation (the row's count pill).
-conversations-count = { $count ->
-    [one] One message
-   *[other] { $count } messages
-}
 # $count (Number) — older messages folded away above the newest ones.
 conversations-earlier = { $count ->
     [one] One earlier message

@@ -28,7 +28,5 @@ export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = conversationActions;
 /** Command-palette descriptions of the feed's keys. */
 export const actionInfo: Readonly<Record<string, ActionInfo>> = conversationActionInfo;
-export const dialogs: Feature["dialogs"] = {};
-export const events: Feature["events"] = [];
 /** The offer to turn a strip-era reader stack into the card feed. */
-export const effects: Feature["effects"] = [ReaderOffer];
+export const effects: NonNullable<Feature["effects"]> = [ReaderOffer];

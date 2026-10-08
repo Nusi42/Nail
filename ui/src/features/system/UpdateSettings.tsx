@@ -10,9 +10,8 @@
  * installer line at the top.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
-import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage, UpdateSettings as Settings } from "../../api/generated";
+import { useId } from "react";
+import type { UpdateSettings as Settings } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
@@ -20,6 +19,7 @@ import { UPDATE_CHANNELS, channelMessageId, installKindMessageId } from "./model
 import { systemKeys, useInstallation, useUpdateStatus } from "./queries";
 import { QueryProblem } from "./QueryProblem";
 import { UpdateStatusPanel } from "./UpdateStatus";
+import { useBusyAction } from "../../state/busyAction";
 
 /** Channel and automatic checks / downloads; every change is saved at once. */
 function UpdateOptions() {
@@ -28,26 +28,19 @@ function UpdateOptions() {
   const client = useClient();
   const queryClient = useQueryClient();
   const status = useUpdateStatus();
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   if (!status.data) return null;
   const { settings, forced_channel: forced } = status.data;
   const off = status.data.state.state === "disabled";
 
   const save = async (next: Settings) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         { type: "SetUpdateSettings", settings: next },
         "UpdateStatus",
       );
       queryClient.setQueryData(systemKeys.updates, answer.status);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (

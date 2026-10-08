@@ -12,9 +12,8 @@
 
 import { FIELDS_NARROW } from "../settings/skin";
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
+import { p } from "../../theme/selectors";
 
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
 /** The editor's own parts. */
 const e = (part: string) => p(`theme-editor.${part}`);
 /** The preview's parts. */

@@ -61,7 +61,7 @@ function TokenPanel({ name, token, onDone }: { name: string; token: string; onDo
           data-variant="primary"
           onClick={onDone}
         >
-          {t("mcp-token-done")}
+          {t("common-done")}
         </button>
       </div>
       {copied === false && (
@@ -144,7 +144,7 @@ function PendingNote({ client }: { client: McpClient }) {
           openWindow(CENTER_DIALOG);
         }}
       >
-        {t("mcp-client-pending-review")}
+        {t("common-review")}
       </button>
     </p>
   );
@@ -191,7 +191,7 @@ function ClientDetail({ client }: { client: McpClient }) {
                 setConfirm(true);
               }}
             >
-              {t("mcp-client-revoke")}
+              {t("common-revoke")}
             </button>
           ) : (
             <span data-part="mcp-clients.confirm" role="group">
@@ -215,7 +215,7 @@ function ClientDetail({ client }: { client: McpClient }) {
                   setConfirm(false);
                 }}
               >
-                {t("mcp-client-cancel")}
+                {t("common-cancel")}
               </button>
             </span>
           )}

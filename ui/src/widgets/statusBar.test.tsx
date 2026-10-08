@@ -2,10 +2,16 @@ import { act, screen } from "@testing-library/react";
 import { createEnv, renderNode, widget } from "../test/harness";
 import { sendPercent } from "../state/uiStore";
 
+/** A status bar that shows only the sync progress. */
+function syncStatus() {
+  const env = createEnv();
+  renderNode(widget("status-bar", { options: { items: "sync-progress" } }), env);
+  return env;
+}
+
 describe("status-bar sync status", () => {
   it("shows the core's localized reason for a failed synchronization", () => {
-    const env = createEnv();
-    renderNode(widget("status-bar", { options: { items: "sync-progress" } }), env);
+    const env = syncStatus();
     act(() => {
       env.store.getState().setSyncError({
         accountId: "work",
@@ -19,8 +25,7 @@ describe("status-bar sync status", () => {
   });
 
   it("falls back to the text of the error code", () => {
-    const env = createEnv();
-    renderNode(widget("status-bar", { options: { items: "sync-progress" } }), env);
+    const env = syncStatus();
     act(() => {
       env.store.getState().setSyncError({ accountId: "work", code: "auth_failed" });
     });

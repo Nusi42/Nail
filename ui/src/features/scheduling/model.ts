@@ -167,12 +167,6 @@ export function placeSpan(span: Span, window: Span): { left: number; width: numb
   return { left, width: right - left };
 }
 
-/** A plausible email address (the core validates for real). */
-export function plausibleEmail(text: string): boolean {
-  const at = text.lastIndexOf("@");
-  return at > 0 && at < text.length - 1 && !/\s/.test(text) && !text.slice(at + 1).startsWith(".");
-}
-
 /** Addresses typed into one field, separated by commas, semicolons or spaces. */
 export function splitAddresses(text: string): string[] {
   return text

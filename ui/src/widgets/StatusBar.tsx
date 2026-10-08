@@ -131,7 +131,7 @@ function OpsItem() {
           </button>
         )}
         <button type="button" data-part="status-bar.button" onClick={dismiss}>
-          {t("status-dismiss")}
+          {t("common-dismiss")}
         </button>
       </span>
     );
@@ -228,7 +228,7 @@ function SendStatusItem() {
             });
           }}
         >
-          {t("status-undo-send")}
+          {t("common-undo")}
         </button>
       )}
     </span>
@@ -258,7 +258,7 @@ export function StatusBar({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       role="status"
       aria-live="polite"
-      aria-label={t("status-bar-label")}
+      aria-label={t("common-status")}
     >
       {items.map((item) => {
         const Item = ITEMS[item];

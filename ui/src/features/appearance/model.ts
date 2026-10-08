@@ -6,6 +6,7 @@
  * the app bundle does not carry the mock core.
  */
 import type {
+  Density,
   AppearanceSettings,
   SystemAppearance,
   ThemeInfo,
@@ -15,6 +16,9 @@ import type {
 } from "../../api/generated";
 
 /** `nail_api::appearance::BUILTIN_THEMES` (gallery order). */
+/** The densities, in the order the appearance page offers them. */
+export const DENSITIES: readonly Density[] = ["comfortable", "compact"];
+
 export const BUILTIN_THEMES: readonly (readonly [string, ThemeKind])[] = [
   ["frost", "light"],
   ["sage", "light"],

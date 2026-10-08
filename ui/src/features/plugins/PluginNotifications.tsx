@@ -68,8 +68,8 @@ function ToastView({ toast }: { toast: Toast }) {
       <button
         type="button"
         {...partAttrs("plugin.notification.dismiss", plugin)}
-        aria-label={t("plugin-notification-dismiss")}
-        title={t("plugin-notification-dismiss")}
+        aria-label={t("common-dismiss")}
+        title={t("common-dismiss")}
         onClick={() => {
           dismiss(toast.id);
         }}

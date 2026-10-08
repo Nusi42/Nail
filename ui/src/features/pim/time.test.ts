@@ -1,6 +1,8 @@
 import { CalendarDate, fromAbsolute } from "@internationalized/date";
 import type { EventInstance, PimTime } from "../../api/generated";
 import {
+  dayGridMove,
+  likeAt,
   initialScrollTop,
   DEFAULT_VIEW_OPTIONS,
   busyDays,
@@ -25,8 +27,7 @@ import {
   viewRange,
   weeksOf,
 } from "./time";
-
-const BERLIN = "Europe/Berlin";
+import { BERLIN } from "../../test/mockIds";
 
 function instance(
   id: string,
@@ -289,5 +290,44 @@ describe("initial scroll of the time grid", () => {
     expect(initialScrollTop(8, 48, 0)).toBe(0);
     expect(initialScrollTop(-2, 48, 500)).toBe(0);
     expect(initialScrollTop(8, 0, 500)).toBe(0);
+  });
+});
+
+describe("day grid keys", () => {
+  const day = new CalendarDate(2026, 10, 8); // a Thursday
+  it("moves by days, weeks and to the ends of the week", () => {
+    expect(dayGridMove("ArrowLeft", day, "en-US")?.toString()).toBe("2026-10-07");
+    expect(dayGridMove("ArrowRight", day, "en-US")?.toString()).toBe("2026-10-09");
+    expect(dayGridMove("ArrowUp", day, "en-US")?.toString()).toBe("2026-10-01");
+    expect(dayGridMove("ArrowDown", day, "en-US")?.toString()).toBe("2026-10-15");
+    expect(dayGridMove("Home", day, "en-US")?.toString()).toBe("2026-10-04");
+    expect(dayGridMove("End", day, "en-US")?.toString()).toBe("2026-10-10");
+    expect(dayGridMove("Home", day, "de-DE")?.toString()).toBe("2026-10-05");
+  });
+
+  it("pages by months (Shift: years) only where asked", () => {
+    expect(dayGridMove("PageUp", day, "en-US")).toBeNull();
+    expect(dayGridMove("PageDown", day, "en-US", { pages: true })?.toString()).toBe("2026-11-08");
+    expect(dayGridMove("PageUp", day, "en-US", { pages: true, shift: true })?.toString()).toBe(
+      "2025-10-08",
+    );
+    expect(dayGridMove("x", day, "en-US", { pages: true })).toBeNull();
+  });
+});
+
+describe("likeAt", () => {
+  const wall = fromAbsolute(Date.UTC(2026, 9, 8, 7, 30), "UTC");
+  it("keeps the kind and zone of the model time", () => {
+    expect(likeAt({ type: "date", date: "2026-01-01" }, wall)).toEqual({
+      type: "date",
+      date: "2026-10-08",
+    });
+    expect(likeAt({ type: "floating", local: "2026-01-01T00:00:00" }, wall)).toEqual({
+      type: "floating",
+      local: "2026-10-08T07:30:00",
+    });
+    expect(
+      likeAt({ type: "zoned", local: "2026-01-01T00:00:00", tz: "Europe/Berlin" }, wall),
+    ).toEqual({ type: "zoned", local: "2026-10-08T07:30:00", tz: "Europe/Berlin" });
   });
 });

@@ -14,11 +14,13 @@ import { emptyComposer } from "../../state/compose";
 import { useUi, type UiState } from "../../state/uiStore";
 import {
   CONFIRMATION_WINDOW_SPEC,
+  DEFAULT_WINDOW_SPEC,
   WindowInstanceContext,
   resolveWindowSpec,
   windowKind,
 } from "../../state/windows";
 import { createEnv, Providers, renderWithProviders, widget, type Env } from "../../test/harness";
+import { defaultLayout } from "../../api/mockData";
 import { appRegistry } from "../registry";
 import { composerCryptoStore } from "../security";
 import { ComposerWindowTitle, composerSubjectTitle } from "./Composer";
@@ -118,6 +120,21 @@ afterEach(() => {
     composerCryptoStore.getState().reset();
   });
 });
+
+/** A new rich composer in its window (`composer:w1`). */
+async function composerWindow() {
+  const env = setup();
+  await startRichCompose(env.ctx);
+  renderWindows(env);
+  return env;
+}
+
+/** Waits until the composer took what it opened with as its baseline. */
+async function baselined(env: ReturnType<typeof setup>): Promise<void> {
+  await waitFor(() => {
+    expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull();
+  });
+}
 
 describe("composer windows", () => {
   // The closing flows check "unsaved changes": the autosave (real timers)
@@ -299,13 +316,9 @@ describe("composer windows", () => {
   });
 
   it("closes at once when everything is saved", async () => {
-    const env = setup();
-    await startRichCompose(env.ctx);
-    renderWindows(env);
+    const env = await composerWindow();
     // The composer took what it opened with as its baseline.
-    await waitFor(() => {
-      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull();
-    });
+    await baselined(env);
     expect(isUnsaved(env.store, "composer:w1")).toBe(false);
     act(() => {
       ui(env).closeWindow("composer:w1");
@@ -318,9 +331,7 @@ describe("composer windows", () => {
 
   it("asks before closing a composer with unsaved changes", async () => {
     const user = userEvent.setup();
-    const env = setup();
-    await startRichCompose(env.ctx);
-    renderWindows(env);
+    const env = await composerWindow();
     await user.type(region("composer:w1").getByRole("textbox", { name: "Subject" }), "Unsent");
     expect(isUnsaved(env.store, "composer:w1")).toBe(true);
 
@@ -356,9 +367,7 @@ describe("composer windows", () => {
 
   it("saves and closes from the confirmation", async () => {
     const user = userEvent.setup();
-    const env = setup();
-    await startRichCompose(env.ctx);
-    renderWindows(env);
+    const env = await composerWindow();
     await user.type(region("composer:w1").getByRole("textbox", { name: "Subject" }), "Keep me");
     act(() => {
       requestClose(env.ctx, "composer:w1");
@@ -374,12 +383,8 @@ describe("composer windows", () => {
 
   it("asks before discarding a saved draft, not an untouched new message", async () => {
     const user = userEvent.setup();
-    const env = setup();
-    await startRichCompose(env.ctx);
-    renderWindows(env);
-    await waitFor(() => {
-      expect(richStoreFor(env.store, "composer:w1").getState().savedKey).not.toBeNull();
-    });
+    const env = await composerWindow();
+    await baselined(env);
     await user.click(region("composer:w1").getByRole("button", { name: "Discard" }));
     expect(ui(env).windows).toEqual([]);
 
@@ -589,19 +594,21 @@ describe("window model", () => {
     }
   });
 
-  it("declares a size for every feature dialog", () => {
+  it("declares a size for every feature dialog (in the feature or the default layout)", () => {
+    const layout = defaultLayout();
     for (const kind of Object.keys(appRegistry.dialogs)) {
       const registration = appRegistry.windows[kind];
-      expect({ kind, registered: registration !== undefined }).toEqual({
+      const frame = layout.window_frames[kind];
+      expect({ kind, registered: registration !== undefined || frame !== undefined }).toEqual({
         kind,
         registered: true,
       });
       if (registration?.confirmation) continue;
-      const spec = resolveWindowSpec(kind, null, appRegistry.windows);
+      const spec = resolveWindowSpec(kind, layout, appRegistry.windows);
       expect(spec.size.width).toBeGreaterThanOrEqual(spec.min_size.width);
       expect(spec.size.height).toBeGreaterThanOrEqual(spec.min_size.height);
-      expect(registration?.size).toBeDefined();
-      expect(registration?.min_size).toBeDefined();
+      expect(registration?.size ?? frame?.size).toBeDefined();
+      expect(registration?.min_size ?? frame?.min_size).toBeDefined();
     }
   });
 
@@ -614,11 +621,12 @@ describe("window model", () => {
       instances: "multiple",
       min_size: { width: 520, height: 400 },
     });
-    // Without a layout window the registration gives the same.
+    expect(spec.size).toEqual({ width: 820, height: 720 });
+    // Without a layout window several composers still open, at the default size.
     expect(resolveWindowSpec("composer", null, appRegistry.windows)).toMatchObject({
       modal: false,
       instances: "multiple",
-      size: { width: 820, height: 720 },
+      size: DEFAULT_WINDOW_SPEC.size,
     });
     // Its confirmations open per composer too.
     expect(resolveWindowSpec("composer-close:w3", null, appRegistry.windows)).toMatchObject({

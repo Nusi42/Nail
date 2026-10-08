@@ -9,7 +9,8 @@
 import type { BadgeSource } from "../../api/generated";
 import { usePendingConfirmations } from "../agents/queries";
 import { useFolders } from "../../state/queries";
-import { ALL_ACCOUNTS, inboxUnread } from "./model";
+import { inboxUnread } from "./model";
+import { ALL_ACCOUNTS } from "../../api/contract";
 
 export type BadgeCounts = Readonly<Record<BadgeSource, number>>;
 

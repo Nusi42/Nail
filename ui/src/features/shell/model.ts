@@ -14,9 +14,6 @@ import type {
 } from "../../api/generated";
 import { VIEW_SHOW_ACTION, hostsViews, viewDef } from "../../layout/views";
 
-/** `nail_api::AccountId::ALL`: the built-in "All accounts" virtual account. */
-export const ALL_ACCOUNTS = "all";
-
 /** Badges show at most this number, then `99+`. */
 export const BADGE_CAP = 99;
 

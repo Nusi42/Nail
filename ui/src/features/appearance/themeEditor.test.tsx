@@ -6,7 +6,7 @@
  * every built-in theme.
  */
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { Request, ResolvedTheme } from "../../api/generated";
+import type { Appearance, Request, ResolvedTheme } from "../../api/generated";
 import { mockEditHistory, simulateExternalEdit } from "../../api/editHistoryMock";
 import { defaultTheme } from "../../api/mockData";
 import { appRegistry } from "../registry";
@@ -36,6 +36,9 @@ import { DeleteThemeDialog, NewThemeDialog, RenameThemeDialog } from "./ThemeDia
 import { ThemeEditorDialog } from "./ThemeEditor";
 import { resolveMockTheme } from "./themes";
 import { setThemeEditDelay } from "./useThemeEdits";
+import { recordRequests } from "../../test/env";
+import { type ComponentType } from "react";
+import { type DialogProps } from "../../layout/dialogRegistry";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -60,17 +63,6 @@ function createEnv(): Env {
     }
   });
   return env;
-}
-
-/** Requests the mock received. */
-function recordRequests(env: Env): Request[] {
-  const seen: Request[] = [];
-  const send = env.transport.send.bind(env.transport);
-  env.transport.send = (request) => {
-    seen.push(request);
-    return send(request);
-  };
-  return seen;
 }
 
 /** A user theme copied from `base` in the mock (as "New theme" makes it). */
@@ -98,6 +90,46 @@ async function tokenRow(id: string): Promise<HTMLElement> {
 
 const editRequests = (requests: Request[]) =>
   requests.filter((r): r is Extract<Request, { type: "EditTheme" }> => r.type === "EditTheme");
+
+/** The accent colour's value field in the editor's token table. */
+async function accentField() {
+  return within(await tokenRow("color.accent")).getByRole("textbox", {
+    name: "Value of color.accent",
+  });
+}
+
+/** Opens the theme editor on the theme `id`. */
+function editTheme(env: Env, id: string): void {
+  act(() => {
+    const editor = themeEditorStoreFor(env.store).getState();
+    editor.setSubject(id);
+    editor.show(id);
+  });
+}
+
+/** Waits until a dialog closed, then the mock's appearance state. */
+async function closedWith(env: Env, close: ReturnType<typeof vi.fn>) {
+  await waitFor(() => {
+    expect(close).toHaveBeenCalled();
+  });
+  return env.transport.data.features.appearance;
+}
+
+/** The theme preferences the appearance answer holds (to change some of them). */
+function preferencesOf(appearance: Appearance) {
+  const { follow_system, light, dark, density } = appearance.settings;
+  return { follow_system, light, dark, density };
+}
+
+/** The theme dialog `Dialog` on a user theme "Moss" (copied from Sage) shown in the editor. */
+async function onMoss(Dialog: ComponentType<DialogProps>, name: string) {
+  const env = createEnv();
+  const id = await userTheme(env, "sage", "Moss");
+  editTheme(env, id);
+  const close = vi.fn();
+  const { container } = renderWithProviders(<Dialog name={name} close={close} />, env);
+  return { env, id, close, container };
+}
 
 describe("theme editor registrations", () => {
   it("registers the editor, its windows and actions", () => {
@@ -245,9 +277,7 @@ describe("theme editor", () => {
     showEditor(env, id);
     await tokenRow("color.accent");
     fireEvent.change(screen.getByLabelText("Values for"), { target: { value: "high-contrast" } });
-    const field = within(await tokenRow("color.accent")).getByRole("textbox", {
-      name: "Value of color.accent",
-    });
+    const field = await accentField();
     fireEvent.change(field, { target: { value: "#ffff00" } });
     fireEvent.blur(field);
     await waitFor(() => {
@@ -390,9 +420,7 @@ describe("theme editor", () => {
     const env = createEnv();
     const id = await userTheme(env);
     showEditor(env, id);
-    const field = within(await tokenRow("color.accent")).getByRole("textbox", {
-      name: "Value of color.accent",
-    });
+    const field = await accentField();
     fireEvent.change(field, { target: { value: "#00aa00" } });
     fireEvent.keyDown(field, { key: "Enter" });
     const undo = await screen.findByRole("button", { name: "Undo Edit theme" });
@@ -402,11 +430,7 @@ describe("theme editor", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Redo Edit theme" }));
     await waitFor(async () => {
-      expect(
-        within(await tokenRow("color.accent")).getByRole("textbox", {
-          name: "Value of color.accent",
-        }),
-      ).toHaveValue("#00aa00");
+      expect(await accentField()).toHaveValue("#00aa00");
     });
     await settleQueries(env);
   });
@@ -457,11 +481,7 @@ describe("theme editor", () => {
       expect(history.undo).toHaveLength(before);
     });
     await waitFor(async () => {
-      expect(
-        within(await tokenRow("color.accent")).getByRole("textbox", {
-          name: "Value of color.accent",
-        }),
-      ).toHaveValue("#00aa00");
+      expect(await accentField()).toHaveValue("#00aa00");
     });
     await settleQueries(env);
   });
@@ -524,13 +544,7 @@ describe("theme editor", () => {
     await env.client.request(
       {
         type: "SetThemePreferences",
-        preferences: {
-          follow_system: appearance.settings.follow_system,
-          light: appearance.settings.light,
-          dark: appearance.settings.dark,
-          density: appearance.settings.density,
-          overrides: { accent: "#aa3366", radius: 9 },
-        },
+        preferences: { ...preferencesOf(appearance), overrides: { accent: "#aa3366", radius: 9 } },
       },
       "Themes",
     );
@@ -556,13 +570,7 @@ describe("theme editor", () => {
     await env.client.request(
       {
         type: "SetThemePreferences",
-        preferences: {
-          follow_system: appearance.settings.follow_system,
-          light: appearance.settings.light,
-          dark: appearance.settings.dark,
-          density: appearance.settings.density,
-          overrides: { accent: "#aa3366" },
-        },
+        preferences: { ...preferencesOf(appearance), overrides: { accent: "#aa3366" } },
       },
       "Themes",
     );
@@ -579,9 +587,7 @@ describe("theme editor", () => {
     const env = createEnv();
     const id = await userTheme(env);
     showEditor(env, id);
-    const field = within(await tokenRow("color.accent")).getByRole("textbox", {
-      name: "Value of color.accent",
-    });
+    const field = await accentField();
     simulateExternalEdit(env.transport, "appearance");
     fireEvent.change(field, { target: { value: "#00aa00" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -672,10 +678,7 @@ describe("theme windows", () => {
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Deep Sea" } });
     expect(screen.getByText("Saved as themes/deep-sea.kdl")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    const state = env.transport.data.features.appearance;
+    const state = await closedWith(env, close);
     expect(state.themes.find((t) => t.id === "deep-sea")).toMatchObject({ extends: "nocturne" });
     await waitFor(() => {
       expect(state.settings.dark).toBe("deep-sea");
@@ -686,18 +689,7 @@ describe("theme windows", () => {
   });
 
   it("renames a theme, optionally with its file", async () => {
-    const env = createEnv();
-    const id = await userTheme(env, "sage", "Moss");
-    act(() => {
-      const editor = themeEditorStoreFor(env.store).getState();
-      editor.setSubject(id);
-      editor.show(id);
-    });
-    const close = vi.fn();
-    const { container } = renderWithProviders(
-      <RenameThemeDialog name={THEME_RENAME_DIALOG} close={close} />,
-      env,
-    );
+    const { env, close, container } = await onMoss(RenameThemeDialog, THEME_RENAME_DIALOG);
     const name = await screen.findByLabelText("Name");
     await waitFor(() => {
       expect(name).toHaveValue("Moss");
@@ -706,10 +698,7 @@ describe("theme windows", () => {
     fireEvent.change(name, { target: { value: "Forest" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /Also rename the file/ }));
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    const state = env.transport.data.features.appearance;
+    const state = await closedWith(env, close);
     expect(state.themes.find((t) => t.id === "forest")?.name).toBe("Forest");
     // The editor follows the renamed file.
     expect(themeEditorStoreFor(env.store).getState().themeId).toBe("forest");
@@ -717,18 +706,7 @@ describe("theme windows", () => {
   });
 
   it("asks before deleting a theme and deletes it", async () => {
-    const env = createEnv();
-    const id = await userTheme(env, "sage", "Moss");
-    act(() => {
-      const editor = themeEditorStoreFor(env.store).getState();
-      editor.setSubject(id);
-      editor.show(id);
-    });
-    const close = vi.fn();
-    const { container } = renderWithProviders(
-      <DeleteThemeDialog name={THEME_DELETE_DIALOG} close={close} />,
-      env,
-    );
+    const { env, id, close, container } = await onMoss(DeleteThemeDialog, THEME_DELETE_DIALOG);
     expect(await screen.findByText("Delete the theme “Moss”?")).toBeInTheDocument();
     expect(screen.getByText(/themes\/moss\.kdl is removed/)).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);

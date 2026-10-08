@@ -38,7 +38,7 @@ export function AttachmentList({ message, accountId, previewId }: AttachmentList
   return (
     <div data-part="message-view.attachment-list" data-state={expanded ? "expanded" : undefined}>
       {listed.length > 0 && (
-        <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>
+        <ul data-part="message-view.attachments" aria-label={t("common-attachments")}>
           {listed.map((a) => (
             <AttachmentCard
               key={a.index}

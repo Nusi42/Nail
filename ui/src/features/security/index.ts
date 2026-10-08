@@ -139,7 +139,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Named dialogs (opened with `window.open "<name>"`). */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [AUTOCRYPT_IMPORT_DIALOG]: AutocryptImportDialog,
   [RECOVERY_CREATE_DIALOG]: RecoveryCreateDialog,
   [RECOVERY_VERIFY_DIALOG]: RecoveryVerifyDialog,
@@ -197,10 +197,10 @@ export const handleSecurityEvent: FeatureEventHandler = (event, { queryClient })
 };
 
 /** Handlers for core events (`KeysChanged`, `VaultProgress`, …). */
-export const events: Feature["events"] = [handleSecurityEvent, handlePinEvent];
+export const events: NonNullable<Feature["events"]> = [handleSecurityEvent, handlePinEvent];
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [RecoveryGate];
+export const effects: NonNullable<Feature["effects"]> = [RecoveryGate];
 
 // ---------------------------------------------------------------------------
 // Mount points for other packages (see ADR 0033, "Mount points").

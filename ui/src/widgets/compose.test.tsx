@@ -6,6 +6,7 @@ import { DiscardConfirmDialog } from "../features/composer/ConfirmDialogs";
 import { identityLabel, localToIso } from "./Composer";
 import { canTakeBack } from "./Outbox";
 import { must } from "../test/must";
+import { queueLater } from "../test/env";
 
 function composerEnv(patch = {}) {
   return createEnv({
@@ -165,45 +166,10 @@ describe("composer", () => {
 });
 
 describe("outbox", () => {
-  async function queue(
-    env: ReturnType<typeof createEnv>,
-    delay: number | null,
-    sendAt: string | null,
-  ) {
-    const { draft_id } = await env.client.request(
-      {
-        type: "SaveDraft",
-        draft: {
-          id: null,
-          identity_id: "ada@example.org",
-          to: [{ name: "Grace", email: "grace@navy.example" }],
-          cc: [],
-          bcc: [],
-          subject: "Later",
-          mode: "plain",
-          text: "x",
-          html: null,
-          markdown: null,
-          attachments: [],
-          context: null,
-          signature: "identity",
-          markdown_part: false,
-        },
-      },
-      "DraftSaved",
-    );
-    return (
-      await env.client.request(
-        { type: "SendDraft", draft_id, delay_secs: delay, send_at: sendAt },
-        "SendQueued",
-      )
-    ).entry;
-  }
-
   it("lists waiting messages and takes one back into the composer", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    await queue(env, null, new Date(Date.now() + 86_400_000).toISOString());
+    await queueLater(env, null, new Date(Date.now() + 86_400_000).toISOString());
     const { container } = renderNode(widget("outbox"), env);
     const item = must(
       (await screen.findByText("Later")).closest<HTMLElement>('[data-part="outbox.item"]'),
@@ -273,7 +239,7 @@ describe("outbox", () => {
   it("sends a waiting message at once", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    await queue(env, 3600, null);
+    await queueLater(env, 3600, null);
     renderNode(widget("outbox"), env);
     await user.click(await screen.findByRole("button", { name: "Send now" }));
     await waitFor(() => {
@@ -287,7 +253,7 @@ describe("outbox", () => {
   it("shows failures", async () => {
     const env = createEnv();
     env.transport.data.behaviour.sendError = "rejected";
-    await queue(env, 0, null);
+    await queueLater(env, 0, null);
     await waitFor(() => {
       expect(env.transport.data.outbox[0]?.state).toBe("failed");
     });

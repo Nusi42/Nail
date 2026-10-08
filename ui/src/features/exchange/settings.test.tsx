@@ -26,7 +26,8 @@ import { exchangeCandidate } from "./model";
 import { EXCHANGE_ACCOUNT } from "./mockSeed";
 import { AUTOMATIC_REPLIES_DIALOG } from "./names";
 import { exchangeStoreFor } from "./store";
-import { actionContext, dialog, requests, setup } from "./testing";
+import { dialog, setup } from "./testing";
+import { requestsOf, actionContext, wireEvents } from "../../test/env";
 
 describe("automatic replies", () => {
   it("converts schedule times between UTC and the viewer's zone", () => {
@@ -60,7 +61,7 @@ describe("automatic replies", () => {
     ).toHaveValue("contacts-only");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Saved in Nail; not on the server yet.")).toBeInTheDocument();
-    const sent = requests(env, "SetAutomaticReplies")[0];
+    const sent = requestsOf(env, "SetAutomaticReplies")[0];
     expect(sent?.settings.status).toBe("scheduled");
     expect(sent?.settings.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/);
     expect(Date.parse(sent?.settings.end ?? "") - Date.parse(sent?.settings.start ?? "")).toBe(
@@ -80,7 +81,7 @@ describe("automatic replies", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Write the reply for people in your organization.",
     );
-    expect(requests(env, "SetAutomaticReplies")).toHaveLength(0);
+    expect(requestsOf(env, "SetAutomaticReplies")).toHaveLength(0);
     await user.selectOptions(
       screen.getByLabelText("Reply to people outside my organization", { selector: "select" }),
       "none",
@@ -96,13 +97,7 @@ describe("automatic replies", () => {
     const replies = env.transport.data.features.exchange.automaticReplies[EXCHANGE_ACCOUNT];
     if (!replies) throw new Error("demo replies missing");
     replies.settings.status = "always-enabled";
-    env.transport.onEvent((event) => {
-      handleExchangeEvent(event, {
-        client: env.client,
-        queryClient: env.queryClient,
-        store: env.store,
-      });
-    });
+    wireEvents(env, handleExchangeEvent);
     renderWithProviders(<NodeView node={widget("automatic-replies-banner")} path="t/0" />, env);
     expect(await screen.findByText("Automatic replies are on for Contoso.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Edit…" }));
@@ -112,7 +107,7 @@ describe("automatic replies", () => {
     await waitFor(() => {
       expect(screen.queryByText("Automatic replies are on for Contoso.")).toBeNull();
     });
-    expect(requests(env, "SetAutomaticReplies")[0]?.settings.status).toBe("disabled");
+    expect(requestsOf(env, "SetAutomaticReplies")[0]?.settings.status).toBe("disabled");
   });
 
   it("announces an upcoming schedule and stays empty while off", async () => {
@@ -186,9 +181,9 @@ describe("rules", () => {
     expect(screen.getByText(/Nail cannot show all of this rule/)).toBeInTheDocument();
     await user.click(outlook);
     await waitFor(() => {
-      expect(requests(env, "SetExchangeInboxRuleEnabled")).toHaveLength(1);
+      expect(requestsOf(env, "SetExchangeInboxRuleEnabled")).toHaveLength(1);
     });
-    expect(requests(env, "SetExchangeInboxRuleEnabled")[0]).toMatchObject({
+    expect(requestsOf(env, "SetExchangeInboxRuleEnabled")[0]).toMatchObject({
       server_rule_id: "inbox-rule-3",
       enabled: true,
     });
@@ -200,11 +195,11 @@ describe("rules", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
-      expect(requests(env, "DeleteExchangeInboxRule")).toHaveLength(1);
+      expect(requestsOf(env, "DeleteExchangeInboxRule")).toHaveLength(1);
     });
     await user.click(screen.getByRole("button", { name: "Sync now" }));
     await waitFor(() => {
-      expect(requests(env, "SyncExchangeRules")).toHaveLength(1);
+      expect(requestsOf(env, "SyncExchangeRules")).toHaveLength(1);
     });
   });
 
@@ -218,9 +213,9 @@ describe("rules", () => {
     expect(toggle).toBeChecked();
     await user.click(toggle);
     await waitFor(() => {
-      expect(requests(env, "UpdateAccount")).toHaveLength(1);
+      expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
     });
-    const config = requests(env, "UpdateAccount")[0]?.config;
+    const config = requestsOf(env, "UpdateAccount")[0]?.config;
     expect(config?.incoming).toMatchObject({
       protocol: "exchange",
       options: { server_rules: false },

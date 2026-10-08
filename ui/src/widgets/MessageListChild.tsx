@@ -47,8 +47,8 @@ export function ChildRowView({
   const t = useT();
   const sender = message.from_me
     ? t("conversations-me")
-    : displayName(message.from) || t("composer-unknown-sender");
-  const preview = message.preview || message.subject || t("message-no-subject");
+    : displayName(message.from) || t("common-unknown-sender");
+  const preview = message.preview || message.subject || t("common-no-subject");
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the tree handles the keyboard and the focus for its rows (aria-activedescendant).
     <div

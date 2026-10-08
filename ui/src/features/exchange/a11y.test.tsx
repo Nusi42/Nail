@@ -4,11 +4,17 @@
  * search open, the setup parts with warnings) and every dialog with real
  * content. Contrast needs a real layout engine (Playwright).
  */
-import { act, screen, waitFor } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+  shownDialog,
+} from "../../test/harness";
 import {
   dialogs,
   ExchangeAccountType,
@@ -37,17 +43,9 @@ import {
   MAILBOX_REMOVE_DIALOG,
 } from "./names";
 import { exchangeStoreFor } from "./store";
-import { cacheList, message, setup } from "./testing";
+import { setup } from "./testing";
 import { must } from "../../test/must";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
+import { messageWithSubject, cacheList, selectCached } from "../../test/env";
 
 describe("axe: Exchange widgets", () => {
   it("the folder-pane widgets, tabs, banner and rules have no violations", async () => {
@@ -64,7 +62,7 @@ describe("axe: Exchange widgets", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await screen.findByRole("switch", { name: "Focused Inbox" })).toBeInTheDocument();
     expect(screen.getByText("Automatic replies are on for Contoso.")).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
@@ -73,7 +71,7 @@ describe("axe: Exchange widgets", () => {
   it("the mount points have no violations", async () => {
     const env = setup();
     const user = userEvent.setup();
-    const phoenix = message(env, "Phoenix launch checklist");
+    const phoenix = messageWithSubject(env, "Phoenix launch checklist");
     cacheList(env, [phoenix]);
     const root = env.transport.data.folders.find((f) => f.id === SHARED_ROOT);
     const lists = env.transport.data.features.pim.calendars.filter((c) =>
@@ -145,7 +143,7 @@ describe("axe: Exchange widgets", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Find a room…" }));
     await screen.findByRole("list", { name: "Rooms for this time" });
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   }, 30_000);
 });
@@ -183,14 +181,13 @@ describe("axe: Exchange dialogs", () => {
       ui.editReplies(EXCHANGE_ACCOUNT);
     }
     if (name === CLASSIFY_DIALOG) {
-      const summary = message(env, "Your weekly digest");
+      const summary = messageWithSubject(env, "Your weekly digest");
       cacheList(env, [summary]);
       ui.classifyMessages({ messageIds: [summary.id], to: "focused" });
     }
     if (name === APPLY_CATEGORIES_DIALOG) {
-      const summary = message(env, "Phoenix launch checklist");
-      cacheList(env, [summary]);
-      env.store.getState().selectMessage(summary.id);
+      const summary = messageWithSubject(env, "Phoenix launch checklist");
+      selectCached(env, summary);
     }
   }
 
@@ -205,14 +202,7 @@ describe("axe: Exchange dialogs", () => {
     async (name, existing) => {
       const env = setup();
       prepare(env, name, existing);
-      const Dialog = must(dialogs[name]);
-      const { container } = renderWithProviders(
-        <div role="dialog" aria-label={name}>
-          <Dialog name={name} close={() => undefined} />
-        </div>,
-        env,
-      );
-      await settle(env);
+      const container = await shownDialog(env, dialogs, name);
       expect(
         container.querySelector('[data-part="exchange.dialog"], [data-part="exchange.oof"]'),
       ).not.toBeNull();

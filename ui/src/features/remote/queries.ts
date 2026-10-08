@@ -11,9 +11,9 @@ import type {
   RemoteUserId,
 } from "../../api/generated";
 import { useClient } from "../../state/queries";
+import { AUDIT_PAGE } from "../../state/queries";
 
 /** Audit entries per page. */
-export const AUDIT_PAGE = 50;
 
 export const remoteKeys = {
   all: ["remote"] as const,

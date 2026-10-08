@@ -28,10 +28,11 @@ import {
   SelectField,
   TextAreaField,
   TextField,
+  SaveRow,
 } from "../../widgets/forms";
-import { useRules } from "../rules/api";
 import { manageSieveIssues, parseAddressList, vacationIssues } from "./model";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
+import { PlacementTable } from "../rules/PlacementTable";
 
 export const sieveKeys = {
   status: ["sieve", "status"] as const,
@@ -154,12 +155,12 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
       <Messages items={problems} part="sieve-status.issues" />
       {saved && (
         <p data-part="sieve-status.notice" role="status">
-          {t("sieve-saved")}
+          {t("common-saved-to-accounts")}
         </p>
       )}
       <div data-part="sieve-status.actions">
         <button type="button" data-part="form.button" onClick={() => void save()}>
-          {t("sieve-connection-save")}
+          {t("common-save")}
         </button>
       </div>
     </fieldset>
@@ -168,37 +169,23 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
 
 function RulePlacements({ status }: { status: SieveAccountStatus }) {
   const t = useT();
-  const rules = useRules();
-  const names = new Map((rules.data ?? []).map((r) => [r.id, r.name]));
-  if (status.rules.length === 0) {
-    return <p data-part="sieve-status.rules-empty">{t("sieve-rules-empty")}</p>;
-  }
   return (
-    <table data-part="sieve-status.rules">
-      <caption data-part="sieve-status.rules.caption">{t("sieve-rules-title")}</caption>
-      <thead>
-        <tr data-part="sieve-status.rules.head">
-          <th scope="col">{t("sieve-rules-rule")}</th>
-          <th scope="col">{t("sieve-rules-placement")}</th>
-          <th scope="col">{t("sieve-rules-why")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {status.rules.map((rule) => (
-          <tr key={rule.rule_id} data-part="sieve-status.rule" data-placement={rule.placement}>
-            <th scope="row" data-part="sieve-status.rule.name">
-              {names.get(rule.rule_id) ?? rule.rule_id}
-            </th>
-            <td data-part="sieve-status.rule.placement">
-              {t(`sieve-placement-${rule.placement}`)}
-            </td>
-            <td data-part="sieve-status.rule.reasons">
-              {rule.reasons.map((r) => t(r.id, r.args)).join(" ")}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <PlacementTable
+      rules={status.rules}
+      parts={{
+        table: "sieve-status.rules",
+        caption: "sieve-status.rules.caption",
+        head: "sieve-status.rules.head",
+        row: "sieve-status.rule",
+        empty: "sieve-status.rules-empty",
+      }}
+      ids={{
+        caption: "sieve-rules-title",
+        placement: "sieve-rules-placement",
+        empty: "sieve-rules-empty",
+      }}
+      placementLabel={(placement) => t(`sieve-placement-${placement}`)}
+    />
   );
 }
 
@@ -265,7 +252,7 @@ function AccountStatus({ status }: { status: SieveAccountStatus }) {
         <dt data-part="sieve-status.term">{t("sieve-script")}</dt>
         <dd data-part="sieve-status.value">{status.script_name}</dd>
         <dt data-part="sieve-status.term">{t("sieve-uploaded")}</dt>
-        <dd data-part="sieve-status.value">{uploaded ?? t("sieve-uploaded-never")}</dd>
+        <dd data-part="sieve-status.value">{uploaded ?? t("common-never")}</dd>
         {status.extensions.length > 0 && (
           <>
             <dt data-part="sieve-status.term">{t("sieve-extensions")}</dt>
@@ -341,11 +328,10 @@ export function SieveStatusWidget({ node }: WidgetProps) {
         <p data-part="sieve-status.empty">{t("sieve-no-imap")}</p>
       ) : (
         <>
-          <SelectField
+          <ImapAccountField
             labelId="sieve-account"
-            name="account"
+            accounts={imap}
             value={account?.id ?? ""}
-            choices={imap.map((a) => ({ value: a.id, label: a.name, literal: true }))}
             onChange={setChosen}
           />
           {account && (
@@ -494,16 +480,7 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
           {t("vacation-saved")}
         </p>
       )}
-      <div data-part="vacation-editor.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          onClick={() => void save()}
-        >
-          {t("vacation-save")}
-        </button>
-      </div>
+      <SaveRow part="vacation-editor.actions" onSave={() => void save()} />
     </div>
   );
 }
@@ -554,16 +531,38 @@ export function VacationEditorWidget({ node }: WidgetProps) {
         <p data-part="vacation-editor.empty">{t("sieve-no-imap")}</p>
       ) : (
         <>
-          <SelectField
+          <ImapAccountField
             labelId="vacation-account"
-            name="account"
+            accounts={imap}
             value={account?.id ?? ""}
-            choices={imap.map((a) => ({ value: a.id, label: a.name, literal: true }))}
             onChange={setChosen}
           />
           {account && <Vacation key={account.id} account={account} />}
         </>
       )}
     </section>
+  );
+}
+
+/** The IMAP account a Sieve setting is for. */
+function ImapAccountField({
+  labelId,
+  accounts,
+  value,
+  onChange,
+}: {
+  labelId: string;
+  accounts: readonly AccountConfig[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <SelectField
+      labelId={labelId}
+      name="account"
+      value={value}
+      choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
+      onChange={onChange}
+    />
   );
 }

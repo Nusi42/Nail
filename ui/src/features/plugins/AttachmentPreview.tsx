@@ -97,7 +97,7 @@ export function AttachmentPreviewPane({
       data-part="plugin-preview"
       data-plugin={renderer.pluginId}
       data-renderer={renderer.id}
-      aria-label={t("plugin-preview-label", { name })}
+      aria-label={t("common-preview-of", { name })}
       aria-busy={preview.isFetching}
     >
       <header data-part="plugin-preview.header">

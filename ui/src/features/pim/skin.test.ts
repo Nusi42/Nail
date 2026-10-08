@@ -13,26 +13,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PIM_BASE_CSS } from "./parts";
 import { CALENDAR_CONTAINER, CALENDAR_NARROW, PIM_SKIN_CSS, PIM_SKIN_PARTS } from "./skin";
-
-/** The top-level rules of a stylesheet text (brace depth 0 → 0). */
-function topLevelRules(css: string): string[] {
-  const rules: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < css.length; i++) {
-    if (css[i] === "{") depth++;
-    if (css[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        rules.push(css.slice(start, i + 1).trim());
-        start = i + 1;
-      }
-    }
-  }
-  expect(css.slice(start).trim()).toBe("");
-  expect(depth).toBe(0);
-  return rules;
-}
+import { cssBlocks, expectInsertable } from "../../test/css";
 
 /** The declarations block of the first rule whose selector is exactly `selector`. */
 function ruleOf(selector: string): string {
@@ -41,16 +22,15 @@ function ruleOf(selector: string): string {
   return rule;
 }
 
+/** The top-level rules of a stylesheet text. */
+const topLevelRules = (css: string) => cssBlocks(css).map((rule) => rule.trim());
+
 describe("PIM skin", () => {
   it("is safe and every rule parses", () => {
     expect(PIM_SKIN_CSS).not.toMatch(/url\s*\(|@import|expression\s*\(|javascript:/i);
-    const sheet = new CSSStyleSheet();
     const rules = topLevelRules(PIM_SKIN_CSS);
     expect(rules.length).toBeGreaterThan(80);
-    for (const rule of rules) {
-      expect(() => sheet.insertRule(rule, sheet.cssRules.length), rule).not.toThrow();
-    }
-    expect(sheet.cssRules.length).toBe(rules.length);
+    expectInsertable(rules);
   });
 
   it("takes colours only from tokens (literal colours only as token fallbacks)", () => {

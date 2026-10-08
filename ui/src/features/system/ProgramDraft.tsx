@@ -68,7 +68,7 @@ export function ProgramDraftNotice({ draftId }: { draftId?: DraftId | null }) {
           forget(id);
         }}
       >
-        {t("system-program-draft-dismiss")}
+        {t("common-dismiss")}
       </button>
     </div>
   );

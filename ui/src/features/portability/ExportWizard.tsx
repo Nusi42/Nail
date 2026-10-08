@@ -8,13 +8,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
-import type {
-  ExportFormat,
-  ExportSource,
-  LocalizedMessage,
-  MboxVariant,
-} from "../../api/generated";
+import type { ExportFormat, ExportSource, MboxVariant } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts, useClient, useFolders } from "../../state/queries";
@@ -34,6 +28,8 @@ import {
 } from "./model";
 import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 type SourceKind = ExportSource["type"];
 const SOURCE_KINDS: readonly SourceKind[] = ["folders", "messages", "calendars", "address-books"];
@@ -66,8 +62,7 @@ export function ExportWizard({ close }: { close: () => void }) {
   const { path, overwrite: confirmed, onChange: setPath } = useSavePath();
   const [overwrite, setOverwrite] = useState(false);
   const [headersOnly, setHeadersOnly] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const [jobId, setJobId] = useState<string | null>(null);
 
   const accountFolders = (folders.data ?? []).map((f) => f.id);
@@ -96,9 +91,7 @@ export function ExportWizard({ close }: { close: () => void }) {
   const ext = exportExtension(chosenFormat);
 
   const start = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         {
           type: "StartExport",
@@ -115,11 +108,7 @@ export function ExportWizard({ close }: { close: () => void }) {
       );
       rememberJob(queryClient, answer.job);
       setJobId(answer.job.job_id);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   if (jobId) {
@@ -129,9 +118,7 @@ export function ExportWizard({ close }: { close: () => void }) {
           <StepHeader step={2} steps={2} titleId="portability-export-job-title" />
           <JobView jobId={jobId} />
           <WizardButtons>
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("portability-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </WizardButtons>
         </div>
       </div>
@@ -156,7 +143,7 @@ export function ExportWizard({ close }: { close: () => void }) {
         {kind === "folders" && (
           <>
             <SelectField
-              label={t("portability-export-account")}
+              label={t("common-account")}
               field="account"
               value={account ?? ""}
               onChange={(v) => {
@@ -174,14 +161,14 @@ export function ExportWizard({ close }: { close: () => void }) {
               ))}
             </SelectField>
             <CheckGroup
-              legend={t("portability-export-folders")}
+              legend={t("common-folders")}
               field="folders"
               selected={chosenFolders}
               onChange={setFolderIds}
               choices={(folders.data ?? []).map((f) => ({
                 value: f.id,
                 label: f.path,
-                hint: t("portability-export-folder-count", { count: f.total }),
+                hint: t("common-message-count", { count: f.total }),
               }))}
             />
             <Check
@@ -199,7 +186,7 @@ export function ExportWizard({ close }: { close: () => void }) {
         )}
         {kind === "calendars" && (
           <CheckGroup
-            legend={t("portability-export-calendars")}
+            legend={t("common-calendars")}
             field="calendars"
             selected={calendarIds}
             onChange={setCalendarIds}
@@ -216,7 +203,7 @@ export function ExportWizard({ close }: { close: () => void }) {
           />
         )}
         <RadioGroup<ExportFormat>
-          legend={t("portability-export-format")}
+          legend={t("common-format")}
           field="format"
           value={chosenFormat}
           onChange={setFormat}

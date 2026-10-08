@@ -22,16 +22,5 @@
     "key": "labeled-enum-message-ids",
     "files": ["crates/nail-api/src/labels.rs", "ui/src/i18n/coverage.test.ts"],
     "what": "`labeled_enum!` gives each contract enum value its Fluent id in Rust; UI message tables (features/*/messages.ts) and `OPEN_TEMPLATES` list values and ids again by hand; generate the value -> id tables with the TypeScript bindings"
-  },
-  {
-    "key": "window-sizes",
-    "files": [
-      "defaults/layout.kdl",
-      "ui/src/features/composer/index.ts",
-      "ui/src/features/rules/index.ts",
-      "ui/src/features/triage/index.ts"
-    ],
-    "what": "`Feature.windows` repeats the `size=` / `min-size=` that defaults/layout.kdl gives the same window (composer 820x720 / 520x400, rules 900x640, snoozed 720x520); one source per window (ADR 0116's layers: a feature gives sizes only for windows the layout does not size)",
-    "mirror": false
   }
 ]

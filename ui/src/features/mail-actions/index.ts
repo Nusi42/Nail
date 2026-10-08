@@ -16,14 +16,12 @@
  * `mail-action-kind-*` in `core-mail-actions.ftl`). The mock core answers
  * the requests (`../../api/mockMailActions.ts`).
  */
-import type { ActionInfo } from "../../actions/palette";
+import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
 import { MailActionToast } from "./Toast";
 
 export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = {};
-
-const MAIL = ["list", "reader"] as const;
 
 /** Command-palette descriptions of the actions P3 added. */
 export const actionInfo: Readonly<Record<string, ActionInfo>> = {
@@ -46,7 +44,5 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
   },
 };
 
-export const dialogs: Feature["dialogs"] = {};
-export const events: Feature["events"] = [];
 /** The undo toast. */
-export const effects: Feature["effects"] = [MailActionToast];
+export const effects: NonNullable<Feature["effects"]> = [MailActionToast];

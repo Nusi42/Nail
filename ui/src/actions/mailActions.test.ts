@@ -7,8 +7,7 @@ import { createUiStore } from "../state/uiStore";
 import { contextsOf, isActivation, isFieldCombo } from "./ActionsProvider";
 import { createDispatcher, moveTargetOf, type ActionContext } from "./registry";
 import { DELETE_PERMANENTLY_DIALOG, confirmDeletePermanently } from "../widgets/DeletePermanently";
-
-const INBOX = "acc-personal/Inbox";
+import { INBOX } from "../test/mockIds";
 
 async function context(): Promise<ActionContext & { transport: MockTransport }> {
   const transport = new MockTransport({ data: createMockData(10) });

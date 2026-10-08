@@ -18,9 +18,8 @@
  * Sizes follow the approved proposal: a 42 px button (control + 10 px) on a
  * rail about 60 px wide, a 34 px app mark (`size.avatar`), a 16 px badge.
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+import { p } from "../../theme/selectors";
+import { initialsAvatar, QUIET_HOVER, TINY_TEXT } from "../../theme/declarations";
 
 /** Token shorthands (fallbacks only where the schema may lack the token). */
 const T = {
@@ -37,7 +36,6 @@ const T = {
     "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
   danger: "var(--nail-color-danger)",
   focus: "var(--nail-color-focus-ring)",
-  avatarFg: "var(--nail-color-avatar-fg, #ffffff)",
   fontUi: "var(--nail-font-ui)",
   fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
   label: "var(--nail-font-size-label)",
@@ -89,7 +87,7 @@ ${p("nav-rail.item")} {
   font: inherit; color: ${T.muted}; background-color: transparent; cursor: default;
   transition: background-color ${T.fast} ${T.ease}, color ${T.fast} ${T.ease};
 }
-${p("nav-rail.item")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("nav-rail.item")}:hover { ${QUIET_HOVER} }
 ${p("nav-rail.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
 ${p("nav-rail.item")}:disabled { opacity: ${T.disabled}; }
 ${p("nav-rail.item")}[aria-current="page"], ${p("nav-rail.item")}[data-state~="active"] {
@@ -112,7 +110,7 @@ ${p("nav-rail.badge")} {
   position: absolute; top: calc(${T.xs} + 1px); right: calc(${T.xs} + 1px);
   box-sizing: border-box; min-width: ${BADGE}; height: ${BADGE}; padding: 0 ${T.xs};
   border-radius: ${T.pill};
-  font-size: calc(${T.label} - 1.5px); font-weight: ${T.semibold}; line-height: ${BADGE};
+  font-size: ${TINY_TEXT}; font-weight: ${T.semibold}; line-height: ${BADGE};
   text-align: center; font-variant-numeric: tabular-nums;
   color: ${T.bg}; background-color: ${T.danger};
   box-shadow: 0 0 0 2px ${T.rail};
@@ -123,19 +121,17 @@ ${p("nav-rail.separator")} {
   background-color: ${T.border};
 }
 ${p("nav-rail.account")} { display: grid; place-items: center; flex: 0 0 auto; margin-top: ${T.sm}; }
-${p("nav-rail.account")} > ${p("avatar")} {
-  display: grid; place-items: center; width: ${T.control}; height: ${T.control}; border-radius: 50%;
-  font-size: ${T.small}; font-weight: ${T.semibold}; line-height: 1; letter-spacing: 0.02em;
-  color: ${T.avatarFg}; user-select: none;
-}`;
+${p("nav-rail.account")} > ${p("avatar")} { ${initialsAvatar(T.control, T.small)} }`;
+
+/** A grid that hands its one cell's whole room to its child. */
+const FILL =
+  "display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden;";
 
 const HOST = `${p("view-host")} {
-  display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  min-width: 0; min-height: 0; overflow: hidden; background-color: ${T.canvas};
+  ${FILL} background-color: ${T.canvas};
 }
 ${p("view-host.view")} {
-  display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  min-width: 0; min-height: 0; overflow: hidden; outline: none; background-color: ${T.bg};
+  ${FILL} outline: none; background-color: ${T.bg};
 }
 ${p("view-host.view")}[hidden] { display: none; }
 ${p("view-host.missing")} { padding: ${T.md}; font-size: ${T.small}; color: ${T.muted}; }`;

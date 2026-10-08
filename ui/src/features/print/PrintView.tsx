@@ -36,6 +36,7 @@ import { daysOf, localZone, monthGrid, overlapsDay, parseDay, rangeInstants } fr
 import { formatBytes } from "../portability/model";
 import { jobIdOfHash, pageName, splitQuoted } from "./model";
 import { printStoreFor, usePrintState } from "./store";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** Query key of a print job. */
 export const printJobKey = (jobId: string) => ["print", "job", jobId] as const;
@@ -94,7 +95,7 @@ function Addresses({
       <dt data-part="print.header.name">{t(`print-header-${header}`)}</dt>
       <dd data-part="print.header.value">
         {list
-          .map((a) => (a.name ? t("print-address", { name: a.name, email: a.email }) : a.email))
+          .map((a) => (a.name ? t("common-name-email", { name: a.name, email: a.email }) : a.email))
           .join(", ")}
       </dd>
     </div>
@@ -137,7 +138,7 @@ export function MessagePrint({ body, options }: { body: MessageBody; options: Pr
   const attachments = body.attachments.filter((a) => !a.shown_in_body);
   return (
     <article data-part="print.message">
-      <h1 data-part="print.subject">{h.subject || t("print-no-subject")}</h1>
+      <h1 data-part="print.subject">{h.subject || t("common-no-subject")}</h1>
       <dl data-part="print.headers" data-detail={options.headers}>
         <Addresses header="from" list={h.from} />
         <Addresses header="to" list={h.to} />
@@ -145,7 +146,7 @@ export function MessagePrint({ body, options }: { body: MessageBody; options: Pr
         {options.headers === "full" && <Addresses header="reply-to" list={h.reply_to} />}
         {h.date && (
           <div data-part="print.header" data-header="date">
-            <dt data-part="print.header.name">{t("print-header-date")}</dt>
+            <dt data-part="print.header.name">{t("common-date")}</dt>
             <dd data-part="print.header.value">{format.dateTime(h.date)}</dd>
           </div>
         )}
@@ -158,13 +159,13 @@ export function MessagePrint({ body, options }: { body: MessageBody; options: Pr
       </dl>
       <Body body={body} options={options} />
       {options.attachment_list && attachments.length > 0 && (
-        <section data-part="print.attachments" aria-label={t("print-attachments")}>
-          <h2 data-part="print.section.title">{t("print-attachments")}</h2>
+        <section data-part="print.attachments" aria-label={t("common-attachments")}>
+          <h2 data-part="print.section.title">{t("common-attachments")}</h2>
           <ul data-part="print.attachments.list">
             {attachments.map((a) => (
               <li key={a.index} data-part="print.attachment">
                 {t("print-attachment", {
-                  name: a.filename ?? t("print-attachment-unnamed"),
+                  name: a.filename ?? t("common-unnamed-attachment"),
                   size: formatBytes(a.size, locale),
                 })}
               </li>
@@ -191,8 +192,8 @@ function ThreadPrint({ threadId, options }: { threadId: string; options: PrintOp
   const messages = [...thread.data.messages].sort((a, b) => a.date.localeCompare(b.date));
   return (
     <section data-part="print.thread">
-      <h1 data-part="print.thread.title">{thread.data.thread.subject || t("print-no-subject")}</h1>
-      <p data-part="print.thread.count">{t("print-thread-count", { count: messages.length })}</p>
+      <h1 data-part="print.thread.title">{thread.data.thread.subject || t("common-no-subject")}</h1>
+      <p data-part="print.thread.count">{t("common-message-count", { count: messages.length })}</p>
       {messages.map((m) => (
         <LoadedMessage key={m.id} id={m.id} options={options} />
       ))}
@@ -218,9 +219,9 @@ function EventPrint({ eventId, occurrence }: { eventId: string; occurrence: stri
       <h1 data-part="print.event.title">{f.title || t("print-no-title")}</h1>
       <dl data-part="print.headers">
         <div data-part="print.header" data-header="when">
-          <dt data-part="print.header.name">{t("print-event-when")}</dt>
+          <dt data-part="print.header.name">{t("common-when")}</dt>
           <dd data-part="print.header.value">
-            {t("print-event-range", {
+            {t("common-time-range", {
               start: formatPimTime(format, f.start, tz),
               end: formatPimTime(format, f.end, tz),
             })}
@@ -228,27 +229,27 @@ function EventPrint({ eventId, occurrence }: { eventId: string; occurrence: stri
         </div>
         {occurrence && (
           <div data-part="print.header" data-header="occurrence">
-            <dt data-part="print.header.name">{t("print-event-occurrence")}</dt>
+            <dt data-part="print.header.name">{t("common-occurrence")}</dt>
             <dd data-part="print.header.value">{occurrence}</dd>
           </div>
         )}
         {f.location && (
           <div data-part="print.header" data-header="location">
-            <dt data-part="print.header.name">{t("print-event-location")}</dt>
+            <dt data-part="print.header.name">{t("common-where")}</dt>
             <dd data-part="print.header.value">{f.location}</dd>
           </div>
         )}
         {f.organizer && (
           <div data-part="print.header" data-header="organizer">
-            <dt data-part="print.header.name">{t("print-event-organizer")}</dt>
+            <dt data-part="print.header.name">{t("common-organizer")}</dt>
             <dd data-part="print.header.value">{f.organizer.name ?? f.organizer.email}</dd>
           </div>
         )}
       </dl>
       {f.description && <div data-part="print.text">{f.description}</div>}
       {f.attendees.length > 0 && (
-        <section data-part="print.attendees" aria-label={t("print-event-attendees")}>
-          <h2 data-part="print.section.title">{t("print-event-attendees")}</h2>
+        <section data-part="print.attendees" aria-label={t("common-attendees")}>
+          <h2 data-part="print.section.title">{t("common-attendees")}</h2>
           <ul data-part="print.attendees.list">
             {f.attendees.map((a) => (
               <li key={a.email} data-part="print.attendee" data-status={a.status}>
@@ -272,8 +273,8 @@ function InstanceLine({ instance, tz }: { instance: EventInstance; tz: string })
     <li data-part="print.agenda.event" data-all-day={instance.all_day ? "" : undefined}>
       <span data-part="print.agenda.time">
         {instance.all_day
-          ? t("print-all-day")
-          : t("print-time-range", {
+          ? t("common-all-day")
+          : t("common-time-range-tight", {
               start: formatClock(format, instance.start_utc, tz),
               end: formatClock(format, instance.end_utc, tz),
             })}
@@ -317,7 +318,7 @@ function AgendaPrint({ target }: { target: Extract<PrintTarget, { type: "agenda"
   const list = [...instances.data].sort((a, b) => a.start_utc.localeCompare(b.start_utc));
   const dayEvents = (day: ReturnType<typeof daysOf>[number]) =>
     list.filter((i) => overlapsDay(i, day, tz));
-  const title = t("print-agenda-title", {
+  const title = t("common-time-range", {
     start: formatDay(format, range.start, { dateStyle: "long" }),
     end: formatDay(format, range.start.add({ days: range.count - 1 }), { dateStyle: "long" }),
   });
@@ -434,11 +435,9 @@ function Toolbar({ onPrint, onClose }: { onPrint: () => void; onClose: () => voi
         data-action="print"
         onClick={onPrint}
       >
-        {t("print-now")}
+        {t("common-print")}
       </button>
-      <button type="button" data-part="form.button" data-action="close-print" onClick={onClose}>
-        {t("print-close")}
-      </button>
+      <CloseButton onClose={onClose} action="close-print" />
     </div>
   );
 }
@@ -501,7 +500,7 @@ export function PrintView({ jobId }: { jobId: string }) {
       data-page={options ? pageName(options.page_size, options.orientation) : undefined}
       data-state={reported ? "ready" : "loading"}
       role="document"
-      aria-label={t("print-view-label")}
+      aria-label={t("print-toolbar")}
     >
       <Toolbar
         onPrint={() => {

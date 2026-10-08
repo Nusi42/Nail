@@ -56,6 +56,7 @@ import { createSchedulingMockState, type SchedulingMockState } from "../features
 import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
 import { createSieveMockState, type SieveMockState } from "../features/sieve/mock";
 import { createTriageMockState, type TriageMockState } from "../features/triage/mock";
+import { DAY_MS } from "../state/clock";
 
 export interface MockData {
   /** Real accounts, in display order. */
@@ -365,7 +366,7 @@ export function createMockData(inboxSize = 250): MockData {
       subject: "[rust-announce] Rust 1.97 released",
       from: { name: "Rust Announce", email: "announce@lists.example" },
       to: [{ name: null, email: "rust-announce@lists.example" }],
-      date: new Date(MOCK_NOW - 3 * 86_400_000).toISOString(),
+      date: new Date(MOCK_NOW - 3 * DAY_MS).toISOString(),
       flags: { seen: true, flagged: false, answered: false, draft: false },
       has_attachments: false,
       preview: "The Rust team is happy to announce a new version.",

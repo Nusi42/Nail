@@ -15,7 +15,6 @@ import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   CryptoTechnology,
-  LocalizedMessage,
   Pkcs11Module,
   SmartcardObject,
   SmartcardSettings,
@@ -28,6 +27,7 @@ import { PathField } from "../portability/PathField";
 import { securityKeys } from "./queries";
 import { MAX_PIN_CACHE_MINUTES, smartcardSettingsIssue } from "./smartcardModel";
 import { hasText } from "../../text/empty";
+import { useBusyAction } from "../../state/busyAction";
 
 export const SMARTCARDS_WIDGET = "security-smartcards";
 
@@ -87,7 +87,7 @@ function ModuleRow({
       </label>
       {module.name && <span data-part="smartcards.module.path">{module.path}</span>}
       <button type="button" data-part="form.button" data-action="remove-module" onClick={onRemove}>
-        {t("security-smartcard-remove-module")}
+        {t("common-remove")}
       </button>
     </li>
   );
@@ -100,16 +100,13 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
   const id = useId();
   const [draft, setDraft] = useState(settings);
   const [newPath, setNewPath] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const [saved, setSaved] = useState(false);
   const issue = smartcardSettingsIssue(draft);
   const changed = JSON.stringify(draft) !== JSON.stringify(settings);
 
   const save = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         { type: "SetSmartcardSettings", settings: draft },
         "SmartcardSettings",
@@ -117,11 +114,7 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
       queryClient.setQueryData(smartcardKeys.settings, answer.settings);
       void queryClient.invalidateQueries({ queryKey: smartcardKeys.tokens });
       setSaved(true);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const add = () => {
@@ -213,7 +206,7 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
       )}
       {saved && !changed && (
         <p data-part="form.hint" role="status" data-tone="success">
-          {t("security-smartcard-saved")}
+          {t("common-saved")}
         </p>
       )}
       <button
@@ -224,7 +217,7 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
         disabled={busy || !changed || issue !== null}
         onClick={() => void save()}
       >
-        {t("security-smartcard-save")}
+        {t("common-save")}
       </button>
     </section>
   );
@@ -235,14 +228,11 @@ function ObjectRow({ token, object }: { token: SmartcardToken; object: Smartcard
   const format = useDateFormat();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const cert = object.certificate;
 
   const use = async (technology: CryptoTechnology) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await client.request(
         {
           type: "UseSmartcardKey",
@@ -253,11 +243,7 @@ function ObjectRow({ token, object }: { token: SmartcardToken; object: Smartcard
       );
       void queryClient.invalidateQueries({ queryKey: smartcardKeys.tokens });
       void queryClient.invalidateQueries({ queryKey: securityKeys.all });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (

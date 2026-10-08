@@ -12,13 +12,13 @@ import type { GmailLabel, MessageSummary } from "../../api/generated";
 import { errorMessageOf } from "../../api/client";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { labelQuery, labelTree, pruneTree, type LabelNode } from "./model";
 import { LABEL_DELETE_DIALOG, LABEL_EDITOR_DIALOG } from "./names";
 import { showLabel, useGmailAccount, useGmailLabels } from "./queries";
 import { gmailStoreFor } from "./store";
+import { useActiveMailView } from "../../state/hooks";
 
 /** A label's colour dot or chip background (theme geometry, never inline styles). */
 export function LabelSwatch({
@@ -47,9 +47,7 @@ export function LabelSwatch({
 export function LabelList({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
-  const store = useUiStoreApi();
-  const accountId = useUi((s) => s.activeAccountId);
-  const search = useUi((s) => s.search);
+  const { store, accountId, search } = useActiveMailView();
   const account = useGmailAccount(accountId);
   const labels = useGmailLabels(account?.id ?? null);
   const showHidden = optionBool(node, "show-hidden", false);
@@ -91,11 +89,11 @@ export function LabelList({ node }: WidgetProps) {
                   <span data-part="label-list.name">{n.name}</span>
                   {showCounts && own.unread > 0 && (
                     <span data-part="label-list.unread">
-                      {t("gmail-label-unread", { count: own.unread })}
+                      {t("common-unread-count", { count: own.unread })}
                     </span>
                   )}
                   {own.sync === "pending" && (
-                    <span data-part="label-list.pending">{t("gmail-label-pending")}</span>
+                    <span data-part="label-list.pending">{t("common-not-synced-yet")}</span>
                   )}
                 </button>
                 <button
@@ -109,7 +107,7 @@ export function LabelList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="settings" part="label-list.icon" />
-                  <span data-part="label-list.action.text">{t("gmail-edit-short")}</span>
+                  <span data-part="label-list.action.text">{t("common-edit")}</span>
                 </button>
                 <button
                   type="button"
@@ -122,7 +120,7 @@ export function LabelList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="trash" part="label-list.icon" />
-                  <span data-part="label-list.action.text">{t("gmail-delete-short")}</span>
+                  <span data-part="label-list.action.text">{t("common-delete")}</span>
                 </button>
               </div>
             ) : (
@@ -145,7 +143,7 @@ export function LabelList({ node }: WidgetProps) {
       aria-busy={labels.isFetching}
     >
       <div data-part="label-list.header">
-        <h2 data-part="label-list.title">{t("gmail-labels-title")}</h2>
+        <h2 data-part="label-list.title">{t("gmail-apply-legend")}</h2>
         <button
           type="button"
           data-part="label-list.new"
@@ -155,7 +153,7 @@ export function LabelList({ node }: WidgetProps) {
           }}
         >
           <Icon name="plus" part="label-list.icon" />
-          <span data-part="label-list.action.text">{t("gmail-label-new")}</span>
+          <span data-part="label-list.action.text">{t("gmail-action-new-label")}</span>
         </button>
       </div>
       {labels.isError && (
@@ -189,7 +187,7 @@ export function MessageLabels({ message }: { message: MessageSummary }) {
   const category = message.gmail.category;
   if (shown.length === 0 && category === null) return null;
   return (
-    <ul data-part="gmail.labels" aria-label={t("gmail-message-labels")}>
+    <ul data-part="gmail.labels" aria-label={t("gmail-apply-legend")}>
       {category && (
         <li data-part="gmail.category" data-category={category}>
           {t(`gmail-category-${category}`)}

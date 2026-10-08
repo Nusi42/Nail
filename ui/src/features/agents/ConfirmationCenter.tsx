@@ -100,11 +100,7 @@ export function CenterContent({ showHistory = true }: { showHistory?: boolean })
     <>
       <p data-part="confirmation-center.intro">{t("agents-center-intro")}</p>
       {showHistory && (
-        <div
-          data-part="confirmation-center.views"
-          role="group"
-          aria-label={t("agents-center-views")}
-        >
+        <div data-part="confirmation-center.views" role="group" aria-label={t("common-show")}>
           <button
             type="button"
             data-part="confirmation-center.view"

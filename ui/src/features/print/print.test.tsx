@@ -8,8 +8,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useActions } from "../../actions/ActionsProvider";
+import { afterEach, describe, expect, it } from "vitest";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import {
@@ -32,12 +31,10 @@ import {
   targetIssue,
 } from "./model";
 import { pdfName } from "./PrintDialog";
+import { RunAction } from "../../test/actions";
+import { stubPrintEachTest } from "../../test/env";
 
-let print: ReturnType<typeof vi.fn>;
-beforeEach(() => {
-  print = vi.fn(() => window.dispatchEvent(new Event("afterprint")));
-  window.print = print as unknown as typeof window.print;
-});
+const printed = stubPrintEachTest();
 afterEach(() => {
   act(() => {
     closePrintView();
@@ -67,13 +64,14 @@ describe("print model", () => {
   });
 });
 
-function Run({ id }: { id: string }) {
-  const actions = useActions();
-  return (
-    <button type="button" onClick={() => void actions.dispatch(id)}>
-      {`run ${id}`}
-    </button>
-  );
+/** Starts "Save as PDF" and presses Browse… in the print dialog. */
+async function browseForPdf(env: Env) {
+  const user = userEvent.setup();
+  render(env, [PRINT_SAVE_PDF_ACTION]);
+  await user.click(screen.getByRole("button", { name: `run ${PRINT_SAVE_PDF_ACTION}` }));
+  const dialog = await screen.findByRole("dialog", { name: "Print" });
+  await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+  return { user, dialog };
 }
 
 function selected(): Env {
@@ -90,7 +88,7 @@ function render(env: Env, ids: string[]) {
   return renderWithProviders(
     <>
       {ids.map((id) => (
-        <Run key={id} id={id} />
+        <RunAction key={id} id={id} />
       ))}
       <WindowLayer layout={env.transport.data.layout} />
       <PrintHost />
@@ -116,7 +114,7 @@ describe("printing", () => {
       options: { page_size: "letter", headers: "full" },
     });
     await waitFor(() => {
-      expect(print).toHaveBeenCalled();
+      expect(printed.spy).toHaveBeenCalled();
     });
     expect(env.transport.requests.some((r) => r.type === "PrintViewReady")).toBe(true);
     // The print dialog closed; afterprint closed the view again.
@@ -155,7 +153,7 @@ describe("printing", () => {
     expect(document.documentElement.dataset.nailMode).toBe("print");
     await waitFor(() => expect(view).toHaveAttribute("data-state", "ready"));
     expect(within(view).getByText("From")).toBeVisible();
-    expect(print).not.toHaveBeenCalled();
+    expect(printed.spy).not.toHaveBeenCalled();
     const result = await axe.run(document.body, {
       rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
     });
@@ -172,14 +170,14 @@ describe("printing", () => {
     const env = selected();
     const user = userEvent.setup();
     render(env, [PRINT_THREAD_ACTION]);
-    print.mockImplementation(() => undefined);
+    printed.spy.mockImplementation(() => undefined);
     await user.click(screen.getByRole("button", { name: `run ${PRINT_THREAD_ACTION}` }));
     const dialog = await screen.findByRole("dialog", { name: "Print" });
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
     const view = await screen.findByRole("document", { name: "Print preview" });
     expect(view).toHaveAttribute("data-target", "thread");
     await waitFor(() => {
-      expect(print).toHaveBeenCalled();
+      expect(printed.spy).toHaveBeenCalled();
     });
     expect(within(view).getAllByRole("article").length).toBeGreaterThan(0);
   });
@@ -189,11 +187,7 @@ describe("printing", () => {
     env.transport.data.features.print.desktop = true;
     env.transport.data.features.portability.desktop = true;
     env.transport.data.features.portability.pickAnswers = ["C:\\Users\\Ada\\Documents\\mail.pdf"];
-    const user = userEvent.setup();
-    render(env, [PRINT_SAVE_PDF_ACTION]);
-    await user.click(screen.getByRole("button", { name: `run ${PRINT_SAVE_PDF_ACTION}` }));
-    const dialog = await screen.findByRole("dialog", { name: "Print" });
-    await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    const { user, dialog } = await browseForPdf(env);
     expect(within(dialog).getByLabelText("PDF file")).toHaveValue(
       "C:\\Users\\Ada\\Documents\\mail.pdf",
     );
@@ -207,16 +201,12 @@ describe("printing", () => {
       path: "C:\\Users\\Ada\\Documents\\mail.pdf",
       overwrite: true,
     });
-    expect(print).not.toHaveBeenCalled();
+    expect(printed.spy).not.toHaveBeenCalled();
   });
 
   it("falls back to the print dialog's PDF printer without a desktop", async () => {
     const env = selected();
-    const user = userEvent.setup();
-    render(env, [PRINT_SAVE_PDF_ACTION]);
-    await user.click(screen.getByRole("button", { name: `run ${PRINT_SAVE_PDF_ACTION}` }));
-    const dialog = await screen.findByRole("dialog", { name: "Print" });
-    await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    const { user, dialog } = await browseForPdf(env);
     // No host: the field says to type the path and Browse goes away.
     expect(await within(dialog).findByText(/Type the full path of the file/)).toBeVisible();
     expect(within(dialog).queryByRole("button", { name: "Browse…" })).toBeNull();
@@ -245,12 +235,12 @@ describe("printing", () => {
     await user.clear(start);
     await user.type(start, "2019-12-25");
     await user.selectOptions(within(dialog).getByLabelText("Layout"), "day");
-    print.mockImplementation(() => undefined);
+    printed.spy.mockImplementation(() => undefined);
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
     const view = await screen.findByRole("document", { name: "Print preview" });
     expect(view).toHaveAttribute("data-target", "agenda");
     await waitFor(() => {
-      expect(print).toHaveBeenCalled();
+      expect(printed.spy).toHaveBeenCalled();
     });
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "ListEventInstances" }),

@@ -31,6 +31,7 @@ import { allGranted, grantsValid, orderedGrants } from "./grants";
 import { Permissions } from "./Permissions";
 import { Placements } from "./Placements";
 import { usePluginsState } from "./store";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** Dialog name. */
 export const INSTALL_DIALOG = "plugin-install";
@@ -64,6 +65,22 @@ type Stage =
   | { kind: "placements"; plugin: PluginInfo }
   | { kind: "done"; plugin: PluginInfo };
 
+/** What a plug-in adds (commands, panels, hooks, …), one line each. */
+export function ContributionList({ items }: { items: ReturnType<typeof contributionItems> }) {
+  const t = useT();
+  return (
+    <ul data-part="plugin-install.contributions">
+      {items.map((item) => (
+        <li key={item.key} data-part="plugin-install.contribution" data-kind={item.kind}>
+          {item.kind === "hook"
+            ? t(item.id, { hook: t(item.args.hook ?? "") })
+            : t(item.id, item.args)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Contributions({ manifest }: { manifest: PluginManifest }) {
   const t = useT();
   const items = contributionItems(manifest);
@@ -71,15 +88,7 @@ function Contributions({ manifest }: { manifest: PluginManifest }) {
   return (
     <section data-part="plugin-install.adds">
       <h3 data-part="plugin-install.heading">{t("plugin-install-adds")}</h3>
-      <ul data-part="plugin-install.contributions">
-        {items.map((item) => (
-          <li key={item.key} data-part="plugin-install.contribution" data-kind={item.kind}>
-            {item.kind === "hook"
-              ? t(item.id, { hook: t(item.args.hook ?? "") })
-              : t(item.id, item.args)}
-          </li>
-        ))}
-      </ul>
+      <ContributionList items={items} />
     </section>
   );
 }
@@ -213,7 +222,7 @@ function Review({
           disabled={busy}
           onClick={onBack}
         >
-          {t("plugin-install-back")}
+          {t("common-back")}
         </button>
       </div>
     </div>
@@ -346,7 +355,7 @@ export function InstallDialog({ close }: DialogProps) {
               {t("plugin-install-preview")}
             </button>
             <button type="button" data-part="form.button" data-action="cancel" onClick={close}>
-              {t("plugin-install-cancel")}
+              {t("common-cancel")}
             </button>
           </div>
         </form>
@@ -382,9 +391,7 @@ export function InstallDialog({ close }: DialogProps) {
             {t("plugin-install-done", { name: stage.plugin.manifest.name })}
           </p>
           <div data-part="plugin-install.actions">
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("plugin-install-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </div>
         </>
       )}

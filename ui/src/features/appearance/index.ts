@@ -146,7 +146,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
   },
 };
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [THEME_EDITOR_DIALOG]: ThemeEditorDialog,
   [THEME_NEW_DIALOG]: NewThemeDialog,
   [THEME_RENAME_DIALOG]: RenameThemeDialog,
@@ -180,7 +180,7 @@ export const windows: NonNullable<Feature["windows"]> = {
  * `ConfigChanged` when the resolved theme changed; the refetch covers a
  * core or a remote session that only sent `ThemeChanged`).
  */
-export const events: Feature["events"] = [
+export const events: NonNullable<Feature["events"]> = [
   (event, ctx) => {
     if (event.type === "ThemeChanged") applyAppearance(ctx.queryClient, event.appearance);
     // Undo, redo or a change on disk: the editor shows the files as they are now.
@@ -190,7 +190,7 @@ export const events: Feature["events"] = [
   },
 ];
 /** Background components: Follow Windows from the browser / WebView. */
-export const effects: Feature["effects"] = [SystemAppearanceReporter];
+export const effects: NonNullable<Feature["effects"]> = [SystemAppearanceReporter];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

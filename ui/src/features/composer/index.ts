@@ -22,7 +22,7 @@ import { useUiStoreApi, type UiState } from "../../state/uiStore";
 import type { Feature } from "../types";
 import { CloseConfirmDialog, DiscardConfirmDialog } from "./ConfirmDialogs";
 import { switchMode } from "./flows";
-import { composerSubjectTitle, MODES } from "./Composer";
+import { composerSubjectTitle, COMPOSER_MODES } from "./Composer";
 import {
   CLOSE_CONFIRM_KIND,
   composerOf,
@@ -67,7 +67,7 @@ const richOf = (ctx: ActionContext) => richStoreFor(ctx.store, target(ctx));
 
 function modeArg(args: readonly JsonValue[]) {
   const mode = args[0];
-  return MODES.find((m) => m === mode) ?? null;
+  return COMPOSER_MODES.find((m) => m === mode) ?? null;
 }
 
 /** Action ids → handlers. */
@@ -106,7 +106,7 @@ export const actions: Feature["actions"] = {
  * Named dialogs: the composer's confirmations, opened per composer as
  * `composer-close:<key>` / `composer-discard:<key>`.
  */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CLOSE_CONFIRM_KIND]: CloseConfirmDialog,
   [DISCARD_CONFIRM_KIND]: DiscardConfirmDialog,
 };
@@ -117,12 +117,9 @@ export const dialogs: Feature["dialogs"] = {
  * "composer"` sets the same sizes. Only the confirmations are modal.
  */
 export const windows: NonNullable<Feature["windows"]> = {
-  [COMPOSER_KIND]: {
-    modal: false,
-    size: { width: 820, height: 720 },
-    min_size: { width: 520, height: 400 },
-    instances: "multiple",
-  },
+  // Its size and minimum size come from defaults/layout.kdl (`window
+  // "composer"`), the one source; several composers are this feature's own.
+  [COMPOSER_KIND]: { modal: false, instances: "multiple" },
   [CLOSE_CONFIRM_KIND]: {
     confirmation: true,
     size: { width: 480, height: 220 },
@@ -147,9 +144,6 @@ export const windowTitles: Readonly<
   [COMPOSER_KIND]: composerSubjectTitle,
 };
 
-/** Handlers for core events. */
-export const events: Feature["events"] = [];
-
 /**
  * Installs the composer sessions (focused-composer mirror, close guard) as
  * soon as the app starts, so composers restored or opened by any path are
@@ -164,4 +158,4 @@ function ComposerSessions() {
 }
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [ComposerSessions];
+export const effects: NonNullable<Feature["effects"]> = [ComposerSessions];

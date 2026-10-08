@@ -3,10 +3,10 @@
  * undo-send or at a later time, undo, discard. The composer's fields live in
  * the UI store (`composer`); drafts and the outbox are the core's.
  */
-import { NailError, errorMessageIdOf } from "../api/client";
+import { NailError, errorMessageIdOf, type NailClient } from "../api/client";
 import type { AccountId, Draft, DraftId, Identity, MessageId } from "../api/generated";
 import type { MessageArgs } from "../i18n/localizer";
-import { displayName, formatAddressList, parseAddressList } from "./addresses";
+import { displayName, formatAddressList, parseAddressList, replyAllCc } from "./addresses";
 import type { WriteContext } from "./mailOps";
 import { queryKeys } from "./queries";
 import type { ComposerState } from "./uiStore";
@@ -168,19 +168,13 @@ export async function startReply(
     const replyTo = h.reply_to.length > 0 ? h.reply_to : h.from;
     composer.to = formatAddressList(replyTo);
     if (mode === "reply-all") {
-      const seen = new Set(replyTo.map((a) => a.email.toLowerCase()));
-      const cc = [...h.to, ...h.cc].filter((a) => {
-        const key = a.email.toLowerCase();
-        if (seen.has(key) || own.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const cc = replyAllCc(replyTo, h, own);
       composer.cc = formatAddressList(cc);
       composer.showCc = cc.length > 0;
     }
     const header = ctx.t("composer-quote-header", {
       date: formatDate(ctx, h.date),
-      name: displayName(sender) || ctx.t("composer-unknown-sender"),
+      name: displayName(sender) || ctx.t("common-unknown-sender"),
     });
     composer.text = `\n\n${header}\n${quote(message.text)}${signatureBlock(identity)}`;
   }
@@ -294,12 +288,33 @@ export async function discardComposer(ctx: ComposeContext): Promise<void> {
   const ui = ctx.store.getState();
   ui.setComposer(null);
   ui.closeWindow(COMPOSER_WINDOW);
-  if (composer?.draftId) {
-    try {
-      await ctx.client.request({ type: "DeleteDraft", draft_id: composer.draftId }, "Done");
-    } catch (error) {
-      if (!(error instanceof NailError && error.code === "not_found")) throw error;
-    }
+  if (composer?.draftId) await deleteSavedDraft(ctx, composer.draftId);
+}
+
+/** The address, subject and context fields of a composer for a saved draft. */
+export function draftFields(
+  draft: Draft,
+): Pick<ComposerState, "to" | "cc" | "bcc" | "showCc" | "showBcc" | "subject" | "context"> {
+  return {
+    to: formatAddressList(draft.to),
+    cc: formatAddressList(draft.cc),
+    bcc: formatAddressList(draft.bcc),
+    showCc: draft.cc.length > 0,
+    showBcc: draft.bcc.length > 0,
+    subject: draft.subject,
+    context: draft.context,
+  };
+}
+
+/** Deletes a saved draft; one that is already gone is no error. */
+export async function deleteSavedDraft(
+  ctx: { client: NailClient },
+  draftId: DraftId,
+): Promise<void> {
+  try {
+    await ctx.client.request({ type: "DeleteDraft", draft_id: draftId }, "Done");
+  } catch (error) {
+    if (!(error instanceof NailError && error.code === "not_found")) throw error;
   }
 }
 
@@ -311,14 +326,8 @@ export async function openDraft(ctx: ComposeContext, draftId: DraftId): Promise<
     draftId: draft.id ?? draftId,
     identityId: draft.identity_id,
     identityPicked: true,
-    to: formatAddressList(draft.to),
-    cc: formatAddressList(draft.cc),
-    bcc: formatAddressList(draft.bcc),
-    showCc: draft.cc.length > 0,
-    showBcc: draft.bcc.length > 0,
-    subject: draft.subject,
+    ...draftFields(draft),
     text: draft.text,
-    context: draft.context,
   });
 }
 

@@ -109,7 +109,7 @@ function RuleList({
                 disabled={index === 0}
                 onClick={() => void move(index, -1)}
               >
-                {t("rules-move-up")}
+                {t("common-move-up")}
               </button>
               <button
                 type="button"
@@ -119,7 +119,7 @@ function RuleList({
                 disabled={index === rules.length - 1}
                 onClick={() => void move(index, 1)}
               >
-                {t("rules-move-down")}
+                {t("common-move-down")}
               </button>
             </li>
           ))}

@@ -27,6 +27,7 @@ import { must } from "../../test/must";
 import { LAYOUT_EDITOR_SKIN_CSS, actions, widgets } from "./index";
 import { resetEditor, startEditing, editorStore } from "./store";
 import { CustomizeViewWatcher } from "./ViewWatcher";
+import { actionContext, staleLayoutRevision } from "../../test/env";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -95,6 +96,20 @@ async function customize(env: Env) {
   await settleQueries(env);
 }
 
+/** Hides the Folders pane with its eye button. */
+function hideFolders(): void {
+  fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+}
+
+/** Runs `step` and checks that it ended customize mode. */
+async function endedBy(env: Env, step: () => unknown): Promise<void> {
+  await act(async () => {
+    await step();
+  });
+  expect(editorStore.getState().window).toBeNull();
+  await settleQueries(env);
+}
+
 describe("customize-layout mode", () => {
   it("frames the window with the banner, pane headers and the palette", async () => {
     const env = createEnv();
@@ -131,7 +146,7 @@ describe("customize-layout mode", () => {
   it("hides and shows a pane with the eye", async () => {
     const env = createEnv();
     await customize(env);
-    fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+    hideFolders();
     await waitFor(() => {
       expect(pane("Folders")).toHaveAttribute("data-state", "hidden");
     });
@@ -211,7 +226,7 @@ describe("customize-layout mode", () => {
         : (mailRoot(env) as Extract<LayoutNode, { children: unknown }>).children.filter(
             (c) => c.hidden === true,
           ).length;
-    fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+    hideFolders();
     await waitFor(() => {
       expect(hidden()).toBe(1);
     });
@@ -412,7 +427,7 @@ describe("customize-layout mode", () => {
   it("offers Undo anyway when layout.kdl changed on disk", async () => {
     const env = createEnv();
     await customize(env);
-    fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+    hideFolders();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
     });
@@ -433,17 +448,9 @@ describe("customize-layout mode", () => {
   it("shows an edit refused by the core", async () => {
     const env = createEnv();
     await customize(env);
-    act(() => {
-      simulateExternalEdit(env.transport, "layout");
-    });
     // The history in the cache is stale now: the edit is a conflict.
-    env.queryClient.setQueryData(["edit-history", "layout"], {
-      scope: "layout",
-      revision: "stale",
-      undo: [],
-      redo: [],
-    });
-    fireEvent.click(within(pane("Folders")).getByRole("button", { name: "Hide Folders" }));
+    staleLayoutRevision(env);
+    hideFolders();
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
     });
@@ -480,14 +487,7 @@ describe("layout.customize and the settings card", () => {
     await settleQueries(env);
     const layout = env.transport.data.layout;
     const action = must(actions["layout.customize"]);
-    const ctx = {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout,
-      t: (id: string) => id,
-      locale: "en",
-    };
+    const ctx = { ...actionContext(env), layout };
     expect(action.enabled?.(ctx, [])).toBe(true);
     await act(async () => {
       await action.run(ctx, []);
@@ -495,11 +495,7 @@ describe("layout.customize and the settings card", () => {
     expect(editorStore.getState().window).toBe("mail");
     expect(env.store.getState().activeView).toBe("mail");
     await screen.findByRole("region", { name: /Customizing layout/ });
-    await act(async () => {
-      await action.run(ctx, []);
-    });
-    expect(editorStore.getState().window).toBeNull();
-    await settleQueries(env);
+    await endedBy(env, () => action.run(ctx, []));
   });
 
   // Review finding (ADR 0138): a session of a view the user left must not
@@ -509,14 +505,7 @@ describe("layout.customize and the settings card", () => {
     renderMail(env);
     await settleQueries(env);
     const action = must(actions["layout.customize"]);
-    const ctx = {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id: string) => id,
-      locale: "en",
-    };
+    const ctx = actionContext(env);
     act(() => {
       env.store.getState().setActiveView("mail");
       startEditing("mail");
@@ -530,11 +519,7 @@ describe("layout.customize and the settings card", () => {
     expect(editorStore.getState().window).toBe("calendar");
     expect(env.store.getState().activeView).toBe("calendar");
     // Again on the same view: Done.
-    await act(async () => {
-      await action.run(ctx, []);
-    });
-    expect(editorStore.getState().window).toBeNull();
-    await settleQueries(env);
+    await endedBy(env, () => action.run(ctx, []));
   });
 
   it("ends customize mode when the user switches to another view", async () => {

@@ -15,18 +15,17 @@ import {
   createEnv,
   renderNode,
   settleQueries,
-  stubElementSizes,
   widget,
   type Env,
+  stubElementSizesEachTest,
 } from "../test/harness";
 import { violations } from "../test/axe";
 import { must } from "../test/must";
 import { currentListControl } from "./messageListControl";
 import { listStep, templateFields } from "./MessageList";
 import { compileTemplate } from "../template/template";
+import { INBOX, SENT } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-const SENT = "acc-personal/Sent";
 /** The default layout's wide rows (Design A). */
 const ROWS = [
   "{participants | names(3)}  {count | if-many}  {date | relative}",
@@ -34,13 +33,7 @@ const ROWS = [
   '{latest_from | names(1) | then(":")}{preview}',
 ];
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 function setup(threads: "collapsed" | "expandable"): Env {
   const env = createEnv({

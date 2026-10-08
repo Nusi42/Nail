@@ -81,7 +81,7 @@ export function PimSettings() {
             }}
           >
             <Icon name="import" part="form.button.icon" />
-            <span data-part="form.button.label">{t("pim-import-open")}</span>
+            <span data-part="form.button.label">{t("common-import-open")}</span>
           </button>
         </div>
       </section>

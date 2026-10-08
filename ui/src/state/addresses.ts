@@ -11,6 +11,15 @@ export function isEmail(value: string): boolean {
   return EMAIL_RE.test(value);
 }
 
+/**
+ * A plausible email address for an attendee or a contact (looser than
+ * {@link isEmail}: no dot needed in the domain; the core validates for real).
+ */
+export function plausibleEmail(text: string): boolean {
+  const at = text.lastIndexOf("@");
+  return at > 0 && at < text.length - 1 && !/\s/.test(text) && !text.slice(at + 1).startsWith(".");
+}
+
 /** Splits on commas and semicolons outside double quotes and angle brackets. */
 function splitList(text: string): string[] {
   const parts: string[] = [];
@@ -78,4 +87,22 @@ export function formatAddressList(addresses: readonly Address[]): string {
 /** A short display form: the name, or the address. */
 export function displayName(address: Address | null | undefined): string {
   return address ? (address.name ?? address.email) : "";
+}
+
+/**
+ * The Cc of a reply to all: the original's To and Cc without the people
+ * answered, the user's own addresses (`own`, lower-cased) and repeats.
+ */
+export function replyAllCc(
+  answered: readonly Address[],
+  original: { to: readonly Address[]; cc: readonly Address[] },
+  own: ReadonlySet<string>,
+): Address[] {
+  const seen = new Set(answered.map((a) => a.email.toLowerCase()));
+  return [...original.to, ...original.cc].filter((a) => {
+    const key = a.email.toLowerCase();
+    if (seen.has(key) || own.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

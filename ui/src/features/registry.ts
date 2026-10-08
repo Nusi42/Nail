@@ -103,8 +103,8 @@ export interface AppRegistry {
   windows: WindowRegistry;
   /** Window titles by kind from the UI state (M5c). */
   windowTitles: WindowTitleRegistry;
-  events: Feature["events"];
-  effects: Feature["effects"];
+  events: NonNullable<Feature["events"]>;
+  effects: NonNullable<Feature["effects"]>;
 }
 
 function mergeInto<T>(
@@ -142,19 +142,19 @@ export function mergeFeatures(
   const windowTitles: Record<string, WindowTitleFn> = {};
   mergeInto(widgets, builtins.widgets, "widget", "the built-ins", owners);
   mergeInto(actions, builtins.actions, "action", "the built-ins", owners);
-  const events: Feature["events"][number][] = [];
-  const effects: Feature["effects"][number][] = [];
+  const events: NonNullable<Feature["events"]>[number][] = [];
+  const effects: NonNullable<Feature["effects"]>[number][] = [];
   for (const [name, feature] of Object.entries(slots)) {
     const owner = `feature "${name}"`;
     mergeInto(widgets, feature.widgets, "widget", owner, owners);
     mergeInto(actions, feature.actions, "action", owner, owners);
-    mergeInto(dialogs, feature.dialogs, "dialog", owner, owners);
+    mergeInto(dialogs, feature.dialogs ?? {}, "dialog", owner, owners);
     mergeInto(actionInfo, feature.actionInfo ?? {}, "action info", owner, owners);
     mergeInto(settings, feature.settings ?? {}, "settings info", owner, owners);
     mergeInto(windowSpecs, feature.windows ?? {}, "window", owner, owners);
     mergeInto(windowTitles, feature.windowTitles ?? {}, "window title", owner, owners);
-    events.push(...feature.events);
-    effects.push(...feature.effects);
+    events.push(...(feature.events ?? []));
+    effects.push(...(feature.effects ?? []));
   }
   return {
     widgets,

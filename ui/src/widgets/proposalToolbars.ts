@@ -40,6 +40,19 @@ export const PROPOSAL_READER = [
 ];
 
 const item = (action: string) => ({ type: "action", action });
+/** The reader bar's icon buttons as one block: answer, then file away. */
+const ANSWER_AND_FILE_GROUP = [
+  item("mail.reply"),
+  item("mail.reply-all"),
+  item("mail.forward"),
+  { type: "separator" },
+  item("mail.archive"),
+  item("mail.delete"),
+  item("mail.move"),
+  item("mail.toggle-flag"),
+  item("snooze.open"),
+  { type: "separator" },
+];
 const MESSAGE_GROUP = [
   { type: "header", label: "@toolbar.group.message" },
   item("mail.toggle-read"),
@@ -64,16 +77,7 @@ const TURN_INTO_GROUP = [
  */
 export const PROPOSAL_CONTEXT_MENUS = {
   "context:message-list.row": [
-    item("mail.reply"),
-    item("mail.reply-all"),
-    item("mail.forward"),
-    { type: "separator" },
-    item("mail.archive"),
-    item("mail.delete"),
-    item("mail.move"),
-    item("mail.toggle-flag"),
-    item("snooze.open"),
-    { type: "separator" },
+    ...ANSWER_AND_FILE_GROUP,
     ...MESSAGE_GROUP,
     item("print.message"),
     item("print.thread"),
@@ -81,16 +85,7 @@ export const PROPOSAL_CONTEXT_MENUS = {
     ...TURN_INTO_GROUP,
   ],
   "context:message-view": [
-    item("mail.reply"),
-    item("mail.reply-all"),
-    item("mail.forward"),
-    { type: "separator" },
-    item("mail.archive"),
-    item("mail.delete"),
-    item("mail.move"),
-    item("mail.toggle-flag"),
-    item("snooze.open"),
-    { type: "separator" },
+    ...ANSWER_AND_FILE_GROUP,
     ...MESSAGE_GROUP,
     item("security.autocrypt.import"),
     item("print.message"),

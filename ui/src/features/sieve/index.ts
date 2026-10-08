@@ -19,8 +19,6 @@ export const widgets: Feature["widgets"] = {
 };
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {};
-/** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
 
 /** Keeps the Sieve state current (uploads, rules and accounts change it). */
 export const handleSieveEvent: FeatureEventHandler = (event, { queryClient }) => {
@@ -34,9 +32,7 @@ export const handleSieveEvent: FeatureEventHandler = (event, { queryClient }) =>
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleSieveEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+export const events: NonNullable<Feature["events"]> = [handleSieveEvent];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

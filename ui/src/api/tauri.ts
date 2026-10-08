@@ -4,7 +4,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Listeners, NailError, type ConnectionStatus, type Transport } from "./client";
+import { ClosableTransport, NailError } from "./client";
 import type { Event as NailEvent, Request, Response } from "./generated";
 
 /** Name of the Tauri command that handles every request. */
@@ -23,14 +23,12 @@ const defaultApi: TauriApi = {
   listen: (event, handler) => listen(event, handler),
 };
 
-export class TauriTransport implements Transport {
+export class TauriTransport extends ClosableTransport {
   private readonly api: TauriApi;
-  private readonly events = new Listeners<NailEvent>();
-  private readonly statuses = new Listeners<ConnectionStatus>();
   private unlisten: (() => void) | null = null;
-  private closed = false;
 
   constructor(api: TauriApi = defaultApi) {
+    super();
     this.api = api;
     void this.api
       .listen(TAURI_EVENT, (event) => {
@@ -60,22 +58,8 @@ export class TauriTransport implements Transport {
     }
   }
 
-  onEvent(listener: (event: NailEvent) => void): () => void {
-    return this.events.add(listener);
-  }
-
-  onStatus(listener: (status: ConnectionStatus) => void): () => void {
-    return this.statuses.add(listener);
-  }
-
-  status(): ConnectionStatus {
-    return this.closed ? "closed" : "connected";
-  }
-
-  close(): void {
-    this.closed = true;
+  protected override release(): void {
     this.unlisten?.();
     this.unlisten = null;
-    this.statuses.emit("closed");
   }
 }

@@ -48,7 +48,7 @@ function Changes({ confirmation }: { confirmation: Confirmation }) {
       <caption data-part="confirmation.changes.caption">{t("agents-changes")}</caption>
       <thead>
         <tr data-part="confirmation.changes.header">
-          <th scope="col">{t("agents-change-field")}</th>
+          <th scope="col">{t("common-field")}</th>
           <th scope="col">{t("agents-change-before")}</th>
           <th scope="col">{t("agents-change-after")}</th>
         </tr>
@@ -284,7 +284,7 @@ export function ConfirmationCard({ confirmation, focused = false, onDecided }: P
               disabled={busy}
               onClick={() => void decide("deny")}
             >
-              {t("agents-deny")}
+              {t("common-deny")}
             </button>
           </div>
         </div>

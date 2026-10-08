@@ -49,7 +49,7 @@ export interface AppProps {
   windowName?: string;
 }
 
-const MODES: readonly ThemeMode[] = ["system", "light", "dark", "high-contrast"];
+const THEME_MODES: readonly ThemeMode[] = ["system", "light", "dark", "high-contrast"];
 
 /** UI overrides from the page URL: `?lang=de`, `?mode=dark`. */
 export function overridesFromUrl(search: string): {
@@ -60,7 +60,7 @@ export function overridesFromUrl(search: string): {
   const mode = params.get("mode");
   return {
     localeOverride: params.get("lang"),
-    modeOverride: MODES.find((m) => m === mode) ?? null,
+    modeOverride: THEME_MODES.find((m) => m === mode) ?? null,
   };
 }
 

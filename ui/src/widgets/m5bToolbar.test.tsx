@@ -17,12 +17,11 @@ import {
   stubElementSizes,
   widget,
   type Env,
+  renderMainToolbar,
 } from "../test/harness";
 import { PROPOSAL_CONTEXT_MENUS, PROPOSAL_READER } from "./proposalToolbars";
 import { must } from "../test/must";
-
-const INBOX = "acc-personal/Inbox";
-const FIRST = `${INBOX}#1`;
+import { FIRST, INBOX } from "../test/mockIds";
 
 function readerLayout(
   env: Env,
@@ -120,12 +119,17 @@ function names(): string[] {
     .map((b) => b.getAttribute("aria-label") ?? b.textContent);
 }
 
+/** The reader toolbar of the ranked proposal layout. */
+function renderReaderBar(env: Env) {
+  return renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
+    layout: readerLayout(env),
+  });
+}
+
 describe("reader action bar (M5b)", () => {
   it("labels the primary actions, shows the common ones as icons with tooltips and shortcuts", () => {
     const env = readerEnv();
-    renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-      layout: readerLayout(env),
-    });
+    renderReaderBar(env);
     expect(bar()).toHaveAttribute("data-overflow", "more");
     const reply = screen.getByRole("button", { name: "Reply" });
     expect(reply).toHaveAttribute("data-display", "icon-label");
@@ -157,9 +161,7 @@ describe("reader action bar (M5b)", () => {
 
   it("puts the rest into More, with headings, icons and shortcuts, and runs what is chosen", async () => {
     const env = readerEnv();
-    renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-      layout: readerLayout(env),
-    });
+    renderReaderBar(env);
     const more = screen.getByRole("button", { name: "More" });
     expect(more).toHaveAttribute("aria-haspopup", "menu");
     expect(more).toHaveAttribute("aria-expanded", "false");
@@ -222,9 +224,7 @@ describe("reader action bar (M5b)", () => {
 
   it("opens More from the keyboard with the first entry focused, Escape returns", async () => {
     const env = readerEnv();
-    renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-      layout: readerLayout(env),
-    });
+    renderReaderBar(env);
     const more = screen.getByRole("button", { name: "More" });
     act(() => {
       more.focus();
@@ -244,9 +244,7 @@ describe("reader action bar (M5b)", () => {
 
   it("hides actions that cannot run instead of greying them out", () => {
     const env = readerEnv(false);
-    renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-      layout: readerLayout(env),
-    });
+    renderReaderBar(env);
     // Nothing selected: no message action can run, More has nothing either.
     expect(within(bar()).queryAllByRole("button")).toEqual([]);
     act(() => {
@@ -270,9 +268,7 @@ describe("reader action bar (M5b)", () => {
     const observer = fakeResizeObserver();
     try {
       const env = readerEnv();
-      renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-        layout: readerLayout(env),
-      });
+      renderReaderBar(env);
       // 3 × 90 + 9 + 5 × 32 + 70 = 509 > 400: Snooze, Flag, Move and Delete
       // (highest rank first) move until 381 fits.
       expect(names()).toEqual(["Reply", "Reply all", "Forward", "Archive", "More"]);
@@ -329,9 +325,7 @@ describe("reader action bar (M5b)", () => {
     const observer = fakeResizeObserver();
     try {
       const env = readerEnv();
-      renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
-        layout: readerLayout(env),
-      });
+      renderReaderBar(env);
       expect(names()).toHaveLength(9);
       width.width = 400;
       observer.resize();
@@ -362,18 +356,12 @@ describe("reader action bar (M5b)", () => {
     const restore = stubWidths(width);
     try {
       const env = createEnv({ state: { activeAccountId: "acc-work" } });
-      const layout = normalizeLayout({
-        ...env.transport.data.layout,
-        toolbars: {
-          main: [
-            { type: "action", action: "sync.now" },
-            { type: "separator" },
-            { type: "action", action: "outbox.open" },
-            { type: "action", action: "view.toggle", args: ["sidebar"], label: "Sidebar" },
-          ],
-        },
-      });
-      renderNode(widget("toolbar", { options: { toolbar: "main" } }), env, { layout });
+      renderMainToolbar(env, [
+        { type: "action", action: "sync.now" },
+        { type: "separator" },
+        { type: "action", action: "outbox.open" },
+        { type: "action", action: "view.toggle", args: ["sidebar"], label: "Sidebar" },
+      ]);
       // 90 + 9 + 90 + 90 = 279 > 200; unranked items move from the end.
       expect(names()).toEqual(["Check for new mail", "More"]);
       fireEvent.click(screen.getByRole("button", { name: "More" }));

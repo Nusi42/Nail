@@ -72,7 +72,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [DELETE_PERMANENTLY_DIALOG]: DeletePermanentlyDialog,
 };
 
@@ -80,7 +80,3 @@ export const dialogs: Feature["dialogs"] = {
 export const windows: NonNullable<Feature["windows"]> = {
   [DELETE_PERMANENTLY_DIALOG]: { confirmation: true },
 };
-/** Handlers for core events. */
-export const events: Feature["events"] = [];
-/** Background components. */
-export const effects: Feature["effects"] = [];

@@ -371,7 +371,7 @@ export function TimeGrid({
       </div>
 
       <div data-part="calendar.all-day" data-zones={zones}>
-        <span data-part="calendar.all-day.label">{t("pim-all-day")}</span>
+        <span data-part="calendar.all-day.label">{t("common-all-day")}</span>
         <Columns
           geom={geomId(nodeKey, "all-day")}
           part="calendar.all-day.days"

@@ -86,33 +86,34 @@ class ScriptedTransport extends MockTransport {
   }
 }
 
+/**
+ * A request the core answers with `reauth_required` and then `next`,
+ * waiting until the UI asks the user to confirm who they are.
+ */
+async function askedToReauth(next: Response) {
+  const inner = new ScriptedTransport();
+  inner.answers = [{ type: "Error", code: "reauth_required", message: "fresh login needed" }, next];
+  const wrapped = new ReauthTransport(inner);
+  const answer = wrapped.send({ type: "ListRemoteUsers" });
+  await waitFor(() => {
+    expect(reauthStore.getState().pending).toBe(true);
+  });
+  return { inner, wrapped, answer };
+}
+
 describe("re-authentication", () => {
   it("retries a request once the user confirmed who they are", async () => {
-    const inner = new ScriptedTransport();
-    inner.answers = [
-      { type: "Error", code: "reauth_required", message: "fresh login needed" },
-      { type: "RemoteUsers", users: [] },
-    ];
-    const wrapped = new ReauthTransport(inner);
-    const answer = wrapped.send({ type: "ListRemoteUsers" });
-    await waitFor(() => {
-      expect(reauthStore.getState().pending).toBe(true);
-    });
+    const { inner, answer } = await askedToReauth({ type: "RemoteUsers", users: [] });
     reauthStore.getState().finish(true);
     expect((await answer).type).toBe("RemoteUsers");
     expect(inner.sent.map((r) => r.type)).toEqual(["ListRemoteUsers", "ListRemoteUsers"]);
   });
 
   it("keeps the error when the user cancels, and passes other answers through", async () => {
-    const inner = new ScriptedTransport();
-    inner.answers = [
-      { type: "Error", code: "reauth_required", message: "fresh login needed" },
-      { type: "Error", code: "forbidden", message: "no" },
-    ];
-    const wrapped = new ReauthTransport(inner);
-    const answer = wrapped.send({ type: "ListRemoteUsers" });
-    await waitFor(() => {
-      expect(reauthStore.getState().pending).toBe(true);
+    const { wrapped, answer } = await askedToReauth({
+      type: "Error",
+      code: "forbidden",
+      message: "no",
     });
     reauthStore.getState().finish(false);
     expect(await answer).toMatchObject({ code: "reauth_required" });

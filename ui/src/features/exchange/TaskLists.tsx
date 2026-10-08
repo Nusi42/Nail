@@ -43,7 +43,7 @@ export function TaskListChooser({ lists, value, onChange, allowAll = true }: Tas
   return (
     <div data-part="form.field" data-field="list">
       <label data-part="form.label" htmlFor={id}>
-        {t("exchange-tasks-list")}
+        {t("common-task-list")}
       </label>
       <select
         id={id}

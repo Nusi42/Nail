@@ -134,7 +134,7 @@ export function CalendarListView({
     {
       type: "item",
       id: "import",
-      label: t("pim-import-open"),
+      label: t("common-import-open"),
       icon: "import",
       onSelect: () => {
         open(IMPORT_DIALOG);
@@ -307,9 +307,7 @@ function CalendarRow({
           }}
         />
         <span data-part="calendar-list.name">{name}</span>
-        {isTaskList(calendar) && (
-          <span data-part="calendar-list.kind">{t("pim-calendar-kind-tasks")}</span>
-        )}
+        {isTaskList(calendar) && <span data-part="calendar-list.kind">{t("common-tasks")}</span>}
       </label>
       {asButtons ? (
         <span data-part="calendar-list.buttons">
@@ -328,8 +326,8 @@ function CalendarRow({
               type="button"
               data-part="form.button"
               data-variant="icon"
-              aria-label={t("pim-calendar-remove-of", { name })}
-              title={t("pim-calendar-remove-of", { name })}
+              aria-label={t("common-remove-named", { name })}
+              title={t("common-remove-named", { name })}
               onClick={onRemove}
             >
               <Icon name="trash" part="form.button.icon" />

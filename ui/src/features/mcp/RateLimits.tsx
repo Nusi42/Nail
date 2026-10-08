@@ -11,7 +11,7 @@ import type { LocalizedMessage, McpClient, McpRateLimits } from "../../api/gener
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { CheckField, NumberField } from "../../widgets/forms";
-import { DEFAULT_RATE_LIMITS, mcpKeys, rateLimitIssues } from "./queries";
+import { DEFAULT_RATE_LIMITS, MAX_RATE_LIMIT, mcpKeys, rateLimitIssues } from "./queries";
 
 /** The limits in display order. */
 export const RATE_LIMIT_KEYS = [
@@ -52,7 +52,7 @@ function LimitField({
           name={name}
           value={value}
           min={1}
-          max={10_000}
+          max={MAX_RATE_LIMIT}
           onChange={(n) => {
             onChange(n ?? 0);
           }}

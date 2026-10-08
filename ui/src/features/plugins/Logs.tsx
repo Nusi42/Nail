@@ -11,6 +11,7 @@ import { SHORT_DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { pluginKeys, usePluginLogs } from "./queries";
+import { RefreshButton } from "../../widgets/RefreshButton";
 
 export const LOG_LEVELS: readonly PluginLogLevel[] = ["debug", "info", "warn", "error"];
 
@@ -64,14 +65,7 @@ export function Logs({ pluginId }: { pluginId: string }) {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="refresh"
-          onClick={() => void logs.refetch()}
-        >
-          {t("plugin-logs-refresh")}
-        </button>
+        <RefreshButton refetch={logs.refetch} />
         <button
           type="button"
           data-part="form.button"

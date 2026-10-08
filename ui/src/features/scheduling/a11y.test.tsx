@@ -6,27 +6,24 @@
  * timeline, the meeting panels, and every dialog. Contrast needs a real
  * layout engine (Playwright).
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+  shownDialog,
+} from "../../test/harness";
 import { dialogs, InvitationCard, MeetingPanel } from ".";
 import { firstStart, newAttendee, AttendeePicker } from "./AttendeePicker";
 import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
 import { CANCEL_DIALOG, DIALOGS } from "./names";
 import { schedulingStoreFor } from "./store";
 import { localZone, makePimTime, todayIn } from "../pim/time";
-import { must } from "../../test/must";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
 
 function setup(): Env {
   const env = createEnv();
@@ -43,7 +40,7 @@ describe("axe: invitation cards", () => {
         <InvitationCard messageId={id} attendeesOpen />,
         env,
       );
-      await settle(env);
+      await settleQueries(env, 20);
       expect(container.querySelector('[data-part="invitation"]')).not.toBeNull();
       expect(await violations(container)).toEqual([]);
     },
@@ -62,7 +59,7 @@ describe("axe: invitation cards", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     const [first, second, third] = screen.getAllByRole("region", { name: /^Invitation:/ });
     if (!first || !second || !third) throw new Error("cards missing");
     await user.click(within(first).getByRole("button", { name: "Propose a new time" }));
@@ -84,7 +81,7 @@ describe("axe: invitation cards", () => {
       <NodeView node={widget("invitation-card")} path="t/0" />,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("heading", { name: "Design review" })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });
@@ -110,7 +107,7 @@ describe("axe: attendee picker, meeting panel, dialogs", () => {
       />,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("img", { name: /^Grace Hopper:/ })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   }, 30_000);
@@ -123,7 +120,7 @@ describe("axe: attendee picker, meeting panel, dialogs", () => {
       env,
     );
     await user.type(screen.getByLabelText("Address"), "alan@bletchley.example{Enter}");
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   }, 30_000);
 
@@ -140,7 +137,7 @@ describe("axe: attendee picker, meeting panel, dialogs", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getAllByRole("region", { name: /^Meeting: / })).toHaveLength(2);
     expect(await violations(container)).toEqual([]);
   });
@@ -160,14 +157,7 @@ describe("axe: attendee picker, meeting panel, dialogs", () => {
             attendees: [newAttendee("katherine@nasa.example", "Katherine Johnson")],
           });
       }
-      const Dialog = must(dialogs[name]);
-      const { container } = renderWithProviders(
-        <div role="dialog" aria-label={name}>
-          <Dialog name={name} close={() => undefined} />
-        </div>,
-        env,
-      );
-      await settle(env);
+      const container = await shownDialog(env, dialogs, name);
       expect(container.querySelector("[data-part]")).not.toBeNull();
       expect(await violations(container)).toEqual([]);
     },

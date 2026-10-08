@@ -106,27 +106,30 @@ function offer(
   };
 }
 
+/** The running plug-ins allowed to see attachments (of `accountId`). */
+function attachmentPlugins(plugins: readonly PluginInfo[], accountId?: string | null) {
+  return plugins.filter((p) => isRunning(p) && hasGrant(p, "attachments", accountId));
+}
+
 /** Preview renderers for an attachment (permission `attachments`, size limit). */
 export function previewRenderersFor(
   plugins: readonly PluginInfo[],
   attachment: AttachmentInfo,
   accountId?: string | null,
 ): Offer[] {
-  return plugins
-    .filter((p) => isRunning(p) && hasGrant(p, "attachments", accountId))
-    .flatMap((p) =>
-      (p.manifest.contributes?.attachmentPreviews ?? [])
-        .filter(
-          (def) =>
-            matchesFile(
-              def.mimeTypes ?? [],
-              def.extensions ?? [],
-              attachment.mime,
-              attachment.filename,
-            ) && attachment.size <= Math.min(def.maxBytes ?? MAX_PREVIEW_INPUT, MAX_PREVIEW_INPUT),
-        )
-        .map((def) => offer(p, def)),
-    );
+  return attachmentPlugins(plugins, accountId).flatMap((p) =>
+    (p.manifest.contributes?.attachmentPreviews ?? [])
+      .filter(
+        (def) =>
+          matchesFile(
+            def.mimeTypes ?? [],
+            def.extensions ?? [],
+            attachment.mime,
+            attachment.filename,
+          ) && attachment.size <= Math.min(def.maxBytes ?? MAX_PREVIEW_INPUT, MAX_PREVIEW_INPUT),
+      )
+      .map((def) => offer(p, def)),
+  );
 }
 
 /** Actions in an attachment's menu (permission `attachments`). */
@@ -135,20 +138,18 @@ export function attachmentActionsFor(
   attachment: AttachmentInfo,
   accountId?: string | null,
 ): Offer[] {
-  return plugins
-    .filter((p) => isRunning(p) && hasGrant(p, "attachments", accountId))
-    .flatMap((p) =>
-      (p.manifest.contributes?.attachmentActions ?? [])
-        .filter((def) => {
-          const mimes = def.mimeTypes ?? [];
-          const exts = def.extensions ?? [];
-          return (
-            (mimes.length === 0 && exts.length === 0) ||
-            matchesFile(mimes, exts, attachment.mime, attachment.filename)
-          );
-        })
-        .map((def) => offer(p, def)),
-    );
+  return attachmentPlugins(plugins, accountId).flatMap((p) =>
+    (p.manifest.contributes?.attachmentActions ?? [])
+      .filter((def) => {
+        const mimes = def.mimeTypes ?? [];
+        const exts = def.extensions ?? [];
+        return (
+          (mimes.length === 0 && exts.length === 0) ||
+          matchesFile(mimes, exts, attachment.mime, attachment.filename)
+        );
+      })
+      .map((def) => offer(p, def)),
+  );
 }
 
 /** The host a link action is matched against: the URL's host, empty for `mailto:`. */

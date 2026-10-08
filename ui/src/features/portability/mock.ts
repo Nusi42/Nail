@@ -814,14 +814,15 @@ function restoreActions(backup: MockBackup, contents: BackupContents | null) {
   };
 }
 
-function previewRestore(
-  core: MockCore,
-  path: string,
-  passphrase: string,
-  contents: BackupContents | null,
-): Response {
-  const state = core.data.features.portability;
-  const opened = openBackup(state, path, passphrase);
+/** What a restore names: the backup, its passphrase and the items to restore. */
+interface RestoreRequest {
+  path: string;
+  passphrase: string;
+  contents: BackupContents | null;
+}
+
+function previewRestore(core: MockCore, { path, passphrase, contents }: RestoreRequest): Response {
+  const opened = openBackup(core.data.features.portability, path, passphrase);
   if (opened.error) return opened.error;
   const problem = contents ? backupContentsIssues(contents)[0] : undefined;
   if (problem !== undefined) return fail("invalid_request", problem, `backup-issue-${problem}`);
@@ -836,14 +837,8 @@ function previewRestore(
   return { type: "RestorePlan", plan };
 }
 
-function startRestore(
-  core: MockCore,
-  path: string,
-  passphrase: string,
-  contents: BackupContents | null,
-): Response {
-  const state = core.data.features.portability;
-  const opened = openBackup(state, path, passphrase);
+function startRestore(core: MockCore, { path, passphrase, contents }: RestoreRequest): Response {
+  const opened = openBackup(core.data.features.portability, path, passphrase);
   if (opened.error) return opened.error;
   const planned = restoreActions(opened.backup, contents);
   const id = core.nextId("job-");
@@ -1065,9 +1060,9 @@ export function answerPortability(core: MockCore, request: PortabilityRequest): 
     case "VerifyBackup":
       return verifyBackup(core, request.path, request.passphrase);
     case "PreviewRestore":
-      return previewRestore(core, request.path, request.passphrase, request.contents);
+      return previewRestore(core, request);
     case "StartRestore":
-      return startRestore(core, request.path, request.passphrase, request.contents);
+      return startRestore(core, request);
     case "ListPortabilityJobs":
       return {
         type: "PortabilityJobs",

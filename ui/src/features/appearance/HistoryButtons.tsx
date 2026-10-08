@@ -87,14 +87,14 @@ export function HistoryButtons() {
         aria-label={
           undo
             ? t("appearance-undo-named", { action: t(undo.label.id, undo.label.args) })
-            : t("appearance-undo")
+            : t("common-undo")
         }
         onClick={() => {
           void run("undo");
         }}
       >
         <Icon name="undo-2" part="form.button.icon" />
-        {t("appearance-undo")}
+        {t("common-undo")}
       </button>
       <button
         type="button"
@@ -104,14 +104,14 @@ export function HistoryButtons() {
         aria-label={
           redo
             ? t("appearance-redo-named", { action: t(redo.label.id, redo.label.args) })
-            : t("appearance-redo")
+            : t("common-redo")
         }
         onClick={() => {
           void run("redo");
         }}
       >
         <Icon name="redo-2" part="form.button.icon" />
-        {t("appearance-redo")}
+        {t("common-redo")}
       </button>
       {failure && (
         <p data-part="form.error" role="alert">

@@ -4,10 +4,10 @@
  * `prefixes` must exist in the English catalogs (`appearance.ftl`,
  * `core-appearance.ftl`); ids built at runtime are listed by `runtimeIds`.
  */
-import type { Density, ThemeKind, ThemeOverridesIssue } from "../../api/generated";
+import type { ThemeKind, ThemeOverridesIssue } from "../../api/generated";
 import { LUCIDE_ICONS } from "../../widgets/lucideIcons";
 import { APPEARANCE_DIALOGS } from "./editorStore";
-import { BUILTIN_THEMES } from "./model";
+import { BUILTIN_THEMES, DENSITIES } from "./model";
 import { TOKEN_GROUPS, TOKEN_MODES } from "./tokens";
 
 /** Prefixes of message ids written literally in this feature's sources. */
@@ -33,7 +33,6 @@ export const notMessages: readonly string[] = [
 ];
 
 const KINDS: readonly ThemeKind[] = ["light", "dark", "high-contrast"];
-const DENSITIES: readonly Density[] = ["comfortable", "compact"];
 const ISSUES: readonly ThemeOverridesIssue[] = [
   "font-size-range",
   "radius-range",

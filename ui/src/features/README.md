@@ -42,12 +42,13 @@ M4c: ADR 0094; M5a: ADR 0102; M5b: ADR 0109; M5c: ADR 0116; M5d: ADR 0131; P2: A
 ## Files of a slot
 
 - `index.ts` — what the feature contributes, as named exports (see
-  `types.ts`, `Feature`):
+  `types.ts`, `Feature`; leave an optional one out instead of exporting it
+  empty):
   - `widgets`: layout widget kind → component (`WidgetProps`). Register the
     same kind with its options in `crates/nail-config/src/widgets/<feature>.rs`.
   - `actions`: action id → `ActionHandler` (toolbars, menus and key bindings
     refer to the id). Use a feature prefix (`rules.run`, `mcp.revoke`, …).
-  - `dialogs`: name → component (`DialogProps`: `name`, `close()`). A dialog
+  - `dialogs` (optional): name → component (`DialogProps`: `name`, `close()`). A dialog
     opens with `window.open "<name>"` (or `store.openWindow(name)`) when the
     layout has no `window "<name>"`, inside the standard modal window frame;
     its title is the Fluent message `window-<name>`. Use dialogs only for
@@ -57,9 +58,9 @@ M4c: ADR 0094; M5a: ADR 0102; M5b: ADR 0109; M5c: ADR 0116; M5d: ADR 0131; P2: A
     resizable, `min_size`, `size`, `pop_out`, `instances`; `{ confirmation:
 true }` for the only modal windows, confirmations). Windows are
     non-modal by default; the layout's `window` properties win.
-  - `events`: handlers called with every core event (refetch queries, update
+  - `events` (optional): handlers called with every core event (refetch queries, update
     feature state).
-  - `effects`: components mounted once in the app shell that render nothing
+  - `effects` (optional): components mounted once in the app shell that render nothing
     (background work such as reporting the UI context).
 - `mock.ts` — the `MockTransport` answers for this feature's requests (the
   list `<FEATURE>_REQUESTS`; `src/api/mock.ts` routes them here) and the

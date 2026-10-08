@@ -24,6 +24,8 @@ import { formatInstant } from "./fmt";
 import { usePim, usePimStore } from "./store";
 import { pimWrite, usePimSources } from "./queries";
 import { localZone } from "./time";
+import { TextField } from "../../widgets/forms";
+import { CloseButton } from "../../widgets/CloseButton";
 
 export const SOURCE_KINDS = ["ics", "caldav", "carddav"] as const;
 export type NewSourceKind = (typeof SOURCE_KINDS)[number];
@@ -118,18 +120,18 @@ export function SourcesPanel({ close }: { close?: () => void }) {
                   })}
                   onClick={() => void run({ type: "SyncPimSources", source_id: source.id })}
                 >
-                  {t("pim-source-sync")}
+                  {t("common-sync-now")}
                 </button>
                 <button
                   type="button"
                   data-part="form.button"
                   data-variant="danger"
-                  aria-label={t("pim-source-remove-label", {
+                  aria-label={t("common-remove-named", {
                     name: sourceName(t, source, source.id),
                   })}
                   onClick={() => void run({ type: "RemovePimSource", source_id: source.id })}
                 >
-                  {t("pim-remove")}
+                  {t("common-remove")}
                 </button>
               </>
             )}
@@ -146,11 +148,7 @@ export function SourcesPanel({ close }: { close?: () => void }) {
         >
           {t("pim-sources-sync-all")}
         </button>
-        {close && (
-          <button type="button" data-part="form.button" onClick={close}>
-            {t("pim-close")}
-          </button>
-        )}
+        {close && <CloseButton onClose={close} />}
       </div>
     </div>
   );
@@ -162,7 +160,6 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
   const accounts = useAccounts();
   const ids = {
     kind: useId(),
-    name: useId(),
     url: useId(),
     account: useId(),
     user: useId(),
@@ -270,7 +267,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
       <h3 data-part="form.section.title">{t("pim-source-add")}</h3>
       <div data-part="form.field" data-field="kind">
         <label data-part="form.label" htmlFor={ids.kind}>
-          {t("pim-source-kind")}
+          {t("common-kind")}
         </label>
         <select
           id={ids.kind}
@@ -287,19 +284,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           ))}
         </select>
       </div>
-      <div data-part="form.field" data-field="name">
-        <label data-part="form.label" htmlFor={ids.name}>
-          {t("pim-source-name")}
-        </label>
-        <input
-          id={ids.name}
-          data-part="form.input"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-      </div>
+      <TextField labelId="common-name" name="name" value={name} onChange={setName} />
       {kind !== "ics" && (
         <div data-part="form.field" data-field="account">
           <label data-part="form.label" htmlFor={ids.account}>
@@ -354,7 +339,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           </div>
           <div data-part="form.field" data-field="password">
             <label data-part="form.label" htmlFor={ids.password}>
-              {t("pim-source-password")}
+              {t("common-password")}
             </label>
             <input
               id={ids.password}
@@ -433,7 +418,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
       <Problem message={problem} />
       <div data-part="pim.editor.actions">
         <button type="button" data-part="form.button" disabled={busy} onClick={() => void test()}>
-          {t("pim-source-test")}
+          {t("common-test")}
         </button>
         <button
           type="submit"
@@ -441,7 +426,7 @@ function AddSourceForm({ taken }: { taken: readonly string[] }) {
           data-variant="primary"
           disabled={busy || (kind === "ics" && !url.trim())}
         >
-          {t("pim-source-add-submit")}
+          {t("common-add")}
         </button>
       </div>
     </form>

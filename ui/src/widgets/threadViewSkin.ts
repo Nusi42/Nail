@@ -14,9 +14,8 @@
  * feed (`thread-view.card*`, `thread-view.participants`; `thread-view.item`
  * stays an alias for one release).
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+import { p, ps } from "../theme/selectors";
+import { ACCENT_BAR, AVATAR_FG, READER_MEASURE, READER_NARROW } from "../theme/declarations";
 
 const T = {
   bg: "var(--nail-color-bg)",
@@ -59,13 +58,28 @@ const T = {
 /** The strip's rows: half the list's row padding above and below. */
 const ROW_PAD = `calc(${T.row} / 2)`;
 
+/**
+ * A header's toggle button (the stacked item's and the card's): the whole
+ * line opens or closes it.
+ */
+const toggle = (
+  inline: string,
+  radius: string,
+) => `display: flex; flex: 1 1 auto; align-items: center; gap: ${T.md}; min-width: 0;
+  padding: ${ROW_PAD} ${inline}; border: none; border-radius: ${radius};
+  font: inherit; text-align: start; white-space: nowrap; overflow: hidden;
+  color: inherit; background-color: transparent; cursor: pointer;`;
+
+/** Phone width: the card feed keeps only the first action of a card. */
+const PHONE_WIDTH = "480px";
+
 const STRIP = `:root { --nail-skin-avatar-sm: calc(var(--nail-size-avatar) * 28 / 34); }
 ${p("thread-view")} {
-  box-sizing: border-box; width: 100%; max-width: calc(68ch + 2 * ${T.xxl}); margin-inline: auto;
+  box-sizing: border-box; width: 100%; max-width: calc(${READER_MEASURE} + 2 * ${T.xxl}); margin-inline: auto;
   padding: ${T.sm} ${T.xxl} ${T.xs}; border-bottom: 1px solid ${T.border};
   font-size: ${T.body}; line-height: ${T.normal}; color: ${T.fg}; background-color: ${T.bg};
 }
-@container nail-reader (max-width: 640px) {
+@container nail-reader (max-width: ${READER_NARROW}) {
   ${p("thread-view")} { padding-inline: ${T.pane}; }
 }
 ${p("thread-view.header")} {
@@ -86,16 +100,11 @@ ${p("thread-view.item")} { border-radius: ${T.rMd}; }
 ${p("thread-view.item")} + ${p("thread-view.item")} { border-top: 1px solid ${T.border}; }
 ${p("thread-view.item")}[data-state~="selected"] { background-color: ${T.subtle}; }
 ${p("thread-view.item.header")} { display: flex; align-items: center; gap: ${T.sm}; padding-inline-end: ${T.sm}; }
-${p("thread-view.item.toggle")} {
-  display: flex; flex: 1 1 auto; align-items: center; gap: ${T.md}; min-width: 0;
-  padding: ${ROW_PAD} ${T.sm}; border: none; border-radius: ${T.rMd};
-  font: inherit; text-align: start; white-space: nowrap; overflow: hidden;
-  color: inherit; background-color: transparent; cursor: pointer;
-}
-${p("thread-view.item.avatar")} {
+${p("thread-view.item.toggle")} { ${toggle(T.sm, T.rMd)} }
+${ps("thread-view.item.avatar", "thread-view.card.avatar")} {
   display: grid; flex: 0 0 auto; place-items: center; width: ${T.avatar}; height: ${T.avatar}; border-radius: 50%;
   font-size: calc(${T.avatar} * 0.4); font-weight: ${T.semibold}; line-height: 1;
-  color: var(--nail-color-avatar-fg, #ffffff); user-select: none;
+  color: ${AVATAR_FG}; user-select: none;
 }
 ${p("thread-view.item.from")} { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
 ${p("thread-view.item")}[data-state~="unread"] ${p("thread-view.item.from")} { font-weight: ${T.semibold}; }
@@ -109,7 +118,7 @@ ${p("thread-view.item.open")}:hover { background-color: ${T.subtle}; }
 ${p("thread-view.item.open")}:disabled { opacity: ${T.disabled}; cursor: default; }
 ${p("thread-view.text")} { padding: 0 ${T.sm} ${T.sm} calc(${T.sm} + ${T.avatar} + ${T.md}); }
 ${p("thread-view.body")} { font-family: ${T.fontReader}; font-size: ${T.body}; }
-${p("thread-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: 3px solid ${T.quote}; color: ${T.muted}; }
+${p("thread-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.quote}; color: ${T.muted}; }
 ${p("thread-view.quote-toggle")} { font-size: ${T.small}; color: ${T.accent}; cursor: pointer; }`;
 
 /** The reader's per-message widgets an open card holds besides `message-view` (`ThreadViewFeed.tsx`). */
@@ -147,7 +156,7 @@ ${p("thread-view")}[data-mode] {
 ${p("thread-view")}[data-mode="single"] { padding: 0; }
 ${p("thread-view")}[data-mode="single"] > ${p("message-view")} { flex: 1 1 auto; }
 ${p("thread-view")}[data-mode="cards"] > ${p("thread-view.header")}, ${p("thread-view.feed")} {
-  box-sizing: border-box; width: 100%; max-width: calc(68ch + 2 * ${T.xl}); margin-inline: auto;
+  box-sizing: border-box; width: 100%; max-width: calc(${READER_MEASURE} + 2 * ${T.xl}); margin-inline: auto;
 }
 ${p("thread-view")}[data-mode="cards"] > ${p("thread-view.header")} {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: ${T.xs} ${T.md}; padding: 0 0 ${T.md};
@@ -179,18 +188,8 @@ ${p("thread-view.fold-row")} > ${p("thread-view.fold")} {
   flex: 0 0 auto; width: auto; padding: ${ROW_PAD} ${T.md}; border-radius: ${T.rLg};
 }
 ${p("thread-view.card.header")} { display: flex; align-items: center; gap: ${T.xs}; min-width: 0; padding-inline-end: ${T.sm}; }
-${p("thread-view.card.toggle")} {
-  display: flex; flex: 1 1 auto; align-items: center; gap: ${T.md}; min-width: 0;
-  padding: ${ROW_PAD} ${T.md}; border: none; border-radius: ${T.rLg};
-  font: inherit; text-align: start; white-space: nowrap; overflow: hidden;
-  color: inherit; background-color: transparent; cursor: pointer;
-}
+${p("thread-view.card.toggle")} { ${toggle(T.md, T.rLg)} }
 ${p("thread-view.card")}:not([data-state~="expanded"]) ${p("thread-view.card.toggle")}:hover { background-color: ${T.subtle}; }
-${p("thread-view.card.avatar")} {
-  display: grid; flex: 0 0 auto; place-items: center; width: ${T.avatar}; height: ${T.avatar}; border-radius: 50%;
-  font-size: calc(${T.avatar} * 0.4); font-weight: ${T.semibold}; line-height: 1;
-  color: var(--nail-color-avatar-fg, #ffffff); user-select: none;
-}
 ${p("thread-view.card.from")} { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; font-weight: ${T.medium}; }
 ${p("thread-view.card")}[data-state~="unread"] ${p("thread-view.card.from")} { font-weight: ${T.semibold}; }
 ${p("thread-view.card.recipients")}, ${p("thread-view.card.preview")} {
@@ -224,17 +223,17 @@ ${inCard("message-view.text")} { display: grid; align-content: start; gap: ${T.x
 ${inCard("message-view.text-block")}, ${inCard("message-view.quote")} {
   margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere;
 }
-${inCard("message-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: 3px solid ${T.quote}; color: ${T.muted}; }
+${inCard("message-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.quote}; color: ${T.muted}; }
 ${inCard("message-view.quote-toggle")} { width: fit-content; font-size: ${T.small}; color: ${T.accent}; cursor: pointer; }
 ${inCard("message-view.quote-toggle")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
 ${inCard("message-view.body")} { background-color: transparent; }
-@container nail-reader (max-width: 640px) {
+@container nail-reader (max-width: ${READER_NARROW}) {
   ${p("thread-view")}[data-mode="cards"] { padding: ${T.md} ${T.pane} ${T.lg}; }
   ${p("thread-view.card.body")} { padding-inline-start: ${T.md}; }
   ${p("thread-view.card.toggle")} { gap: ${T.sm}; padding-inline: ${T.sm}; }
   ${p("thread-view.card.recipients")} { display: none; }
 }
-@container nail-reader (max-width: 480px) {
+@container nail-reader (max-width: ${PHONE_WIDTH}) {
   /* Phone width: the sender keeps its room; Reply all / Forward stay in the reader's bar. */
   ${p("thread-view.card.action")}:not(:first-child) { display: none; }
   ${p("thread-view.card.from")} { max-width: none; }

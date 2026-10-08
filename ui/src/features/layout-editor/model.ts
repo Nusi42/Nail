@@ -18,9 +18,12 @@ import type {
 } from "../../api/generated";
 import { selectBreakpointIndex } from "../../layout/engine";
 import { hostsViews } from "../../layout/views";
+import { nodeAt } from "../../layout/engine";
 
 /** Where a dragged pane or widget can be dropped on a pane. */
 export type DropZone = DockSide | "swap" | "into";
+
+export { nodeAt };
 
 /** The dock sides, in the order the keyboard reaches them. */
 export const DOCK_SIDES: readonly DockSide[] = ["left", "right", "top", "bottom"];
@@ -28,16 +31,6 @@ export const DOCK_SIDES: readonly DockSide[] = ["left", "right", "top", "bottom"
 /** What is being moved (picked up with the keyboard, or dragged). */
 export type Moving =
   { kind: "pane"; ref: LayoutNodeRef } | { kind: "widget"; widget: NewWidget; name: string };
-
-/** The node at `path` below `root`, `null` when there is none. */
-export function nodeAt(root: LayoutNode, path: readonly number[]): LayoutNode | null {
-  let node: LayoutNode | undefined = root;
-  for (const index of path) {
-    if (node === undefined || node.type === "widget") return null;
-    node = node.children[index];
-  }
-  return node ?? null;
-}
 
 /** The root of a reference's breakpoint. */
 export function rootOf(layout: ResolvedLayout, ref: LayoutNodeRef): LayoutNode | null {

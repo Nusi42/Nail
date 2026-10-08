@@ -4,79 +4,16 @@
  * checkbox that can be disabled with a reason, and a two-step confirm
  * button. Labels are Fluent ids; styling is the theme's (`form.*` parts).
  */
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import type { RemoteAccessPreset } from "../../api/generated";
+import { SelectField, TextField } from "../../widgets/forms";
+import { PRESETS } from "./model";
 import type { MessageArgs } from "../../i18n/localizer";
 import { useT } from "../../i18n/I18nProvider";
 
-export function InputField({
-  labelId,
-  args,
-  hintId,
-  hint,
-  name,
-  value,
-  onChange,
-  type = "text",
-  autoComplete = "off",
-  inputMode,
-  focusOnMount = false,
-  disabled = false,
-  readOnly = false,
-  invalid = false,
-  maxLength,
-}: {
-  labelId: string;
-  args?: MessageArgs;
-  hintId?: string;
-  /** Hint text already translated (wins over `hintId`). */
-  hint?: string;
-  name: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: "text" | "password";
-  autoComplete?: string;
-  inputMode?: "text" | "numeric";
-  focusOnMount?: boolean;
-  disabled?: boolean;
-  readOnly?: boolean;
-  invalid?: boolean;
-  maxLength?: number;
-}) {
-  const t = useT();
-  const id = useId();
-  const hintText = hint ?? (hintId ? t(hintId) : null);
-  return (
-    <div data-part="form.field" data-field={name}>
-      <label data-part="form.label" htmlFor={id}>
-        {t(labelId, args)}
-      </label>
-      <input
-        id={id}
-        data-part="form.input"
-        type={type}
-        name={name}
-        value={value}
-        autoComplete={autoComplete}
-        inputMode={inputMode}
-        // eslint-disable-next-line jsx-a11y/no-autofocus -- each login step moves the focus to its first field (the step replaced the previous one).
-        autoFocus={focusOnMount}
-        disabled={disabled}
-        readOnly={readOnly}
-        maxLength={maxLength}
-        spellCheck={false}
-        aria-invalid={invalid || undefined}
-        aria-describedby={hintText ? `${id}-hint` : undefined}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      />
-      {hintText && (
-        <span data-part="form.hint" id={`${id}-hint`}>
-          {hintText}
-        </span>
-      )}
-    </div>
-  );
+/** A text input that never spell-checks (logins, codes, names). */
+export function InputField(props: Omit<ComponentProps<typeof TextField>, "spellCheck">) {
+  return <TextField {...props} spellCheck={false} />;
 }
 
 /** A checkbox; when `lockedReason` is set it is disabled and says why. */
@@ -202,8 +139,46 @@ export function ConfirmButton({
           setAsking(false);
         }}
       >
-        {t("remote-cancel")}
+        {t("common-cancel")}
       </button>
     </span>
+  );
+}
+
+/** The access preset of a new user or a paired device. */
+export function AccessPresetField({
+  name,
+  preset,
+  onChange,
+}: {
+  name: string;
+  preset: RemoteAccessPreset;
+  onChange: (preset: RemoteAccessPreset) => void;
+}) {
+  return (
+    <SelectField
+      labelId="remote-access"
+      name={name}
+      value={preset}
+      onChange={(v) => {
+        onChange(v as RemoteAccessPreset);
+      }}
+      choices={PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` }))}
+    />
+  );
+}
+
+/** Save and Cancel of an inline rename form. */
+export function RenameActions({ disabled, onCancel }: { disabled: boolean; onCancel: () => void }) {
+  const t = useT();
+  return (
+    <>
+      <button type="submit" data-part="form.button" data-action="save-name" disabled={disabled}>
+        {t("common-save")}
+      </button>
+      <button type="button" data-part="form.button" data-action="cancel" onClick={onCancel}>
+        {t("common-cancel")}
+      </button>
+    </>
   );
 }

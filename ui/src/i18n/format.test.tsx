@@ -2,7 +2,7 @@
  * Dates follow the UI locale (the Fluent locale in use), not the browser's
  * formatting locale (M2c carry-over WP65).
  */
-import { act, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { createEnv, renderNode, stubElementSizes, widget } from "../test/harness";
@@ -16,6 +16,8 @@ import {
   useDateFormat,
 } from "./format";
 import { must } from "../test/must";
+import { settleUntil } from "../test/app";
+import { queueLater } from "../test/env";
 
 const catalogs = { en: ["hello = Hello"], de: ["hello = Hallo"] };
 const WHEN = new Date(2031, 2, 5, 14, 30); // 5 March 2031, 14:30 local time
@@ -29,22 +31,6 @@ function browserLanguages(languages: string[]) {
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-/**
- * Lets the mock core answer and React commit until `query` finds something,
- * bounded by event-loop turns rather than wall-clock time (deterministic
- * under load).
- */
-async function settleUntil<T>(query: () => T | null, what: string, turns = 100): Promise<T> {
-  for (let turn = 0; turn < turns; turn++) {
-    const found = query();
-    if (found !== null) return found;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
-  throw new Error(`${what} did not appear within ${String(turns)} event-loop turns`);
-}
 
 function Probe() {
   const format = useDateFormat();
@@ -155,32 +141,7 @@ describe("widgets show dates in the UI locale", () => {
     browserLanguages(["en-US"]);
     const env = createEnv();
     const sendAt = WHEN.toISOString();
-    const { draft_id } = await env.client.request(
-      {
-        type: "SaveDraft",
-        draft: {
-          id: null,
-          identity_id: "ada@example.org",
-          to: [{ name: "Grace", email: "grace@navy.example" }],
-          cc: [],
-          bcc: [],
-          subject: "Later",
-          mode: "plain",
-          text: "x",
-          html: null,
-          markdown: null,
-          attachments: [],
-          context: null,
-          signature: "identity",
-          markdown_part: false,
-        },
-      },
-      "DraftSaved",
-    );
-    await env.client.request(
-      { type: "SendDraft", draft_id, delay_secs: null, send_at: sendAt },
-      "SendQueued",
-    );
+    await queueLater(env, null, sendAt);
     renderNode(widget("outbox"), env, { locale: "de" });
     const item = await settleUntil(
       () => document.querySelector<HTMLElement>('[data-part="outbox.item"]'),

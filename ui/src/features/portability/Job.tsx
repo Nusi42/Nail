@@ -217,13 +217,13 @@ export function JobProgressView({ job }: { job: JobStatus }) {
       </p>
       <progress
         data-part="portability.progress.bar"
-        aria-label={t("portability-progress-label")}
+        aria-label={t("common-progress")}
         max={1}
         {...(fraction === null ? {} : { value: fraction })}
       />
       {progress.total !== null && (
         <p data-part="portability.progress.items">
-          {t("portability-progress-items", { done: progress.done, total: progress.total })}
+          {t("portability-progress-bytes", { done: progress.done, total: progress.total })}
         </p>
       )}
       {progress.bytes_done > 0 && (
@@ -249,7 +249,7 @@ export function JobProgressView({ job }: { job: JobStatus }) {
           disabled={cancelling}
           onClick={() => void cancel()}
         >
-          {t("portability-cancel-job")}
+          {t("common-cancel")}
         </button>
       </div>
       <p data-part="form.hint">{t("portability-cancel-hint")}</p>
@@ -272,7 +272,7 @@ export function JobView({
   if (!job.data) {
     return (
       <p data-part="portability.loading" role="status">
-        {t("portability-loading")}
+        {t("common-loading")}
       </p>
     );
   }

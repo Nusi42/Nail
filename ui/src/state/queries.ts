@@ -65,6 +65,9 @@ export const queryKeys = {
   drafts: ["drafts"] as const,
 };
 
+/** Audit entries per page (the MCP and remote-access audit logs). */
+export const AUDIT_PAGE = 50;
+
 /** Whether an error means "the core does not implement this yet". */
 export function isUnsupported(error: unknown): boolean {
   return error instanceof NailError && error.code === "unsupported";

@@ -6,10 +6,11 @@
 import { useId } from "react";
 import type { Account, PluginGrant, PluginPermission } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { ALL_ACCOUNTS, useAccountName } from "../../widgets/AccountSwitcher";
+import { useAccountName } from "../../widgets/AccountSwitcher";
 import { isWritePermission } from "./extensions";
 import { grantOf, requiresRead, setAccounts, setGranted, takesAccounts } from "./grants";
 import { permissionArgs, permissionMessageId } from "./messages";
+import { ALL_ACCOUNTS } from "../../api/contract";
 
 interface Props {
   permissions: readonly PluginPermission[];
@@ -70,7 +71,7 @@ function PermissionRow({
               onChange(setGranted(grants, permission, false));
             }}
           />
-          {t("plugin-permission-deny")}
+          {t("common-deny")}
         </label>
         {needsRead && (
           <span data-part="plugin-permissions.hint">{t("plugin-permission-needs-read")}</span>
@@ -91,7 +92,7 @@ function PermissionRow({
                 onChange(setAccounts(grants, permission, null));
               }}
             />
-            {t("plugin-permission-all-accounts")}
+            {t("common-all-accounts")}
           </label>
           <label data-part="plugin-permissions.option">
             <input
@@ -139,7 +140,7 @@ function PermissionRow({
           )}
           {grant.accounts !== null && grant.accounts.length === 0 && (
             <span data-part="plugin-permissions.error" role="alert">
-              {t("plugin-permission-no-accounts")}
+              {t("common-choose-account")}
             </span>
           )}
         </fieldset>
@@ -157,7 +158,7 @@ export function Permissions(props: Props) {
     return <p data-part="plugin-permissions.none">{t("plugin-permissions-none")}</p>;
   }
   return (
-    <ul data-part="plugin-permissions" aria-label={t("plugin-permissions-label")}>
+    <ul data-part="plugin-permissions" aria-label={t("common-permissions")}>
       {props.permissions.map((permission) => (
         <PermissionRow key={permission} {...props} accounts={accounts} permission={permission} />
       ))}

@@ -28,9 +28,7 @@ import {
 import { PROPOSAL_READER } from "./proposalToolbars";
 import { must } from "../test/must";
 import { objectContaining } from "../test/matchers";
-
-const INBOX = "acc-personal/Inbox";
-const FIRST = `${INBOX}#1`;
+import { FIRST, INBOX } from "../test/mockIds";
 
 let restoreSizes: () => void;
 beforeEach(() => {

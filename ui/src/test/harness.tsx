@@ -4,17 +4,17 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { TransportClient } from "../api/client";
 import type { LayoutNode, ResolvedLayout, ResolvedTheme } from "../api/generated";
 import { MockTransport } from "../api/mock";
 import { createMockData } from "../api/mockData";
-import { normalizeNode } from "../api/normalize";
+import { normalizeLayout, normalizeNode } from "../api/normalize";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { Catalogs } from "../i18n/localizer";
 import { LayoutContext } from "../layout/LayoutContext";
-import { DialogRegistryContext } from "../layout/dialogRegistry";
+import { DialogRegistryContext, type DialogProps } from "../layout/dialogRegistry";
 import { WindowSpecsContext, WindowTitlesContext } from "../layout/windowSpecs";
 import { WidgetRegistryContext, type WidgetNode } from "../layout/widgetRegistry";
 import { usePluginLayout } from "../features/plugins";
@@ -110,15 +110,16 @@ export function Providers({
 /**
  * Waits until the env's queries and mutations are idle, then lets React
  * commit their last results inside `act` (a test that ends meanwhile would
- * see those updates outside act).
+ * see those updates outside act); `delayMs` gives effects that run after a
+ * timer (focus, measuring) that long.
  */
-export async function settleQueries(env: Env): Promise<void> {
+export async function settleQueries(env: Env, delayMs = 0): Promise<void> {
   await waitFor(() => {
     expect(env.queryClient.isFetching()).toBe(0);
     expect(env.queryClient.isMutating()).toBe(0);
   });
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   });
 }
 
@@ -140,6 +141,38 @@ export function renderWithProviders(
 }
 
 /** Renders one layout node (e.g. a single widget) with all providers. */
+/** The `main` toolbar with `items` (sparse layout items) on the env's layout. */
+export function renderMainToolbar(env: Env, items: readonly Record<string, unknown>[]) {
+  const layout = normalizeLayout({
+    ...env.transport.data.layout,
+    toolbars: { main: items },
+  });
+  return renderNode(widget("toolbar", { options: { toolbar: "main" } }), env, { layout });
+}
+
+/** A feature dialog on its own, framed as the window would (role `dialog`, named `name`). */
+export function renderAsDialog(env: Env, Dialog: ComponentType<DialogProps>, name: string) {
+  return renderWithProviders(
+    <div role="dialog" aria-label={name}>
+      <Dialog name={name} close={() => undefined} />
+    </div>,
+    env,
+  );
+}
+
+/** {@link renderAsDialog} for the dialog `name` of `dialogs`, settled; its container. */
+export async function shownDialog(
+  env: Env,
+  dialogs: Readonly<Record<string, ComponentType<DialogProps>>>,
+  name: string,
+): Promise<HTMLElement> {
+  const Dialog = dialogs[name];
+  if (Dialog === undefined) throw new Error(`no dialog ${name}`);
+  const { container } = renderAsDialog(env, Dialog, name);
+  await settleQueries(env, 20);
+  return container;
+}
+
 export function renderNode(
   node: LayoutNode,
   env: Env,
@@ -152,6 +185,17 @@ export function renderNode(
  * jsdom has no layout. Give elements plausible sizes so the virtualizer
  * renders rows: the message list viewport is 600px high, rows 40px.
  */
+/** Stubs element sizes around every test of the file (see {@link stubElementSizes}). */
+export function stubElementSizesEachTest(): void {
+  let restore: () => void = () => undefined;
+  beforeEach(() => {
+    restore = stubElementSizes();
+  });
+  afterEach(() => {
+    restore();
+  });
+}
+
 export function stubElementSizes(): () => void {
   const height = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
   const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");

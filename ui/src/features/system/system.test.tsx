@@ -27,6 +27,7 @@ import { AboutNail } from "./AboutNail";
 import { FirstRun, FirstRunGate } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
 import { activeComposer } from "../composer/sessions";
+import { actionContext } from "../../test/env";
 
 afterEach(() => {
   // Unmount before resetting module-level stores.
@@ -56,6 +57,15 @@ const release = {
   notes: "## New\n\n- Faster search\n- <script>alert(1)</script>",
   size_bytes: 48_000_000,
 } as const;
+
+/** The update settings with "Check now" pressed. */
+async function checkForUpdates(env: Env) {
+  const stop = listen(env);
+  const user = userEvent.setup();
+  renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
+  await user.click(await screen.findByRole("button", { name: "Check now" }));
+  return { stop, user };
+}
 
 describe("update-settings widget", () => {
   it("keeps a newer status from the events over an older answer", async () => {
@@ -112,10 +122,7 @@ describe("update-settings widget", () => {
   it("offers Download when updates are not downloaded automatically", async () => {
     const env = createEnv();
     env.transport.data.features.system.updateSettings.auto_download = false;
-    const stop = listen(env);
-    const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
-    await user.click(await screen.findByRole("button", { name: "Check now" }));
+    const { stop, user } = await checkForUpdates(env);
     await user.click(await screen.findByRole("button", { name: "Download" }));
     expect(env.transport.data.features.system.calls).toEqual(["check", "download"]);
     expect(await screen.findByRole("button", { name: "Restart to install" })).toBeVisible();
@@ -171,10 +178,7 @@ describe("update-settings widget", () => {
   it("reports a failed check and offers to try again", async () => {
     const env = createEnv();
     env.transport.data.features.system.failNext = "signature";
-    const stop = listen(env);
-    const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
-    await user.click(await screen.findByRole("button", { name: "Check now" }));
+    const { stop, user } = await checkForUpdates(env);
     expect(
       await screen.findByText("The update’s signature is not valid. Nothing was installed."),
     ).toBeVisible();
@@ -225,14 +229,7 @@ describe("About Nail", () => {
 
   it("opens with the action; check-updates opens it when refused", async () => {
     const env = createEnv();
-    const ctx = {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id: string) => id,
-      locale: "en",
-    };
+    const ctx = actionContext(env);
     await appRegistry.actions["system.about"]?.run(ctx, []);
     expect(env.store.getState().windows).toContain(ABOUT_DIALOG);
     env.store.getState().closeWindow(ABOUT_DIALOG);

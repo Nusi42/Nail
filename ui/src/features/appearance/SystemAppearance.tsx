@@ -12,9 +12,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { SystemAppearance } from "../../api/generated";
 import { useClient } from "../../state/queries";
 import { applyAppearance, useAppearance } from "./queries";
-
-/** Error codes of a core that does not have `ReportSystemAppearance`. */
-const UNSUPPORTED = new Set(["unsupported", "invalid_request"]);
+import { UNSUPPORTED_CODES } from "../../api/contract";
 
 const QUERIES = {
   dark: "(prefers-color-scheme: dark)",
@@ -87,7 +85,7 @@ export function SystemAppearanceReporter() {
           return;
         }
         // A core older than M5a does not know the request: ask only once.
-        if (response.type === "Error" && UNSUPPORTED.has(response.code)) {
+        if (response.type === "Error" && UNSUPPORTED_CODES.has(response.code)) {
           unsupported.current = true;
         } else if (response.type === "Error") {
           console.warn("nail: cannot report the system appearance", response.message);

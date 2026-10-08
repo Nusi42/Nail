@@ -15,7 +15,7 @@ import type {
   WindowsCertStore,
 } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
-import { useClient, useIdentities } from "../../state/queries";
+import { useClient } from "../../state/queries";
 import { SelectField, TextAreaField, TextField } from "../../widgets/forms";
 import { identityText } from "./IdentityCrypto";
 import {
@@ -25,8 +25,12 @@ import {
   isPkcs12Name,
   looksArmored,
 } from "./model";
-import { securityKeys, useSecuritySettings, useWindowsCertificates } from "./queries";
-import { nonEmpty } from "../../text/empty";
+import {
+  securityKeys,
+  useSecuritySettings,
+  useWindowsCertificates,
+  useIdentityChoice,
+} from "./queries";
 
 /** Called with the keys a tool added or changed (the manager selects the first). */
 export type OnKeys = (keys: CryptoKey[]) => void;
@@ -249,7 +253,7 @@ export function ImportTool({ onKeys }: { onKeys: OnKeys }) {
           data-action="import-text"
           disabled={busy || text.trim() === ""}
         >
-          {t("security-import-submit")}
+          {t("common-import")}
         </button>
       </form>
       <label data-part="form.field" data-field="import-file">
@@ -321,15 +325,13 @@ export function GenerateTool({ onKeys }: { onKeys: OnKeys }) {
   const t = useT();
   const client = useClient();
   const invalidate = useInvalidateKeys();
-  const identities = useIdentities(null).data ?? [];
-  const [identity, setIdentity] = useState<string>("");
+  const { identities, setIdentity, chosen } = useIdentityChoice();
   const [algorithm, setAlgorithm] = useState<KeyAlgorithm>("curve25519");
   const [expiry, setExpiry] = useState<string>("730");
   const [protection, setProtection] = useState<ProtectionInput>(NO_PROTECTION);
   const [created, setCreated] = useState<CryptoKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const chosen = nonEmpty(identity) ?? identities[0]?.id ?? "";
 
   const generate = async (event: SubmitEvent) => {
     event.preventDefault();
@@ -537,7 +539,7 @@ export function LookupTool({ onKeys }: { onKeys: OnKeys }) {
                         data-action="import-candidate"
                         onClick={() => void take(c.armored, c.fingerprint)}
                       >
-                        {t("security-lookup-import")}
+                        {t("common-import")}
                       </button>
                     )}
                   </li>

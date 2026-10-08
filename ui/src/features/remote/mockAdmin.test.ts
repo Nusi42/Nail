@@ -1,5 +1,3 @@
-import type { Event as NailEvent, Request, Response } from "../../api/generated";
-import { MockTransport } from "../../api/mock";
 import {
   MOCK_TOTP_CODE,
   decorateRemoteContent,
@@ -9,17 +7,11 @@ import {
   mockStatus,
 } from "./mock";
 import { presetGrant } from "./model";
+import { mockSetup } from "../../test/env";
 
 function setup() {
-  const transport = new MockTransport();
-  const events: NailEvent[] = [];
-  transport.onEvent((e) => events.push(e));
-  const send = async <T extends Response["type"]>(request: Request, type: T) => {
-    const answer = await transport.send(request);
-    if (answer.type !== type) throw new Error(JSON.stringify(answer));
-    return answer as Extract<Response, { type: T }>;
-  };
-  return { transport, events, send, s: transport.data.features.remote };
+  const core = mockSetup();
+  return { ...core, s: core.transport.data.features.remote };
 }
 
 async function withUser(ctx: ReturnType<typeof setup>, admin = false) {

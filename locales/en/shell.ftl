@@ -8,7 +8,7 @@
 # The app mark at the top of the rail (decorative).
 shell-rail-logo = N
 # Tooltip of a rail button with its keyboard shortcut.
-shell-rail-tooltip = { $label } ({ $shortcut })
+shell-rail-tooltip = { common-tooltip-shortcut }
 # Accessible name of a rail button with an unread badge.
 shell-rail-item-unread = { $label }, { $count ->
     [one] one unread message

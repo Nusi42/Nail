@@ -2,8 +2,8 @@
  * The composer ↔ `Draft` mapping for all three modes.
  */
 import type { Draft, SendCrypto } from "../../api/generated";
-import { formatAddressList, parseAddressList } from "../../state/addresses";
-import { emptyComposer } from "../../state/compose";
+import { parseAddressList } from "../../state/addresses";
+import { draftFields, emptyComposer } from "../../state/compose";
 import type { ComposerState } from "../../state/uiStore";
 import { composerCrypto } from "../security";
 import type { RichState } from "./store";
@@ -100,14 +100,8 @@ export function fromDraft(
       ...emptyComposer(),
       draftId: draft.id,
       identityId: draft.identity_id === "" ? null : draft.identity_id,
-      to: formatAddressList(draft.to),
-      cc: formatAddressList(draft.cc),
-      bcc: formatAddressList(draft.bcc),
-      showCc: draft.cc.length > 0,
-      showBcc: draft.bcc.length > 0,
-      subject: draft.subject,
+      ...draftFields(draft),
       text: mode === "plain" ? draft.text : "",
-      context: draft.context,
       ...base,
     },
     rich: {

@@ -4,6 +4,9 @@
  */
 import { useSyncExternalStore } from "react";
 
+/** One day in milliseconds (24 hours; calendar days come from the time zone). */
+export const DAY_MS = 86_400_000;
+
 const TICK_MS = 30_000;
 let now = Date.now();
 const listeners = new Set<() => void>();

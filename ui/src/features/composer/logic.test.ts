@@ -39,6 +39,7 @@ import { mentionsAttachment, needsReminder, ownText, parseKeywords } from "./rem
 import { activeComposer } from "./sessions";
 import { emptyRich, instanceRichStore, primeRich, richStoreFor } from "./store";
 import { must } from "../../test/must";
+import { type ErrorCode } from "../../api/generated";
 
 /** The rich store of the focused composer window. */
 const activeRich = (ctx: ComposeContext) =>
@@ -90,6 +91,13 @@ function draft(patch: Partial<Draft> = {}): Draft {
     markdown_part: false,
     ...patch,
   };
+}
+
+/** Makes the mock core refuse `NewDraft` with `code`. */
+function refuseNewDraft(ctx: ReturnType<typeof context>, code: ErrorCode, message: string): void {
+  const send = ctx.transport.send.bind(ctx.transport);
+  ctx.transport.send = async (request) =>
+    request.type === "NewDraft" ? { type: "Error", code, message } : send(request);
 }
 
 describe("draft mapping", () => {
@@ -323,11 +331,7 @@ describe("composer flows", () => {
 
   it("falls back to the plain-text flows when the core has no composer yet", async () => {
     const ctx = context();
-    const send = ctx.transport.send.bind(ctx.transport);
-    ctx.transport.send = async (request) =>
-      request.type === "NewDraft"
-        ? { type: "Error", code: "unsupported", message: "not yet" }
-        : send(request);
+    refuseNewDraft(ctx, "unsupported", "not yet");
     await startRichCompose(ctx);
     expect(ctx.store.getState().composer?.text).toBe("\n\n-- \nAda");
     expect(activeRich(ctx).getState().mode).toBe("plain");
@@ -341,11 +345,7 @@ describe("composer flows", () => {
 
   it("opens a plain-text composer when the core cannot choose an identity", async () => {
     const ctx = context();
-    const send = ctx.transport.send.bind(ctx.transport);
-    ctx.transport.send = async (request) =>
-      request.type === "NewDraft"
-        ? { type: "Error", code: "invalid_request", message: "there is no identity to send from" }
-        : send(request);
+    refuseNewDraft(ctx, "invalid_request", "there is no identity to send from");
     await startRichCompose(ctx);
     expect(ctx.store.getState().composer).not.toBeNull();
     expect(ctx.store.getState().windows).toEqual(["composer:w1"]);

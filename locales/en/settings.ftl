@@ -3,7 +3,7 @@
 # of the default layout are in core-shell.ftl.
 
 settings-section-action = Show a settings section
-settings-search-action = Search settings
+settings-search-action = { settings-search-label }
 settings-keywords-search = find preferences options configure
 
 ## The page
@@ -15,9 +15,7 @@ settings-page-section-missing = This section is not on the settings page.
 ## Search
 
 settings-search-label = Search settings
-settings-search-placeholder = Search settings
 settings-search-clear = Clear the search
-settings-search-results = Search results
 settings-search-count =
     { $count ->
         [0] No settings match “{ $query }”.

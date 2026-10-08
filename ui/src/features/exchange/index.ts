@@ -21,7 +21,7 @@
  */
 import type { Event as NailEvent, InferenceClassification } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
-import { findSummary } from "../../state/mailOps";
+import { findSummary, activeInbox } from "../../state/mailOps";
 import { rememberTagTargets } from "../mail-actions/tags";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
@@ -150,13 +150,8 @@ export const actions: Feature["actions"] = {
   /** `exchange.focus "focused"` / `"other"` (or no argument for the whole inbox). */
   "exchange.focus": {
     run: (ctx, args) => {
-      const accountId = ctx.store.getState().activeAccountId;
-      const folders = ctx.queryClient.getQueryData<{ id: string; role: string }[]>(
-        queryKeys.folders(accountId),
-      );
-      const inbox = folders?.find((f) => f.role === "inbox");
-      if (accountId === null || !inbox) return;
-      showFocus(ctx.store, accountId, inbox.id, focusArg(args[0]));
+      const inbox = activeInbox(ctx);
+      if (inbox) showFocus(ctx.store, inbox.accountId, inbox.inboxId, focusArg(args[0]));
     },
     enabled: activeExchange,
   },
@@ -198,7 +193,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [MAILBOX_EDITOR_DIALOG]: MailboxEditorDialog,
   [MAILBOX_REMOVE_DIALOG]: MailboxRemoveDialog,
   [CATEGORY_EDITOR_DIALOG]: CategoryEditorDialog,
@@ -251,9 +246,7 @@ export const handleExchangeEvent: FeatureEventHandler = (event, { queryClient })
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleExchangeEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+export const events: NonNullable<Feature["events"]> = [handleExchangeEvent];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

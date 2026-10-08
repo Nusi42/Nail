@@ -335,7 +335,7 @@ export function SecurityBadge({
   );
 }
 
-const METHODS = ["dmarc", "dkim", "spf", "arc"] as const;
+export const METHODS = ["dmarc", "dkim", "spf", "arc"] as const;
 
 function MethodRow({
   method,

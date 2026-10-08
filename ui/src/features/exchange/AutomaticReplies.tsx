@@ -44,6 +44,8 @@ import { automaticRepliesIssues, repliesActive, repliesUpcoming } from "./model"
 import { AUTOMATIC_REPLIES_DIALOG } from "./names";
 import { setAutomaticReplies, useAutomaticReplies, useExchangeAccounts } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
+import { EmptyDialog } from "../../widgets/DialogStates";
+import { CloseButton } from "../../widgets/CloseButton";
 
 const STATUSES: readonly AutomaticRepliesStatus[] = ["disabled", "always-enabled", "scheduled"];
 const AUDIENCES: readonly ExternalAudience[] = ["none", "contacts-only", "all"];
@@ -82,7 +84,7 @@ export function AutomaticRepliesEditor({
   if (!replies.data) {
     return (
       <p data-part="exchange.hint" aria-busy="true">
-        {t("exchange-loading")}
+        {t("common-loading")}
       </p>
     );
   }
@@ -188,7 +190,7 @@ function RepliesForm({
       }}
     >
       <fieldset data-part="form.section" data-section="status">
-        <legend data-part="form.section.title">{t("exchange-oof-status")}</legend>
+        <legend data-part="form.section.title">{t("window-exchange-automatic-replies")}</legend>
         {STATUSES.map((status) => (
           <label key={status} data-part="form.check" data-field={`status-${status}`}>
             <input
@@ -205,7 +207,7 @@ function RepliesForm({
       </fieldset>
       {scheduled && (
         <fieldset data-part="exchange.oof.schedule">
-          <legend data-part="form.section.title">{t("exchange-oof-schedule")}</legend>
+          <legend data-part="form.section.title">{t("common-when")}</legend>
           {timeField("start")}
           {timeField("end")}
           <p data-part="form.hint">{t("exchange-oof-zone", { zone: tz.replaceAll("_", " ") })}</p>
@@ -247,7 +249,7 @@ function RepliesForm({
       {draft.external_audience !== "none" && (
         <div data-part="form.field" data-field="external-reply">
           <label data-part="form.label" htmlFor={ids.external}>
-            {t("exchange-oof-external")}
+            {t("exchange-oof-audience")}
           </label>
           <textarea
             id={ids.external}
@@ -282,7 +284,7 @@ function RepliesForm({
       )}
       {saved && (
         <p data-part="exchange.notice" role="status">
-          {t("exchange-oof-saved")}
+          {t("common-saved")}
         </p>
       )}
       <div data-part="exchange.actions">
@@ -313,12 +315,12 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
   };
   if (!account) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-no-accounts")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-no-accounts"
+        close={close}
+      />
     );
   }
   return (
@@ -327,7 +329,7 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
       {accounts.length > 1 && (
         <div data-part="form.field" data-field="account">
           <label data-part="form.label" htmlFor={ids.account}>
-            {t("exchange-account")}
+            {t("common-account")}
           </label>
           <select
             id={ids.account}
@@ -347,9 +349,7 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
       )}
       <AutomaticRepliesEditor key={account.id} accountId={account.id} />
       <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-close")}
-        </button>
+        <CloseButton onClose={finish} />
       </div>
     </div>
   );
@@ -401,7 +401,7 @@ function Banner({ accountId, name }: { accountId: AccountId; name: string }) {
         data-action="turn-off"
         onClick={() => void turnOff()}
       >
-        {t("exchange-oof-turn-off")}
+        {t("common-turn-off")}
       </button>
       <button
         type="button"

@@ -29,6 +29,7 @@ import {
   toZoned,
 } from "@internationalized/date";
 import type { EventInstance, PimTime, Weekday } from "../../api/generated";
+import { DAY_MS } from "../../state/clock";
 
 /** The calendar views (`calendar view="…"`). */
 export const VIEW_KINDS = [
@@ -194,17 +195,21 @@ export function zoneOf(time: PimTime): string | null {
  * `value` (dates keep only the day in `value`'s own zone).
  */
 export function sameKindAs(like: PimTime, value: ZonedDateTime): PimTime {
+  return likeAt(
+    like,
+    like.type === "zoned" ? toTimeZone(value, isKnownZone(like.tz) ? like.tz : "UTC") : value,
+  );
+}
+
+/** A `PimTime` of the same kind (and zone) as `like` at the wall-clock time `wall`. */
+export function likeAt(like: PimTime, wall: CalendarDateTime | ZonedDateTime): PimTime {
   switch (like.type) {
     case "date":
-      return { type: "date", date: dateString(value) };
+      return { type: "date", date: dateString(wall) };
     case "floating":
-      return { type: "floating", local: localString(value) };
+      return { type: "floating", local: localString(wall) };
     case "zoned":
-      return {
-        type: "zoned",
-        local: localString(toTimeZone(value, isKnownZone(like.tz) ? like.tz : "UTC")),
-        tz: like.tz,
-      };
+      return { type: "zoned", local: localString(wall), tz: like.tz };
   }
 }
 
@@ -435,6 +440,42 @@ export function startOfWeekFor(day: CalendarDate, locale: string): CalendarDate 
   return startOfWeek(day, locale);
 }
 
+/**
+ * The day a key moves to in a grid of days with a week per row: arrows by
+ * a day or a week, Home / End to the week's first / last day, and with
+ * `pages` PageUp / PageDown by a month (with Shift a year); `null` for any
+ * other key.
+ */
+export function dayGridMove(
+  key: string,
+  focused: CalendarDate,
+  locale: string,
+  options: { pages?: boolean; shift?: boolean } = {},
+): CalendarDate | null {
+  switch (key) {
+    case "ArrowLeft":
+      return focused.add({ days: -1 });
+    case "ArrowRight":
+      return focused.add({ days: 1 });
+    case "ArrowUp":
+      return focused.add({ weeks: -1 });
+    case "ArrowDown":
+      return focused.add({ weeks: 1 });
+    case "Home":
+      return startOfWeekFor(focused, locale);
+    case "End":
+      return startOfWeekFor(focused, locale).add({ days: 6 });
+    case "PageUp":
+      if (options.pages !== true) return null;
+      return focused.add(options.shift === true ? { years: -1 } : { months: -1 });
+    case "PageDown":
+      if (options.pages !== true) return null;
+      return focused.add(options.shift === true ? { years: 1 } : { months: 1 });
+    default:
+      return null;
+  }
+}
+
 /** The days of one month as a grid of weeks starting as the locale says. */
 export function monthGrid(month: CalendarDate, locale: string): CalendarDate[][] {
   return weeksOf(viewRange("month", startOfMonth(month), locale));
@@ -456,9 +497,7 @@ export function overlapsDay(instance: EventInstance, day: CalendarDate, tz: stri
 
 /** Shown in the all-day row: all-day events and timed ones of 24 hours or more. */
 export function isAllDayLike(instance: EventInstance): boolean {
-  return (
-    instance.all_day || instantMs(instance.end_utc) - instantMs(instance.start_utc) >= 86_400_000
-  );
+  return instance.all_day || instantMs(instance.end_utc) - instantMs(instance.start_utc) >= DAY_MS;
 }
 
 /** An event placed in a day column (fractions of the day, columns for overlaps). */

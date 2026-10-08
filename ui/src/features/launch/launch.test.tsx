@@ -1,7 +1,7 @@
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
-import { createEnv, renderWithProviders } from "../../test/harness";
+import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
 import { LaunchRequests } from "./LaunchRequests";
@@ -12,6 +12,14 @@ afterEach(() => {
   cleanup();
   remoteStore.getState().clear();
 });
+
+/** Renders the launch handler and waits until it took the queued launches. */
+async function launchesTaken(env: Env): Promise<void> {
+  renderWithProviders(<LaunchRequests />, env);
+  await waitFor(() => {
+    expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true);
+  });
+}
 
 describe("launch requests", () => {
   it("opens the composer for a mailto: link taken at start-up", async () => {
@@ -110,10 +118,7 @@ describe("launch requests", () => {
     const message = env.transport.data.messages[3];
     if (message === undefined) throw new Error("no message");
     env.transport.data.messageFiles.set("C:\\Downloads\\offer.eml", message.id);
-    renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => {
-      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true);
-    });
+    await launchesTaken(env);
     act(() => {
       env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\Downloads\\offer.eml" }]);
     });
@@ -148,10 +153,7 @@ describe("launch requests", () => {
 
   it("says when a file cannot be opened and can be dismissed with the keyboard", async () => {
     const env = createEnv();
-    renderWithProviders(<LaunchRequests />, env);
-    await waitFor(() => {
-      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true);
-    });
+    await launchesTaken(env);
     act(() => {
       env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\missing.eml" }]);
     });

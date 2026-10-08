@@ -117,7 +117,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CANCEL_DIALOG]: CancelMeetingDialog,
   [SETTINGS_DIALOG]: SchedulingSettingsDialog,
   [FIND_TIME_DIALOG]: FindTimeDialog,
@@ -148,6 +148,4 @@ export const handleSchedulingEvent: FeatureEventHandler = (event, { queryClient 
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleSchedulingEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+export const events: NonNullable<Feature["events"]> = [handleSchedulingEvent];

@@ -10,20 +10,26 @@ import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
-import type { Density } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { BUILTIN_THEMES } from "../appearance";
 import { resolveMockTheme } from "../appearance/themes";
 import { WindowView } from "../../layout/LayoutRenderer";
 import { compileTheme } from "../../theme/compile";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderWithProviders,
+  widget,
+  type Env,
+  renderAsDialog,
+} from "../../test/harness";
 import { dialogs, loadPimEditors } from ".";
 import { fireReminder } from "./mock";
 import { DIALOGS } from "./names";
 import { PimToasts } from "./Reminders";
 import { pimStoreFor } from "./store";
 import { VIEW_KINDS } from "./time";
+import { DENSITIES, THEME_CASES, itCoversTheBuiltInThemes } from "../../test/themes";
 
 /** The value, or a test failure when it is missing. */
 function must<T>(value: T | null | undefined): T {
@@ -173,13 +179,7 @@ describe("axe: PIM dialogs", () => {
   it.each([...DIALOGS])("dialog %s has no violations", async (name) => {
     const env = createEnv();
     await prepare(env, name);
-    const Dialog = must(dialogs[name]);
-    const { container } = renderWithProviders(
-      <div role="dialog" aria-label={name}>
-        <Dialog name={name} close={() => undefined} />
-      </div>,
-      env,
-    );
+    const { container } = renderAsDialog(env, must(dialogs[name]), name);
     await settle(env);
     expect(container.querySelector("[data-part]")).not.toBeNull();
     expect(await violations(container)).toEqual([]);
@@ -238,23 +238,13 @@ describe("axe: PIM dialogs", () => {
 });
 
 describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
-  const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-  const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
   // Each theme once for the (slow) axe scans, the densities alternating;
   // every theme and density compiles below.
   const SCANS = BUILTIN_THEMES.map(([id], i) => [id, DENSITIES[i % 2] ?? "comfortable"] as const);
 
-  it("covers the five built-in themes", () => {
-    expect(BUILTIN_THEMES.map(([id]) => id)).toEqual([
-      "frost",
-      "sage",
-      "graphite",
-      "nocturne",
-      "high-contrast",
-    ]);
-  });
+  itCoversTheBuiltInThemes();
 
-  it.each(CASES)("%s / %s compiles with the PIM skin and no dropped rules", (id, density) => {
+  it.each(THEME_CASES)("%s / %s compiles with the PIM skin and no dropped rules", (id, density) => {
     const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
     const compiled = compileTheme(theme);
     expect(compiled.warnings).toEqual([]);

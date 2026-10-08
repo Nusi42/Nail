@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import type { DiscoveredAccount } from "../api/generated";
 import { securityDemoBySender } from "../features/security/mock";
 import { createEnv, renderNode, widget, type Env } from "../test/harness";
@@ -23,6 +23,22 @@ function forwardOAuth(env: Env) {
       env.store.getState().setOAuthResult(event.flow_id, event.error);
     }
   });
+}
+
+/** The account settings once the first account's form showed. */
+async function accountSettings() {
+  const user = userEvent.setup();
+  const env = createEnv();
+  renderNode(widget("account-settings"), env);
+  await screen.findByRole("textbox", { name: "Account name" });
+  return { user, env };
+}
+
+/** The account setup with a Gmail address entered and Continue pressed. */
+async function setupGmail(user: UserEvent, env: Env): Promise<void> {
+  renderNode(widget("account-setup"), env);
+  await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@gmail.com");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
 describe("account-setup", () => {
@@ -74,9 +90,7 @@ describe("account-setup", () => {
     // on a loaded machine; the mock's default 20 ms delay made this flaky.
     env.transport.data.behaviour.workMs = 1500;
     const off = forwardOAuth(env);
-    renderNode(widget("account-setup"), env);
-    await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@gmail.com");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await setupGmail(user, env);
     expect(await screen.findByText("Google Mail", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Sign-in method" })).toHaveValue("oauth2:google");
     expect(screen.queryByLabelText("Password")).toBeNull();
@@ -95,9 +109,7 @@ describe("account-setup", () => {
     const env = createEnv();
     env.transport.data.behaviour.oauthError = "cancelled";
     const off = forwardOAuth(env);
-    renderNode(widget("account-setup"), env);
-    await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@gmail.com");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await setupGmail(user, env);
     await user.click(await screen.findByRole("button", { name: "Sign in with Google" }));
     expect(
       await screen.findByText("Sign-in failed: The operation was cancelled."),
@@ -260,10 +272,7 @@ describe("account-settings", () => {
   });
 
   it("removes an account after confirmation and opens setup for new ones", async () => {
-    const user = userEvent.setup();
-    const env = createEnv();
-    renderNode(widget("account-settings"), env);
-    await screen.findByRole("textbox", { name: "Account name" });
+    const { user, env } = await accountSettings();
     await user.click(screen.getByRole("button", { name: "Remove account" }));
     expect(screen.getByText(/Remove “Personal”\?/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -309,10 +318,7 @@ describe("account-settings", () => {
   });
 
   it("says when recent mail suggests no receiving server", async () => {
-    const user = userEvent.setup();
-    const env = createEnv();
-    renderNode(widget("account-settings"), env);
-    await screen.findByRole("textbox", { name: "Account name" });
+    const { user } = await accountSettings();
     await user.click(screen.getByRole("button", { name: "Suggest from recent mail" }));
     expect(
       await screen.findByText("Your recent mail names no receiving server Nail could suggest."),

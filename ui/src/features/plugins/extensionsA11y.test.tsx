@@ -5,10 +5,10 @@
  * activity and confirmation sections open, plus the install dialog's list
  * of contributions. Contrast needs a real layout engine (Playwright).
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
-import { createEnv, renderWithProviders, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders, type Env, settleQueries } from "../../test/harness";
 import {
   AttachmentActionMenu,
   AttachmentPreviewPane,
@@ -22,15 +22,8 @@ import {
 import { installDemoExtensions } from "./extensionsSeed";
 import { PluginManagerDialog } from "./PluginManager";
 import { pluginsStoreFor } from "./store";
-import { tick } from "./testUtil";
+import { withAttachments } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(() => tick());
-}
 
 function setup(): Env {
   const env = createEnv();
@@ -41,24 +34,20 @@ function setup(): Env {
 describe("axe: plug-in extensions", () => {
   it("reader parts (banners, badges, previews, open menus) have no violations", async () => {
     const env = setup();
-    const m = env.transport.data.messages.find(
-      (x) => (env.transport.data.bodies.get(x.id)?.attachments.length ?? 0) > 1,
-    );
-    const body = m ? env.transport.data.bodies.get(m.id) : undefined;
-    if (!m || !body?.attachments[0] || !body.attachments[1]) throw new Error("no attachments");
+    const { messageId, pdf, csv } = withAttachments(env);
     const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(
       <article>
-        <PluginBadges messageId={m.id} />
-        <PluginBanners messageId={m.id} />
-        <AttachmentPreviewPane messageId={m.id} attachment={body.attachments[0]} />
-        <AttachmentPreviewPane messageId={m.id} attachment={body.attachments[1]} />
-        <AttachmentActionMenu messageId={m.id} attachment={body.attachments[1]} />
+        <PluginBadges messageId={messageId} />
+        <PluginBanners messageId={messageId} />
+        <AttachmentPreviewPane messageId={messageId} attachment={pdf} />
+        <AttachmentPreviewPane messageId={messageId} attachment={csv} />
+        <AttachmentActionMenu messageId={messageId} attachment={csv} />
         <LinkActionMenu url="https://docs.example.org" />
       </article>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "Plug-in actions for this link" }));
     expect(screen.getByRole("menu")).toBeInTheDocument();
@@ -81,7 +70,7 @@ describe("axe: plug-in extensions", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     await user.click(screen.getByRole("button", { name: "Insert block" }));
     expect(await violations(container)).toEqual([]);
     act(() => {
@@ -113,7 +102,7 @@ describe("axe: plug-in extensions", () => {
     if (snippets) snippets.manifest.permissions = ["composer", "tasks.write"];
     const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(<PluginManagerDialog />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     for (const id of ["digest", "attachment-check"]) {
       const row = container.querySelector<HTMLElement>(`[data-plugin="${id}"]`);
       if (!row) throw new Error(id);
@@ -122,10 +111,10 @@ describe("axe: plug-in extensions", () => {
     const row = container.querySelector<HTMLElement>('[data-plugin="snippets"]');
     if (!row) throw new Error("snippets");
     await user.click(within(row).getByRole("button", { name: "Confirmations" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
     await user.click(within(row).getByRole("button", { name: "Permissions" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   });
 });

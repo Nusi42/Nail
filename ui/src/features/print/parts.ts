@@ -15,12 +15,13 @@
  * base CSS (`ui/src/theme/compile.ts`).
  */
 import { pageRules } from "./model";
+import { INLINE_GAP } from "../../theme/declarations";
 
 export const PRINT_BASE_CSS = `[data-part="print"] { position: fixed; inset: 0; z-index: 2000; overflow: auto; }
-[data-part="print.toolbar"] { display: flex; flex-wrap: wrap; gap: 0.5em; }
+[data-part="print.toolbar"] { display: flex; flex-wrap: wrap; gap: ${INLINE_GAP}; }
 [data-part="print.text"], [data-part="print.quote"], [data-part="print.body"] { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-part="print.headers"] { margin: 0; }
-[data-part="print.header"] { display: flex; gap: 0.5em; }
+[data-part="print.header"] { display: flex; gap: ${INLINE_GAP}; }
 [data-part="print.header.value"] { margin: 0; overflow-wrap: anywhere; }
 [data-part="print.attachments.list"], [data-part="print.attendees.list"], [data-part="print.agenda.events"] { list-style: none; margin: 0; padding: 0; }
 [data-part="print.message"] + [data-part="print.message"] { break-before: page; }

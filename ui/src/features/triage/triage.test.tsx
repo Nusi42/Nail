@@ -1,6 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { createDispatcher } from "../../actions/registry";
 import { appRegistry } from "../registry";
@@ -21,25 +20,11 @@ import { decorateJunk, snoozedFolderId, wakeDue } from "./mock";
 import { SnoozeDialog, SNOOZE_DIALOG } from "./Snooze";
 import { WebNotifications, notificationTexts } from "./Notifications";
 import { triageStoreFor } from "./store";
-
-const INBOX = "acc-personal/Inbox";
+import { snoozeForADay, requestsOf, actionContext } from "../../test/env";
+import { INBOX } from "../../test/mockIds";
 
 function dispatcher(env: Env) {
-  return createDispatcher(
-    {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id) => id,
-      locale: "en",
-    },
-    appRegistry.actions,
-  );
-}
-
-function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
+  return createDispatcher(actionContext(env), appRegistry.actions);
 }
 
 describe("triage model", () => {
@@ -152,7 +137,7 @@ describe("junk and snooze actions", () => {
     expect(actions.isEnabled("junk.mark")).toBe(true);
     await actions.dispatch("junk.mark");
     // P3: one mail action (one batch with one undo) on the selection.
-    expect(sent(env, "ApplyMailAction")).toEqual([
+    expect(requestsOf(env, "ApplyMailAction")).toEqual([
       {
         type: "ApplyMailAction",
         targets: [{ kind: "message", message_id: message.id }],
@@ -178,7 +163,7 @@ describe("junk and snooze actions", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    const [request] = sent(env, "ApplyMailAction");
+    const [request] = requestsOf(env, "ApplyMailAction");
     const expected = presetTime("tomorrow", new Date());
     expect(request?.action.type).toBe("snooze");
     expect(Date.parse(request?.action.type === "snooze" ? request.action.until : "")).toBe(
@@ -196,7 +181,7 @@ describe("junk and snooze actions", () => {
     fireEvent.change(field, { target: { value: "2020-01-01T08:00" } });
     await user.click(screen.getByRole("button", { name: "Snooze" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Choose a time in the future.");
-    expect(sent(env, "SnoozeMessages")).toEqual([]);
+    expect(requestsOf(env, "SnoozeMessages")).toEqual([]);
   });
 });
 
@@ -206,15 +191,7 @@ describe("triage widgets", () => {
     const env = createEnv();
     const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
     if (!message) throw new Error("no inbox message");
-    await env.client.request(
-      {
-        type: "SnoozeMessages",
-        message_ids: [message.id],
-        until: new Date(Date.now() + 86_400_000).toISOString(),
-        wake_folder_id: null,
-      },
-      "Queued",
-    );
+    await snoozeForADay(env, message.id);
     renderWithProviders(<NodeView node={widget("snooze-list")} path="t" />, env);
     const list = await screen.findByRole("region", { name: "Snoozed messages" });
     const item = await within(list).findByText(message.subject);
@@ -239,7 +216,7 @@ describe("triage widgets", () => {
     expect(bar).toHaveTextContent("Marked by you");
     await user.click(within(bar).getByRole("button", { name: "Not junk" }));
     await waitFor(() => {
-      expect(sent(env, "ApplyMailAction").at(-1)).toEqual({
+      expect(requestsOf(env, "ApplyMailAction").at(-1)).toEqual({
         type: "ApplyMailAction",
         targets: [{ kind: "message", message_id: message.id }],
         action: { type: "junk", junk: false },
@@ -258,19 +235,19 @@ describe("triage widgets", () => {
     await user.type(threshold, "20");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("between 50 and 99");
-    expect(sent(env, "UpdateJunkSettings")).toEqual([]);
+    expect(requestsOf(env, "UpdateJunkSettings")).toEqual([]);
     await user.clear(threshold);
     await user.type(threshold, "80");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Saved.");
-    expect(sent(env, "UpdateJunkSettings")[0]?.settings).toMatchObject({
+    expect(requestsOf(env, "UpdateJunkSettings")[0]?.settings).toMatchObject({
       enabled: true,
       threshold: 80,
     });
     await user.click(screen.getByRole("button", { name: "Reset the filter…" }));
     await user.click(screen.getByRole("button", { name: "Reset" }));
     expect(await screen.findByText("The filter forgot everything it learned.")).toBeVisible();
-    expect(sent(env, "ResetJunkClassifier")).toHaveLength(1);
+    expect(requestsOf(env, "ResetJunkClassifier")).toHaveLength(1);
   });
 
   it("edits notification settings: quiet hours, overrides, test", async () => {
@@ -284,7 +261,7 @@ describe("triage widgets", () => {
     await user.selectOptions(await screen.findByLabelText("Personal"), "off");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved.");
-    const [update] = sent(env, "UpdateNotificationSettings");
+    const [update] = requestsOf(env, "UpdateNotificationSettings");
     expect(update?.settings.quiet_hours).toEqual({ start: "22:00", end: "07:00", days: ["sat"] });
     expect(update?.settings.overrides).toContainEqual({
       scope: { type: "account", account_id: "acc-personal" },

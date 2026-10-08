@@ -30,6 +30,7 @@ import { snooze, triageKeys, unsnooze, useSnoozed } from "./queries";
 import { useTriage } from "./store";
 import { formatDateTime } from "../../i18n/format";
 import { nonEmpty } from "../../text/empty";
+import { useBusyAction } from "../../state/busyAction";
 
 /** Name of the snooze picker dialog and of the snoozed-list window. */
 export const SNOOZE_DIALOG = "snooze";
@@ -79,17 +80,14 @@ export function SnoozeDialog({ close }: DialogProps) {
     const tomorrow = presetTime("tomorrow", now);
     return tomorrow ? toLocalInput(tomorrow) : "";
   });
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, setProblem, run: runBusy } = useBusyAction();
 
   const run = async (date: Date) => {
     if (isPast(date)) {
       setProblem({ id: "snooze-error-past" });
       return;
     }
-    setBusy(true);
-    setProblem(null);
-    try {
+    await runBusy(async () => {
       if (targets === null) {
         await snooze(ctx, ids, toRfc3339(date));
         close();
@@ -103,11 +101,7 @@ export function SnoozeDialog({ close }: DialogProps) {
         void ctx.queryClient.invalidateQueries({ queryKey: triageKeys.snoozed });
         if (result !== null) close();
       }
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const submit = (event: SubmitEvent) => {
@@ -170,10 +164,10 @@ export function SnoozeDialog({ close }: DialogProps) {
       <Problem message={problem} />
       <div data-part="snooze.actions">
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("snooze-submit")}
+          {t("common-snooze")}
         </button>
         <button type="button" data-part="form.button" onClick={close}>
-          {t("snooze-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -195,10 +189,10 @@ function SnoozedItem({
   const sender =
     nonEmpty(item.message.from?.name) ??
     nonEmpty(item.message.from?.email) ??
-    t("snooze-unknown-sender");
+    t("common-unknown-sender");
   return (
     <li data-part="snooze-list.item" data-message={item.message.id}>
-      <span data-part="snooze-list.subject">{item.message.subject || t("message-no-subject")}</span>
+      <span data-part="snooze-list.subject">{item.message.subject || t("common-no-subject")}</span>
       <span data-part="snooze-list.from">{sender}</span>
       <span data-part="snooze-list.until">
         {t("snooze-list-until", {
@@ -245,7 +239,7 @@ export function SnoozeList({ node }: Partial<WidgetProps>) {
     <section
       data-part="snooze-list"
       data-node-id={node?.id ?? undefined}
-      aria-label={node?.label ? label(node.label) : t("snooze-list-label")}
+      aria-label={node?.label ? label(node.label) : t("snooze-action-list")}
       aria-busy={snoozed.isFetching}
     >
       {snoozed.isError && <Problem message={errorMessageOf(snoozed.error)} />}

@@ -7,7 +7,7 @@
  * events; sending honours the undo-send delay with real timers (tests use
  * fake timers). `data.behaviour` makes the mock fail on purpose.
  */
-import { Listeners, type ConnectionStatus, type Transport } from "./client";
+import { ClosableTransport } from "./client";
 import type { LaunchRequest, Event as NailEvent, Request, Response } from "./generated";
 import * as accounts from "./mockAccounts";
 import { createMockData, type MockData } from "./mockData";
@@ -72,17 +72,15 @@ export interface MockTransportOptions {
   latencyMs?: number;
 }
 
-export class MockTransport implements Transport, MockCore {
+export class MockTransport extends ClosableTransport implements MockCore {
   readonly data: MockData;
   /** Every request received, in order (for assertions). */
   readonly requests: Request[] = [];
   private readonly latencyMs: number;
-  private readonly events = new Listeners<NailEvent>();
-  private readonly statuses = new Listeners<ConnectionStatus>();
-  private closed = false;
   private counter = 0;
 
   constructor(options: MockTransportOptions = {}) {
+    super();
     this.data = options.data ?? createMockData();
     this.latencyMs = options.latencyMs ?? 0;
   }
@@ -115,23 +113,6 @@ export class MockTransport implements Transport, MockCore {
   nextId(prefix: string): string {
     this.counter++;
     return `${prefix}${String(this.counter)}`;
-  }
-
-  onEvent(listener: (event: NailEvent) => void): () => void {
-    return this.events.add(listener);
-  }
-
-  onStatus(listener: (status: ConnectionStatus) => void): () => void {
-    return this.statuses.add(listener);
-  }
-
-  status(): ConnectionStatus {
-    return this.closed ? "closed" : "connected";
-  }
-
-  close(): void {
-    this.closed = true;
-    this.statuses.emit("closed");
   }
 
   private answer(request: Request): Response {

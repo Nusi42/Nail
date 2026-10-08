@@ -9,12 +9,10 @@
 import type { NailClient } from "../api/client";
 import { NailError } from "../api/client";
 import type { AttachmentInfo, MessageId, Response } from "../api/generated";
+import { UNSUPPORTED_CODES } from "../api/contract";
 
 /** How a save ended. */
 export type SaveOutcome = "saved" | "downloaded" | "cancelled" | "unsupported";
-
-/** Error codes of a core that does not have the request. */
-const UNSUPPORTED = new Set(["unsupported", "invalid_request"]);
 
 function fail(response: Extract<Response, { type: "Error" }>): never {
   throw new NailError(response.code, response.message, response.localized ?? null);
@@ -66,7 +64,7 @@ export async function saveAttachment(
       overwrite: true,
     });
     if (saved.type === "Error") {
-      if (UNSUPPORTED.has(saved.code)) return "unsupported";
+      if (UNSUPPORTED_CODES.has(saved.code)) return "unsupported";
       fail(saved);
     }
     return "saved";
@@ -79,7 +77,7 @@ export async function saveAttachment(
     index: attachment.index,
   });
   if (content.type === "Error") {
-    if (UNSUPPORTED.has(content.code)) return "unsupported";
+    if (UNSUPPORTED_CODES.has(content.code)) return "unsupported";
     fail(content);
   }
   if (content.type !== "AttachmentData") return "unsupported";

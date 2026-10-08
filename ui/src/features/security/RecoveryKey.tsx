@@ -30,6 +30,8 @@ import { PathField, useSavePath } from "../portability/PathField";
 import { printSheet } from "../print";
 import { securityKeys, useVaultStatus } from "./queries";
 import { parseRecoveryKey, recoveryIssueId, recoveryKeyGroups } from "./recoveryKeyText";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 export const RECOVERY_WIDGET = "security-recovery-key";
 export const RECOVERY_CREATE_DIALOG = "security-recovery-create";
@@ -154,14 +156,11 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
   const [stored, setStored] = useState(false);
   const [copied, setCopied] = useState(false);
   const [typed, setTyped] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, setProblem, run } = useBusyAction();
   const replacing = vault.data?.recovery.configured ?? false;
 
   const create = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         {
           type: "CreateRecoveryKey",
@@ -175,17 +174,11 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
       setCreatedAt(answer.status.created_at);
       updateRecovery(answer.status);
       setStep("show");
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const verify = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         { type: "VerifyRecoveryKey", key: typed },
         "RecoveryKeyVerified",
@@ -197,11 +190,7 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
       } else {
         setProblem({ id: "security-recovery-verify-mismatch" });
       }
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const copy = async () => {
@@ -293,7 +282,7 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
                 );
               }}
             >
-              {t("security-recovery-print")}
+              {t("common-print")}
             </button>
           </div>
           <label data-part="form.check" data-field="stored">
@@ -365,9 +354,7 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
             {t("security-recovery-done")}
           </p>
           <div data-part="wizard.buttons">
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("security-recovery-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </div>
         </>
       )}
@@ -382,24 +369,17 @@ export function RecoveryKeyVerify({ close }: { close: () => void }) {
   const updateRecovery = useUpdateRecovery();
   const [typed, setTyped] = useState("");
   const [result, setResult] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
 
   const verify = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         { type: "VerifyRecoveryKey", key: typed },
         "RecoveryKeyVerified",
       );
       updateRecovery(answer.status);
       setResult(answer.valid);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -430,9 +410,7 @@ export function RecoveryKeyVerify({ close }: { close: () => void }) {
         >
           {t("security-recovery-verify")}
         </button>
-        <button type="button" data-part="form.button" data-action="close" onClick={close}>
-          {t("security-recovery-close")}
-        </button>
+        <CloseButton onClose={close} action="close" />
       </div>
     </div>
   );
@@ -447,25 +425,18 @@ export function RecoveryKeyRestore({ close }: { close: () => void }) {
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
   const [restartNeeded, setRestartNeeded] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const needed = vault.data?.needs_recovery ?? false;
 
   const restore = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request({ type: "RestoreVaultKey", key: typed }, "VaultStatus");
       queryClient.setQueryData(securityKeys.vault, answer.status);
       setTyped("");
       // A locked data directory opens after a restart (WP125, ADR 0099).
       setRestartNeeded(answer.status.localized?.id === "vault-restart-needed");
       setDone(true);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   if (done) {
@@ -475,9 +446,7 @@ export function RecoveryKeyRestore({ close }: { close: () => void }) {
           {t(restartNeeded ? "vault-restart-needed" : "security-recovery-restored")}
         </p>
         <div data-part="wizard.buttons">
-          <button type="button" data-part="form.button" data-action="close" onClick={close}>
-            {t("security-recovery-close")}
-          </button>
+          <CloseButton onClose={close} action="close" />
         </div>
       </div>
     );

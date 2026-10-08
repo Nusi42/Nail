@@ -103,48 +103,8 @@ mail-actions-done-tags-added = { $noun ->
     [one] the conversation
    *[other] { $conversations } conversations
 }
-mail-actions-done-tags-removed = { $noun ->
-    [label] { $tags ->
-        [one] Label
-       *[other] Labels
-    }
-    [category] { $tags ->
-        [one] Category
-       *[other] Categories
-    }
-   *[tag] { $tags ->
-        [one] Tag
-       *[other] Tags
-    }
-} removed from { $conversations ->
-    [0] { $messages ->
-        [one] the message
-       *[other] { $messages } messages
-    }
-    [one] the conversation
-   *[other] { $conversations } conversations
-}
-mail-actions-done-tags-changed = { $noun ->
-    [label] { $tags ->
-        [one] Label
-       *[other] Labels
-    }
-    [category] { $tags ->
-        [one] Category
-       *[other] Categories
-    }
-   *[tag] { $tags ->
-        [one] Tag
-       *[other] Tags
-    }
-} changed on { $conversations ->
-    [0] { $messages ->
-        [one] the message
-       *[other] { $messages } messages
-    }
-    [one] the conversation
-   *[other] { $conversations } conversations
-}
+mail-actions-done-tags-removed = { mail-actions-done-tags-added }
+mail-actions-done-tags-changed = { mail-actions-done-tags-added }
 mail-actions-done-snooze = { $conversations ->
     [0] { $messages ->
         [one] Message snoozed
@@ -181,9 +141,7 @@ mail-actions-toast-messages =
         [one] 1 message
        *[other] { $messages } messages
     }
-mail-actions-undo = Undo
 mail-actions-undone = Action undone
-mail-actions-dismiss = Dismiss
 
 ## "Delete permanently?" for conversations: the count the core resolved.
 
@@ -197,9 +155,9 @@ mail-actions-delete-permanently-conversations = { $conversations ->
 
 ## Command palette
 
-mail-actions-action-mark-read = Mark as read
+mail-actions-action-mark-read = { common-mark-as-read }
 mail-actions-action-mark-read-keywords = seen read conversation
-mail-actions-action-mark-unread = Mark as unread
+mail-actions-action-mark-unread = { common-mark-as-unread }
 mail-actions-action-mark-unread-keywords = unseen new unread conversation
 mail-actions-action-undo = Undo last action
 mail-actions-action-undo-keywords = revert restore back archive delete move

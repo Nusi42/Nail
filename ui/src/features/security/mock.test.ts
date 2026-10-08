@@ -1,5 +1,3 @@
-import type { Event as NailEvent, Request, Response } from "../../api/generated";
-import { MockTransport } from "../../api/mock";
 import {
   SECURITY_REQUESTS,
   VAULT_ITEMS,
@@ -9,17 +7,11 @@ import {
   pemCertificate,
   securityDemoBySender,
 } from "./mock";
+import { mockSetup } from "../../test/env";
 
 function setup() {
-  const transport = new MockTransport();
-  const events: NailEvent[] = [];
-  transport.onEvent((e) => events.push(e));
-  const send = async <T extends Response["type"]>(request: Request, type: T) => {
-    const answer = await transport.send(request);
-    if (answer.type !== type) throw new Error(JSON.stringify(answer));
-    return answer as Extract<Response, { type: T }>;
-  };
-  return { transport, events, send, s: transport.data.features.security };
+  const core = mockSetup();
+  return { ...core, s: core.transport.data.features.security };
 }
 
 const ALL = { technology: null, text: null, own_only: false };

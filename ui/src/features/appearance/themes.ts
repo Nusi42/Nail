@@ -20,6 +20,7 @@ import type {
   ThemeMode,
   TokenSet,
 } from "../../api/generated";
+import { PX_CATEGORIES } from "./tokens";
 
 const files = import.meta.glob<string>("../../../../defaults/themes/*.kdl", {
   query: "?raw",
@@ -28,7 +29,6 @@ const files = import.meta.glob<string>("../../../../defaults/themes/*.kdl", {
 });
 
 /** Categories whose unitless numbers are pixels (as in `nail-config`). */
-const PX_CATEGORIES = new Set(["font-size", "space", "size", "radius"]);
 /** Token variants a theme file may give. */
 const VARIANTS = new Set(["light", "dark", "high-contrast", "print", "compact"]);
 

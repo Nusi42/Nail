@@ -27,7 +27,6 @@ import { useDateFormat } from "../../i18n/format";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { queryKeys, useAccountsConfig, useClient } from "../../state/queries";
-import { useRules } from "../rules/api";
 import { formatInstant } from "../pim/fmt";
 import { localZone } from "../pim/time";
 import { Problem, useWriteContext } from "./common";
@@ -39,6 +38,7 @@ import {
   useExchangeAccounts,
   useExchangeRules,
 } from "./queries";
+import { PlacementTable } from "../rules/PlacementTable";
 
 function AccountBadge({ account, ruleId }: { account: Account; ruleId: RuleId }) {
   const t = useT();
@@ -126,37 +126,23 @@ function ServerSwitch({ config }: { config: AccountConfig }) {
 
 function Placements({ status }: { status: ExchangeRulesStatus }) {
   const t = useT();
-  const rules = useRules();
-  const names = new Map((rules.data ?? []).map((r) => [r.id, r.name]));
-  if (status.rules.length === 0) {
-    return <p data-part="exchange-rules.empty">{t("exchange-rules-none")}</p>;
-  }
   return (
-    <table data-part="exchange-rules.placements">
-      <caption data-part="exchange-rules.caption">{t("exchange-rules-placements")}</caption>
-      <thead>
-        <tr data-part="exchange-rules.head">
-          <th scope="col">{t("exchange-rules-rule")}</th>
-          <th scope="col">{t("exchange-rules-placement")}</th>
-          <th scope="col">{t("exchange-rules-why")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {status.rules.map((rule) => (
-          <tr key={rule.rule_id} data-part="exchange-rules.rule" data-placement={rule.placement}>
-            <th scope="row" data-part="exchange-rules.rule.name">
-              {names.get(rule.rule_id) ?? rule.rule_id}
-            </th>
-            <td data-part="exchange-rules.rule.placement">
-              {t(`exchange-placement-short-${rule.placement}`)}
-            </td>
-            <td data-part="exchange-rules.rule.reasons">
-              {rule.reasons.map((r) => t(r.id, r.args)).join(" ")}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <PlacementTable
+      rules={status.rules}
+      parts={{
+        table: "exchange-rules.placements",
+        caption: "exchange-rules.caption",
+        head: "exchange-rules.head",
+        row: "exchange-rules.rule",
+        empty: "exchange-rules.empty",
+      }}
+      ids={{
+        caption: "exchange-rules-placements",
+        placement: "exchange-rules-placement",
+        empty: "exchange-rules-none",
+      }}
+      placementLabel={(placement) => t(`exchange-placement-short-${placement}`)}
+    />
   );
 }
 
@@ -219,7 +205,7 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
               setConfirm(false);
             }}
           >
-            {t("exchange-cancel")}
+            {t("common-cancel")}
           </button>
           <button
             type="button"
@@ -227,7 +213,7 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
             data-variant="danger"
             onClick={() => void run(() => deleteServerRule(ctx, accountId, rule.id))}
           >
-            {t("exchange-rules-delete")}
+            {t("common-delete")}
           </button>
         </span>
       ) : (
@@ -240,7 +226,7 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
             setConfirm(true);
           }}
         >
-          {t("exchange-rules-delete")}
+          {t("common-delete")}
         </button>
       )}
       <Problem message={problem} />
@@ -265,7 +251,7 @@ function AccountRules({
   if (!status) {
     return (
       <p data-part="exchange.hint" aria-busy="true">
-        {t("exchange-loading")}
+        {t("common-loading")}
       </p>
     );
   }
@@ -301,7 +287,7 @@ function AccountRules({
           disabled={status.state === "disabled" || status.state === "syncing"}
           onClick={() => void sync()}
         >
-          {t("exchange-rules-sync")}
+          {t("common-sync-now")}
         </button>
       </div>
       <Placements status={status} />
@@ -344,7 +330,7 @@ export function ExchangeRulesWidget({ node }: WidgetProps) {
           {accounts.length > 1 && (
             <div data-part="form.field" data-field="account">
               <label data-part="form.label" htmlFor={ids.account}>
-                {t("exchange-account")}
+                {t("common-account")}
               </label>
               <select
                 id={ids.account}

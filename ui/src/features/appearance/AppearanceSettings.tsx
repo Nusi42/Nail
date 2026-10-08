@@ -401,7 +401,7 @@ function OverridesForm({
           {t("appearance-overrides-reset")}
         </button>
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("appearance-overrides-apply")}
+          {t("common-apply")}
         </button>
       </div>
     </form>

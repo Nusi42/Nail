@@ -53,7 +53,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Named dialogs (opened with `window.open "<name>"`). */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [DIALOGS.merge]: MergeDialog,
   [DIALOGS.errors]: ConfigErrorsDialog,
 };
@@ -77,10 +77,14 @@ export const handleCustomizationEvent: FeatureEventHandler = (event, { queryClie
 };
 
 /** Handlers for core events. */
-export const events: Feature["events"] = [handleCustomizationEvent];
+export const events: NonNullable<Feature["events"]> = [handleCustomizationEvent];
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [Inspector, SplitWriteBack, LayoutMigration];
+export const effects: NonNullable<Feature["effects"]> = [
+  Inspector,
+  SplitWriteBack,
+  LayoutMigration,
+];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

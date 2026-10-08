@@ -19,6 +19,7 @@ import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { contributionItems, hookMessageId, isRunning } from "./extensions";
 import { pluginKeys, usePluginActivity } from "./queries";
+import { ContributionList } from "./InstallDialog";
 
 /** CPU use as a share of the quota, 0–100 (whole percent). */
 export function cpuPercent(usedMs: number, quotaMs: number): number {
@@ -42,7 +43,7 @@ function Hooks({ hooks }: { hooks: readonly PluginHookStats[] }) {
         <tr>
           <th scope="col">{t("plugin-activity-hook")}</th>
           <th scope="col">{t("plugin-activity-calls")}</th>
-          <th scope="col">{t("plugin-activity-failures")}</th>
+          <th scope="col">{t("common-failed")}</th>
           <th scope="col">{t("plugin-activity-timeouts")}</th>
           <th scope="col">{t("plugin-activity-vetoes")}</th>
           <th scope="col">{t("plugin-activity-time")}</th>
@@ -69,9 +70,7 @@ function Hooks({ hooks }: { hooks: readonly PluginHookStats[] }) {
               })}
             </td>
             <td>
-              {h.last_at === null
-                ? t("plugin-activity-never")
-                : dates.dateTime(h.last_at, DATE_TIME)}
+              {h.last_at === null ? t("common-never") : dates.dateTime(h.last_at, DATE_TIME)}
               {h.last_error !== null && (
                 <span data-part="plugin-activity.last-error">
                   {t("plugin-activity-last-error", { error: h.last_error })}
@@ -111,7 +110,7 @@ function Job({ plugin, job }: { plugin: PluginInfo; job: PluginJobStatus }) {
       <dl data-part="plugin-activity.job.facts">
         {job.schedule !== null && (
           <>
-            <dt>{t("plugin-activity-schedule")}</dt>
+            <dt>{t("common-schedule")}</dt>
             <dd>
               <code data-part="plugin-activity.schedule">{job.schedule}</code>
             </dd>
@@ -134,7 +133,7 @@ function Job({ plugin, job }: { plugin: PluginInfo; job: PluginJobStatus }) {
           {job.running
             ? t("plugin-activity-running")
             : job.last_run_at === null
-              ? t("plugin-activity-never")
+              ? t("common-never")
               : t("plugin-activity-last-run-value", {
                   time: dates.dateTime(job.last_run_at, DATE_TIME),
                   outcome: t(`plugin-job-outcome-${job.last_outcome ?? "ok"}`),
@@ -181,15 +180,7 @@ function Adds({ plugin }: { plugin: PluginInfo }) {
   return (
     <div data-part="plugin-activity.adds">
       <h4 data-part="plugin-activity.heading">{t("plugin-install-adds")}</h4>
-      <ul data-part="plugin-install.contributions">
-        {items.map((item) => (
-          <li key={item.key} data-part="plugin-install.contribution" data-kind={item.kind}>
-            {item.kind === "hook"
-              ? t(item.id, { hook: t(item.args.hook ?? "") })
-              : t(item.id, item.args)}
-          </li>
-        ))}
-      </ul>
+      <ContributionList items={items} />
     </div>
   );
 }

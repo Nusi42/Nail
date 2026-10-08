@@ -4,9 +4,9 @@
  * dialogs show "Loading…" for the moment it takes.
  */
 import { Suspense, lazy, type ComponentType } from "react";
-import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import type * as Editors from "./editorDialogs";
+import { LoadingDialog } from "../../widgets/DialogStates";
 
 type EditorModule = typeof Editors;
 
@@ -19,12 +19,7 @@ export function loadPimEditors(): Promise<EditorModule> {
 }
 
 function Loading() {
-  const t = useT();
-  return (
-    <div data-part="pim.editor" data-state="loading" aria-busy="true">
-      <p data-part="pim.editor.loading">{t("pim-loading")}</p>
-    </div>
-  );
+  return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
 }
 
 function lazyDialog(

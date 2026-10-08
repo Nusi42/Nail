@@ -161,7 +161,7 @@ function TextView({
         <ul data-part="rules.text.errors" role="alert">
           {errors.map((e, i) => (
             <li key={i} data-part="rules.text.error">
-              {t("rules-text-error", {
+              {t("common-error-at-line", {
                 line: e.line,
                 column: e.column,
                 message: e.localized ? t(e.localized.id, e.localized.args) : e.message,
@@ -400,13 +400,13 @@ export function RuleEditor({
     <form
       data-part="rules.editor"
       data-new={isNew}
-      aria-label={t("rules-editor-title")}
+      aria-label={t("common-rule")}
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <div data-part="rules.views" role="group" aria-label={t("rules-view")}>
+      <div data-part="rules.views" role="group" aria-label={t("common-view")}>
         <button
           type="button"
           data-part="rules.view"

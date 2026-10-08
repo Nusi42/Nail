@@ -224,7 +224,7 @@ function EditorBody({
               }}
             >
               <Icon name="pencil" part="form.button.icon" />
-              {t("theme-editor-rename")}
+              {t("common-rename")}
             </button>
             <button
               type="button"
@@ -235,12 +235,12 @@ function EditorBody({
               }}
             >
               <Icon name="trash" part="form.button.icon" />
-              {t("theme-editor-delete")}
+              {t("common-delete")}
             </button>
           </>
         )}
         <span data-part="theme-editor.status" role="status">
-          {edits.saving ? t("theme-editor-saving") : ""}
+          {edits.saving ? t("common-saving") : ""}
         </span>
       </div>
       {!editable && (

@@ -162,11 +162,11 @@ function PairForm({
     <form
       data-part="remote-login.form"
       data-step="pair"
-      aria-label={t("remote-pair-browser-title")}
+      aria-label={t("remote-pair-browser-submit")}
       noValidate
       onSubmit={(e) => void submit(e)}
     >
-      <h1 data-part="remote-login.title">{t("remote-pair-browser-title")}</h1>
+      <h1 data-part="remote-login.title">{t("remote-pair-browser-submit")}</h1>
       <p data-part="remote-login.intro">{t("remote-pair-browser-intro")}</p>
       <section
         data-part="remote-login.fingerprint"
@@ -294,7 +294,7 @@ function OfferPasskey({
             autoFocus
             onClick={onDone}
           >
-            {t("remote-login-continue")}
+            {t("common-continue")}
           </button>
         </div>
       </section>
@@ -305,11 +305,11 @@ function OfferPasskey({
     <form
       data-part="remote-login.form"
       data-step="offer-passkey"
-      aria-label={t("remote-passkey-offer-title")}
+      aria-label={t("remote-passkey-offer-add")}
       noValidate
       onSubmit={(e) => void add(e)}
     >
-      <h1 data-part="remote-login.title">{t("remote-passkey-offer-title")}</h1>
+      <h1 data-part="remote-login.title">{t("remote-passkey-offer-add")}</h1>
       <p data-part="remote-login.intro">{t("remote-passkey-offer-intro")}</p>
       <InputField
         labelId="remote-passkey-name"
@@ -331,7 +331,7 @@ function OfferPasskey({
           {t("remote-passkey-offer-add")}
         </button>
         <button type="button" data-part="form.button" data-action="skip" onClick={onDone}>
-          {t("remote-passkey-offer-skip")}
+          {t("common-not-now")}
         </button>
       </div>
     </form>
@@ -661,7 +661,7 @@ export function RemoteLogin({ auth, passkeys = browserPasskeys, onLoggedIn }: Re
               setAttempt((n) => n + 1);
             }}
           >
-            {t("remote-login-retry")}
+            {t("common-try-again")}
           </button>
         </div>
       );
@@ -695,8 +695,8 @@ export function RemoteLogin({ auth, passkeys = browserPasskeys, onLoggedIn }: Re
     case "sign-in": {
       const offered = view.status.methods.passkey && passkeys.supported();
       content = (
-        <section data-part="remote-login.sign-in" aria-label={t("remote-login-title")}>
-          <h1 data-part="remote-login.title">{t("remote-login-title")}</h1>
+        <section data-part="remote-login.sign-in" aria-label={t("remote-login-label")}>
+          <h1 data-part="remote-login.title">{t("remote-login-label")}</h1>
           {view.status.methods.passkey && !passkeys.supported() && (
             <p data-part="remote-login.note" role="note">
               {t("remote-login-no-passkey-support")}
@@ -776,7 +776,7 @@ export function RemoteReauth({
         }}
         extra={
           <button type="button" data-part="form.button" data-action="cancel" onClick={onCancel}>
-            {t("remote-cancel")}
+            {t("common-cancel")}
           </button>
         }
       />

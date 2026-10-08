@@ -1,7 +1,6 @@
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request } from "../../api/generated";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import { createEnv, renderNode, renderWithProviders, widget } from "../../test/harness";
 import { handleRemoteEvent } from "./index";
 import { defaultRemoteUiSettings } from "./mock";
 import { MockAuthServer } from "./mockAuth";
@@ -9,20 +8,7 @@ import { groupFingerprint, presetGrant } from "./model";
 import { PAIR_DIALOG, PairDeviceDialog } from "./PairDevice";
 import { remoteStore } from "./state";
 import { createAda } from "./testUtil";
-
-function wireEvents(env: Env) {
-  return env.client.subscribe((event) => {
-    handleRemoteEvent(event, {
-      client: env.client,
-      queryClient: env.queryClient,
-      store: env.store,
-    });
-  });
-}
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf, wireEvents } from "../../test/env";
 
 afterEach(() => {
   // Unmount before resetting the feature's module-level stores.
@@ -34,7 +20,7 @@ describe("remote-users", () => {
   it("adds a user with a preset using only the keyboard", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     renderNode(widget("remote-users"), env);
     expect(await screen.findByText("No remote users yet.")).toBeInTheDocument();
     const form = screen.getByRole("form", { name: "Add a user" });
@@ -69,7 +55,7 @@ describe("remote-users", () => {
   it("sets a password, enrolls TOTP with a QR code and manages passkeys", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     const ada = await createAda(env.transport);
     await env.transport.send({ type: "SetRemotePassword", user_id: ada.id, password: null });
     env.transport.data.features.remote.users[0]?.passkeys.push({
@@ -133,7 +119,7 @@ describe("remote-users", () => {
   it("unlocks a locked user and disables / deletes users", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     await createAda(env.transport);
     const stored = env.transport.data.features.remote.users[0];
     if (stored) stored.locked_until = new Date(Date.now() + 600_000).toISOString();
@@ -155,7 +141,7 @@ describe("remote-users", () => {
   it("narrows a user's access", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     await createAda(env.transport);
     renderNode(widget("remote-users"), env);
     const detail = await screen.findByRole("region", { name: "User ada" });
@@ -174,7 +160,7 @@ describe("pairing, desktop side", () => {
   it("shows the code, the address and the fingerprint, and follows the pairing", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     env.transport.data.features.remote.settings = {
       ...defaultRemoteUiSettings(),
       enabled: true,
@@ -235,7 +221,7 @@ describe("pairing, desktop side", () => {
   it("cancels a code and explains when there is nobody to pair for", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     const { unmount } = renderWithProviders(
       <PairDeviceDialog name={PAIR_DIALOG} close={() => undefined} />,
       env,

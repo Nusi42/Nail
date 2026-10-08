@@ -5,26 +5,25 @@
  * the manager with each section open. Contrast needs a real layout engine
  * (Playwright).
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import type { PluginUiNode } from "../../api/generated";
 import { clientIdOf } from "./context";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  renderWithProviders,
+  widget,
+  settleQueries,
+} from "../../test/harness";
 import { INSTALL_DIALOG } from ".";
 import { InstallDialog } from "./InstallDialog";
 import { crashPlugin } from "./mockHost";
 import { PluginDialogs } from "./PluginDialogs";
 import { PluginNotifications } from "./PluginNotifications";
-import { installFollowUp, must, tick, wireEvents } from "./testUtil";
+import { installFollowUp, must, wireEvents } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(() => tick());
-}
 
 const EVERY_NODE: PluginUiNode[] = [
   { type: "text", value: "Title", style: "heading" },
@@ -124,7 +123,7 @@ describe("plug-in UI accessibility", () => {
         },
       });
     });
-    await settle(env);
+    await settleQueries(env, 20);
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByRole("dialog").querySelector('[data-part="plugin.dialog"]')).toHaveAttribute(
       "data-state",
@@ -169,7 +168,7 @@ describe("plug-in UI accessibility", () => {
     act(() => {
       crashPlugin(env.transport, "follow-up", "cpu-budget");
     });
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(view.container)).toEqual([]);
     unsubscribe();
   });
@@ -185,7 +184,7 @@ describe("plug-in UI accessibility", () => {
       env,
     );
     await screen.findByRole("table");
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(view.container)).toEqual([]);
   });
 
@@ -199,11 +198,11 @@ describe("plug-in UI accessibility", () => {
     await screen.findByRole("button", { name: "Install" });
     const scope = screen.getByRole("group", { name: /Accounts for/ });
     await user.click(within(scope).getByRole("radio", { name: "Only these accounts" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(view.container)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "Install" }));
     await screen.findByRole("button", { name: /Add 1 item/ });
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(view.container)).toEqual([]);
   });
 
@@ -226,7 +225,7 @@ describe("plug-in UI accessibility", () => {
       const view = renderNode(widget("plugin-manager"), env);
       await user.click(await screen.findByRole("button", { name: section }));
       await user.click(screen.getByRole("button", { name: "Remove" }));
-      await settle(env);
+      await settleQueries(env, 20);
       expect(await violations(view.container)).toEqual([]);
     },
   );

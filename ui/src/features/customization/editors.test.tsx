@@ -2,33 +2,23 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import type { Request, ResolvedLayout } from "../../api/generated";
+import type { ResolvedLayout } from "../../api/generated";
 import { LayoutContext } from "../../layout/LayoutContext";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { queryKeys, useClient } from "../../state/queries";
 import {
   createEnv,
   renderWithProviders,
-  stubElementSizes,
   widget,
-  type Env,
+  stubElementSizesEachTest,
 } from "../../test/harness";
 import { columnsOf } from "../../widgets/MessageList";
 import { messageLists, recordKey } from "./Editors";
 import { moved } from "./ReorderList";
 import { must } from "../../test/must";
+import { requestsOf } from "../../test/env";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
-
-function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+stubElementSizesEachTest();
 
 /** Follows `ConfigChanged` like the app shell: the editors see the written layout. */
 function LiveLayout({ children }: { children: ReactNode }) {
@@ -106,7 +96,7 @@ describe("toolbar-editor", () => {
     await user.click(within(must(items()[1])).getByRole("button", { name: /Remove/ }));
     await user.click(within(section).getByRole("button", { name: "Save to layout.kdl" }));
     expect(await within(section).findByText("Saved to layout.kdl.")).toBeVisible();
-    const [update] = sent(env, "UpdateLayout");
+    const [update] = requestsOf(env, "UpdateLayout");
     expect(update?.patches[0]).toMatchObject({ op: "toolbar-order", toolbar: "reader" });
     const written = env.transport.data.layout.toolbars.reader ?? [];
     expect(written.at(-1)).toEqual({ type: "separator" });
@@ -114,7 +104,7 @@ describe("toolbar-editor", () => {
 
     await user.click(within(section).getByRole("button", { name: "Back to the default toolbar" }));
     await waitFor(() => {
-      expect(sent(env, "UpdateLayout")[1]?.patches).toEqual([
+      expect(requestsOf(env, "UpdateLayout")[1]?.patches).toEqual([
         { op: "reset-toolbar", toolbar: "reader" },
       ]);
     });
@@ -140,7 +130,7 @@ describe("key-binding-editor", () => {
     expect(capture).toHaveValue("Ctrl+Shift+K");
     await user.click(within(section).getByRole("button", { name: "Add shortcut" }));
     expect(await within(section).findByText("Shortcut saved to layout.kdl.")).toBeVisible();
-    expect(sent(env, "UpdateLayout")[0]?.patches).toEqual([
+    expect(requestsOf(env, "UpdateLayout")[0]?.patches).toEqual([
       {
         op: "add-key-binding",
         context: "global",
@@ -154,14 +144,14 @@ describe("key-binding-editor", () => {
     const tr = row.closest("tr") as HTMLElement;
     await user.click(within(tr).getByRole("button", { name: /Remove Ctrl\+Shift\+K/ }));
     await waitFor(() => {
-      expect(sent(env, "UpdateLayout")[1]?.patches).toEqual([
+      expect(requestsOf(env, "UpdateLayout")[1]?.patches).toEqual([
         { op: "remove-key-binding", context: "global", key: "ctrl+shift+k" },
       ]);
     });
     const reply = within(table).getByRole("button", { name: "Restore the default for R" });
     await user.click(reply);
     await waitFor(() => {
-      expect(sent(env, "UpdateLayout")[2]?.patches).toEqual([
+      expect(requestsOf(env, "UpdateLayout")[2]?.patches).toEqual([
         { op: "reset-key-binding", context: "global", key: "r" },
       ]);
     });
@@ -201,7 +191,7 @@ describe("column-editor", () => {
     await user.click(within(list).getByRole("button", { name: "Move From up" }));
     await user.click(save);
     expect(await within(section).findByText("Saved to layout.kdl.")).toBeVisible();
-    const [update] = sent(env, "UpdateLayout");
+    const [update] = requestsOf(env, "UpdateLayout");
     expect(update?.patches[0]).toMatchObject({
       op: "column-order",
       node: { window: "mail", breakpoint: 0 },

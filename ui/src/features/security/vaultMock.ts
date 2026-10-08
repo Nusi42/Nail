@@ -109,15 +109,7 @@ export function demoToken(module: string): SmartcardToken {
         label: "PIV Authentication / Signature",
         algorithm: "ECDSA P-256",
         usages: ["sign", "decrypt"],
-        certificate: {
-          subject: "CN=Ada Lovelace,E=ada@example.org",
-          issuer: "CN=Demo Mail CA,O=Demo Trust",
-          serial: "7A21C4",
-          not_before: "2026-01-01T00:00:00Z",
-          not_after: "2028-01-01T00:00:00Z",
-          emails: ["ada@example.org"],
-          sha256: "3F9A".repeat(16),
-        },
+        certificate: { ...ADA_CARD_CERTIFICATE },
         openpgp_fingerprint: null,
         key_id: null,
       },
@@ -127,15 +119,7 @@ export function demoToken(module: string): SmartcardToken {
         label: "Certificate for PIV Authentication",
         algorithm: null,
         usages: [],
-        certificate: {
-          subject: "CN=Ada Lovelace,E=ada@example.org",
-          issuer: "CN=Demo Mail CA,O=Demo Trust",
-          serial: "7A21C4",
-          not_before: "2026-01-01T00:00:00Z",
-          not_after: "2028-01-01T00:00:00Z",
-          emails: ["ada@example.org"],
-          sha256: "3F9A".repeat(16),
-        },
+        certificate: { ...ADA_CARD_CERTIFICATE },
         openpgp_fingerprint: null,
         key_id: null,
       },
@@ -356,6 +340,17 @@ export function answerVault(core: MockCore, request: VaultRequest): Response {
     }
   }
 }
+
+/** The certificate on the demo card (its key and its certificate object). */
+const ADA_CARD_CERTIFICATE = {
+  subject: "CN=Ada Lovelace,E=ada@example.org",
+  issuer: "CN=Demo Mail CA,O=Demo Trust",
+  serial: "7A21C4",
+  not_before: "2026-01-01T00:00:00Z",
+  not_after: "2028-01-01T00:00:00Z",
+  emails: ["ada@example.org"],
+  sha256: "3F9A".repeat(16),
+};
 
 /**
  * Puts the mock vault into "encrypted, key lost" with a known recovery key

@@ -56,7 +56,7 @@ export function ConfirmationNotices() {
                   openWindow(CENTER_DIALOG);
                 }}
               >
-                {t("agents-notice-review")}
+                {t("common-review")}
               </button>
               <button
                 type="button"

@@ -211,12 +211,12 @@ function DeletePanel({ keyInfo, onDeleted }: { keyInfo: CryptoKey; onDeleted: ()
           setConfirm(true);
         }}
       >
-        {t("security-key-delete")}
+        {t("common-delete")}
       </button>
     );
   }
   return (
-    <div data-part="security-key.confirm" role="group" aria-label={t("security-key-delete")}>
+    <div data-part="security-key.confirm" role="group" aria-label={t("common-delete")}>
       <p data-part="security-key.confirm.text">
         {t(own ? "security-key-delete-own-confirm" : "security-key-delete-confirm", {
           name: keyInfo.user_ids[0] ?? keyInfo.fingerprint,
@@ -307,7 +307,7 @@ export function KeyDetail({ keyInfo, onDeleted }: { keyInfo: CryptoKey; onDelete
         </Field>
         <Field labelId="security-key-expires">
           {keyInfo.expires_at === null
-            ? t("security-key-never-expires")
+            ? t("common-never")
             : formatDateTime(keyInfo.expires_at, locale, false)}
         </Field>
         <Field labelId="security-key-usage">

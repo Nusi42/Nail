@@ -161,7 +161,7 @@ export function MessageView({ node }: WidgetProps) {
         <header data-part="message-view.header">
           {(card === null || cardShowsSubject(message.headers.subject, card)) && (
             <h1 data-part="message-view.header.subject">
-              {message.headers.subject || t("message-no-subject")}
+              {message.headers.subject || t("common-no-subject")}
             </h1>
           )}
           {fields.map((field) => {
@@ -218,7 +218,7 @@ export function MessageView({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       data-message={message?.id}
       tabIndex={-1}
-      aria-label={node.label ? label(node.label) : t("message-view-label")}
+      aria-label={node.label ? label(node.label) : t("common-message")}
       aria-busy={query.isFetching}
     >
       {content}

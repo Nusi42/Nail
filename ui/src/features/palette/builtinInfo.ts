@@ -9,12 +9,11 @@
  *
  * A feature's own `actionInfo` wins over an entry here.
  */
-import type { ActionInfo } from "../../actions/palette";
+import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
 import type { ActionAvailability } from "../../api/generated";
 
 type Row = readonly [id: string, availability: readonly ActionAvailability[], keywords: boolean];
 
-const MAIL: readonly ActionAvailability[] = ["list", "reader"];
 const LIST: readonly ActionAvailability[] = ["list"];
 const READER: readonly ActionAvailability[] = ["reader"];
 const COMPOSER: readonly ActionAvailability[] = ["composer"];

@@ -4,63 +4,24 @@
  * conversation, the selection moves on, the undo toast undoes the batch, a
  * card's own menu acts on its message, picked rows act together.
  */
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { App } from "../../App";
 import type { Request } from "../../api/generated";
 import { MOCK_CONVERSATION_ID, addMockConversation } from "../../api/mockConversations";
 import { violations } from "../../test/axe";
-import { createEnv, setWindowWidth, stubElementSizes, type Env } from "../../test/harness";
+import { appWindowEachTest, eventually, renderApp, settleUntil } from "../../test/app";
+import { createEnv, type Env } from "../../test/harness";
 import { must } from "../../test/must";
 import { TOAST_MS, toastMessage } from "./Toast";
 import { mailActionsStoreFor } from "./store";
 import { removesRows } from "./run";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-  setWindowWidth(1200);
-});
-afterEach(() => {
-  restoreSizes();
-  setWindowWidth(1024);
-});
+appWindowEachTest();
 
-const TURNS = 100;
-
-async function turn(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
-async function eventually(assertion: () => void): Promise<void> {
-  let failure: unknown = null;
-  for (let n = 0; n < TURNS; n++) {
-    await turn();
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      failure = error;
-    }
-  }
-  throw failure;
-}
-
-async function settleUntil<T>(query: () => T | null, what: string): Promise<T> {
-  for (let n = 0; n < TURNS; n++) {
-    const found = query();
-    if (found !== null) return found;
-    await turn();
-  }
-  throw new Error(`${what} did not appear`);
-}
-
-function renderApp() {
+function renderWithConversation() {
   const env = createEnv({ state: { connection: "connecting" } });
   const added = addMockConversation(env.transport.data);
-  render(<App client={env.client} queryClient={env.queryClient} store={env.store} />);
+  renderApp(env);
   return { env, added };
 }
 
@@ -79,7 +40,7 @@ const toast = () => document.querySelector<HTMLElement>('[data-part="mail-action
 describe("conversation actions (P3)", () => {
   it("archives the conversation with e, moves on, and undoes from the toast", async () => {
     const user = userEvent.setup();
-    const { env, added } = renderApp();
+    const { env, added } = renderWithConversation();
     const row = await settleUntil(conversationRow, "the conversation's row");
     const rowIds = [...document.querySelectorAll<HTMLElement>('[data-part="message-list.row"]')];
     const below = rowIds[rowIds.indexOf(row) + 1]?.dataset.message ?? null;
@@ -124,7 +85,7 @@ describe("conversation actions (P3)", () => {
   });
 
   it("deletes the whole conversation with #, Sent replies included; z undoes it", async () => {
-    const { env, added } = renderApp();
+    const { env, added } = renderWithConversation();
     fireEvent.click(await settleUntil(conversationRow, "the conversation's row"));
     fireEvent.keyDown(document.body, { key: "#" });
     await eventually(() => {
@@ -142,7 +103,7 @@ describe("conversation actions (P3)", () => {
   });
 
   it("acts on several picked conversations at once", async () => {
-    const { env } = renderApp();
+    const { env } = renderWithConversation();
     const row = await settleUntil(conversationRow, "the conversation's row");
     const rows = [...document.querySelectorAll<HTMLElement>('[data-part="message-list.row"]')];
     const other = must(rows.find((r) => r !== row));
@@ -164,7 +125,7 @@ describe("conversation actions (P3)", () => {
 
   it("a card's More menu acts on that message only", async () => {
     const user = userEvent.setup();
-    const { env, added } = renderApp();
+    const { env, added } = renderWithConversation();
     fireEvent.click(await settleUntil(conversationRow, "the conversation's row"));
     const feed = await settleUntil(() => screen.queryByRole("feed"), "the feed");
     const card = await settleUntil(

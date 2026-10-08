@@ -79,7 +79,7 @@ export function ReaderOffer() {
             answer("dismissed");
           }}
         >
-          {t("thread-view-offer-dismiss")}
+          {t("common-not-now")}
         </button>
       </div>
     </section>

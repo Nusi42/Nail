@@ -7,7 +7,7 @@
  * change through the operation queue).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type SubmitEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import type {
   GmailLabel,
   GmailLabelColor,
@@ -16,12 +16,10 @@ import type {
   GmailMessageListVisibility,
   LocalizedMessage,
 } from "../../api/generated";
-import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { findSummary } from "../../state/mailOps";
 import { TagCheckbox } from "../mail-actions/TagCheckbox";
-import { NO_TAGS, applyTags, tagChange, tagMark, useTargetTags } from "../mail-actions/tags";
+import { useTagWindow } from "../mail-actions/tags";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
@@ -31,6 +29,9 @@ import { LABEL_COLORS, paletteName } from "./palette";
 import { deleteLabel, saveLabel, useGmailLabels } from "./queries";
 import { gmailStoreFor, useGmail } from "./store";
 import { LabelSwatch } from "./Labels";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { TextField } from "../../widgets/forms";
+import { useBusyAction } from "../../state/busyAction";
 
 const LIST_VISIBILITIES: readonly GmailLabelListVisibility[] = ["show", "show-if-unread", "hide"];
 const MESSAGE_VISIBILITIES: readonly GmailMessageListVisibility[] = ["show", "hide"];
@@ -75,25 +76,20 @@ function ColorOption({
 
 /** Dialog `gmail-label-editor`. */
 export function LabelEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = useGmail((s) => s.editor);
   const labels = useGmailLabels(target?.accountId ?? null);
   if (target === null) {
     return (
-      <div data-part="gmail.dialog" data-state="empty">
-        <p data-part="gmail.hint">{t("gmail-editor-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("gmail-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="gmail.dialog"
+        textPart="gmail.hint"
+        hintId="gmail-editor-nothing"
+        close={close}
+      />
     );
   }
   if (!labels.data) {
-    return (
-      <div data-part="gmail.dialog" data-state="loading" aria-busy="true">
-        <p data-part="gmail.hint">{t("gmail-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="gmail.dialog" textPart="gmail.hint" />;
   }
   const label = target.labelId ? (labels.data.find((l) => l.id === target.labelId) ?? null) : null;
   return (
@@ -125,7 +121,7 @@ function LabelEditor({
   const client = useClient();
   const queryClient = useQueryClient();
   const store = useUiStoreApi();
-  const ids = { name: useId(), parent: useId(), list: useId(), message: useId(), colors: useId() };
+  const ids = { parent: useId(), list: useId(), message: useId(), colors: useId() };
   const [name, setName] = useState(label ? leafOf(label.name) : "");
   const [parent, setParent] = useState<string>(
     (label ? parentOf(label.name) : initialParent) ?? "",
@@ -135,8 +131,7 @@ function LabelEditor({
   const [message, setMessage] = useState<GmailMessageListVisibility>(
     label?.message_visibility ?? "show",
   );
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, setProblem, run } = useBusyAction();
   // A colour Gmail would refuse (set elsewhere) stays selectable as "current".
   const current = paletteName(color);
   const parents = labels
@@ -166,16 +161,10 @@ function LabelEditor({
       setProblem({ id: `gmail-label-issue-${issue}` });
       return;
     }
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await saveLabel({ client, queryClient }, accountId, label?.id ?? null, settings);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -185,21 +174,14 @@ function LabelEditor({
       aria-busy={busy}
       onSubmit={(e) => void submit(e)}
     >
-      <div data-part="form.field" data-field="name">
-        <label data-part="form.label" htmlFor={ids.name}>
-          {t("gmail-label-name")}
-        </label>
-        <input
-          id={ids.name}
-          data-part="form.input"
-          value={name}
-          maxLength={225}
-          aria-invalid={problem !== null}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-      </div>
+      <TextField
+        labelId="common-name"
+        name="name"
+        value={name}
+        maxLength={225}
+        invalid={problem !== null}
+        onChange={setName}
+      />
       <div data-part="form.field" data-field="parent">
         <label data-part="form.label" htmlFor={ids.parent}>
           {t("gmail-label-parent")}
@@ -221,7 +203,7 @@ function LabelEditor({
         </select>
       </div>
       <fieldset data-part="gmail.colors">
-        <legend data-part="form.section.title">{t("gmail-label-color")}</legend>
+        <legend data-part="form.section.title">{t("common-colour")}</legend>
         <ColorOption
           name="none"
           color={null}
@@ -297,10 +279,10 @@ function LabelEditor({
       <Problem message={problem} />
       <div data-part="gmail.dialog.actions">
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {label ? t("gmail-save") : t("gmail-create")}
+          {label ? t("common-save") : t("common-create")}
         </button>
         <button type="button" data-part="form.button" onClick={finish}>
-          {t("gmail-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -314,35 +296,28 @@ export function LabelDeleteDialog({ close }: DialogProps) {
   const queryClient = useQueryClient();
   const store = useUiStoreApi();
   const label = useGmail((s) => s.deleting);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   const finish = () => {
     gmailStoreFor(store).getState().deleteLabel(null);
     close();
   };
   if (label === null) {
     return (
-      <div data-part="gmail.dialog" data-state="empty">
-        <p data-part="gmail.hint">{t("gmail-delete-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("gmail-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="gmail.dialog"
+        textPart="gmail.hint"
+        hintId="gmail-delete-nothing"
+        close={finish}
+      />
     );
   }
   const remove = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await deleteLabel({ client, queryClient }, label.account_id, label.id);
       const search = store.getState().search;
       if (search?.text.includes(label.tag ?? label.name)) store.getState().setSearch(null);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <div data-part="gmail.dialog" data-dialog="label-delete" aria-busy={busy}>
@@ -361,7 +336,7 @@ export function LabelDeleteDialog({ close }: DialogProps) {
           {t("gmail-delete-confirm")}
         </button>
         <button type="button" data-part="form.button" onClick={finish}>
-          {t("gmail-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </div>
@@ -375,65 +350,33 @@ export function LabelDeleteDialog({ close }: DialogProps) {
  */
 export function ApplyLabelsDialog({ close }: DialogProps) {
   const t = useT();
-  const client = useClient();
-  const queryClient = useQueryClient();
-  const store = useUiStoreApi();
-  // What the window opened with: a selection change behind it changes nothing.
-  const [messageId] = useState(() => store.getState().selectedMessageId);
-  const summary = useMemo(
-    () => (messageId ? findSummary(queryClient, messageId) : undefined),
-    [messageId, queryClient],
-  );
+  const tags = useTagWindow("label", close);
+  const { summary, store } = tags;
   const labels = useGmailLabels(summary?.gmail ? summary.account_id : null);
-  const { counts } = useTargetTags();
   const ids = { filter: useId() };
   const [filter, setFilter] = useState("");
-  const [decided, setDecided] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
   if (!summary?.gmail) {
     return (
-      <div data-part="gmail.dialog" data-state="empty">
-        <p data-part="gmail.hint">{t("gmail-apply-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("gmail-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="gmail.dialog"
+        textPart="gmail.hint"
+        hintId="gmail-apply-nothing"
+        close={close}
+      />
     );
   }
   const user = (labels.data ?? []).filter((l) => l.kind === "user");
   const tagOf = (l: GmailLabel) => l.tag ?? l.name;
-  const mark = (l: GmailLabel) => tagMark(counts ?? NO_TAGS, tagOf(l));
   const shown = user.filter((l) => l.name.toLowerCase().includes(filter.trim().toLowerCase()));
-
-  const apply = async () => {
-    const { add, remove } = tagChange(user.map(tagOf), counts ?? NO_TAGS, decided);
-    if (add.length === 0 && remove.length === 0) {
-      close();
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      // The whole conversation (or the picked rows / the card), as one undoable batch.
-      if ((await applyTags({ client, store, queryClient }, add, remove, "label")) !== null) {
-        close();
-      }
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <form
       data-part="gmail.dialog"
       data-dialog="apply-labels"
-      aria-busy={busy}
+      aria-busy={tags.busy}
       onSubmit={(e) => {
         e.preventDefault();
-        void apply();
+        void tags.apply(user.map(tagOf));
       }}
     >
       <p data-part="gmail.dialog.intro">
@@ -459,10 +402,10 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
         {shown.map((l) => (
           <label key={l.id} data-part="form.check" data-label={l.id}>
             <TagCheckbox
-              mark={mark(l)}
-              decided={decided.get(tagOf(l))}
+              mark={tags.mark(tagOf(l))}
+              decided={tags.decision(tagOf(l))}
               onDecide={(checked) => {
-                setDecided(new Map(decided).set(tagOf(l), checked));
+                tags.decide(tagOf(l), checked);
               }}
             />
             <LabelSwatch label={l} />
@@ -470,10 +413,10 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
           </label>
         ))}
       </fieldset>
-      <Problem message={problem} />
+      <Problem message={tags.problem} />
       <div data-part="gmail.dialog.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("gmail-apply")}
+        <button type="submit" data-part="form.button" data-variant="primary" disabled={tags.busy}>
+          {t("common-apply")}
         </button>
         <button
           type="button"
@@ -485,10 +428,10 @@ export function ApplyLabelsDialog({ close }: DialogProps) {
             store.getState().openWindow(LABEL_EDITOR_DIALOG);
           }}
         >
-          {t("gmail-label-new")}
+          {t("gmail-action-new-label")}
         </button>
         <button type="button" data-part="form.button" onClick={close}>
-          {t("gmail-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>

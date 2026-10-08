@@ -18,7 +18,9 @@ import type {
 } from "../../api/generated";
 import type { MockTransport } from "../../api/mock";
 import { chooseIdentity } from "../../api/mockAccounts";
+import { draftSaveRefusal } from "../../api/mockDrafts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { replyAllCc } from "../../state/addresses";
 
 /** The requests this feature answers. */
 export const COMPOSER_REQUESTS = [
@@ -305,13 +307,7 @@ function newDraft(
       const answered = h.reply_to.length > 0 ? h.reply_to : h.from;
       draft.to = answered.filter((a) => !own.has(a.email.toLowerCase()));
       if (context.mode === "reply-all") {
-        const seen = new Set(draft.to.map((a) => a.email.toLowerCase()));
-        draft.cc = [...h.to, ...h.cc].filter((a) => {
-          const key = a.email.toLowerCase();
-          if (seen.has(key) || own.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
+        draft.cc = replyAllCc(draft.to, h, own);
       }
       const quoted = original.text
         .split("\n")
@@ -406,12 +402,8 @@ export function suggest(core: MockCore, prefix: string, limit: number): Address[
  * the same routing on a transport directly (kept for the feature's tests).
  */
 export function saveRichDraft(core: MockCore, draft: Draft): Response {
-  if (!identities(core).some((i) => i.id === draft.identity_id)) {
-    return errorResponse("invalid_request", `unknown identity ${draft.identity_id}`);
-  }
-  if (draft.id !== null && !core.data.drafts.has(draft.id)) {
-    return errorResponse("not_found", `draft ${draft.id} not found`);
-  }
+  const refused = draftSaveRefusal(core, draft);
+  if (refused) return refused;
   for (const a of draft.attachments) {
     if (!core.data.features.composer.blobs.has(a.blob)) {
       return errorResponse("invalid_request", `unknown attachment blob ${a.blob}`);

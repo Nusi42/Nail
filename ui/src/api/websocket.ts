@@ -4,8 +4,8 @@
  * Reconnects with exponential backoff; requests issued while disconnected
  * are queued and sent after the next successful connect.
  */
-import { Listeners, NailError, type ConnectionStatus, type Transport } from "./client";
-import type { Event as NailEvent, Request, Response, RpcRequest, ServerMessage } from "./generated";
+import { NailError, TransportBase, type ConnectionStatus } from "./client";
+import type { Request, Response, RpcRequest, ServerMessage } from "./generated";
 
 /** The subset of the DOM `WebSocket` the transport uses (fakeable in tests). */
 export interface WebSocketLike {
@@ -47,13 +47,11 @@ interface Pending {
   reject: (error: Error) => void;
 }
 
-export class WebSocketTransport implements Transport {
+export class WebSocketTransport extends TransportBase {
   private readonly url: string;
   private readonly createSocket: (url: string) => WebSocketLike;
   private readonly initialBackoffMs: number;
   private readonly maxBackoffMs: number;
-  private readonly events = new Listeners<NailEvent>();
-  private readonly statuses = new Listeners<ConnectionStatus>();
   /** Requests sent on the current socket, awaiting a response. */
   private readonly inFlight = new Map<number, Pending>();
   /** Requests waiting for a connection. */
@@ -65,6 +63,7 @@ export class WebSocketTransport implements Transport {
   private current: ConnectionStatus = "connecting";
 
   constructor(options: WebSocketTransportOptions = {}) {
+    super();
     this.url = options.url ?? defaultWebSocketUrl(window.location);
     this.createSocket =
       options.createSocket ?? ((url) => new WebSocket(url) as unknown as WebSocketLike);
@@ -86,14 +85,6 @@ export class WebSocketTransport implements Transport {
         this.outbox.push({ frame, pending });
       }
     });
-  }
-
-  onEvent(listener: (event: NailEvent) => void): () => void {
-    return this.events.add(listener);
-  }
-
-  onStatus(listener: (status: ConnectionStatus) => void): () => void {
-    return this.statuses.add(listener);
   }
 
   status(): ConnectionStatus {

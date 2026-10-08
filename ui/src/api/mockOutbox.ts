@@ -8,6 +8,7 @@ import { htmlToText, saveRichDraft } from "../features/composer/mock";
 import { checkSendCrypto } from "../features/security/mock";
 import type { Draft, OutboxEntry, Response, SendCrypto } from "./generated";
 import { mockBody } from "./mockData";
+import { draftSaveRefusal, identityOf } from "./mockDrafts";
 import { errorResponse, type MockCore } from "./mockMail";
 
 /** Default undo-send delay (`AccountsConfig::DEFAULT_UNDO_SEND_SECS`). */
@@ -31,24 +32,12 @@ function at(entry: OutboxEntry, due: number, fn: () => void): void {
   );
 }
 
-function identityOf(core: MockCore, id: string) {
-  for (const account of core.data.accountsConfig.accounts) {
-    const identity = account.identities.find((i) => i.id === id);
-    if (identity) return identity;
-  }
-  return undefined;
-}
-
 export function saveDraft(core: MockCore, draft: Draft): Response {
   if (draft.html !== null || draft.markdown !== null || draft.attachments.length > 0) {
     return saveRichDraft(core, draft);
   }
-  if (!identityOf(core, draft.identity_id)) {
-    return errorResponse("invalid_request", `unknown identity ${draft.identity_id}`);
-  }
-  if (draft.id !== null && !core.data.drafts.has(draft.id)) {
-    return errorResponse("not_found", `draft ${draft.id} not found`);
-  }
+  const refused = draftSaveRefusal(core, draft);
+  if (refused) return refused;
   const id = draft.id ?? core.nextId("draft-");
   core.data.drafts.set(id, { ...draft, id });
   return { type: "DraftSaved", draft_id: id };

@@ -7,31 +7,24 @@
 
 ## Shared
 
-remote-cancel = Cancel
-remote-save = Save
-remote-rename = Rename
-remote-never = never
-window-remote-pair = Pair a device
+window-remote-pair = { remote-action-pair }
 remote-fingerprint-label = Certificate fingerprint (SHA-256)
 
 ## Login page (browser)
 
 remote-login-label = Sign in to Nail
-remote-login-title = Sign in to Nail
 remote-login-loading = Connecting to Nail…
 remote-login-unreachable = Nail cannot be reached. Check that the app on your computer is running and that remote access is turned on.
-remote-login-retry = Try again
 remote-login-unexpected = Nail answered something unexpected. Try again.
-remote-login-continue = Continue
 remote-login-passkey-intro = Use the passkey you set up for this device.
 remote-login-passkey = Sign in with a passkey
 remote-login-use-password = Use a password instead
 remote-login-use-passkey = Use a passkey instead
 remote-login-no-passkey-support = This browser cannot use passkeys here. Sign in with your password.
 remote-login-password-title = Sign in with a password
-remote-login-user = User name
-remote-login-password = Password
-remote-login-sign-in = Sign in
+remote-login-user = { common-user-name }
+remote-login-password = { common-password }
+remote-login-sign-in = { common-sign-in }
 remote-login-totp-title = Two-step verification
 remote-login-totp-intro = Enter the 6-digit code from your authenticator app.
 remote-login-totp-code = Verification code
@@ -59,30 +52,27 @@ remote-passkey-failed = The passkey could not be used.
 
 ## Pairing, browser side
 
-remote-pair-browser-title = Pair this browser
 remote-pair-browser-intro = This browser is not paired with Nail yet. On your computer, open Settings → Remote access and choose “Pair a device”. Then enter the code it shows.
 remote-pair-browser-compare = Check that this fingerprint matches the one shown on your computer:
 remote-pair-browser-mismatch = If the fingerprints differ, stop: you may not be talking to your computer.
 remote-pair-browser-no-tls = This connection is not encrypted, which Nail allows only on this computer itself.
-remote-pair-code = Pairing code
+remote-pair-code = { remote-pair-code-title }
 remote-pair-code-hint = For example K7QM-2WXR. Upper or lower case, with or without the dash.
 remote-pair-device-name = Name for this device
 remote-pair-device-name-hint = For example “Phone” or “Laptop”. You see this name in the list of devices.
 remote-pair-default-device = Browser
 remote-pair-browser-submit = Pair this browser
 
-remote-passkey-offer-title = Add a passkey
 remote-passkey-offer-intro = This browser is now paired. Add a passkey so you can sign in next time without a password.
 remote-passkey-name = Name for the passkey
 remote-passkey-offer-add = Add a passkey
-remote-passkey-offer-skip = Not now
 remote-passkey-added-title = Passkey added
 remote-passkey-added = The passkey “{ $name }” is ready. Use it the next time you sign in.
 
 ## Re-authentication
 
 remote-reauth-title = Confirm it’s you
-window-remote-reauth = Confirm it’s you
+window-remote-reauth = { remote-reauth-title }
 remote-reauth-intro = This change needs a fresh sign-in as { $user }.
 remote-reauth-passkey-intro = Confirm with your passkey.
 remote-reauth-confirm = Confirm
@@ -90,13 +80,13 @@ remote-reauth-confirm = Confirm
 ## Pairing, desktop side
 
 remote-pair-intro = A new device needs a one-time code from this computer. Choose who it belongs to and what it may do.
-remote-pair-user = User
+remote-pair-user = { remote-audit-col-user }
 remote-pair-device-name-desktop-hint = Optional. Leave it empty to use the name the browser suggests.
 remote-pair-ttl = Code valid for
 remote-pair-ttl-minutes = { $minutes } minutes
 remote-pair-create = Create pairing code
 remote-pair-no-users = There is no remote user yet. Create one under Users first.
-remote-pair-open-dialog = Pair a device
+remote-pair-open-dialog = { remote-action-pair }
 remote-pair-code-title = Pairing code
 remote-pair-open = On the new device, open { $url } and enter this code:
 remote-pair-open-not-running = Remote access is not running. Turn it on, then open its address on the new device and enter this code:
@@ -106,7 +96,6 @@ remote-pair-fingerprint-intro = The browser shows this certificate fingerprint. 
 remote-pair-no-fingerprint = Remote access runs without TLS, so there is no fingerprint to compare.
 remote-pair-once = This code is shown only now. Anyone who has it can pair a device until it is used or expires.
 remote-pair-cancel-code = Cancel code
-remote-pair-close = Close
 
 remote-pairing-title = Codes waiting to be used
 remote-pairing-pending = { $device } for { $user }, until { $time }
@@ -134,7 +123,7 @@ remote-access-narrowing = Narrowing access also narrows the user’s devices and
 
 ## Settings
 
-remote-settings-title = Remote access
+remote-settings-title = { settings-section-remote }
 remote-settings-intro = Use Nail from a browser on another device. Off by default; each new device must be paired with a code from this computer.
 remote-settings-enabled = Serve Nail to browsers on other devices
 remote-settings-network = Network
@@ -145,13 +134,13 @@ remote-bind-custom = One address…
 remote-settings-bind-address = Address
 remote-settings-bind-address-hint = An IP address of this computer, for example 192.168.1.20.
 remote-settings-lan-warning = Other devices on your network can reach Nail. Windows may ask to allow Nail through the firewall.
-remote-settings-port = Port
+remote-settings-port = { common-port }
 remote-settings-host-name = Host name
 remote-settings-host-name-hint = The name other devices use to reach this computer, for example nail-desktop.local. Passkeys need a name, not an IP address. Empty: this computer’s name.
 remote-settings-tls = Encryption (TLS)
-remote-tls-self-signed = Certificate made by Nail
+remote-tls-self-signed = { remote-certificate-self-signed }
 remote-tls-self-signed-hint = Nail makes its own certificate. Browsers warn about it once; compare its fingerprint when you pair.
-remote-tls-off = Off
+remote-tls-off = { common-off }
 remote-tls-off-hint = Only allowed when Nail listens on this computer only.
 remote-tls-acme = Let’s Encrypt
 remote-tls-acme-hint = Only available in internet mode.
@@ -162,9 +151,6 @@ remote-settings-idle = Sign out after this many idle minutes
 remote-settings-max-hours = Sign out after this many hours at the latest
 remote-settings-audit-retention = Keep the security log for this many days
 remote-settings-reauth = Ask again for sensitive changes after this many minutes
-remote-settings-issues = Problems
-remote-settings-save = Save
-remote-settings-reset = Undo changes
 remote-settings-saved = Remote access settings saved.
 
 remote-issue-invalid-bind-address = The address must be an IP address of this computer.
@@ -179,7 +165,7 @@ remote-issue-invalid-host-name = The host name is not valid (letters, digits and
 remote-issue-invalid-session-limits = Session limits must be at least 1, and the idle limit cannot be longer than the maximum.
 remote-issue-invalid-audit-retention = Keep the security log for 1 to 3650 days.
 
-remote-status-title = Status
+remote-status-title = { common-status }
 remote-state-stopped = Not running.
 remote-state-starting = Starting…
 remote-state-running = Running.
@@ -197,7 +183,7 @@ remote-certificate-valid = Valid from { $from } until { $until }
 remote-certificate-names = For { $names }
 remote-certificate-regenerate = Make a new certificate
 remote-certificate-regenerate-confirm = Browsers that trusted the old certificate will warn again, and paired devices should compare the new fingerprint. Continue?
-remote-certificate-regenerate-yes = Make a new certificate
+remote-certificate-regenerate-yes = { remote-certificate-regenerate }
 remote-certificate-regenerated = A new certificate is in use.
 
 remote-internet-title = Internet access
@@ -233,21 +219,20 @@ remote-user-meta = Login name { $name } · added { $created } · last sign-in { 
 remote-user-locked = Signing in is locked until { $until } after too many failed attempts.
 remote-user-unlock = Unlock now
 remote-user-unlocked = The user can sign in again.
-remote-user-access-save = Save access
-remote-user-access-saved = Access saved.
+remote-user-access-saved = { common-access-saved }
 remote-user-disable = Disable user
 remote-user-enable = Enable user
 remote-user-disabled = The user is disabled and was signed out everywhere.
 remote-user-enabled = The user is enabled again.
 remote-user-delete = Delete user
 remote-user-delete-confirm = Delete { $user } with all devices and sessions? They are signed out at once.
-remote-user-delete-yes = Delete user
+remote-user-delete-yes = { remote-user-delete }
 
-remote-password-title = Password
+remote-password-title = { common-password }
 remote-password-set = A password is set.
 remote-password-none = No password yet: this user can sign in only with a passkey.
-remote-password = Password
-remote-password-new = New password
+remote-password = { common-password }
+remote-password-new = { common-new-password }
 remote-password-repeat = Repeat the password
 remote-password-hint = At least { $min } characters. A long passphrase is best.
 remote-password-save = Set password
@@ -256,7 +241,7 @@ remote-password-too-short = The password needs at least { $min } characters.
 remote-password-mismatch = The passwords do not match.
 remote-password-remove = Remove password
 remote-password-remove-confirm = Remove the password of { $user }? Signing in then needs a passkey.
-remote-password-remove-yes = Remove password
+remote-password-remove-yes = { remote-password-remove }
 remote-password-removed = Password removed.
 
 remote-totp-title = Two-step verification (authenticator app)
@@ -274,17 +259,17 @@ remote-totp-code = Code from the app
 remote-totp-confirm = Turn on
 remote-totp-wrong-code = That code does not match. Check the time on your phone and try again.
 remote-totp-enabled = Two-step verification is on.
-remote-totp-disable = Turn off
+remote-totp-disable = { common-turn-off }
 remote-totp-disable-confirm = Turn off two-step verification for { $user }?
-remote-totp-disable-yes = Turn off
+remote-totp-disable-yes = { common-turn-off }
 remote-totp-disabled = Two-step verification is off.
 
 remote-passkeys-title = Passkeys
 remote-passkeys-none = No passkeys. They are added from the device itself after signing in.
 remote-passkey-meta = Added { $created } · last used { $used }
 remote-passkey-rename-label = Rename passkey { $name }
-remote-passkey-new-name = New name
-remote-passkey-delete = Delete
+remote-passkey-new-name = { remote-device-new-name }
+remote-passkey-delete = { common-delete }
 remote-passkey-delete-confirm = Delete the passkey “{ $name }”? It can no longer be used to sign in.
 remote-passkey-delete-yes = Delete passkey
 
@@ -295,7 +280,7 @@ remote-devices-empty = No device is paired.
 remote-device-meta = { $user } · paired { $paired } · last seen { $seen } { $ip }
 remote-device-rename-label = Rename { $name }
 remote-device-new-name = New name
-remote-device-revoke = Revoke
+remote-device-revoke = { common-revoke }
 remote-device-revoke-confirm = Revoke { $name }? It is signed out at once and must be paired again with a new code.
 remote-device-revoke-yes = Revoke device
 remote-device-revoked = Revoked { $time }
@@ -307,7 +292,6 @@ remote-session-label = Session of { $user } on { $device }
 remote-session-who = { $user } on { $device }
 remote-session-meta = Signed in { $started } · last active { $seen } { $ip }
 remote-session-expires = Ends { $time } at the latest
-remote-session-revoke = Sign out
 remote-session-revoke-label = Sign out { $user } on { $device }
 remote-session-ended = Ended { $time }: { $reason }
 remote-sessions-revoke-all = Sign out everyone
@@ -315,12 +299,12 @@ remote-sessions-revoke-all-confirm = { $count ->
     [one] Sign out the one signed-in session?
    *[other] Sign out all { $count } signed-in sessions?
 }
-remote-sessions-revoke-all-yes = Sign out everyone
+remote-sessions-revoke-all-yes = { remote-sessions-revoke-all }
 
 remote-method-passkey = Passkey
-remote-method-password = Password
+remote-method-password = { common-password }
 remote-method-password-totp = Password and code
-remote-method-pairing = Pairing code
+remote-method-pairing = { remote-pair-code-title }
 
 remote-end-logout = signed out
 remote-end-revoked = signed out from this computer
@@ -332,9 +316,8 @@ remote-end-user-changed = user disabled or removed
 
 remote-audit-title = Security log
 remote-audit-intro = Every sign-in, failed sign-in, pairing and change to remote access.
-remote-audit-filter-user = User
+remote-audit-filter-user = { remote-audit-col-user }
 remote-audit-all-users = All users
-remote-audit-refresh = Refresh
 remote-audit-empty = Nothing recorded yet.
 remote-audit-load-older = Load older entries
 remote-audit-summary = { $count ->
@@ -345,8 +328,6 @@ remote-audit-summary = { $count ->
     [one] 1 failed or denied
    *[other] { $failures } failed or denied
 }
-remote-audit-unknown-user = unknown
-remote-audit-col-time = Time
 remote-audit-col-event = Event
 remote-audit-col-user = User
 remote-audit-col-origin = From
@@ -364,10 +345,10 @@ remote-audit-kind-session-ended = Session ended
 remote-audit-kind-device-changed = Device changed
 remote-audit-kind-user-changed = User changed
 remote-audit-kind-settings-changed = Settings changed
-remote-audit-kind-request = Action
+remote-audit-kind-request = { common-action }
 remote-audit-outcome-success = Succeeded
-remote-audit-outcome-failure = Failed
-remote-audit-outcome-denied = Denied
+remote-audit-outcome-failure = { common-failed }
+remote-audit-outcome-denied = { common-denied }
 
 ## Alerts
 
@@ -380,12 +361,10 @@ remote-alert-lockout-user = Too many failed sign-ins for { $user }. Signing in i
 remote-alert-lockout-ip = Too many failed sign-ins from { $ip }. That address is locked out until { $until }.
 remote-alert-lockout = Too many failed sign-ins. Signing in is locked until { $until }.
 remote-alert-review = Review devices
-remote-alert-dismiss = Dismiss
 
 ## Remote content in the reader
 
 remote-content-label = Remote content
-remote-content-actions = Load remote content
 remote-content-blocked = { $count ->
     [one] Nail blocked 1 image or other file from the internet in this message.
    *[other] Nail blocked { $count } images or other files from the internet in this message.
@@ -403,26 +382,25 @@ remote-content-block-sender = Stop loading from this sender
 remote-content-block-domain = Stop loading from this domain
 remote-content-allow-once = Load once
 remote-content-allowed-once = Remote content is loaded this time only.
-remote-content-block-once = Block again
+remote-content-block-once = { remote-content-block-message }
 
 ## Privacy settings (allow-lists)
 
-remote-allows-title = Remote content
+remote-allows-title = { remote-content-label }
 remote-allows-intro = Messages, senders and domains whose images and other files from the internet Nail loads.
 remote-allows-empty = Nothing is allowed: remote content is blocked in every message.
-remote-allows-scope-message = Messages
+remote-allows-scope-message = { common-messages }
 remote-allows-scope-sender = Senders
 remote-allows-scope-domain = Domains
 remote-allows-since = allowed { $time }
-remote-allows-remove = Remove
 remote-allows-remove-label = Stop loading remote content for { $value }
 
 ## Settings tabs and actions (labels referenced from layout.kdl)
 
-remote-settings-tab = Remote access
+remote-settings-tab = { settings-section-remote }
 remote-settings-tab-users = Remote users
-remote-settings-tab-devices = Devices
-remote-settings-tab-audit = Security log
+remote-settings-tab-devices = { remote-devices-title }
+remote-settings-tab-audit = { remote-audit-title }
 remote-settings-tab-privacy = Privacy
 remote-action-pair = Pair a device
 remote-action-load-content = Load remote content

@@ -3,28 +3,13 @@
  * `nail_api::customize::LayoutPatch` on the resolved layout, and the whole
  * `UpdateLayout` path (base revision, undo history, `ConfigChanged`).
  */
-import type {
-  Event as NailEvent,
-  LayoutNode,
-  LayoutNodeRef,
-  ResolvedLayout,
-} from "../../api/generated";
-import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
+import type { Event as NailEvent, LayoutNode, ResolvedLayout } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { createMockData } from "../../api/mockData";
-import { normalizeLayout } from "../../api/normalize";
 import { must } from "../../test/must";
 import { applyLayoutEditPatch, isLayoutEditPatch, type LayoutEditPatch } from "./mock";
 import { nodeAt } from "./model";
-
-const layout = (): ResolvedLayout => normalizeLayout(defaultLayoutJson);
-const ref = (path: number[], window = "mail", breakpoint = 0): LayoutNodeRef => ({
-  window,
-  breakpoint,
-  path,
-});
-const root = (l: ResolvedLayout, breakpoint = 0): LayoutNode =>
-  must(l.windows.mail?.[breakpoint]).root;
+import { layout, mailRoot, ref } from "./testing";
 
 /** The shape of a tree: ids, with containers as `type(children)`, hidden marked `!`. */
 function shape(node: LayoutNode): string {
@@ -48,7 +33,7 @@ describe("layout editor mock patches", () => {
   it("swaps panes and each takes its own size and limits along", () => {
     const l = layout();
     expect(apply(l, { op: "swap-panes", a: ref([0]), b: ref([2]) })).toBeNull();
-    const r = root(l);
+    const r = mailRoot(l);
     expect(shape(r)).toBe("panes(reader,list-pane,sidebar)");
     expect(r.type === "split" && r.sizes).toEqual(["1.4fr", "1fr", "260px"]);
     expect(r.type === "split" && r.min_sizes).toEqual(["320px", "300px", "200px"]);
@@ -69,8 +54,8 @@ describe("layout editor mock patches", () => {
         to: { kind: "beside", target: ref([2]), side: "right" },
       }),
     ).toBeNull();
-    expect(shape(root(l))).toBe("panes(list-pane,reader,sidebar)");
-    const r = root(l);
+    expect(shape(mailRoot(l))).toBe("panes(list-pane,reader,sidebar)");
+    const r = mailRoot(l);
     expect(r.type === "split" && r.sizes).toEqual(["1fr", "1.4fr", "260px"]);
     expect(r.type === "split" && r.max_sizes).toEqual([null, null, "480px"]);
     expect(r.type === "split" && r.collapsible).toEqual([false, true, true]);
@@ -82,7 +67,7 @@ describe("layout editor mock patches", () => {
         to: { kind: "beside", target: ref([1]), side: "bottom" },
       }),
     ).toBeNull();
-    expect(shape(root(l))).toBe("panes(split-v(reader,list-pane),sidebar)");
+    expect(shape(mailRoot(l))).toBe("panes(split-v(reader,list-pane),sidebar)");
     // Back beside the sidebar: the vertical split is left with one child and dissolves.
     expect(
       apply(l, {
@@ -91,7 +76,7 @@ describe("layout editor mock patches", () => {
         to: { kind: "beside", target: ref([1]), side: "left" },
       }),
     ).toBeNull();
-    expect(shape(root(l))).toBe("panes(reader,list-pane,sidebar)");
+    expect(shape(mailRoot(l))).toBe("panes(reader,list-pane,sidebar)");
   });
 
   it("moves into a container at an index of the tree before the move", () => {
@@ -103,7 +88,7 @@ describe("layout editor mock patches", () => {
         to: { kind: "into", parent: ref([]), index: 3 },
       }),
     ).toBeNull();
-    expect(shape(root(l))).toBe("panes(list-pane,reader,sidebar)");
+    expect(shape(mailRoot(l))).toBe("panes(list-pane,reader,sidebar)");
     expect(
       apply(l, {
         op: "move-pane",
@@ -138,7 +123,7 @@ describe("layout editor mock patches", () => {
     expect(add("bottom")).toBeNull();
     expect(add("top")).toBeNull();
     // The stack is no split: the folder tree is wrapped in a vertical one.
-    const sidebar = must(nodeAt(root(l), [0]));
+    const sidebar = must(nodeAt(mailRoot(l), [0]));
     expect(shape(sidebar)).toBe("sidebar");
     const first = must(nodeAt(sidebar, [0]));
     expect(shape(first)).toBe("split-v(mini-month-2,split-v(folders,mini-month))");
@@ -185,33 +170,33 @@ describe("layout editor mock patches", () => {
     expect(apply(l, { op: "remove-node", node: ref([1]) })).toBeNull();
     expect(apply(l, { op: "remove-node", node: ref([1]) })).toBeNull();
     // A split left with one child is replaced by it.
-    expect(shape(root(l))).toBe("sidebar");
+    expect(shape(mailRoot(l))).toBe("sidebar");
     expect(apply(l, { op: "remove-node", node: ref([]) })).toBe("edit-issue-invalid-placement");
   });
 
   it("hides and shows nodes", () => {
     const l = layout();
     expect(apply(l, { op: "set-hidden", node: ref([0]), hidden: true })).toBeNull();
-    expect(shape(root(l))).toBe("panes(sidebar!,list-pane,reader)");
+    expect(shape(mailRoot(l))).toBe("panes(sidebar!,list-pane,reader)");
     expect(apply(l, { op: "set-hidden", node: ref([0]), hidden: false })).toBeNull();
-    expect("hidden" in must(nodeAt(root(l), [0]))).toBe(false);
+    expect("hidden" in must(nodeAt(mailRoot(l), [0]))).toBe(false);
   });
 
   it("applies presets; unnamed panes stay hidden in a stack", () => {
     const l = layout();
     const preset = (id: string) => apply(l, { op: "apply-preset", preset: id, target: ref([]) });
     expect(preset("reader-below")).toBeNull();
-    expect(shape(root(l))).toBe("split-h(sidebar,split-v(list-pane,reader))");
+    expect(shape(mailRoot(l))).toBe("split-h(sidebar,split-v(list-pane,reader))");
     // The folder pane keeps its limits; the vertical split gets none.
-    const below = root(l);
+    const below = mailRoot(l);
     expect(below.type === "split" && below.max_sizes).toEqual(["480px", null]);
     const column = must(nodeAt(below, [1]));
     expect(column.type === "split" && column.min_sizes).toEqual([]);
     expect(preset("focus")).toBeNull();
-    expect(shape(root(l))).toBe("stack(reader,sidebar!,list-pane!)");
+    expect(shape(mailRoot(l))).toBe("stack(reader,sidebar!,list-pane!)");
     expect(preset("three-panes")).toBeNull();
-    expect(shape(root(l))).toBe("split-h(sidebar,list-pane,reader)");
-    const r = root(l);
+    expect(shape(mailRoot(l))).toBe("split-h(sidebar,list-pane,reader)");
+    const r = mailRoot(l);
     expect(r.type === "split" && r.sizes).toEqual(["260px", "1fr", "1.4fr"]);
     expect(r.type === "split" && r.min_sizes).toEqual(["200px", "300px", "320px"]);
     expect(r.type === "split" && r.collapsible).toEqual([true, false, true]);
@@ -241,9 +226,9 @@ describe("UpdateLayout with layout-editor patches (mock core)", () => {
     expect(await transport.send({ type: "UpdateLayout", patches: [swap] })).toEqual({
       type: "Done",
     });
-    expect(shape(root(transport.data.layout))).toBe("panes(reader,list-pane,sidebar)");
+    expect(shape(mailRoot(transport.data.layout))).toBe("panes(reader,list-pane,sidebar)");
     const changed = events.find((e) => e.type === "ConfigChanged");
-    expect(changed?.type === "ConfigChanged" && shape(root(changed.layout))).toBe(
+    expect(changed?.type === "ConfigChanged" && shape(mailRoot(changed.layout))).toBe(
       "panes(reader,list-pane,sidebar)",
     );
     const history = await transport.send({ type: "GetEditHistory", scope: "layout" });
@@ -264,6 +249,6 @@ describe("UpdateLayout with layout-editor patches (mock core)", () => {
     expect(await transport.send({ type: "UndoEdit", scope: "layout", force: false })).toMatchObject(
       { type: "EditHistory" },
     );
-    expect(shape(root(transport.data.layout))).toBe("panes(sidebar,list-pane,reader)");
+    expect(shape(mailRoot(transport.data.layout))).toBe("panes(sidebar,list-pane,reader)");
   });
 });

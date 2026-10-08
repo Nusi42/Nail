@@ -17,11 +17,11 @@ import { useLayoutConfig } from "../layout/LayoutContext";
 import { optionBool, type WidgetProps } from "../layout/widgetRegistry";
 import { useAccounts, useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
-import { ALL_ACCOUNTS } from "./AccountSwitcher";
 import { wordsOption } from "./folderPane";
 import { LIST_FILTERS } from "./listFilter";
 import { SearchForm } from "./SearchBar";
 import type { ResolvedLayout } from "../api/generated";
+import { ALL_ACCOUNTS } from "../api/contract";
 
 /** Unified folders titled like their favorite. */
 const UNIFIED_TITLES: Readonly<Record<string, string>> = {
@@ -90,7 +90,7 @@ export function ListHeader({ node }: WidgetProps) {
 
   let title: string | null = null;
   if (search !== null) {
-    title = t("list-header-title-search");
+    title = t("common-search-results");
   } else {
     const named = folderTitle(folder, accountId);
     if (named) title = "id" in named ? t(named.id) : named.text;
@@ -113,17 +113,17 @@ export function ListHeader({ node }: WidgetProps) {
       data-part="list-header"
       data-node-id={node.id ?? undefined}
       role="region"
-      aria-label={node.label ? label(node.label) : t("list-header-label")}
+      aria-label={node.label ? label(node.label) : t("common-message-list")}
     >
       {showSearch && (
         <SearchForm
-          label={t("search-bar-label")}
+          label={t("common-search-noun")}
           scope="account"
           showHints
           liveCheck
           shortcut={binding === null ? null : keyLabel(binding, t)}
           keyShortcuts={binding === null ? undefined : ariaShortcut(binding)}
-          placeholder={t("search-bar-input")}
+          placeholder={t("common-search-mail")}
         />
       )}
       {showTitle && title !== null && (

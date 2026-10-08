@@ -114,7 +114,7 @@ function QuietHoursEditor({
             </div>
           </div>
           <fieldset data-part="notification-settings.days">
-            <legend data-part="form.label">{t("notification-quiet-days")}</legend>
+            <legend data-part="form.label">{t("common-on")}</legend>
             {WEEKDAYS.map((day: Weekday) => (
               <CheckField
                 key={day}
@@ -373,7 +373,7 @@ function Editor({
           data-variant="primary"
           onClick={() => void save()}
         >
-          {t("notification-settings-save")}
+          {t("common-save")}
         </button>
         <button type="button" data-part="form.button" onClick={() => void test()}>
           {t("notification-test")}

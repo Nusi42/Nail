@@ -24,9 +24,9 @@
  */
 
 import { CUSTOMIZER_PART, SETTINGS_PART } from "./ids";
+import { p } from "../../theme/selectors";
+import { CAPS_TIGHT, LINE_BOX } from "../../theme/declarations";
 
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
 const c = (part: string) => p(`toolbar-customizer.${part}`);
 
 /** Token shorthands (the same derived fallbacks as the shared skin). */
@@ -71,6 +71,12 @@ export const CUSTOMIZER_NARROW = "40rem";
 /** Below this height the body scrolls instead of the lists shrinking further. */
 export const CUSTOMIZER_SHORT = "30rem";
 
+/** The customizer: the toolbar's items, and the palette beside them (220–280 px). */
+const PANEL_COLUMNS = "minmax(0, 1fr) minmax(220px, 280px)";
+
+/** The palette list stays a usable drop target while it is short. */
+const PALETTE_MIN_HEIGHT = "160px";
+
 const FRAME = `${p(CUSTOMIZER_PART)} {
   display: flex; flex-direction: column; gap: ${T.md}; height: 100%; min-height: 0; padding: ${T.md};
   box-sizing: border-box; color: ${T.fg}; container: ${CUSTOMIZER_CONTAINER} / size;
@@ -83,7 +89,7 @@ ${c("intro")}, ${c("drop-hint")}, ${c("more-matches")} { margin: 0; color: ${T.m
    scrolls instead of letting them run into each other (the header and footer stay). In a narrow
    window the available actions go below the toolbar's lists. */
 ${c("body")} {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: ${T.lg};
+  display: grid; grid-template-columns: ${PANEL_COLUMNS}; gap: ${T.lg};
   flex: 1; min-height: 0;
 }
 @container ${CUSTOMIZER_CONTAINER} (max-width: ${CUSTOMIZER_NARROW}) { ${c("body")} { grid-template-columns: minmax(0, 1fr); } }
@@ -97,8 +103,8 @@ ${c("area")}, ${c("palette")} { display: flex; flex-direction: column; gap: ${T.
   ${c("list")}[data-orientation="vertical"] { flex: none; max-height: calc(6 * ${T.control}); }
 }
 ${c("heading")} {
-  margin: 0; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.04em;
-  text-transform: uppercase; color: ${T.muted};
+  margin: 0; font-size: ${T.label}; font-weight: ${T.semibold}; ${CAPS_TIGHT}
+  color: ${T.muted};
 }`;
 
 const LISTS = `${c("list")} {
@@ -108,7 +114,7 @@ const LISTS = `${c("list")} {
 }
 ${c("list")}[data-orientation="horizontal"] { flex-wrap: wrap; align-items: center; }
 ${c("list")}[data-orientation="vertical"] { flex-direction: column; overflow: auto; }
-${c("list")}[data-list="palette"] { flex: 1; min-height: 160px; border-style: solid; background-color: ${T.bg}; }
+${c("list")}[data-list="palette"] { flex: 1; min-height: ${PALETTE_MIN_HEIGHT}; border-style: solid; background-color: ${T.bg}; }
 ${c("list")}[data-drop="end"] { box-shadow: inset 0 -2px 0 ${T.accent}; }
 ${c("list")}[data-orientation="horizontal"][data-drop="end"] { box-shadow: inset -2px 0 0 ${T.accent}; }
 ${c("item")} {
@@ -147,7 +153,7 @@ ${c("palette")}[data-drop="remove"] ${c("list")} { border-color: ${T.danger}; bo
 
 const CONTROLS = `${c("commands")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }
 ${c("status")} {
-  display: flex; align-items: center; gap: ${T.sm}; margin: 0; min-height: 1.5em; font-size: ${T.small};
+  display: flex; align-items: center; gap: ${T.sm}; margin: 0; min-height: ${LINE_BOX}; font-size: ${T.small};
   color: ${T.muted};
 }
 ${c("status")}[data-tone="error"] { color: ${T.danger}; }

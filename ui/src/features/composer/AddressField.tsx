@@ -5,16 +5,15 @@
  * being typed.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import type { Address } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { formatAddress } from "../../state/addresses";
 import { useClient } from "../../state/queries";
+import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 
 /** How many suggestions are shown. */
 export const SUGGESTION_LIMIT = 8;
-/** Typing pause before asking the core. */
-export const SUGGEST_DELAY_MS = 150;
 
 /** The entry being typed: text after the last separator outside quotes / brackets. */
 export function currentEntry(value: string): { start: number; text: string } {
@@ -38,19 +37,6 @@ export function completeEntry(value: string, address: Address): string {
   return `${head}${head === "" ? "" : " "}${formatAddress(address)}, `;
 }
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebounced(value);
-    }, ms);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, ms]);
-  return debounced;
-}
-
 export interface AddressFieldProps {
   field: "to" | "cc" | "bcc";
   value: string;
@@ -65,7 +51,7 @@ export function AddressField({ field, value, onChange }: AddressFieldProps) {
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(0);
   const [closed, setClosed] = useState(false);
-  const prefix = useDebounced(currentEntry(value).text, SUGGEST_DELAY_MS);
+  const prefix = useDebounced(currentEntry(value).text, TYPING_PAUSE_MS);
   const enabled = focused && prefix.length > 0 && !closed;
   const suggestions = useQuery({
     queryKey: ["composer", "suggest", prefix],

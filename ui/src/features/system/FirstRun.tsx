@@ -13,9 +13,7 @@
  * serve`, the e2e harness): there `GetInstallation` answers `unsupported`.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage } from "../../api/generated";
+import { useEffect } from "react";
 import { useActions } from "../../actions/ActionsProvider";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -34,6 +32,7 @@ import {
   useInstallation,
 } from "./queries";
 import { systemStoreFor } from "./store";
+import { useBusyAction } from "../../state/busyAction";
 
 function DefaultAppsStep() {
   const t = useT();
@@ -105,7 +104,7 @@ function ImportStep({ onImport }: { onImport: () => void }) {
       <p data-part="first-run.step.text">{t("system-first-run-import-text")}</p>
       {available ? (
         <button type="button" data-part="form.button" data-action="import" onClick={onImport}>
-          {t("system-first-run-import-start")}
+          {t("common-import-open")}
         </button>
       ) : (
         <p data-part="form.hint" data-field="import">
@@ -123,30 +122,23 @@ export function FirstRun({ close }: { close: () => void }) {
   const queryClient = useQueryClient();
   const actions = useActions();
   const installation = useInstallation();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const desktop = installation.isSuccess;
 
   const complete = async (then?: () => void) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request({ type: "CompleteFirstRun" }, "FirstRun");
       queryClient.setQueryData(systemKeys.firstRun, answer.state);
       close();
       then?.();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
     <div data-part="first-run">
       <h3 data-part="first-run.title">{t("system-first-run-title")}</h3>
       <p data-part="first-run.intro">{t("system-first-run-intro")}</p>
-      <ul data-part="first-run.steps" aria-label={t("system-first-run-steps")}>
+      <ul data-part="first-run.steps" aria-label={t("common-setup-steps")}>
         {desktop && <DefaultAppsStep />}
         {desktop && <StartupStep />}
         <ImportStep

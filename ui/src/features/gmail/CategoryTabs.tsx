@@ -9,17 +9,14 @@ import type { GmailCategory } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, optionList, type WidgetProps } from "../../layout/widgetRegistry";
 import { useFolders } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { CATEGORIES, categoryLabel, categoryOfQuery } from "./model";
 import { showCategory, useGmailAccount, useGmailLabels } from "./queries";
+import { useActiveMailView } from "../../state/hooks";
 
 export function CategoryTabs({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
-  const store = useUiStoreApi();
-  const accountId = useUi((s) => s.activeAccountId);
-  const activeFolderId = useUi((s) => s.activeFolderId);
-  const search = useUi((s) => s.search);
+  const { store, accountId, activeFolderId, search } = useActiveMailView();
   const account = useGmailAccount(accountId);
   const folders = useFolders(account?.id ?? null);
   const labels = useGmailLabels(account?.id ?? null);
@@ -54,7 +51,7 @@ export function CategoryTabs({ node }: WidgetProps) {
                 showCategory(store, account.id, inbox.id, null);
               }}
             >
-              {t("gmail-category-all")}
+              {t("common-all")}
             </button>
           </li>
         )}
@@ -79,7 +76,7 @@ export function CategoryTabs({ node }: WidgetProps) {
                 <span data-part="category-tabs.name">{t(`gmail-category-${c}`)}</span>
                 {count > 0 && (
                   <span data-part="category-tabs.unread">
-                    {t("gmail-category-unread", { count })}
+                    {t("common-unread-count", { count })}
                   </span>
                 )}
               </button>

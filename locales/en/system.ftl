@@ -11,23 +11,23 @@ system-settings-title = Desktop
 
 ## Layout labels (settings tabs, actions, window titles)
 
-system-settings-tab-updates = Updates
-system-settings-tab-desktop = Tray and startup
-system-settings-tab-default-apps = Default apps
+system-settings-tab-updates = { common-updates }
+system-settings-tab-desktop = { system-desktop-title }
+system-settings-tab-default-apps = { system-default-apps-title }
 system-action-about = About Nail
 system-action-check-updates = Check for updates
 system-action-first-run = Welcome screen
 system-action-default-apps = Choose default apps
-window-about-nail = About Nail
-window-first-run = Welcome to Nail
+window-about-nail = { system-action-about }
+window-first-run = { system-first-run-title }
 
 ## Updates (widget update-settings, "About Nail")
 
-system-updates-title = Updates
+system-updates-title = { common-updates }
 # $version = e.g. 1.0.0; $kind = how Nail was installed (install-kind-*)
 system-version-line = Nail { $version } · { $kind }
 system-update-options = Update options
-system-update-channel = Update channel
+system-update-channel = { system-about-channel }
 system-update-auto-check = Check for updates automatically (at start and once a day)
 system-update-auto-download = Download updates in the background
 system-update-idle-auto = Nail checks for updates automatically.
@@ -50,14 +50,13 @@ system-update-installing = Installing version { $version }. Nail restarts in a m
 # $when = date and time
 system-update-last-checked = Last checked: { $when }
 system-update-check = Check now
-system-update-retry = Try again
+system-update-retry = { common-try-again }
 system-update-download = Download
 system-update-restart = Restart to install
 system-release-notes-label = What’s new in { $version }
 
 ## About Nail
 
-system-about-product = Nail
 system-about-tagline = E-mail, calendar and contacts.
 system-about-facts = Installation
 system-about-version = Version
@@ -65,7 +64,6 @@ system-about-installer = Installed by
 system-about-scope = Installed for
 system-about-architecture = Architecture
 system-about-channel = Update channel
-system-about-folder = Folder
 system-about-webview = WebView2 runtime
 system-about-mapi = “Send to → Mail recipient”
 system-about-mapi-yes = Installed
@@ -109,7 +107,6 @@ system-default-apps-refresh = Check again
 
 system-first-run-title = Welcome to Nail
 system-first-run-intro = A few things to set up. You can change all of them later in Settings.
-system-first-run-steps = Setup steps
 system-first-run-default-apps = Open e-mail links with Nail
 system-first-run-default-apps-text = Windows lets only you choose the app for e-mail links, calendar links and mail files. The button opens the right page in Windows Settings.
 # $state = default-app-state-* text
@@ -119,7 +116,6 @@ system-first-run-start-with-windows = Start Nail with Windows, in the notificati
 system-first-run-startup-text = Nail then gets new mail, runs your rules and shows reminders from the moment you sign in.
 system-first-run-import = Bring your mail along
 system-first-run-import-text = Import mail, contacts and calendars from another mail program.
-system-first-run-import-start = Import…
 system-first-run-import-later = The import assistant comes with a later version of Nail.
 system-first-run-later = You can change these later in Settings.
 system-first-run-done = Get started
@@ -129,4 +125,3 @@ system-first-run-skip = Skip
 
 system-program-draft-label = Message from another program
 system-program-draft-unknown = Another program prepared this message. Check it, then press Send.
-system-program-draft-dismiss = Dismiss

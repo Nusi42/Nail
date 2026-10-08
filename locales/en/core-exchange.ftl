@@ -45,15 +45,15 @@ exchange-category-issue-name-too-long = The category name is too long.
 exchange-category-issue-invalid-name = Category names cannot contain commas or semicolons.
 exchange-category-issue-duplicate-name = A category with this name already exists.
 exchange-color-none = No colour
-exchange-color-preset0 = Red
-exchange-color-preset1 = Orange
+exchange-color-preset0 = { common-red }
+exchange-color-preset1 = { common-orange }
 exchange-color-preset2 = Brown
 exchange-color-preset3 = Yellow
-exchange-color-preset4 = Green
+exchange-color-preset4 = { common-green }
 exchange-color-preset5 = Teal
 exchange-color-preset6 = Olive
-exchange-color-preset7 = Blue
-exchange-color-preset8 = Purple
+exchange-color-preset7 = { common-blue }
+exchange-color-preset8 = { common-purple }
 exchange-color-preset9 = Cranberry
 exchange-color-preset10 = Steel
 exchange-color-preset11 = Dark steel
@@ -78,7 +78,7 @@ exchange-oof-issue-empty-external-reply = Write the reply for people outside you
 exchange-oof-issue-reply-too-long = The reply is too long.
 exchange-oof-issue-invalid-time = The start or end time is not valid.
 exchange-oof-issue-missing-schedule = Choose when the replies start and end.
-exchange-oof-issue-end-before-start = The end must be after the start.
+exchange-oof-issue-end-before-start = { common-end-after-start }
 
 ## Autodiscover (WP93, nail-exchange autodiscover)
 

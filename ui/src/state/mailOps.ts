@@ -8,7 +8,9 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import { NailError, type NailClient } from "../api/client";
 import type {
+  AccountId,
   FlagChange,
+  FolderId,
   MessageId,
   MessageSummary,
   MoveTarget,
@@ -35,6 +37,22 @@ interface SearchPage {
 }
 
 /** Looks a message summary up in any list, search or thread cache. */
+/**
+ * The active account and its cached Inbox (for actions that show a view of
+ * the Inbox, e.g. a Focused / category tab); `null` before the folders came.
+ */
+export function activeInbox(ctx: {
+  store: UiStore;
+  queryClient: QueryClient;
+}): { accountId: AccountId; inboxId: FolderId } | null {
+  const accountId = ctx.store.getState().activeAccountId;
+  const folders = ctx.queryClient.getQueryData<{ id: FolderId; role: string }[]>(
+    queryKeys.folders(accountId),
+  );
+  const inbox = folders?.find((f) => f.role === "inbox");
+  return accountId === null || !inbox ? null : { accountId, inboxId: inbox.id };
+}
+
 export function findSummary(queryClient: QueryClient, id: MessageId): MessageSummary | undefined {
   for (const [, data] of queryClient.getQueriesData<InfiniteData<MessagesPage>>({
     queryKey: queryKeys.allMessages,

@@ -9,6 +9,7 @@
  * theme compiler maps them (`pluginPartSelector`) — with the namespaced
  * names of the design, `plugin.<id>.<part>` (`plugin.follow-up.button`).
  */
+import { noticeStack } from "../../theme/declarations";
 
 /** The generic parts plug-in elements carry. */
 export const PLUGIN_PARTS = [
@@ -125,7 +126,7 @@ export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog"] { display: flex; fle
 [data-part="plugin.field"] { display: flex; flex-direction: column; }
 [data-part="plugin.text"], [data-part="plugin.markdown.code-block"], [data-part="plugin-placements.text"] { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-part="plugin.image"] { max-width: 100%; height: auto; }
-[data-part="plugin.notifications"] { position: fixed; right: 16px; bottom: 16px; z-index: 300; max-width: min(420px, calc(100% - 32px)); }
+[data-part="plugin.notifications"] { ${noticeStack("right")} z-index: 300; }
 [data-part="plugin.notification"] { display: flex; align-items: flex-start; }
 [data-part="plugin.notification.content"] { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 [data-part="plugin-panel"] { display: flex; flex-direction: column; min-height: 0; overflow: auto; }

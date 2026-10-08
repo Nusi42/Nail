@@ -6,13 +6,11 @@
 
 ## Editing modes
 
-composer-mode-label = Format
 composer-mode-plain = Plain text
 composer-mode-html = HTML
 composer-mode-markdown = Markdown
 composer-lossy-warning = Switching from { $from } to { $to } loses formatting that { $to } cannot express.
 composer-lossy-confirm = Switch anyway
-composer-lossy-cancel = Keep editing
 
 ## HTML editor
 
@@ -36,14 +34,14 @@ composer-format-blockquote-short = “ ”
 composer-format-code-block = Code block
 composer-format-code-block-short = { "{ }" }
 composer-format-table = Insert table
-composer-format-table-short = Table
-composer-format-undo = Undo
-composer-format-undo-short = Undo
-composer-format-redo = Redo
-composer-format-redo-short = Redo
+composer-format-table-short = { common-table }
+composer-format-undo = { common-undo }
+composer-format-undo-short = { common-undo }
+composer-format-redo = { common-redo }
+composer-format-redo-short = { common-redo }
 composer-format-add-row = Add row
 composer-format-add-row-short = + Row
-composer-format-add-column = Add column
+composer-format-add-column = { common-add-column }
 composer-format-add-column-short = + Column
 composer-format-delete-row = Delete row
 composer-format-delete-row-short = − Row
@@ -51,21 +49,17 @@ composer-format-delete-column = Delete column
 composer-format-delete-column-short = − Column
 composer-format-delete-table = Delete table
 composer-format-delete-table-short = − Table
-composer-format-link = Link
-composer-format-link-short = Link
+composer-format-link = { common-link }
+composer-format-link-short = { common-link }
 composer-format-image = Insert image
 composer-format-image-short = Image
-composer-format-source = HTML source
+composer-format-source = { composer-html-source }
 composer-format-source-short = Source
-composer-link-label = Link
 composer-link-url = Address
-composer-link-apply = Apply
-composer-link-cancel = Cancel
 composer-html-source = HTML source
 
 ## Markdown editor
 
-composer-preview-toggle = Preview
 composer-preview-title = Preview of the message
 composer-preview-failed = The preview could not be rendered.
 composer-markdown-part = Also send the Markdown source
@@ -77,10 +71,7 @@ composer-suggestions-label = Suggested addresses
 ## Attachments
 
 composer-attach = Attach…
-composer-attachments-label = Attachments
 composer-attachment-inline = in text
-composer-attachment-remove = Remove { $name }
-composer-attachment-remove-short = Remove
 composer-uploading =
     { $count ->
         [one] Uploading one file…
@@ -91,8 +82,6 @@ composer-error-uploading = Wait until the attachments are uploaded.
 # Translations list the words of their language.
 composer-attachment-keywords = attach, attached, attaching, attachment, attachments, enclosed, enclosure
 composer-reminder = The message mentions an attachment, but nothing is attached.
-composer-reminder-send-anyway = Send anyway
-composer-reminder-dismiss = Dismiss
 
 ## Drafts
 
@@ -118,14 +107,11 @@ window-composer-close = Unsaved changes
 window-composer-discard = Discard message
 # { $subject }: the message's subject, or "New message".
 composer-close-question = “{ $subject }” has changes that are not saved yet. Save them as a draft before closing?
-composer-close-save = Save draft
 composer-close-discard = Close without saving
-composer-confirm-keep = Keep editing
 
 ## Pop-out windows (desktop, M5c): why a message stays in the main window
 
 composer-pop-out-plain = this message window cannot open on its own
 composer-pop-out-not-saved = the message could not be saved first
-composer-confirm-ok = OK
 composer-discard-question = Discard “{ $subject }”?
 composer-discard-saved = Discard “{ $subject }”? Its saved draft is deleted too.

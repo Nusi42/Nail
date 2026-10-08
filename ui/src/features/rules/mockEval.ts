@@ -14,11 +14,11 @@ import type {
 } from "../../api/generated";
 import type { MockData } from "../../api/mockData";
 import { MOCK_NOW } from "../../api/mockData";
-import { matches as queryMatches, parseQuery, type Searchable } from "../../api/mockSearch";
+import { messageSize, searchable } from "../../api/mockMail";
+import { matches as queryMatches, parseQuery } from "../../api/mockSearch";
 import { comparePaths } from "./model";
 import type { ConditionHit } from "./types";
-
-const DAY = 86_400_000;
+import { DAY_MS } from "../../state/clock";
 
 export function textMatches(m: TextMatch, value: string): boolean {
   if (m.op === "regex") {
@@ -64,33 +64,6 @@ function accountMatches(d: MockData, messageAccount: string, wanted: string): bo
   if (wanted === messageAccount || wanted === "all") return true;
   const va = d.accountsConfig.virtual_accounts.find((v) => v.id === wanted);
   return va?.members.includes(messageAccount) ?? false;
-}
-
-function searchable(d: MockData, m: MessageSummary): Searchable {
-  const body = d.bodies.get(m.id);
-  const address = (a: Address | null) => (a ? `${a.name ?? ""} ${a.email}` : "");
-  return {
-    subject: m.subject,
-    from: address(m.from),
-    to: m.to.map(address).join(" "),
-    text: body?.text ?? m.preview,
-    tags: m.tags,
-    account: m.account_id,
-    accountName: d.accounts.find((a) => a.id === m.account_id)?.name ?? "",
-    folder: d.folders.find((f) => f.id === m.folder_id)?.path ?? "",
-    date: Date.parse(m.date),
-    size: messageSize(d, m),
-    unread: !m.flags.seen,
-    flagged: m.flags.flagged,
-    answered: m.flags.answered,
-    draft: m.flags.draft,
-    hasAttachments: m.has_attachments,
-  };
-}
-
-function messageSize(d: MockData, m: MessageSummary): number {
-  const body = d.bodies.get(m.id);
-  return (body?.text.length ?? 0) + (body?.attachments.reduce((s, a) => s + a.size, 0) ?? 0);
 }
 
 type Decision = [boolean, string | null];
@@ -145,13 +118,13 @@ function leaf(d: MockData, c: Condition, m: MessageSummary): Decision {
     case "date": {
       const start = Date.parse(`${c.date}T00:00:00Z`);
       const date = Date.parse(m.date);
-      return [c.cmp === "before" ? date < start : date >= start + DAY, null];
+      return [c.cmp === "before" ? date < start : date >= start + DAY_MS, null];
     }
     case "age": {
       const age = MOCK_NOW - Date.parse(m.date);
       return [
-        c.cmp === "greater" ? age > c.days * DAY : age < c.days * DAY,
-        String(Math.floor(age / DAY)),
+        c.cmp === "greater" ? age > c.days * DAY_MS : age < c.days * DAY_MS,
+        String(Math.floor(age / DAY_MS)),
       ];
     }
     case "flag":

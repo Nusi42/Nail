@@ -12,6 +12,7 @@ import type {
   PrintTarget,
 } from "../../api/generated";
 import { ORIENTATIONS, PAGE_SIZES } from "./messages";
+import { DAY_MS } from "../../state/clock";
 
 /** `nail_api::print::print_view_route`. */
 export function printViewRoute(jobId: string): string {
@@ -26,7 +27,7 @@ export function targetIssue(target: PrintTarget): string | null {
   if (target.type !== "agenda") return null;
   const day = (d: string) =>
     /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`))
-      ? Date.parse(`${d}T00:00:00Z`) / 86_400_000
+      ? Date.parse(`${d}T00:00:00Z`) / DAY_MS
       : null;
   const start = day(target.start);
   const end = day(target.end);

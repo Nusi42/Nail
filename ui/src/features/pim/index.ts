@@ -240,7 +240,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [EVENT_DIALOG]: EventEditorDialog,
   [SCOPE_DIALOG]: ScopeDialog,
   [CONTACT_DIALOG]: ContactEditorDialog,
@@ -300,6 +300,6 @@ export const handlePimEvent: FeatureEventHandler = (event, { queryClient, store 
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handlePimEvent];
+export const events: NonNullable<Feature["events"]> = [handlePimEvent];
 /** Background components: the reminder toasts. */
-export const effects: Feature["effects"] = [PimToasts];
+export const effects: NonNullable<Feature["effects"]> = [PimToasts];

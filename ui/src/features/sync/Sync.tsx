@@ -20,7 +20,7 @@ import { findSummary } from "../../state/mailOps";
 import { useAccountsConfig, useClient, useFolders, useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
 import { flattenFolders } from "../../widgets/FolderTree";
-import { NumberField, SelectField } from "../../widgets/forms";
+import { NumberField, SelectField, SaveRow } from "../../widgets/forms";
 import { BODY_MODES } from "./model";
 import { useSync } from "./store";
 
@@ -194,19 +194,10 @@ function PolicyForm({
       )}
       {saved && (
         <p data-part="sync-policy.notice" role="status">
-          {t("sync-saved")}
+          {t("common-saved-to-accounts")}
         </p>
       )}
-      <div data-part="sync-policy.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          onClick={() => void save()}
-        >
-          {t("sync-save")}
-        </button>
-      </div>
+      <SaveRow part="sync-policy.actions" onSave={() => void save()} />
     </div>
   );
 }
@@ -262,7 +253,7 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
     >
       <p data-part="sync-folder-policies.intro">{t("sync-intro")}</p>
       {accounts.length === 0 ? (
-        <p data-part="sync-folder-policies.empty">{t("sync-no-accounts")}</p>
+        <p data-part="sync-folder-policies.empty">{t("common-no-accounts-yet")}</p>
       ) : (
         <>
           <SelectField

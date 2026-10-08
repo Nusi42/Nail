@@ -86,7 +86,7 @@ export function rangeTitle(
       return format.dateTime(dayDate(anchor), { year: "numeric", timeZone: "UTC" });
     default: {
       const last = range.start.add({ days: range.count - 1 });
-      return t("pim-range", {
+      return t("common-time-range", {
         start: formatDay(format, range.start, { day: "numeric", month: "short" }),
         end: formatDay(format, last, { dateStyle: "medium" }),
       });
@@ -128,7 +128,7 @@ function ViewSwitch({
     return (
       <div data-part="calendar.view-menu">
         <label data-part="form.label" htmlFor={id}>
-          {t("pim-views-label")}
+          {t("common-view")}
         </label>
         <select
           id={id}
@@ -154,7 +154,7 @@ function ViewSwitch({
       data-part="segmented"
       data-field="calendar-view"
       role="group"
-      aria-label={t("pim-views-label")}
+      aria-label={t("common-view")}
     >
       {views.map((kind) => (
         <button
@@ -306,7 +306,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
                 pim.getState().setAnchor(null);
               }}
             >
-              {t("pim-nav-today")}
+              {t("common-today")}
             </button>
             <button
               type="button"
@@ -326,8 +326,8 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
               data-part="form.button"
               data-variant="icon ghost"
               data-field="calendar-next"
-              aria-label={t("pim-nav-next")}
-              title={t("pim-nav-next")}
+              aria-label={t("common-next-period")}
+              title={t("common-next-period")}
               onClick={() => {
                 goTo(stepAnchor(view, anchor, 1, options));
               }}
@@ -358,7 +358,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
             }}
           >
             <Icon name="plus" part="form.button.icon" />
-            <span data-part="form.button.label">{t("pim-new-event")}</span>
+            <span data-part="form.button.label">{t("pim-action-new-event")}</span>
           </button>
         </div>
       )}

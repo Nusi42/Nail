@@ -13,7 +13,7 @@ customize-open-unsupported = Opening files needs the desktop app. Open the file 
 ## Dialog titles
 
 window-config-merge = Apply a theme or layout
-window-config-errors = Configuration errors
+window-config-errors = { config-error-list-label }
 
 ## Inspector
 
@@ -66,12 +66,9 @@ config-error-file =
 
 ## Smart folders (saved searches)
 
-saved-search-label = Smart folders
 saved-search-empty = No smart folders yet. Search for something, then save the search here.
 saved-search-remove = Remove “{ $name }”
 saved-search-name = Name of the smart folder
-saved-search-save = Save
-saved-search-cancel = Cancel
 saved-search-add = Save current search
 saved-search-add-hint = Search first, then save the search as a smart folder.
 
@@ -89,7 +86,6 @@ merge-dialog-incoming-invalid =
         [one] The file you loaded has an error. Fix it and compare again.
        *[other] The file you loaded has { $count } errors. Fix them and compare again.
     }
-merge-dialog-error-at = Line { $line }, column { $column }: { $message }
 merge-dialog-identical = The file is the same as yours; there is nothing to take.
 merge-dialog-summary =
     { $differing ->
@@ -112,16 +108,13 @@ merge-dialog-take-theirs = Take theirs
 merge-dialog-mine = Mine
 merge-dialog-theirs = Theirs
 merge-dialog-absent = (not present)
-merge-dialog-back = Back
-merge-dialog-apply = Apply
 merge-dialog-applied = Applied. Your previous file was backed up.
 merge-dialog-revert = Revert
 merge-dialog-reverted = The previous version is back.
-merge-dialog-close = Close
 merge-dialog-backups = Earlier versions
 merge-dialog-no-backups = No backups yet.
 
-merge-section-header = Name
+merge-section-header = { common-name }
 merge-section-tokens = Tokens
 merge-section-modes = Colour mode
 merge-section-parts = Part styles
@@ -129,9 +122,9 @@ merge-section-icons = Icons
 merge-section-message = Message display and sounds
 merge-section-raw-css = Raw CSS
 merge-section-windows = Windows
-merge-section-actions = Actions
+merge-section-actions = { common-actions }
 merge-section-keys = Key bindings
-merge-section-toolbars = Toolbars
+merge-section-toolbars = { customize-toolbar-tab }
 merge-section-menus = Menus
 
 merge-change-added = new
@@ -147,20 +140,16 @@ merge-conflict-invalid = Cannot be taken as it is
 
 ## Action labels (for `action "…" label="@…"` in layout.kdl)
 
-customize-action-inspector = Inspector
+customize-action-inspector = { inspector-title }
 customize-action-merge = Apply a theme or layout…
-customize-action-errors = Configuration errors
+customize-action-errors = { config-error-list-label }
 
 ## Customize tab editors (M2c WP54): toolbars, keys, columns
 
 customize-editors-tabs = Editors
 customize-save = Save to layout.kdl
 customize-saved = Saved to layout.kdl.
-customize-discard = Undo changes
 customize-reset-done = The default is back.
-customize-move-up-short = Up
-customize-move-down-short = Down
-customize-remove-short = Remove
 customize-move-up = Move { $label } up
 customize-move-down = Move { $label } down
 customize-remove = Remove { $label }
@@ -175,18 +164,15 @@ customize-toolbar-separator = Separator
 customize-toolbar-more = More menu
 customize-toolbar-spacer = Flexible space
 customize-toolbar-add = Add to the toolbar
-customize-toolbar-action = Action
-customize-toolbar-add-action = Add action
 customize-toolbar-add-separator = Add separator
 customize-toolbar-add-spacer = Add flexible space
 customize-toolbar-reset = Back to the default toolbar
 
-customize-keys-tab = Keys
+customize-keys-tab = { customize-keys-key }
 customize-keys-label = Key binding editor
 customize-keys-intro = Every shortcut, by where it works. Bindings in "Everywhere" apply unless a more specific place binds the same key.
 customize-keys-add-title = New shortcut
 customize-keys-context = Where
-customize-keys-action = Action
 customize-keys-argument = Argument (optional)
 customize-keys-key = Keys
 customize-keys-press = Press the keys…
@@ -199,19 +185,18 @@ customize-keys-removed = Shortcut removed.
 customize-keys-remove = Remove { $key } ({ $action })
 customize-keys-reset = Restore the default for { $key }
 customize-keys-reset-short = Default
-customize-keys-filter = Show
 customize-keys-filter-all = All shortcuts
 customize-keys-table = Shortcuts
 customize-keys-actions = Change
 customize-keys-context-global = Everywhere
-customize-keys-context-list = Message list
+customize-keys-context-list = { common-message-list }
 customize-keys-context-reader = Reader
 customize-keys-context-composer = Composer
 customize-keys-context-search = Search field
 customize-keys-context-folders = Folder list
-customize-keys-context-calendar = Calendar
-customize-keys-context-contacts = Contacts
-customize-keys-context-tasks = Tasks
+customize-keys-context-calendar = { common-calendar }
+customize-keys-context-contacts = { common-contacts }
+customize-keys-context-tasks = { common-tasks }
 customize-keys-context-window = Dialogs
 customize-keys-context-menu = Context menus
 customize-keys-context-plugin-dialog = Plug-in dialogs
@@ -221,17 +206,14 @@ customize-columns-tab = Columns
 customize-columns-label = Column editor
 customize-columns-intro = Show a message list as columns and choose their order.
 customize-columns-none = The layout has no message list.
-customize-columns-choose = List
 customize-columns-list = { $window } window, layout { $breakpoint }: { $id }
 customize-columns-rows = This list shows rows made from templates. Saving columns switches it to columns.
 customize-columns-items = Columns in display order
 customize-columns-add = Add a column
 customize-columns-column = Column
-customize-columns-add-column = Add column
 
 ## The new default layout offered to layouts of your own (M5b WP165)
 
 customize-layout-offer-title = A new layout with a navigation rail
 customize-layout-offer-text = Nail now switches between Mail, Calendar, Contacts, Tasks and Settings with a rail on the left. Your own layout keeps working; review the new default to take over what you like.
 customize-layout-offer-review = Review the new layout
-customize-layout-offer-dismiss = Not now

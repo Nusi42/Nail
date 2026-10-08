@@ -266,7 +266,7 @@ function AddProperty({ selector, edits }: { selector: string; edits: ThemeEdits 
         />
       </div>
       <button type="submit" data-part="form.button">
-        {t("theme-editor-add")}
+        {t("common-add")}
       </button>
       {problem && (
         <p data-part="form.error" role="alert">
@@ -467,7 +467,7 @@ export function PartEditor({
               />
             </div>
             <button type="submit" data-part="form.button">
-              {t("theme-editor-add")}
+              {t("common-add")}
             </button>
             {problem && (
               <p data-part="form.error" role="alert">

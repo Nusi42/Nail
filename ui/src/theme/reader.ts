@@ -22,6 +22,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { ResolvedTheme } from "../api/generated";
 import { isSafeValue, resolveTokenRefs } from "./compile";
+import { ACCENT_BAR } from "./declarations";
 
 /** `nail_api::remote_content::PROXY_URL_SCHEME`. */
 export const PROXY_URL_SCHEME = "nail-proxy:";
@@ -78,6 +79,24 @@ export function isDesignedMail(sanitizedHtml: string): boolean {
 /** The token mode whose colours paint designed mail's light paper. */
 const PAPER_MODE = "print";
 
+/** Room below a mail's last line. */
+const BOTTOM_ROOM = "24px";
+
+/** Designed mail on the light "paper": the text keeps off its edges. */
+const PAPER_PADDING = `12px 16px ${BOTTOM_ROOM}`;
+
+/** Quoted text: a small indent, then the quote bar, then the text. */
+const QUOTE_INDENT = "4px";
+const QUOTE_PADDING = "12px";
+
+/** The text and link colours, at zero specificity: the mail's own rules always win. */
+function colours(fg: string, bg: string, link: string): string[] {
+  return [
+    `:where(body) { color: ${fg}; background-color: ${bg}; }`,
+    `:where(a) { color: ${link}; }`,
+  ];
+}
+
 /**
  * Reader stylesheet for `mode`, with all token references resolved.
  * `designed` = the mail brings its own design (`isDesignedMail`, decided
@@ -99,10 +118,8 @@ export function readerCss(theme: ResolvedTheme, mode: string, designed = false):
   const paper = designed && mode === "dark" && m.html_dark_mode === "smart";
   const rules = [
     `:root { color-scheme: ${dark && !paper ? "dark" : "light"}; }`,
-    `body { margin: 0; padding: 0 0 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; overflow-wrap: anywhere; }`,
-    // Colours at zero specificity: the mail's own rules always win.
-    `:where(body) { color: ${fg}; background-color: ${bg}; }`,
-    `:where(a) { color: ${accent}; }`,
+    `body { margin: 0; padding: 0 0 ${BOTTOM_ROOM}; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; overflow-wrap: anywhere; }`,
+    ...colours(fg, bg, accent),
     // The reading width only for mail without its own layout.
     `body:not(${DESIGNED}) > * { max-width: ${r(m.max_width, "none")}; }`,
     `img { max-width: 100%; }`,
@@ -122,7 +139,7 @@ export function readerCss(theme: ResolvedTheme, mode: string, designed = false):
   m.quote_colors.forEach((color, index) => {
     const selector = Array.from({ length: index + 1 }, () => "blockquote").join(" ");
     rules.push(
-      `${selector} { margin: 0 0 0 4px; padding-left: 12px; border-left: 3px solid ${r(color, "currentColor")}; }`,
+      `${selector} { margin: 0 0 0 ${QUOTE_INDENT}; padding-left: ${QUOTE_PADDING}; border-left: ${ACCENT_BAR} solid ${r(color, "currentColor")}; }`,
     );
   });
   if (dark && m.html_dark_mode === "invert") {
@@ -147,11 +164,14 @@ export function readerCss(theme: ResolvedTheme, mode: string, designed = false):
           ? fallback
           : safe(resolveTokenRefs(value, theme, PAPER_MODE), fallback);
       rules.push(
-        `:where(body) { color: ${p("var(--nail-color-fg)", "#1f1f1f")}; background-color: ${p("var(--nail-color-bg)", "#ffffff")}; }`,
-        `:where(a) { color: ${p("var(--nail-color-accent)", "#0b57d0")}; }`,
+        ...colours(
+          p("var(--nail-color-fg)", "#1f1f1f"),
+          p("var(--nail-color-bg)", "#ffffff"),
+          p("var(--nail-color-accent)", "#0b57d0"),
+        ),
         // The text keeps off the paper's edge (the mail's own body padding
         // still wins: its style comes later).
-        `body { padding: 12px 16px 24px; }`,
+        `body { padding: ${PAPER_PADDING}; }`,
       );
     } else {
       // Plain mail takes the theme's colours.

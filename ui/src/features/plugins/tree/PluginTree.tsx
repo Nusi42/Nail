@@ -297,7 +297,7 @@ function MessageListNode({
         const content = (
           <>
             <span {...partAttrs("plugin.message-list.subject", plugin)}>
-              {message.subject === "" ? t("plugin-message-no-subject") : message.subject}
+              {message.subject === "" ? t("common-no-subject") : message.subject}
             </span>
             <span {...partAttrs("plugin.message-list.from", plugin)}>
               {message.from ? formatAddress(message.from) : null}
@@ -357,7 +357,7 @@ function TableNode({
       onChange(on ? [...selected, row].sort((a, b) => a - b) : selected.filter((s) => s !== row));
   };
   return (
-    <table {...partAttrs("plugin.table", plugin, node.id)} aria-label={t("plugin-table-label")}>
+    <table {...partAttrs("plugin.table", plugin, node.id)} aria-label={t("common-table")}>
       <thead>
         <tr {...partAttrs("plugin.table.row", plugin)}>
           {selectable && (
@@ -408,9 +408,58 @@ function TableNode({
   );
 }
 
+/** The options of a plug-in select. */
+function PluginOptions({ options }: { options: readonly { value: string; label: string }[] }) {
+  return (
+    <>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </>
+  );
+}
+
 function NodeView(props: TreeProps & { node: PluginUiNode }) {
   const { plugin, node, values, onChange, issues, onAction, busy } = props;
   const t = useT();
+  /** The labelled frame of the field `field` around its control. */
+  const field = (field: { id: string; label: string }, control: FieldProps["control"]) => (
+    <Field
+      plugin={plugin}
+      id={field.id}
+      label={field.label}
+      issue={issues[field.id]}
+      control={control}
+    />
+  );
+  /** The value of a text control (empty until set). */
+  const text = (id: string) => {
+    const value = values[id];
+    return typeof value === "string" ? value : "";
+  };
+  /** Stores what the user typed into the text control `id`. */
+  const setText = (id: string) => (event: { target: { value: string } }) => {
+    onChange(id, event.target.value);
+  };
+  /** What a picker node gets: its value, its problem and how it changes. */
+  const picked = (id: string) => ({
+    plugin,
+    value: values[id],
+    issue: issues[id],
+    onChange: (value: JsonValue) => {
+      onChange(id, value);
+    },
+  });
+  /** What a node with an optional id gets: its value (if any) and how it changes. */
+  const optional = (id: string | undefined) => ({
+    plugin,
+    value: id === undefined ? undefined : values[id],
+    onChange: (value: JsonValue) => {
+      if (id !== undefined) onChange(id, value);
+    },
+  });
   switch (node.type) {
     case "stack":
       return (
@@ -432,108 +481,68 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
       );
     case "markdown":
       return <Markdown plugin={plugin} value={node.value} />;
-    case "input": {
-      const value = values[node.id];
-      return (
-        <Field
-          plugin={plugin}
-          id={node.id}
-          label={node.label}
-          issue={issues[node.id]}
-          control={(a11y) => (
-            <input
-              {...a11y}
-              {...partAttrs("plugin.input", plugin, node.id)}
-              type={node.kind === "number" ? "text" : (node.kind ?? "text")}
-              inputMode={node.kind === "number" ? "decimal" : undefined}
-              aria-required={node.required ? true : undefined}
-              maxLength={node.maxLength}
-              placeholder={node.placeholder}
-              value={typeof value === "string" ? value : ""}
-              onChange={(event) => {
-                onChange(node.id, event.target.value);
-              }}
-            />
-          )}
+    case "input":
+      return field(node, (a11y) => (
+        <input
+          {...a11y}
+          {...partAttrs("plugin.input", plugin, node.id)}
+          type={node.kind === "number" ? "text" : (node.kind ?? "text")}
+          inputMode={node.kind === "number" ? "decimal" : undefined}
+          aria-required={node.required ? true : undefined}
+          maxLength={node.maxLength}
+          placeholder={node.placeholder}
+          value={text(node.id)}
+          onChange={setText(node.id)}
         />
-      );
-    }
-    case "textarea": {
-      const value = values[node.id];
-      return (
-        <Field
-          plugin={plugin}
-          id={node.id}
-          label={node.label}
-          issue={issues[node.id]}
-          control={(a11y) => (
-            <textarea
-              {...a11y}
-              {...partAttrs("plugin.textarea", plugin, node.id)}
-              aria-required={node.required ? true : undefined}
-              rows={node.rows}
-              maxLength={node.maxLength}
-              placeholder={node.placeholder}
-              value={typeof value === "string" ? value : ""}
-              onChange={(event) => {
-                onChange(node.id, event.target.value);
-              }}
-            />
-          )}
+      ));
+    case "textarea":
+      return field(node, (a11y) => (
+        <textarea
+          {...a11y}
+          {...partAttrs("plugin.textarea", plugin, node.id)}
+          aria-required={node.required ? true : undefined}
+          rows={node.rows}
+          maxLength={node.maxLength}
+          placeholder={node.placeholder}
+          value={text(node.id)}
+          onChange={setText(node.id)}
         />
-      );
-    }
+      ));
     case "select": {
       const value = values[node.id];
-      return (
-        <Field
-          plugin={plugin}
-          id={node.id}
-          label={node.label}
-          issue={issues[node.id]}
-          control={(a11y) =>
-            node.multiple ? (
-              <select
-                {...a11y}
-                {...partAttrs("plugin.select", plugin, node.id)}
-                multiple
-                aria-required={node.required ? true : undefined}
-                value={Array.isArray(value) ? value.filter((v) => typeof v === "string") : []}
-                onChange={(event) => {
-                  onChange(
-                    node.id,
-                    [...event.target.selectedOptions].map((o) => o.value),
-                  );
-                }}
-              >
-                {node.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <select
-                {...a11y}
-                {...partAttrs("plugin.select", plugin, node.id)}
-                aria-required={node.required ? true : undefined}
-                value={typeof value === "string" ? value : ""}
-                onChange={(event) => {
-                  onChange(node.id, event.target.value);
-                }}
-              >
-                {(node.default === undefined || node.default.length === 0) && (
-                  <option value="">{t("plugin-select-none")}</option>
-                )}
-                {node.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            )
-          }
-        />
+      return field(node, (a11y) =>
+        node.multiple ? (
+          <select
+            {...a11y}
+            {...partAttrs("plugin.select", plugin, node.id)}
+            multiple
+            aria-required={node.required ? true : undefined}
+            value={Array.isArray(value) ? value.filter((v) => typeof v === "string") : []}
+            onChange={(event) => {
+              onChange(
+                node.id,
+                [...event.target.selectedOptions].map((o) => o.value),
+              );
+            }}
+          >
+            <PluginOptions options={node.options} />
+          </select>
+        ) : (
+          <select
+            {...a11y}
+            {...partAttrs("plugin.select", plugin, node.id)}
+            aria-required={node.required ? true : undefined}
+            value={text(node.id)}
+            onChange={(event) => {
+              onChange(node.id, event.target.value);
+            }}
+          >
+            {(node.default === undefined || node.default.length === 0) && (
+              <option value="">{t("plugin-select-none")}</option>
+            )}
+            <PluginOptions options={node.options} />
+          </select>
+        ),
       );
     }
     case "checkbox": {
@@ -554,77 +563,29 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
         </div>
       );
     }
-    case "date": {
-      const value = values[node.id];
-      return (
-        <Field
-          plugin={plugin}
-          id={node.id}
-          label={node.label}
-          issue={issues[node.id]}
-          control={(a11y) => (
-            <input
-              {...a11y}
-              {...partAttrs("plugin.date", plugin, node.id)}
-              type={node.time ? "datetime-local" : "date"}
-              aria-required={node.required ? true : undefined}
-              min={node.min === undefined ? undefined : node.time ? `${node.min}T00:00` : node.min}
-              max={node.max === undefined ? undefined : node.time ? `${node.max}T23:59` : node.max}
-              value={typeof value === "string" ? value : ""}
-              onChange={(event) => {
-                onChange(node.id, event.target.value === "" ? null : event.target.value);
-              }}
-            />
-          )}
+    case "date":
+      return field(node, (a11y) => (
+        <input
+          {...a11y}
+          {...partAttrs("plugin.date", plugin, node.id)}
+          type={node.time ? "datetime-local" : "date"}
+          aria-required={node.required ? true : undefined}
+          min={node.min === undefined ? undefined : node.time ? `${node.min}T00:00` : node.min}
+          max={node.max === undefined ? undefined : node.time ? `${node.max}T23:59` : node.max}
+          value={text(node.id)}
+          onChange={(event) => {
+            onChange(node.id, event.target.value === "" ? null : event.target.value);
+          }}
         />
-      );
-    }
+      ));
     case "contact-picker":
-      return (
-        <ContactPicker
-          plugin={plugin}
-          node={node}
-          value={values[node.id]}
-          issue={issues[node.id]}
-          onChange={(value) => {
-            onChange(node.id, value);
-          }}
-        />
-      );
+      return <ContactPicker node={node} {...picked(node.id)} />;
     case "folder-picker":
-      return (
-        <FolderPickerNode
-          plugin={plugin}
-          node={node}
-          value={values[node.id]}
-          issue={issues[node.id]}
-          onChange={(value) => {
-            onChange(node.id, value);
-          }}
-        />
-      );
+      return <FolderPickerNode node={node} {...picked(node.id)} />;
     case "message-list":
-      return (
-        <MessageListNode
-          plugin={plugin}
-          node={node}
-          value={node.id === undefined ? undefined : values[node.id]}
-          onChange={(value) => {
-            if (node.id !== undefined) onChange(node.id, value);
-          }}
-        />
-      );
+      return <MessageListNode node={node} {...optional(node.id)} />;
     case "table":
-      return (
-        <TableNode
-          plugin={plugin}
-          node={node}
-          value={node.id === undefined ? undefined : values[node.id]}
-          onChange={(value) => {
-            if (node.id !== undefined) onChange(node.id, value);
-          }}
-        />
-      );
+      return <TableNode node={node} {...optional(node.id)} />;
     case "button":
       return (
         <button
@@ -653,7 +614,7 @@ function NodeView(props: TreeProps & { node: PluginUiNode }) {
           <progress
             max={100}
             value={indeterminate ? undefined : Math.min(Math.max(node.value ?? 0, 0), 100)}
-            aria-label={node.label ?? t("plugin-progress-label")}
+            aria-label={node.label ?? t("common-progress")}
           />
         </div>
       );

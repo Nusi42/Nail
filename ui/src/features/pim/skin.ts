@@ -22,16 +22,16 @@
  * (`PIM_BASE_CSS`).
  */
 import { AVATAR_COLORS } from "../../theme/skin";
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
-/** Joined selectors of several parts. */
-const ps = (...parts: string[]) => parts.map(p).join(", ");
-/** Joined selectors of several parts, each followed by the same suffix. */
-const pss = (suffix: string, ...parts: string[]) => parts.map((x) => p(x) + suffix).join(", ");
-/** Selectors under High contrast. */
-const hc = (...parts: string[]) =>
-  parts.map((x) => `:root[data-nail-mode="high-contrast"] ${p(x)}`).join(", ");
+import { hc, p, ps, pss } from "../../theme/selectors";
+import {
+  ACCENT_BAR,
+  AVATAR_FG,
+  INLINE_ROW,
+  QUIET_BUTTON,
+  QUIET_HOVER,
+  SECTION_LABEL,
+  smallTag,
+} from "../../theme/declarations";
 
 const T = {
   bg: "var(--nail-color-bg)",
@@ -78,6 +78,27 @@ const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 /** One line, cut with an ellipsis. */
 const oneLine = "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
 
+/** A field's flex basis in the date / time row and the contact list's toolbar. */
+const FIELD_BASIS = "10rem";
+
+/** A task title's and the new-task field's flex basis. */
+const TITLE_BASIS = "12em";
+
+/** One level of subtask indentation. */
+const SUBTASK_INDENT = "28px";
+
+/** The colour bar on the start edge of an event card. */
+const EVENT_BAR = "6px";
+
+/** Colour swatches in menus. */
+const SWATCH = "12px";
+
+/** The corners of swatches and the task check mark. */
+const MARK_RADIUS = "4px";
+
+/** The calendar dialogs' smallest width (or the window's, when narrower). */
+const DIALOG_MIN = "360px";
+
 const TOOLBAR = `${p("calendar.toolbar")} {
   display: flex; flex-wrap: nowrap; align-items: center; gap: ${T.sm};
   min-width: 0; min-height: calc(${T.control} + 2 * ${T.sm}); padding: ${T.sm} ${T.pane};
@@ -92,14 +113,14 @@ ${p("calendar.title")} {
 ${p("calendar.toolbar")} > ${p("calendar.title")} { flex: 1 1 auto; }
 ${p("segmented")}[data-field="calendar-view"] { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 ${p("segmented")}[data-field="calendar-view"] ${p("segmented.option")} { flex: 0 0 auto; white-space: nowrap; }
-${p("calendar.view-menu")} { display: inline-flex; align-items: center; gap: ${T.xs}; }`;
+${p("calendar.view-menu")} { ${INLINE_ROW} gap: ${T.xs}; }`;
 
 /**
  * ADR 0160: a date and time field's row — the date takes the room the row
  * offers (its segments start at the left), the "Choose" button and the time
  * (`data-width="short"`) keep their size.
  */
-const DATETIME = `${p("pim.datetime.controls")} > ${p("pim.datetime.date")} { flex: 1 1 10rem; min-width: 0; }
+const DATETIME = `${p("pim.datetime.controls")} > ${p("pim.datetime.date")} { flex: 1 1 ${FIELD_BASIS}; min-width: 0; }
 ${p("pim.datetime.date")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }
 ${p("pim.datetime.time")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }`;
 
@@ -111,7 +132,7 @@ const CARD_PARTS = [
 ];
 
 const CARDS = `${ps(...CARD_PARTS)} {
-  border: none; border-left: 3px solid ${T.accent}; border-radius: ${T.rSm};
+  border: none; border-left: ${ACCENT_BAR} solid ${T.accent}; border-radius: ${T.rSm};
   font-size: ${T.small}; line-height: ${T.tight}; text-align: start;
   color: ${T.fg}; background-color: ${T.raised};
   transition: box-shadow ${T.fast} ${T.ease};
@@ -146,7 +167,7 @@ ${ps("calendar.agenda.event", "agenda.list.event")} > ${p("event-card.location")
 ${hc(...CARD_PARTS)} {
   background-color: ${T.bg};
   border-top: 2px solid ${T.fg}; border-right: 2px solid ${T.fg}; border-bottom: 2px solid ${T.fg};
-  border-left-width: 6px; border-left-style: solid;
+  border-left-width: ${EVENT_BAR}; border-left-style: solid;
 }`;
 
 const GRIDS = `${p("calendar.day-head")} { display: flex; flex-direction: column; align-items: center; gap: 0; padding: ${T.xs}; border: 0; line-height: ${T.tight}; font-size: ${T.label}; color: ${T.muted}; background-color: transparent; }
@@ -179,11 +200,8 @@ ${p("calendar.month.item")} { container-type: inline-size; }
 ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.title")} { flex: 0 1 auto; }
 ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { order: 0; flex: 0 0 auto; }
 @container (max-width: 8.5rem) { ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { display: none; } }
-${p("calendar.month.more")} {
-  padding: 0 ${T.xs}; border: none; border-radius: ${T.rSm}; font-size: ${T.label};
-  color: ${T.muted}; background-color: transparent;
-}
-${p("calendar.month.more")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("calendar.month.more")} { padding: 0 ${T.xs}; font-size: ${T.label}; ${QUIET_BUTTON} }
+${p("calendar.month.more")}:hover { ${QUIET_HOVER} }
 ${p("calendar.month.more")}:focus-visible { ${focusRing} }
 ${p("calendar.year.month.title")} {
   caption-side: top; padding: 0 ${T.xxs} ${T.xs}; text-align: start;
@@ -209,16 +227,15 @@ const CALENDAR_LIST = `${p("calendar-list")} { display: flex; flex-direction: co
 ${p("calendar-list.source")} { display: grid; gap: 1px; }
 ${p("calendar-list.source.header")} { display: flex; align-items: center; justify-content: space-between; gap: ${T.xs}; padding: 0 0 0 ${T.xs}; }
 ${p("calendar-list.source.name")} {
-  margin: 0; ${oneLine} font-size: ${T.label}; font-weight: ${T.semibold};
-  letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted};
+  margin: 0; ${oneLine} ${SECTION_LABEL}
 }
 ${ps(...MENU_BUTTONS)} {
   display: inline-grid; place-items: center; flex: 0 0 auto; width: calc(${T.control} - ${T.sm}); height: calc(${T.control} - ${T.sm});
   padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent;
 }
-${pss(":hover", ...MENU_BUTTONS)} { color: ${T.fg}; background-color: ${T.raised}; }
+${pss(":hover", ...MENU_BUTTONS)} { ${QUIET_HOVER} }
 ${pss(":focus-visible", ...MENU_BUTTONS)} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
-${pss('[aria-expanded="true"]', ...MENU_BUTTONS)} { color: ${T.fg}; background-color: ${T.raised}; }
+${pss('[aria-expanded="true"]', ...MENU_BUTTONS)} { ${QUIET_HOVER} }
 ${ps("calendar-list.add.icon", "calendar-list.menu.icon", "pim.menu-button.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("calendar-list.item")} {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: ${T.xs};
@@ -228,26 +245,23 @@ ${p("calendar-list.item")}:hover { background-color: ${T.raised}; }
 ${p("calendar-list.label")} { display: flex; align-items: center; gap: ${T.sm}; min-width: 0; font-size: ${T.body}; }
 ${p("calendar-list.toggle")} {
   appearance: none; flex: 0 0 auto; width: 14px; height: 14px; margin: 0;
-  border: 2px solid ${T.accent}; border-radius: 4px; background-color: ${T.accent};
+  border: 2px solid ${T.accent}; border-radius: ${MARK_RADIUS}; background-color: ${T.accent};
 }
 ${p("calendar-list.toggle")}:not(:checked) { background-color: transparent; }
 ${p("calendar-list.toggle")}:focus-visible { ${focusRing} }
 ${p("calendar-list.name")} { ${oneLine} }
 ${p("calendar-list.item")}[data-state~="hidden"] ${p("calendar-list.name")} { color: ${T.muted}; }
-${p("calendar-list.kind")} {
-  flex: 0 0 auto; padding: 0 ${T.xs}; border-radius: ${T.rSm};
-  font-size: ${T.label}; color: ${T.muted}; background-color: ${T.subtle};
-}
+${p("calendar-list.kind")} { ${smallTag(T.rSm, T.muted, T.subtle)} }
 ${p("calendar-list.buttons")} { display: inline-flex; gap: ${T.xxs}; }
 ${p("calendar-list.item")} ${p("calendar-list.menu")} { opacity: 0; }
 ${p("calendar-list.item")}:hover ${p("calendar-list.menu")}, ${p("calendar-list.item")}:focus-within ${p("calendar-list.menu")}, ${p("calendar-list.menu")}[aria-expanded="true"] { opacity: 1; }
 @media (hover: none) { ${p("calendar-list.item")} ${p("calendar-list.menu")} { opacity: 1; } }
-${p("context-menu.item.swatch")} { grid-column: 1; width: 12px; height: 12px; border-radius: 4px; background-color: ${T.accent}; }
+${p("context-menu.item.swatch")} { grid-column: 1; width: ${SWATCH}; height: ${SWATCH}; border-radius: ${MARK_RADIUS}; background-color: ${T.accent}; }
 ${p("context-menu.item.check")} { grid-column: 3; width: ${T.icon}; height: ${T.icon}; color: ${T.accent}; }
 ${p("context-menu.item")}[data-tone="danger"] { color: ${T.danger}; }
 ${p("context-menu.item")}[data-tone="danger"] ${p("context-menu.item.icon")} { color: ${T.danger}; }`;
 
-const DIALOGS = `${p("pim.calendar-dialog")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: min(360px, 100%); padding: ${T.lg}; }
+const DIALOGS = `${p("pim.calendar-dialog")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: min(${DIALOG_MIN}, 100%); padding: ${T.lg}; }
 ${p("pim.calendar-dialog.question")} { margin: 0; max-width: 60ch; }
 ${p("pim.colors")} { display: grid; gap: ${T.sm}; margin: 0; padding: 0; border: none; min-width: 0; }
 ${p("pim.colors.options")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }
@@ -266,7 +280,7 @@ const avatars = AVATAR_COLORS.map(
 
 const CONTACTS = `${ps("contact-list.avatar", "contact-card.avatar")} {
   display: grid; place-items: center; border-radius: 50%; font-weight: ${T.semibold}; line-height: 1;
-  color: var(--nail-color-avatar-fg, #ffffff); user-select: none;
+  color: ${AVATAR_FG}; user-select: none;
 }
 ${p("contact-list.avatar")} { width: ${T.avatar}; height: ${T.avatar}; font-size: calc(${T.avatar} * 0.37); }
 ${p("contact-card.avatar")} { width: 72px; height: 72px; flex: 0 0 auto; font-size: 28px; }
@@ -285,7 +299,7 @@ ${ps("contact-list.email", "contact-list.organization", "contact-list.book", "co
 ${p("contact-list.item")}[aria-selected="true"] > :not(${p("contact-list.avatar")}) { color: inherit; }
 ${p("contact-card.header")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.lg}; padding-bottom: ${T.md}; border-bottom: 1px solid ${T.border}; }
 ${p("contact-card.name")} { margin: 0; font-family: ${T.fontDisplay}; font-weight: ${T.semibold}; }
-${p("contact-card.heading")} { margin: 0 0 ${T.xs}; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted}; }
+${p("contact-card.heading")} { margin: 0 0 ${T.xs}; ${SECTION_LABEL} }
 ${p("contact-card.section")} { display: grid; gap: ${T.xs}; }`;
 
 const VIEW_HEADER = `${p("pim.view-header")} {
@@ -307,7 +321,7 @@ ${p("task-list.item")} {
 ${p("task-list.item")}:hover { background-color: ${T.subtle}; }
 ${p("task-list.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("task-list.check")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; margin: 0; accent-color: ${T.accent}; }
-${p("task-list.title")} { flex: 1 1 12em; min-width: 0; padding: 0; border: 0; text-align: start; overflow-wrap: anywhere; color: inherit; background-color: transparent; }
+${p("task-list.title")} { flex: 1 1 ${TITLE_BASIS}; min-width: 0; padding: 0; border: 0; text-align: start; overflow-wrap: anywhere; color: inherit; background-color: transparent; }
 ${ps("task-list.due", "task-list.priority", "task-list.subtasks", "task-list.badge")} {
   flex: 0 0 auto; padding: 0 ${T.sm}; border-radius: ${T.pill};
   font-size: ${T.label}; line-height: 1.6; color: ${T.muted}; background-color: ${T.subtle};
@@ -316,14 +330,14 @@ ${p("task-list.due")}[data-state~="overdue"] { color: ${T.danger}; font-weight: 
 ${p("task-list.priority")}[data-priority="high"] { color: ${T.danger}; }
 ${p("task-list.toggle")} { display: inline-grid; place-items: center; padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent; }
 ${p("task-list.toggle.icon")} { width: ${T.icon}; height: ${T.icon}; }
-${p("task-list.item")}[data-level="2"] { padding-left: calc(${T.sm} + 28px); }
-${p("task-list.item")}[data-level="3"] { padding-left: calc(${T.sm} + 56px); }
-${p("task-list.item")}[data-level="4"] { padding-left: calc(${T.sm} + 84px); }
-${p("task-list.item")}[data-state~="current"] { background-color: ${T.subtle}; box-shadow: inset 3px 0 0 ${T.accent}; }
+${p("task-list.item")}[data-level="2"] { padding-left: calc(${T.sm} + ${SUBTASK_INDENT}); }
+${p("task-list.item")}[data-level="3"] { padding-left: calc(${T.sm} + 2 * ${SUBTASK_INDENT}); }
+${p("task-list.item")}[data-level="4"] { padding-left: calc(${T.sm} + 3 * ${SUBTASK_INDENT}); }
+${p("task-list.item")}[data-state~="current"] { background-color: ${T.subtle}; box-shadow: inset ${ACCENT_BAR} 0 0 ${T.accent}; }
 ${p("task-list.item")}[data-state~="done"] ${p("task-list.title")} { color: ${T.muted}; text-decoration: line-through; }
 ${p("task-list.add")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; padding: ${T.xs} 0; }
 ${p("task-list.add")} > ${p("form.label")} { flex: 1 0 100%; margin: 0; }
-${p("task-list.add")} > ${p("form.input")} { flex: 1 1 12em; min-width: 0; }`;
+${p("task-list.add")} > ${p("form.input")} { flex: 1 1 ${TITLE_BASIS}; min-width: 0; }`;
 
 /** The container the calendar's narrow rules measure (P1 WP192). */
 export const CALENDAR_CONTAINER = "nail-calendar";
@@ -360,7 +374,7 @@ const RESPONSIVE = `@container ${CALENDAR_CONTAINER} (max-width: ${CALENDAR_NARR
   [data-field="calendar-new-event"] > ${p("form.button.label")} { ${srOnly} }
 }
 ${p("calendar.all-day.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { display: none; }
-${p("contact-list")} > ${p("contact-list.toolbar")} > ${p("form.field")} { flex: 1 1 10rem; min-width: 0; }
+${p("contact-list")} > ${p("contact-list.toolbar")} > ${p("form.field")} { flex: 1 1 ${FIELD_BASIS}; min-width: 0; }
 ${p("contact-list")} > ${p("contact-list.toolbar")} > ${p("form.field")} > ${p("form.select")} { width: 100%; min-width: 0; }
 ${p("contact-card")} > ${p("contact-card.header")}, ${p("contact-card")} > ${p("contact-card.section")} { width: 100%; max-width: ${READING}; box-sizing: border-box; }
 ${p("task-list")} > * { width: 100%; max-width: ${READING}; box-sizing: border-box; }`;

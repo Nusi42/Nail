@@ -9,12 +9,12 @@ import type {
   CancelScope,
   FreeBusyIssue,
   InvitationAction,
-  InvitationResponse,
   InvitationState,
   ItipIssue,
   ItipMethod,
 } from "../../api/generated";
 import { DIALOGS, FREEBUSY_WIDGET, INVITATION_CARD_WIDGET } from "./names";
+import { RESPONSES } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["scheduling-", "invitation-", "freebusy-"];
@@ -96,7 +96,6 @@ export const APPLIED: readonly InvitationAction[] = [
   "decline-counter",
 ];
 
-export const RESPONSES: readonly InvitationResponse[] = ["accept", "tentative", "decline"];
 export const CANCEL_SCOPES: readonly CancelScope[] = ["meeting", "occurrence", "attendees"];
 /** Kinds of free/busy sources (`FreeBusySource.type`). */
 export const SOURCES = ["own", "caldav", "exchange", "unknown"] as const;

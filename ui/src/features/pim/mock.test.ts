@@ -1,4 +1,3 @@
-import { setLocalTimeZone, resetLocalTimeZone } from "@internationalized/date";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -16,20 +15,12 @@ import { PIM_EVENTS, handlePimEvent, pimKeys, pimStoreFor } from ".";
 import { PIM_REQUESTS, createPimMockState, fireReminder, isPimRequest, parseImport } from "./mock";
 import { expandEvent, occurrenceStarts } from "./mockExpand";
 import { emptyEventFields } from "./mockSeed";
+import { plainRecurrence } from "./recurrence";
+import { inTimeZone } from "../../test/env";
+import { must } from "../../test/must";
+import { BERLIN } from "../../test/mockIds";
 
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing test data");
-  return value;
-}
-
-const BERLIN = "Europe/Berlin";
-beforeAll(() => {
-  setLocalTimeZone(BERLIN);
-});
-afterAll(() => {
-  resetLocalTimeZone();
-});
+inTimeZone(BERLIN);
 
 type Of<T extends Response["type"]> = Extract<Response, { type: T }>;
 
@@ -47,27 +38,7 @@ function weekly(
   days: ("mon" | "tue" | "wed" | "thu" | "fri")[],
   end: Recurrence["rules"][number]["end"] = { type: "never" },
 ): Recurrence {
-  return {
-    rules: [
-      {
-        freq: "weekly",
-        interval: 1,
-        end,
-        by_second: [],
-        by_minute: [],
-        by_hour: [],
-        by_day: days.map((day) => ({ day, ordinal: null })),
-        by_month_day: [],
-        by_year_day: [],
-        by_week_no: [],
-        by_month: [],
-        by_set_pos: [],
-        week_start: null,
-      },
-    ],
-    dates: [],
-    exceptions: [],
-  };
+  return plainRecurrence("weekly", { end, by_day: days.map((day) => ({ day, ordinal: null })) });
 }
 
 function fields(start: string, end: string, title = "Meeting"): EventFields {

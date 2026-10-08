@@ -126,7 +126,7 @@ export function AttachmentCard({
   const client = useClient();
   const canPreview = useHasAttachmentPreview(attachment, accountId) && !attachment.inline;
   const [save, setSave] = useState<SaveState>("idle");
-  const name = attachment.filename ?? t("message-view-attachment-unnamed");
+  const name = attachment.filename ?? t("common-unnamed-attachment");
   const type = fileType(attachment.filename, attachment.mime);
   const status = saveStatus(save);
   const onSave = () => {

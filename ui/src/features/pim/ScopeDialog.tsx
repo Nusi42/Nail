@@ -14,6 +14,7 @@ import { EDIT_SCOPES } from "./constants";
 import { formatPimTime } from "./fmt";
 import { usePim } from "./store";
 import { localZone } from "./time";
+import { EmptyDialog } from "../../widgets/DialogStates";
 
 export function ScopeDialog({ close }: DialogProps) {
   const t = useT();
@@ -32,12 +33,12 @@ export function ScopeDialog({ close }: DialogProps) {
 
   if (change === null) {
     return (
-      <div data-part="pim.scope" data-state="empty">
-        <p data-part="pim.scope.empty">{t("pim-scope-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("pim-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="pim.scope"
+        textPart="pim.scope.empty"
+        hintId="pim-scope-nothing"
+        close={finish}
+      />
     );
   }
 
@@ -68,11 +69,11 @@ export function ScopeDialog({ close }: DialogProps) {
       <p data-part="pim.scope.intro">
         {change.kind === "move"
           ? t("pim-scope-move-intro", {
-              title: change.instance.title || t("pim-event-untitled"),
+              title: change.instance.title || t("common-no-title"),
               time: formatPimTime(format, change.start, tz),
             })
           : t("pim-scope-delete-intro", {
-              title: change.instance.title || t("pim-event-untitled"),
+              title: change.instance.title || t("common-no-title"),
             })}
       </p>
       <fieldset data-part="pim.scope.choices">
@@ -100,10 +101,10 @@ export function ScopeDialog({ close }: DialogProps) {
           data-variant={change.kind === "delete" ? "danger" : "primary"}
           disabled={busy}
         >
-          {change.kind === "move" ? t("pim-scope-apply") : t("pim-delete")}
+          {change.kind === "move" ? t("common-apply") : t("pim-delete")}
         </button>
         <button type="button" data-part="form.button" onClick={finish}>
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>

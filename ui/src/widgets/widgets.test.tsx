@@ -1,19 +1,18 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { normalizeLayout } from "../api/normalize";
-import { createEnv, renderNode, stubElementSizes, widget } from "../test/harness";
+import {
+  createEnv,
+  renderNode,
+  widget,
+  stubElementSizesEachTest,
+  renderMainToolbar,
+} from "../test/harness";
 import { flattenFolders } from "./FolderTree";
 import { compileRows, rowStates } from "./MessageList";
 import { must } from "../test/must";
+import { INBOX } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 describe("account-switcher", () => {
   it("lists accounts and selects one", async () => {
@@ -358,16 +357,10 @@ describe("toolbar", () => {
 
   it("dispatches enabled actions", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-work" } });
-    const layout = normalizeLayout({
-      ...env.transport.data.layout,
-      toolbars: {
-        main: [
-          { type: "action", action: "sync.now" },
-          { type: "action", action: "view.toggle", args: ["sidebar"], label: "Sidebar" },
-        ],
-      },
-    });
-    renderNode(widget("toolbar", { options: { toolbar: "main" } }), env, { layout });
+    renderMainToolbar(env, [
+      { type: "action", action: "sync.now" },
+      { type: "action", action: "view.toggle", args: ["sidebar"], label: "Sidebar" },
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Check for new mail" }));
     await waitFor(() => {
       expect(env.transport.requests).toContainEqual({ type: "SyncNow", account_id: "acc-work" });

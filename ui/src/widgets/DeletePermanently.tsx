@@ -132,7 +132,7 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
             });
           }}
         >
-          {t("mail-delete-permanently-confirm")}
+          {t("mail-action-delete-permanently")}
         </button>
         <button
           ref={cancel}
@@ -144,7 +144,7 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
             close();
           }}
         >
-          {t("mail-delete-permanently-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </div>

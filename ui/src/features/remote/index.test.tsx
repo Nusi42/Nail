@@ -1,7 +1,7 @@
 import { act, cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { appRegistry } from "../registry";
-import { createEnv, renderWithProviders, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders } from "../../test/harness";
 import { RemoteAlerts } from "./Alerts";
 import { configureRemoteAuth, remoteAuth } from "./authConfig";
 import { actions, dialogs, effects, events, handleRemoteEvent, widgets } from "./index";
@@ -10,27 +10,7 @@ import { PAIR_DIALOG } from "./PairDevice";
 import { remoteKeys } from "./queries";
 import { MAX_ALERTS, remoteStore } from "./state";
 import { createAda, pairedBrowser } from "./testUtil";
-
-function wireEvents(env: Env) {
-  return env.client.subscribe((event) => {
-    handleRemoteEvent(event, {
-      client: env.client,
-      queryClient: env.queryClient,
-      store: env.store,
-    });
-  });
-}
-
-function actionContext(env: Env) {
-  return {
-    client: env.client,
-    store: env.store,
-    queryClient: env.queryClient,
-    layout: env.transport.data.layout,
-    t: (id: string) => id,
-    locale: "en",
-  };
-}
+import { wireEvents, actionContext } from "../../test/env";
 
 afterEach(() => {
   // Unmount before resetting the feature's module-level stores.
@@ -71,7 +51,7 @@ describe("remote feature slot", () => {
 
   it("signs this browser out and notices when its session is ended elsewhere", async () => {
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     const ada = await createAda(env.transport);
     const { browser, session } = await pairedBrowser(env.transport, ada.id);
     configureRemoteAuth({ transport: browser });
@@ -93,7 +73,7 @@ describe("remote feature slot", () => {
 
   it("keeps the status cache current and refreshes access data on events", async () => {
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     env.queryClient.setQueryData(remoteKeys.ui, {
       settings: env.transport.data.features.remote.settings,
       status: { state: "stopped" },
@@ -119,7 +99,7 @@ describe("security alerts", () => {
   it("shows a toast for a new device until it is dismissed (Escape)", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     renderWithProviders(<RemoteAlerts />, env);
     expect(screen.queryByRole("region", { name: "Security alerts" })).not.toBeInTheDocument();
 
@@ -138,7 +118,7 @@ describe("security alerts", () => {
   it("offers to review devices and keeps at most a few alerts", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     renderWithProviders(<RemoteAlerts />, env);
     act(() => {
       for (let i = 0; i < MAX_ALERTS + 2; i++) {

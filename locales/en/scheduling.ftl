@@ -10,8 +10,8 @@
 ## Dialog titles (window-<dialog name>)
 
 window-scheduling-cancel-meeting = Cancel meeting
-window-scheduling-settings = Invitation settings
-window-scheduling-find-time = Find a time
+window-scheduling-settings = { scheduling-action-settings }
+window-scheduling-find-time = { scheduling-action-find-time }
 
 ## Actions (layout labels @scheduling.action.*)
 
@@ -23,12 +23,6 @@ scheduling-action-settings = Invitation settings
 
 ## Common
 
-scheduling-save = Save
-scheduling-cancel = Cancel
-scheduling-close = Close
-scheduling-back = Back
-scheduling-remove = Remove
-scheduling-loading = Loading…
 scheduling-minutes =
     { $minutes ->
         [one] { $minutes } minute
@@ -40,18 +34,12 @@ scheduling-repeats-custom = Repeats on a custom schedule
 ## Dates and times
 
 scheduling-time-same-day = { $day }, { $start } – { $end }
-scheduling-time-range = { $start } – { $end }
 scheduling-time-all-day = { $day } (all day)
-scheduling-time-days = { $start } – { $end } (all day)
-scheduling-clock-range = { $start } – { $end }
 
 ## The invitation card
 
-invitation-label = Invitation: { $title }
-invitation-label-error = Invitation
-invitation-untitled = (No title)
-invitation-person = { $name } <{ $email }>
-invitation-kind-publish = Event
+invitation-label = { itip-subject-request }
+invitation-kind-publish = { common-event }
 invitation-kind-request =
     { $state ->
         [update] Updated invitation
@@ -60,11 +48,11 @@ invitation-kind-request =
     }
 invitation-kind-reply = Answer to your invitation
 invitation-kind-add = More occurrences added
-invitation-kind-cancel = Cancelled
+invitation-kind-cancel = { common-cancelled }
 invitation-kind-refresh = Request for the latest version
 invitation-kind-counter = New time proposed
 invitation-kind-decline-counter = Your proposal was declined
-invitation-state-new = Not answered yet
+invitation-state-new = { common-not-answered-yet }
 invitation-state-current = Your calendar is up to date
 invitation-state-update =
     { $method ->
@@ -80,11 +68,6 @@ invitation-state-cancelled =
 invitation-state-unknown-event = This event is not in your calendar
 invitation-state-invalid = This invitation cannot be used
 invitation-issues = Problems with this invitation
-invitation-when = When
-invitation-repeats = Repeats
-invitation-occurrence = Occurrence
-invitation-where = Where
-invitation-organizer = Organizer
 invitation-my-status = Your answer
 invitation-call = Call
 invitation-reply-from =
@@ -114,9 +97,9 @@ invitation-conflicts-title =
 invitation-conflict-all-day = all day
 invitation-conflict-tentative = (maybe)
 invitation-transport-server = Your calendar server sends your answer to the organizer.
-invitation-action-accept = Accept
-invitation-action-tentative = Maybe
-invitation-action-decline = Decline
+invitation-action-accept = { mcp-tool-value-accept }
+invitation-action-tentative = { common-maybe }
+invitation-action-decline = { mcp-tool-value-decline }
 invitation-action-propose-new-time = Propose a new time
 invitation-action-add-to-calendar = Add to calendar
 invitation-action-update-calendar = Update my calendar
@@ -126,7 +109,7 @@ invitation-action-accept-counter = Accept the new time
 invitation-action-decline-counter = Decline the new time
 invitation-action-send-current = Send the latest version
 invitation-action-refresh = Ask for the latest version
-invitation-action-forward = Forward invitation
+invitation-action-forward = { scheduling-forward-title }
 invitation-action-open-event = Open in calendar
 invitation-done-accept = Accepted. No answer was sent.
 invitation-done-accept-sent = Accepted. Your answer is on its way.
@@ -147,29 +130,24 @@ invitation-applied-propose = Your proposal is on its way.
 
 ## Answering
 
-scheduling-answer-accept = Accept
-scheduling-answer-tentative = Maybe
-scheduling-answer-decline = Decline
-scheduling-answer-group = Your answer
+scheduling-answer-accept = { mcp-tool-value-accept }
+scheduling-answer-tentative = { common-maybe }
+scheduling-answer-decline = { mcp-tool-value-decline }
 scheduling-answer-comment = Note for the organizer (optional)
 scheduling-answer-send = Send my answer to the organizer
 scheduling-answer-confirm = Send “{ $answer }” to { $organizer }?
-scheduling-answer-confirm-send = Send
 scheduling-answer-confirm-no-send = Only update my calendar
 scheduling-answer-only-this = Answer only for this occurrence
 scheduling-scope-legend = Answer for
-scheduling-scope-series = All occurrences
+scheduling-scope-series = { common-all-occurrences }
 scheduling-scope-occurrence = One occurrence
 scheduling-scope-day = Day of the occurrence
 
 ## Propose a new time
 
-scheduling-propose-title = Propose a new time
 scheduling-propose-intro = Suggest another time to the organizer. Your calendar does not change.
 scheduling-propose-start = Proposed start
 scheduling-propose-end = Proposed end
-scheduling-propose-end-before-start = The end must be after the start.
-scheduling-propose-comment = Note (optional)
 scheduling-propose-send = Send proposal
 
 ## Forward
@@ -178,7 +156,6 @@ scheduling-forward-title = Forward invitation
 scheduling-forward-to = To (addresses, separated by commas)
 scheduling-forward-invalid = Enter at least one valid address.
 scheduling-forward-comment = Note (optional)
-scheduling-forward-send = Forward
 
 ## Attendee picker and free/busy
 
@@ -186,25 +163,18 @@ scheduling-attendees-legend = People and rooms
 scheduling-attendees-none = No one is invited yet.
 scheduling-attendee-me = (you)
 scheduling-attendee-role = Role of { $email }
-scheduling-attendee-remove = Remove { $email }
-scheduling-attendee-email = Address
-scheduling-attendee-kind = Kind
-scheduling-attendee-add = Add
 scheduling-attendee-invalid = This address is not valid.
-scheduling-attendee-suggestions = Suggestions from your contacts
-scheduling-kind-individual = Person
-scheduling-kind-room = Room
-scheduling-kind-resource = Resource
+scheduling-kind-individual = { common-person }
+scheduling-kind-room = { invitation-attendee-room }
+scheduling-kind-resource = { invitation-attendee-resource }
 freebusy-label = Availability
 freebusy-previous-day = Previous day
 freebusy-next-day = Next day
 freebusy-previous-short = Back
-freebusy-next-short = Next
-freebusy-today = Today
 freebusy-empty = Add people to see when they are free.
 freebusy-source-own = Your calendars
 freebusy-source-caldav = Calendar server
-freebusy-source-exchange = Exchange
+freebusy-source-exchange = { common-exchange }
 freebusy-source-unknown = No information
 freebusy-kind-busy = busy
 freebusy-kind-tentative = maybe busy
@@ -237,7 +207,6 @@ scheduling-meeting-organized-by = Organized by { $name }
 scheduling-send-legend = Send invitations or the update to
 scheduling-send-to-everyone = Everyone
 scheduling-send-to-chosen = Only the people I choose
-scheduling-send-note = Note in the mail (optional)
 scheduling-send-invitations = Send invitations
 scheduling-sent-invitations = The invitations are on their way.
 scheduling-cancel-meeting = Cancel meeting…
@@ -267,4 +236,3 @@ scheduling-setting-apply-cancellations-hint = Otherwise the invitation offers �
 scheduling-setting-confirm-replies = Ask before sending an answer
 scheduling-setting-confirm-replies-hint = Accept, Maybe and Decline ask first whether to send.
 scheduling-setting-calendar = Calendar for new invitations
-scheduling-setting-calendar-default = The default calendar

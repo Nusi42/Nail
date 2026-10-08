@@ -5,11 +5,18 @@
  * contacts (list, card, editor, groups, merge), tasks (list, editor,
  * subtasks), reminder toasts, import and sources.
  */
-import { CalendarDate, resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
+import { CalendarDate } from "@internationalized/date";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+} from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { GroupsDialog, MergeDialog } from "./ContactDialogs";
 import { ContactEditorDialog } from "./ContactEditor";
@@ -26,29 +33,29 @@ import { pimStoreFor } from "./store";
 import { TaskEditorDialog } from "./TaskEditor";
 import { localZone, makePimTime, todayIn } from "./time";
 import { stringMatching } from "../../test/matchers";
+import { inTimeZone, clickAndClose } from "../../test/env";
+import { must } from "../../test/must";
+import { BERLIN } from "../../test/mockIds";
 
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing test data");
-  return value;
-}
-
-const BERLIN = "Europe/Berlin";
 const START_LABEL = "Start";
-beforeAll(() => {
-  setLocalTimeZone(BERLIN);
-});
-afterAll(() => {
-  resetLocalTimeZone();
-});
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-}
+inTimeZone(BERLIN);
 
 const pimOf = (env: Env) => env.transport.data.features.pim;
+
+/** The occurrences of the work calendar's daily stand-up. */
+async function standupInstances(env: Env) {
+  const answer = await env.client.request(
+    {
+      type: "ListEventInstances",
+      from: "2020-01-01T00:00:00Z",
+      to: "2040-01-01T00:00:00Z",
+      calendar_ids: ["cal-work"],
+      tz: BERLIN,
+    },
+    "EventInstances",
+  );
+  return answer.instances.filter((i) => i.event_id === "ev-standup");
+}
 
 describe("date and time picker", () => {
   function Picker({ onChange }: { onChange: (day: string, time: string) => void }) {
@@ -145,10 +152,7 @@ describe("event editor", () => {
     await user.selectOptions(screen.getByLabelText("Also show the times in"), "America/New_York");
     expect(screen.getAllByText(/^In America\/New York:/)).toHaveLength(2);
     await user.selectOptions(screen.getByLabelText("Time zone"), "Europe/London");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
+    await clickAndClose(user, "Save", close);
     const created = pimOf(env).events.find((e) => e.fields.title === "Yoga");
     expect(created).toMatchObject({
       calendar_id: "cal-personal",
@@ -183,19 +187,8 @@ describe("event editor", () => {
   it("edits one occurrence, this and following, or all of a series", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
-    await settle(env);
-    const instances = (
-      await env.client.request(
-        {
-          type: "ListEventInstances",
-          from: "2020-01-01T00:00:00Z",
-          to: "2040-01-01T00:00:00Z",
-          calendar_ids: ["cal-work"],
-          tz: BERLIN,
-        },
-        "EventInstances",
-      )
-    ).instances.filter((i) => i.event_id === "ev-standup");
+    await settleQueries(env);
+    const instances = await standupInstances(env);
     const occurrence = must(instances[3]);
     const open = () => {
       pimStoreFor(env.store).getState().editEvent({
@@ -218,10 +211,7 @@ describe("event editor", () => {
     expect(screen.getByLabelText("Repeats")).toBeDisabled();
     await user.clear(screen.getByLabelText("Title"));
     await user.type(screen.getByLabelText("Title"), "Retro");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
+    await clickAndClose(user, "Save", close);
     expect(pimOf(env).events.find((e) => e.id === "ev-standup")?.overrides).toHaveLength(1);
     unmount();
 
@@ -283,18 +273,7 @@ describe("event editor", () => {
   it("applies the scope chosen for a dragged recurring occurrence", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
-    const instances = (
-      await env.client.request(
-        {
-          type: "ListEventInstances",
-          from: "2020-01-01T00:00:00Z",
-          to: "2040-01-01T00:00:00Z",
-          calendar_ids: ["cal-work"],
-          tz: BERLIN,
-        },
-        "EventInstances",
-      )
-    ).instances.filter((i) => i.event_id === "ev-standup");
+    const instances = await standupInstances(env);
     const instance = must(instances[2]);
     const close = vi.fn();
     pimStoreFor(env.store)
@@ -388,10 +367,7 @@ describe("contacts", () => {
     await user.click(screen.getByRole("button", { name: "Add a field" }));
     await user.type(screen.getByLabelText("Field 1: name"), "X-SHIP");
     await user.type(screen.getByLabelText("Field 1: value"), "Apollo");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
+    await clickAndClose(user, "Save", close);
     const created = pimOf(env).contacts.find((c) => c.fields.display_name === "Margaret Hamilton");
     expect(created).toMatchObject({
       address_book_id: "ab-personal",
@@ -547,10 +523,7 @@ describe("tasks", () => {
       ).toBe(true);
     });
     expect(await screen.findByRole("checkbox", { name: "Milk" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
+    await clickAndClose(user, "Save", close);
     expect(pimOf(env).tasks.find((t) => t.id === "tk-groceries")).toMatchObject({
       fields: { priority: 1, due: { type: "date" } },
       recurrence: { rules: [{ freq: "weekly" }] },
@@ -570,10 +543,7 @@ describe("tasks", () => {
     expect(screen.getByLabelText("Subtask of")).toHaveValue("tk-report");
     await user.click(screen.getByRole("checkbox", { name: "Due date set" }));
     await user.click(screen.getByRole("checkbox", { name: "At a time of day" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
+    await clickAndClose(user, "Save", close);
     expect(pimOf(env).tasks.find((t) => t.fields.title === "Check the figures")).toMatchObject({
       fields: { parent_id: "tk-report", due: { type: "zoned", tz: BERLIN } },
     });

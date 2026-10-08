@@ -43,7 +43,7 @@ import {
 } from "../state/queries";
 import { UI_STATE_COLLAPSED_SECTIONS, stringList, useUiStateValue } from "../state/uiState";
 import { useUi } from "../state/uiStore";
-import { ALL_ACCOUNTS, useAccountName } from "./AccountSwitcher";
+import { useAccountName } from "./AccountSwitcher";
 import { Icon } from "./Icon";
 import {
   DEFAULT_FAVORITES,
@@ -60,8 +60,19 @@ import {
   toggleCollapsedSection,
   unifiedFolder,
 } from "./folderPaneState";
+import { ALL_ACCOUNTS } from "../api/contract";
 
 /** Folders in tree order (parents before children) with their depth. */
+/** What a folder pane section reads and changes: the selected account, folder and search. */
+function useFolderSelection() {
+  const activeAccountId = useUi((s) => s.activeAccountId);
+  const activeFolderId = useUi((s) => s.activeFolderId);
+  const search = useUi((s) => s.search);
+  const selectAccount = useUi((s) => s.selectAccount);
+  const selectFolder = useUi((s) => s.selectFolder);
+  return { activeAccountId, activeFolderId, search, selectAccount, selectFolder };
+}
+
 export function flattenFolders(
   folders: readonly Folder[],
   options: { rolesFirst?: boolean } = {},
@@ -193,7 +204,7 @@ function AccountFolderTree({ node }: WidgetProps) {
       data-part="folder-tree"
       data-key-context="folders"
       data-node-id={node.id ?? undefined}
-      aria-label={node.label ? label(node.label) : t("folder-tree-label")}
+      aria-label={node.label ? label(node.label) : t("common-folders")}
     >
       {folders.isError && (
         <div data-part="folder-tree.error">{t(errorMessageIdOf(folders.error))}</div>
@@ -201,7 +212,7 @@ function AccountFolderTree({ node }: WidgetProps) {
       <ul
         data-part="folder-tree.list"
         role="tree"
-        aria-label={t("folder-tree-label")}
+        aria-label={t("common-folders")}
         onKeyDown={onKeyDown}
       >
         {rows.map(({ folder, depth }) => (
@@ -369,11 +380,8 @@ function FavoritesSection({
   const t = useT();
   const { dispatch } = useActions();
   const folders = useFolders(ALL_ACCOUNTS).data ?? [];
-  const activeAccountId = useUi((s) => s.activeAccountId);
-  const activeFolderId = useUi((s) => s.activeFolderId);
-  const search = useUi((s) => s.search);
-  const selectAccount = useUi((s) => s.selectAccount);
-  const selectFolder = useUi((s) => s.selectFolder);
+  const { activeAccountId, activeFolderId, search, selectAccount, selectFolder } =
+    useFolderSelection();
   const setSearch = useUi((s) => s.setSearch);
   const setSearchInput = useUi((s) => s.setSearchInput);
 
@@ -475,11 +483,8 @@ function AccountSection({
   const nameOf = useAccountName();
   const folders = useFolders(account.id);
   const status = useAccountStatuses().data?.find((s) => s.account_id === account.id);
-  const activeAccountId = useUi((s) => s.activeAccountId);
-  const activeFolderId = useUi((s) => s.activeFolderId);
-  const search = useUi((s) => s.search);
-  const selectAccount = useUi((s) => s.selectAccount);
-  const selectFolder = useUi((s) => s.selectFolder);
+  const { activeAccountId, activeFolderId, search, selectAccount, selectFolder } =
+    useFolderSelection();
   const rows = flattenFolders(folders.data ?? [], { rolesFirst: true });
   const name = nameOf(account);
   const title =
@@ -727,7 +732,7 @@ function FolderPane({ node }: WidgetProps) {
       data-mode="sections"
       data-key-context="folders"
       data-node-id={node.id ?? undefined}
-      aria-label={node.label ? label(node.label) : t("folder-tree-label")}
+      aria-label={node.label ? label(node.label) : t("common-folders")}
     >
       {compose && <ComposeButton />}
       {accountsQuery.isError && (
@@ -737,7 +742,7 @@ function FolderPane({ node }: WidgetProps) {
         ref={tree}
         data-part="folder-tree.list"
         role="tree"
-        aria-label={t("folder-tree-label")}
+        aria-label={t("common-folders")}
         onKeyDown={onKeyDown}
         onFocus={(event) => {
           const key = (event.target as HTMLElement).dataset.key;

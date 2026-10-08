@@ -24,25 +24,12 @@ import { runtimeIds } from "./messages";
 import { answerCustomization, isCustomizationRequest } from "./mock";
 import { customizationStore } from "./state";
 import { WRITE_DELAY_MS } from "./writeBack";
+import { requestsOf, wireEvents } from "../../test/env";
 
 /** The value, or a test failure when it is missing. */
 function must<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error("missing value");
   return value;
-}
-
-function wireEvents(env: Env) {
-  return env.client.subscribe((event) => {
-    handleCustomizationEvent(event, {
-      client: env.client,
-      queryClient: env.queryClient,
-      store: env.store,
-    });
-  });
-}
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
 }
 
 async function call(env: Env, request: Request): Promise<Response> {
@@ -74,6 +61,13 @@ afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = "";
 });
+
+/** Waits until the configuration the UI shows has the theme `name` (the live preview). */
+async function previewing(env: Env, name: string): Promise<void> {
+  await waitFor(() => {
+    expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe(name);
+  });
+}
 
 describe("slot contributions", () => {
   it("registers widgets, actions, dialogs, events and effects", () => {
@@ -266,7 +260,7 @@ describe("config-errors", () => {
   it("lists every error of every file and opens a file at the line", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleCustomizationEvent);
     renderNode(widget("config-errors"), env);
     expect(screen.getByText("All configuration files are valid.")).toBeInTheDocument();
 
@@ -323,7 +317,7 @@ describe("smart-folders", () => {
   it("saves the current search, runs a saved one and removes it", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleCustomizationEvent);
     renderNode(widget("smart-folders"), env);
     expect(await screen.findByText(/No smart folders yet/)).toBeInTheDocument();
     const add = screen.getByRole("button", { name: "Save current search" });
@@ -452,20 +446,12 @@ describe("merge dialog", () => {
     await user.paste(THEME);
     await user.click(screen.getByRole("button", { name: "Compare with mine" }));
     await user.click(await screen.findByRole("button", { name: "Take all theirs" }));
-    await waitFor(() => {
-      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord");
-    });
+    await previewing(env, "Nord");
     // Turning the live preview off restores the real configuration, too.
     await user.click(screen.getByRole("checkbox", { name: "Live preview" }));
-    await waitFor(() => {
-      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe(
-        config.theme.name,
-      );
-    });
+    await previewing(env, config.theme.name);
     await user.click(screen.getByRole("checkbox", { name: "Live preview" }));
-    await waitFor(() => {
-      expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe("Nord");
-    });
+    await previewing(env, "Nord");
     view.unmount();
     expect(env.queryClient.getQueryData<AppConfig>(queryKeys.config)?.theme.name).toBe(
       config.theme.name,

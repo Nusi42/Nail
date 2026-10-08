@@ -62,7 +62,7 @@ export function FolderPicker({ node }: WidgetProps) {
     <form
       data-part="folder-picker"
       data-node-id={node.id ?? undefined}
-      aria-label={node.label ? label(node.label) : t("folder-picker-label")}
+      aria-label={node.label ? label(node.label) : t("common-move-to-folder")}
       onSubmit={submit}
     >
       <label data-part="folder-picker.filter">
@@ -90,7 +90,7 @@ export function FolderPicker({ node }: WidgetProps) {
           {t(errorMessageIdOf(folders.error))}
         </div>
       )}
-      <ul data-part="folder-picker.list" aria-label={t("folder-picker-folders")}>
+      <ul data-part="folder-picker.list" aria-label={t("common-folders")}>
         {visible.map(({ folder, depth }) => (
           <li key={folder.id} data-part="folder-picker.item" data-depth={depth}>
             <button

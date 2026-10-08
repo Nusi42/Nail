@@ -12,9 +12,9 @@ import {
   createEnv,
   renderNode,
   settleQueries,
-  stubElementSizes,
   widget,
   type Env,
+  stubElementSizesEachTest,
 } from "../../test/harness";
 import { UI_STATE_SETTINGS_SECTION } from "../../state/uiState";
 import { actions } from ".";
@@ -22,13 +22,7 @@ import { settingsStoreFor } from "./store";
 import { FOUND_ATTRIBUTE } from "./widgets";
 import { must } from "../../test/must";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 const page = () => widget("settings-page");
 
@@ -57,6 +51,16 @@ const title = () =>
     level: 2,
     name: (_n, el) => el.getAttribute("data-part") === "settings-page.title",
   });
+
+/** The settings page once settled, and its search field. */
+async function settingsSearch() {
+  const env = createEnv();
+  const user = userEvent.setup();
+  renderNode(page(), env);
+  await settleQueries(env);
+  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  return { env, user, search };
+}
 
 describe("settings page (M5b)", () => {
   it("shows the groups and sections, and the first section when none is remembered", async () => {
@@ -146,11 +150,7 @@ describe("settings page (M5b)", () => {
   });
 
   it("says when nothing matches, and Escape clears the search", async () => {
-    const env = createEnv();
-    const user = userEvent.setup();
-    renderNode(page(), env);
-    await settleQueries(env);
-    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    const { user, search } = await settingsSearch();
     await user.type(search, "zzzz");
     expect(screen.getByRole("status")).toHaveTextContent("No settings match “zzzz”.");
     expect(screen.queryByRole("list", { name: "Search results" })).toBeNull();
@@ -160,11 +160,7 @@ describe("settings page (M5b)", () => {
   });
 
   it("opens the best result with Enter and moves into the results with the down key", async () => {
-    const env = createEnv();
-    const user = userEvent.setup();
-    renderNode(page(), env);
-    await settleQueries(env);
-    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    const { env, user, search } = await settingsSearch();
     await user.type(search, "plug-ins{Enter}");
     await waitFor(() => expect(title()).toHaveTextContent("Plug-ins"));
     await user.click(search);

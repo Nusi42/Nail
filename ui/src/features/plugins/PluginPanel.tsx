@@ -9,11 +9,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type { JsonValue, LocalizedMessage, PluginUiNode } from "../../api/generated";
+import type { JsonValue, PluginUiNode } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionString, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
-import { useUi } from "../../state/uiStore";
 import { isRunnable } from "./commands";
 import { clientIdOf, uiContextOf } from "./context";
 import { parsePluginPanelId } from "./ids";
@@ -21,6 +20,8 @@ import { partAttrs } from "./parts";
 import { pluginKeys, usePlugins } from "./queries";
 import { PluginTree } from "./tree/PluginTree";
 import { mergeValues, type Values } from "./tree/values";
+import { useBusyAction } from "../../state/busyAction";
+import { useUiContextIds } from "../../state/hooks";
 
 function PanelTree({
   panel,
@@ -35,16 +36,13 @@ function PanelTree({
   const client = useClient();
   const [values, setValues] = useState<Values>(() => mergeValues(tree, {}, new Date()));
   const [lastTree, setLastTree] = useState(tree);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   if (lastTree !== tree) {
     setLastTree(tree);
     setValues((previous) => mergeValues(tree, previous, new Date()));
   }
   const action = async (componentId: string) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await client.request(
         {
           type: "PluginUiAction",
@@ -55,11 +53,7 @@ function PanelTree({
         },
         "Done",
       );
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <>
@@ -94,11 +88,7 @@ export function PluginPanel({ node }: WidgetProps) {
   const def = plugin?.manifest.contributes?.panels?.find((p) => p.id === parsed?.panel);
   const available = plugin !== undefined && def !== undefined && isRunnable(plugin);
 
-  const accountId = useUi((s) => s.activeAccountId);
-  const folderId = useUi((s) => s.activeFolderId);
-  const messageId = useUi((s) => s.selectedMessageId);
-  const threadId = useUi((s) => s.selectedThreadId);
-  const draftId = useUi((s) => s.composer?.draftId ?? null);
+  const { accountId, folderId, messageId, threadId, draftId } = useUiContextIds();
   const contextKey = JSON.stringify([accountId, folderId, messageId, threadId, draftId]);
   const context = useMemo(
     () =>

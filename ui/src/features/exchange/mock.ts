@@ -38,6 +38,7 @@ import type {
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { automaticRepliesIssues, categoryIssues, mailboxIssues } from "./model";
+import { DAY_MS } from "../../state/clock";
 
 /** The requests this feature answers. */
 export const EXCHANGE_REQUESTS = [
@@ -389,13 +390,12 @@ function rulesOf(core: MockCore, accountId: AccountId): ExchangeRulesStatus {
 // ---------------------------------------------------------------------------
 // Rooms
 
-const DAY = 86_400_000;
 const MAX_RANGE_DAYS = 92;
 
 function busyPeriods(core: MockCore, address: string, from: number, to: number): BusyPeriod[] {
   const windows = state(core).roomBusy[address.toLowerCase()] ?? [];
   const out: BusyPeriod[] = [];
-  for (let day = Math.floor(from / DAY) * DAY; day < to; day += DAY) {
+  for (let day = Math.floor(from / DAY_MS) * DAY_MS; day < to; day += DAY_MS) {
     for (const w of windows) {
       const start = day + w.start * 3_600_000;
       const end = day + w.end * 3_600_000;
@@ -647,7 +647,7 @@ export function answerExchange(core: MockCore, request: ExchangeRequest): Respon
       if (Number.isNaN(from) || Number.isNaN(to) || to <= from) {
         return invalid("free/busy: invalid-range", "freebusy-issue-invalid-range");
       }
-      if (to - from > MAX_RANGE_DAYS * DAY) {
+      if (to - from > MAX_RANGE_DAYS * DAY_MS) {
         return invalid("free/busy: range-too-long", "freebusy-issue-range-too-long");
       }
       const rooms = (s.rooms[accountId] ?? []).filter(

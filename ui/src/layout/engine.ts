@@ -173,3 +173,13 @@ export function resizeSplit(input: ResizeInput): string[] {
   }
   return sizes;
 }
+
+/** The node at `path` below `root`, `null` when there is none. */
+export function nodeAt(root: LayoutNode, path: readonly number[]): LayoutNode | null {
+  let node: LayoutNode | undefined = root;
+  for (const index of path) {
+    if (node === undefined || node.type === "widget") return null;
+    node = node.children[index];
+  }
+  return node ?? null;
+}

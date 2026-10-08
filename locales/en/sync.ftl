@@ -13,7 +13,7 @@ sync-bodies-recent = Full messages of the last { $days ->
        *[other] { $days } days
     }
 sync-bodies-default = As the account
-sync-choice-full = Full messages
+sync-choice-full = { sync-bodies-full }
 sync-choice-headers-only = Headers only
 sync-choice-recent = Only recent messages in full
 
@@ -28,10 +28,9 @@ window-sync-folder = Folder synchronization
 sync-settings-tab = Synchronization
 sync-policies-label = Synchronization per folder
 sync-intro = Choose per folder how much Nail keeps on this device. Bodies that are not kept are downloaded when you open a message, and server-side search still finds them.
-sync-no-accounts = Add an account first.
 sync-no-folder = Choose a folder first.
-sync-account = Account
-sync-folder = Folder
+sync-account = { common-account }
+sync-folder = { common-folder }
 sync-loading = Loading the folder's settings…
 sync-policy-label = Synchronization of { $path }
 sync-current = Now: { $bodies }; { $synced ->
@@ -46,16 +45,14 @@ sync-bodies-hint = "Only recent" keeps older messages as headers until you open 
 sync-days = Days to keep in full
 sync-pop3-full = POP3 accounts always keep full messages.
 sync-enabled-label = Synchronize this folder
-sync-enabled-default = As the account
-sync-enabled-yes = Yes
-sync-enabled-no = No
+sync-enabled-default = { sync-bodies-default }
+sync-enabled-yes = { mcp-tool-value-yes }
+sync-enabled-no = { mcp-tool-value-no }
 sync-idle-label = Watch for new mail at once (IDLE)
 sync-idle-default = As the account (only the inbox)
-sync-idle-yes = Yes
-sync-idle-no = No
+sync-idle-yes = { mcp-tool-value-yes }
+sync-idle-no = { mcp-tool-value-no }
 sync-error-days = Keep at least 1 day.
-sync-save = Save
-sync-saved = Saved to accounts.kdl.
 
 ## Reader: bodies on demand (widget sync-message-body)
 

@@ -14,14 +14,13 @@ import type { KeyImportResult, MessageId } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
-import { useClient, useIdentities, useMessage } from "../../state/queries";
+import { useClient, useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
 import { SelectField, TextField } from "../../widgets/forms";
 import { identityText } from "./IdentityCrypto";
 import { ImportResult } from "./KeyTools";
 import { formatPasscode, isCompletePasscode } from "./model";
-import { securityKeys } from "./queries";
-import { nonEmpty } from "../../text/empty";
+import { securityKeys, useIdentityChoice } from "./queries";
 
 /** Name of the import dialog (`window.open "security-autocrypt-import"`). */
 export const AUTOCRYPT_IMPORT_DIALOG = "security-autocrypt-import";
@@ -29,12 +28,10 @@ export const AUTOCRYPT_IMPORT_DIALOG = "security-autocrypt-import";
 function SendSetup() {
   const t = useT();
   const client = useClient();
-  const identities = useIdentities(null).data ?? [];
-  const [identity, setIdentity] = useState("");
+  const { identities, setIdentity, chosen } = useIdentityChoice();
   const [sent, setSent] = useState<{ passcode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const chosen = nonEmpty(identity) ?? identities[0]?.id ?? "";
 
   const send = async () => {
     if (chosen === "" || busy) return;
@@ -213,7 +210,7 @@ function ImportSelected() {
         <>
           <p data-part="security-autocrypt.message">
             {t("security-autocrypt-selected", {
-              subject: message.headers.subject || t("security-autocrypt-no-subject"),
+              subject: message.headers.subject || t("common-no-subject"),
             })}
           </p>
           <AutocryptImport key={selectedId} messageId={selectedId} />

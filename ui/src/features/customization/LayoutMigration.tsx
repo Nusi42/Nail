@@ -79,7 +79,7 @@ export function LayoutMigration() {
             answer("dismissed");
           }}
         >
-          {t("customize-layout-offer-dismiss")}
+          {t("common-not-now")}
         </button>
       </div>
     </section>
