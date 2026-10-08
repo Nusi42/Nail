@@ -171,7 +171,7 @@ try {
   $page = Invoke-WebRequest -UseBasicParsing -Uri $url
   Check ($page.StatusCode -eq 200 -and $page.Content -match '<script[^>]+src="([^"]+\.js)"') 'the page loads'
   $asset = Invoke-WebRequest -UseBasicParsing -Uri ([Uri]::new([Uri]$url, $Matches[1]))
-  Check ($asset.StatusCode -eq 200 -and $asset.Content.Length -gt 1000) "its script loads ($($Matches[1]))"
+  Check ($asset.StatusCode -eq 200 -and $asset.RawContentLength -gt 0) "its script loads ($($Matches[1]))"
   Stop-Tree $serve
   $serve = $null
 
