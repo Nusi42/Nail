@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { nailOnDemand } from "../support/nail";
 import {
   expectResponsive,
   formatIssues,
@@ -8,7 +8,15 @@ import {
   screenshotPath,
   type CheckOptions,
 } from "../support/responsive";
-import { openApp, openSettings, readerToolbar, runFromPalette, showView } from "../support/views";
+import {
+  nextFrames,
+  openApp,
+  openSettings,
+  readerToolbar,
+  runFromPalette,
+  showView,
+  messageRows,
+} from "../support/views";
 
 /**
  * Wave P1 WP192 (ADR 0139's responsive standard) against `nail serve`: the
@@ -23,15 +31,10 @@ import { openApp, openSettings, readerToolbar, runFromPalette, showView } from "
  * Screenshots: `<build dir>/screens/p1/views-*.png`.
  */
 
-let server: NailServer | undefined;
-
-test.afterEach(async () => {
-  await server?.stop();
-  server = undefined;
-});
+const server = nailOnDemand();
 
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
-  server = await startNail({ seed });
+  await server.start({ seed });
   await openApp(page, server.url);
 }
 
@@ -90,16 +93,7 @@ async function expectWindowSizes(
   for (const wanted of sizes) {
     const got = await resizeWindow(page, frame, wanted);
     // Let the measured parts (toolbars, container queries) settle.
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              resolve();
-            });
-          });
-        }),
-    );
+    await nextFrames(page);
     const issues = await layoutIssues(page, { ...options, scope });
     const label = wanted.width === 1 ? "min" : "large";
     await page.screenshot({ path: screenshotPath(`${name}-${label}`, got) });
@@ -182,7 +176,7 @@ test("the toolbar customizer at every size, min-size and larger", async ({ page 
     // Below 900 px the mail window shows its panes as tabs.
     const tab = (name: string) => page.getByRole("tab", { name, exact: true });
     if (await tab("Messages").isVisible()) await tab("Messages").click();
-    await page.locator('[data-part="message-list.row"]').first().click();
+    await messageRows(page).first().click();
     if (await tab("Message").isVisible()) await tab("Message").click();
     const bar = readerToolbar(page);
     await bar.getByRole("button").first().click({ button: "right" });

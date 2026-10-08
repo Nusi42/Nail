@@ -1,27 +1,24 @@
 /**
- * The vault recovery key's text form (mirrors `nail_api::recovery`,
- * ADR 0094): 32 bytes as Crockford base32 (52 characters) plus 4 check
+ * The vault recovery key's text form (a port of `nail_api::recovery`,
+ * ADR 0094, pinned by `crates/nail-api/tests/ts_vectors.rs`; the constants
+ * are generated): 32 bytes as Crockford base32 (52 characters) plus 4 check
  * characters (the top 20 bits of the CRC-32 of the bytes), in 14 groups of
  * 4 joined by `-`. Parsing forgives case, spaces and dashes and reads `O`
  * as `0`, `I` / `L` as `1`. The UI checks what is typed before asking the
  * core, so a typo is reported at once and never counts as a wrong key.
  */
-import type { RecoveryKeyIssue } from "../../api/generated";
-
-export const RECOVERY_KEY_BYTES = 32;
-export const RECOVERY_KEY_CHARS = 56;
-const DATA_CHARS = 52;
-const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-export const RECOVERY_KEY_ISSUES: readonly RecoveryKeyIssue[] = [
-  "empty",
-  "invalid-character",
-  "wrong-length",
-  "checksum-mismatch",
-];
+import {
+  RECOVERY_KEY_ALPHABET,
+  RECOVERY_KEY_ISSUE_MESSAGE_IDS,
+  RECOVERY_KEY_BYTES,
+  RECOVERY_KEY_CHARS,
+  RECOVERY_KEY_DATA_CHARS,
+  type RecoveryKeyIssue,
+} from "../../api/generated";
+export { RECOVERY_KEY_BYTES, RECOVERY_KEY_CHARS } from "../../api/generated";
 
 /** Fluent id of an issue (`recovery-key-issue-*`, `core-vault.ftl`). */
-export const recoveryIssueId = (issue: RecoveryKeyIssue) => `recovery-key-issue-${issue}`;
+export const recoveryIssueId = (issue: RecoveryKeyIssue) => RECOVERY_KEY_ISSUE_MESSAGE_IDS[issue];
 
 /** CRC-32 (IEEE 802.3), as `nail_api::recovery`. */
 export function crc32(bytes: Uint8Array): number {
@@ -45,21 +42,22 @@ export function formatRecoveryKey(key: Uint8Array): string {
   for (const b of key) {
     acc = ((acc << 8) | b) & 0xffff;
     bits += 8;
-    while (bits >= 5 && plain.length < DATA_CHARS) {
+    while (bits >= 5 && plain.length < RECOVERY_KEY_DATA_CHARS) {
       bits -= 5;
-      plain += ALPHABET.charAt((acc >>> bits) & 31);
+      plain += RECOVERY_KEY_ALPHABET.charAt((acc >>> bits) & 31);
     }
   }
-  if (bits > 0 && plain.length < DATA_CHARS) plain += ALPHABET.charAt((acc << (5 - bits)) & 31);
+  if (bits > 0 && plain.length < RECOVERY_KEY_DATA_CHARS)
+    plain += RECOVERY_KEY_ALPHABET.charAt((acc << (5 - bits)) & 31);
   const check = crc32(key) >>> 12;
-  for (const shift of [15, 10, 5, 0]) plain += ALPHABET.charAt((check >>> shift) & 31);
+  for (const shift of [15, 10, 5, 0]) plain += RECOVERY_KEY_ALPHABET.charAt((check >>> shift) & 31);
   return (plain.match(/.{1,4}/g) ?? []).join("-");
 }
 
 function valueOf(ch: string): number {
   const upper = ch.toUpperCase();
   const c = upper === "O" ? "0" : upper === "I" || upper === "L" ? "1" : upper;
-  return ALPHABET.indexOf(c);
+  return RECOVERY_KEY_ALPHABET.indexOf(c);
 }
 
 export type ParsedRecoveryKey =
@@ -80,7 +78,7 @@ export function parseRecoveryKey(text: string): ParsedRecoveryKey {
   let acc = 0;
   let bits = 0;
   let index = 0;
-  for (const v of values.slice(0, DATA_CHARS)) {
+  for (const v of values.slice(0, RECOVERY_KEY_DATA_CHARS)) {
     acc = ((acc << 5) | v) & 0xffff;
     bits += 5;
     if (bits >= 8 && index < RECOVERY_KEY_BYTES) {
@@ -90,7 +88,7 @@ export function parseRecoveryKey(text: string): ParsedRecoveryKey {
   }
   // The 4 padding bits must be zero.
   if ((acc & ((1 << bits) - 1)) !== 0) return { ok: false, issue: "checksum-mismatch" };
-  const check = values.slice(DATA_CHARS).reduce((a, v) => (a << 5) | v, 0);
+  const check = values.slice(RECOVERY_KEY_DATA_CHARS).reduce((a, v) => (a << 5) | v, 0);
   if (check !== crc32(bytes) >>> 12) return { ok: false, issue: "checksum-mismatch" };
   return { ok: true, bytes };
 }

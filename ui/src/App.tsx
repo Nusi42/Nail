@@ -7,7 +7,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ActionsProvider } from "./actions/ActionsProvider";
 import type { NailClient } from "./api/client";
 import { errorMessageIdOf } from "./api/client";
-import type { AccountStatus, ResolvedLayout, ThemeMode } from "./api/generated";
+import {
+  type AccountStatus,
+  type ResolvedLayout,
+  THEME_MODE_VALUES,
+  type ThemeMode,
+} from "./api/generated";
 import { normalizeLayout, normalizeTheme } from "./api/normalize";
 import { createClient, selectTransportKind } from "./api/select";
 import { usePluginLayout } from "./features/plugins";
@@ -49,8 +54,6 @@ export interface AppProps {
   windowName?: string;
 }
 
-const MODES: readonly ThemeMode[] = ["system", "light", "dark", "high-contrast"];
-
 /** UI overrides from the page URL: `?lang=de`, `?mode=dark`. */
 export function overridesFromUrl(search: string): {
   localeOverride: string | null;
@@ -60,7 +63,7 @@ export function overridesFromUrl(search: string): {
   const mode = params.get("mode");
   return {
     localeOverride: params.get("lang"),
-    modeOverride: MODES.find((m) => m === mode) ?? null,
+    modeOverride: THEME_MODE_VALUES.find((m) => m === mode) ?? null,
   };
 }
 

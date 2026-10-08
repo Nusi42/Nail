@@ -1,45 +1,35 @@
 /**
  * Pure helpers of the remote-UI and privacy UI (ADR 0036): access presets
  * (`RemoteAccessPreset::grant`), the settings checks the core runs
- * (`RemoteUiSettings::issues`, mirrored so the form can explain a problem
- * before saving), fingerprint and pairing-code formatting, and the value
+ * (`RemoteUiSettings::issues`, ported so the form can explain a problem
+ * before saving; pinned by `crates/nail-api/tests/ts_vectors.rs`), fingerprint and pairing-code formatting, and the value
  * lists the Fluent ids are built from.
  */
-import type {
-  AuthFailure,
-  McpScope,
-  RemoteAccessPreset,
-  RemoteAuditKind,
-  RemoteAuditOutcome,
-  RemoteAuthMethod,
-  RemoteContentScope,
-  RemoteGrant,
-  RemoteTlsMode,
-  RemoteUiSettings,
-  RemoteUiSettingsIssue,
-  RemoteUiState,
-  SessionEndReason,
+import {
+  type AuthFailure,
+  LOCAL_NETWORKS,
+  MAX_AUDIT_RETENTION_DAYS,
+  MCP_SCOPE_VALUES,
+  type McpScope,
+  REMOTE_ACCESS_PRESET_VALUES,
+  type RemoteAccessPreset,
+  type RemoteAuditKind,
+  type RemoteAuditOutcome,
+  type RemoteContentScope,
+  type RemoteGrant,
+  type RemoteTlsMode,
+  type RemoteUiSettings,
+  type RemoteUiSettingsIssue,
+  type RemoteUiState,
 } from "../../api/generated";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
-
-/** `McpScope::ALL`: the order scopes are kept in. */
-export const SCOPE_ORDER: readonly McpScope[] = [
-  "read",
-  "raw-source",
-  "attachments",
-  "encrypted",
-  "context",
-  "organize",
-  "permanent-delete",
-  "draft",
-  "send",
-  "calendar",
-  "pim",
-  "rules",
-];
-
-/** The presets, narrowest first (`RemoteAccessPreset::ALL`). */
-export const PRESETS: readonly RemoteAccessPreset[] = ["read-only", "no-send", "full"];
+export {
+  MAX_AUDIT_RETENTION_DAYS,
+  MCP_SCOPE_VALUES as SCOPE_ORDER,
+  REMOTE_ACCESS_PRESET_VALUES as PRESETS,
+  REMOTE_AUTH_METHOD_VALUES as AUTH_METHODS,
+  SESSION_END_REASON_VALUES as END_REASONS,
+} from "../../api/generated";
 
 const READ: readonly McpScope[] = ["read", "raw-source", "attachments"];
 const WRITE: readonly McpScope[] = [
@@ -54,7 +44,9 @@ const WRITE: readonly McpScope[] = [
 export const EXTRA_SCOPES: readonly McpScope[] = ["encrypted", "context"];
 
 function sortScopes(scopes: readonly McpScope[]): McpScope[] {
-  return [...new Set(scopes)].sort((a, b) => SCOPE_ORDER.indexOf(a) - SCOPE_ORDER.indexOf(b));
+  return [...new Set(scopes)].sort(
+    (a, b) => MCP_SCOPE_VALUES.indexOf(a) - MCP_SCOPE_VALUES.indexOf(b),
+  );
 }
 
 /** The grant of a preset (all accounts), plus the chosen extras. */
@@ -86,7 +78,7 @@ export function presetOf(grant: RemoteGrant): RemoteAccessPreset | "custom" {
   const base = grant.mail.scopes.filter((s) => !EXTRA_SCOPES.includes(s));
   const narrowed = !grant.mail.all_accounts || grant.mail.excluded_folders.length > 0;
   if (narrowed) return "custom";
-  for (const preset of PRESETS) {
+  for (const preset of REMOTE_ACCESS_PRESET_VALUES) {
     const scopes = presetGrant(preset).mail.scopes;
     if (scopes.length === base.length && scopes.every((s) => base.includes(s))) return preset;
   }
@@ -212,21 +204,22 @@ function ipv6Bits(text: string): string | null {
   return left + "0".repeat(Math.max(128 - left.length - right.length, 0)) + right;
 }
 
-/** Local ranges as (binary prefix): loopback, RFC 1918, link-local, CGNAT. */
-const LOCAL_V4: readonly string[] = [
-  binary(127, 8),
-  binary(10, 8),
-  binary(172, 8) + binary(16, 8).slice(0, 4),
-  binary(192, 8) + binary(168, 8),
-  binary(169, 8) + binary(254, 8),
-  binary(100, 8) + binary(64, 8).slice(0, 2),
-];
-/** Local IPv6 ranges: loopback, unique local (fc00::/7), link-local (fe80::/10). */
-const LOCAL_V6: readonly string[] = [
-  "0".repeat(127) + "1",
-  binary(0xfc00, 16).slice(0, 7),
-  binary(0xfe80, 16).slice(0, 10),
-];
+/** The address bits of an IPv4 or IPv6 address (`null` when it is neither). */
+function addressBits(ip: string): { v4: boolean; bits: string } | null {
+  const v4 = parseIpv4(ip);
+  if (v4 !== null) return { v4: true, bits: v4.map((b) => binary(b, 8)).join("") };
+  const bits = ipv6Bits(ip);
+  return bits === null ? null : { v4: false, bits };
+}
+
+/** The contract's local ranges (`LOCAL_NETWORKS`) as binary prefixes, per address family. */
+const LOCAL_RANGES = LOCAL_NETWORKS.map((cidr) => {
+  const [ip = "", prefix = ""] = cidr.split("/");
+  const address = addressBits(ip);
+  return { v4: address?.v4 ?? false, bits: (address?.bits ?? "").slice(0, Number(prefix)) };
+});
+const LOCAL_V4_RANGES = LOCAL_RANGES.filter((r) => r.v4).map((r) => r.bits);
+const LOCAL_V6_RANGES = LOCAL_RANGES.filter((r) => !r.v4).map((r) => r.bits);
 
 /** Whether the network `bits`/`prefix` lies within one of `ranges`. */
 function withinRanges(bits: string, prefix: number, ranges: readonly string[]): boolean {
@@ -242,14 +235,15 @@ export function isLocalNetwork(text: string): boolean {
   const [ip = "", prefixText = ""] = text.trim().split("/");
   const prefix = Number(prefixText);
   const v4 = parseIpv4(ip);
-  if (v4 !== null) return withinRanges(v4.map((b) => binary(b, 8)).join(""), prefix, LOCAL_V4);
+  if (v4 !== null)
+    return withinRanges(v4.map((b) => binary(b, 8)).join(""), prefix, LOCAL_V4_RANGES);
   const bits = ipv6Bits(ip);
   if (bits === null) return false;
   const mappedPrefix = "0".repeat(80) + "1".repeat(16);
   if (bits.startsWith(mappedPrefix) && prefix >= 96) {
-    return withinRanges(bits.slice(96), prefix - 96, LOCAL_V4);
+    return withinRanges(bits.slice(96), prefix - 96, LOCAL_V4_RANGES);
   }
-  return withinRanges(bits, prefix, LOCAL_V6);
+  return withinRanges(bits, prefix, LOCAL_V6_RANGES);
 }
 
 function isDnsName(name: string): boolean {
@@ -361,19 +355,6 @@ export const AUTH_FAILURES: readonly AuthFailure[] = [
   "disabled",
   "bad-request",
 ];
-export const AUTH_METHODS: readonly RemoteAuthMethod[] = [
-  "passkey",
-  "password",
-  "password-totp",
-  "pairing",
-];
-export const END_REASONS: readonly SessionEndReason[] = [
-  "logout",
-  "revoked",
-  "expired",
-  "device-revoked",
-  "user-changed",
-];
 export const AUDIT_KINDS: readonly RemoteAuditKind[] = [
   "login",
   "reauth",
@@ -396,8 +377,6 @@ export const CONTENT_SCOPES = [
   "sender",
   "domain",
 ] as const satisfies readonly RemoteContentScope[];
-/** Longest security-log retention the core accepts (`MAX_AUDIT_RETENTION_DAYS`). */
-export const MAX_AUDIT_RETENTION_DAYS = 3650;
 export const PAIRING_STATES = ["pending", "used", "expired", "cancelled"] as const;
 /** Lifetimes offered for a pairing code, in minutes. */
 export const PAIRING_TTLS: readonly number[] = [5, 10, 30];

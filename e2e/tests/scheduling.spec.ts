@@ -1,6 +1,13 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, startNail, type NailServer } from "../support/nail";
-import { showView, toolbarAction, viewRegion } from "../support/views";
+import { nailPerTest, control } from "../support/nail";
+import {
+  showView,
+  toolbarAction,
+  messageRows,
+  openMail,
+  DEMO_MULTI_CONVERSATIONS,
+} from "../support/views";
+import { eventChip, icalTime, openCalendar } from "../support/calendar";
 
 /**
  * Wave M3b (ADR 0070) against `nail serve --seed demo-multi`: iMIP
@@ -10,37 +17,12 @@ import { showView, toolbarAction, viewRegion } from "../support/views";
  * second principal (`bob`).
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
+const server = nailPerTest({ seed: "demo-multi" });
 
 const WORK = "ada@work.example";
 const GRACE = "Grace Hopper <grace@example.org>";
 
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-
-async function openApp(page: Page) {
-  await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
-}
-
-/** Today + `days` at `hour`:00 UTC, as an iCalendar UTC time. */
-function icalTime(days: number, hour: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + days);
-  d.setUTCHours(hour, 0, 0, 0);
-  return d
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
-}
+const openApp = (page: Page) => openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
 
 interface Imip {
   subject: string;
@@ -102,7 +84,7 @@ async function deliver(page: Page, raw: string, subject: string): Promise<Locato
   // Case-sensitive: a string `hasText` ignores case, and "Retro" also
   // matched a demo message's "retrouve" whenever its row was rendered.
   const literal = subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const row = rows(page).filter({ hasText: new RegExp(literal) });
+  const row = messageRows(page).filter({ hasText: new RegExp(literal) });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   return row;
 }
@@ -122,17 +104,6 @@ interface SmtpMessage {
 }
 
 const smtp = () => control<SmtpMessage[]>(server, "smtp-messages");
-
-async function openCalendar(page: Page): Promise<Locator> {
-  await showView(page, "Calendar");
-  const calendar = viewRegion(page, "Calendar");
-  await expect(calendar).toBeVisible();
-  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
-  return calendar;
-}
-
-const chip = (scope: Locator, title: string) =>
-  scope.getByRole("button", { name: new RegExp(`^${title},`) }).first();
 
 test("an invitation is accepted: the reply goes out and the event is in the calendar", async ({
   page,
@@ -165,8 +136,8 @@ test("an invitation is accepted: the reply goes out and the event is in the cale
       { timeout: 30_000 },
     )
     .toBe(true);
-  const calendar = await openCalendar(page);
-  await expect(chip(calendar, "Atlas kickoff")).toBeVisible();
+  const calendar = await openCalendar(page, { agenda: true });
+  await expect(eventChip(calendar, "Atlas kickoff")).toBeVisible();
 });
 
 test("an organizer's update changes the event and a cancellation removes it", async ({ page }) => {
@@ -181,9 +152,9 @@ test("an organizer's update changes the event and a cancellation removes it", as
   );
   const card = await openCard(page, update, "Retro moved");
   await expect(card.getByText("Your calendar is up to date")).toBeVisible({ timeout: 20_000 });
-  const calendar = await openCalendar(page);
-  await expect(chip(calendar, "Retro moved")).toBeVisible();
-  await expect(chip(calendar, "Retro")).toHaveCount(0);
+  const calendar = await openCalendar(page, { agenda: true });
+  await expect(eventChip(calendar, "Retro moved")).toBeVisible();
+  await expect(eventChip(calendar, "Retro")).toHaveCount(0);
   await showView(page, "Mail");
   await expect(calendar).toBeHidden();
 
@@ -204,25 +175,34 @@ test("an organizer's update changes the event and a cancellation removes it", as
   const cancelCard = page.getByRole("region", { name: /^Invitation:/ });
   await cancelCard.getByRole("button", { name: "Remove from calendar" }).click();
   await expect(cancelCard.getByText("Removed from your calendar.")).toBeVisible();
-  const again = await openCalendar(page);
+  const again = await openCalendar(page, { agenda: true });
   await expect(again.getByRole("button", { name: /^Retro moved,/ })).toHaveCount(0);
 });
+
+/** Opens Nail's agenda and a new event titled `title`; the calendar and the event editor. */
+async function newEvent(
+  page: Page,
+  title: string,
+): Promise<{ calendar: Locator; editor: Locator }> {
+  await openApp(page);
+  const calendar = await openCalendar(page, { agenda: true });
+  await calendar.getByRole("button", { name: "New event" }).click();
+  const editor = page.getByRole("dialog", { name: "Event", exact: true });
+  await editor.getByLabel("Title", { exact: true }).fill(title);
+  return { calendar, editor };
+}
 
 test("a counter-proposal is accepted by the organizer and the update goes out", async ({
   page,
 }) => {
-  await openApp(page);
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "New event" }).click();
-  const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title", { exact: true }).fill("Design review");
+  const { calendar, editor } = await newEvent(page, "Design review");
   await editor.getByLabel("Address").fill("grace@example.org");
   await editor.getByRole("button", { name: "Add", exact: true }).click();
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
 
   // Reopen the meeting: the organizer panel sends the invitations.
-  await chip(calendar, "Design review").click();
+  await eventChip(calendar, "Design review").click();
   await expect(editor).toBeVisible();
   const meeting = editor.getByRole("region", { name: "Meeting: Design review" });
   await meeting.getByRole("button", { name: "Send invitations" }).click();
@@ -281,11 +261,7 @@ test("a counter-proposal is accepted by the organizer and the update goes out", 
 test("free/busy shows the busy blocks of another account on the CalDAV server", async ({
   page,
 }) => {
-  await openApp(page);
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "New event" }).click();
-  const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title", { exact: true }).fill("Workshop planning");
+  const { editor } = await newEvent(page, "Workshop planning");
   await editor.getByLabel("Address").fill("bob@example.org");
   await editor.getByRole("button", { name: "Add", exact: true }).click();
   const availability = editor.locator('[data-part="freebusy"]');
@@ -323,7 +299,7 @@ test("invitations go to the CalDAV calendar chosen in the settings and updates c
 }) => {
   await openApp(page);
   // Settings: new invitations go to the CalDAV calendar "Personal".
-  const calendar = await openCalendar(page);
+  const calendar = await openCalendar(page, { agenda: true });
   await toolbarAction(
     page,
     page.getByRole("toolbar", { name: "Calendar actions" }),

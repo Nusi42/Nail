@@ -7,9 +7,11 @@ import { TransportClient } from "./client";
 import { MockTransport } from "./mock";
 import { addMockConversation, MOCK_CONVERSATION_ID } from "./mockConversations";
 import { createMockData } from "./mockData";
-import { reachOf } from "./mockMailActions";
+import { kindOf, reachOf } from "./mockMailActions";
 import type { MessageTarget } from "./generated";
 import { must } from "../test/must";
+import { describeVectors } from "../test/vectors";
+import mailActionVectors from "../../../crates/nail-api/fixtures/ts-vectors/mail-actions.json";
 
 const INBOX = "acc-personal/Inbox";
 const SENT = "acc-personal/Sent";
@@ -135,3 +137,5 @@ describe("mail actions on conversations in the mock core", () => {
     ).toMatchObject({ localized: { id: "mail-action-issue-no-targets" } });
   });
 });
+
+describeVectors("mail actions", mailActionVectors, { reachOf, kindOf });

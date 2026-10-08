@@ -1,10 +1,10 @@
 /**
  * The bundled Lucide icons (M5a, ADR 0102): exactly
- * `nail_api::icons::BUNDLED_ICONS` (mirrored in
+ * `nail_api::icons::BUNDLED_ICONS` (written by nail-api to
  * `crates/nail-api/fixtures/icons.json`), statically imported so the bundle
- * holds only these. `icons.test.ts` keeps this table equal to the fixture.
- * Adding an icon: add the name (sorted) to the Rust table and the fixture,
- * then here.
+ * holds only these; pinned by `ui/src/widgets/icons.test.tsx` (this table
+ * equals the fixture). Adding an icon: add the name (sorted) to the Rust
+ * table, regenerate the fixture, then import it here.
  *
  * lucide-react is ISC licensed.
  */
@@ -164,6 +164,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+export { LEGACY_ICON_NAMES } from "../api/generated";
 
 /** Lucide name → component. */
 export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -320,21 +321,4 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   users: Users,
   "users-round": UsersRound,
   x: X,
-};
-
-/** Pre-M5 Nail icon names → Lucide names (`nail_api::icons::LEGACY_ICON_NAMES`). */
-export const LEGACY_ICON_NAMES: Readonly<Record<string, string>> = {
-  "account-add": "user-plus",
-  attachment: "paperclip",
-  close: "x",
-  compose: "square-pen",
-  delete: "trash",
-  drafts: "file-pen-line",
-  filter: "funnel",
-  junk: "shield-alert",
-  "mark-read": "mail-open",
-  outbox: "send-horizontal",
-  sent: "send",
-  snooze: "alarm-clock",
-  sync: "refresh-cw",
 };

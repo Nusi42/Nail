@@ -7,8 +7,10 @@
  * that would fire more often than every 5 minutes are refused.
  */
 
+import { CONTRACT } from "./contract.mjs";
+
 /** Shortest interval between two runs (minutes). */
-export const MIN_JOB_INTERVAL_MINUTES = 5;
+export const { MIN_JOB_INTERVAL_MINUTES } = CONTRACT;
 
 /**
  * @typedef {object} CronSchedule

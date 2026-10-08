@@ -1,0 +1,352 @@
+{
+  "cases": [
+    {
+      "args": [
+        "2026-10-08"
+      ],
+      "fn": "isIsoDate",
+      "out": true
+    },
+    {
+      "args": [
+        "2026-13-01"
+      ],
+      "fn": "isIsoDate",
+      "out": false
+    },
+    {
+      "args": [
+        "2026-00-10"
+      ],
+      "fn": "isIsoDate",
+      "out": false
+    },
+    {
+      "args": [
+        "2026-02-31"
+      ],
+      "fn": "isIsoDate",
+      "out": true
+    },
+    {
+      "args": [
+        "2026-1-01"
+      ],
+      "fn": "isIsoDate",
+      "out": false
+    },
+    {
+      "args": [
+        "26-10-08"
+      ],
+      "fn": "isIsoDate",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isIsoDate",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": true,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "empty-body"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "Away",
+          "days": 7,
+          "enabled": true,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 0,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "days"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 366,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "days"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": "2026-10-08",
+          "from": null,
+          "skip_lists": true,
+          "start_date": "2026-10-09",
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "end-before-start"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": "tomorrow",
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "date"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [
+            "a@b.example",
+            "nope"
+          ],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "address"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [
+            "a b@c.example"
+          ],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "address"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": " ",
+          "skip_lists": true,
+          "start_date": null,
+          "subject": ""
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "address"
+      ]
+    },
+    {
+      "args": [
+        {
+          "addresses": [],
+          "body": "",
+          "days": 7,
+          "enabled": false,
+          "end_date": null,
+          "from": null,
+          "skip_lists": true,
+          "start_date": null,
+          "subject": "two\nlines"
+        }
+      ],
+      "fn": "vacationIssues",
+      "out": [
+        "subject"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": null,
+          "port": null,
+          "script_name": null,
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": "sieve.example",
+          "port": 4190,
+          "script_name": "nail",
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": " ",
+          "port": 0,
+          "script_name": "",
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": [
+        "host",
+        "port",
+        "script-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": "a b",
+          "port": null,
+          "script_name": "a/b",
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": [
+        "host",
+        "script-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": null,
+          "port": null,
+          "script_name": "tab\there",
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": [
+        "script-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": null,
+          "host": null,
+          "port": null,
+          "script_name": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+          "tls": null
+        }
+      ],
+      "fn": "manageSieveIssues",
+      "out": [
+        "script-name"
+      ]
+    }
+  ]
+}

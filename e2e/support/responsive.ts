@@ -39,6 +39,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { buildOutputDir } from "./nail";
+import { nextFrames } from "./views";
 
 export interface Size {
   width: number;
@@ -626,16 +627,7 @@ export async function checkResponsive(
     await page.setViewportSize(size);
     if (options.prepare) await options.prepare(page, size);
     // Let layout effects (measured toolbars, virtual lists) settle.
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              resolve();
-            });
-          });
-        }),
-    );
+    await nextFrames(page);
     const issues = await layoutIssues(page, options);
     let shot: string | null = null;
     if (options.screenshot ?? true) {
@@ -693,4 +685,16 @@ export async function resizeWindow(page: Page, frame: Locator, size: Size): Prom
   const after = await frame.boundingBox();
   if (!after) throw new Error("the window disappeared while resizing");
   return { width: Math.round(after.width), height: Math.round(after.height) };
+}
+
+/** Expects no layout issue in the elements whose description names one of `parts`. */
+export async function expectNoIssuesIn(page: Page, parts: readonly string[]): Promise<void> {
+  const issues = (await layoutIssues(page)).filter((i) => parts.some((p) => i.element.includes(p)));
+  expect(issues, formatIssues(issues)).toEqual([]);
+}
+
+/** In the narrow layout (one pane at a time): shows the message list's tab. */
+export async function showListTab(page: Page): Promise<void> {
+  const tab = page.getByRole("tab", { name: "Messages", exact: true });
+  if (await tab.isVisible()) await tab.click();
 }

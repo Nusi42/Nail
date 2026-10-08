@@ -529,9 +529,9 @@ pub(crate) fn apply_theme_patches(
 /// A theme id from a display name: accents dropped (NFKD without combining
 /// marks, so `Café` is `cafe`), lowercase ASCII letters and digits,
 /// everything else a dash; `theme-` in front when it does not start with a
-/// letter. The UI derives the same id (`themeIdFromName` in
-/// `ui/src/features/appearance/model.ts`).
-fn id_from_name(name: &str) -> String {
+/// letter. The UI derives the same id (`themeIdFromName`), pinned by
+/// `crates/nail-config/src/ts_vectors.rs`.
+pub(crate) fn id_from_name(name: &str) -> String {
     let mut id = String::new();
     for c in name.trim().nfkd().filter(|c| !is_combining_mark(*c)) {
         if c.is_ascii_alphanumeric() {

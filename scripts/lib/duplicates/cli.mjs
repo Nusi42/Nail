@@ -1,6 +1,7 @@
 // Arguments and verdict of scripts/check-duplicates.mjs (wave Q2, ADR 0171).
 // Tests in scripts/test/duplicates.test.mjs.
 import { PACKAGES } from "./owners.mjs";
+import { forEachArg } from "../args.mjs";
 
 /**
  * @typedef {import("./owners.mjs").Package} Package
@@ -41,13 +42,7 @@ export function parseArgs(argv) {
     json: undefined,
     files: [],
   };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const next = argv[++i];
-      if (next === undefined) throw new Error(`${arg} needs a value`);
-      return next;
-    };
+  forEachArg(argv, (arg, { value, rest }) => {
     if (arg === "--strict") options.strict = true;
     else if (arg === "--list") options.list = true;
     else if (arg === "--update-baseline") options.updateBaseline = true;
@@ -60,10 +55,9 @@ export function parseArgs(argv) {
         throw new Error(`unknown package ${owner} (known: ${PACKAGES.join(", ")})`);
       options.owner = known;
     } else if (arg === "--files") {
-      options.files.push(...argv.slice(i + 1).map((f) => f.split("\\").join("/")));
-      break;
+      options.files.push(...rest().map((f) => f.split("\\").join("/")));
     } else throw new Error(`unknown argument ${arg}\n\n${USAGE}`);
-  }
+  });
   return options;
 }
 

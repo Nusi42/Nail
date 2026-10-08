@@ -1,18 +1,22 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { McpSession } from "../support/mcp";
-import { control, repoRoot, startNail, type NailServer } from "../support/nail";
+import { McpSession, createMcpClient, grantMcpAccess } from "../support/mcp";
+import { nailPerTest, control, repoRoot } from "../support/nail";
 import {
-  composerWindow,
   discardComposer,
   openSettingsTab,
   READER_SUBJECT,
   sectionInbox,
   showView,
   viewRegion,
+  messageRows,
+  openMail,
+  DEMO_MULTI_CONVERSATIONS,
+  refreshList,
+  messageRow,
 } from "../support/views";
-import { defined } from "../support/defined";
+import { newMessage, sendMessage, smtpMessageMatching } from "../support/compose";
 
 /**
  * End-to-end encryption and data protection (M2a, ADR 0034) against the
@@ -22,21 +26,7 @@ import { defined } from "../support/defined";
  * test delivers it to the POP3 "home" account and reads it there.
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
-
-interface Received {
-  from: string;
-  to: string[];
-  data: string;
-}
+const server = nailPerTest({ seed: "demo-multi" });
 
 const pgpFixture = (name: string) =>
   readFileSync(
@@ -44,37 +34,7 @@ const pgpFixture = (name: string) =>
     "utf8",
   );
 
-async function openApp(page: Page) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-}
-
-/** The SMTP data of the first received mail whose data matches `pattern`. */
-async function receivedMatching(pattern: RegExp): Promise<string> {
-  let data = "";
-  await expect
-    .poll(
-      async () => {
-        const mails = await control<Received[]>(server, "smtp-messages");
-        data = mails.find((m) => pattern.test(m.data))?.data ?? "";
-        return data !== "";
-      },
-      { timeout: 20_000 },
-    )
-    .toBe(true);
-  return data;
-}
-
-/** Opens the composer and fills in a message. */
-async function compose(page: Page, to: string, subject: string, text: string): Promise<Locator> {
-  await page.keyboard.press("c");
-  const dialog = composerWindow(page);
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("textbox", { name: "To" }).fill(to);
-  await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
-  await dialog.getByRole("textbox", { name: "Message" }).fill(text);
-  return dialog;
-}
+const openApp = (page: Page) => openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
 
 /** Waits until the composer knows every recipient's key, then sends. */
 async function sendProtected(page: Page, dialog: Locator) {
@@ -82,11 +42,7 @@ async function sendProtected(page: Page, dialog: Locator) {
     "data-state",
     "usable",
   );
-  await dialog.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("status", { name: "Status" }).getByText("Message sent.")).toBeVisible(
-    { timeout: 20_000 },
-  );
+  await sendMessage(page, dialog);
 }
 
 /**
@@ -97,14 +53,20 @@ async function deliverHome(page: Page, raw: string): Promise<Locator> {
   await sectionInbox(
     page.locator('[data-part="folder-tree.section"][data-account-kind="pop3"]'),
   ).click();
-  const rows = page.locator('[data-part="message-list.row"]');
+  const rows = messageRows(page);
   await expect(rows).toHaveCount(3);
   await control(server, "pop3-deliver", { raw });
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("F5");
+  await refreshList(page);
   const row = rows.filter({ hasText: "Ada Lovelace" });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   return row;
+}
+
+/** Signs and encrypts the composer's message and sends it. */
+async function signEncryptAndSend(page: Page, dialog: Locator): Promise<void> {
+  await dialog.getByRole("checkbox", { name: "Sign" }).check();
+  await dialog.getByRole("checkbox", { name: "Encrypt" }).check();
+  await sendProtected(page, dialog);
 }
 
 const badge = (page: Page) => page.locator('button[data-part="security-badge"]');
@@ -113,18 +75,15 @@ test("a signed and encrypted OpenPGP mail between two accounts hides its subject
   page,
 }) => {
   await openApp(page);
-  const dialog = await compose(
-    page,
-    "ada@home.example",
-    "Secret plans",
-    "The rocket leaves at dawn.",
-  );
-  await dialog.getByRole("checkbox", { name: "Sign" }).check();
-  await dialog.getByRole("checkbox", { name: "Encrypt" }).check();
-  await sendProtected(page, dialog);
+  const dialog = await newMessage(page, {
+    to: "ada@home.example",
+    subject: "Secret plans",
+    text: "The rocket leaves at dawn.",
+  });
+  await signEncryptAndSend(page, dialog);
 
   // Header protection: the SMTP server saw "..." and no plain text.
-  const data = await receivedMatching(/multipart\/encrypted/);
+  const data = await smtpMessageMatching(server, /multipart\/encrypted/);
   expect(data).toContain("Subject: ...");
   expect(data).not.toContain("Secret plans");
   expect(data).not.toContain("rocket");
@@ -157,10 +116,14 @@ test("a signed and encrypted OpenPGP mail between two accounts hides its subject
 
 test("a tampered signature shows as invalid", async ({ page }) => {
   await openApp(page);
-  const dialog = await compose(page, "ada@home.example", "Payment", "Pay 10 EUR to Grace.");
+  const dialog = await newMessage(page, {
+    to: "ada@home.example",
+    subject: "Payment",
+    text: "Pay 10 EUR to Grace.",
+  });
   await dialog.getByRole("checkbox", { name: "Sign" }).check();
   await sendProtected(page, dialog);
-  const data = await receivedMatching(/multipart\/signed/);
+  const data = await smtpMessageMatching(server, /multipart\/signed/);
   expect(data).toContain("Pay 10 EUR");
   const row = await deliverHome(page, data.replace("Pay 10 EUR", "Pay 99 EUR"));
   await row.click();
@@ -170,17 +133,14 @@ test("a tampered signature shows as invalid", async ({ page }) => {
 
 test("S/MIME signs and encrypts with the test certificates", async ({ page }) => {
   await openApp(page);
-  const dialog = await compose(
-    page,
-    "ada@home.example",
-    "Certified",
-    "Greetings with a certificate.",
-  );
+  const dialog = await newMessage(page, {
+    to: "ada@home.example",
+    subject: "Certified",
+    text: "Greetings with a certificate.",
+  });
   await dialog.getByRole("combobox", { name: "Technology" }).selectOption("smime");
-  await dialog.getByRole("checkbox", { name: "Sign" }).check();
-  await dialog.getByRole("checkbox", { name: "Encrypt" }).check();
-  await sendProtected(page, dialog);
-  const data = await receivedMatching(/application\/pkcs7-mime/);
+  await signEncryptAndSend(page, dialog);
+  const data = await smtpMessageMatching(server, /application\/pkcs7-mime/);
   expect(data).toContain("Subject: Certified");
   expect(data).not.toContain("Greetings with a certificate");
 
@@ -199,7 +159,11 @@ test("S/MIME signs and encrypts with the test certificates", async ({ page }) =>
 test("Autocrypt turns on encryption after one received message", async ({ page }) => {
   await openApp(page);
   // Before: nothing is known about Alice.
-  let dialog = await compose(page, "alice@example.org", "Hello Alice", "Hi!");
+  let dialog = await newMessage(page, {
+    to: "alice@example.org",
+    subject: "Hello Alice",
+    text: "Hi!",
+  });
   const recipient = dialog.locator('[data-part="security-compose.recipient"]');
   await expect(recipient).toHaveAttribute("data-state", "missing");
   await expect(dialog.getByRole("checkbox", { name: "Encrypt" })).not.toBeChecked();
@@ -208,17 +172,20 @@ test("Autocrypt turns on encryption after one received message", async ({ page }
 
   // Alice writes once, with her key in the Autocrypt header.
   await control(server, "imap-deliver", { raw: pgpFixture("autocrypt-alice.eml") });
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("F5");
-  await expect(
-    page.locator('[data-part="message-list.row"]').filter({ hasText: "Hi with Autocrypt" }),
-  ).toHaveCount(1, { timeout: 20_000 });
+  await refreshList(page);
+  await expect(messageRows(page).filter({ hasText: "Hi with Autocrypt" })).toHaveCount(1, {
+    timeout: 20_000,
+  });
 
   // Now both sides prefer encryption: the composer encrypts by itself.
   await expect
     .poll(
       async () => {
-        dialog = await compose(page, "alice@example.org", "Hello Alice", "Hi!");
+        dialog = await newMessage(page, {
+          to: "alice@example.org",
+          subject: "Hello Alice",
+          text: "Hi!",
+        });
         const state = await dialog
           .locator('[data-part="security-compose.autocrypt"]')
           .getAttribute("data-state", { timeout: 3_000 })
@@ -234,7 +201,7 @@ test("Autocrypt turns on encryption after one received message", async ({ page }
     .toBe("encrypt");
   await expect(dialog.getByRole("checkbox", { name: "Encrypt" })).toBeChecked();
   await sendProtected(page, dialog);
-  const data = await receivedMatching(/alice@example\.org[\s\S]*multipart\/encrypted/);
+  const data = await smtpMessageMatching(server, /alice@example\.org[\s\S]*multipart\/encrypted/);
   expect(data).not.toContain("Hi!");
 });
 
@@ -255,11 +222,8 @@ test("the sender check badge and a look-alike link warning", async ({ page }) =>
     "",
   ].join("\r\n");
   await control(server, "imap-deliver", { raw });
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("F5");
-  const row = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Check your account" });
+  await refreshList(page);
+  const row = messageRows(page).filter({ hasText: "Check your account" });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await row.click();
 
@@ -320,11 +284,8 @@ test("sender checks count only for a receiving server the user configured", asyn
     "",
   ].join("\r\n");
   await control(server, "imap-deliver", { raw });
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("F5");
-  const row = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Checked by an unconfirmed server" });
+  await refreshList(page);
+  const row = messageRows(page).filter({ hasText: "Checked by an unconfirmed server" });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await row.click();
   await expect(page.locator(READER_SUBJECT)).toContainText("Checked by an unconfirmed server");
@@ -340,19 +301,20 @@ test("sender checks count only for a receiving server the user configured", asyn
   // Back to Mail first: the app reopens the last view after a reload.
   await showView(page, "Mail");
   await page.reload();
-  await page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Checked by an unconfirmed server" })
-    .click();
+  await messageRows(page).filter({ hasText: "Checked by an unconfirmed server" }).click();
   await expect(page.locator('button[data-part="auth-badge"]')).toHaveText("Sender confirmed");
 });
 
+/** The mail view still opens "Release notes for M1". */
+async function expectReleaseNotes(page: Page): Promise<void> {
+  await showView(page, "Mail");
+  await messageRow(page, "Release notes").first().click();
+  await expect(page.locator(READER_SUBJECT)).toContainText("Release notes for M1");
+}
+
 test("encryption at rest can be switched on and off with the data intact", async ({ page }) => {
   await openApp(page);
-  const row = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Release notes for M1" })
-    .first();
+  const row = messageRows(page).filter({ hasText: "Release notes for M1" }).first();
   await row.click();
   const subject = page.locator(READER_SUBJECT);
   await expect(subject).toContainText("Release notes for M1");
@@ -365,21 +327,14 @@ test("encryption at rest can be switched on and off with the data intact", async
   await settings.getByRole("button", { name: "Turn on encryption at rest" }).click();
   await settings.getByRole("button", { name: "Encrypt now" }).click();
   await expect(state).toHaveAttribute("data-state", "encrypted", { timeout: 30_000 });
-  await showView(page, "Mail");
-
   // Everything still reads and searches.
-  await page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Release notes" })
-    .first()
-    .click();
-  await expect(subject).toContainText("Release notes for M1");
+  await expectReleaseNotes(page);
   const search = page.getByRole("searchbox");
   await search.fill("unified");
   await search.press("Enter");
-  await expect(
-    page.locator('[data-part="message-list.row"]').filter({ hasText: "Release notes" }),
-  ).not.toHaveCount(0, { timeout: 20_000 });
+  await expect(messageRows(page).filter({ hasText: "Release notes" })).not.toHaveCount(0, {
+    timeout: 20_000,
+  });
   await search.press("Escape");
 
   await showView(page, "Settings");
@@ -387,18 +342,16 @@ test("encryption at rest can be switched on and off with the data intact", async
   await settings.getByRole("button", { name: "Turn off" }).click();
   await settings.getByRole("button", { name: "Turn off and decrypt" }).click();
   await expect(state).toHaveAttribute("data-state", "plain", { timeout: 30_000 });
-  await showView(page, "Mail");
-  await page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Release notes" })
-    .first()
-    .click();
-  await expect(subject).toContainText("Release notes for M1");
+  await expectReleaseNotes(page);
 });
 
 test("an MCP client reads encrypted content only with its separate grant", async ({ page }) => {
   await openApp(page);
-  const dialog = await compose(page, "ada@home.example", "Numbers", "The PIN is 4711.");
+  const dialog = await newMessage(page, {
+    to: "ada@home.example",
+    subject: "Numbers",
+    text: "The PIN is 4711.",
+  });
   await dialog.getByRole("checkbox", { name: "Encrypt" }).check();
   await sendProtected(page, dialog);
   // The Sent copy is encrypted to the sender too.
@@ -406,27 +359,14 @@ test("an MCP client reads encrypted content only with its separate grant", async
     .locator('[data-part="folder-tree.section"][data-account-kind="imap"]')
     .locator('[data-part="folder-tree.item"][data-role="sent"]')
     .click();
-  const sent = page.locator('[data-part="message-list.row"]').filter({ hasText: "..." }).first();
+  const sent = messageRows(page).filter({ hasText: "..." }).first();
   await expect(sent).toBeVisible({ timeout: 20_000 });
   const messageId = await sent.getAttribute("data-message");
   expect(messageId).toBeTruthy();
 
-  await showView(page, "Settings");
-  const settings = viewRegion(page, "Settings");
-  await openSettingsTab(page, "MCP clients");
-  const serverLine = settings.locator('[data-part="mcp-clients.server"]');
-  await expect(serverLine).toHaveAttribute("data-state", "running");
-  const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];
-  await settings.getByRole("textbox", { name: "Client name" }).fill("Agent");
-  await settings.getByRole("button", { name: "Create client" }).click();
-  const token = (await settings.locator('[data-part="mcp-token.value"]').textContent())?.trim();
-  const form = settings.getByRole("form", { name: "Access of Agent" });
-  await form.getByRole("checkbox", { name: "Read mail" }).check();
-  await form.getByRole("checkbox", { name: /All accounts/ }).check();
-  await form.getByRole("button", { name: "Save access" }).click();
-  await expect(form.getByRole("status")).toHaveText("Access saved.");
-
-  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
+  const client = await createMcpClient(page, "Agent");
+  await grantMcpAccess(client.access, ["Read mail"]);
+  const mcp = new McpSession(client.url, client.token);
   await mcp.open();
   const denied = await mcp.request("tools/call", {
     name: "get_message",
@@ -436,9 +376,7 @@ test("an MCP client reads encrypted content only with its separate grant", async
   expect(JSON.stringify(denied)).toMatch(/encrypted/);
   expect(JSON.stringify(denied)).not.toContain("4711");
 
-  await form.getByRole("checkbox", { name: "Encrypted messages" }).check();
-  await form.getByRole("button", { name: "Save access" }).click();
-  await expect(form.getByRole("status")).toHaveText("Access saved.");
+  await grantMcpAccess(client.access, ["Encrypted messages"]);
   const allowed = await mcp.request("tools/call", {
     name: "get_message",
     arguments: { message_id: messageId },

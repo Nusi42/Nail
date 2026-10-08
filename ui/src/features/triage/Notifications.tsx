@@ -9,13 +9,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type {
-  AccountConfig,
-  LocalizedMessage,
-  MailNotification,
-  NotificationSettings,
-  NotifyFolders,
-  Weekday,
+import {
+  NOTIFICATION_ISSUE_MESSAGE_IDS,
+  type AccountConfig,
+  type LocalizedMessage,
+  type MailNotification,
+  type NotificationSettings,
+  type NotifyFolders,
+  type Weekday,
 } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
@@ -258,7 +259,7 @@ function Editor({
   const save = async () => {
     const issues = notificationIssues(draft);
     if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: `notification-issue-${i}` })));
+      setProblems(issues.map((i) => ({ id: NOTIFICATION_ISSUE_MESSAGE_IDS[i] })));
       return;
     }
     setProblems([]);

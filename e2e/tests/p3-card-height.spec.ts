@@ -1,17 +1,10 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
-import { connectDesktop, skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
-import { buildOutputDir, control, freePort, startNail, type NailServer } from "../support/nail";
-import {
-  createUser,
-  enableRemoteUi,
-  pairBrowser,
-  pairingCode,
-  remoteContext,
-  rpcOk,
-} from "../support/remote";
-import { showView } from "../support/views";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { desktopTests, desktopPerFile } from "../support/desktop";
+import { buildOutputDir, control, nailOnDemand } from "../support/nail";
+import { rpcOk, openInDarkTheme, pairedRemoteMail } from "../support/remote";
+import { showView, messageRow } from "../support/views";
 
 /**
  * P3 WP-card-height (ADR 0164): HTML mail frames are as tall as their mail —
@@ -30,15 +23,12 @@ import { showView } from "../support/views";
  * Frost (light) and Graphite / Nocturne (dark).
  */
 
-let server: NailServer;
+const server = nailOnDemand();
 
 /** A fresh `nail serve --seed demo-multi` for each test of the calling describe block. */
 function useServer(): void {
   test.beforeEach(async () => {
-    server = await startNail({ seed: "demo-multi" });
-  });
-  test.afterEach(async () => {
-    await server.stop();
+    await server.start({ seed: "demo-multi" });
   });
 }
 
@@ -115,8 +105,7 @@ async function deliverConversation(banner: string | null = null): Promise<void> 
   });
 }
 
-const rowOf = (page: Page, subject: string) =>
-  page.locator('[data-part="message-list.row"]').filter({ hasText: subject }).first();
+const rowOf = (page: Page, subject: string) => messageRow(page, subject).first();
 const cards = (page: Page) => page.getByRole("feed").locator('[data-part="thread-view.card"]');
 const frameIn = (scope: Locator) => scope.locator('iframe[data-part="message-view.body"]');
 
@@ -330,10 +319,7 @@ test.describe("dark themes", () => {
     page,
   }) => {
     await deliverConversation();
-    await rpcOk(server, { type: "SetTheme", theme_id: "graphite" }, "Themes");
-    await page.goto(server.url);
-    await showView(page, "Mail");
-    await expect(page.locator("html")).toHaveAttribute("data-nail-mode", "dark");
+    await openInDarkTheme(page, server, "graphite");
     const { long, short } = await openConversation(page);
     // The newsletter (a layout table) keeps a light paper in the dark theme.
     const paper = await frameIn(long)
@@ -375,14 +361,7 @@ test.describe("the remote UI's sandbox origin", () => {
         html: HOSTILE,
       }),
     });
-    const remote = await enableRemoteUi(server);
-    const user = await createUser(server, "ada");
-    const context = await remoteContext(page);
-    const phone = await context.newPage();
-    await phone.setViewportSize({ width: 1280, height: 1000 });
-    await pairBrowser(phone, remote, await pairingCode(server, user));
-    await phone.getByRole("button", { name: "Not now" }).click();
-    await showView(phone, "Mail");
+    const { remote, context, phone } = await pairedRemoteMail(page, server);
 
     const { long, short } = await openConversation(phone);
     const shortFrame = frameIn(short);
@@ -419,29 +398,13 @@ test.describe("the remote UI's sandbox origin", () => {
 });
 
 test.describe("the desktop app", () => {
-  test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
-  test.skip(
-    !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
-    "set NAIL_E2E_DESKTOP=1 to run the desktop tests in CI",
-  );
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
-
-  let app: DesktopApp;
-  let browser: Browser;
-  let desktop: Page;
-
-  test.beforeAll(async () => {
-    app = await startDesktop(freePort());
-    ({ browser, page: desktop } = await connectDesktop(app));
-    await skipFirstRun(desktop);
-  });
-
-  test.afterAll(async () => {
-    await (browser as Browser | undefined)?.close().catch(() => undefined);
-    await (app as DesktopApp | undefined)?.stop();
-  });
+  desktopTests(180_000);
+  // Started with its own (longer) timeout and retried once: the start was a
+  // known flake on a busy machine (Q2).
+  const session = desktopPerFile();
 
   test("WebView2 measures the local frames: the corpus's newsletter and photo mail fit", async () => {
+    const desktop = session.page;
     await showView(desktop, "Mail");
     for (const subject of ["Your weekly garden digest 🌱", "Photo of the new lab bench"]) {
       await rowOf(desktop, subject).click();

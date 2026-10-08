@@ -1,38 +1,46 @@
 /**
- * Pure helpers of the Exchange UI: validation mirrors of the contract's
+ * Pure helpers of the Exchange UI: validation ports of the contract's
  * `issues()` (immediate feedback with the same `exchange-*-issue-*` texts;
- * the core stays authoritative), category colours, Focused Inbox queries,
+ * the core stays authoritative; pinned by `crates/nail-api/tests/ts_vectors.rs`), category colours, Focused Inbox queries,
  * mailbox folder paths (`@<address>/…`), Autodiscover review (domain
  * redirects, EWS against Exchange Online), Exchange sign-in methods, rooms
  * as attendees and room availability, task-list grouping (To Do lists).
  */
-import type {
-  Account,
-  AccountConfig,
-  Attendee,
-  AuthConfig,
-  AutomaticRepliesIssue,
-  AutomaticRepliesSettings,
-  BusyPeriod,
-  Calendar,
-  CategoryColor,
-  DiscoveredAccount,
-  ExchangeCategory,
-  ExchangeCategoryIssue,
-  ExchangeCategorySettings,
-  ExchangeEngine,
-  ExchangeMailbox,
-  ExchangeMailboxIssue,
-  ExchangeMailboxSettings,
-  ExchangeOptions,
-  ExchangeWarning,
-  Folder,
-  InferenceClassification,
-  RoomAvailability,
-  SecretInput,
-  SspiPackage,
+import {
+  type Account,
+  type AccountConfig,
+  type Attendee,
+  type AuthConfig,
+  type AutomaticRepliesIssue,
+  type AutomaticRepliesSettings,
+  type BusyPeriod,
+  type Calendar,
+  CATEGORY_PRESET_RGB,
+  type CategoryColor,
+  type DiscoveredAccount,
+  type ExchangeCategory,
+  type ExchangeCategoryIssue,
+  type ExchangeCategorySettings,
+  type ExchangeEngine,
+  type ExchangeMailbox,
+  type ExchangeMailboxIssue,
+  type ExchangeMailboxSettings,
+  type ExchangeOptions,
+  type ExchangeWarning,
+  type Folder,
+  type InferenceClassification,
+  MAX_CATEGORY_NAME,
+  MAX_REPLY_CHARS,
+  type RoomAvailability,
+  type SecretInput,
+  type SspiPackage,
 } from "../../api/generated";
 import { charCount } from "../../text/chars";
+export {
+  CATEGORY_PRESET_RGB as PRESET_RGB,
+  MAX_CATEGORY_NAME,
+  MAX_REPLY_CHARS,
+} from "../../api/generated";
 
 // ---------------------------------------------------------------------------
 // Accounts
@@ -50,42 +58,10 @@ export function exchangeSourceId(accountId: string): string {
 // ---------------------------------------------------------------------------
 // Categories
 
-/** Longest category name (`MAX_CATEGORY_NAME`). */
-export const MAX_CATEGORY_NAME = 255;
-
-/** Outlook's preset colours (`CategoryColor::rgb`), `preset0` first. */
-export const PRESET_RGB: readonly string[] = [
-  "#e7a1a2",
-  "#f9ba89",
-  "#f7dd8f",
-  "#fcfa90",
-  "#78d168",
-  "#9fdcc9",
-  "#c6d2b0",
-  "#9db7e8",
-  "#b5a1e2",
-  "#daaec2",
-  "#dad9dc",
-  "#6b7994",
-  "#bfbfbf",
-  "#6f6f6f",
-  "#4f4f4f",
-  "#c11a25",
-  "#e2620d",
-  "#c79930",
-  "#b9b300",
-  "#368f2b",
-  "#329b7a",
-  "#778b45",
-  "#2858a5",
-  "#5c3fa3",
-  "#93446b",
-];
-
 /** The colour's RGB (`null` for `none`). */
 export function categoryRgb(color: CategoryColor): string | null {
   if (color === "none") return null;
-  return PRESET_RGB[Number(color.slice("preset".length))] ?? null;
+  return CATEGORY_PRESET_RGB[Number(color.slice("preset".length))] ?? null;
 }
 
 /** A readable text colour on the category colour (dark presets get white text). */
@@ -105,7 +81,7 @@ export function categoryTextRgb(color: CategoryColor): string | null {
   return luminance > 0.179 ? "#000000" : "#ffffff";
 }
 
-/** Mirrors `ExchangeCategorySettings::issues` plus duplicates among `others`. */
+/** `ExchangeCategorySettings::issues` plus duplicates among `others`. */
 export function categoryIssues(
   settings: ExchangeCategorySettings,
   others: readonly Pick<ExchangeCategory, "name">[],
@@ -152,7 +128,7 @@ export function focusOfQuery(text: string | null | undefined): InferenceClassifi
 // ---------------------------------------------------------------------------
 // Mailboxes
 
-/** Mirrors `ExchangeMailboxSettings::issues` (`own` = the account's address) plus duplicates. */
+/** `ExchangeMailboxSettings::issues` (`own` = the account's address) plus duplicates. */
 export function mailboxIssues(
   settings: ExchangeMailboxSettings,
   own: string,
@@ -234,12 +210,9 @@ export function newMailboxSettings(): ExchangeMailboxSettings {
 // ---------------------------------------------------------------------------
 // Automatic replies
 
-/** Longest reply (`MAX_REPLY_CHARS`). */
-export const MAX_REPLY_CHARS = 32_000;
-
 const UTC_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
-/** Mirrors `AutomaticRepliesSettings::issues`. */
+/** `AutomaticRepliesSettings::issues`. */
 export function automaticRepliesIssues(
   settings: AutomaticRepliesSettings,
 ): AutomaticRepliesIssue[] {

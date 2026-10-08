@@ -18,12 +18,10 @@
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
+import { forEachArg } from "../../scripts/lib/args.mjs";
+import { repoRoot, runMain } from "../../scripts/lib/program.mjs";
 import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, "..", "..");
 
 /** @typedef {{ update: boolean, review: boolean, playwright: string[] }} Options */
 
@@ -34,16 +32,12 @@ const repoRoot = path.resolve(here, "..", "..");
 export function parseArgs(argv) {
   /** @type {Options} */
   const options = { update: false, review: true, playwright: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    if (arg === "--") {
-      options.playwright = argv.slice(i + 1);
-      break;
-    }
-    if (arg === "--update") options.update = true;
+  forEachArg(argv, (arg, { rest }) => {
+    if (arg === "--") options.playwright = rest();
+    else if (arg === "--update") options.update = true;
     else if (arg === "--no-review") options.review = false;
     else throw new Error(`unknown argument ${arg}`);
-  }
+  });
   return options;
 }
 
@@ -62,9 +56,10 @@ export function playwrightArgs(options) {
   ];
 }
 
-async function main() {
+/** @param {string[]} argv */
+async function main(argv) {
   assertWorkFolder("npm run visual");
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseArgs(argv);
   // The Playwright CLI through node itself (no shell for `npx.cmd`).
   const cli = path.join(repoRoot, "node_modules", "@playwright", "test", "cli.js");
   const args = playwrightArgs(options);
@@ -89,14 +84,4 @@ async function main() {
   return status;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().then(
-    (status) => {
-      process.exitCode = status;
-    },
-    (/** @type {unknown} */ error) => {
-      console.error(error instanceof Error ? error.message : error);
-      process.exitCode = 2;
-    },
-  );
-}
+await runMain(import.meta.url, main);

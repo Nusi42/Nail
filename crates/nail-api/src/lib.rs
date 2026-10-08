@@ -170,6 +170,7 @@ pub mod smartcard;
 pub mod sync;
 pub mod triage;
 pub mod ts_constants;
+pub mod ts_vectors;
 pub mod ui_state;
 pub mod views;
 pub mod windows;
@@ -296,7 +297,7 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     accounts::SecretKind::export_all(&cfg)?;
     McpScope::export_all(&cfg)?;
     ConfigFile::export_all(&cfg)?;
-    // P3 (ADR 0164): the UI mirrors the reach rules and shows issues.
+    // P3 (ADR 0164): the UI shows the reach of a conversation and the issues.
     ConversationReach::export_all(&cfg)?;
     mail_actions::MailActionIssue::export_all(&cfg)?;
     // M2a types reachable only through optional fields, or not at all.
@@ -485,6 +486,10 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
     plugins::PluginPreview::export_all(&cfg)?;
     plugins::PluginJobTrigger::export_all(&cfg)?;
     plugins::ComposerEdit::export_all(&cfg)?;
+    // Q2: the kinds of writes and their policies (`PluginActionKind`, the
+    // generated `ACTION_KIND_RULES`).
+    ActionKind::export_all(&cfg)?;
+    ActionPolicyMode::export_all(&cfg)?;
     ts_constants::plugin_constants()
         .map_err(std::io::Error::other)?
         .write(out_dir)?;
@@ -516,6 +521,10 @@ fn write_index(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     std::fs::write(out_dir.join(TS_INDEX_FILE), index)?;
 
     files.push(TS_INDEX_FILE.to_owned());
+    // The constants as JSON, for plain JavaScript (not a module of the index).
+    if out_dir.join(ts_constants::JSON_CONSTANTS_FILE).exists() {
+        files.push(ts_constants::JSON_CONSTANTS_FILE.to_owned());
+    }
     files.sort();
     Ok(files)
 }

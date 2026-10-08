@@ -211,4 +211,64 @@ mod tests {
         let archive = folder("Archive", FolderRole::Archive);
         assert_eq!(resolve(&a, &archive).bodies, BodyPolicy::HeadersOnly);
     }
+
+    /// The UI's ports (`resolvePolicy`, `withFolderRule` in
+    /// `ui/src/features/sync/model.ts`) run over these vectors
+    /// (`NAIL_UPDATE_SNAPSHOTS=1` regenerates them).
+    #[test]
+    fn ts_vectors() {
+        use nail_api::ts_vectors::Vectors;
+        use serde_json::json;
+        let mut v = Vectors::default();
+        let mut rules = account();
+        set_rule(
+            &mut rules,
+            "Lists/rust",
+            Some(BodyPolicy::Full),
+            Some(false),
+            None,
+        );
+        set_rule(&mut rules, "inbox", None, None, Some(false));
+        rules.sync.folders.push(FolderPolicy {
+            folder: FolderMatch::Path("Lists/rust".into()),
+            bodies: None,
+            enabled: None,
+            idle: Some(true),
+        });
+        let mut pop3 = serde_json::to_value(account()).unwrap();
+        pop3["incoming"]["protocol"] = json!("pop3");
+        pop3["incoming"]["options"] = json!({});
+        let pop3: AccountConfig = serde_json::from_value(pop3).unwrap();
+        let folders = [
+            folder("INBOX", FolderRole::Inbox),
+            folder("Archive", FolderRole::Archive),
+            folder("Lists/rust", FolderRole::Other),
+            folder("Other", FolderRole::Other),
+        ];
+        for a in [account(), rules.clone(), pop3] {
+            for f in &folders {
+                v.case("resolvePolicy", json!([a, f]), resolve(&a, f));
+            }
+        }
+        for (path, bodies, enabled, idle) in [
+            ("Lists/rust", Some(BodyPolicy::HeadersOnly), None, None),
+            ("Lists/rust", None, None, None),
+            ("New", None, Some(true), None),
+            (
+                "INBOX",
+                Some(BodyPolicy::Recent { days: 7 }),
+                Some(true),
+                Some(true),
+            ),
+        ] {
+            let mut edited = rules.clone();
+            set_rule(&mut edited, path, bodies, enabled, idle);
+            v.case(
+                "withFolderRule",
+                json!([rules, path, bodies, enabled, idle]),
+                edited,
+            );
+        }
+        v.check("sync");
+    }
 }

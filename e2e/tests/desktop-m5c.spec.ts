@@ -1,20 +1,17 @@
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
-  connectDesktop,
   expectWindowsInBackground,
   shellControl,
-  skipFirstRun,
-  startDesktop,
-  type DesktopApp,
+  desktopTests,
+  configWithIdentity,
+  desktopPerTest,
 } from "../support/desktop";
-import { writeFileSync } from "node:fs";
-import path from "node:path";
-import { freePort, tempDir } from "../support/nail";
 import {
   composerWindow,
   composerWindows,
   newMessageButton,
   runFromPalette,
+  messageRows,
 } from "../support/views";
 import { defined } from "../support/defined";
 
@@ -30,48 +27,18 @@ import { defined } from "../support/defined";
  * CI it runs only with `NAIL_E2E_DESKTOP=1`; locally it always runs.
  */
 
-test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
-test.skip(
-  !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
-  "set NAIL_E2E_DESKTOP=1 to run the desktop smoke tests in CI",
-);
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+desktopTests();
 test.use({ actionTimeout: 30_000 });
 
-let app: DesktopApp | undefined;
+const launchApp = desktopPerTest();
+/** The connection of the test's app (its pop-out windows are pages of it). */
 let browser: Browser | undefined;
 
-test.afterEach(async () => {
-  await browser?.close().catch(() => undefined);
-  await app?.stop();
-  app = undefined;
-  browser = undefined;
-});
-
-/** An accounts.kdl with one identity (switched off: nothing connects). */
-function configWithIdentity(): string {
-  const dir = tempDir("desktop-config");
-  writeFileSync(
-    path.join(dir, "accounts.kdl"),
-    [
-      'account "work" email="ada@example.org" name="Work" enabled=#false {',
-      '    imap host="127.0.0.1" port=1 tls="plaintext"',
-      '    smtp host="127.0.0.1" port=1 tls="plaintext"',
-      '    identity "ada@example.org" name="Ada Lovelace"',
-      "}",
-      "",
-    ].join("\n"),
-  );
-  return dir;
-}
-
 async function launch(): Promise<Page> {
-  app = await startDesktop(freePort(), { args: ["--config-dir", configWithIdentity()] });
-  const connected = await connectDesktop(app);
-  browser = connected.browser;
-  const page = connected.page;
-  await skipFirstRun(page);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible({
+  const session = await launchApp({ args: ["--config-dir", configWithIdentity()] });
+  browser = session.browser;
+  const page = session.page;
+  await expect(messageRows(page).first()).toBeVisible({
     timeout: 60_000,
   });
   return page;

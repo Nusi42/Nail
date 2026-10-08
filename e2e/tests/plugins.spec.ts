@@ -1,11 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
-import { nailBinary, startNail, type NailServer } from "../support/nail";
-import { commandManifest, followUpPackage, packFiles, writePluginFolder } from "../support/plugins";
+import { expect, type Page } from "@playwright/test";
+import { nailFixture } from "../support/nail";
+import { axeViolations } from "../support/axe";
+import {
+  commandManifest,
+  followUpPackage,
+  packFiles,
+  writePluginFolder,
+  installPlugin,
+  pluginDevConsole,
+} from "../support/plugins";
 import {
   openSettingsTab,
   READER_SUBJECT,
@@ -13,6 +18,7 @@ import {
   readerToolbar,
   showView,
   viewRegion,
+  messageRows,
 } from "../support/views";
 
 /**
@@ -24,61 +30,24 @@ import {
  * refused a body; a runaway plug-in stopped and flagged while the UI keeps
  * working; `nail plugin dev` loading a folder and reloading it on changes.
  */
-const test = base.extend<{ nail: NailServer }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
-  nail: async ({}, use) => {
-    const server = await startNail();
-    await use(server);
-    await server.stop();
-  },
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-
-/** Every axe violation (plug-in dialogs and toasts are drawn by Nail). */
-async function violations(page: Page) {
-  const results = await new AxeBuilder({ page }).analyze();
-  return results.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    targets: v.nodes.map((n) => n.target.join(" ")),
-  }));
-}
-
-/** The settings view at the section of a former settings tab (M5b). */
-function openSettings(page: Page, tab: string): Promise<Locator> {
-  return openSettingsTab(page, tab);
-}
+const test = nailFixture();
 
 /**
  * Installs a package through Settings → Plug-ins → "Install a plug-in…",
  * allowing every permission, and adds its suggested places to the layout.
  * Leaves the settings window open.
  */
-async function install(page: Page, file: string, title: RegExp): Promise<Locator> {
-  const settings = await openSettings(page, "Plug-ins");
-  await settings.getByRole("button", { name: "Install a plug-in…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Install a plug-in" });
-  await dialog.getByRole("textbox", { name: "Path of the .nailplugin file" }).fill(file);
-  await dialog.getByRole("button", { name: "Check the plug-in" }).click();
-  await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
-  await dialog.getByRole("button", { name: "Install", exact: true }).click();
-  await expect(dialog.getByText(/is installed\./)).toBeVisible();
-  await dialog.getByRole("button", { name: /^Add \d+ items? to the layout$/ }).click();
-  await expect(dialog.getByText(/Added to your layout/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
-  return settings;
-}
+const install = (page: Page, file: string, title: RegExp) =>
+  installPlugin(page, file, title, { place: true });
 
 test("the full Follow-up example installs with its permissions, creates a task and is placed in layout.kdl", async ({
   page,
   nail,
 }) => {
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
 
-  const settings = await openSettings(page, "Plug-ins");
+  const settings = await openSettingsTab(page, "Plug-ins");
   await expect(settings.getByText("No plug-ins are installed.")).toBeVisible();
   await settings.getByRole("button", { name: "Install a plug-in…" }).click();
   const dialog = page.getByRole("dialog", { name: "Install a plug-in" });
@@ -124,14 +93,14 @@ test("the full Follow-up example installs with its permissions, creates a task a
   await showView(page, "Mail");
 
   // Its button sits in the reader toolbar; it opens the plug-in's dialog.
-  const row = rows(page).filter({ hasText: "Welcome to Nail" });
+  const row = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();
   // Unranked, it may sit in "More" when the bar is narrow (M5b).
   await readerAction(page, "Follow up…");
   const plugin = page.getByRole("dialog", { name: "Follow up" });
   await expect(plugin.getByText("from Follow up")).toBeVisible();
   await expect(plugin.getByText(/Follow up on “Welcome to Nail/)).toBeVisible();
-  expect(await violations(page), "plug-in dialog").toEqual([]);
+  expect(await axeViolations(page), "plug-in dialog").toEqual([]);
   await plugin.getByLabel("Due", { exact: true }).fill("2031-03-05");
   await plugin.getByLabel("Note").fill("Answer Ada");
   await plugin.getByRole("button", { name: "Create task" }).click();
@@ -141,7 +110,7 @@ test("the full Follow-up example installs with its permissions, creates a task a
   // writes run without a confirmation by default)…
   const toast = page.locator('[data-part="plugin.notification"]');
   await expect(toast.filter({ hasText: "Follow-up task created, due 2031-03-05" })).toBeVisible();
-  expect(await violations(page), "plug-in notification").toEqual([]);
+  expect(await axeViolations(page), "plug-in notification").toEqual([]);
   // …the dialog now knows about it…
   await readerAction(page, "Follow up…");
   await expect(
@@ -156,7 +125,7 @@ test("the full Follow-up example installs with its permissions, creates a task a
   await expect(tasks.getByText(/Follow up: Welcome to Nail/)).toBeVisible();
   // The plug-in's log records the write.
   await showView(page, "Mail");
-  const log = await openSettings(page, "Plug-ins");
+  const log = await openSettingsTab(page, "Plug-ins");
   await log.getByRole("button", { name: "Log" }).click();
   await expect(log.getByText("Changed your data: nail.tasks.create")).toBeVisible();
 });
@@ -181,18 +150,18 @@ test("a plug-in without mail.read.body is refused the message body", async ({ pa
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Peek 1\.0\.0$/);
   await showView(page, "Mail");
 
-  await rows(page).filter({ hasText: "Welcome to Nail" }).click();
+  await messageRows(page).filter({ hasText: "Welcome to Nail" }).click();
   await readerAction(page, "Peek at the body");
   await expect(
     page.locator('[data-part="plugin.notification"]').filter({ hasText: "Refused: forbidden" }),
   ).toBeVisible();
 
   // The plug-in's log names the missing permission.
-  const settings = await openSettings(page, "Plug-ins");
+  const settings = await openSettingsTab(page, "Plug-ins");
   await settings.getByRole("button", { name: "Log" }).click();
   await expect(
     settings.getByText(
@@ -214,14 +183,14 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Spinner 1\.0\.0$/);
   await showView(page, "Mail");
 
-  await rows(page).filter({ hasText: "Welcome to Nail" }).click();
+  await messageRows(page).filter({ hasText: "Welcome to Nail" }).click();
   await readerAction(page, "Spin forever");
   // The UI keeps working while the plug-in loops: another message opens.
-  const other = rows(page).nth(1);
+  const other = messageRows(page).nth(1);
   const subject = (
     await other.locator('[data-part="message-list.row.subject"]').innerText()
   ).trim();
@@ -234,7 +203,7 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
       .locator('[data-part="plugin.notification"]')
       .filter({ hasText: "Spinner was stopped because it took too long." }),
   ).toBeVisible({ timeout: 15_000 });
-  const settings = await openSettings(page, "Plug-ins");
+  const settings = await openSettingsTab(page, "Plug-ins");
   const entry = settings.locator('[data-part="plugin-manager.plugin"][data-state="crashed"]');
   await expect(entry).toBeVisible();
   await expect(entry).toContainText("Stopped after a problem");
@@ -247,34 +216,6 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
   if ((await spin.count()) > 0) await expect(spin).toBeDisabled();
   await page.keyboard.press("Escape");
 });
-
-/** A running `nail plugin dev` console: its stdout lines. */
-interface Console {
-  child: ChildProcess;
-  lines: string[];
-  waitFor(text: string): Promise<void>;
-}
-
-function devConsole(folder: string, url: string): Console {
-  const child = spawn(nailBinary(), ["plugin", "dev", folder, "--url", url], {
-    stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, NAIL_LOG: "error", NAIL_LOCALE: "en" },
-  });
-  const lines: string[] = [];
-  createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
-  return {
-    child,
-    lines,
-    async waitFor(text: string) {
-      await expect
-        .poll(() => lines.some((l) => l.includes(text)), {
-          message: `console line with "${text}"; saw ${JSON.stringify(lines)}`,
-          timeout: 20_000,
-        })
-        .toBe(true);
-    },
-  };
-}
 
 test("nail plugin dev loads a folder and reloads it on changes", async ({ page, nail }) => {
   // Its name and command title come from its own locale file.
@@ -301,14 +242,14 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
   mkdirSync(path.join(folder, "locales"));
   const ftl = path.join(folder, "locales", "en.ftl");
   writeFileSync(ftl, locale("Dev hello", "Say hello"));
-  const dev = devConsole(folder, nail.url);
+  const dev = pluginDevConsole(folder, ["--url", nail.url]);
   try {
     await dev.waitFor("Loaded Dev hello 1.0.0");
     await dev.waitFor("activated: Hello one");
 
     await page.goto(nail.url);
-    await expect(rows(page).first()).toBeVisible();
-    const settings = await openSettings(page, "Plug-ins");
+    await expect(messageRows(page).first()).toBeVisible();
+    const settings = await openSettingsTab(page, "Plug-ins");
     const entry = settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]');
     await expect(entry).toContainText("Dev hello 1.0.0");
     await expect(entry).toContainText("Loaded from the development folder");
@@ -317,7 +258,7 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     await settings.getByRole("button", { name: /^Add \d+ items? to the layout$/ }).click();
     await expect(settings.getByText(/Added to your layout/)).toBeVisible();
     await showView(page, "Mail");
-    await rows(page).filter({ hasText: "Welcome to Nail" }).click();
+    await messageRows(page).filter({ hasText: "Welcome to Nail" }).click();
     await readerAction(page, "Say hello");
     const toasts = page.locator('[data-part="plugin.notification"]');
     await expect(toasts.filter({ hasText: "Hello one" })).toBeVisible();
@@ -332,7 +273,7 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     expect(dev.lines.filter((l) => l.includes("%plugin-name%"))).toEqual([]);
     await readerAction(page, "Say hello");
     await expect(toasts.filter({ hasText: "Hello two" })).toBeVisible();
-    const again = await openSettings(page, "Plug-ins");
+    const again = await openSettingsTab(page, "Plug-ins");
     await expect(again.locator('[data-part="plugin-manager.plugin"]')).toContainText(
       "Dev hello 1.0.1",
     );
@@ -357,7 +298,7 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
       });
       await page.keyboard.press("Escape");
     }).toPass({ timeout: 15_000 });
-    const edited = await openSettings(page, "Plug-ins");
+    const edited = await openSettingsTab(page, "Plug-ins");
     await expect(edited.locator('[data-part="plugin-manager.plugin"]')).toContainText(
       "Dev hello edited 1.0.1",
     );

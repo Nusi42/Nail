@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { AttachmentInfo, PluginInfo } from "../../api/generated";
+import extensionVectors from "../../../../crates/nail-api/fixtures/ts-vectors/plugin-extensions.json";
+import { describeVectors } from "../../test/vectors";
+import { isPluginName, parsePluginCommandId, parsePluginPanelId, pluginCommandId } from "./ids";
 import {
   applyComposerEdit,
   attachmentActionsFor,
   blockFence,
   composerActionsFor,
   contributionItems,
+  extensionId,
   contributionMessageId,
   hasGrant,
   hookMessageId,
@@ -207,4 +211,15 @@ describe("activity and previews", () => {
     ).toBeNull();
     expect(previewImageSrc({ kind: "image", mimeType: "image/png", data: 'a"b' })).toBeNull();
   });
+});
+
+describeVectors("plug-in extensions", extensionVectors, {
+  extensionId,
+  parseExtensionId,
+  matchesFile,
+  hostMatches,
+  isPluginName,
+  pluginCommandId,
+  parsePluginCommandId,
+  parsePluginPanelId,
 });

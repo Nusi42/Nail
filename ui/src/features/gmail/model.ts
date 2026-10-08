@@ -4,16 +4,15 @@
  * filters, and a mirror of `GmailLabelSettings::issues` for immediate
  * feedback in the editor (the core validates for real).
  */
-import type {
-  GmailCategory,
-  GmailLabel,
-  GmailLabelIssue,
-  GmailLabelSettings,
+import {
+  type GmailCategory,
+  type GmailLabel,
+  type GmailLabelIssue,
+  type GmailLabelSettings,
+  MAX_LABEL_NAME,
 } from "../../api/generated";
 import { charCount, chars } from "../../text/chars";
-
-/** Longest label name (`nail_api::gmail::MAX_LABEL_NAME`). */
-export const MAX_LABEL_NAME = 225;
+export { MAX_LABEL_NAME } from "../../api/generated";
 
 /** Gmail's system label ids; user labels cannot take these names. */
 export const SYSTEM_LABELS = [

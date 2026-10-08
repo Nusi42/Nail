@@ -15,6 +15,7 @@ import type {
   TextOp,
 } from "../../api/generated";
 import { nonEmpty } from "../../text/empty";
+export { TEXT_OP_VALUES as TEXT_OPS } from "../../api/generated";
 
 export type ConditionKind = Condition["type"];
 export type ActionKind = RuleAction["type"];
@@ -59,14 +60,6 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   "reply",
   "notify",
   "stop",
-];
-
-export const TEXT_OPS: readonly TextOp[] = [
-  "contains",
-  "equals",
-  "starts-with",
-  "ends-with",
-  "regex",
 ];
 
 export const TRIGGER_KINDS: readonly TriggerKind[] = [

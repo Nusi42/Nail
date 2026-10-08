@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { MenuItem, ResolvedLayout } from "../../api/generated";
+import type { JsonValue, MenuItem, ResolvedLayout } from "../../api/generated";
+import menusVectors from "../../../../crates/nail-api/fixtures/ts-vectors/menus.json";
+import { defaultLayout, describeVectors } from "../../test/vectors";
 import {
   contextMenuName,
   keyContextOf,
   resolveMenu,
+  shortcut,
   withoutConversationShortcuts,
   withoutDisabled,
 } from "./resolve";
@@ -48,7 +51,7 @@ function layout(menu: MenuItem[]): ResolvedLayout {
 
 const header = (label: string): MenuItem => ({ type: "header", label });
 
-// Mirrors `nail_api::menus::tests::headers_are_kept_only_above_entries`.
+// The UI's own cases; the Rust rules' answers are the vectors at the end.
 describe("menu headings (M5b)", () => {
   it("keeps headings only above entries", () => {
     const l = layout([
@@ -78,7 +81,6 @@ describe("menu headings (M5b)", () => {
   });
 });
 
-// Mirrors `nail_api::menus` tests.
 describe("context menus", () => {
   it("resolves labels, icons and shortcuts and normalizes separators", () => {
     const l = layout([
@@ -215,4 +217,13 @@ describe("card menus (P3, ADR 0169)", () => {
       },
     ]);
   });
+});
+
+describeVectors("context menus", menusVectors, {
+  keyContextOf,
+  contextMenuName,
+  resolveMenu: (_layout: string, name: string, context: string) =>
+    resolveMenu(defaultLayout(), name, context),
+  shortcut: (_layout: string, action: string, args: JsonValue[], context: string) =>
+    shortcut(defaultLayout(), action, args, context),
 });

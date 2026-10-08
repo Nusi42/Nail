@@ -14,31 +14,34 @@
  * (from `pickAnswers`, else a plausible path), else `unsupported`
  * (`desktop-unavailable`) like `nail serve`.
  */
-import type {
-  AccountProposal,
-  BackupContents,
-  BackupManifest,
-  DiagnosticsEntry,
-  DiagnosticsManifest,
-  DiagnosticsOptions,
-  ExportFormat,
-  ExportSource,
-  ImportOptions,
-  ImportPreview,
-  ImportSource,
-  ItemIssue,
-  JobCounts,
-  JobKind,
-  JobPhase,
-  JobReport,
-  JobStatus,
-  PathPick,
-  PortabilityIssueCode,
-  Request,
-  Response,
-  RestoreAction,
-  RestorePlan,
-  RuleProposal,
+import {
+  BACKUP_ISSUE_MESSAGE_IDS,
+  DIAGNOSTICS_ISSUE_MESSAGE_IDS,
+  PORTABILITY_ISSUE_CODE_MESSAGE_IDS,
+  type AccountProposal,
+  type BackupContents,
+  type BackupManifest,
+  type DiagnosticsEntry,
+  type DiagnosticsManifest,
+  type DiagnosticsOptions,
+  type ExportFormat,
+  type ExportSource,
+  type ImportOptions,
+  type ImportPreview,
+  type ImportSource,
+  type ItemIssue,
+  type JobCounts,
+  type JobKind,
+  type JobPhase,
+  type JobReport,
+  type JobStatus,
+  type PathPick,
+  type PortabilityIssueCode,
+  type Request,
+  type Response,
+  type RestoreAction,
+  type RestorePlan,
+  type RuleProposal,
 } from "../../api/generated";
 import { mockAccountConfig } from "../../api/mockData";
 import type { MockCore } from "../../api/mockMail";
@@ -182,7 +185,7 @@ function issue(
     severity,
     code,
     detail,
-    localized: { id: `portability-issue-${code}` },
+    localized: { id: PORTABILITY_ISSUE_CODE_MESSAGE_IDS[code] },
   };
 }
 
@@ -706,7 +709,7 @@ function createBackup(
 ): Response {
   const state = core.data.features.portability;
   const problem = [...backupContentsIssues(contents), ...passphraseIssues(passphrase)][0];
-  if (problem) return fail("invalid_request", problem, `backup-issue-${problem}`);
+  if (problem) return fail("invalid_request", problem, BACKUP_ISSUE_MESSAGE_IDS[problem]);
   if (!isAbsolutePath(path)) {
     return fail(
       "invalid_request",
@@ -824,7 +827,8 @@ function previewRestore(
   const opened = openBackup(state, path, passphrase);
   if (opened.error) return opened.error;
   const problem = contents ? backupContentsIssues(contents)[0] : undefined;
-  if (problem !== undefined) return fail("invalid_request", problem, `backup-issue-${problem}`);
+  if (problem !== undefined)
+    return fail("invalid_request", problem, BACKUP_ISSUE_MESSAGE_IDS[problem]);
   const planned = restoreActions(opened.backup, contents);
   const plan: RestorePlan = {
     manifest: structuredClone(opened.backup.manifest),
@@ -979,7 +983,7 @@ function diagnosticsManifest(core: MockCore, options: DiagnosticsOptions): Diagn
 
 function checkDiagnostics(options: DiagnosticsOptions): Response | null {
   const problem = diagnosticsIssues(options)[0];
-  return problem ? fail("invalid_request", problem, `diagnostics-issue-${problem}`) : null;
+  return problem ? fail("invalid_request", problem, DIAGNOSTICS_ISSUE_MESSAGE_IDS[problem]) : null;
 }
 
 // ---------------------------------------------------------------------------

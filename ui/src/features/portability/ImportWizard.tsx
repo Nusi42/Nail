@@ -15,13 +15,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type {
-  AccountProposal,
-  ImportFormat,
-  ImportPreview,
-  JobReport,
-  LocalizedMessage,
-  RuleProposal,
+import {
+  IMPORT_COLLECTION_KIND_MESSAGE_IDS,
+  type AccountProposal,
+  type ImportFormat,
+  type ImportPreview,
+  type JobReport,
+  type LocalizedMessage,
+  type RuleProposal,
 } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { DATE_ONLY, useDateFormat } from "../../i18n/format";
@@ -318,7 +319,7 @@ function OptionsStep({
             value: c.key,
             label: c.name,
             hint: t("portability-import-collection-size", {
-              kind: t(`import-collection-${c.kind}`),
+              kind: t(IMPORT_COLLECTION_KIND_MESSAGE_IDS[c.kind]),
               count: c.items,
             }),
           }))}

@@ -76,6 +76,13 @@ pub const POP_OUT_ROUTE_PREFIX: &str = "#/window/";
 /// The prefix of a pop-out's OS window label (Tauri): `popout-<kind>` or
 /// `popout-<kind>:<instance>`.
 pub const POP_OUT_LABEL_PREFIX: &str = "popout-";
+/// The DOM event a pop-out's page gets when the user closes its OS window
+/// (the close button, Alt+F4, the taskbar): the page closes the window it
+/// shows the way the window's own close button does — a composer with
+/// unsaved changes asks first — and the OS window closes when the page
+/// closes it (`ClosePopOut`). The desktop shell dispatches it; the UI
+/// listens for it (generated `constants.ts`).
+pub const POP_OUT_CLOSE_EVENT: &str = "nail-pop-out-close-requested";
 
 // ---------------------------------------------------------------------------
 // Ids

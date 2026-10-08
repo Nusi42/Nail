@@ -20,6 +20,7 @@ import type {
   Response,
 } from "./generated";
 import type { MockCore } from "./mockMail";
+import { EDIT_KIND_MESSAGE_IDS } from "./generated";
 
 /** The requests answered here. */
 export const EDIT_HISTORY_REQUESTS = [
@@ -150,7 +151,7 @@ export function recordMockEdit(
     entry: {
       id: `e${String(state.nextId)}`,
       kind,
-      label: { id: `edit-kind-${kind}` },
+      label: { id: EDIT_KIND_MESSAGE_IDS[kind] },
       at: new Date().toISOString(),
       files: [scope === "layout" ? "layout.kdl" : "theme.kdl"],
     },

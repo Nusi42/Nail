@@ -1,10 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { repoRoot, startNail, type NailServer } from "../support/nail";
+import { repoRoot, nailOnDemand } from "../support/nail";
 import { rpcOk } from "../support/remote";
-import { expectResponsive } from "../support/responsive";
-import { READER_SUBJECT } from "../support/views";
+import { expectResponsive, showListTab } from "../support/responsive";
+import { READER_SUBJECT, messageRows } from "../support/views";
 
 /**
  * P2 WP202 (ADR 0148): the conversation list on the real core — Design A
@@ -15,13 +15,8 @@ import { READER_SUBJECT } from "../support/views";
  * `<build dir>/screens/p1/p2-list-*` (the standard's folder).
  */
 
-let server: NailServer;
+const server = nailOnDemand();
 
-test.afterEach(async () => {
-  await server.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const SUBJECT = "Project Nightingale kickoff";
 
 /** The default layout with the mail window's lists set to `threads="expandable"`. */
@@ -55,12 +50,12 @@ async function appearance(theme: string, density: "comfortable" | "compact") {
 /** Only the list's elements count (other packages own the rest of the window). */
 const LIST_SCOPE = '[data-part="message-list"]';
 
-const nightingale = (page: Page) => rows(page).filter({ hasText: SUBJECT });
+const nightingale = (page: Page) => messageRows(page).filter({ hasText: SUBJECT });
 
 test("conversation rows show people, count, subject and the newest sender's preview", async ({
   page,
 }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(server.url);
   const row = nightingale(page);
@@ -98,16 +93,14 @@ const SWEEPS = [
 for (const { theme, density } of SWEEPS) {
   test(`conversation rows at every size in ${theme} (${density})`, async ({ page }) => {
     test.setTimeout(180_000);
-    server = await startNail({ seed: "demo-multi" });
+    await server.start({ seed: "demo-multi" });
     await appearance(theme, density);
     await page.goto(server.url);
     await expect(nightingale(page)).toHaveCount(1);
     await expectResponsive(page, `p2-list-rows-${theme}-${density}`, {
       scope: LIST_SCOPE,
       prepare: async () => {
-        // The narrow layout shows one pane at a time: the list's tab.
-        const tab = page.getByRole("tab", { name: "Messages", exact: true });
-        if (await tab.isVisible()) await tab.click();
+        await showListTab(page);
         await nightingale(page).click();
       },
     });
@@ -115,7 +108,7 @@ for (const { theme, density } of SWEEPS) {
 }
 
 test("expandable conversations open into their messages", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   writeFileSync(path.join(server.configDir, "layout.kdl"), expandableLayout());
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(server.url);
@@ -161,7 +154,7 @@ const EXPANDED_SWEEPS = [
 for (const { theme, density } of EXPANDED_SWEEPS) {
   test(`expanded conversations at every size in ${theme} (${density})`, async ({ page }) => {
     test.setTimeout(180_000);
-    server = await startNail({ seed: "demo-multi" });
+    await server.start({ seed: "demo-multi" });
     writeFileSync(path.join(server.configDir, "layout.kdl"), expandableLayout());
     await appearance(theme, density);
     await page.goto(server.url);
@@ -169,8 +162,7 @@ for (const { theme, density } of EXPANDED_SWEEPS) {
     await expectResponsive(page, `p2-list-expanded-${theme}-${density}`, {
       scope: LIST_SCOPE,
       prepare: async () => {
-        const tab = page.getByRole("tab", { name: "Messages", exact: true });
-        if (await tab.isVisible()) await tab.click();
+        await showListTab(page);
         const row = nightingale(page);
         if ((await row.getAttribute("aria-expanded")) !== "true") {
           await row.locator('[data-part="message-list.row.expander"]').click();

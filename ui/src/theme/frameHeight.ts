@@ -26,13 +26,8 @@
  * inside its frame (wide mail keeps its horizontal scrollbar: owner
  * decision 2026-10-05).
  */
-
-/** `nail_api::remote_content::FRAME_HEIGHT_MESSAGE`. */
-export const FRAME_HEIGHT_MESSAGE = "nail-frame-height";
-/** `nail_api::remote_content::RENDER_PARENT_PARAM`. */
-export const RENDER_PARENT_PARAM = "parent";
-/** `nail_api::remote_content::MAX_FRAME_HEIGHT` (CSS px). */
-export const MAX_FRAME_HEIGHT = 200_000;
+import { FRAME_HEIGHT_MESSAGE, MAX_FRAME_HEIGHT } from "../api/generated";
+export { FRAME_HEIGHT_MESSAGE, MAX_FRAME_HEIGHT, RENDER_PARENT_PARAM } from "../api/generated";
 
 /** The `sandbox` attribute of a local (`srcdoc`) mail frame. Never add `allow-scripts`. */
 export const SRCDOC_SANDBOX = "allow-same-origin";

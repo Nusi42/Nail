@@ -14,7 +14,13 @@ import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage, PinPrompt, PinPromptCloseReason } from "../../api/generated";
+import {
+  PIN_PROMPT_CLOSE_REASON_MESSAGE_IDS,
+  PIN_PURPOSE_MESSAGE_IDS,
+  type LocalizedMessage,
+  type PinPrompt,
+  type PinPromptCloseReason,
+} from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -144,7 +150,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
   const lastTry = prompt.attempts_left !== null && prompt.attempts_left <= 1;
   return (
     <form data-part="pin-prompt" data-purpose={prompt.purpose} onSubmit={submit}>
-      <p data-part="pin-prompt.purpose">{t(`pin-purpose-${prompt.purpose}`)}</p>
+      <p data-part="pin-prompt.purpose">{t(PIN_PURPOSE_MESSAGE_IDS[prompt.purpose])}</p>
       <p data-part="pin-prompt.token">
         {t("security-pin-token", { label: prompt.token_label, serial: prompt.token_serial })}
       </p>
@@ -244,7 +250,7 @@ export function PinPromptView({ close }: { close: () => void }) {
   return (
     <div data-part="pin-prompt" data-state="closed">
       <p data-part="pin-prompt.text" role="status">
-        {t(closed ? `pin-prompt-closed-${closed}` : "security-pin-nothing")}
+        {t(closed ? PIN_PROMPT_CLOSE_REASON_MESSAGE_IDS[closed] : "security-pin-nothing")}
       </p>
       <div data-part="wizard.buttons">
         <button

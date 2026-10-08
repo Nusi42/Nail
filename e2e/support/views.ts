@@ -14,6 +14,56 @@ export type ViewName = "Mail" | "Calendar" | "Contacts" | "Tasks" | "Settings";
 export const READER_SUBJECT =
   ':is([data-part="thread-view.subject"], [data-part="message-view.header.subject"])';
 
+/** The rows of the message list (of every list on the page). */
+export const messageRows = (scope: Page | Locator) =>
+  scope.locator('[data-part="message-list.row"]');
+
+/** The rows of the conversation (or message) `subject`. */
+export const messageRow = (scope: Page | Locator, subject: string) =>
+  messageRows(scope).filter({ hasText: subject });
+
+/** The message list (focus it for the list's keys). */
+export const messageList = (page: Page) => page.locator('[data-part="message-list"]');
+
+/** Fetches new mail now: F5 in the message list. */
+export async function refreshList(page: Page): Promise<void> {
+  await messageList(page).focus();
+  await page.keyboard.press("F5");
+}
+
+/** Moves the selected messages into `folder` (key `v` in the list, then the folder picker). */
+export async function moveSelectionTo(page: Page, folder: string): Promise<void> {
+  await messageList(page).focus();
+  await page.keyboard.press("v");
+  const move = page.getByRole("dialog", { name: "Move to folder" });
+  await move.getByRole("button", { name: folder, exact: true }).click();
+}
+
+/**
+ * Settings → Vacation reply: switches the reply of `account` on with
+ * `message` and saves.
+ */
+export async function saveVacationReply(
+  page: Page,
+  account: string,
+  message: string,
+): Promise<void> {
+  const settings = await openSettingsTab(page, "Vacation reply");
+  const vacation = settings.locator('[data-part="vacation-editor"]');
+  await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: account });
+  await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
+  await vacation.getByRole("textbox", { name: "Message" }).fill(message);
+  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+}
+
+/** In the open "Apply labels" dialog: checks `label` and applies. */
+export async function applyLabel(page: Page, label: string): Promise<void> {
+  const apply = page.getByRole("dialog", { name: "Apply labels" });
+  await apply.getByRole("checkbox", { name: label }).check();
+  await apply.getByRole("button", { name: "Apply" }).click();
+  await expect(apply).toBeHidden();
+}
+
 /** The navigation rail. */
 export const rail = (page: Page) => page.getByRole("navigation", { name: "Sections", exact: true });
 
@@ -30,6 +80,31 @@ export const FIRST_LOAD_TIMEOUT = 30_000;
 export async function openApp(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await expect(rail(page)).toBeVisible({ timeout: FIRST_LOAD_TIMEOUT });
+}
+
+/** Conversations in the unified inbox of `--seed demo-multi` (P2's demo threads included). */
+export const DEMO_MULTI_CONVERSATIONS = 17;
+
+/** A wide desktop window: the mail view shows every pane. */
+export const WIDE_WINDOW = { width: 1600, height: 1000 };
+
+/**
+ * Opens the app at `url` (in a window of `size`) and waits for the message
+ * list: `rows` rows, or at least one.
+ */
+export async function openMail(
+  page: Page,
+  url: string,
+  options: { rows?: number; size?: { width: number; height: number } } = {},
+): Promise<void> {
+  if (options.size) await page.setViewportSize(options.size);
+  await page.goto(url);
+  const rows = messageRows(page);
+  if (options.rows === undefined) {
+    await expect(rows.first()).toBeVisible({ timeout: FIRST_LOAD_TIMEOUT });
+  } else {
+    await expect(rows).toHaveCount(options.rows, { timeout: FIRST_LOAD_TIMEOUT });
+  }
 }
 
 /** A rail button by its view label (its name may carry a badge: "Mail, 3 unread messages"). */
@@ -67,6 +142,53 @@ export async function openSettings(page: Page, section?: string): Promise<Locato
     await expect(view.locator('[data-part="settings-page.title"]')).toHaveText(section);
   }
   return view;
+}
+
+/** Waits two animation frames (measured toolbars, lists and layout effects settle). */
+export async function nextFrames(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      }),
+  );
+}
+
+/**
+ * P3 (ADR 0164): "Delete permanently?" asks only for mail in Trash / Junk.
+ * Moves the conversation `subject` to Trash and selects it there; `click`
+ * are the options of both row clicks.
+ */
+export async function selectInTrash(
+  page: Page,
+  subject: string,
+  click: Parameters<Locator["click"]>[0] = {},
+): Promise<void> {
+  const row = messageRows(page).filter({ hasText: subject }).first();
+  const account = await row.getAttribute("data-account");
+  await row.click(click);
+  await page.keyboard.press("Delete");
+  await expect(row).toHaveCount(0);
+  await page
+    .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account ?? ""}"]`)
+    .first()
+    .click();
+  await messageRows(page).filter({ hasText: subject }).first().click(click);
+}
+
+/** Back to the unified inbox (Favorites → All inboxes). */
+export async function showAllInboxes(page: Page): Promise<void> {
+  await page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]').click();
+}
+
+/** Closes a window or dialog with its Close button and waits until it is gone. */
+export async function closeWindow(window: Locator): Promise<void> {
+  await window.getByRole("button", { name: "Close" }).first().click();
+  await expect(window).toBeHidden();
 }
 
 /** Runs an action from the command palette by searching for `query`. */
@@ -213,3 +335,29 @@ export const accountSectionNamed = (page: Page, name: string) =>
 /** A section's top-level inbox. */
 export const sectionInbox = (section: Locator) =>
   section.locator('[data-part="folder-tree.item"][data-role="inbox"][data-depth="0"]').first();
+
+/**
+ * Settings → Accounts → `name` → "Synchronize this account" → Save (the demo
+ * accounts that start switched off); `check` first looks at the account's
+ * settings (its protocol, its options). Back in Mail it waits until the
+ * account is online, opens its inbox and waits for `messages` rows.
+ */
+export async function syncAccount(
+  page: Page,
+  name: string,
+  messages: number,
+  check?: (settings: Locator) => Promise<void>,
+): Promise<Locator> {
+  const settings = await openSettingsTab(page, "Accounts");
+  await settings.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+  if (check !== undefined) await check(settings);
+  await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(settings.getByText("Settings saved.")).toBeVisible();
+  await showView(page, "Mail");
+  const account = accountSectionNamed(page, name);
+  await expect(account).toHaveAttribute("data-status", "online", { timeout: 30_000 });
+  await sectionInbox(account).click();
+  await expect(messageRows(page)).toHaveCount(messages, { timeout: 30_000 });
+  return account;
+}

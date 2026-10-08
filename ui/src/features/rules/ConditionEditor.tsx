@@ -3,17 +3,21 @@
  * and one row per condition, each kind with its own fields.
  */
 import { useId, useState } from "react";
-import type {
-  Account,
-  AddressField,
-  AuthMethod,
-  AuthResult,
-  Condition,
-  FolderRef,
-  FolderRole,
-  MessageFlag,
-  TextMatch,
-  TextOp,
+import {
+  type Account,
+  ADDRESS_FIELD_VALUES,
+  type AddressField,
+  AUTH_METHOD_VALUES,
+  AUTH_RESULT_VALUES,
+  type AuthMethod,
+  type AuthResult,
+  type Condition,
+  type FolderRef,
+  type FolderRole,
+  MESSAGE_FLAG_VALUES,
+  type MessageFlag,
+  type TextMatch,
+  type TextOp,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useAccounts } from "../../state/queries";
@@ -31,27 +35,13 @@ import {
   type ConditionKind,
   type ConditionPath,
 } from "./model";
-
-export const ADDRESS_FIELDS: readonly AddressField[] = [
-  "from",
-  "to",
-  "cc",
-  "recipients",
-  "reply-to",
-  "sender",
-];
-export const FLAGS: readonly MessageFlag[] = ["seen", "flagged", "answered", "draft"];
-export const ROLES: readonly FolderRole[] = ["inbox", "sent", "drafts", "archive", "junk", "trash"];
-export const AUTH_METHODS: readonly AuthMethod[] = ["dkim", "spf", "dmarc"];
-export const AUTH_RESULTS: readonly AuthResult[] = [
-  "pass",
-  "fail",
-  "softfail",
-  "neutral",
-  "none",
-  "temperror",
-  "permerror",
-];
+import { SPECIAL_USE_ROLES } from "../../widgets/folderNames";
+export {
+  ADDRESS_FIELD_VALUES as ADDRESS_FIELDS,
+  AUTH_METHOD_VALUES as AUTH_METHODS,
+  AUTH_RESULT_VALUES as AUTH_RESULTS,
+  MESSAGE_FLAG_VALUES as FLAGS,
+} from "../../api/generated";
 
 const choices = (values: readonly string[], prefix: string): Choice[] =>
   values.map((value) => ({ value, label: `${prefix}${value}` }));
@@ -159,7 +149,7 @@ export function FolderRefFields({
           labelId="rules-folder-role"
           name={`${name}-role`}
           value={value.role}
-          choices={choices(ROLES, "rules-role-")}
+          choices={choices(SPECIAL_USE_ROLES, "rules-role-")}
           onChange={(role) => {
             onChange({ ...value, role: role as FolderRole });
           }}
@@ -199,7 +189,7 @@ function LeafFields({
             labelId="rules-field"
             name={`${name}-field`}
             value={c.field}
-            choices={choices(ADDRESS_FIELDS, "rules-field-")}
+            choices={choices(ADDRESS_FIELD_VALUES, "rules-field-")}
             onChange={(field) => {
               onChange({ ...c, field: field as AddressField });
             }}
@@ -360,7 +350,7 @@ function LeafFields({
             labelId="rules-flag"
             name={`${name}-flag`}
             value={c.flag}
-            choices={choices(FLAGS, "rules-flag-")}
+            choices={choices(MESSAGE_FLAG_VALUES, "rules-flag-")}
             onChange={(flag) => {
               onChange({ ...c, flag: flag as MessageFlag });
             }}
@@ -420,7 +410,7 @@ function LeafFields({
             labelId="rules-auth-method"
             name={`${name}-method`}
             value={c.method}
-            choices={choices(AUTH_METHODS, "rules-auth-")}
+            choices={choices(AUTH_METHOD_VALUES, "rules-auth-")}
             onChange={(method) => {
               onChange({ ...c, method: method as AuthMethod });
             }}
@@ -429,7 +419,7 @@ function LeafFields({
             labelId="rules-auth-result"
             name={`${name}-result`}
             value={c.result}
-            choices={choices(AUTH_RESULTS, "rules-auth-result-")}
+            choices={choices(AUTH_RESULT_VALUES, "rules-auth-result-")}
             onChange={(result) => {
               onChange({ ...c, result: result as AuthResult });
             }}

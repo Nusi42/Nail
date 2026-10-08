@@ -7,9 +7,9 @@
 //! [`ResolvedLayout::settings`], [`ToolbarItem::More`],
 //! [`ResolvedLayout::toolbar_settings`]); this module holds the ids, widget
 //! kinds and action names the UI and `nail-config` share, and the small
-//! pure rules both sides implement (the UI mirrors them in
+//! pure rules both sides implement (the UI ports them in
 //! `ui/src/layout/{views,overflow}.ts` and `ui/src/widgets/folderPane.ts`,
-//! tested against the same cases).
+//! pinned by `crates/nail-api/tests/ts_vectors.rs`).
 //!
 //! * **Views:** `mail`, `calendar`, `contacts`, `tasks`, `settings`
 //!   ([`BUILTIN_VIEWS`]). [`VIEW_SHOW_ACTION`] `"<view>"` switches (the

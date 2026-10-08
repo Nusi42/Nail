@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJson } from "../../scripts/lib/json.mjs";
+import { runMain } from "../../scripts/lib/program.mjs";
 import { buildBase } from "../../scripts/visual-review/generate.mjs";
 
 /** @typedef {import("../../scripts/visual-review/generate.mjs").Entry} Entry */
@@ -140,11 +141,4 @@ function main() {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    process.exitCode = main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 2;
-  }
-}
+await runMain(import.meta.url, main);

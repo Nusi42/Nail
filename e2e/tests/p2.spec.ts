@@ -1,10 +1,20 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { buildOutputDir, startNail, type NailServer } from "../support/nail";
+import { buildOutputDir, nailPerTest } from "../support/nail";
 import { rpcOk } from "../support/remote";
-import { formatIssues, layoutIssues } from "../support/responsive";
-import { composerWindow, discardComposer } from "../support/views";
+import { expectNoIssuesIn } from "../support/responsive";
+import {
+  composerWindow,
+  discardComposer,
+  messageRows,
+  openMail,
+  DEMO_MULTI_CONVERSATIONS,
+  WIDE_WINDOW,
+  messageList,
+  messageRow,
+} from "../support/views";
+import { DINNER, LAB, LAB_TOTAL, READING } from "../support/demo";
 
 /**
  * P2 (conversations, ADR 0148) on the real core with `--seed demo-multi`:
@@ -27,24 +37,8 @@ import { composerWindow, discardComposer } from "../support/views";
  * 1600 × 1000 and 1024 × 700; the expandable list): `<build dir>/screens/p2/`.
  */
 
-const LAB = "Lab move: timeline and packing";
-const DINNER = "Dinner on Saturday?";
-const READING = "Reading group: October book";
-/** Messages of the Lab move conversation: 9 in the Inbox + 3 replies in Sent. */
-const LAB_TOTAL = 12;
+const server = nailPerTest({ seed: "demo-multi" });
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-const rowOf = (page: Page, subject: string) => rows(page).filter({ hasText: subject });
 const feed = (page: Page) => page.getByRole("feed");
 /** The message cards (the fold "N older messages" is an article of its own). */
 const cards = (page: Page) => feed(page).locator('[data-part="thread-view.card"]');
@@ -52,17 +46,12 @@ const fold = (page: Page) => page.locator('[data-part="thread-view.fold"]');
 /** The state words of an element (`data-state="expanded unread"`). */
 const hasState = (state: string) => new RegExp(`(^|\\s)${state}(\\s|$)`);
 
-async function openApp(page: Page, size = { width: 1600, height: 1000 }) {
-  await page.setViewportSize(size);
-  await page.goto(server.url);
-  // 32 messages in the unified inbox are 17 conversations (14 before P2's
-  // demo threads: Lab move, Dinner, Reading group).
-  await expect(rows(page)).toHaveCount(17);
-}
+const openApp = (page: Page, size = WIDE_WINDOW) =>
+  openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS, size });
 
 /** Selects a conversation row; returns the row and the reader's feed. */
 async function openConversation(page: Page, subject: string) {
-  const row = rowOf(page, subject);
+  const row = messageRow(page, subject);
   await expect(row).toHaveCount(1);
   await row.click();
   await expect(feed(page)).toBeVisible();
@@ -90,7 +79,7 @@ test.describe("conversation rows (Design A)", () => {
     page,
   }) => {
     await openApp(page);
-    const lab = rowOf(page, LAB);
+    const lab = messageRow(page, LAB);
     await expect(lab).toHaveCount(1);
     await expect(lab).toHaveAttribute("data-state", hasState("thread"));
     // The count covers the Inbox and the user's replies from Sent (WP201).
@@ -112,20 +101,20 @@ test.describe("conversation rows (Design A)", () => {
     );
 
     // The user is "me": the Dinner conversation started in Sent.
-    const dinner = rowOf(page, DINNER);
+    const dinner = messageRow(page, DINNER);
     await expect(dinner.locator('[data-part="message-list.row.count"]')).toHaveText("4");
     const me = dinner.locator('[data-part="message-list.row.participant"]', { hasText: "me" });
     await expect(me).toHaveAttribute("data-state", hasState("me"));
     await expect(dinner).toHaveAttribute("data-state", hasState("unread"));
 
     // A conversation of one message has no count.
-    const single = rowOf(page, "Welcome to Nail");
+    const single = messageRow(page, "Welcome to Nail");
     await expect(single.locator('[data-part="message-list.row.count"]')).toBeHidden();
 
     // Four people take part in the reading group.
-    await expect(rowOf(page, READING).locator('[data-part="message-list.row.count"]')).toHaveText(
-      "5",
-    );
+    await expect(
+      messageRow(page, READING).locator('[data-part="message-list.row.count"]'),
+    ).toHaveText("5");
   });
 
   test("names stay whole at ordinary window sizes: fewer names, not fragments", async ({
@@ -142,7 +131,7 @@ test.describe("conversation rows (Design A)", () => {
           names.filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
         );
       // At most a lone name may be cut (the newest sender, or "me" beside it).
-      const rowsWithCuts = await rows(page).evaluateAll(
+      const rowsWithCuts = await messageRows(page).evaluateAll(
         (all) =>
           all.filter((row) => {
             const names = [
@@ -156,7 +145,7 @@ test.describe("conversation rows (Design A)", () => {
       expect(rowsWithCuts, `${String(size.width)}: ${cut.join(" | ")}`).toBe(0);
       // First names when a row names several people.
       await expect(
-        rowOf(page, LAB).locator('[data-part="message-list.row.participant"]').first(),
+        messageRow(page, LAB).locator('[data-part="message-list.row.participant"]').first(),
       ).toHaveText("Linus");
     }
   });
@@ -177,7 +166,7 @@ test.describe("conversation rows (Design A)", () => {
       "Themes",
     );
     await openApp(page);
-    const lab = rowOf(page, LAB);
+    const lab = messageRow(page, LAB);
     await expect(lab.locator('[data-part="message-list.row.count"]')).toBeVisible();
     await expect(lab.locator('[data-part="message-list.row.participants"]')).toBeVisible();
     // The preview line is hidden: two lines remain.
@@ -193,7 +182,7 @@ test.describe("conversation rows (Design A)", () => {
     const work = page.locator('[data-part="folder-tree.section"][data-account="work"]');
     await work.locator('[data-part="folder-tree.item"]', { hasText: "Sent" }).first().click();
     // Nightingale, Dinner, Lab move, Reading group, Talk proposal.
-    await expect(rows(page)).toHaveCount(5);
+    await expect(messageRows(page)).toHaveCount(5);
     await openConversation(page, LAB);
     // Listed in Sent, the conversation is the user's three replies.
     await expect(cards(page)).toHaveCount(3);
@@ -337,11 +326,11 @@ test.describe("the card feed (Design A)", () => {
     // The list has the focus after the click: Enter moves it to the
     // conversation's selected (open) card, the newest, without Tab stops.
     await expect(row).toHaveAttribute("data-state", hasState("selected"));
-    await page.locator('[data-part="message-list"]').focus();
+    await messageList(page).focus();
     await page.keyboard.press("Enter");
     await expect(toggleOf(cards(page).last())).toBeFocused();
     // Back to the list, o does the same.
-    await page.locator('[data-part="message-list"]').focus();
+    await messageList(page).focus();
     await page.keyboard.press("o");
     await expect(toggleOf(cards(page).last())).toBeFocused();
 
@@ -396,10 +385,7 @@ test.describe("the card feed (Design A)", () => {
       await openApp(page, size);
       await openConversation(page, LAB);
       await page.getByRole("button", { name: "Expand all" }).click();
-      const issues = (await layoutIssues(page)).filter(
-        (i) => i.element.includes("thread-view") || i.element.includes("message-list"),
-      );
-      expect(issues, formatIssues(issues)).toEqual([]);
+      await expectNoIssuesIn(page, ["thread-view", "message-list"]);
     }
   });
 });
@@ -433,7 +419,7 @@ test.describe("conversations that open in the list (Design B, opt-in)", () => {
 
   test("a row opens into its messages; a child shows just that message", async ({ page }) => {
     await openApp(page);
-    const lab = rowOf(page, LAB);
+    const lab = messageRow(page, LAB);
     const expander = lab.locator('[data-part="message-list.row.expander"]');
     // A pointer-only chevron: keyboard users press → (the row is a treeitem
     // with aria-expanded), so screen readers skip it.
@@ -483,15 +469,14 @@ test.describe("conversations that open in the list (Design B, opt-in)", () => {
       { width: 800, height: 700 },
     ]) {
       await openApp(page, size);
-      const lab = rowOf(page, LAB);
+      const lab = messageRow(page, LAB);
       // "Sender: preview" as in Design A rows.
       await expect(lab.locator('[data-part="message-list.row.preview"]')).toContainText(
         "All my crates are labelled",
       );
       await lab.locator('[data-part="message-list.row.expander"]').click();
       await expect(page.locator('[data-part="message-list.child"]')).toHaveCount(LAB_TOTAL);
-      const issues = (await layoutIssues(page)).filter((i) => i.element.includes("message-list"));
-      expect(issues, formatIssues(issues)).toEqual([]);
+      await expectNoIssuesIn(page, ["message-list"]);
     }
   });
 });

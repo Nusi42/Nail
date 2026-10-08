@@ -10,8 +10,8 @@ node packages/create-nail-plugin/index.mjs <dir> [--template NAME] [--id ID] [--
 
 Creates `<dir>` from `template/`: `manifest.json`, `src/index.tsx`,
 `tsconfig.json`, `package.json` (scripts `build`, `watch`, `typecheck`,
-`package`), `scripts/build.mjs` (esbuild bundle), `scripts/pack.mjs`
-(`dist/<id>.nailplugin` via `@nail/plugin-api/tools`), `locales/en.ftl`,
+`package`: the SDK's `nail-plugin build` (esbuild bundle) and `nail-plugin
+pack` (`dist/<id>.nailplugin`)), `locales/en.ftl`,
 `README.md` and `.gitignore`. `--template` picks the starter:
 
 | Template | Files from | What it starts with |

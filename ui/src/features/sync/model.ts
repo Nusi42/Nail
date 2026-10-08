@@ -1,7 +1,8 @@
 /**
- * Pure helpers of the sync feature, mirroring `nail_api::accounts::SyncPolicy`
+ * Pure helpers of the sync feature, ports of `nail_api::accounts::SyncPolicy`
  * and the core's `sync_policy` module (ADR 0043): the effective policy of a
- * folder and editing the rule written for exactly one folder path.
+ * folder and editing the rule written for exactly one folder path; pinned by
+ * `crates/nail-core/src/sync_policy.rs` (its vectors run in `model.test.ts`).
  */
 import type {
   AccountConfig,

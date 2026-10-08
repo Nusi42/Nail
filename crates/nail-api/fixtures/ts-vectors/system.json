@@ -1,0 +1,566 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "state": "idle"
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "idle"
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "idle"
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "idle"
+        }
+      ],
+      "fn": "updateOf",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "state": "checking"
+        }
+      ],
+      "fn": "canCheck",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "checking"
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "checking"
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "checking"
+        }
+      ],
+      "fn": "updateOf",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "state": "up-to-date"
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "up-to-date"
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "up-to-date"
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "up-to-date"
+        }
+      ],
+      "fn": "updateOf",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "state": "available",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "available",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canDownload",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "available",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "available",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "updateOf",
+      "out": {
+        "channel": "stable",
+        "notes": null,
+        "published_at": null,
+        "size_bytes": 1000,
+        "version": "1.2.0"
+      }
+    },
+    {
+      "args": [
+        {
+          "downloaded_bytes": 10,
+          "state": "downloading",
+          "total_bytes": null,
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canCheck",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "downloaded_bytes": 10,
+          "state": "downloading",
+          "total_bytes": null,
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "downloaded_bytes": 10,
+          "state": "downloading",
+          "total_bytes": null,
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "downloaded_bytes": 10,
+          "state": "downloading",
+          "total_bytes": null,
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "updateOf",
+      "out": {
+        "channel": "stable",
+        "notes": null,
+        "published_at": null,
+        "size_bytes": 1000,
+        "version": "1.2.0"
+      }
+    },
+    {
+      "args": [
+        {
+          "state": "ready-to-install",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "ready-to-install",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "ready-to-install",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canInstall",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "state": "ready-to-install",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "updateOf",
+      "out": {
+        "channel": "stable",
+        "notes": null,
+        "published_at": null,
+        "size_bytes": 1000,
+        "version": "1.2.0"
+      }
+    },
+    {
+      "args": [
+        {
+          "state": "installing",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canCheck",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "installing",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "installing",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "state": "installing",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "updateOf",
+      "out": {
+        "channel": "stable",
+        "notes": null,
+        "published_at": null,
+        "size_bytes": 1000,
+        "version": "1.2.0"
+      }
+    },
+    {
+      "args": [
+        {
+          "detail": null,
+          "failure": "network",
+          "state": "failed",
+          "update": null
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "detail": null,
+          "failure": "network",
+          "state": "failed",
+          "update": null
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "detail": null,
+          "failure": "network",
+          "state": "failed",
+          "update": null
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "detail": null,
+          "failure": "network",
+          "state": "failed",
+          "update": null
+        }
+      ],
+      "fn": "updateOf",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "detail": "x",
+          "failure": "download",
+          "state": "failed",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canCheck",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "detail": "x",
+          "failure": "download",
+          "state": "failed",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "detail": "x",
+          "failure": "download",
+          "state": "failed",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "detail": "x",
+          "failure": "download",
+          "state": "failed",
+          "update": {
+            "channel": "stable",
+            "notes": null,
+            "published_at": null,
+            "size_bytes": 1000,
+            "version": "1.2.0"
+          }
+        }
+      ],
+      "fn": "updateOf",
+      "out": {
+        "channel": "stable",
+        "notes": null,
+        "published_at": null,
+        "size_bytes": 1000,
+        "version": "1.2.0"
+      }
+    },
+    {
+      "args": [
+        {
+          "reason": "portable",
+          "state": "disabled"
+        }
+      ],
+      "fn": "canCheck",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "reason": "portable",
+          "state": "disabled"
+        }
+      ],
+      "fn": "canDownload",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "reason": "portable",
+          "state": "disabled"
+        }
+      ],
+      "fn": "canInstall",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "reason": "portable",
+          "state": "disabled"
+        }
+      ],
+      "fn": "updateOf",
+      "out": null
+    }
+  ]
+}

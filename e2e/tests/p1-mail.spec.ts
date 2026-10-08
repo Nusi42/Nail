@@ -1,16 +1,9 @@
-import { expect, test, type Browser, type FrameLocator, type Page } from "@playwright/test";
-import { connectDesktop, skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
-import { control, freePort, startNail, type NailServer } from "../support/nail";
-import {
-  createUser,
-  enableRemoteUi,
-  pairBrowser,
-  pairingCode,
-  remoteContext,
-  rpcOk,
-} from "../support/remote";
+import { expect, test, type FrameLocator, type Page } from "@playwright/test";
+import { desktopTests, desktopPerFile } from "../support/desktop";
+import { control, nailPerTest, type NailServer } from "../support/nail";
+import { openInDarkTheme, pairedRemoteMail } from "../support/remote";
 import { expectResponsive } from "../support/responsive";
-import { READER_SUBJECT, showView } from "../support/views";
+import { READER_SUBJECT, showView, messageRows } from "../support/views";
 
 /**
  * P1 WP190: HTML mail renders as its author designed it (style sheets,
@@ -81,7 +74,7 @@ const readerFrame = (page: Page): FrameLocator =>
 
 /** Opens the message whose list row shows `subject` (in the Mail view). */
 async function openMessage(page: Page, subject: string): Promise<void> {
-  const row = page.locator('[data-part="message-list.row"]', { hasText: subject }).first();
+  const row = messageRows(page).filter({ hasText: subject }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
   await expect(page.locator(READER_SUBJECT)).toHaveText(subject);
@@ -135,26 +128,30 @@ interface RemoteHosts {
   requests: string[];
 }
 
+/** Delivers the newsletter (its logo on the remote-content host) and opens the mail view. */
+async function openWithNewsletter(page: Page, server: NailServer): Promise<void> {
+  const hosts = await control<RemoteHosts>(server, "remote-content");
+  await control(server, "imap-deliver", { raw: newsletter(`${hosts.images}/logo.png`) });
+  await page.goto(server.url);
+  await showView(page, "Mail");
+}
+
+/** Opens the corpus's photo mail: its text shows, its inline image loads. */
+async function expectLabBench(page: Page, frame: FrameLocator): Promise<void> {
+  await openMessage(page, "Photo of the new lab bench");
+  await expect(frame.getByText("Here is the new bench")).toBeVisible();
+  await expect.poll(() => naturalWidth(frame, "Lab bench"), { timeout: 15_000 }).toBe(1);
+}
+
 test.describe("HTML mail in nail serve (demo-multi)", () => {
-  let server: NailServer;
-
-  test.beforeEach(async () => {
-    server = await startNail({ seed: "demo-multi" });
-  });
-
-  test.afterEach(async () => {
-    await server.stop();
-  });
+  const server = nailPerTest({ seed: "demo-multi" });
 
   test("a newsletter keeps its style sheet, classes, body colour and inline image; remote images wait for the user", async ({
     page,
   }) => {
-    const hosts = await control<RemoteHosts>(server, "remote-content");
-    await control(server, "imap-deliver", { raw: newsletter(`${hosts.images}/logo.png`) });
-    await page.goto(server.url);
-    await showView(page, "Mail");
+    await openWithNewsletter(page, server);
     // The list preview keeps the blocks apart (not "Big October SaleEverything").
-    const row = page.locator('[data-part="message-list.row"]', { hasText: "Big October Sale" });
+    const row = messageRows(page).filter({ hasText: "Big October Sale" });
     await expect(row).toContainText("Big October Sale Everything 30% off this week.", {
       timeout: 30_000,
     });
@@ -220,10 +217,7 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     await control(server, "imap-deliver", {
       raw: htmlMail("Plain greetings", "plain", "<p>Hello <b>Ada</b>, plain words.</p>"),
     });
-    await rpcOk(server, { type: "SetTheme", theme_id: "graphite" }, "Themes");
-    await page.goto(server.url);
-    await showView(page, "Mail");
-    await expect(page.locator("html")).toHaveAttribute("data-nail-mode", "dark");
+    await openInDarkTheme(page, server, "graphite");
 
     await openMessage(page, "Red letter day");
     const frame = readerFrame(page);
@@ -258,15 +252,7 @@ function luminance(rgb: string): number {
 }
 
 test.describe("HTML mail from the demo corpus", () => {
-  let server: NailServer;
-
-  test.beforeEach(async () => {
-    server = await startNail({ seed: "demo" });
-  });
-
-  test.afterEach(async () => {
-    await server.stop();
-  });
+  const server = nailPerTest({ seed: "demo" });
 
   test("the corpus's inline image, newsletter and hostile mail render in the frame", async ({
     page,
@@ -275,9 +261,7 @@ test.describe("HTML mail from the demo corpus", () => {
     await showView(page, "Mail");
     const frame = readerFrame(page);
 
-    await openMessage(page, "Photo of the new lab bench");
-    await expect(frame.getByText("Here is the new bench")).toBeVisible();
-    await expect.poll(() => naturalWidth(frame, "Lab bench"), { timeout: 15_000 }).toBe(1);
+    await expectLabBench(page, frame);
     await expectEmbeddedOnly(page, "bench.png");
 
     await openMessage(page, "Your weekly garden digest 🌱");
@@ -293,14 +277,7 @@ test.describe("HTML mail from the demo corpus", () => {
   });
 
   test("the remote UI renders the same mail from its sandbox origin", async ({ page }) => {
-    const remote = await enableRemoteUi(server);
-    const user = await createUser(server, "ada");
-    const context = await remoteContext(page);
-    const phone = await context.newPage();
-    await phone.setViewportSize({ width: 1280, height: 1000 });
-    await pairBrowser(phone, remote, await pairingCode(server, user));
-    await phone.getByRole("button", { name: "Not now" }).click();
-    await showView(phone, "Mail");
+    const { remote, context, phone } = await pairedRemoteMail(page, server);
 
     await openMessage(phone, "Photo of the new lab bench");
     const body = phone.locator('iframe[data-part="message-view.body"]');
@@ -320,24 +297,13 @@ test.describe("HTML mail from the demo corpus", () => {
 });
 
 test.describe("the mail view at every standard size", () => {
-  let server: NailServer;
-
-  test.beforeEach(async () => {
-    server = await startNail({ seed: "demo-multi" });
-  });
-
-  test.afterEach(async () => {
-    await server.stop();
-  });
+  const server = nailPerTest({ seed: "demo-multi" });
 
   test("folder pane, list, chips, reader, toolbar and attachments stay in shape", async ({
     page,
   }) => {
     test.setTimeout(240_000);
-    const hosts = await control<RemoteHosts>(server, "remote-content");
-    await control(server, "imap-deliver", { raw: newsletter(`${hosts.images}/logo.png`) });
-    await page.goto(server.url);
-    await showView(page, "Mail");
+    await openWithNewsletter(page, server);
     const mail = '[aria-label="Mail view"]';
 
     // Below 900 px (`defaults/layout.kdl`) the mail window shows one pane at a
@@ -438,34 +404,14 @@ test.describe("the mail view at every standard size", () => {
 });
 
 test.describe("HTML mail in the desktop app", () => {
-  test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
-  test.skip(
-    !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
-    "set NAIL_E2E_DESKTOP=1 to run the desktop tests in CI",
-  );
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
-
-  let app: DesktopApp;
-  let browser: Browser;
-  let page: Page;
-
-  test.beforeAll(async () => {
-    app = await startDesktop(freePort());
-    ({ browser, page } = await connectDesktop(app));
-    await skipFirstRun(page);
-  });
-
-  test.afterAll(async () => {
-    await (browser as Browser | undefined)?.close().catch(() => undefined);
-    await (app as DesktopApp | undefined)?.stop();
-  });
+  desktopTests(180_000);
+  const desktop = desktopPerFile();
 
   test("the desktop reader shows inline images and the newsletter's colours", async () => {
+    const page = desktop.page;
     await showView(page, "Mail");
     const frame = readerFrame(page);
-    await openMessage(page, "Photo of the new lab bench");
-    await expect(frame.getByText("Here is the new bench")).toBeVisible();
-    await expect.poll(() => naturalWidth(frame, "Lab bench"), { timeout: 15_000 }).toBe(1);
+    await expectLabBench(page, frame);
     await openMessage(page, "Your weekly garden digest 🌱");
     await expect(frame.getByRole("heading", { name: "Autumn is here" })).toBeVisible();
     expect(await frameStyle(frame, "body", "background-color")).toBe("rgb(244, 241, 232)");

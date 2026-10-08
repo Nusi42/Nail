@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { defined } from "../support/defined";
-import { startNail, type NailServer } from "../support/nail";
+import { nailPerTest } from "../support/nail";
 import {
   openSettings,
   rail,
@@ -10,6 +10,9 @@ import {
   runFromPalette,
   showView,
   viewRegion,
+  messageRows,
+  openMail,
+  messageList,
 } from "../support/views";
 
 /**
@@ -37,15 +40,7 @@ import {
  * Each test runs its own server (the files are per config directory).
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo" });
 
 function configFile(name: string): string {
   const file = path.join(server.configDir, name);
@@ -96,10 +91,7 @@ function positionOf(id: string): number {
   return next >= 0 && at > next ? -1 : at;
 }
 
-async function open(page: Page) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-}
+const open = (page: Page) => openMail(page, server.url);
 
 const editor = (page: Page) => page.getByRole("region", { name: "Customizing layout: Mail" });
 
@@ -121,6 +113,12 @@ async function customizeFromRail(page: Page): Promise<Locator> {
   return editor(page);
 }
 
+/** Keyboard: picks the folder pane up and swaps it with the reader. */
+async function swapFoldersWithReader(page: Page): Promise<void> {
+  await pane(page, "Folders").getByRole("button", { name: "Move Folders", exact: true }).click();
+  await page.getByRole("button", { name: "Swap Folders with Message", exact: true }).click();
+}
+
 test("customize layout: swap panes, undo, hide and show, Done", async ({ page }) => {
   await open(page);
   const view = await customizeFromRail(page);
@@ -130,9 +128,7 @@ test("customize layout: swap panes, undo, hide and show, Done", async ({ page })
   const undo = view.getByRole("button", { name: /^Undo/ }).first();
   await expect(undo).toBeDisabled();
 
-  // Keyboard: pick Folders up, swap it with the reader.
-  await pane(page, "Folders").getByRole("button", { name: "Move Folders", exact: true }).click();
-  await page.getByRole("button", { name: "Swap Folders with Message", exact: true }).click();
+  await swapFoldersWithReader(page);
   await expect(page.getByRole("status").filter({ hasText: "swapped places" })).toBeVisible();
   await expect.poll(() => positionOf("reader")).toBeGreaterThan(-1);
   expect(positionOf("reader")).toBeLessThan(positionOf("sidebar"));
@@ -154,14 +150,13 @@ test("customize layout: swap panes, undo, hide and show, Done", async ({ page })
   // Done leaves customize mode; the mail view works as before.
   await view.getByRole("button", { name: "Done" }).click();
   await expect(editor(page)).toBeHidden();
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
 });
 
 test("customize layout: swapped panes keep their widths and limits", async ({ page }) => {
   await open(page);
   const view = await customizeFromRail(page);
-  await pane(page, "Folders").getByRole("button", { name: "Move Folders", exact: true }).click();
-  await page.getByRole("button", { name: "Swap Folders with Message", exact: true }).click();
+  await swapFoldersWithReader(page);
   // Each pane takes its own entries along (ADR 0138).
   await expect.poll(layoutFile).toContain('sizes="1.4fr 1fr 260px"');
   const text = layoutFile();
@@ -169,7 +164,7 @@ test("customize layout: swapped panes keep their widths and limits", async ({ pa
   expect(text).toContain('max-sizes="none none 480px"');
   expect(text).toContain('collapsible="true false true"');
   await view.getByRole("button", { name: "Done" }).click();
-  await page.locator('[data-part="message-list.row"]').first().click();
+  await messageRows(page).first().click();
   await expect(readerToolbar(page)).toBeVisible();
   // On screen: the reader is the wide pane, the folders stay narrow.
   const sidebar = await widthOf(page, "sidebar");
@@ -330,7 +325,7 @@ test("customize layout: add a widget and apply presets, Reset to default", async
 
 test("customize a toolbar: right-click → Customize toolbar, into More, Undo", async ({ page }) => {
   await open(page);
-  await page.locator('[data-part="message-list.row"]').first().click();
+  await messageRows(page).first().click();
   const bar = readerToolbar(page);
   await expect(bar).toBeVisible();
   await bar.getByRole("button", { name: "Forward", exact: true }).click({ button: "right" });
@@ -382,14 +377,26 @@ test("customize a toolbar: right-click → Customize toolbar, into More, Undo", 
   await expect(dialog).toBeHidden();
 });
 
-test("appearance: accent and corner radius go to theme.kdl and undo", async ({ page }) => {
+/** Opens Nail at Settings → Appearance and applies the accent #aa3366; the Appearance region. */
+async function openWithAccent(page: Page): Promise<Locator> {
   await open(page);
   const settings = await openSettings(page, "Appearance");
   const appearance = settings.getByRole("region", { name: "Appearance" });
-
   await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#aa3366");
   await appearance.getByRole("button", { name: "Apply" }).click();
   await expect.poll(themeFile).toContain('color "accent" "#aa3366"');
+  return appearance;
+}
+
+/** The theme editor, open on the theme `id`. */
+async function themeEditorOn(page: Page, id: string): Promise<Locator> {
+  const themeEditor = page.getByRole("dialog", { name: "Theme editor" });
+  await expect(themeEditor.getByLabel("Theme", { exact: true })).toHaveValue(id);
+  return themeEditor;
+}
+
+test("appearance: accent and corner radius go to theme.kdl and undo", async ({ page }) => {
+  const appearance = await openWithAccent(page);
 
   // The slider writes after a pause.
   const radius = appearance.getByRole("slider", { name: "Corner radius" });
@@ -429,8 +436,7 @@ test("New theme: duplicate a theme, edit a token, undo", async ({ page }) => {
   await expect.poll(themeFile).toContain("ocean-cafe");
 
   // The editor opens on the new theme; a token edit lands in its file.
-  const themeEditor = page.getByRole("dialog", { name: "Theme editor" });
-  await expect(themeEditor.getByLabel("Theme", { exact: true })).toHaveValue("ocean-cafe");
+  const themeEditor = await themeEditorOn(page, "ocean-cafe");
   const accent = themeEditor.getByRole("textbox", { name: "Value of color.accent", exact: true });
   await accent.fill("#117755");
   await accent.press("Enter");
@@ -487,9 +493,7 @@ async function newTheme(page: Page): Promise<Locator> {
   await create.getByRole("button", { name: "Create" }).click();
   await expect.poll(() => userThemeExists("ocean-cafe")).toBe(true);
   await expect.poll(themeFile).toContain("ocean-cafe");
-  const themeEditor = page.getByRole("dialog", { name: "Theme editor" });
-  await expect(themeEditor.getByLabel("Theme", { exact: true })).toHaveValue("ocean-cafe");
-  return themeEditor;
+  return themeEditorOn(page, "ocean-cafe");
 }
 
 test("theme editor: rename a theme with its file, delete it, undo", async ({ page }) => {
@@ -533,7 +537,7 @@ test("theme editor: Edit style from the inspector, a part override", async ({ pa
 
   // The inspector: pick a message subject, then "Edit style".
   const subject = page.locator('[data-part="message-list.row.subject"]').first();
-  await page.locator('[data-part="message-list"]').focus();
+  await messageList(page).focus();
   await page.keyboard.press("Control+Shift+I");
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   await expect(inspector).toBeVisible();
@@ -597,12 +601,7 @@ test("theme editor: unreadable text warns; Ctrl+Z and Reset appearance lead back
 });
 
 test("theme editor: an Appearance override is named and can be cleared", async ({ page }) => {
-  await open(page);
-  const settings = await openSettings(page, "Appearance");
-  const appearance = settings.getByRole("region", { name: "Appearance" });
-  await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#aa3366");
-  await appearance.getByRole("button", { name: "Apply" }).click();
-  await expect.poll(themeFile).toContain('color "accent" "#aa3366"');
+  await openWithAccent(page);
 
   const themeEditor = await newTheme(page);
   const row = themeEditor.locator('[data-part="theme-editor.token"][data-token="color.accent"]');
@@ -621,12 +620,7 @@ test("theme editor: an Appearance override is named and can be cleared", async (
 });
 
 test("appearance: Undo right after a slider move undoes that move", async ({ page }) => {
-  await open(page);
-  const settings = await openSettings(page, "Appearance");
-  const appearance = settings.getByRole("region", { name: "Appearance" });
-  await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#aa3366");
-  await appearance.getByRole("button", { name: "Apply" }).click();
-  await expect.poll(themeFile).toContain('color "accent" "#aa3366"');
+  const appearance = await openWithAccent(page);
   const undo = appearance.getByRole("button", { name: /^Undo / });
   await expect(undo).toBeEnabled();
 

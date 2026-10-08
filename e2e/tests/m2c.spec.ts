@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { expect, test, type Page } from "@playwright/test";
+import { nailPerTest, control, serverMessages } from "../support/nail";
 import {
   accountSectionNamed,
   openSettings as openSection,
@@ -10,6 +10,10 @@ import {
   runFromPalette,
   sectionInbox,
   showView,
+  messageRows,
+  openMail,
+  DEMO_MULTI_CONVERSATIONS,
+  closeWindow,
 } from "../support/views";
 
 /**
@@ -20,15 +24,7 @@ import {
  * (server search, body fetched on open), context menus and a rebound key.
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo-multi" });
 
 interface SieveScripts {
   active: string | null;
@@ -40,29 +36,13 @@ const sieveScripts = () => control<SieveScripts>(server, "sieve-scripts");
 const nailScript = async () =>
   (await sieveScripts()).scripts.find((s) => s.name === "nail")?.content ?? "";
 
-async function open(page: Page, rows = 17) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(rows);
-}
+const open = (page: Page, rows = DEMO_MULTI_CONVERSATIONS) => openMail(page, server.url, { rows });
 
 function deliver(subject: string, body: string, id: string) {
   return control(server, "imap-deliver", {
     raw: `From: Someone <someone@example.net>\r\nTo: ada@work.example\r\nSubject: ${subject}\r\nMessage-ID: <${id}@example.net>\r\n\r\n${body}\r\n`,
   });
 }
-
-/** The settings view at the section of a former settings tab (M5b). */
-function openSettings(page: Page, tab: string): Promise<Locator> {
-  return openSettingsTab(page, tab);
-}
-
-async function closeDialog(page: Page, name: string) {
-  const dialog = page.getByRole("dialog", { name });
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
-}
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 test("a rule runs on the server and the vacation reply is uploaded", async ({ page }) => {
   await open(page);
@@ -80,10 +60,10 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
   await editor.getByRole("button", { name: "Editor" }).click();
   await editor.getByRole("button", { name: "Save rule" }).click();
   await expect(editor.getByText("The rule is saved.")).toBeVisible();
-  await closeDialog(page, "Filter rules");
+  await closeWindow(page.getByRole("dialog", { name: "Filter rules" }));
 
   // Settings → Server rules: turn ManageSieve on for the account.
-  const settings = await openSettings(page, "Server rules");
+  const settings = await openSettingsTab(page, "Server rules");
   // The Server rules & vacation section: the ManageSieve card.
   const section = settings.locator('[data-part="sieve-status"]');
   await section.getByRole("checkbox", { name: "Run rules on the server when possible" }).check();
@@ -114,12 +94,12 @@ test("marking junk trains the filter and the next similar message lands in Junk"
     "Congratulations winner! Claim your lottery prize money now, cheap pills, exclusive casino bonus, click here to claim the prize today";
   await deliver("You are a lottery winner", spam, "spam-1");
   await open(page, 18);
-  await expect(rows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(1, {
+  await expect(messageRows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(1, {
     timeout: 20_000,
   });
 
   // Nail's filter on, trained after one message of each kind.
-  const settings = await openSettings(page, "Junk mail");
+  const settings = await openSettingsTab(page, "Junk mail");
   const junk = settings.locator('[data-part="junk-settings"]');
   await junk
     .getByRole("checkbox", { name: "Classify arriving mail with Nail's junk filter" })
@@ -133,7 +113,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   // "Not junk" for a normal message: it applies only to mail in Junk (M5b
   // review), so the welcome mail goes to Junk and comes back from there
   // through its context menu — the filter learns it as wanted mail…
-  const normal = rows(page).filter({ hasText: "Welcome to Nail" });
+  const normal = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await normal.click({ button: "right" });
   const menu = page.getByRole("menu");
   await expect(menu.getByRole("menuitem", { name: "Not junk" })).toHaveCount(0);
@@ -141,7 +121,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   await expect(normal).toHaveCount(0);
   const work = accountSectionNamed(page, "Work");
   await work.locator('[data-part="folder-tree.item"][data-role="junk"]').first().click();
-  const inJunk = rows(page).filter({ hasText: "Welcome to Nail" });
+  const inJunk = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await inJunk.click({ button: "right" });
   await expect(menu.getByRole("menuitem", { name: "Mark as junk" })).toHaveCount(0);
   await menu.getByRole("menuitem", { name: "Not junk" }).click();
@@ -149,9 +129,9 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   await sectionInbox(work).click();
   await expect(normal).toHaveCount(1);
   // …and "Mark as junk" for the spam (reader toolbar).
-  await rows(page).filter({ hasText: "You are a lottery winner" }).click();
+  await messageRows(page).filter({ hasText: "You are a lottery winner" }).click();
   await readerAction(page, "Mark as junk");
-  await expect(rows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(0);
+  await expect(messageRows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(0);
   await expect
     .poll(async () => (await serverMessages(server, "Junk")).map((m) => m.subject), {
       timeout: 20_000,
@@ -165,12 +145,12 @@ test("marking junk trains the filter and the next similar message lands in Junk"
       timeout: 20_000,
     })
     .toContain("Another lottery winner");
-  await expect(rows(page).filter({ hasText: "Another lottery winner" })).toHaveCount(0);
+  await expect(messageRows(page).filter({ hasText: "Another lottery winner" })).toHaveCount(0);
 });
 
 test("a snoozed message hides and returns at the wake time", async ({ page }) => {
   await open(page);
-  const row = rows(page).filter({ hasText: "Welcome to Nail" });
+  const row = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();
   await readerAction(page, "Snooze…");
   const picker = page.getByRole("dialog", { name: "Snooze" });
@@ -187,7 +167,7 @@ test("a snoozed message hides and returns at the wake time", async ({ page }) =>
   await runFromPalette(page, "snoozed", "Snoozed messages");
   const list = page.getByRole("dialog", { name: "Snoozed messages" });
   await expect(list.getByText("Welcome to Nail")).toBeVisible();
-  await closeDialog(page, "Snoozed messages");
+  await closeWindow(page.getByRole("dialog", { name: "Snoozed messages" }));
 
   // Two days later (the core's clock) it is back.
   await control(server, "clock-advance", { seconds: 2 * 86_400 });
@@ -234,7 +214,7 @@ test("new mail notifies, and quiet hours suppress it", async ({ page, context })
   expect((await shown())[0]).toContain("Lunch on Friday?");
 
   // Quiet hours around noon: the next mail does not notify.
-  const settings = await openSettings(page, "Notifications");
+  const settings = await openSettingsTab(page, "Notifications");
   const form = settings.locator('[data-part="notification-settings"]');
   await form.getByRole("checkbox", { name: "No notifications during quiet hours" }).check();
   await form.getByLabel("From").fill("11:00");
@@ -243,7 +223,9 @@ test("new mail notifies, and quiet hours suppress it", async ({ page, context })
   await expect(form.getByText("Saved.", { exact: true })).toBeVisible();
   await showView(page, "Mail");
   await deliver("Quiet please", "Shh.", "quiet-1");
-  await expect(rows(page).filter({ hasText: "Quiet please" })).toHaveCount(1, { timeout: 20_000 });
+  await expect(messageRows(page).filter({ hasText: "Quiet please" })).toHaveCount(1, {
+    timeout: 20_000,
+  });
   await page.waitForTimeout(4_000);
   expect(await shown()).toHaveLength(1);
 });
@@ -254,7 +236,7 @@ test("server search finds mail without a local body, and opening fetches it", as
   const newsletters = page.getByRole("treeitem", { name: /^Newsletters/ });
   await expect(newsletters).toBeVisible({ timeout: 20_000 });
   await newsletters.click();
-  const row = rows(page).filter({ hasText: "This week in nature" });
+  const row = messageRows(page).filter({ hasText: "This week in nature" });
   await expect(row).toHaveCount(1);
 
   // "platypus" is only in the body, which is not stored locally: the
@@ -264,7 +246,7 @@ test("server search finds mail without a local body, and opening fetches it", as
   await search.fill("platypus");
   await search.press("Enter");
   await expect(row).toHaveCount(1, { timeout: 20_000 });
-  await expect(rows(page)).toHaveCount(1);
+  await expect(messageRows(page)).toHaveCount(1);
   await expect(row).toHaveAttribute("data-state", /headers-only/);
 
   // Opening it fetches the body.
@@ -277,7 +259,7 @@ test("server search finds mail without a local body, and opening fetches it", as
 
 test("the right-click menu of a message works, also from the keyboard", async ({ page }) => {
   await open(page);
-  const row = rows(page).filter({ hasText: "Welcome to Nail" });
+  const row = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await row.click({ button: "right" });
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
@@ -316,7 +298,7 @@ test("a rebound key is written to layout.kdl and works", async ({ page }) => {
   expect(layout).toContain("ctrl+shift+y");
   await showView(page, "Mail");
 
-  const row = rows(page).filter({ hasText: "Welcome to Nail" });
+  const row = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();
   await page.keyboard.press("Control+Shift+Y");
   await expect(row).toHaveAttribute("data-state", /flagged/);

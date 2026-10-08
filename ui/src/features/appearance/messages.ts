@@ -4,7 +4,11 @@
  * `prefixes` must exist in the English catalogs (`appearance.ftl`,
  * `core-appearance.ftl`); ids built at runtime are listed by `runtimeIds`.
  */
-import type { Density, ThemeKind, ThemeOverridesIssue } from "../../api/generated";
+import {
+  DENSITY_MESSAGE_IDS,
+  THEME_KIND_MESSAGE_IDS,
+  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
+} from "../../api/generated";
 import { LUCIDE_ICONS } from "../../widgets/lucideIcons";
 import { APPEARANCE_DIALOGS } from "./editorStore";
 import { BUILTIN_THEMES } from "./model";
@@ -32,21 +36,13 @@ export const notMessages: readonly string[] = [
   ...Object.keys(LUCIDE_ICONS),
 ];
 
-const KINDS: readonly ThemeKind[] = ["light", "dark", "high-contrast"];
-const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-const ISSUES: readonly ThemeOverridesIssue[] = [
-  "font-size-range",
-  "radius-range",
-  "accent-invalid",
-];
-
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   return [
     ...BUILTIN_THEMES.map(([id]) => `theme-name-${id}`),
-    ...KINDS.map((k) => `theme-kind-${k}`),
-    ...DENSITIES.map((d) => `density-${d}`),
-    ...ISSUES.map((i) => `theme-overrides-issue-${i}`),
+    ...Object.values(THEME_KIND_MESSAGE_IDS),
+    ...Object.values(DENSITY_MESSAGE_IDS),
+    ...Object.values(THEME_OVERRIDES_ISSUE_MESSAGE_IDS),
     // M5d WP183: window titles, token groups, modes and value origins.
     ...APPEARANCE_DIALOGS.map((d) => `window-${d}`),
     ...TOKEN_GROUPS.map((g) => `theme-editor-group-${g}`),

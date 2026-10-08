@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { forEachArg } from "./args.mjs";
 
 /**
  * @typedef {object} Step
@@ -184,20 +185,15 @@ export function selectSteps(steps, { only = [], skip = [] }) {
 export function parseCheckArgs(argv) {
   /** @type {{ only: string[], skip: string[], advisories: boolean, list: boolean, keepGoing: boolean }} */
   const options = { only: [], skip: [], advisories: false, list: false, keepGoing: true };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const next = argv[++i];
-      if (next === undefined) throw new Error(`${arg} needs a value`);
-      return next.split(",").filter(Boolean);
-    };
+  forEachArg(argv, (arg, reader) => {
+    const value = () => reader.value().split(",").filter(Boolean);
     if (arg === "--only") options.only.push(...value());
     else if (arg === "--skip") options.skip.push(...value());
     else if (arg === "--advisories") options.advisories = true;
     else if (arg === "--list") options.list = true;
     else if (arg === "--fail-fast") options.keepGoing = false;
     else throw new Error(`unknown argument ${arg}`);
-  }
+  });
   return options;
 }
 

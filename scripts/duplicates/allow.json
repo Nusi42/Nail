@@ -3,5 +3,79 @@
     "rs CRATE = env!(\"CARGO_PKG_NAME\")": {
       "reason": "each crate's own name (the tracing target of its logs): one fact per crate, evaluated by the compiler in each crate"
     }
+  },
+  "rust-ts-const": {
+    "KEY_CONTEXTS": {
+      "reason": "the UI's own key contexts (every context an element, the default layout or a plug-in uses: a superset of the contract's plug-in KEY_CONTEXTS, which the UI imports generated); the coverage test checks the contract's list is inside it and every entry is labelled",
+      "pinnedBy": "ui/src/i18n/coverage.test.ts"
+    },
+    "SIGNATURE_SEPARATOR": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "BAR_WIDGETS": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "TOKEN_MODES": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "CARD_WIDGETS": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "WIDGETS": {
+      "reason": "each nail-config widgets module defines its own feature's widget list (one fact per feature, private to its module); the one TypeScript list (the Exchange feature's kinds) is pinned against crates/nail-config/src/widgets/exchange.rs",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "CONTACTS": {
+      "reason": "different facts sharing a name: nail-mcp's `nail://contacts` resource URI (itself from nail_api::pim::mcp) vs the PIM skin's contact-list CSS and the palette's contacts availability"
+    },
+    "TASKS": {
+      "reason": "different facts sharing a name: nail-mcp's `nail://tasks` resource URI (itself from nail_api::pim::mcp) vs the PIM skin's task-list CSS"
+    },
+    "TEMPLATES": {
+      "reason": "different facts sharing a name: nail-mcp's RFC 6570 resource URI templates vs create-nail-plugin's scaffold templates"
+    },
+    "READ": {
+      "reason": "different facts sharing a name: Thunderbird's X-Mozilla-Status read bit (nail-portability) vs the remote UI's read scopes of an access preset"
+    }
+  },
+  "rust-ts-list": {
+    "account-switcher, status-bar, text, toolbar": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "compact, dark, high-contrast, print": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "compact, dark, high-contrast, light, print": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "font-size, radius, size, space": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "junk-verdict, message-view, remote-content, security-message, security-warnings, sync-message-body": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "agenda, day, free-time, month, multi-day, week, work-week, year": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "due, manual, priority, title": {
+      "reason": "the Rust side lives in nail-config / nail-compose, which the generated bindings do not see; the pinning test compares both lists value by value",
+      "pinnedBy": "scripts/test/rust-ts-pins.test.mjs"
+    },
+    "junk-, notification-, snooze-": {
+      "reason": "different facts: a test-only check of nail-config's triage widget kind prefixes vs the triage feature's Fluent id prefixes for the UI's catalog coverage test"
+    },
+    "calendar, contacts, tasks": {
+      "reason": "different facts: the EWS distinguished folders a delegate may be denied (nail-proto-ews) vs the UI's PIM view key contexts / palette availabilities"
+    }
   }
 }

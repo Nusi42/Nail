@@ -14,13 +14,10 @@ import type {
   SourceLocation,
 } from "../../api/generated";
 import { selectBreakpointIndex } from "../../layout/engine";
-import { elementSelector } from "../../theme/compile";
+import { PSEUDO_STATES, elementSelector } from "../../theme/compile";
 
 /** Parts of the inspector itself are never inspected. */
 export const INSPECTOR_PART_PREFIX = "inspector";
-
-/** States that are CSS pseudo-classes (see the theme compiler). */
-const PSEUDO_STATES = new Set(["hover", "active", "focus", "focus-visible", "focus-within"]);
 
 /** Attributes that are not data conditions of the theme. */
 const NOT_CONDITIONS = new Set([

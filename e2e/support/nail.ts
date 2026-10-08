@@ -5,32 +5,27 @@
  * `cargo build -p nail-cli` must have run first (the root `npm run e2e`
  * script does both).
  */
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
-import { defined } from "./defined";
+import { test } from "@playwright/test";
+import { buildBase } from "../../scripts/lib/build.mjs";
+import { workspaceBinary } from "../../scripts/lib/cargo.mjs";
+import { repoRoot } from "../../scripts/lib/program.mjs";
+import { spawnServe, type ServeProcess } from "./serve.mjs";
 
-export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+export { repoRoot, spawnServe, type ServeProcess };
 
 /** Path of the `nail` binary: `$NAIL_BIN`, else cargo's debug target dir. */
 export function nailBinary(): string {
-  const fromEnv = process.env.NAIL_BIN;
-  if (fromEnv) return fromEnv;
-  const metadata = JSON.parse(
-    execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }),
-  ) as { target_directory: string };
-  const exe = process.platform === "win32" ? "nail.exe" : "nail";
-  const bin = path.join(metadata.target_directory, "debug", exe);
-  if (!existsSync(bin)) {
-    throw new Error(`${bin} does not exist; run \`cargo build -p nail-cli\` first`);
-  }
-  return bin;
+  return workspaceBinary({
+    repoRoot,
+    name: "nail",
+    pkg: "nail-cli",
+    profile: "debug",
+    envName: "NAIL_BIN",
+  });
 }
 
 /**
@@ -52,8 +47,7 @@ export function freePort(): number {
  * base.
  */
 export function buildOutputDir(name: string): string {
-  const base = process.env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
-  return path.join(base, name);
+  return path.join(buildBase(process.env, repoRoot), name);
 }
 
 /** A fresh temporary directory. */
@@ -111,41 +105,133 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
   ];
   if (options.locale) args.push("--locale", options.locale);
   for (const target of options.launch ?? []) args.push("--launch", target);
-  const child: ChildProcess = spawn(nailBinary(), args, {
-    cwd: repoRoot,
-    stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
-  });
-  const url = await new Promise<string>((resolve, reject) => {
-    const lines = createInterface({ input: defined(child.stdout, "the server's stdout") });
-    const timer = setTimeout(() => {
-      reject(new Error("nail serve did not start"));
-    }, 30_000);
-    lines.once("line", (line) => {
-      clearTimeout(timer);
-      resolve(line.trim());
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`nail serve exited with ${String(code)}`));
-    });
-  });
+  const serve = await spawnServe(nailBinary(), args, { cwd: repoRoot, timeoutMs: 30_000 });
   return {
-    url,
+    url: serve.url,
     dataDir,
     configDir,
     async stop() {
-      if (child.exitCode === null) {
-        const exited = new Promise((resolve) => child.once("exit", resolve));
-        child.kill();
-        await exited;
-      }
+      await serve.stop();
       if (keepDirs) return;
       for (const dir of [dataDir, configDir]) {
         rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
       }
     },
   };
+}
+
+/** Prepares a started server before the tests use it. */
+type Ready = (server: NailServer) => void | Promise<void>;
+
+/**
+ * One server slot of a spec file: `start` / `stop` run `nail serve`,
+ * `view` is a `NailServer` whose fields and `stop()` reach the running
+ * one (an error while none runs).
+ */
+function serverSlot() {
+  let current: NailServer | undefined;
+  const running = (): NailServer => {
+    if (!current) throw new Error("no nail serve is running (used outside a test?)");
+    return current;
+  };
+  const view: NailServer = {
+    get url() {
+      return running().url;
+    },
+    get dataDir() {
+      return running().dataDir;
+    },
+    get configDir() {
+      return running().configDir;
+    },
+    stop: () => running().stop(),
+  };
+  const start = async (options: StartOptions, ready?: Ready): Promise<NailServer> => {
+    current = await startNail(options);
+    if (ready !== undefined) await ready(current);
+    return current;
+  };
+  const stop = async (): Promise<void> => {
+    // The start may have failed before a server ran.
+    await current?.stop();
+    current = undefined;
+  };
+  return { view, start, stop };
+}
+
+/** The server of a spec file's lifecycle hooks (`each` test or `all` of them). */
+function hookedServer(scope: "each" | "all", options: StartOptions, ready?: Ready): NailServer {
+  const slot = serverSlot();
+  const start = async () => {
+    await slot.start(options, ready);
+  };
+  if (scope === "each") {
+    test.beforeEach(start);
+    test.afterEach(slot.stop);
+  } else {
+    test.beforeAll(start);
+    test.afterAll(slot.stop);
+  }
+  return slot.view;
+}
+
+/** A `nail serve` that each test starts itself (`start`, with its own options). */
+export interface OnDemandServer extends NailServer {
+  start(options?: StartOptions): Promise<NailServer>;
+}
+
+/**
+ * A server each test of the calling spec file starts when it needs one
+ * (with that test's options); it is stopped after the test.
+ */
+export function nailOnDemand(): OnDemandServer {
+  const slot = serverSlot();
+  test.afterEach(slot.stop);
+  const view = slot.view;
+  return {
+    get url() {
+      return view.url;
+    },
+    get dataDir() {
+      return view.dataDir;
+    },
+    get configDir() {
+      return view.configDir;
+    },
+    stop: () => view.stop(),
+    start: (options: StartOptions = {}) => slot.start(options),
+  };
+}
+
+/**
+ * A fresh `nail serve` for each test of the calling spec file (or
+ * `describe` block); `ready` prepares it before the test.
+ */
+export function nailPerTest(options: StartOptions = {}, ready?: Ready): NailServer {
+  return hookedServer("each", options, ready);
+}
+
+/**
+ * One `nail serve` for every test of the calling spec file (or `describe`
+ * block); `ready` prepares it before the first test.
+ */
+export function nailPerFile(options: StartOptions = {}, ready?: Ready): NailServer {
+  return hookedServer("all", options, ready);
+}
+
+/**
+ * The calling spec file's `test` with a fixture `nail`: a fresh
+ * `nail serve` per test that asks for it.
+ */
+export function nailFixture(options: StartOptions = {}) {
+  return test.extend<{ nail: NailServer }>({
+    // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
+    nail: async ({}, use) => {
+      const server = await startNail(options);
+      await use(server);
+      await server.stop();
+    },
+  });
 }
 
 /**

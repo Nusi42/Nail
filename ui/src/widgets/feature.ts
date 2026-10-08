@@ -19,13 +19,10 @@ import { toggleCollapsedSection } from "./folderPaneState";
 import { ListHeader } from "./ListHeader";
 import { isListFilter } from "./listFilter";
 import { DELETE_PERMANENTLY_DIALOG, DeletePermanentlyDialog } from "./DeletePermanently";
+import { FOLDER_SECTION_TOGGLE_ACTION, LIST_FILTER_ACTION } from "../api/generated";
+export { FOLDER_SECTION_TOGGLE_ACTION, LIST_FILTER_ACTION } from "../api/generated";
 
 export { ListHeader };
-
-/** `nail_api::views::LIST_FILTER_ACTION`. */
-export const LIST_FILTER_ACTION = "list.filter";
-/** `nail_api::views::FOLDER_SECTION_TOGGLE_ACTION`. */
-export const FOLDER_SECTION_TOGGLE_ACTION = "folders.toggle-section";
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {

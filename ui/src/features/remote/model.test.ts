@@ -1,5 +1,7 @@
 import { WebAuthnError } from "@simplewebauthn/browser";
-import type { MessageBody, RemoteUiSettings } from "../../api/generated";
+import type { MessageBody, RemoteAccessPreset, RemoteUiSettings } from "../../api/generated";
+import remoteVectors from "../../../../crates/nail-api/fixtures/ts-vectors/remote.json";
+import { describeVectors } from "../../test/vectors";
 import { defaultRemoteUiSettings } from "./mock";
 import {
   extrasOf,
@@ -291,4 +293,10 @@ describe("remoteContentView", () => {
       }),
     ).toBeNull();
   });
+});
+
+describeVectors("remote UI settings", remoteVectors, {
+  isLocalNetwork,
+  presetGrant: (preset: RemoteAccessPreset) => presetGrant(preset),
+  settingsIssues,
 });

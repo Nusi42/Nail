@@ -1,7 +1,8 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { nailPerTest } from "../support/nail";
+import { messageRows } from "../support/views";
 
 /**
  * M5b contract (ADR 0109) against `nail serve --seed demo` with a layout of
@@ -10,8 +11,6 @@ import { startNail, type NailServer } from "../support/nail";
  * `view.show`) still work — without a `view-host` in the main window a view
  * opens as its window — and the command palette lists the views.
  */
-
-let server: NailServer;
 
 /** A pre-M5b layout: its own three-pane main window, extending the default. */
 const OLD_LAYOUT = [
@@ -27,21 +26,16 @@ const OLD_LAYOUT = [
   "",
 ].join("\n");
 
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo" });
-  writeFileSync(path.join(server.configDir, "layout.kdl"), OLD_LAYOUT);
-});
-
-test.afterEach(async () => {
-  await server.stop();
+const server = nailPerTest({ seed: "demo" }, (s) => {
+  writeFileSync(path.join(s.configDir, "layout.kdl"), OLD_LAYOUT);
 });
 
 async function open(page: Page) {
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   // The old main window shows; there is no rail.
   await expect(page.locator('[data-part="nav-rail"]')).toHaveCount(0);
-  await page.locator('[data-part="message-list.row"]').first().click();
+  await messageRows(page).first().click();
 }
 
 test("view shortcuts open the views' windows", async ({ page }) => {

@@ -7,42 +7,13 @@ import { describe, expect, it } from "vitest";
 
 import { encodeUtf8 } from "./bytes";
 import { veto } from "./extensions";
-import type { PluginManifest, PluginMessage, PluginOutgoingMessage } from "./generated";
-import { createTestHost } from "./testing";
+import type { PluginManifest, PluginMessage } from "./generated";
+import { createTestHost, testMessage, testOutgoingMessage } from "./testing";
 
-const msg = (
-  id: string,
-  accountId = "work",
-  extra: Partial<PluginMessage> = {},
-): PluginMessage => ({
-  id,
-  uri: `nail://messages/${id}`,
-  accountId,
-  folderId: "INBOX",
-  subject: `Subject ${id}`,
-  to: [],
-  cc: [],
-  date: "2026-10-01T10:00:00Z",
-  flags: { seen: false, flagged: false, answered: false, draft: false },
-  tags: [],
-  hasAttachments: false,
-  encrypted: false,
-  ...extra,
-});
+const msg = (id: string, accountId = "work", extra: Partial<PluginMessage> = {}): PluginMessage =>
+  testMessage(id, { accountId, ...extra });
 
-const outgoing: PluginOutgoingMessage = {
-  draftId: "d1",
-  accountId: "work",
-  identityId: "work-main",
-  from: { name: null, email: "me@example.org" },
-  to: [{ name: "Ada", email: "ada@example.org" }],
-  cc: [],
-  bcc: [],
-  subject: "Report",
-  text: "Hi",
-  attachments: [],
-  encrypted: false,
-};
+const outgoing = testOutgoingMessage();
 
 describe("writes", () => {
   it("need their permission", async () => {

@@ -7,17 +7,14 @@
  * handled by the browser; this module only carries the CSRF token that
  * `Status` hands out in the `x-nail-csrf` header of every other request.
  */
-import type { AuthRequest, AuthResponse } from "../../api/generated";
-
-/** `nail_api::remote::AUTH_PATH`. */
-export const AUTH_PATH = "/api/auth";
-/**
- * The status the local, loopback `nail serve` (no remote login) answers
- * `POST /api/auth` with: there is nothing to log in to.
- */
-export const NO_LOGIN_STATUS = 204;
-/** `nail_api::remote::CSRF_HEADER`. */
-export const CSRF_HEADER = "x-nail-csrf";
+import {
+  AUTH_PATH,
+  type AuthRequest,
+  type AuthResponse,
+  CSRF_HEADER,
+  NO_LOGIN_STATUS,
+} from "../../api/generated";
+export { AUTH_PATH, CSRF_HEADER, NO_LOGIN_STATUS } from "../../api/generated";
 
 /** Sends login-protocol requests. */
 export interface AuthTransport {

@@ -26,14 +26,36 @@ import { isTestPath, lex, withoutRustTests } from "./sources.mjs";
 
 /**
  * A finding's identity in the ratchet baseline: its key plus what it spans
- * (members, else files), so a finding that grows (a third copy) or shrinks
- * (one copy of three removed) counts as new and fails until it is gone.
+ * (members, else files), so a finding that grows (a third copy) counts as
+ * new and fails ({@link knownInBaseline}).
  *
  * @param {Finding} finding
  */
 export function baselineIdentity(finding) {
   const members = finding.members ?? finding.files;
   return members.length > 1 ? `${finding.key} @ ${members.join(", ")}` : finding.key;
+}
+
+/**
+ * Whether the baseline knows `finding`: its identity is recorded, or a
+ * recorded finding of the same key spans every member it spans (a finding
+ * that only lost members — one copy of three removed, often by another
+ * package's fix — is progress, not a regression). A finding with a member
+ * the baseline does not list is new.
+ *
+ * @param {Finding} finding
+ * @param {readonly string[]} recorded the baseline identities of its check
+ */
+export function knownInBaseline(finding, recorded) {
+  const identity = baselineIdentity(finding);
+  if (recorded.includes(identity)) return true;
+  const members = finding.members ?? finding.files;
+  const prefix = `${finding.key} @ `;
+  return recorded.some((entry) => {
+    if (!entry.startsWith(prefix)) return false;
+    const listed = new Set(entry.slice(prefix.length).split(", "));
+    return members.every((m) => listed.has(m));
+  });
 }
 
 /** The SSOT checks, in report order, with what each finds. */
@@ -260,6 +282,22 @@ export function rustTsConstants(files) {
 const STRING_LIST = /\[\s*(?:"(?:[^"\\\n]|\\.)*"\s*,\s*){2,}"(?:[^"\\\n]|\\.)*"\s*,?\s*\]/g;
 
 /**
+ * The non-test source files with the code the checks scan (Rust without
+ * its `#[cfg(test)]` modules).
+ *
+ * @param {SourceFile[]} files
+ * @returns {{ file: SourceFile, rust: boolean, text: string }[]}
+ */
+export function productionCode(files) {
+  return files
+    .filter((file) => !isTestPath(file.path))
+    .map((file) => {
+      const rust = file.path.endsWith(".rs");
+      return { file, rust, text: rust ? withoutRustTests(file.text) : file.text };
+    });
+}
+
+/**
  * `rust-ts-list`: the same set of string literals as a list in non-test
  * Rust code and in non-test TypeScript / JavaScript (enum value lists,
  * colour tables, id lists copied by hand).
@@ -270,10 +308,7 @@ const STRING_LIST = /\[\s*(?:"(?:[^"\\\n]|\\.)*"\s*,\s*){2,}"(?:[^"\\\n]|\\.)*"\
 export function rustTsLists(files) {
   /** @type {Map<string, { rust: string[], ts: string[] }>} */
   const lists = new Map();
-  for (const file of files) {
-    if (isTestPath(file.path)) continue;
-    const rust = file.path.endsWith(".rs");
-    const text = rust ? withoutRustTests(file.text) : file.text;
+  for (const { file, rust, text } of productionCode(files)) {
     for (const m of text.matchAll(STRING_LIST)) {
       const items = [...m[0].matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((i) => i[1] ?? "");
       const key = [...new Set(items)].sort().join(", ");
@@ -591,10 +626,7 @@ const NUMBER = /(?<![\w.#$])(\d[\d_]*)(?![\w.])/g;
 export function magicNumbers(files) {
   /** @type {Map<string, Map<string, number>>} */
   const seen = new Map();
-  for (const file of files) {
-    if (isTestPath(file.path)) continue;
-    const rust = file.path.endsWith(".rs");
-    const text = rust ? withoutRustTests(file.text) : file.text;
+  for (const { file, rust, text } of productionCode(files)) {
     for (const seg of lex(text, { rust })) {
       if (seg.kind !== "code") continue;
       seg.text.split("\n").forEach((codeLine, n) => {

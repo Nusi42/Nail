@@ -82,7 +82,7 @@ export const TOKEN_MODES = ["dark", "high-contrast", "print", "compact"] as cons
 export type TokenMode = (typeof TOKEN_MODES)[number];
 
 /** Categories whose unitless numbers are pixels (as in `nail-config`). */
-const PX_CATEGORIES = new Set(["font-size", "space", "size", "radius"]);
+export const PX_CATEGORIES: ReadonlySet<string> = new Set(["font-size", "space", "size", "radius"]);
 
 /** `color.accent` — how the editor names a token. */
 export function tokenId(category: string, name: string): string {

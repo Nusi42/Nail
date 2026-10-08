@@ -1,0 +1,5830 @@
+{
+  "cases": [
+    {
+      "args": [
+        "message-list.row"
+      ],
+      "fn": "keyContextOf",
+      "out": "list"
+    },
+    {
+      "args": [
+        "message-list.row"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:message-list.row"
+    },
+    {
+      "args": [
+        "thread-view.message"
+      ],
+      "fn": "keyContextOf",
+      "out": "reader"
+    },
+    {
+      "args": [
+        "thread-view.message"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:thread-view.message"
+    },
+    {
+      "args": [
+        "message-view"
+      ],
+      "fn": "keyContextOf",
+      "out": "reader"
+    },
+    {
+      "args": [
+        "message-view"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:message-view"
+    },
+    {
+      "args": [
+        "message-view.attachment"
+      ],
+      "fn": "keyContextOf",
+      "out": "reader"
+    },
+    {
+      "args": [
+        "message-view.attachment"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:message-view.attachment"
+    },
+    {
+      "args": [
+        "folder-tree.folder"
+      ],
+      "fn": "keyContextOf",
+      "out": "global"
+    },
+    {
+      "args": [
+        "folder-tree.folder"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:folder-tree.folder"
+    },
+    {
+      "args": [
+        "folder-tree.account"
+      ],
+      "fn": "keyContextOf",
+      "out": "global"
+    },
+    {
+      "args": [
+        "folder-tree.account"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:folder-tree.account"
+    },
+    {
+      "args": [
+        "composer"
+      ],
+      "fn": "keyContextOf",
+      "out": "composer"
+    },
+    {
+      "args": [
+        "composer"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:composer"
+    },
+    {
+      "args": [
+        "calendar-list.calendar"
+      ],
+      "fn": "keyContextOf",
+      "out": "calendar"
+    },
+    {
+      "args": [
+        "calendar-list.calendar"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:calendar-list.calendar"
+    },
+    {
+      "args": [
+        "nav-rail"
+      ],
+      "fn": "keyContextOf",
+      "out": "global"
+    },
+    {
+      "args": [
+        "nav-rail"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:nav-rail"
+    },
+    {
+      "args": [
+        "unknown.part"
+      ],
+      "fn": "keyContextOf",
+      "out": "global"
+    },
+    {
+      "args": [
+        "unknown.part"
+      ],
+      "fn": "contextMenuName",
+      "out": "context:unknown.part"
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-list.row",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.thread",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-list.row"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-list.row",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": "ctrl+p",
+            "type": "action"
+          },
+          {
+            "action": "print.thread",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-list.row"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-list.row",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": "shift+o",
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": "ctrl+p",
+            "type": "action"
+          },
+          {
+            "action": "print.thread",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-list.row"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-list.row",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.thread",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-list.row"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-list.row",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.thread",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-list.row"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:thread-view.message",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.mark-unread",
+            "args": [],
+            "icon": "mail",
+            "label": "@mail-actions.card-mark-unread",
+            "shortcut": "shift+u",
+            "type": "action"
+          },
+          {
+            "action": "mail.mark-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail-actions.card-mark-read",
+            "shortcut": "shift+i",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail-actions.card-toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail-actions.card-archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.card-move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail-actions.card-delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@mail-actions.card-junk",
+            "shortcut": "shift+j",
+            "type": "action"
+          }
+        ],
+        "name": "context:thread-view.message"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:thread-view.message",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.mark-unread",
+            "args": [],
+            "icon": "mail",
+            "label": "@mail-actions.card-mark-unread",
+            "shortcut": "shift+u",
+            "type": "action"
+          },
+          {
+            "action": "mail.mark-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail-actions.card-mark-read",
+            "shortcut": "shift+i",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail-actions.card-toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail-actions.card-archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.card-move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail-actions.card-delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@mail-actions.card-junk",
+            "shortcut": "shift+j",
+            "type": "action"
+          }
+        ],
+        "name": "context:thread-view.message"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:thread-view.message",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.mark-unread",
+            "args": [],
+            "icon": "mail",
+            "label": "@mail-actions.card-mark-unread",
+            "shortcut": "shift+u",
+            "type": "action"
+          },
+          {
+            "action": "mail.mark-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail-actions.card-mark-read",
+            "shortcut": "shift+i",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail-actions.card-toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail-actions.card-archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.card-move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail-actions.card-delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@mail-actions.card-junk",
+            "shortcut": "shift+j",
+            "type": "action"
+          }
+        ],
+        "name": "context:thread-view.message"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:thread-view.message",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.mark-unread",
+            "args": [],
+            "icon": "mail",
+            "label": "@mail-actions.card-mark-unread",
+            "shortcut": "shift+u",
+            "type": "action"
+          },
+          {
+            "action": "mail.mark-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail-actions.card-mark-read",
+            "shortcut": "shift+i",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail-actions.card-toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail-actions.card-archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.card-move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail-actions.card-delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@mail-actions.card-junk",
+            "shortcut": "shift+j",
+            "type": "action"
+          }
+        ],
+        "name": "context:thread-view.message"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:thread-view.message",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.mark-unread",
+            "args": [],
+            "icon": "mail",
+            "label": "@mail-actions.card-mark-unread",
+            "shortcut": "shift+u",
+            "type": "action"
+          },
+          {
+            "action": "mail.mark-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail-actions.card-mark-read",
+            "shortcut": "shift+i",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail-actions.card-toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail-actions.card-archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.card-move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail-actions.card-delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@mail-actions.card-junk",
+            "shortcut": "shift+j",
+            "type": "action"
+          }
+        ],
+        "name": "context:thread-view.message"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-view",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "security.autocrypt.import",
+            "args": [],
+            "icon": "key-round",
+            "label": "@security.action.autocrypt-import",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.save-pdf",
+            "args": [],
+            "icon": "file-down",
+            "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-view"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-view",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "security.autocrypt.import",
+            "args": [],
+            "icon": "key-round",
+            "label": "@security.action.autocrypt-import",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": "ctrl+p",
+            "type": "action"
+          },
+          {
+            "action": "print.save-pdf",
+            "args": [],
+            "icon": "file-down",
+            "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-view"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-view",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": "shift+o",
+            "type": "action"
+          },
+          {
+            "action": "security.autocrypt.import",
+            "args": [],
+            "icon": "key-round",
+            "label": "@security.action.autocrypt-import",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": "ctrl+p",
+            "type": "action"
+          },
+          {
+            "action": "print.save-pdf",
+            "args": [],
+            "icon": "file-down",
+            "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-view"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-view",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "security.autocrypt.import",
+            "args": [],
+            "icon": "key-round",
+            "label": "@security.action.autocrypt-import",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.save-pdf",
+            "args": [],
+            "icon": "file-down",
+            "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-view"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:message-view",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": "reply",
+            "label": "@mail.action.reply",
+            "shortcut": "r",
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": "reply-all",
+            "label": "@mail.action.reply-all",
+            "shortcut": "a",
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": "forward",
+            "label": "@mail.action.forward",
+            "shortcut": "f",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "icon": "archive",
+            "label": "@mail.action.archive",
+            "shortcut": "e",
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@mail.action.delete",
+            "shortcut": "delete",
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail.action.move",
+            "shortcut": "v",
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "icon": "flag",
+            "label": "@mail.action.toggle-flag",
+            "shortcut": "s",
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "icon": "alarm-clock",
+            "label": "@snooze.action.open",
+            "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.message",
+            "type": "header"
+          },
+          {
+            "action": "mail.toggle-read",
+            "args": [],
+            "icon": "mail-open",
+            "label": "@mail.action.toggle-read",
+            "shortcut": "u",
+            "type": "action"
+          },
+          {
+            "action": "junk.mark",
+            "args": [],
+            "icon": "shield-alert",
+            "label": "@junk.action.mark",
+            "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "action": "junk.not-junk",
+            "args": [],
+            "icon": "inbox",
+            "label": "@junk.action.not-junk",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "sync.download-message",
+            "args": [],
+            "icon": "download",
+            "label": "@sync.action.download-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.apply-labels",
+            "args": [],
+            "icon": "tags",
+            "label": "@gmail.action.apply-labels",
+            "shortcut": "l",
+            "type": "action"
+          },
+          {
+            "action": "exchange.apply-categories",
+            "args": [],
+            "icon": "tags",
+            "label": "@exchange.action.apply-categories",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.classify",
+            "args": [],
+            "icon": "list-filter",
+            "label": "@exchange.action.classify",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "security.autocrypt.import",
+            "args": [],
+            "icon": "key-round",
+            "label": "@security.action.autocrypt-import",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.message",
+            "args": [],
+            "icon": "printer",
+            "label": "@print.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "print.save-pdf",
+            "args": [],
+            "icon": "file-down",
+            "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "label": "@toolbar.group.turn-into",
+            "type": "header"
+          },
+          {
+            "action": "calendar.event-from-message",
+            "args": [],
+            "icon": "calendar",
+            "label": "@pim.action.event-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "tasks.from-message",
+            "args": [],
+            "icon": "square-check-big",
+            "label": "@pim.action.task-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.create-from-message",
+            "args": [],
+            "icon": "funnel",
+            "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:message-view"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.folder",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "sync.folder-policy",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.folder-policy",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.new-category",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.folder"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.folder",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "sync.folder-policy",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.folder-policy",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.new-category",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.folder"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.folder",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "sync.folder-policy",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.folder-policy",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.new-category",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.folder"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.folder",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "sync.folder-policy",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.folder-policy",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.new-category",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.folder"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.folder",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "sync.folder-policy",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.folder-policy",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.new-category",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.folder"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.account",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "exchange.automatic-replies",
+            "args": [],
+            "icon": "plane",
+            "label": "@exchange.action.automatic-replies",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "settings.section",
+            "args": [
+              "accounts"
+            ],
+            "icon": "user-round",
+            "label": "@settings.section.accounts",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.account"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.account",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "exchange.automatic-replies",
+            "args": [],
+            "icon": "plane",
+            "label": "@exchange.action.automatic-replies",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "settings.section",
+            "args": [
+              "accounts"
+            ],
+            "icon": "user-round",
+            "label": "@settings.section.accounts",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.account"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.account",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "exchange.automatic-replies",
+            "args": [],
+            "icon": "plane",
+            "label": "@exchange.action.automatic-replies",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "settings.section",
+            "args": [
+              "accounts"
+            ],
+            "icon": "user-round",
+            "label": "@settings.section.accounts",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.account"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.account",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "exchange.automatic-replies",
+            "args": [],
+            "icon": "plane",
+            "label": "@exchange.action.automatic-replies",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "settings.section",
+            "args": [
+              "accounts"
+            ],
+            "icon": "user-round",
+            "label": "@settings.section.accounts",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.account"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:folder-tree.account",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": "refresh-cw",
+            "label": "@sync.action.now",
+            "shortcut": "f5",
+            "type": "action"
+          },
+          {
+            "action": "exchange.automatic-replies",
+            "args": [],
+            "icon": "plane",
+            "label": "@exchange.action.automatic-replies",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "exchange.add-mailbox",
+            "args": [],
+            "icon": "plus",
+            "label": "@exchange.action.add-mailbox",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "gmail.new-label",
+            "args": [],
+            "icon": "plus",
+            "label": "@gmail.action.new-label",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "settings.section",
+            "args": [
+              "accounts"
+            ],
+            "icon": "user-round",
+            "label": "@settings.section.accounts",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:folder-tree.account"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:nav-rail",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "label": "@layout.menu.view",
+            "type": "header"
+          },
+          {
+            "action": "layout.customize",
+            "args": [],
+            "icon": "layout-dashboard",
+            "label": "@layout-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.edit",
+            "args": [],
+            "icon": "palette",
+            "label": "@appearance.action.edit-theme",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.reset",
+            "args": [],
+            "icon": "rotate-ccw",
+            "label": "@appearance.action.reset",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "palette.open",
+            "args": [],
+            "icon": "search",
+            "label": "@palette.action.open",
+            "shortcut": "ctrl+shift+p",
+            "type": "action"
+          }
+        ],
+        "name": "context:nav-rail"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:nav-rail",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "label": "@layout.menu.view",
+            "type": "header"
+          },
+          {
+            "action": "layout.customize",
+            "args": [],
+            "icon": "layout-dashboard",
+            "label": "@layout-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.edit",
+            "args": [],
+            "icon": "palette",
+            "label": "@appearance.action.edit-theme",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.reset",
+            "args": [],
+            "icon": "rotate-ccw",
+            "label": "@appearance.action.reset",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "palette.open",
+            "args": [],
+            "icon": "search",
+            "label": "@palette.action.open",
+            "shortcut": "ctrl+shift+p",
+            "type": "action"
+          }
+        ],
+        "name": "context:nav-rail"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:nav-rail",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "label": "@layout.menu.view",
+            "type": "header"
+          },
+          {
+            "action": "layout.customize",
+            "args": [],
+            "icon": "layout-dashboard",
+            "label": "@layout-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.edit",
+            "args": [],
+            "icon": "palette",
+            "label": "@appearance.action.edit-theme",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.reset",
+            "args": [],
+            "icon": "rotate-ccw",
+            "label": "@appearance.action.reset",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "palette.open",
+            "args": [],
+            "icon": "search",
+            "label": "@palette.action.open",
+            "shortcut": "ctrl+shift+p",
+            "type": "action"
+          }
+        ],
+        "name": "context:nav-rail"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:nav-rail",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "label": "@layout.menu.view",
+            "type": "header"
+          },
+          {
+            "action": "layout.customize",
+            "args": [],
+            "icon": "layout-dashboard",
+            "label": "@layout-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.edit",
+            "args": [],
+            "icon": "palette",
+            "label": "@appearance.action.edit-theme",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.reset",
+            "args": [],
+            "icon": "rotate-ccw",
+            "label": "@appearance.action.reset",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "palette.open",
+            "args": [],
+            "icon": "search",
+            "label": "@palette.action.open",
+            "shortcut": "ctrl+shift+p",
+            "type": "action"
+          }
+        ],
+        "name": "context:nav-rail"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:nav-rail",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "label": "@layout.menu.view",
+            "type": "header"
+          },
+          {
+            "action": "layout.customize",
+            "args": [],
+            "icon": "layout-dashboard",
+            "label": "@layout-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.edit",
+            "args": [],
+            "icon": "palette",
+            "label": "@appearance.action.edit-theme",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "theme.reset",
+            "args": [],
+            "icon": "rotate-ccw",
+            "label": "@appearance.action.reset",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "palette.open",
+            "args": [],
+            "icon": "search",
+            "label": "@palette.action.open",
+            "shortcut": "ctrl+shift+p",
+            "type": "action"
+          }
+        ],
+        "name": "context:nav-rail"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:toolbar",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "toolbar.customize",
+            "args": [],
+            "icon": "settings-2",
+            "label": "@toolbar-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:toolbar"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:toolbar",
+        "list"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "toolbar.customize",
+            "args": [],
+            "icon": "settings-2",
+            "label": "@toolbar-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:toolbar"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:toolbar",
+        "reader"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "toolbar.customize",
+            "args": [],
+            "icon": "settings-2",
+            "label": "@toolbar-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:toolbar"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:toolbar",
+        "composer"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "toolbar.customize",
+            "args": [],
+            "icon": "settings-2",
+            "label": "@toolbar-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:toolbar"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "context:toolbar",
+        "calendar"
+      ],
+      "fn": "resolveMenu",
+      "out": {
+        "items": [
+          {
+            "action": "toolbar.customize",
+            "args": [],
+            "icon": "settings-2",
+            "label": "@toolbar-editor.action.customize",
+            "shortcut": null,
+            "type": "action"
+          }
+        ],
+        "name": "context:toolbar"
+      }
+    },
+    {
+      "args": [
+        "default-layout",
+        "no-such-menu",
+        "global"
+      ],
+      "fn": "resolveMenu",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowdown"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowup"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowdown"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.next",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowup"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.previous",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.expand",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.expand",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowright"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.expand",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.collapse",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.collapse",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "arrowleft"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.collapse",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.open-in-reader",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-card",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-card",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-card",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-card",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-card",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-card",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "k"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.next-message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "n"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.previous-message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.toggle-card",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.toggle-card",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.toggle-card",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.expand-all",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.expand-all",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.expand-all",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": ";"
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.collapse-all",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.collapse-all",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "conversation.collapse-all",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": ":"
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.accept",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.accept",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.accept",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+y"
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.tentative",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.tentative",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.tentative",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.decline",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.decline",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "scheduling.decline",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+n"
+    },
+    {
+      "args": [
+        "default-layout",
+        "exchange.classify",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "exchange.classify",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "exchange.classify",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "print.message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.send",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.send",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.send",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.save",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.save",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.save",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.attach",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.attach",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "composer.attach",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.clear",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.clear",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.clear",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.goto-today",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.goto-today",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.goto-today",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.next",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.next",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.next",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.previous",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.previous",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.previous",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "day"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "day"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "day"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "week"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "week"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "week"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "month"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "month"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "month"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "year"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "year"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "year"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "agenda"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "agenda"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.view",
+        [
+          "agenda"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.new-event",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.new-event",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar.new-event",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "window.close",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "window.close",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "window.close",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.compose",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.compose",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.compose",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply-all",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply-all",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.reply-all",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.forward",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "f"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.forward",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "f"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.forward",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "f"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.archive",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "e"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.archive",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "e"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.archive",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "e"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.move",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "v"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.move",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "v"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.move",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "v"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete-permanently",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "shift+delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete-permanently",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "shift+delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.delete-permanently",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+delete"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-read",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-read",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-read",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-read",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-read",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-read",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-unread",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "shift+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-unread",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "shift+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.mark-unread",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "gmail.apply-labels",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "l"
+    },
+    {
+      "args": [
+        "default-layout",
+        "gmail.apply-labels",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "l"
+    },
+    {
+      "args": [
+        "default-layout",
+        "gmail.apply-labels",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "l"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.undo",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "z"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.undo",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "z"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.undo",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "z"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-flag",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "s"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-flag",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "s"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail.toggle-flag",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "s"
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.focus",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "/"
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.focus",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "/"
+    },
+    {
+      "args": [
+        "default-layout",
+        "search.focus",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "/"
+    },
+    {
+      "args": [
+        "default-layout",
+        "sync.now",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "f5"
+    },
+    {
+      "args": [
+        "default-layout",
+        "sync.now",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "f5"
+    },
+    {
+      "args": [
+        "default-layout",
+        "sync.now",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "f5"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "sidebar"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "sidebar"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "sidebar"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "reader"
+        ],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "reader"
+        ],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.toggle",
+        [
+          "reader"
+        ],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.calendar",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+2"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.calendar",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+2"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.calendar",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+2"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.contacts",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+3"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.contacts",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+3"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.contacts",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+3"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.tasks",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+4"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.tasks",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+4"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.tasks",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+4"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "view.mail",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g m"
+    },
+    {
+      "args": [
+        "default-layout",
+        "outbox.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "outbox.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "outbox.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g o"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.calendar.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.calendar.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.calendar.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g c"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.contacts.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.contacts.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.contacts.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.tasks.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g t"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.tasks.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g t"
+    },
+    {
+      "args": [
+        "default-layout",
+        "pim.tasks.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g t"
+    },
+    {
+      "args": [
+        "default-layout",
+        "agents.open-center",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "g a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "agents.open-center",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "g a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "agents.open-center",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "g a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+,"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+,"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+,"
+    },
+    {
+      "args": [
+        "default-layout",
+        "inspector.toggle",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "inspector.toggle",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "inspector.toggle",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+i"
+    },
+    {
+      "args": [
+        "default-layout",
+        "system.about",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "f1"
+    },
+    {
+      "args": [
+        "default-layout",
+        "system.about",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "f1"
+    },
+    {
+      "args": [
+        "default-layout",
+        "system.about",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "f1"
+    },
+    {
+      "args": [
+        "default-layout",
+        "snooze.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "snooze.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "snooze.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "b"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "junk.mark",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "shift+j"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "palette.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    },
+    {
+      "args": [
+        "default-layout",
+        "menu.context",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "contextmenu"
+    }
+  ]
+}

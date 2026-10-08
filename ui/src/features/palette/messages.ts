@@ -4,7 +4,11 @@
  * one of `prefixes` must exist in `locales/en/palette.ftl`; ids built at
  * runtime are listed by `runtimeIds`.
  */
-import type { ActionAvailability } from "../../api/generated";
+import {
+  ACTION_AVAILABILITY_MESSAGE_IDS,
+  ACTION_AVAILABILITY_VALUES,
+  type ActionAvailability,
+} from "../../api/generated";
 import { builtinMessageIds } from "./builtinInfo";
 import { PALETTE_DIALOG } from "./names";
 
@@ -14,21 +18,12 @@ export const prefixes: readonly string[] = ["palette-"];
 /** Literals with those prefixes that are not message ids (part, widget, dialog names). */
 export const notMessages: readonly string[] = [];
 
-/** Every `ActionAvailability` (mirrors `nail_api::palette`). */
-export const ACTION_AVAILABILITIES: readonly ActionAvailability[] = [
-  "global",
-  "list",
-  "reader",
-  "composer",
-  "calendar",
-  "contacts",
-  "tasks",
-  "desktop",
-];
+/** Every `ActionAvailability` (generated from `nail_api::palette`). */
+export { ACTION_AVAILABILITY_VALUES as ACTION_AVAILABILITIES } from "../../api/generated";
 
 /** Fluent id of an availability (`action-availability-*`). */
 export function availabilityMessageId(availability: ActionAvailability): string {
-  return `action-availability-${availability}`;
+  return ACTION_AVAILABILITY_MESSAGE_IDS[availability];
 }
 
 /** Message ids built at runtime. */
@@ -37,7 +32,7 @@ export function runtimeIds(): string[] {
     "palette-title",
     "palette-invalid-action",
     `window-${PALETTE_DIALOG}`,
-    ...ACTION_AVAILABILITIES.map(availabilityMessageId),
+    ...ACTION_AVAILABILITY_VALUES.map(availabilityMessageId),
     ...builtinMessageIds(),
   ];
 }

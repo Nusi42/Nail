@@ -1,16 +1,21 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, startNail, type NailServer } from "../support/nail";
+import { control, nailPerTest } from "../support/nail";
 import {
   accountSectionNamed,
-  composerWindow,
-  openSettingsTab,
   readerAction,
   runFromPalette,
-  sectionInbox,
   showView,
   viewRegion,
+  messageRows,
+  syncAccount,
+  DEMO_MULTI_CONVERSATIONS,
+  openMail,
+  moveSelectionTo,
+  messageList,
+  saveVacationReply,
 } from "../support/views";
 import { defined } from "../support/defined";
+import { expectSentThrough, newMessage } from "../support/compose";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -21,8 +26,6 @@ import { defined } from "../support/defined";
  * `graph-*` (the mock Graph tenant), `ews-*` (the mock EWS server).
  */
 
-let server: NailServer;
-
 /**
  * The core's clock for these tests: before every dated item of the mock
  * tenants (their first reminders are due 2026-10-05 06:45 UTC), so no
@@ -31,17 +34,9 @@ let server: NailServer;
  */
 const FIXTURE_NOW = Date.UTC(2026, 9, 1, 8, 0) / 1000;
 
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-  await control(server, "clock-set", { at: FIXTURE_NOW });
+const server = nailPerTest({ seed: "demo-multi" }, async (s) => {
+  await control(s, "clock-set", { at: FIXTURE_NOW });
 });
-
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 interface GraphMessage {
   id: string;
@@ -92,23 +87,13 @@ async function enableContoso(page: Page) {
   await enableAccount(page, "Contoso", 2);
 }
 
-/** Settings → Accounts → `name` → "Synchronize this account"; waits for
- * `messages` rows in its inbox. */
+/** Settings → Accounts → `name` (an Exchange account) → "Synchronize this
+ * account"; waits for `messages` rows in its inbox. */
 async function enableAccount(page: Page, name: string, messages: number) {
-  await showView(page, "Settings");
-  const settings = viewRegion(page, "Settings");
-  await openSettingsTab(page, "Accounts");
-  await settings.getByRole("button", { name: new RegExp(`^${name}`) }).click();
-  // An Exchange account shows its engine and options.
-  await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("exchange");
-  await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
-  await settings.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(settings.getByText("Settings saved.")).toBeVisible();
-  await showView(page, "Mail");
-  const account = accountSectionNamed(page, name);
-  await expect(account).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await sectionInbox(account).click();
-  await expect(rows(page)).toHaveCount(messages, { timeout: 30_000 });
+  await syncAccount(page, name, messages, async (settings) => {
+    // An Exchange account shows its engine and options.
+    await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("exchange");
+  });
 }
 
 /** Opens the Add account dialog and looks up `email`. */
@@ -134,8 +119,7 @@ async function finishSetup(page: Page, dialog: Locator) {
 }
 
 test("an Exchange Online account is added through Autodiscover and syncs", async ({ page }) => {
-  await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
   // Another address of the demo tenant (Ada's is configured already).
   const dialog = await lookUp(page, "grace@contoso.example");
   // Autodiscover: Exchange Online → Microsoft Graph.
@@ -161,7 +145,7 @@ test("an Exchange Online account is added through Autodiscover and syncs", async
   const grace = accountSectionNamed(page, "grace@contoso.example");
   await expect(grace).toHaveAttribute("data-account-kind", "exchange");
   await expect(grace).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await expect(rows(page).filter({ hasText: "Engine review on Monday" })).toHaveCount(1, {
+  await expect(messageRows(page).filter({ hasText: "Engine review on Monday" })).toHaveCount(1, {
     timeout: 30_000,
   });
 });
@@ -185,50 +169,46 @@ test("an on-premises Exchange account is added through Autodiscover (EWS)", asyn
   await finishSetup(page, dialog);
   const ada = accountSectionNamed(page, "grace@corp.example");
   await expect(ada).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await expect(rows(page).filter({ hasText: "Quarterly numbers" })).toHaveCount(1, {
+  await expect(messageRows(page).filter({ hasText: "Quarterly numbers" })).toHaveCount(1, {
     timeout: 30_000,
   });
   // Server-side mail arrives through streaming notifications.
   await control(server, "ews-deliver", {
     raw: "From: Grace <grace@corp.example>\nTo: ada@corp.example\nSubject: Pushed by EWS\nMessage-ID: <push@corp.example>\n\nHello\n",
   });
-  await expect(rows(page).filter({ hasText: "Pushed by EWS" })).toHaveCount(1, {
+  await expect(messageRows(page).filter({ hasText: "Pushed by EWS" })).toHaveCount(1, {
     timeout: 30_000,
   });
 });
 
 test("Exchange mail syncs, takes flags, moves, categories as tags and sends", async ({ page }) => {
-  await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
   await enableContoso(page);
 
   // Focused Inbox tabs filter the inbox.
   const tabs = page.locator('[data-part="focused-tabs"]');
   await tabs.getByRole("button", { name: "Other", exact: true }).click();
-  await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).first()).toContainText("Fabrikam newsletter, October");
+  await expect(messageRows(page)).toHaveCount(1);
+  await expect(messageRows(page).first()).toContainText("Fabrikam newsletter, October");
   await tabs.getByRole("button", { name: "All", exact: true }).click();
-  await expect(rows(page)).toHaveCount(2);
+  await expect(messageRows(page)).toHaveCount(2);
 
   // Flag: replayed to Graph.
-  await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
+  await messageRows(page).filter({ hasText: "Fabrikam newsletter" }).click();
   await readerAction(page, "Flag");
   await expect
     .poll(async () => (await graphMessage("Fabrikam newsletter, October"))?.flag)
     .toBe("flagged");
 
   // A category on the server shows as a tag with its colour.
-  await rows(page).filter({ hasText: "Engine review on Monday" }).click();
+  await messageRows(page).filter({ hasText: "Engine review on Monday" }).click();
   await expect(
     page.locator('[data-part="exchange.categories"]').getByText("Red category"),
   ).toBeVisible();
 
   // Move to Inbox/Receipts: the server moves it too.
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("v");
-  const move = page.getByRole("dialog", { name: "Move to folder" });
-  await move.getByRole("button", { name: "Receipts", exact: true }).click();
-  await expect(rows(page)).toHaveCount(1);
+  await moveSelectionTo(page, "Receipts");
+  await expect(messageRows(page)).toHaveCount(1);
   const receipts = defined(
     (await graphFolders()).find((f) => f.name === "Receipts"),
     "the Receipts folder",
@@ -247,7 +227,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
     .poll(async () => (await graphSettings()).categories.map((c) => c.displayName))
     .toContain("Urgent");
   // Tags are categories on the message.
-  await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
+  await messageRows(page).filter({ hasText: "Fabrikam newsletter" }).click();
   await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Urgent" }).check();
@@ -258,23 +238,15 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
     .toContain("Urgent");
 
   // Sending goes through Graph.
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  await composer.getByRole("textbox", { name: "To" }).fill("bob@contoso.example");
-  await composer.getByRole("textbox", { name: "Subject" }).fill("Sent through Microsoft Graph");
-  await composer.getByRole("textbox", { name: "Message" }).fill("Hello Bob");
+  await messageList(page).focus();
+  const composer = await newMessage(page, {
+    to: "bob@contoso.example",
+    subject: "Sent through Microsoft Graph",
+    text: "Hello Bob",
+  });
   await composer.getByRole("button", { name: "Send", exact: true }).click();
   await expect(composer).toBeHidden();
-  await expect
-    .poll(
-      async () =>
-        (await control<string[]>(server, "graph-sent")).some((raw) =>
-          raw.includes("Sent through Microsoft Graph"),
-        ),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+  await expectSentThrough(server, "graph-sent", "Sent through Microsoft Graph");
 });
 
 test("a shared mailbox appears and automatic replies are set and read back", async ({ page }) => {
@@ -293,19 +265,12 @@ test("a shared mailbox appears and automatic replies are set and read back", asy
   });
   // M5b: section (1) → mailbox (2) → its Inbox (3).
   await tree.getByRole("treeitem", { name: /^Inbox/, level: 3 }).click();
-  await expect(rows(page).filter({ hasText: "Ticket 4711: login fails" })).toHaveCount(1, {
+  await expect(messageRows(page).filter({ hasText: "Ticket 4711: login fails" })).toHaveCount(1, {
     timeout: 30_000,
   });
 
   // Automatic replies: on, with a text, on the server.
-  await showView(page, "Settings");
-  const settings = viewRegion(page, "Settings");
-  await openSettingsTab(page, "Vacation reply");
-  const vacation = settings.locator('[data-part="vacation-editor"]');
-  await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: "Contoso" });
-  await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
-  await vacation.getByRole("textbox", { name: "Message" }).fill("Back on Monday.");
-  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await saveVacationReply(page, "Contoso", "Back on Monday.");
   // The demo's replies were scheduled: the dates stay, the text is new.
   await expect
     .poll(async () => String((await graphSettings()).automatic_replies.internalReplyMessage), {
@@ -327,7 +292,7 @@ test("a shared mailbox appears and automatic replies are set and read back", asy
 test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
   await page.goto(server.url);
   await enableContoso(page);
-  await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
+  await messageRows(page).filter({ hasText: "Fabrikam newsletter" }).click();
   await readerAction(page, "Create rule from message");
   const rules = page.getByRole("dialog", { name: "Filter rules" });
   const editor = rules.getByRole("form", { name: "Rule" });
@@ -414,18 +379,15 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   await enableAccount(page, "Corp", 3);
 
   // Move to Archive: replayed through EWS (MoveItem).
-  await rows(page).filter({ hasText: "Quarterly numbers" }).click();
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("v");
-  const move = page.getByRole("dialog", { name: "Move to folder" });
-  await move.getByRole("button", { name: "Archive", exact: true }).click();
-  await expect(rows(page)).toHaveCount(2);
+  await messageRows(page).filter({ hasText: "Quarterly numbers" }).click();
+  await moveSelectionTo(page, "Archive");
+  await expect(messageRows(page)).toHaveCount(2);
   await expect
     .poll(async () => (await ewsItems("Archive")).map((i) => i.subject), { timeout: 30_000 })
     .toContain("Quarterly numbers");
 
   // A category of the server's master list, set as a tag.
-  await rows(page).filter({ hasText: "Password expires in 7 days" }).click();
+  await messageRows(page).filter({ hasText: "Password expires in 7 days" }).click();
   await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Work" }).check();
@@ -440,33 +402,18 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
     .toContain("Work");
 
   // Sending goes through EWS (SendAndSaveCopy).
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  await composer.getByRole("textbox", { name: "To" }).fill("bob@corp.example");
-  await composer.getByRole("textbox", { name: "Subject" }).fill("Sent through EWS");
-  await composer.getByRole("textbox", { name: "Message" }).fill("Hello Bob");
+  await messageList(page).focus();
+  const composer = await newMessage(page, {
+    to: "bob@corp.example",
+    subject: "Sent through EWS",
+    text: "Hello Bob",
+  });
   await composer.getByRole("button", { name: "Send", exact: true }).click();
   await expect(composer).toBeHidden();
-  await expect
-    .poll(
-      async () =>
-        (await control<string[]>(server, "ews-sent")).some((raw) =>
-          raw.includes("Sent through EWS"),
-        ),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+  await expectSentThrough(server, "ews-sent", "Sent through EWS");
 
   // Automatic replies through the vacation editor (SetUserOofSettings).
-  await showView(page, "Settings");
-  const settings = viewRegion(page, "Settings");
-  await openSettingsTab(page, "Vacation reply");
-  const vacation = settings.locator('[data-part="vacation-editor"]');
-  await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: "Corp" });
-  await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
-  await vacation.getByRole("textbox", { name: "Message" }).fill("Away until Monday.");
-  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await saveVacationReply(page, "Corp", "Away until Monday.");
   await expect
     .poll(async () => (await ewsSettings()).oof.internal, { timeout: 30_000 })
     .toContain("Away until Monday.");

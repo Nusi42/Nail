@@ -31,7 +31,12 @@ import type {
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { makeKey } from "./mockSeed";
-import { formatRecoveryKey, normalizeRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
+import {
+  formatRecoveryKey,
+  normalizeRecoveryKey,
+  parseRecoveryKey,
+  recoveryIssueId,
+} from "./recoveryKeyText";
 import { PIN_PROMPT_TIMEOUT_SECS, smartcardSettingsIssue } from "./smartcardModel";
 
 export { smartcardSettingsIssue } from "./smartcardModel";
@@ -319,7 +324,7 @@ export function answerVault(core: MockCore, request: VaultRequest): Response {
     case "VerifyRecoveryKey": {
       const parsed = parseRecoveryKey(request.key);
       if (!parsed.ok) {
-        return error("invalid_request", `recovery-key-issue-${parsed.issue}`);
+        return error("invalid_request", recoveryIssueId(parsed.issue));
       }
       const valid =
         state.recoveryKey !== null && normalizeRecoveryKey(request.key) === state.recoveryKey;
@@ -333,7 +338,7 @@ export function answerVault(core: MockCore, request: VaultRequest): Response {
     case "RestoreVaultKey": {
       const parsed = parseRecoveryKey(request.key);
       if (!parsed.ok) {
-        return error("invalid_request", `recovery-key-issue-${parsed.issue}`);
+        return error("invalid_request", recoveryIssueId(parsed.issue));
       }
       if (state.recoveryKey === null || normalizeRecoveryKey(request.key) !== state.recoveryKey) {
         return error("auth_failed", "recovery-key-wrong");

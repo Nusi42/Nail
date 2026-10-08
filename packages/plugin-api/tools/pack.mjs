@@ -7,15 +7,12 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { CONTRACT } from "./contract.mjs";
 import { checkManifest, isPackagePath } from "./manifest.mjs";
 import { createZip } from "./zip.mjs";
 
-/** Largest `manifest.json` (bytes), as in Nail. */
-export const MAX_MANIFEST_BYTES = 64 * 1024;
-/** Largest package (bytes), as in Nail. */
-export const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
-/** The package file extension. */
-export const PACKAGE_EXTENSION = "nailplugin";
+/** Largest `manifest.json` and package (bytes), the package file extension: Nail's. */
+export const { MAX_MANIFEST_BYTES, MAX_PACKAGE_BYTES, PACKAGE_EXTENSION } = CONTRACT;
 
 /** A packing failure with the manifest issues (if any). */
 export class PackError extends Error {

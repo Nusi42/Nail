@@ -7,11 +7,13 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildBase as checkoutBuildBase } from "../../../scripts/lib/build.mjs";
+import { repoRoot } from "../../../scripts/lib/program.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** The checkout this harness belongs to. */
-export const repoRoot = path.resolve(here, "..", "..", "..");
+export { repoRoot };
 
 /** The checked-in baselines (`NAIL_VISUAL_BASELINES` overrides), per platform below it. */
 export function baselinesRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -21,7 +23,7 @@ export function baselinesRoot(env: NodeJS.ProcessEnv = process.env): string {
 
 /** The base build directory, as `e2e/support/nail.ts` `buildOutputDir` computes it. */
 export function buildBase(env: NodeJS.ProcessEnv = process.env): string {
-  return env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
+  return checkoutBuildBase(env, repoRoot);
 }
 
 /** The harness's output root. */

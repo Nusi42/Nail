@@ -729,7 +729,7 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        Vitest); vite.config.ts splits vendor / catalogs chunks, TipTap / CodeMirror
                        load lazily
 packages/              npm workspaces (M2d, ADR 0053): plugin-api (@nail/plugin-api: src/api.ts = the host's
-                       `nail` global (mirror prelude.js by hand), jsx-runtime, globals.d.ts, testing.ts
+                       `nail` global (typed by hand, pinned against prelude.js by src/prelude.test.ts), jsx-runtime, globals.d.ts, testing.ts
                        createTestHost (writes, confirmations, hooks, previews, jobs, MCP tools, l10n),
                        src/extensions.ts hook / preview helpers and checks, src/bytes.ts UTF-8 / base64,
                        src/l10n.ts Fluent for the test host, tools/ checkManifest + packPlugin + cron.mjs +
@@ -765,6 +765,10 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        <build dir>/screens/p2/quickwin/);
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
+                       Q2 (ADR 0172): servers only via support/nail.ts nailPerTest / nailPerFile / nailFixture /
+                       nailOnDemand (support/serve.mjs spawnServe + coreRequest), desktop apps via support/desktop.ts
+                       desktopTests / desktopPerFile / desktopPerTest; shared steps in support/{views,compose,mcp,
+                       calendar,demo,axe,remote,windowTour}.ts (windowTour = the a11y and P1 window sweeps);
                        support/responsive.ts (P1, ADR 0139: STANDARD_SIZES 1600/1280/1024/800 × 1000/700,
                        expectResponsive / layoutIssues / resizeWindow — overflow, clipping, text running out of a
                        non-clipping box (`overflowing`, ADR 0147), overlap (incl. a text leaf's sideways spill),
@@ -849,7 +853,8 @@ taplo fmt                                  # format TOML (cargo install taplo-cl
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run build:desktop                      # nail-app (custom-protocol + test-overrides) + DLL / harness for the desktop smoke tests, own target dir
-npm run gen:api                            # regenerate ui/src/api/generated + packages/plugin-api/src/generated (a test fails when stale)
+npm run gen:api                            # regenerate ui/src/api/generated + packages/plugin-api/src/generated incl. constants.ts / .json (a test fails when stale)
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors   # crates/nail-api/fixtures/ts-vectors (Rust answers for the UI ports; also -p nail-config / -p nail-core ts_vectors; ADR 0172)
 npm run docs -w packages/plugin-api        # regenerate the reference sections of userDocs/en/plugins/{api-reference,components}.md (a test fails when stale)
 node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|composer|attachment] [--id] [--name] [--sdk]   # scaffold a plug-in
 npm run package --prefix examples/<name>   # build + pack an example (follow-up, attachment-check, csv-preview; dist/ gitignored)

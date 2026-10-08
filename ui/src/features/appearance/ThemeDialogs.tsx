@@ -12,7 +12,8 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { useUiStoreApi } from "../../state/uiStore";
 import { useDeleteTheme, useDuplicateTheme, useRenameTheme, useUseTheme } from "./editorQueries";
 import { openThemeEditor, themeEditorStoreFor, useThemeEditorState } from "./editorStore";
-import { THEME_NAME_MAX, isThemeName, themeIdFromName } from "./model";
+import { MAX_THEME_NAME_CHARS } from "../../api/generated";
+import { isThemeName, themeIdFromName } from "./model";
 import { useAppearance } from "./queries";
 import { useThemeName } from "./ThemeEditor";
 
@@ -37,7 +38,7 @@ function NameField({
         id={id}
         type="text"
         data-part="form.input"
-        maxLength={THEME_NAME_MAX}
+        maxLength={MAX_THEME_NAME_CHARS}
         aria-invalid={invalid || undefined}
         aria-describedby={`${id}-hint`}
         value={value}

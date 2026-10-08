@@ -22,22 +22,23 @@
  * a program's "Send to" becomes a saved draft plus a `ComposeDraft` launch
  * request — never a sent message.
  */
-import type {
-  Address,
-  DefaultAppsStatus,
-  DesktopSettings,
-  Draft,
-  FirstRunState,
-  InstallationInfo,
-  MapiResult,
-  Request,
-  Response,
-  UpdateChannel,
-  UpdateFailure,
-  UpdateInfo,
-  UpdateSettings,
-  UpdateState,
-  UpdateStatus,
+import {
+  UPDATE_DISABLED_REASON_MESSAGE_IDS,
+  type Address,
+  type DefaultAppsStatus,
+  type DesktopSettings,
+  type Draft,
+  type FirstRunState,
+  type InstallationInfo,
+  type MapiResult,
+  type Request,
+  type Response,
+  type UpdateChannel,
+  type UpdateFailure,
+  type UpdateInfo,
+  type UpdateSettings,
+  type UpdateState,
+  type UpdateStatus,
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { answerComposer, saveRichDraft } from "../composer/mock";
@@ -340,7 +341,11 @@ export function answerSystem(core: MockCore, request: SystemRequest): Response {
     case "InstallUpdate": {
       const reason = state.installation.updates_disabled;
       if (reason !== null) {
-        return error("forbidden", "updates are disabled", `update-disabled-${reason}`);
+        return error(
+          "forbidden",
+          "updates are disabled",
+          UPDATE_DISABLED_REASON_MESSAGE_IDS[reason],
+        );
       }
       const allowed =
         request.type === "CheckForUpdates"

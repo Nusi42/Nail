@@ -1,8 +1,15 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { composerWindow, runFromPalette } from "../support/views";
+import { expect, test, type Page } from "@playwright/test";
+import { nailPerTest, serverMessages } from "../support/nail";
+import {
+  composerWindow,
+  runFromPalette,
+  messageRows,
+  openMail,
+  DEMO_MULTI_CONVERSATIONS,
+} from "../support/views";
+import { newMessage, sendMessage, smtpMessageMatching, smtpMessages } from "../support/compose";
 
 /**
  * The rich composer (ADR 0023) against the `demo-multi` mock servers: HTML
@@ -11,59 +18,9 @@ import { composerWindow, runFromPalette } from "../support/views";
  * Drafts folder and continued after a reload.
  */
 
-let server: NailServer;
+const server = nailPerTest({ seed: "demo-multi" });
 
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
-
-interface Received {
-  from: string;
-  to: string[];
-  data: string;
-}
-
-const received = () => control<Received[]>(server, "smtp-messages");
-
-async function mailWith(subject: string): Promise<string> {
-  let data = "";
-  await expect
-    .poll(
-      async () => {
-        data = (await received()).find((m) => m.data.includes(`Subject: ${subject}`))?.data ?? "";
-        return data !== "";
-      },
-      { timeout: 20_000 },
-    )
-    .toBe(true);
-  return data;
-}
-
-async function openApp(page: Page) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-}
-
-async function newMessage(page: Page, subject: string): Promise<Locator> {
-  await page.keyboard.press("c");
-  const dialog = composerWindow(page);
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
-  await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
-  return dialog;
-}
-
-async function send(page: Page, dialog: Locator) {
-  await dialog.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("status", { name: "Status" }).getByText("Message sent.")).toBeVisible(
-    { timeout: 20_000 },
-  );
-}
+const openApp = (page: Page) => openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
 
 /** Closes an open composer window (the accounts change may not have applied yet). */
 async function closeComposer(page: Page) {
@@ -92,7 +49,7 @@ test("HTML and Markdown mails reach the SMTP server with their MIME parts", asyn
   await openApp(page);
 
   // HTML: bold text from the formatting toolbar.
-  let dialog = await newMessage(page, "HTML greetings");
+  let dialog = await newMessage(page, { subject: "HTML greetings" });
   await dialog.getByRole("radio", { name: "HTML" }).click();
   await expect(dialog.getByRole("radio", { name: "HTML" })).toBeChecked();
   const html = dialog.getByRole("textbox", { name: "Message" });
@@ -100,15 +57,15 @@ test("HTML and Markdown mails reach the SMTP server with their MIME parts", asyn
   await page.keyboard.type("Hello ");
   await dialog.getByRole("button", { name: "Bold" }).click();
   await page.keyboard.type("Grace");
-  await send(page, dialog);
-  let data = await mailWith("HTML greetings");
+  await sendMessage(page, dialog);
+  let data = await smtpMessageMatching(server, "Subject: HTML greetings");
   expect(data).toMatch(/Content-Type: multipart\/alternative/i);
   expect(data).toMatch(/Content-Type: text\/plain/i);
   expect(data).toMatch(/Content-Type: text\/html/i);
   expect(data).toContain("<strong>Grace</strong>");
 
   // Markdown with the source as text/markdown and an attachment.
-  dialog = await newMessage(page, "Markdown notes");
+  dialog = await newMessage(page, { subject: "Markdown notes" });
   await dialog.getByRole("radio", { name: "Markdown" }).click();
   await expect(dialog.getByRole("radio", { name: "Markdown" })).toBeChecked();
   const source = dialog.getByRole("textbox", { name: "Message" });
@@ -128,8 +85,8 @@ test("HTML and Markdown mails reach the SMTP server with their MIME parts", asyn
   );
   const preview = dialog.frameLocator('[data-part="composer.preview.frame"]');
   await expect(preview.locator("h1")).toHaveText("Review");
-  await send(page, dialog);
-  data = await mailWith("Markdown notes");
+  await sendMessage(page, dialog);
+  data = await smtpMessageMatching(server, "Subject: Markdown notes");
   expect(data).toMatch(/Content-Type: multipart\/mixed/i);
   expect(data).toMatch(/Content-Type: multipart\/alternative/i);
   expect(data).toMatch(/Content-Type: text\/markdown/i);
@@ -142,10 +99,7 @@ test("HTML and Markdown mails reach the SMTP server with their MIME parts", asyn
 
 test("replies quote the original in HTML and in Markdown", async ({ page }) => {
   await openApp(page);
-  const original = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Welcome to Nail" })
-    .first();
+  const original = messageRows(page).filter({ hasText: "Welcome to Nail" }).first();
 
   // HTML: the original in a blockquote under a localized header.
   setComposerMode("html");
@@ -164,8 +118,8 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
   await editor.click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.type("Thanks!");
-  await send(page, dialog);
-  let data = await mailWith("Re: Welcome to Nail");
+  await sendMessage(page, dialog);
+  let data = await smtpMessageMatching(server, "Subject: Re: Welcome to Nail");
   expect(data).toMatch(/^In-Reply-To: </m);
   expect(data).toContain("<blockquote");
 
@@ -181,12 +135,12 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
   const source = dialog.locator('[data-part="composer.markdown.content"]');
   await expect(source).toContainText("wrote:");
   await expect(source.locator(".cm-line").filter({ hasText: /^> / }).first()).toBeVisible();
-  await send(page, dialog);
+  await sendMessage(page, dialog);
   data = await (async () => {
     let found = "";
     await expect
       .poll(async () => {
-        const replies = (await received()).filter((m) =>
+        const replies = (await smtpMessages(server)).filter((m) =>
           m.data.includes("Subject: Re: Welcome to Nail"),
         );
         found = replies[1]?.data ?? "";
@@ -201,7 +155,7 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
 
 test("drafts are autosaved to the server and continued after a reload", async ({ page }) => {
   await openApp(page);
-  const dialog = await newMessage(page, "Plans for Friday");
+  const dialog = await newMessage(page, { subject: "Plans for Friday" });
   await dialog.getByRole("textbox", { name: "Message" }).fill("Half-written thoughts");
   // Autosave: shortly after the last edit, locally and to the server's Drafts.
   await expect(dialog.locator('[data-part="composer.saved"]')).toHaveText("Draft saved.", {
@@ -213,7 +167,7 @@ test("drafts are autosaved to the server and continued after a reload", async ({
 
   // A reload forgets the open composer; the outbox window lists the draft.
   await page.reload();
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
   await runFromPalette(page, "outbox", "Outbox");
   const drafts = page.getByRole("region", { name: "Drafts" });
   const item = drafts.locator('[data-part="outbox.item"]').filter({ hasText: "Plans for Friday" });
@@ -226,7 +180,7 @@ test("drafts are autosaved to the server and continued after a reload", async ({
   await expect(reopened.getByRole("textbox", { name: "To" })).toHaveValue("grace@navy.example");
 
   // Sending removes the server copy.
-  await send(page, reopened);
+  await sendMessage(page, reopened);
   await expect
     .poll(async () => (await serverMessages(server, "Drafts")).map((m) => m.subject))
     .not.toContain("Plans for Friday");

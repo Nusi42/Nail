@@ -1,22 +1,19 @@
 /**
- * Plug-in ids in the layout (ADR 0050), the same rules as
- * `nail_api::plugins`: plug-in ids and names of commands / panels are
+ * Plug-in ids in the layout (ADR 0050), ports of `nail_api::plugins` pinned
+ * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * `extensions.test.ts`): plug-in ids and names of commands / panels are
  * kebab-case, 1–64 characters, starting with a letter; commands are the
  * actions `plugin.<plugin>.<command>`, panels `plugin-panel
  * "<plugin>.<panel>"`.
  */
-
-/** Longest plug-in id or contribution name (`MAX_NAME_LEN`). */
-export const MAX_NAME_LEN = 64;
-
-/** Prefix of plug-in action ids. */
-export const PLUGIN_ACTION_PREFIX = "plugin.";
+import { MAX_PLUGIN_NAME_LEN, PLUGIN_ACTION_PREFIX } from "../../api/generated";
+export { MAX_PLUGIN_NAME_LEN as MAX_NAME_LEN, PLUGIN_ACTION_PREFIX } from "../../api/generated";
 
 const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /** Whether `name` is a valid plug-in id or contribution name. */
 export function isPluginName(name: string): boolean {
-  return name.length > 0 && name.length <= MAX_NAME_LEN && KEBAB.test(name);
+  return name.length > 0 && name.length <= MAX_PLUGIN_NAME_LEN && KEBAB.test(name);
 }
 
 /** `plugin.<plugin>.<command>`. */

@@ -1,0 +1,635 @@
+{
+  "cases": [
+    {
+      "args": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "fn": "formatRecoveryKey",
+      "out": "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-3455"
+    },
+    {
+      "args": [
+        "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-3455"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 3455"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "1000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-3455"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "checksum-mismatch",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-34"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "wrong-length",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        [
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "fn": "formatRecoveryKey",
+      "out": "ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZG-ZXPA"
+    },
+    {
+      "args": [
+        "ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZG-ZXPA"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzz zzzg zxpa"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "0ZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZG-ZXPA"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "checksum-mismatch",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZG-ZX"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "wrong-length",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        [
+          3,
+          10,
+          17,
+          24,
+          31,
+          38,
+          45,
+          52,
+          59,
+          66,
+          73,
+          80,
+          87,
+          94,
+          101,
+          108,
+          115,
+          122,
+          129,
+          136,
+          143,
+          150,
+          157,
+          164,
+          171,
+          178,
+          185,
+          192,
+          199,
+          206,
+          213,
+          220
+        ]
+      ],
+      "fn": "formatRecoveryKey",
+      "out": "0C51-260Z-4RPK-8ET2-9585-EQK5-DHSQ-N0C8-HYB9-V95B-PAWW-1HYE-TQE0-M478"
+    },
+    {
+      "args": [
+        "0C51-260Z-4RPK-8ET2-9585-EQK5-DHSQ-N0C8-HYB9-V95B-PAWW-1HYE-TQE0-M478"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          3,
+          10,
+          17,
+          24,
+          31,
+          38,
+          45,
+          52,
+          59,
+          66,
+          73,
+          80,
+          87,
+          94,
+          101,
+          108,
+          115,
+          122,
+          129,
+          136,
+          143,
+          150,
+          157,
+          164,
+          171,
+          178,
+          185,
+          192,
+          199,
+          206,
+          213,
+          220
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "0c51 260z 4rpk 8et2 9585 eqk5 dhsq n0c8 hyb9 v95b paww 1hye tqe0 m478"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "bytes": [
+          3,
+          10,
+          17,
+          24,
+          31,
+          38,
+          45,
+          52,
+          59,
+          66,
+          73,
+          80,
+          87,
+          94,
+          101,
+          108,
+          115,
+          122,
+          129,
+          136,
+          143,
+          150,
+          157,
+          164,
+          171,
+          178,
+          185,
+          192,
+          199,
+          206,
+          213,
+          220
+        ],
+        "ok": true
+      }
+    },
+    {
+      "args": [
+        "1C51-260Z-4RPK-8ET2-9585-EQK5-DHSQ-N0C8-HYB9-V95B-PAWW-1HYE-TQE0-M478"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "checksum-mismatch",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "0C51-260Z-4RPK-8ET2-9585-EQK5-DHSQ-N0C8-HYB9-V95B-PAWW-1HYE-TQE0-M4"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "wrong-length",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "empty",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "  - "
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "empty",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "U000"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "invalid-character",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        "oil0-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000"
+      ],
+      "fn": "parseRecoveryKey",
+      "out": {
+        "issue": "checksum-mismatch",
+        "ok": false
+      }
+    },
+    {
+      "args": [
+        {
+          "modules": [],
+          "pin_cache_minutes": 0
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "modules": [
+            {
+              "enabled": true,
+              "name": null,
+              "path": "C:\\pkcs11\\a.dll"
+            },
+            {
+              "enabled": true,
+              "name": null,
+              "path": "/usr/lib/b.so"
+            },
+            {
+              "enabled": true,
+              "name": null,
+              "path": "\\\\srv\\c.dll"
+            }
+          ],
+          "pin_cache_minutes": 480
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "modules": [
+            {
+              "enabled": true,
+              "name": null,
+              "path": "a.dll"
+            }
+          ],
+          "pin_cache_minutes": 0
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": "smartcard-settings-issue-relative-path"
+    },
+    {
+      "args": [
+        {
+          "modules": [
+            {
+              "enabled": true,
+              "name": null,
+              "path": "C:/x.dll"
+            },
+            {
+              "enabled": true,
+              "name": null,
+              "path": "c:/X.DLL"
+            }
+          ],
+          "pin_cache_minutes": 0
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": "smartcard-settings-issue-duplicate-module"
+    },
+    {
+      "args": [
+        {
+          "modules": [],
+          "pin_cache_minutes": 481
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": "smartcard-settings-issue-cache-too-long"
+    },
+    {
+      "args": [
+        {
+          "modules": [
+            {
+              "enabled": true,
+              "name": null,
+              "path": "rel"
+            },
+            {
+              "enabled": true,
+              "name": null,
+              "path": "rel"
+            }
+          ],
+          "pin_cache_minutes": 9999
+        }
+      ],
+      "fn": "smartcardSettingsIssue",
+      "out": "smartcard-settings-issue-relative-path"
+    },
+    {
+      "args": [
+        "1234"
+      ],
+      "fn": "pinIsPlausible",
+      "out": true
+    },
+    {
+      "args": [
+        "123"
+      ],
+      "fn": "pinIsPlausible",
+      "out": false
+    },
+    {
+      "args": [
+        "äöüß"
+      ],
+      "fn": "pinIsPlausible",
+      "out": true
+    },
+    {
+      "args": [
+        "12\n34"
+      ],
+      "fn": "pinIsPlausible",
+      "out": false
+    },
+    {
+      "args": [
+        "123"
+      ],
+      "fn": "pinIsPlausible",
+      "out": false
+    },
+    {
+      "args": [
+        "99999999999999999999999999999999999999999999999999999999999999999"
+      ],
+      "fn": "pinIsPlausible",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "pinIsPlausible",
+      "out": false
+    }
+  ]
+}

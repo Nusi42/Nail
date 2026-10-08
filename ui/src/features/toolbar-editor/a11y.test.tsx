@@ -5,9 +5,7 @@
  * token-only and well-formed.
  */
 import { act, fireEvent, waitFor } from "@testing-library/react";
-import { defaultTheme } from "../../api/mockData";
 import { BUILTIN_THEMES } from "../appearance";
-import { resolveMockTheme } from "../appearance/themes";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { violations } from "../../test/axe";
@@ -20,6 +18,7 @@ import {
   CUSTOMIZER_SHORT,
   TOOLBAR_CUSTOMIZER_SKIN_CSS,
 } from "./skin";
+import { builtinTheme } from "../../test/themes";
 
 async function settle(env: Env): Promise<void> {
   await waitFor(() => {
@@ -34,17 +33,10 @@ async function settle(env: Env): Promise<void> {
 const THEMES = BUILTIN_THEMES.map(([id]) => id);
 
 describe("toolbar customizer accessibility (M5d)", () => {
-  it("covers the five built-in themes", () => {
-    expect(THEMES).toEqual(["frost", "sage", "graphite", "nocturne", "high-contrast"]);
-  });
-
   it.each(THEMES)(
     "%s: the customizer window and the settings card have no violations",
     async (id) => {
-      const theme = resolveMockTheme(defaultTheme(), id, {
-        density: "comfortable",
-        overrides: {},
-      });
+      const theme = builtinTheme(id);
       // The theme still compiles with the customizer's skin after it.
       expect(compileTheme(theme).warnings).toEqual([]);
       const env = createEnv();

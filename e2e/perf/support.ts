@@ -9,12 +9,10 @@
  * `<build dir>/perf/<corpus>/{data,config,report-rust.json}`. Nothing goes
  * into the repository.
  */
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
-import { buildOutputDir, repoRoot } from "../support/nail";
-import { defined } from "../support/defined";
+import { workspaceBinary } from "../../scripts/lib/cargo.mjs";
+import { buildOutputDir, repoRoot, spawnServe, type ServeProcess } from "../support/nail";
 
 export { repoRoot };
 
@@ -63,27 +61,16 @@ export function readRustReport(): RustReport | null {
  * respected through `cargo metadata`). UI timings need the optimized core.
  */
 export function releaseBinary(name: "nail" | "nail-bench"): string {
-  const fromEnv = name === "nail" ? process.env.NAIL_BIN : process.env.NAIL_BENCH_BIN;
-  if (fromEnv) return fromEnv;
-  const metadata = JSON.parse(
-    execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }),
-  ) as { target_directory: string };
-  const exe = process.platform === "win32" ? `${name}.exe` : name;
-  const bin = path.join(metadata.target_directory, "release", exe);
-  if (!existsSync(bin)) {
-    const pkg = name === "nail" ? "nail-cli" : "nail-bench";
-    throw new Error(`${bin} does not exist; run \`cargo build --release -p ${pkg}\` first`);
-  }
-  return bin;
+  return workspaceBinary({
+    repoRoot,
+    name,
+    pkg: name === "nail" ? "nail-cli" : "nail-bench",
+    profile: "release",
+    envName: name === "nail" ? "NAIL_BIN" : "NAIL_BENCH_BIN",
+  });
 }
 
-export interface PerfServer {
-  url: string;
-  stop(): Promise<void>;
-}
+export type PerfServer = ServeProcess;
 
 /** `nail serve` on the benchmark data (no seed, no MCP server). */
 export async function startServe(dataDir: string, configDir: string): Promise<PerfServer> {
@@ -99,37 +86,7 @@ export async function startServe(dataDir: string, configDir: string): Promise<Pe
     "--ui-dir",
     path.join(repoRoot, "ui", "dist"),
   ];
-  const child: ChildProcess = spawn(releaseBinary("nail"), args, {
-    cwd: repoRoot,
-    stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
-  });
-  const url = await new Promise<string>((resolve, reject) => {
-    const lines = createInterface({ input: defined(child.stdout, "the server's stdout") });
-    const timer = setTimeout(() => {
-      reject(new Error("nail serve did not start"));
-    }, 120_000);
-    lines.once("line", (line) => {
-      clearTimeout(timer);
-      resolve(line.trim());
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`nail serve exited with ${String(code)}`));
-    });
-  });
-  return {
-    url,
-    async stop() {
-      if (child.exitCode === null) {
-        const exited = new Promise((resolve) => {
-          child.once("exit", resolve);
-        });
-        child.kill();
-        await exited;
-      }
-    },
-  };
+  return spawnServe(releaseBinary("nail"), args, { cwd: repoRoot, timeoutMs: 120_000 });
 }
 
 /** The `p`-th percentile (nearest rank), like `nail_bench::run::percentile`. */

@@ -26,9 +26,9 @@ use std::time::Duration;
 
 use nail_api::desktop::{DesktopChange, DesktopNotifier};
 use nail_api::windows::{
-    DEFAULT_WINDOW_SPEC, MAX_POP_OUT_TITLE_CHARS, POP_OUT_LABEL_PREFIX, PopOutChange, PopOutIssue,
-    PopOutOpen, PopOutReport, WINDOW_CASCADE_OFFSET, WINDOW_MIN_VISIBLE, WindowGeometry,
-    WindowRect, WindowSize, parse_pop_out_label, pop_out_label,
+    DEFAULT_WINDOW_SPEC, MAX_POP_OUT_TITLE_CHARS, POP_OUT_CLOSE_EVENT, POP_OUT_LABEL_PREFIX,
+    PopOutChange, PopOutIssue, PopOutOpen, PopOutReport, WINDOW_CASCADE_OFFSET, WINDOW_MIN_VISIBLE,
+    WindowGeometry, WindowRect, WindowSize, parse_pop_out_label, pop_out_label,
 };
 use nail_api::{ApiError, ErrorCode, LocalizedMessage};
 use tokio::time::Instant;
@@ -42,12 +42,6 @@ pub const REPORT_MAX_DELAY: Duration = Duration::from_millis(500);
 pub const TITLE_STRIP: u32 = 32;
 /// The smallest pop-out (CSS pixels).
 pub const MIN_POP_OUT_SIZE: WindowSize = WindowSize::new(320, 240);
-/// The DOM event a pop-out's page gets when the user closes its OS window
-/// (the close button, Alt+F4, the taskbar): the page closes the window it
-/// shows the way the window's own close button does — a composer with
-/// unsaved changes asks first — and the OS window closes when the page
-/// closes it (`ClosePopOut`). Mirrored as `POP_OUT_CLOSE_EVENT` in the UI.
-pub const POP_OUT_CLOSE_EVENT: &str = "nail-pop-out-close-requested";
 
 /// The script run in a pop-out's page when the user closes its OS window.
 pub fn close_request_script() -> String {

@@ -11,13 +11,14 @@
  * server, the others in Nail (the real compiler is `nail-sieve`, WP51).
  * `data.features.sieve.failWith` makes uploads fail.
  */
-import type {
-  AccountConfig,
-  Request,
-  Response,
-  RuleSieveStatus,
-  SieveAccountStatus,
-  VacationSettings,
+import {
+  VACATION_ISSUE_MESSAGE_IDS,
+  type AccountConfig,
+  type Request,
+  type Response,
+  type RuleSieveStatus,
+  type SieveAccountStatus,
+  type VacationSettings,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { defaultVacation, vacationIssues } from "./model";
@@ -166,8 +167,8 @@ export function answerSieve(core: MockCore, request: SieveRequest): Response {
         return {
           type: "Error",
           code: "invalid_request",
-          message: `invalid vacation settings (vacation-issue-${issue})`,
-          localized: { id: `vacation-issue-${issue}` },
+          message: `invalid vacation settings (${VACATION_ISSUE_MESSAGE_IDS[issue]})`,
+          localized: { id: VACATION_ISSUE_MESSAGE_IDS[issue] },
         };
       }
       s.vacation[account.id] = structuredClone(request.settings);

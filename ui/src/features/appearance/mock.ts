@@ -5,15 +5,16 @@
  * (`nail_api::appearance`). `../../api/mock.ts` routes exactly these
  * requests here; `setMockSystemAppearance` plays Windows switching modes.
  */
-import type {
-  Appearance,
-  AppearanceSettings,
-  Request,
-  ResolvedTheme,
-  Response,
-  SystemAppearance,
-  ThemeInfo,
-  ThemeKind,
+import {
+  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
+  type Appearance,
+  type AppearanceSettings,
+  type Request,
+  type ResolvedTheme,
+  type Response,
+  type SystemAppearance,
+  type ThemeInfo,
+  type ThemeKind,
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { recordMockEdit, registerMockHistoryScope } from "../../api/editHistoryMock";
@@ -337,7 +338,7 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
         return invalid("the pair needs a light and a dark theme", "theme-problem-unknown");
       }
       const issue = overrideIssues(p.overrides)[0];
-      if (issue) return invalid(issue, `theme-overrides-issue-${issue}`);
+      if (issue) return invalid(issue, THEME_OVERRIDES_ISSUE_MESSAGE_IDS[issue]);
       const before = themeKey(core);
       const undo = appearanceSnapshot(core);
       state.settings = {

@@ -1,27 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { PluginMessage } from "./generated";
-import { createTestHost } from "./testing";
+import { createTestHost, testMessage } from "./testing";
 import { checkTree, MAX_UI_DEPTH, MAX_UI_NODES } from "./tree";
 import type { PluginUiNode } from "./generated";
 
-const base: Omit<PluginMessage, "id" | "uri" | "accountId" | "date" | "encrypted"> = {
-  folderId: "INBOX",
-  subject: "s",
-  to: [],
-  cc: [],
-  flags: { seen: false, flagged: false, answered: false, draft: false },
-  tags: [],
-  hasAttachments: false,
-};
-const msg = (id: string, accountId: string, date: string, encrypted = false): PluginMessage => ({
-  ...base,
-  id,
-  uri: `nail://messages/${id}`,
-  accountId,
-  date,
-  encrypted,
-});
+const msg = (id: string, accountId: string, date: string, encrypted = false): PluginMessage =>
+  testMessage(id, { accountId, date, encrypted, subject: "s" });
 
 describe("test host permissions", () => {
   it("rejects every capability without its permission", async () => {

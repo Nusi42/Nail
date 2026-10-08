@@ -15,17 +15,18 @@
  *   itself with `ThemeChanged` (+ `ConfigChanged` when the resolved theme
  *   changed), like the core.
  */
-import type {
-  EditIssue,
-  EditKind,
-  PartRule,
-  Request,
-  Response,
-  ThemeDetails,
-  ThemePartRule,
-  ThemePatch,
-  ThemeTokenValue,
-  ValueOrigin,
+import {
+  EDIT_ISSUE_MESSAGE_IDS,
+  type EditIssue,
+  type EditKind,
+  type PartRule,
+  type Request,
+  type Response,
+  type ThemeDetails,
+  type ThemePartRule,
+  type ThemePatch,
+  type ThemeTokenValue,
+  type ValueOrigin,
 } from "../../api/generated";
 import { checkMockBaseRevision, mockRevision, recordMockEdit } from "../../api/editHistoryMock";
 import { defaultTheme } from "../../api/mockData";
@@ -33,8 +34,8 @@ import type { MockCore } from "../../api/mockMail";
 import {
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
-  THEME_NAME_MAX,
   isThemeId,
+  isThemeName,
   themeIdFromName,
 } from "./model";
 import {
@@ -73,7 +74,7 @@ function error(
     type: "Error",
     code,
     message: `${issue}: ${theme}`,
-    localized: { id: `edit-issue-${issue}`, args: { theme } },
+    localized: { id: EDIT_ISSUE_MESSAGE_IDS[issue], args: { theme } },
   };
 }
 
@@ -273,8 +274,7 @@ export function applyThemePatches(
 }
 
 function validName(name: string): string | null {
-  const trimmed = name.trim();
-  return trimmed === "" || trimmed.length > THEME_NAME_MAX ? null : trimmed;
+  return isThemeName(name) ? name.trim() : null;
 }
 
 /** Writes through `write` as one undo entry and announces it. */

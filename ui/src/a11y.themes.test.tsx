@@ -9,15 +9,12 @@
  * dropped rules.
  */
 import { act, waitFor } from "@testing-library/react";
-import type { Density } from "./api/generated";
-import { defaultTheme } from "./api/mockData";
-import { BUILTIN_THEMES } from "./features/appearance";
-import { resolveMockTheme } from "./features/appearance/themes";
 import { NodeView, WindowView } from "./layout/LayoutRenderer";
 import { emptyComposer } from "./state/compose";
 import { violations } from "./test/axe";
 import { createEnv, renderWithProviders, stubElementSizes, widget, type Env } from "./test/harness";
 import { compileTheme } from "./theme/compile";
+import { THEME_DENSITY_CASES, builtinTheme } from "./test/themes";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -50,31 +47,16 @@ function mailEnv(): Env {
   return env;
 }
 
-const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
-const themeOf = (id: string, density: Density) =>
-  resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
-
 describe("axe in every theme and density (M5a)", () => {
-  it("covers the five built-in themes", () => {
-    expect(BUILTIN_THEMES.map(([id]) => id)).toEqual([
-      "frost",
-      "sage",
-      "graphite",
-      "nocturne",
-      "high-contrast",
-    ]);
-  });
-
-  it.each(CASES)("%s / %s compiles without dropped rules", (id, density) => {
-    const theme = themeOf(id, density);
+  it.each(THEME_DENSITY_CASES)("%s / %s compiles without dropped rules", (id, density) => {
+    const theme = builtinTheme(id, density);
     expect(compileTheme(theme).warnings).toEqual([]);
   });
 
-  it.each(CASES)(
+  it.each(THEME_DENSITY_CASES)(
     "%s / %s: main window, composer, settings and appearance have no violations",
     async (id, density) => {
-      const theme = themeOf(id, density);
+      const theme = builtinTheme(id, density);
       for (const name of ["main", "composer", "settings"]) {
         const env = mailEnv();
         const layout = env.transport.data.layout;

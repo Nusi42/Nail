@@ -13,13 +13,11 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { forEachArg } from "./lib/args.mjs";
 import { artifactNames, assertOutsideRepo, buildBase } from "./lib/build.mjs";
 import { parseJson, readJson } from "./lib/json.mjs";
+import { repoRoot, runMain } from "./lib/program.mjs";
 import { cargoSbom, npmSbom } from "./lib/sbom.mjs";
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The shipped binaries' packages. */
 export const ROOTS = ["nail-app", "nail-cli"];
@@ -92,16 +90,17 @@ export function writeSboms({
   return { rustFile, uiFile, crates: rust.components.length, npm: ui.components.length };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const argv = process.argv.slice(2);
-  /** @param {string} name */
-  const option = (name) => {
-    const i = argv.indexOf(name);
-    return i >= 0 ? argv[i + 1] : undefined;
-  };
-  const outDir = option("--out") ?? path.join(buildBase(process.env, repoRoot), "dist");
-  const result = writeSboms({ outDir, target: option("--target") });
+await runMain(import.meta.url, (argv) => {
+  /** @type {{ outDir?: string, target?: string }} */
+  const options = {};
+  forEachArg(argv, (arg, { value }) => {
+    if (arg === "--out") options.outDir = value();
+    else if (arg === "--target") options.target = value();
+    else throw new Error(`unknown argument ${arg}`);
+  });
+  const outDir = options.outDir ?? path.join(buildBase(process.env, repoRoot), "dist");
+  const result = writeSboms({ outDir, target: options.target });
   console.log(
     `SBOM: ${result.rustFile} (${String(result.crates)} crates), ${result.uiFile} (${String(result.npm)} packages)`,
   );
-}
+});

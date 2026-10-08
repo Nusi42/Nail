@@ -14,6 +14,7 @@ import { CODE, readSources } from "./sources.mjs";
 import {
   baselineIdentity,
   cssBlocks,
+  knownInBaseline,
   cssLengths,
   fluentDuplicates,
   magicNumbers,
@@ -138,7 +139,7 @@ export function classifySsot(findings, allow, baseline, read, checks) {
   }
   const classified = findings.map((finding) => {
     const allowed = allow[finding.check]?.[finding.key] !== undefined;
-    const known = baseline.findings[finding.check]?.includes(baselineIdentity(finding)) ?? false;
+    const known = knownInBaseline(finding, baseline.findings[finding.check] ?? []);
     /** @type {Classified} */
     const c = {
       finding,

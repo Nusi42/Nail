@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { readJson } from "./lib/json.mjs";
 import { classifyArtifact } from "./lib/update-manifest.mjs";
 import { expandUrl, wingetManifests } from "./lib/winget.mjs";
+import { forEachArg } from "./lib/args.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,13 +32,7 @@ function parse(argv) {
    *   releaseNotesUrl?: string, releaseDate?: string, package?: string }}
    */
   const o = { artifacts: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const v = argv[++i];
-      if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
-      return v;
-    };
+  forEachArg(argv, (arg, { value }) => {
     if (arg === "--version") o.version = value();
     else if (arg === "--artifacts") o.artifacts.push(value());
     else if (arg === "--installer-url-template") o.urlTemplate = value();
@@ -46,7 +41,7 @@ function parse(argv) {
     else if (arg === "--release-date") o.releaseDate = value();
     else if (arg === "--package") o.package = value();
     else throw new Error(`unknown option ${arg}`);
-  }
+  });
   const { version, urlTemplate, out } = o;
   if (!version || !urlTemplate || !out || !o.artifacts.length) {
     throw new Error("--version, --artifacts, --installer-url-template and --out are required");

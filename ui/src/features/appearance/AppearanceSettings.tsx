@@ -12,6 +12,12 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { errorMessageOf } from "../../api/client";
+import {
+  THEME_KIND_MESSAGE_IDS,
+  DENSITY_MESSAGE_IDS,
+  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
+  PREVIEW_TOKENS,
+} from "../../api/generated";
 import type {
   Appearance,
   Density,
@@ -36,9 +42,6 @@ import { previewColors } from "./themes";
 import { pickerColor, pixels } from "./tokens";
 import { registerPendingWrite } from "./pendingWrites";
 import { themeEditDelay } from "./useThemeEdits";
-
-/** Colours of a theme's preview (rail, list, accent, text). */
-const SWATCH_TOKENS = ["bg-subtle", "bg", "accent", "fg"] as const;
 
 function Swatch({ geom, color }: { geom: string; color: string }) {
   useGeometry(geom, { "background-color": color });
@@ -80,7 +83,7 @@ function ThemeCard({
       onClick={onPick}
     >
       <span data-part="theme-card.preview" aria-hidden="true">
-        {SWATCH_TOKENS.map((token) => {
+        {PREVIEW_TOKENS.map((token) => {
           const color = colors[token];
           return color ? <Swatch key={token} geom={`${geom}-${token}`} color={color} /> : null;
         })}
@@ -88,7 +91,7 @@ function ThemeCard({
       <span data-part="theme-card.name">{name}</span>
       <span data-part="theme-card.kind">
         {t(theme.source === "user" ? "appearance-theme-meta-user" : "appearance-theme-meta", {
-          kind: t(`theme-kind-${theme.kind}`),
+          kind: t(THEME_KIND_MESSAGE_IDS[theme.kind]),
         })}
       </span>
       {active && <Icon name="check" part="theme-card.check" />}
@@ -273,7 +276,7 @@ function OverridesForm({
     if (issue) {
       const range = issue === "font-size-range" ? FONT_SIZE_RANGE : RADIUS_RANGE;
       setProblem({
-        id: `theme-overrides-issue-${issue}`,
+        id: THEME_OVERRIDES_ISSUE_MESSAGE_IDS[issue],
         args: { min: range[0], max: range[1] },
       });
       return Promise.resolve();
@@ -537,7 +540,7 @@ export function AppearanceSettings({ node }: WidgetProps) {
             value={s.density}
             disabled={busy}
             options={(["comfortable", "compact"] as const satisfies readonly Density[]).map(
-              (d) => ({ value: d, label: t(`density-${d}`) }),
+              (d) => ({ value: d, label: t(DENSITY_MESSAGE_IDS[d]) }),
             )}
             onChange={(value) => {
               update({ density: value === "compact" ? "compact" : "comfortable" });

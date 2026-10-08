@@ -50,7 +50,28 @@ macro_rules! labeled_enum {
                 Self::ALL.iter().copied().find(|v| v.as_str() == text)
             }
         }
+
+        impl $crate::labels::Labeled for $name {
+            const NAME: &'static str = stringify!($name);
+            const VALUES: &'static [Self] = Self::ALL;
+
+            fn label_id(self) -> String {
+                self.message_id()
+            }
+        }
     };
+}
+
+/// What every `labeled_enum!` provides, for code generic over them (the
+/// generated TypeScript value lists and Fluent id tables,
+/// `ts_constants::Constants::labeled`).
+pub(crate) trait Labeled: Copy + serde::Serialize + 'static {
+    /// The Rust (and TypeScript) type name.
+    const NAME: &'static str;
+    /// Every variant, in declaration order (`ALL`).
+    const VALUES: &'static [Self];
+    /// The Fluent id of the label (`message_id`).
+    fn label_id(self) -> String;
 }
 
 /// Checks that every variant's `as_str` is what serde writes, round-trips

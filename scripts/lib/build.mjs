@@ -6,6 +6,7 @@
  * (`node --test scripts/test/`).
  */
 import path from "node:path";
+import { forEachArg } from "./args.mjs";
 
 /**
  * A Tauri config overlay (JSON object; `null` values remove keys).
@@ -112,15 +113,7 @@ export function parseArgs(argv, defaults = {}) {
     insecureLoopbackUpdates: false,
     devUpdaterKey: false,
   };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const next = argv[++i];
-      if (next === undefined || next.startsWith("--")) {
-        throw new Error(`${arg} needs a value`);
-      }
-      return next;
-    };
+  forEachArg(argv, (arg, { value }) => {
     if (arg === "--skip-ui") options.skipUi = true;
     else if (arg === "--no-cli") options.cli = false;
     else if (arg === "--target-dir") options.targetDir = value();
@@ -138,7 +131,7 @@ export function parseArgs(argv, defaults = {}) {
     else if (arg === "--insecure-loopback-updates") options.insecureLoopbackUpdates = true;
     else if (arg === "--dev-updater-key") options.devUpdaterKey = true;
     else throw new Error(`unknown option ${arg}`);
-  }
+  });
   if (!ARCHS.includes(options.arch)) throw new Error(`unsupported architecture ${options.arch}`);
   if (!options.bundles.length || options.bundles.some((b) => !BUNDLES.includes(b))) {
     throw new Error(`--bundles takes ${BUNDLES.join(", ")}`);

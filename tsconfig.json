@@ -21,10 +21,9 @@
     "*.mjs",
     "scripts/**/*.mjs",
     "e2e/**/*.mjs",
-    "examples/*/scripts/*.mjs",
     "packages/*/scripts/*.mjs",
-    "packages/create-nail-plugin/template/scripts/*.mjs",
     "packages/plugin-api/tools/index.mjs",
+    "packages/plugin-api/tools/cli.mjs",
     "crates/nail-plugins/src/prelude.js"
   ],
   "exclude": ["**/node_modules", "**/dist"]

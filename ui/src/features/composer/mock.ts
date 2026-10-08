@@ -7,14 +7,15 @@
  * core's (`nail-compose`); this mock only imitates it closely enough for UI
  * tests and the `?mock=1` dev mode.
  */
-import type {
-  Address,
-  ComposerMode,
-  Draft,
-  DraftContext,
-  Identity,
-  Request,
-  Response,
+import {
+  MAX_ATTACHMENT_BYTES,
+  type Address,
+  type ComposerMode,
+  type Draft,
+  type DraftContext,
+  type Identity,
+  type Request,
+  type Response,
 } from "../../api/generated";
 import type { MockTransport } from "../../api/mock";
 import { chooseIdentity } from "../../api/mockAccounts";
@@ -54,9 +55,6 @@ export interface ComposerMockState {
 export function createComposerMockState(): ComposerMockState {
   return { blobs: new Map(), addresses: [] };
 }
-
-/** Largest attachment the mock accepts (the core's limit is configurable). */
-export const MOCK_MAX_ATTACHMENT = 25 * 1024 * 1024;
 
 export function answerComposer(core: MockCore, request: ComposerRequest): Response {
   switch (request.type) {
@@ -348,7 +346,7 @@ function upload(
     return errorResponse("invalid_request", "attachment data is not base64");
   }
   const size = base64Size(data);
-  if (size > MOCK_MAX_ATTACHMENT)
+  if (size > MAX_ATTACHMENT_BYTES)
     return errorResponse("too_large", `${filename}: ${String(size)} bytes`);
   const blob = core.nextId("blob-");
   core.data.features.composer.blobs.set(blob, { filename, mime, data });

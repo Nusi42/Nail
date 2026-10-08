@@ -1,8 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
-import { composerWindow, composerWindows, runFromPalette } from "../support/views";
+import { nailOnDemand } from "../support/nail";
+import {
+  composerWindow,
+  composerWindows,
+  messageRows,
+  runFromPalette,
+  selectInTrash,
+  openMail,
+} from "../support/views";
 import { defined } from "../support/defined";
 
 /**
@@ -16,15 +23,15 @@ import { defined } from "../support/defined";
  * The desktop pop-out is in `desktop-m5c.spec.ts`.
  */
 
-let server: NailServer;
+const server = nailOnDemand();
 
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const win = (page: Page, id: string) => page.locator(`[data-part="window"][data-window="${id}"]`);
+/** Opens a new composer (key `c`): its window id and window. */
+async function openComposer(page: Page): Promise<{ id: string; own: Locator }> {
+  await page.keyboard.press("c");
+  const id = defined(await composerWindow(page).getAttribute("data-window"), "the window id");
+  return { id, own: win(page, id) };
+}
 const titleBar = (window: Locator) => window.locator('[data-part="window.header"]');
 
 /**
@@ -38,9 +45,8 @@ async function lengthenAutosave(page: Page) {
 }
 
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
-  server = await startNail({ seed });
-  await page.goto(server.url);
-  await expect(rows(page).first()).toBeVisible();
+  await server.start({ seed });
+  await openMail(page, server.url);
 }
 
 async function openRules(page: Page): Promise<Locator> {
@@ -256,7 +262,7 @@ test("window geometry is remembered across a reload", async ({ page }) => {
     .toMatchObject({ width: 780, height: 560 });
 
   await page.reload();
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   rules = await openRules(page);
   expect(await box(rules)).toEqual(placed);
 
@@ -269,7 +275,7 @@ test("two composers side by side: each edits and sends on its own", async ({ pag
   // demo-multi: accounts with identities and a mock SMTP server.
   await open(page, "demo-multi");
   const viewport = defined(page.viewportSize(), "the viewport");
-  await rows(page).first().click();
+  await messageRows(page).first().click();
   await page.keyboard.press("c");
   const first = composerWindow(page);
   await expect(first).toBeVisible();
@@ -315,11 +321,8 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await lengthenAutosave(page);
   // P3: demo-multi has a Trash ("Delete permanently?" asks only there).
   await open(page, "demo-multi");
-  await rows(page).first().click();
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  const id = defined(await composer.getAttribute("data-window"), "the window id");
-  const own = win(page, id);
+  await messageRows(page).first().click();
+  const { id, own } = await openComposer(page);
   await own.getByRole("textbox", { name: "Subject" }).fill("Unsaved thoughts");
   // Closed with unsaved changes (the autosave is lengthened): the composer asks.
   await own.locator('[data-part="window.close"]').click();
@@ -332,7 +335,7 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await expect(page.locator('[data-part="window-scrim"]')).toHaveCount(0);
 
   // The main window stays usable: another message opens in the reader.
-  const other = rows(page).nth(2);
+  const other = messageRows(page).nth(2);
   await other.click();
   await expect(other).toHaveAttribute("aria-selected", "true");
 
@@ -349,7 +352,7 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   });
   await expect(own).toHaveAttribute("data-snap", "right");
   // P3: "Delete permanently?" asks only for mail in Trash.
-  await selectInTrash(page, "Your weekly garden digest");
+  await selectInTrash(page, "Your weekly garden digest", { position: { x: 40, y: 20 } });
   await page.keyboard.press("Shift+Delete");
   const remove = win(page, "mail-delete-permanently");
   await expect(remove).toBeVisible();
@@ -377,16 +380,13 @@ test("Escape closes the focused window, not windows behind the main window", asy
 
   // Focus in the main window: Escape there leaves a non-modal window open.
   await openRules(page);
-  await rows(page).first().click();
+  await messageRows(page).first().click();
   await page.keyboard.press("Escape");
   await expect(win(page, "rules")).toBeVisible();
 
   // A composer with unsaved changes asks instead of closing; Escape in the
   // confirmation closes only the confirmation.
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  const id = defined(await composer.getAttribute("data-window"), "the window id");
-  const own = win(page, id);
+  const { id, own } = await openComposer(page);
   await own.getByRole("textbox", { name: "Subject" }).fill("Not yet");
   await own.getByRole("textbox", { name: "Subject" }).press("Escape");
   const confirm = win(page, `composer-close:${id.split(":")[1] ?? ""}`);
@@ -398,23 +398,3 @@ test("Escape closes the focused window, not windows behind the main window", asy
   await expect(own.locator('[data-part="window.pop-out"]')).toHaveCount(0);
   await expect(win(page, "rules").locator('[data-part="window.pop-out"]')).toHaveCount(0);
 });
-
-/**
- * P3 (ADR 0164): "Delete permanently?" asks only for mail in Trash / Junk.
- * Moves the conversation `subject` to Trash and selects it there.
- */
-async function selectInTrash(page: Page, subject: string): Promise<void> {
-  const row = rows(page).filter({ hasText: subject }).first();
-  const account = await row.getAttribute("data-account");
-  await row.click({ position: { x: 40, y: 20 } });
-  await page.keyboard.press("Delete");
-  await expect(row).toHaveCount(0);
-  await page
-    .locator(`[data-part="folder-tree.item"][data-role="trash"][data-account="${account ?? ""}"]`)
-    .first()
-    .click();
-  await rows(page)
-    .filter({ hasText: subject })
-    .first()
-    .click({ position: { x: 40, y: 20 } });
-}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { AutomaticRepliesSettings, Calendar, DiscoveredAccount } from "../../api/generated";
+import type {
+  AutomaticRepliesSettings,
+  Calendar,
+  DiscoveredAccount,
+  ExchangeCategorySettings,
+  ExchangeMailboxSettings,
+} from "../../api/generated";
+import exchangeVectors from "../../../../crates/nail-api/fixtures/ts-vectors/exchange.json";
+import { describeVectors } from "../../test/vectors";
 import {
   addRoom,
   automaticRepliesIssues,
@@ -381,4 +389,12 @@ describe("task lists", () => {
       ["other", null, ["local"]],
     ]);
   });
+});
+
+describeVectors("exchange", exchangeVectors, {
+  categoryIssues: (settings: ExchangeCategorySettings) => categoryIssues(settings, []),
+  mailboxIssues: (settings: ExchangeMailboxSettings, own: string) =>
+    mailboxIssues(settings, own, []),
+  isPlausibleEmail,
+  automaticRepliesIssues,
 });

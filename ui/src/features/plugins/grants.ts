@@ -4,34 +4,30 @@
  * limited to accounts (`null` = every account, never empty); reading
  * bodies needs reading mail.
  */
-import type { AccountId, PluginGrant, PluginPermission } from "../../api/generated";
+import {
+  ACCOUNT_PERMISSIONS,
+  REQUIRED_PERMISSIONS,
+  type AccountId,
+  type PluginGrant,
+  type PluginPermission,
+} from "../../api/generated";
 
-/** Permissions that can be limited to accounts (`PluginPermission::takes_accounts`; M4a adds the mail writes, mail hooks and `attachments`). */
-export const ACCOUNT_PERMISSIONS: readonly PluginPermission[] = [
-  "mail.read",
-  "mail.read.body",
-  "mail.organize",
-  "mail.send",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "attachments",
-];
+/** Permissions that can be limited to accounts (`PluginPermission::takes_accounts`, generated). */
+export { ACCOUNT_PERMISSIONS } from "../../api/generated";
 
-/** Permissions that need `mail.read` (`PluginPermission::requires`). */
-export const NEEDS_READ: readonly PluginPermission[] = [
-  "mail.read.body",
-  "mail.organize",
-  "hooks.arrival",
-  "hooks.open",
-];
+const REQUIRES: Readonly<Record<string, readonly string[] | undefined>> = REQUIRED_PERMISSIONS;
+
+/** Permissions that need `mail.read` (`PluginPermission::requires`, generated). */
+export const NEEDS_READ: readonly PluginPermission[] = Object.keys(REQUIRES).filter((p) =>
+  REQUIRES[p]?.includes("mail.read"),
+) as PluginPermission[];
 
 export function requiresRead(permission: PluginPermission): boolean {
   return NEEDS_READ.includes(permission);
 }
 
 export function takesAccounts(permission: PluginPermission): boolean {
-  return ACCOUNT_PERMISSIONS.includes(permission);
+  return (ACCOUNT_PERMISSIONS as readonly PluginPermission[]).includes(permission);
 }
 
 /** Every declared permission granted for every account (the install default). */

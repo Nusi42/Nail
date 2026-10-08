@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { defined } from "../support/defined";
-import { READER_SUBJECT } from "../support/views";
+import { READER_SUBJECT, messageRows, messageList } from "../support/views";
 
 /** The seeded demo data (nail-testkit corpus) in the shared server. */
 
@@ -10,7 +10,7 @@ async function openInbox(page: Page) {
   await expect(
     page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]'),
   ).toHaveAttribute("aria-selected", "true");
-  const rows = page.locator('[data-part="message-list.row"]');
+  const rows = messageRows(page);
   await expect(rows.first()).toBeVisible();
   return rows;
 }
@@ -105,7 +105,7 @@ test("hostile HTML is neutralised", async ({ page }) => {
 
 test("j/k move through the message list", async ({ page }) => {
   const rows = await openInbox(page);
-  const list = page.locator('[data-part="message-list"]');
+  const list = messageList(page);
   await list.focus();
 
   await page.keyboard.press("j");

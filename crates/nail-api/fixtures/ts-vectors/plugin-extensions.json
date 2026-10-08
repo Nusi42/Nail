@@ -1,0 +1,362 @@
+{
+  "cases": [
+    {
+      "args": [
+        "acme-crm",
+        "ticket"
+      ],
+      "fn": "extensionId",
+      "out": "acme-crm.ticket"
+    },
+    {
+      "args": [
+        "x",
+        "y"
+      ],
+      "fn": "extensionId",
+      "out": "x.y"
+    },
+    {
+      "args": [
+        "acme-crm.ticket"
+      ],
+      "fn": "parseExtensionId",
+      "out": {
+        "name": "ticket",
+        "plugin": "acme-crm"
+      }
+    },
+    {
+      "args": [
+        "a.b.c"
+      ],
+      "fn": "parseExtensionId",
+      "out": null
+    },
+    {
+      "args": [
+        ".x"
+      ],
+      "fn": "parseExtensionId",
+      "out": null
+    },
+    {
+      "args": [
+        "x."
+      ],
+      "fn": "parseExtensionId",
+      "out": null
+    },
+    {
+      "args": [
+        "nodot"
+      ],
+      "fn": "parseExtensionId",
+      "out": null
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "parseExtensionId",
+      "out": null
+    },
+    {
+      "args": [
+        [
+          "text/csv"
+        ],
+        [],
+        "text/csv",
+        "a.csv"
+      ],
+      "fn": "matchesFile",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          "text/*"
+        ],
+        [],
+        "TEXT/Plain",
+        null
+      ],
+      "fn": "matchesFile",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          "image/*"
+        ],
+        [],
+        "text/plain",
+        "a.png"
+      ],
+      "fn": "matchesFile",
+      "out": false
+    },
+    {
+      "args": [
+        [],
+        [
+          "csv"
+        ],
+        "application/octet-stream",
+        "Data.CSV"
+      ],
+      "fn": "matchesFile",
+      "out": true
+    },
+    {
+      "args": [
+        [],
+        [
+          "csv"
+        ],
+        "application/octet-stream",
+        "csv"
+      ],
+      "fn": "matchesFile",
+      "out": false
+    },
+    {
+      "args": [
+        [],
+        [
+          "gz"
+        ],
+        "application/gzip",
+        "a.tar.gz"
+      ],
+      "fn": "matchesFile",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          "text/csv"
+        ],
+        [
+          "tsv"
+        ],
+        "text/plain",
+        null
+      ],
+      "fn": "matchesFile",
+      "out": false
+    },
+    {
+      "args": [
+        "jira.example.com",
+        "jira.example.com"
+      ],
+      "fn": "hostMatches",
+      "out": true
+    },
+    {
+      "args": [
+        "jira.example.com",
+        "JIRA.example.com."
+      ],
+      "fn": "hostMatches",
+      "out": true
+    },
+    {
+      "args": [
+        "*.example.com",
+        "a.example.com"
+      ],
+      "fn": "hostMatches",
+      "out": true
+    },
+    {
+      "args": [
+        "*.example.com",
+        "example.com"
+      ],
+      "fn": "hostMatches",
+      "out": false
+    },
+    {
+      "args": [
+        "*.example.com",
+        "xexample.com"
+      ],
+      "fn": "hostMatches",
+      "out": false
+    },
+    {
+      "args": [
+        "*.example.com",
+        "a.b.example.com"
+      ],
+      "fn": "hostMatches",
+      "out": true
+    },
+    {
+      "args": [
+        "jira.example.com",
+        ""
+      ],
+      "fn": "hostMatches",
+      "out": false
+    },
+    {
+      "args": [
+        "acme-crm"
+      ],
+      "fn": "isPluginName",
+      "out": true
+    },
+    {
+      "args": [
+        "a1"
+      ],
+      "fn": "isPluginName",
+      "out": true
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "Acme"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "1a"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "a-"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "a--b"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "a_b"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "fn": "isPluginName",
+      "out": false
+    },
+    {
+      "args": [
+        "acme",
+        "open-ticket"
+      ],
+      "fn": "pluginCommandId",
+      "out": "plugin.acme.open-ticket"
+    },
+    {
+      "args": [
+        "x",
+        "y"
+      ],
+      "fn": "pluginCommandId",
+      "out": "plugin.x.y"
+    },
+    {
+      "args": [
+        "plugin.acme.open"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": {
+        "command": "open",
+        "plugin": "acme"
+      }
+    },
+    {
+      "args": [
+        "plugin.acme"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": null
+    },
+    {
+      "args": [
+        "plugin.Acme.open"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": null
+    },
+    {
+      "args": [
+        "mail.reply"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": null
+    },
+    {
+      "args": [
+        "plugin.acme.open.x"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": null
+    },
+    {
+      "args": [
+        "plugin..open"
+      ],
+      "fn": "parsePluginCommandId",
+      "out": null
+    },
+    {
+      "args": [
+        "acme.panel"
+      ],
+      "fn": "parsePluginPanelId",
+      "out": {
+        "panel": "panel",
+        "plugin": "acme"
+      }
+    },
+    {
+      "args": [
+        "acme"
+      ],
+      "fn": "parsePluginPanelId",
+      "out": null
+    },
+    {
+      "args": [
+        "acme.Panel"
+      ],
+      "fn": "parsePluginPanelId",
+      "out": null
+    },
+    {
+      "args": [
+        "a.b.c"
+      ],
+      "fn": "parsePluginPanelId",
+      "out": null
+    }
+  ]
+}

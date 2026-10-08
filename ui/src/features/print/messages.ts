@@ -4,7 +4,13 @@
  * one of `prefixes` must exist in `locales/en/print.ftl`; ids built at
  * runtime are listed by `runtimeIds`.
  */
-import type { AgendaLayout, HeaderDetail, PageOrientation, PageSize } from "../../api/generated";
+import {
+  AGENDA_LAYOUT_MESSAGE_IDS,
+  HEADER_DETAIL_MESSAGE_IDS,
+  PAGE_ORIENTATION_MESSAGE_IDS,
+  PAGE_SIZE_MESSAGE_IDS,
+  PRINT_TARGET_ISSUE_MESSAGE_IDS,
+} from "../../api/generated";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["print-"];
@@ -12,11 +18,13 @@ export const prefixes: readonly string[] = ["print-"];
 /** Literals with those prefixes that are not message ids (part, widget, dialog names). */
 export const notMessages: readonly string[] = ["print-setup", "remote-images"];
 
-/** The contract's choices (mirror `nail_api::print`). */
-export const AGENDA_LAYOUTS: readonly AgendaLayout[] = ["day", "week", "month", "list"];
-export const PAGE_SIZES: readonly PageSize[] = ["a4", "a5", "letter", "legal"];
-export const ORIENTATIONS: readonly PageOrientation[] = ["portrait", "landscape"];
-export const HEADER_DETAILS: readonly HeaderDetail[] = ["basic", "full"];
+/** The contract's choices (generated from `nail_api::print`). */
+export {
+  AGENDA_LAYOUT_VALUES as AGENDA_LAYOUTS,
+  HEADER_DETAIL_VALUES as HEADER_DETAILS,
+  PAGE_ORIENTATION_VALUES as ORIENTATIONS,
+  PAGE_SIZE_VALUES as PAGE_SIZES,
+} from "../../api/generated";
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
@@ -24,11 +32,11 @@ export function runtimeIds(): string[] {
     "print-title",
     "print-job-expired",
     "desktop-unavailable",
-    ...AGENDA_LAYOUTS.map((l) => `print-agenda-layout-${l}`),
-    ...PAGE_SIZES.map((s) => `print-page-size-${s}`),
-    ...ORIENTATIONS.map((o) => `print-orientation-${o}`),
-    ...HEADER_DETAILS.map((h) => `print-headers-${h}`),
-    ...["invalid-date", "end-before-start", "range-too-long"].map((i) => `print-target-issue-${i}`),
+    ...Object.values(AGENDA_LAYOUT_MESSAGE_IDS),
+    ...Object.values(PAGE_SIZE_MESSAGE_IDS),
+    ...Object.values(PAGE_ORIENTATION_MESSAGE_IDS),
+    ...Object.values(HEADER_DETAIL_MESSAGE_IDS),
+    ...Object.values(PRINT_TARGET_ISSUE_MESSAGE_IDS),
     "window-print",
     "print-filter-pdf",
     ...["from", "to", "cc", "reply-to"].map((h) => `print-header-${h}`),

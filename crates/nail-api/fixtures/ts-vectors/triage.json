@@ -1,0 +1,327 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 90
+        }
+      ],
+      "fn": "junkIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 49
+        }
+      ],
+      "fn": "junkIssues",
+      "out": [
+        "threshold"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 1,
+          "move_to_junk": true,
+          "threshold": 50
+        }
+      ],
+      "fn": "junkIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 10000,
+          "move_to_junk": true,
+          "threshold": 99
+        }
+      ],
+      "fn": "junkIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 0,
+          "move_to_junk": true,
+          "threshold": 100
+        }
+      ],
+      "fn": "junkIssues",
+      "out": [
+        "threshold",
+        "min-training"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "honor_server_flags": true,
+          "min_training": 10001,
+          "move_to_junk": true,
+          "threshold": 70
+        }
+      ],
+      "fn": "junkIssues",
+      "out": [
+        "min-training"
+      ]
+    },
+    {
+      "args": [
+        "00:00"
+      ],
+      "fn": "parseHhmm",
+      "out": 0
+    },
+    {
+      "args": [
+        "23:59"
+      ],
+      "fn": "parseHhmm",
+      "out": 1439
+    },
+    {
+      "args": [
+        "24:00"
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        "12:60"
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        "7:00"
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        "07:5"
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        "ab:cd"
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        "07:00 "
+      ],
+      "fn": "parseHhmm",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [],
+          "quiet_hours": null,
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [],
+          "quiet_hours": {
+            "days": [],
+            "end": "07:00",
+            "start": "22:00"
+          },
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [],
+          "quiet_hours": {
+            "days": [],
+            "end": "22:00",
+            "start": "22:00"
+          },
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": [
+        "empty-quiet-hours"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [],
+          "quiet_hours": {
+            "days": [],
+            "end": "07:00",
+            "start": "25:00"
+          },
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": [
+        "quiet-hours-time"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [
+            {
+              "notify": false,
+              "scope": {
+                "account_id": "a1",
+                "type": "account"
+              }
+            },
+            {
+              "notify": true,
+              "scope": {
+                "folder_id": "a1",
+                "type": "folder"
+              }
+            },
+            {
+              "notify": false,
+              "scope": {
+                "account_id": "a2",
+                "type": "account"
+              }
+            }
+          ],
+          "quiet_hours": null,
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [
+            {
+              "notify": false,
+              "scope": {
+                "account_id": "a1",
+                "type": "account"
+              }
+            },
+            {
+              "notify": false,
+              "scope": {
+                "account_id": "a1",
+                "type": "account"
+              }
+            }
+          ],
+          "quiet_hours": null,
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": [
+        "duplicate-override"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "folders": "inbox",
+          "overrides": [
+            {
+              "notify": true,
+              "scope": {
+                "folder_id": "f",
+                "type": "folder"
+              }
+            },
+            {
+              "notify": true,
+              "scope": {
+                "folder_id": "f",
+                "type": "folder"
+              }
+            }
+          ],
+          "quiet_hours": {
+            "days": [],
+            "end": "07:00",
+            "start": "x"
+          },
+          "show_preview": true,
+          "sound": true
+        }
+      ],
+      "fn": "notificationIssues",
+      "out": [
+        "quiet-hours-time",
+        "duplicate-override"
+      ]
+    }
+  ]
+}

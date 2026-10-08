@@ -1,0 +1,328 @@
+{
+  "cases": [
+    {
+      "args": [
+        {}
+      ],
+      "fn": "policyTable",
+      "out": [
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "organize",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "trash",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "permanent-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "draft",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "send",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "calendar",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "invite",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "contact",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "task",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "pim-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "rule",
+          "mode": "ask"
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "calendar": "allow",
+          "contact": "allow",
+          "draft": "allow",
+          "invite": "allow",
+          "organize": "allow",
+          "permanent-delete": "allow",
+          "pim-delete": "allow",
+          "rule": "allow",
+          "send": "allow",
+          "task": "allow",
+          "trash": "allow"
+        }
+      ],
+      "fn": "policyTable",
+      "out": [
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "organize",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "trash",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "permanent-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "draft",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "send",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "calendar",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "invite",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "contact",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "task",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "pim-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "rule",
+          "mode": "allow"
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "calendar": "ask",
+          "contact": "ask",
+          "draft": "ask",
+          "invite": "ask",
+          "organize": "ask",
+          "permanent-delete": "ask",
+          "pim-delete": "ask",
+          "rule": "ask",
+          "send": "ask",
+          "task": "ask",
+          "trash": "ask"
+        }
+      ],
+      "fn": "policyTable",
+      "out": [
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "organize",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": true,
+          "kind": "trash",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": true,
+          "kind": "permanent-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "draft",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "send",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "calendar",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "invite",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "contact",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "task",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": true,
+          "kind": "pim-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "rule",
+          "mode": "ask"
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "draft": "ask",
+          "send": "allow",
+          "trash": "allow"
+        }
+      ],
+      "fn": "policyTable",
+      "out": [
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "organize",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "trash",
+          "mode": "ask"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "permanent-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "draft",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": true,
+          "kind": "send",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "calendar",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "invite",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "contact",
+          "mode": "allow"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "task",
+          "mode": "allow"
+        },
+        {
+          "can_allow": false,
+          "customized": false,
+          "kind": "pim-delete",
+          "mode": "ask"
+        },
+        {
+          "can_allow": true,
+          "customized": false,
+          "kind": "rule",
+          "mode": "ask"
+        }
+      ]
+    }
+  ]
+}

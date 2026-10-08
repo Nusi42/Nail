@@ -26,6 +26,7 @@ import {
   verifyPlatforms,
 } from "./lib/update-manifest.mjs";
 import { readJson } from "./lib/json.mjs";
+import { forEachArg } from "./lib/args.mjs";
 
 /**
  * @param {string[]} argv
@@ -37,13 +38,7 @@ function parse(argv) {
    *   pubkeyFile?: string }}
    */
   const o = { artifacts: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const v = argv[++i];
-      if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
-      return v;
-    };
+  forEachArg(argv, (arg, { value }) => {
     if (arg === "--version") o.version = value();
     else if (arg === "--channel") o.channel = value();
     else if (arg === "--artifacts") o.artifacts.push(value());
@@ -54,7 +49,7 @@ function parse(argv) {
     else if (arg === "--existing-beta") o.existingBeta = value();
     else if (arg === "--pubkey-file") o.pubkeyFile = value();
     else throw new Error(`unknown option ${arg}`);
-  }
+  });
   const { version, channel, downloadBase, out } = o;
   /** @param {string} key */
   const missing = (key) =>

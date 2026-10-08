@@ -34,9 +34,14 @@ pub const RECOVERY_KEY_BYTES: usize = 32;
 /// Characters of the formatted key without dashes.
 pub const RECOVERY_KEY_CHARS: usize = 56;
 
-const DATA_CHARS: usize = 52;
-const GROUP: usize = 4;
+pub(crate) const DATA_CHARS: usize = 52;
+pub(crate) const GROUP: usize = 4;
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// [`ALPHABET`] as text (for the generated TypeScript constants).
+pub(crate) fn alphabet() -> &'static str {
+    std::str::from_utf8(ALPHABET).unwrap_or_default()
+}
 
 /// Whether a recovery key exists and when it was made / last checked
 /// (part of [`crate::security::VaultStatus`]).

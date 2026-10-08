@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test as base } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
-import { openSettings, toolbarAction } from "../support/views";
+import { expect } from "@playwright/test";
+import { nailFixture } from "../support/nail";
+import { openSettings, toolbarAction, messageRows, messageList } from "../support/views";
 import { defined } from "../support/defined";
 
 /**
@@ -10,23 +10,16 @@ import { defined } from "../support/defined";
  * divider write-back into layout.kdl, the merge dialog with backup and
  * revert, and every error of every broken config file at once.
  */
-const test = base.extend<{ nail: NailServer }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
-  nail: async ({}, use) => {
-    const server = await startNail();
-    await use(server);
-    await server.stop();
-  },
-});
+const test = nailFixture();
 
 const accent = () =>
   getComputedStyle(document.documentElement).getPropertyValue("--nail-color-accent").trim();
 
 test("the inspector shows the part path, theme rules and layout node", async ({ page, nail }) => {
   await page.goto(nail.url);
-  const row = page.locator('[data-part="message-list.row"]').first();
+  const row = messageRows(page).first();
   await expect(row).toBeVisible();
-  await page.locator('[data-part="message-list"]').focus();
+  await messageList(page).focus();
   await page.keyboard.press("Control+Shift+I");
   const panel = page.getByRole("complementary", { name: "Inspector" });
   await expect(panel.getByText("Nothing picked yet.")).toBeVisible();
@@ -58,7 +51,7 @@ test("the inspector shows the part path, theme rules and layout node", async ({ 
 
 test("dragging a divider writes the sizes into layout.kdl", async ({ page, nail }) => {
   await page.goto(nail.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   const layoutFile = path.join(nail.configDir, "layout.kdl");
   expect(existsSync(layoutFile)).toBe(false);
 
@@ -130,7 +123,7 @@ test("the merge dialog applies a shared theme and reverts it", async ({ page, na
 
 test("the config error list shows every error of two broken files", async ({ page, nail }) => {
   await page.goto(nail.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   // Nothing is shown while every file is valid.
   await expect(page.locator('[data-part="config-errors"][data-state="invalid"]')).toHaveCount(0);
 

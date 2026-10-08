@@ -37,6 +37,7 @@ import {
 } from "../lib/duplicates/sources.mjs";
 import {
   baselineIdentity,
+  knownInBaseline,
   constDefs,
   cssBlocks,
   cssLengths,
@@ -407,6 +408,18 @@ test("classify: exceptions, baseline identity, stale and pinned exceptions", () 
     ["rust-ts-const"],
   );
   assert.match(missing.problems[0] ?? "", /pinning test gone\.test\.ts is missing/);
+});
+
+test("baseline: a finding that only lost members is known, one that gained one is new", () => {
+  const recorded = ["WP-ui 480 @ a.ts, b.ts, c.ts", "rs B = 1 @ a.rs, b.rs", "WP-ui 999"];
+  /** @type {(key: string, files: string[]) => import("../lib/duplicates/ssot.mjs").Finding} */
+  const of = (key, files) => finding({ check: "magic-number", key, files });
+  assert.equal(knownInBaseline(of("WP-ui 480", ["a.ts", "b.ts", "c.ts"]), recorded), true);
+  assert.equal(knownInBaseline(of("WP-ui 480", ["a.ts", "c.ts"]), recorded), true);
+  assert.equal(knownInBaseline(of("WP-ui 480", ["a.ts", "d.ts"]), recorded), false);
+  assert.equal(knownInBaseline(of("WP-ui 480", ["a.ts", "b.ts", "c.ts", "d.ts"]), recorded), false);
+  assert.equal(knownInBaseline(of("WP-ui 999", ["x.ts"]), recorded), true);
+  assert.equal(knownInBaseline(of("WP-ui 48", ["a.ts", "b.ts"]), recorded), false);
 });
 
 test("cli: arguments and which findings fail", () => {

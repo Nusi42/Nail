@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { control, startNail, type NailServer } from "../support/nail";
+import { expect, test } from "@playwright/test";
+import { nailPerTest, control } from "../support/nail";
 import {
   accountSectionNamed,
   accountSections,
@@ -9,6 +9,9 @@ import {
   sectionInbox,
   showView,
   viewRegion,
+  messageRows,
+  DEMO_MULTI_CONVERSATIONS,
+  refreshList,
 } from "../support/views";
 
 /**
@@ -17,17 +20,7 @@ import {
  * (bob@new.example) whose settings the autoconfig mock serves.
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
+const server = nailPerTest({ seed: "demo-multi" });
 
 test("the unified inbox shows both accounts and their status", async ({ page }) => {
   await page.goto(server.url);
@@ -58,15 +51,15 @@ test("the unified inbox shows both accounts and their status", async ({ page }) 
   // One row per conversation (P2): work's 30 messages are 15 conversations,
   // home has 3; the mailing-list post in both accounts is one row (listed
   // under the home copy).
-  await expect(rows(page)).toHaveCount(15 + 3 - 1);
-  await expect(rows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
-  await expect(rows(page).and(page.locator('[data-account="work"]'))).toHaveCount(14);
-  await expect(rows(page).and(page.locator('[data-account="home"]'))).toHaveCount(3);
+  await expect(messageRows(page)).toHaveCount(15 + 3 - 1);
+  await expect(messageRows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
+  await expect(messageRows(page).and(page.locator('[data-account="work"]'))).toHaveCount(14);
+  await expect(messageRows(page).and(page.locator('[data-account="home"]'))).toHaveCount(3);
 
   // Each account's own folders are in its section.
   await sectionInbox(accounts.nth(1)).click();
-  await expect(rows(page)).toHaveCount(3);
-  await expect(rows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
+  await expect(messageRows(page)).toHaveCount(3);
+  await expect(messageRows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
 });
 
 test("an account is added through discovery against the mock servers", async ({ page }) => {
@@ -95,7 +88,7 @@ test("an account is added through discovery against the mock servers", async ({ 
   const bob = accountSectionNamed(page, "Bob");
   await expect(bob).toHaveAttribute("data-account-kind", "imap");
   await expect(bob).toHaveAttribute("data-status", "online");
-  await expect(rows(page).filter({ hasText: "Welcome to New Example Mail" })).toHaveCount(1);
+  await expect(messageRows(page).filter({ hasText: "Welcome to New Example Mail" })).toHaveCount(1);
 });
 
 test("settings that could not be verified come with a warning", async ({ page }) => {
@@ -118,15 +111,14 @@ test("settings that could not be verified come with a warning", async ({ page })
 test("a POP3 account receives mail", async ({ page }) => {
   await page.goto(server.url);
   await sectionInbox(accountSectionNamed(page, "Home")).click();
-  await expect(rows(page)).toHaveCount(3);
+  await expect(messageRows(page)).toHaveCount(3);
   await control(server, "pop3-deliver", {
     raw: "From: Grace Hopper <grace@home.example>\nTo: ada@home.example\nSubject: Fresh from the POP3 server\nMessage-ID: <fresh@home.example>\n\nHello!",
   });
   // Check for new mail now (F5 = sync.now).
-  await page.locator('[data-part="message-list"]').focus();
-  await page.keyboard.press("F5");
-  await expect(rows(page)).toHaveCount(4);
-  await rows(page).filter({ hasText: "Fresh from the POP3 server" }).click();
+  await refreshList(page);
+  await expect(messageRows(page)).toHaveCount(4);
+  await messageRows(page).filter({ hasText: "Fresh from the POP3 server" }).click();
   await expect(page.locator(READER_SUBJECT)).toContainText("Fresh from the POP3 server");
 });
 
@@ -152,8 +144,8 @@ test("a virtual account merges folders and dedupes a mailing-list message", asyn
   await expect(folders.filter({ hasText: "Inbox" }).first()).toHaveAttribute("data-role", "inbox");
   await folders.and(page.locator('[data-role="inbox"]')).first().click();
   // Both inboxes merged; the list message both accounts got is one row.
-  await expect(rows(page)).toHaveCount(17);
-  await expect(rows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
-  await expect(rows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
-  await expect(rows(page).filter({ hasText: "Welcome to Nail" })).toHaveCount(1);
+  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
+  await expect(messageRows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(1);
+  await expect(messageRows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
+  await expect(messageRows(page).filter({ hasText: "Welcome to Nail" })).toHaveCount(1);
 });

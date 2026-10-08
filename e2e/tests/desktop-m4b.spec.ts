@@ -1,10 +1,8 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
-import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
-  connectDesktop,
   desktopBinary,
   expectWindowsInBackground,
   fakeInstaller,
@@ -12,12 +10,13 @@ import {
   mapiHarness,
   shellControl,
   skipFirstRun,
-  startDesktop,
-  type DesktopApp,
   type DesktopOptions,
+  desktopTests,
+  configWithIdentity,
+  desktopPerTest,
 } from "../support/desktop";
-import { freePort, nailBinary, tempDir } from "../support/nail";
-import { commandManifest, writePluginFolder } from "../support/plugins";
+import { tempDir } from "../support/nail";
+import { commandManifest, writePluginFolder, pluginDevConsole } from "../support/plugins";
 import { startUpdateServer, updateKey } from "../support/updates";
 import { composerWindow, openSettingsTab } from "../support/views";
 
@@ -40,64 +39,11 @@ import { composerWindow, openSettingsTab } from "../support/views";
  * CI it runs only with `NAIL_E2E_DESKTOP=1`; locally it always runs.
  */
 
-test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
-test.skip(
-  !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
-  "set NAIL_E2E_DESKTOP=1 to run the desktop smoke tests in CI",
-);
-// One app window at a time; starting it takes a while.
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+desktopTests();
 
-/** An app with its page; closed after the test. */
-interface Running {
-  app: DesktopApp;
-  browser: Browser;
-  page: Page;
-}
-
-const running: Running[] = [];
-
-async function launch(options: DesktopOptions = {}): Promise<Running> {
-  const app = await startDesktop(freePort(), options);
-  try {
-    const { browser, page } = await connectDesktop(app);
-    const entry = { app, browser, page };
-    running.push(entry);
-    return entry;
-  } catch (error) {
-    await app.stop();
-    throw error;
-  }
-}
-
-test.afterEach(async () => {
-  for (const { app, browser } of running.splice(0)) {
-    await browser.close().catch(() => undefined);
-    await app.stop();
-  }
-});
-
-/** The settings view at the section of a former settings tab (M5b). */
-function openSettings(page: Page, tab: string): Promise<Locator> {
-  return openSettingsTab(page, tab);
-}
-
-/** An accounts.kdl with one identity (switched off: nothing connects). */
-function configWithIdentity(): string {
-  const dir = tempDir("desktop-config");
-  writeFileSync(
-    path.join(dir, "accounts.kdl"),
-    [
-      'account "work" email="ada@example.org" name="Work" enabled=#false {',
-      '    imap host="127.0.0.1" port=1 tls="plaintext"',
-      '    smtp host="127.0.0.1" port=1 tls="plaintext"',
-      '    identity "ada@example.org" name="Ada Lovelace"',
-      "}",
-      "",
-    ].join("\n"),
-  );
-  return dir;
-}
+/** An app with its page (the first-run screen still open); stopped after the test. */
+const launchApp = desktopPerTest();
+const launch = (options: DesktopOptions = {}) => launchApp({ ...options, keepFirstRun: true });
 
 test("the first run, About Nail and the desktop settings", async () => {
   const { page } = await launch();
@@ -118,7 +64,7 @@ test("the first run, About Nail and the desktop settings", async () => {
   await about.getByRole("button", { name: "Close" }).click();
 
   // Settings: tray and startup (the demo's registry is in memory).
-  const settings = await openSettings(page, "Tray and startup");
+  const settings = await openSettingsTab(page, "Tray and startup");
   const closeToTray = settings.getByRole("checkbox", {
     name: "Keep Nail running in the notification area",
   });
@@ -227,7 +173,7 @@ test("the updater finds a newer version on a loopback server and installs it on 
       },
     });
     await skipFirstRun(page);
-    const settings = await openSettings(page, "Updates");
+    const settings = await openSettingsTab(page, "Updates");
     const status = settings.locator('[data-part="update-status"]');
     // Check now (or the automatic check got there first); the download
     // runs in the background (the default) and the signature is checked.
@@ -276,7 +222,7 @@ test("an MSI installation (DISABLEUPDATES=1) hides the updater", async () => {
       },
     });
     await skipFirstRun(page);
-    const settings = await openSettings(page, "Updates");
+    const settings = await openSettingsTab(page, "Updates");
     const status = settings.locator('[data-part="update-status"]');
     await expect(status).toHaveAttribute("data-state", "disabled");
     await expect(status).toContainText("Your organization installs updates for Nail.");
@@ -297,7 +243,7 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
   expect(existsSync(endpointFile)).toBe(false);
 
   // Off by default; switching it on starts the loopback endpoint.
-  const settings = await openSettings(page, "Tray and startup");
+  const settings = await openSettingsTab(page, "Tray and startup");
   await settings
     .getByRole("checkbox", { name: "Allow “nail plugin dev” to load plug-ins into this app" })
     .click();
@@ -333,28 +279,16 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
     };`,
   });
   mkdirSync(path.join(folder, "locales"), { recursive: true });
-  const child = spawn(nailBinary(), ["plugin", "dev", folder, "--data-dir", data], {
-    stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, NAIL_LOG: "error", NAIL_LOCALE: "en" },
-  });
-  const lines: string[] = [];
-  createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
+  const dev = pluginDevConsole(folder, ["--data-dir", data]);
   try {
-    await expect
-      .poll(() => lines.some((l) => l.includes("Loaded Desktop hello 1.0.0")), {
-        message: `console lines: ${JSON.stringify(lines)}`,
-        timeout: 30_000,
-      })
-      .toBe(true);
-    await expect
-      .poll(() => lines.some((l) => l.includes("activated on the desktop")), { timeout: 30_000 })
-      .toBe(true);
+    await dev.waitFor("Loaded Desktop hello 1.0.0");
+    await dev.waitFor("activated on the desktop");
     await openSettingsTab(page, "Plug-ins");
     const entry = settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]');
     await expect(entry).toContainText("Desktop hello 1.0.0");
     await expect(entry).toContainText("Loaded from the development folder");
   } finally {
-    child.kill();
+    dev.child.kill();
   }
 
   // Switched off again: the endpoint file is gone.

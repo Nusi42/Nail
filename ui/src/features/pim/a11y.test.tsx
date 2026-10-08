@@ -10,10 +10,7 @@ import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
-import type { Density } from "../../api/generated";
-import { defaultTheme } from "../../api/mockData";
 import { BUILTIN_THEMES } from "../appearance";
-import { resolveMockTheme } from "../appearance/themes";
 import { WindowView } from "../../layout/LayoutRenderer";
 import { compileTheme } from "../../theme/compile";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -24,6 +21,8 @@ import { DIALOGS } from "./names";
 import { PimToasts } from "./Reminders";
 import { pimStoreFor } from "./store";
 import { VIEW_KINDS } from "./time";
+import { THEME_DENSITY_CASES, builtinTheme } from "../../test/themes";
+import { DENSITY_VALUES } from "../../api/generated";
 
 /** The value, or a test failure when it is missing. */
 function must<T>(value: T | null | undefined): T {
@@ -238,33 +237,26 @@ describe("axe: PIM dialogs", () => {
 });
 
 describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
-  const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-  const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
   // Each theme once for the (slow) axe scans, the densities alternating;
   // every theme and density compiles below.
-  const SCANS = BUILTIN_THEMES.map(([id], i) => [id, DENSITIES[i % 2] ?? "comfortable"] as const);
+  const SCANS = BUILTIN_THEMES.map(
+    ([id], i) => [id, DENSITY_VALUES[i % 2] ?? "comfortable"] as const,
+  );
 
-  it("covers the five built-in themes", () => {
-    expect(BUILTIN_THEMES.map(([id]) => id)).toEqual([
-      "frost",
-      "sage",
-      "graphite",
-      "nocturne",
-      "high-contrast",
-    ]);
-  });
-
-  it.each(CASES)("%s / %s compiles with the PIM skin and no dropped rules", (id, density) => {
-    const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
-    const compiled = compileTheme(theme);
-    expect(compiled.warnings).toEqual([]);
-    expect(compiled.css).toContain('[data-part="calendar.toolbar"]');
-  });
+  it.each(THEME_DENSITY_CASES)(
+    "%s / %s compiles with the PIM skin and no dropped rules",
+    (id, density) => {
+      const theme = builtinTheme(id, density);
+      const compiled = compileTheme(theme);
+      expect(compiled.warnings).toEqual([]);
+      expect(compiled.css).toContain('[data-part="calendar.toolbar"]');
+    },
+  );
 
   it.each(SCANS)(
     "%s / %s: the PIM windows, an open calendar menu and the settings section",
     async (id, density) => {
-      const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
+      const theme = builtinTheme(id, density);
       for (const name of ["calendar", "contacts", "tasks"]) {
         const env = createEnv();
         pimStoreFor(env.store).getState().showContact("ct-ada");

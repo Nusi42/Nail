@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { checkForUpdate, downloadVerified } from "./lib/update-check.mjs";
+import { forEachArg } from "./lib/args.mjs";
 
 /** @type {Partial<Record<string, string>>} */
 const OPTIONS = {
@@ -29,14 +30,11 @@ const OPTIONS = {
 function parse(argv) {
   /** @type {Partial<Record<string, string>>} */
   const o = {};
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const v = argv[++i];
-    if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
+  forEachArg(argv, (arg, { value }) => {
     const key = OPTIONS[arg];
     if (!key) throw new Error(`unknown option ${arg}`);
-    o[key] = v;
-  }
+    o[key] = value();
+  });
   /** @param {string} key */
   const get = (key) => {
     const value = o[key];

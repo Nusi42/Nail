@@ -1,7 +1,7 @@
 /**
  * Context menus resolved from `layout.kdl` — the UI side of
- * `nail_api::menus::resolve_menu` (ADR 0043), same rules, tested against the
- * same cases (`resolve.test.ts` mirrors the Rust tests):
+ * `nail_api::menus::resolve_menu` (ADR 0043): a port pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `resolve.test.ts`):
  *
  * - label and icon: the item's override, else the layout's action metadata,
  *   else `null` (the action's built-in label);
@@ -12,40 +12,27 @@
  * - headings (M5b) are kept only when an action or submenu follows them
  *   before the next heading or separator.
  */
-import type {
-  JsonValue,
-  MenuItem,
-  ResolvedLayout,
-  ResolvedMenu,
-  ResolvedMenuEntry,
+import {
+  CONTEXT_MENU_PARTS,
+  CONTEXT_MENU_PREFIX,
+  type JsonValue,
+  type MenuItem,
+  type ResolvedLayout,
+  type ResolvedMenu,
+  type ResolvedMenuEntry,
 } from "../../api/generated";
-
-/** Prefix of context-menu names in the layout. */
-export const CONTEXT_MENU_PREFIX = "context:";
-
-/** Parts with context menus and the key context of their shortcuts. */
-export const CONTEXT_MENU_PARTS: Readonly<Record<string, string>> = {
-  "message-list.row": "list",
-  "thread-view.message": "reader",
-  "message-view": "reader",
-  "message-view.attachment": "reader",
-  "folder-tree.folder": "global",
-  "folder-tree.account": "global",
-  composer: "composer",
-  // M5b: the "…" menu of a calendar in the calendar list.
-  "calendar-list.calendar": "calendar",
-  // M5d: the View menu on the navigation rail.
-  "nav-rail": "global",
-};
+export { CONTEXT_MENU_PARTS, CONTEXT_MENU_PREFIX } from "../../api/generated";
 
 /** `context:<part>`. */
 export function contextMenuName(part: string): string {
   return `${CONTEXT_MENU_PREFIX}${part}`;
 }
 
+const KEY_CONTEXT_OF_PART: Readonly<Record<string, string | undefined>> = CONTEXT_MENU_PARTS;
+
 /** The key context of a part's context menu (`global` when unknown). */
 export function keyContextOf(part: string): string {
-  return CONTEXT_MENU_PARTS[part] ?? "global";
+  return KEY_CONTEXT_OF_PART[part] ?? "global";
 }
 
 function sameArgs(a: readonly JsonValue[], b: readonly JsonValue[]): boolean {

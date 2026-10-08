@@ -5,7 +5,12 @@
  * tooltip — and come first, in that fixed order, before the other folders
  * (which keep the core's order).
  */
-import type { Folder, FolderRole } from "../api/generated";
+import { FOLDER_ROLE_VALUES, type Folder, type FolderRole } from "../api/generated";
+
+/** The special-use roles (every `FolderRole` but `other`), in the contract's order. */
+export const SPECIAL_USE_ROLES: readonly FolderRole[] = FOLDER_ROLE_VALUES.filter(
+  (role) => role !== "other",
+);
 
 /** The special-use roles in the pane's order. */
 export const ROLE_ORDER: readonly FolderRole[] = [

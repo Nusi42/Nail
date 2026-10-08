@@ -7,7 +7,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type { JunkSettings as Settings, JunkStatus, LocalizedMessage } from "../../api/generated";
+import {
+  JUNK_ISSUE_MESSAGE_IDS,
+  type JunkSettings as Settings,
+  type JunkStatus,
+  type LocalizedMessage,
+} from "../../api/generated";
 import { useActions } from "../../actions/ActionsProvider";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
@@ -119,7 +124,7 @@ function SettingsEditor({
   const save = async () => {
     const issues = junkIssues(draft);
     if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: `junk-issue-${i}` })));
+      setProblems(issues.map((i) => ({ id: JUNK_ISSUE_MESSAGE_IDS[i] })));
       return;
     }
     setProblems([]);

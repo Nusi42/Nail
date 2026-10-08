@@ -6,10 +6,10 @@
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "watch": "node scripts/build.mjs --watch",
+    "build": "nail-plugin build",
+    "watch": "nail-plugin build --watch",
     "typecheck": "tsc -p .",
-    "package": "npm run typecheck && npm run build && node scripts/pack.mjs"
+    "package": "npm run typecheck && npm run build && nail-plugin pack"
   },
   "devDependencies": {
     "@nail/plugin-api": "*",

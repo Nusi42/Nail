@@ -1,0 +1,1550 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "INBOX",
+          "parent_id": null,
+          "path": "INBOX",
+          "role": "inbox",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "days": 30,
+          "mode": "recent"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": true,
+        "on_demand": true,
+        "path": "INBOX",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Archive",
+          "parent_id": null,
+          "path": "Archive",
+          "role": "archive",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "headers-only"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "Archive",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Lists/rust",
+          "parent_id": null,
+          "path": "Lists/rust",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "days": 30,
+          "mode": "recent"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "Lists/rust",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Other",
+          "parent_id": null,
+          "path": "Other",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "days": 30,
+          "mode": "recent"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "Other",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "INBOX",
+          "parent_id": null,
+          "path": "INBOX",
+          "role": "inbox",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "days": 30,
+          "mode": "recent"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "INBOX",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Archive",
+          "parent_id": null,
+          "path": "Archive",
+          "role": "archive",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "headers-only"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "Archive",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Lists/rust",
+          "parent_id": null,
+          "path": "Lists/rust",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "full"
+        },
+        "enabled": false,
+        "folder_id": "f1",
+        "idle": true,
+        "on_demand": true,
+        "path": "Lists/rust",
+        "rule": {
+          "bodies": null,
+          "enabled": null,
+          "folder": {
+            "path": "Lists/rust"
+          },
+          "idle": true
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Other",
+          "parent_id": null,
+          "path": "Other",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "days": 30,
+          "mode": "recent"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": true,
+        "path": "Other",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "delete_after_days": null,
+              "delete_when_deleted_locally": null,
+              "leave_on_server": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "pop3",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "INBOX",
+          "parent_id": null,
+          "path": "INBOX",
+          "role": "inbox",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "full"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": true,
+        "on_demand": false,
+        "path": "INBOX",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "delete_after_days": null,
+              "delete_when_deleted_locally": null,
+              "leave_on_server": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "pop3",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Archive",
+          "parent_id": null,
+          "path": "Archive",
+          "role": "archive",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "full"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": false,
+        "path": "Archive",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "delete_after_days": null,
+              "delete_when_deleted_locally": null,
+              "leave_on_server": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "pop3",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Lists/rust",
+          "parent_id": null,
+          "path": "Lists/rust",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "full"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": false,
+        "path": "Lists/rust",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "delete_after_days": null,
+              "delete_when_deleted_locally": null,
+              "leave_on_server": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "pop3",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              }
+            ]
+          }
+        },
+        {
+          "account_id": "work",
+          "id": "f1",
+          "name": "Other",
+          "parent_id": null,
+          "path": "Other",
+          "role": "other",
+          "total": 0,
+          "unread": 0
+        }
+      ],
+      "fn": "resolvePolicy",
+      "out": {
+        "account_id": "work",
+        "bodies": {
+          "mode": "full"
+        },
+        "enabled": true,
+        "folder_id": "f1",
+        "idle": false,
+        "on_demand": false,
+        "path": "Other",
+        "rule": null
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        "Lists/rust",
+        {
+          "mode": "headers-only"
+        },
+        null,
+        null
+      ],
+      "fn": "withFolderRule",
+      "out": {
+        "email": "ada@example.org",
+        "enabled": true,
+        "id": "work",
+        "identities": [],
+        "incoming": {
+          "options": {
+            "compress": null,
+            "max_connections": null,
+            "poll_interval_secs": null
+          },
+          "protocol": "imap",
+          "server": {
+            "auth": {
+              "method": "none"
+            },
+            "host": "imap.example.org",
+            "port": 993,
+            "tls": "implicit"
+          }
+        },
+        "name": "Work",
+        "outgoing": null,
+        "save_sent_copy": null,
+        "sync": {
+          "bodies": {
+            "days": 30,
+            "mode": "recent"
+          },
+          "folders": [
+            {
+              "bodies": {
+                "mode": "headers-only"
+              },
+              "enabled": null,
+              "folder": {
+                "role": "archive"
+              },
+              "idle": null
+            },
+            {
+              "bodies": {
+                "mode": "headers-only"
+              },
+              "enabled": null,
+              "folder": {
+                "path": "Lists/rust"
+              },
+              "idle": null
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "inbox"
+              },
+              "idle": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        "Lists/rust",
+        null,
+        null,
+        null
+      ],
+      "fn": "withFolderRule",
+      "out": {
+        "email": "ada@example.org",
+        "enabled": true,
+        "id": "work",
+        "identities": [],
+        "incoming": {
+          "options": {
+            "compress": null,
+            "max_connections": null,
+            "poll_interval_secs": null
+          },
+          "protocol": "imap",
+          "server": {
+            "auth": {
+              "method": "none"
+            },
+            "host": "imap.example.org",
+            "port": 993,
+            "tls": "implicit"
+          }
+        },
+        "name": "Work",
+        "outgoing": null,
+        "save_sent_copy": null,
+        "sync": {
+          "bodies": {
+            "days": 30,
+            "mode": "recent"
+          },
+          "folders": [
+            {
+              "bodies": {
+                "mode": "headers-only"
+              },
+              "enabled": null,
+              "folder": {
+                "role": "archive"
+              },
+              "idle": null
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "inbox"
+              },
+              "idle": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        "New",
+        null,
+        true,
+        null
+      ],
+      "fn": "withFolderRule",
+      "out": {
+        "email": "ada@example.org",
+        "enabled": true,
+        "id": "work",
+        "identities": [],
+        "incoming": {
+          "options": {
+            "compress": null,
+            "max_connections": null,
+            "poll_interval_secs": null
+          },
+          "protocol": "imap",
+          "server": {
+            "auth": {
+              "method": "none"
+            },
+            "host": "imap.example.org",
+            "port": 993,
+            "tls": "implicit"
+          }
+        },
+        "name": "Work",
+        "outgoing": null,
+        "save_sent_copy": null,
+        "sync": {
+          "bodies": {
+            "days": 30,
+            "mode": "recent"
+          },
+          "folders": [
+            {
+              "bodies": {
+                "mode": "headers-only"
+              },
+              "enabled": null,
+              "folder": {
+                "role": "archive"
+              },
+              "idle": null
+            },
+            {
+              "bodies": {
+                "mode": "full"
+              },
+              "enabled": false,
+              "folder": {
+                "path": "Lists/rust"
+              },
+              "idle": null
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "inbox"
+              },
+              "idle": false
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "Lists/rust"
+              },
+              "idle": true
+            },
+            {
+              "bodies": null,
+              "enabled": true,
+              "folder": {
+                "path": "New"
+              },
+              "idle": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "email": "ada@example.org",
+          "enabled": true,
+          "id": "work",
+          "identities": [],
+          "incoming": {
+            "options": {
+              "compress": null,
+              "max_connections": null,
+              "poll_interval_secs": null
+            },
+            "protocol": "imap",
+            "server": {
+              "auth": {
+                "method": "none"
+              },
+              "host": "imap.example.org",
+              "port": 993,
+              "tls": "implicit"
+            }
+          },
+          "name": "Work",
+          "outgoing": null,
+          "save_sent_copy": null,
+          "sync": {
+            "bodies": {
+              "days": 30,
+              "mode": "recent"
+            },
+            "folders": [
+              {
+                "bodies": {
+                  "mode": "headers-only"
+                },
+                "enabled": null,
+                "folder": {
+                  "role": "archive"
+                },
+                "idle": null
+              },
+              {
+                "bodies": {
+                  "mode": "full"
+                },
+                "enabled": false,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": null
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "inbox"
+                },
+                "idle": false
+              },
+              {
+                "bodies": null,
+                "enabled": null,
+                "folder": {
+                  "path": "Lists/rust"
+                },
+                "idle": true
+              }
+            ]
+          }
+        },
+        "INBOX",
+        {
+          "days": 7,
+          "mode": "recent"
+        },
+        true,
+        true
+      ],
+      "fn": "withFolderRule",
+      "out": {
+        "email": "ada@example.org",
+        "enabled": true,
+        "id": "work",
+        "identities": [],
+        "incoming": {
+          "options": {
+            "compress": null,
+            "max_connections": null,
+            "poll_interval_secs": null
+          },
+          "protocol": "imap",
+          "server": {
+            "auth": {
+              "method": "none"
+            },
+            "host": "imap.example.org",
+            "port": 993,
+            "tls": "implicit"
+          }
+        },
+        "name": "Work",
+        "outgoing": null,
+        "save_sent_copy": null,
+        "sync": {
+          "bodies": {
+            "days": 30,
+            "mode": "recent"
+          },
+          "folders": [
+            {
+              "bodies": {
+                "mode": "headers-only"
+              },
+              "enabled": null,
+              "folder": {
+                "role": "archive"
+              },
+              "idle": null
+            },
+            {
+              "bodies": {
+                "mode": "full"
+              },
+              "enabled": false,
+              "folder": {
+                "path": "Lists/rust"
+              },
+              "idle": null
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "inbox"
+              },
+              "idle": false
+            },
+            {
+              "bodies": null,
+              "enabled": null,
+              "folder": {
+                "path": "Lists/rust"
+              },
+              "idle": true
+            },
+            {
+              "bodies": {
+                "days": 7,
+                "mode": "recent"
+              },
+              "enabled": true,
+              "folder": {
+                "path": "INBOX"
+              },
+              "idle": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

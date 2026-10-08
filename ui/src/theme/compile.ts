@@ -41,18 +41,21 @@ import { MAIL_ACTIONS_SKIN_CSS } from "../features/mail-actions/skin";
 import { RESPONSIVE_SKIN_CSS } from "./skinResponsive";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
-import type {
-  AncestorSelector,
-  MessageDisplay,
-  PartCondition,
-  PartRule,
-  ResolvedTheme,
-  ThemeMode,
-  TokenSet,
+import {
+  PSEUDO_CLASS_STATES,
+  type AncestorSelector,
+  COMPACT_VARIANT,
+  type MessageDisplay,
+  type PartCondition,
+  type PartRule,
+  type ResolvedTheme,
+  type ThemeMode,
+  type TokenSet,
 } from "../api/generated";
+export { COMPACT_VARIANT } from "../api/generated";
 
 /** States that map to CSS pseudo-classes; all others to `[data-state~=…]`. */
-const PSEUDO_STATES = new Set(["hover", "active", "focus", "focus-visible", "focus-within"]);
+export const PSEUDO_STATES: ReadonlySet<string> = new Set(PSEUDO_CLASS_STATES);
 
 const PART_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 const IDENT_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -292,9 +295,6 @@ function readerRules(message: MessageDisplay): string {
 function colorScheme(mode: string): string {
   return mode === "dark" || mode === "high-contrast" ? "dark" : "light";
 }
-
-/** `nail_api::appearance::COMPACT_VARIANT`: the density variant in `modes`. */
-export const COMPACT_VARIANT = "compact";
 
 function tokenRules(theme: ResolvedTheme, warnings: string[]): string[] {
   const out: string[] = [];

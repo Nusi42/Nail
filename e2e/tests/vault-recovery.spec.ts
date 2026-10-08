@@ -1,10 +1,10 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, tempDir, type NailServer } from "../support/nail";
+import { tempDir, type NailServer, nailOnDemand } from "../support/nail";
+import { axeViolations } from "../support/axe";
 import { rpcOk } from "../support/remote";
-import { openSettingsTab, showView } from "../support/views";
+import { openSettingsTab, showView, messageRows } from "../support/views";
 
 /**
  * M4c WP125 (ADRs 0095, 0099): the recovery key opens encrypted data after
@@ -16,11 +16,10 @@ import { openSettingsTab, showView } from "../support/views";
  * the key in the dialog Nail opens by itself, and restarts once more.
  */
 
-let server: NailServer | undefined;
+const server = nailOnDemand();
 const dirs = { dataDir: "", configDir: "" };
 
-test.afterEach(async () => {
-  await server?.stop();
+test.afterEach(() => {
   for (const dir of [dirs.dataDir, dirs.configDir]) {
     if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
@@ -28,8 +27,7 @@ test.afterEach(async () => {
 
 /** Accessibility scan of one window (each step of the recovery-key dialogs). */
 async function expectAccessible(page: Page, selector: string) {
-  const scan = await new AxeBuilder({ page }).include(selector).analyze();
-  expect(scan.violations.map((v) => v.id)).toEqual([]);
+  expect(await axeViolations(page, selector)).toEqual([]);
 }
 
 async function vaultState(nail: NailServer) {
@@ -44,19 +42,16 @@ async function vaultState(nail: NailServer) {
 test("a recovery key opens the data after the keychain entry was lost", async ({ page }) => {
   dirs.dataDir = tempDir("vault-data");
   dirs.configDir = tempDir("vault-config");
-  server = await startNail({ dirs });
+  await server.start({ dirs });
   await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-  const welcome = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Welcome to Nail" });
+  await expect(messageRows(page).first()).toBeVisible();
+  const welcome = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await expect(welcome).toBeVisible();
 
   // Encryption at rest on, then a recovery key from the Settings.
   await rpcOk(server, { type: "SetVaultEncryption", enabled: true }, "VaultStatus");
-  const running = server;
   await expect
-    .poll(async () => (await vaultState(running)).state, { timeout: 60_000 })
+    .poll(async () => (await vaultState(server)).state, { timeout: 60_000 })
     .toBe("encrypted");
   const settings = await openSettingsTab(page, "Recovery key");
   await settings.getByRole("button", { name: "Create recovery key" }).click();
@@ -98,7 +93,7 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   writeFileSync(keychainFile, JSON.stringify(remaining));
 
   // Nail starts locked and asks for the recovery key by itself.
-  server = await startNail({ dirs });
+  await server.start({ dirs });
   expect((await vaultState(server)).needs_recovery).toBe(true);
   await page.goto(server.url);
   const restore = page.getByRole("dialog", { name: "Open your data with the recovery key" });
@@ -111,16 +106,14 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   await server.stop();
 
   // After the restart the data is there again.
-  server = await startNail({ dirs });
+  await server.start({ dirs });
   const status = await vaultState(server);
   expect(status.needs_recovery).toBe(false);
   expect(status.state).toBe("encrypted");
   await page.goto(server.url);
   // The last view survives restarts (Settings, where the key was made).
   await showView(page, "Mail");
-  await expect(
-    page.locator('[data-part="message-list.row"]').filter({ hasText: "Welcome to Nail" }),
-  ).toBeVisible();
+  await expect(messageRows(page).filter({ hasText: "Welcome to Nail" })).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Open your data with the recovery key" }),
   ).toHaveCount(0);

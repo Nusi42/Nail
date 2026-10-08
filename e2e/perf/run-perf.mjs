@@ -15,16 +15,15 @@
  * (`<checkout>/.nail-build/perf/<corpus>`, NAIL_BUILD_DIR), never tracked
  * files.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { parseJson } from "../../scripts/lib/json.mjs";
+import { forEachArg } from "../../scripts/lib/args.mjs";
+import { buildBase } from "../../scripts/lib/build.mjs";
+import { workspaceBinary } from "../../scripts/lib/cargo.mjs";
+import { repoRoot, runMain } from "../../scripts/lib/program.mjs";
 import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, "..", "..");
 
 /**
  * @param {string[]} argv
@@ -32,20 +31,15 @@ const repoRoot = path.resolve(here, "..", "..");
  */
 export function parseArgs(argv) {
   const options = { corpus: "standard", tolerant: false };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
+  forEachArg(argv, (arg, { value }) => {
     if (arg === "--tolerant") options.tolerant = true;
-    else if (arg === "--corpus") options.corpus = argv[++i] ?? "";
+    else if (arg === "--corpus") options.corpus = value();
     else throw new Error(`unknown argument ${arg}`);
-  }
+  });
   if (!["standard", "small"].includes(options.corpus)) {
     throw new Error(`unknown corpus ${options.corpus}`);
   }
   return options;
-}
-
-function buildDir() {
-  return process.env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
 }
 
 /**
@@ -53,23 +47,10 @@ function buildDir() {
  *
  * @param {string} name
  * @param {string} envName
- * @returns {string}
  */
 function release(name, envName) {
-  const fromEnv = process.env[envName];
-  if (fromEnv) return fromEnv;
-  const metadata = /** @type {{ target_directory: string }} */ (
-    parseJson(
-      execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-        cwd: repoRoot,
-        encoding: "utf8",
-      }),
-    )
-  );
-  const exe = process.platform === "win32" ? `${name}.exe` : name;
-  const bin = path.join(metadata.target_directory, "release", exe);
-  if (!existsSync(bin)) throw new Error(`${bin} is missing: build it with cargo --release`);
-  return bin;
+  const pkg = name === "nail" ? "nail-cli" : name;
+  return workspaceBinary({ repoRoot, name, pkg, profile: "release", envName });
 }
 
 /**
@@ -89,10 +70,11 @@ function run(command, args, env = {}) {
   return result.status ?? 1;
 }
 
-function main() {
+/** @param {string[]} argv */
+function main(argv) {
   assertWorkFolder("node e2e/perf/run-perf.mjs");
-  const options = parseArgs(process.argv.slice(2));
-  const work = path.join(buildDir(), "perf", options.corpus);
+  const options = parseArgs(argv);
+  const work = path.join(buildBase(process.env, repoRoot), "perf", options.corpus);
   const bench = release("nail-bench", "NAIL_BENCH_BIN");
   const budgets = path.join(repoRoot, "e2e", "perf", "budgets.json");
   const tolerant = options.tolerant ? ["--tolerant"] : [];
@@ -146,11 +128,4 @@ function main() {
   return failed || status !== 0 ? 1 : 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    process.exitCode = main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 2;
-  }
-}
+await runMain(import.meta.url, main);

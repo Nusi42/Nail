@@ -1,28 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { nailPerTest } from "../support/nail";
+import { messageRows, DEMO_MULTI_CONVERSATIONS, openMail, messageList } from "../support/views";
 
 /** Search with the query language and the thread view, on the real core. */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
+const server = nailPerTest({ seed: "demo-multi" });
 
 async function ready(page: Page) {
-  await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
 }
 
 test("search with the query language", async ({ page }) => {
   await ready(page);
-  const list = page.locator('[data-part="message-list"]');
+  const list = messageList(page);
   await page.keyboard.press("/");
   const input = page.getByRole("searchbox", { name: "Search mail" });
   await expect(input).toBeFocused();
@@ -31,15 +21,15 @@ test("search with the query language", async ({ page }) => {
   await input.fill('subject:"garden party" OR from:users@lists.nail.example');
   await input.press("Enter");
   await expect(list).toHaveAttribute("data-state", "search");
-  await expect(rows(page)).toHaveCount(3);
-  await expect(rows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
-  await expect(rows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(2);
+  await expect(messageRows(page)).toHaveCount(3);
+  await expect(messageRows(page).filter({ hasText: "Garden party on Saturday" })).toHaveCount(1);
+  await expect(messageRows(page).filter({ hasText: "Release notes for M1" })).toHaveCount(2);
 
   // Flags and negation.
   await input.fill("is:unread NOT from:grace account:home");
   await input.press("Enter");
-  await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page)).toContainText("Release notes for M1");
+  await expect(messageRows(page)).toHaveCount(1);
+  await expect(messageRows(page)).toContainText("Release notes for M1");
 
   // A mistake is pointed out where it is, before searching.
   await input.fill("frm:ada");
@@ -51,12 +41,12 @@ test("search with the query language", async ({ page }) => {
   // Escape clears the search: back to the folder.
   await input.press("Escape");
   await expect(list).not.toHaveAttribute("data-state", "search");
-  await expect(rows(page)).toHaveCount(17);
+  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
 });
 
 test("the reader shows a conversation across folders as cards", async ({ page }) => {
   await ready(page);
-  const latest = rows(page).filter({ hasText: "Project Nightingale kickoff" }).first();
+  const latest = messageRows(page).filter({ hasText: "Project Nightingale kickoff" }).first();
   await latest.click();
   const thread = page.locator('[data-part="thread-view"]');
   await expect(thread).toBeVisible();

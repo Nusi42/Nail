@@ -32,6 +32,7 @@ import {
 import { setPendingMove } from "../features/mail-actions/move";
 import { currentTargets, hasTargets, listSelectionFor } from "./mailTargets";
 import type { UiStore } from "../state/uiStore";
+import { SPECIAL_USE_ROLES } from "../widgets/folderNames";
 
 export interface ActionContext {
   client: NailClient;
@@ -53,8 +54,6 @@ export const WINDOWS = {
   composer: "composer",
 } as const;
 
-const ROLES: readonly FolderRole[] = ["inbox", "sent", "drafts", "archive", "junk", "trash"];
-
 function selected(ctx: ActionContext): string[] {
   const id = ctx.store.getState().selectedMessageId;
   return id === null ? [] : [id];
@@ -75,7 +74,7 @@ const hasComposer = (ctx: ActionContext) => ctx.store.getState().composer !== nu
 /** `mail.move-to "archive"` (a role) or `mail.move-to "<folder id>"`. */
 export function moveTargetOf(arg: JsonValue | undefined): MoveTarget | null {
   if (typeof arg !== "string" || arg === "") return null;
-  return (ROLES as readonly string[]).includes(arg)
+  return (SPECIAL_USE_ROLES as readonly string[]).includes(arg)
     ? { role: arg as FolderRole }
     : { folder_id: arg };
 }

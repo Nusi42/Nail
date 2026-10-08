@@ -29,9 +29,9 @@ nail-testkit-net = { path = "../../crates/nail-testkit-net" }
 url = "2.5.8"
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time"] }
 
-# The workspace lints (root Cargo.toml, ADR 0123), copied because this crate
-# is its own workspace; keep them in sync. CI's interop job runs clippy with
-# -D warnings on it.
+# The workspace lints (root Cargo.toml, ADR 0123), repeated because this crate
+# is its own workspace (pinned by scripts/test/interop-lints.test.mjs). CI's
+# interop job runs clippy with -D warnings on it.
 [lints.rust]
 unsafe_code = "forbid"
 rust_2018_idioms = { level = "warn", priority = -1 }

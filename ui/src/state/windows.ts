@@ -1,6 +1,8 @@
 /**
- * The window model of M5c (ADR 0116), mirrored from `nail_api::windows` and
- * tested against the same cases (`windows.test.ts`). Shared contract file:
+ * The window model of M5c (ADR 0116): the contract's constants come from
+ * the generated `constants.ts`; the rules are ports of `nail_api::windows`
+ * pinned by `crates/nail-api/tests/ts_vectors.rs` (its vectors run in
+ * `windows.test.ts`). Shared contract file:
  * the window manager (WP171, `features/windows/` + `layout/`), the
  * composers (WP172) and the pop-outs (WP173) build on it; change it only
  * through the integration.
@@ -17,48 +19,44 @@
  * - **Pop-outs.** The desktop opens a pop-out at `#/window/<id>`.
  */
 import { createContext, useContext } from "react";
-import type {
-  ResolvedLayout,
-  WindowFrame,
-  WindowGeometry,
-  WindowSpec,
-  WindowState,
-  WindowStateIssue,
+import {
+  CONFIRMATION_WINDOW_SPEC,
+  DEFAULT_WINDOW_SPEC,
+  MAX_WINDOW_COORDINATE,
+  MAX_WINDOW_EDGE,
+  MAX_WINDOW_INSTANCE_CHARS,
+  MAX_WINDOW_KIND_CHARS,
+  MAX_WINDOW_STATES,
+  MIN_WINDOW_EDGE,
+  POP_OUT_LABEL_PREFIX,
+  POP_OUT_ROUTE_PREFIX,
+  WINDOW_INSTANCE_SEPARATOR,
+  type ResolvedLayout,
+  type WindowFrame,
+  type WindowGeometry,
+  type WindowSpec,
+  type WindowState,
+  type WindowStateIssue,
 } from "../api/generated";
 
-/** `MAX_WINDOW_STATES`. */
-export const MAX_WINDOW_STATES = 256;
-/** `MAX_WINDOW_KIND_CHARS`. */
-export const MAX_WINDOW_KIND_CHARS = 64;
-/** `MAX_WINDOW_INSTANCE_CHARS`. */
-export const MAX_WINDOW_INSTANCE_CHARS = 64;
-/** `WINDOW_INSTANCE_SEPARATOR`. */
-export const WINDOW_INSTANCE_SEPARATOR = ":";
-/** `MIN_WINDOW_EDGE`: smallest width / height (and minimum size). */
-export const MIN_WINDOW_EDGE = 120;
-/** `MAX_WINDOW_EDGE`. */
-export const MAX_WINDOW_EDGE = 16_384;
-/** `MAX_WINDOW_COORDINATE`. */
-export const MAX_WINDOW_COORDINATE = 65_536;
-/** `WINDOW_CASCADE_OFFSET`: a new instance's offset from the previous one. */
-export const WINDOW_CASCADE_OFFSET = 24;
-/** `WINDOW_KEYBOARD_STEP`: arrow-key move / resize step. */
-export const WINDOW_KEYBOARD_STEP = 16;
-/** `WINDOW_MIN_VISIBLE`: how much of a window always stays on the page. */
-export const WINDOW_MIN_VISIBLE = 48;
-/** `MAX_POP_OUTS`. */
-export const MAX_POP_OUTS = 32;
-/** `POP_OUT_ROUTE_PREFIX`. */
-export const POP_OUT_ROUTE_PREFIX = "#/window/";
-/** `POP_OUT_LABEL_PREFIX` (the OS window label of a pop-out). */
-export const POP_OUT_LABEL_PREFIX = "popout-";
-/**
- * The DOM event the desktop shell dispatches in a pop-out's page when the
- * user closes its OS window (close button, Alt+F4): the page closes its
- * window like the window's own close button would (app/src-tauri
- * `popout.rs` `POP_OUT_CLOSE_EVENT`).
- */
-export const POP_OUT_CLOSE_EVENT = "nail-pop-out-close-requested";
+export {
+  CONFIRMATION_WINDOW_SPEC,
+  DEFAULT_WINDOW_SPEC,
+  MAX_POP_OUTS,
+  MAX_WINDOW_COORDINATE,
+  MAX_WINDOW_EDGE,
+  MAX_WINDOW_INSTANCE_CHARS,
+  MAX_WINDOW_KIND_CHARS,
+  MAX_WINDOW_STATES,
+  MIN_WINDOW_EDGE,
+  POP_OUT_CLOSE_EVENT,
+  POP_OUT_LABEL_PREFIX,
+  POP_OUT_ROUTE_PREFIX,
+  WINDOW_CASCADE_OFFSET,
+  WINDOW_INSTANCE_SEPARATOR,
+  WINDOW_KEYBOARD_STEP,
+  WINDOW_MIN_VISIBLE,
+} from "../api/generated";
 
 /** `nail_api::windows::is_window_kind`. */
 export function isWindowKind(kind: string): boolean {
@@ -131,31 +129,6 @@ export function parsePopOutRoute(hash: string): string | null {
 export function popOutLabel(window: string): string {
   return `${POP_OUT_LABEL_PREFIX}${window}`;
 }
-
-/**
- * `DEFAULT_WINDOW_SPEC`. Popping out is opt-in (`pop-out=#true` in
- * `layout.kdl` or `pop_out: true` in the registration): only windows that
- * show core data alone or register a pop-out preparer work in another
- * webview (each has its own UI store).
- */
-export const DEFAULT_WINDOW_SPEC: Readonly<WindowSpec> = {
-  modal: false,
-  resizable: true,
-  min_size: { width: 360, height: 240 },
-  size: { width: 720, height: 520 },
-  pop_out: false,
-  instances: "single",
-};
-
-/** `CONFIRMATION_WINDOW_SPEC` (the only modal windows). */
-export const CONFIRMATION_WINDOW_SPEC: Readonly<WindowSpec> = {
-  modal: true,
-  resizable: false,
-  min_size: { width: 320, height: 160 },
-  size: { width: 440, height: 220 },
-  pop_out: false,
-  instances: "single",
-};
 
 /**
  * A feature's registration of a window kind (`Feature.windows`): any spec

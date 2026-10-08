@@ -1,0 +1,119 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-10-07",
+          "layout": "list",
+          "start": "2026-10-01",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-10-01",
+          "layout": "list",
+          "start": "2026-10-07",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": "print-target-issue-end-before-start"
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-12-31",
+          "layout": "list",
+          "start": "2025-01-01",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": "print-target-issue-range-too-long"
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-12-31",
+          "layout": "list",
+          "start": "2026-01-01",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2024-12-31",
+          "layout": "list",
+          "start": "2024-01-01",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-12-31",
+          "layout": "list",
+          "start": "soon",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": "print-target-issue-invalid-date"
+    },
+    {
+      "args": [
+        {
+          "calendar_ids": [],
+          "end": "2026-03-01",
+          "layout": "list",
+          "start": "2026-02-30",
+          "type": "agenda"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": "print-target-issue-invalid-date"
+    },
+    {
+      "args": [
+        {
+          "message_id": "m1",
+          "type": "message"
+        }
+      ],
+      "fn": "targetIssue",
+      "out": null
+    },
+    {
+      "args": [
+        "j1"
+      ],
+      "fn": "printViewRoute",
+      "out": "#/print/j1"
+    },
+    {
+      "args": [
+        "job-42"
+      ],
+      "fn": "printViewRoute",
+      "out": "#/print/job-42"
+    }
+  ]
+}

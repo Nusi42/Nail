@@ -8,9 +8,16 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { repoRoot, startNail, tempDir, type NailServer } from "../support/nail";
+import { tempDir, repoRoot, type NailServer, nailOnDemand } from "../support/nail";
 import { rpcOk } from "../support/remote";
-import { accountSectionNamed, openSettingsTab, showView, viewRegion } from "../support/views";
+import {
+  accountSectionNamed,
+  openSettingsTab,
+  showView,
+  viewRegion,
+  messageRows,
+  openMail,
+} from "../support/views";
 import { defined } from "../support/defined";
 
 /**
@@ -113,10 +120,7 @@ async function messagesIn(server: NailServer, folderId: string): Promise<Summary
   return answer.messages as Summary[];
 }
 
-async function openApp(page: Page, server: NailServer) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-}
+const openApp = (page: Page, server: NailServer) => openMail(page, server.url);
 
 /** The settings view at the section of a former settings tab (M5b). */
 function settingsTab(page: Page, tab: string): Promise<Locator> {
@@ -153,15 +157,10 @@ async function importWith(
   return dialog;
 }
 
-let server: NailServer;
-
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
+const server = nailOnDemand();
 
 test("an mbox and a Maildir are imported with their flags", async ({ page }) => {
-  server = await startNail();
+  await server.start();
   const files = tempDir("import");
   await openApp(page, server);
   const dialog = await importWith(page, "mbox file", "File", writeMbox(files), "Old mail");
@@ -190,7 +189,7 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   const account = accountSectionNamed(page, "Local Folders");
   await expect(account).toBeVisible();
   await account.getByRole("treeitem", { name: /old-mail/ }).click();
-  const rows = page.locator('[data-part="message-list.row"]');
+  const rows = messageRows(page);
   await expect(rows).toHaveCount(2);
   await expect(rows.filter({ hasText: "Read and flagged" })).toHaveAttribute(
     "data-state",
@@ -202,7 +201,7 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
 test("a Thunderbird profile offers its accounts and imports folders and address books", async ({
   page,
 }) => {
-  server = await startNail();
+  await server.start();
   const profile = path.join(tempDir("thunderbird"), "x7k2m9qa.default-release");
   copyDir(
     path.join(
@@ -245,7 +244,7 @@ test("a Thunderbird profile offers its accounts and imports folders and address 
 });
 
 test("a folder exported to mbox imports again identically", async ({ page }) => {
-  server = await startNail();
+  await server.start();
   const files = tempDir("export");
   await openApp(page, server);
   await importWith(page, "mbox file", "File", writeMbox(files), "Source");
@@ -299,7 +298,7 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
 });
 
 test("a backup restores into a wiped Nail", async ({ page }) => {
-  server = await startNail();
+  await server.start();
   const files = tempDir("backup");
   const archive = path.join(files, "nail.nailbackup");
   const passphrase = "correct horse battery staple";
@@ -320,7 +319,7 @@ test("a backup restores into a wiped Nail", async ({ page }) => {
   await server.stop();
 
   // A new, empty Nail.
-  server = await startNail();
+  await server.start();
   await openApp(page, server);
   settings = await settingsTab(page, "Backups");
   await settings.getByRole("button", { name: "Restore…" }).click();
@@ -344,7 +343,7 @@ test("a backup restores into a wiped Nail", async ({ page }) => {
 });
 
 test("the command palette runs an action and remembers it", async ({ page }) => {
-  server = await startNail();
+  await server.start();
   await openApp(page, server);
   await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "Command palette" });
