@@ -11,6 +11,8 @@ publish.workspace = true
 nail-util.workspace = true
 nail-net = { workspace = true, features = ["http", "xml"] }
 nail-api.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true

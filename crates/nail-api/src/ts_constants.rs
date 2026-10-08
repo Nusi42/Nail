@@ -1037,6 +1037,11 @@ fn contract_enums(c: Constants) -> Result<Constants, serde_json::Error> {
         &every!(AttachmentRisk: Executable, Macro, DisguisedName, Container, Shortcut, TypeMismatch),
     )?
     .enum_values("VaultPhase", &VaultPhase::ALL)?
+    // ADR 0190: the connection log's enums.
+    .enum_values("WireProtocol", crate::connlog::WireProtocol::ALL)?
+    .enum_values("WireLevel", crate::connlog::WireLevel::ALL)?
+    .enum_values("WireDirection", crate::connlog::WireDirection::ALL)?
+    .enum_values("ErrorStep", crate::connlog::ErrorStep::ALL)?
     .enum_values("CryptoTechnology", &CryptoTechnology::ALL)?
     .enum_values(
         "KeyLookupSource",

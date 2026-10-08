@@ -21,6 +21,7 @@ import { createInterface } from "node:readline";
  * @property {number} timeoutMs how long to wait for the URL
  * @property {string} [cwd] the working directory
  * @property {"inherit" | "ignore"} [stderr] where its logs go (default `inherit`)
+ * @property {Record<string, string>} [env] extra environment variables
  */
 
 /**
@@ -35,7 +36,7 @@ export async function spawnServe(binary, args, options) {
   const child = spawn(binary, args, {
     cwd: options.cwd,
     stdio: ["ignore", "pipe", options.stderr ?? "inherit"],
-    env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error" },
+    env: { ...process.env, NAIL_LOG: process.env.NAIL_LOG ?? "error", ...options.env },
   });
   const stop = async () => {
     if (child.exitCode === null && child.pid !== undefined) {

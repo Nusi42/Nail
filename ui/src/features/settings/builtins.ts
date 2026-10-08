@@ -11,6 +11,9 @@ export const BUILTIN_SETTINGS: Readonly<Record<string, SettingsWidgetInfo>> = {
     labels: [
       "settings-tab-accounts",
       "settings-accounts-label",
+      // ADR 0190: the account's connection log and recent problems.
+      "connlog-account-open",
+      "connlog-account-problems",
       "settings-add-account",
       "settings-general",
       "settings-name",

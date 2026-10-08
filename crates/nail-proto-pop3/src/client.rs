@@ -176,16 +176,25 @@ impl Pop3Client {
         })
         .await?;
         drop(tcp.set_nodelay(true));
+        let tap = std::sync::Arc::new(config.tap.connect(
+            nail_connlog::WireProtocol::Pop3,
+            &config.host,
+            config.port,
+        ));
         let (stream, encrypted) = match config.tls {
-            TlsMode::Implicit => (handshake(config, tcp).await?, true),
+            TlsMode::Implicit => (handshake(config, tcp, &tap).await?, true),
             TlsMode::Starttls => (Pop3Stream::Plain(tcp), false),
             TlsMode::Plaintext => {
                 tracing::warn!(host = %config.host, "POP3 connection without TLS");
+                tap.note(
+                    nail_connlog::WireLevel::Warning,
+                    "no TLS: the connection is not encrypted",
+                );
                 (Pop3Stream::Plain(tcp), false)
             }
         };
         let mut client = Self {
-            lines: Lines::new(stream, config.timeout),
+            lines: Lines::new(stream, config.timeout, tap),
             config: config.clone(),
             caps: Capabilities::default(),
             timestamp: None,
@@ -216,14 +225,23 @@ impl Pop3Client {
         if self.lines.has_buffered_data() {
             return Err(Pop3Error::Protocol("unexpected data after STLS".to_owned()));
         }
-        let placeholder = Lines::new(Pop3Stream::Closed, self.config.timeout);
+        let tap = std::sync::Arc::clone(&self.lines.tap);
+        let placeholder = Lines::new(
+            Pop3Stream::Closed,
+            self.config.timeout,
+            std::sync::Arc::clone(&tap),
+        );
         let lines = std::mem::replace(&mut self.lines, placeholder);
         let Pop3Stream::Plain(tcp) = lines.into_stream() else {
             return Err(Pop3Error::Protocol(
                 "STLS on an encrypted connection".to_owned(),
             ));
         };
-        self.lines = Lines::new(handshake(&self.config, tcp).await?, self.config.timeout);
+        self.lines = Lines::new(
+            handshake(&self.config, tcp, &tap).await?,
+            self.config.timeout,
+            tap,
+        );
         self.encrypted = true;
         // RFC 2595: discard earlier capabilities and ask again.
         self.caps = self.capa().await?;
@@ -274,7 +292,7 @@ impl Pop3Client {
     pub async fn capa(&mut self) -> Result<Capabilities> {
         match self.command("CAPA").await? {
             Reply::Ok(_) => {
-                let body = self.lines.read_multiline(64 * 1024).await?;
+                let body = self.lines.read_multiline(64 * 1024, true).await?;
                 let text = String::from_utf8_lossy(&body);
                 Ok(Capabilities::from_lines(text.lines()))
             }
@@ -294,6 +312,12 @@ impl Pop3Client {
     pub async fn login(&mut self, credentials: &Pop3Credentials) -> Result<()> {
         if self.state == State::Transaction {
             return Ok(());
+        }
+        match credentials {
+            Pop3Credentials::Password { password, .. } => self.lines.tap.add_secret(password),
+            Pop3Credentials::OAuth2 { access_token, .. } => {
+                self.lines.tap.add_secret(access_token);
+            }
         }
         match credentials {
             Pop3Credentials::Password {
@@ -430,7 +454,7 @@ impl Pop3Client {
     async fn listing(&mut self, command: &str) -> Result<Vec<(u32, String)>> {
         self.require_transaction()?;
         self.simple(command).await?;
-        let body = self.lines.read_multiline(64 * 1024 * 1024).await?;
+        let body = self.lines.read_multiline(64 * 1024 * 1024, false).await?;
         let text = String::from_utf8_lossy(&body);
         text.lines()
             .filter(|l| !l.trim().is_empty())
@@ -492,14 +516,14 @@ impl Pop3Client {
             return Err(Pop3Error::Unsupported("TOP".to_owned()));
         }
         self.simple(&format!("TOP {number} {lines}")).await?;
-        self.lines.read_multiline(MAX_MESSAGE_BYTES).await
+        self.lines.read_multiline(MAX_MESSAGE_BYTES, false).await
     }
 
     /// `RETR n`: the whole message (CRLF line ends).
     pub async fn retr(&mut self, number: u32) -> Result<Vec<u8>> {
         self.require_transaction()?;
         self.simple(&format!("RETR {number}")).await?;
-        self.lines.read_multiline(MAX_MESSAGE_BYTES).await
+        self.lines.read_multiline(MAX_MESSAGE_BYTES, false).await
     }
 
     /// `DELE n`: marks a message for deletion at [`Self::quit`].

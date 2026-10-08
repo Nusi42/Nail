@@ -4364,6 +4364,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "keyring",
  "nail-api",
+ "nail-connlog",
  "nail-testkit-net",
  "nail-util",
  "oauth2",
@@ -4466,6 +4467,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-connlog"
+version = "1.0.0-rc.1"
+dependencies = [
+ "chrono",
+ "der",
+ "hex",
+ "nail-api",
+ "pretty_assertions",
+ "proptest",
+ "rustls",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "x509-cert",
+]
+
+[[package]]
 name = "nail-core"
 version = "1.0.0-rc.1"
 dependencies = [
@@ -4479,6 +4497,7 @@ dependencies = [
  "nail-auth",
  "nail-compose",
  "nail-config",
+ "nail-connlog",
  "nail-core",
  "nail-dav",
  "nail-discovery",
@@ -4537,6 +4556,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-discovery",
  "nail-net",
  "nail-testkit",
@@ -4557,6 +4577,7 @@ dependencies = [
  "hickory-resolver",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-net",
  "nail-testkit-net",
  "quick-xml",
@@ -4577,6 +4598,7 @@ dependencies = [
  "chrono-tz",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-discovery",
  "nail-exchange",
  "nail-ical",
@@ -4699,6 +4721,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "nail-api",
+ "nail-connlog",
  "nail-net",
  "nail-util",
  "quick-xml",
@@ -4803,6 +4826,7 @@ dependencies = [
  "hex",
  "mail-parser",
  "nail-api",
+ "nail-connlog",
  "nail-ical",
  "nail-portability",
  "nail-util",
@@ -4829,6 +4853,7 @@ dependencies = [
  "futures-util",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-exchange",
  "nail-net",
  "nail-proto-ews",
@@ -4852,6 +4877,7 @@ dependencies = [
  "mail-parser",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-net",
  "nail-proto-gmail",
  "nail-testkit",
@@ -4876,6 +4902,7 @@ dependencies = [
  "mail-parser",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-exchange",
  "nail-net",
  "nail-proto-graph",
@@ -4900,6 +4927,7 @@ dependencies = [
  "futures",
  "imap-proto",
  "nail-api",
+ "nail-connlog",
  "nail-net",
  "nail-testkit",
  "nail-util",
@@ -4916,6 +4944,7 @@ dependencies = [
  "base64 0.23.1",
  "md-5 0.11.0",
  "nail-api",
+ "nail-connlog",
  "nail-net",
  "nail-testkit-net",
  "nail-util",
@@ -4933,6 +4962,7 @@ dependencies = [
  "lettre",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-net",
  "nail-testkit-net",
  "thiserror 2.0.21",
@@ -5069,6 +5099,7 @@ dependencies = [
  "base64 0.23.1",
  "hex",
  "nail-api",
+ "nail-connlog",
  "nail-net",
  "nail-testkit",
  "nail-testkit-net",

@@ -11,6 +11,8 @@ publish.workspace = true
 # The secret stand-in of Debug output (ADR 0171).
 nail-util.workspace = true
 nail-api.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true

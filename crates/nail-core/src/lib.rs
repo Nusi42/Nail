@@ -26,6 +26,7 @@ mod attachments;
 mod bodies;
 mod clock;
 mod composer;
+mod connlog;
 mod context;
 mod conversations;
 mod creds;

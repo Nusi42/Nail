@@ -7,6 +7,9 @@ import { BUILTIN_THEMES, DENSITY_VALUES, type Density } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { resolveMockTheme } from "../features/appearance/themes";
 
+/** The ids of the built-in themes. */
+export const BUILTIN_THEME_IDS = BUILTIN_THEMES.map(([id]) => id);
+
 /** Every built-in theme in every density: [theme id, density]. */
 export const THEME_DENSITY_CASES = BUILTIN_THEMES.flatMap(([id]) =>
   DENSITY_VALUES.map((density) => [id, density] as const),

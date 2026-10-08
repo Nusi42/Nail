@@ -378,6 +378,14 @@ fn contract_message_ids_exist_in_english() {
         nail_api::mail_actions::MailActionKind,
         nail_api::mail_actions::MailActionIssue,
     );
+    // ADR 0190: the connection log and error details (core-connlog.ftl).
+    labels!(
+        nail_api::connlog::WireProtocol,
+        nail_api::connlog::WireDirection,
+        nail_api::connlog::WireLevel,
+        nail_api::connlog::ErrorStep,
+    );
+    wanted.extend(["sync-skipped-messages"].map(str::to_owned));
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [

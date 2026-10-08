@@ -11,8 +11,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use nail_api::connlog::ErrorDetails;
 use nail_api::{
     AccountConfig, AccountId, AccountState, AccountStatus, ErrorCode, Event, IncomingServer,
+    LocalizedMessage,
 };
 use tokio::sync::{Notify, watch};
 use tokio::task::JoinHandle;
@@ -134,44 +136,88 @@ pub(crate) async fn pause(
     }
 }
 
+/// The error an account status shows.
+#[derive(Debug, Clone)]
+pub(crate) struct StatusError {
+    pub(crate) code: ErrorCode,
+    pub(crate) message: String,
+    pub(crate) localized: Option<LocalizedMessage>,
+    pub(crate) details: Option<Box<ErrorDetails>>,
+}
+
+impl StatusError {
+    /// The status error of `err` with its details.
+    pub(crate) fn of(err: &crate::error::CoreError, details: Option<ErrorDetails>) -> Self {
+        Self {
+            code: err.code(),
+            message: err.to_string(),
+            localized: err.localized(),
+            details: details.map(Box::new),
+        }
+    }
+}
+
 impl Service {
-    /// Records an account's connection state; broadcasts
-    /// [`Event::AccountStatus`] when it changed.
-    /// Reports a failed sync pass of `account`: the state its error
-    /// means, and a [`nail_api::Event::SyncFailed`].
-    pub(crate) fn report_sync_failure(&self, account: &AccountId, err: &crate::CoreError) {
+    /// What an engine reports when it cannot connect or sync: the account's
+    /// status, the stored account error and (`announce`) `SyncFailed`, all
+    /// with the same details (ADR 0190).
+    pub(crate) async fn engine_failed(
+        &self,
+        account: &AccountId,
+        err: &crate::error::CoreError,
+        context: crate::connlog::ErrorContext,
+        announce: bool,
+    ) {
         let code = err.code();
+        let details = self.account_error_details(account, code, &err.to_string(), context);
         self.set_status(
             account,
             state_for_error(code),
-            Some((code, err.to_string(), err.localized())),
+            Some(StatusError::of(err, Some(details.clone()))),
         );
-        self.broadcast(Event::SyncFailed {
-            account_id: account.clone(),
-            code,
-            message: err.to_string(),
-            localized: err.localized(),
-        });
+        if announce {
+            self.broadcast(Event::SyncFailed {
+                account_id: account.clone(),
+                code,
+                message: err.to_string(),
+                localized: err.localized(),
+                details: Some(Box::new(details.clone())),
+            });
+        }
+        self.record_sync_error(account, None, &details).await;
     }
 
-    /// Reports an account whose engine cannot start: offline, with why.
-    pub(crate) fn report_offline(&self, account: &AccountId, err: &crate::CoreError) {
-        self.set_status(
-            account,
-            AccountState::Offline,
-            Some((err.code(), err.to_string(), err.localized())),
-        );
+    /// An engine is connected / synced: the account is online and its
+    /// stored account error is gone.
+    pub(crate) async fn engine_online(&self, account: &AccountId) {
+        self.set_status(account, AccountState::Online, None);
+        self.clear_sync_error(account, None).await;
     }
 
+    /// [`Self::engine_failed`] with the details read from `err` of
+    /// `protocol`.
+    pub(crate) async fn protocol_failed(
+        &self,
+        account: &AccountId,
+        err: &crate::error::CoreError,
+        protocol: nail_api::connlog::WireProtocol,
+        announce: bool,
+    ) {
+        let context = crate::connlog::ErrorContext::of_error(protocol, err);
+        self.engine_failed(account, err, context, announce).await;
+    }
+
+    /// Records an account's connection state; broadcasts
+    /// [`Event::AccountStatus`] when it changed.
     pub(crate) fn set_status(
         &self,
         account: &AccountId,
         state: AccountState,
-        error: Option<(ErrorCode, String, Option<nail_api::LocalizedMessage>)>,
+        error: Option<StatusError>,
     ) {
-        let (error, message, localized) = match error {
-            Some((code, message, localized)) => (Some(code), Some(message), localized),
-            None => (None, None, None),
+        let (error, message, localized, details) = match error {
+            Some(e) => (Some(e.code), Some(e.message), e.localized, e.details),
+            None => (None, None, None, None),
         };
         let status = {
             let mut statuses = lock(&self.inner.engines.statuses);
@@ -188,6 +234,7 @@ impl Service {
                 error,
                 message,
                 localized,
+                details,
             };
             statuses.insert(account.clone(), status.clone());
             status
@@ -218,15 +265,46 @@ impl Service {
                         error: None,
                         message: None,
                         localized: None,
+                        details: None,
                     })
             })
             .collect()
+    }
+
+    /// Registers where the token requests of every account's sign-ins are
+    /// logged: its own connection log (ADR 0190); sign-in flows log into
+    /// account setup's.
+    fn register_oauth_taps(&self, config: &nail_api::AccountsConfig) {
+        let taps = &self.inner.tokens.taps;
+        taps.set_flows(
+            self.connlog_tap(&nail_api::connlog::ConnectionLogScope::Setup)
+                .http(nail_api::connlog::WireProtocol::OAuth),
+        );
+        for account in &config.accounts {
+            let tap = self
+                .account_tap(&account.id)
+                .http(nail_api::connlog::WireProtocol::OAuth);
+            let servers = std::iter::once(account.incoming.server()).chain(
+                account
+                    .outgoing
+                    .as_ref()
+                    .map(nail_api::OutgoingServer::server),
+            );
+            for server in servers {
+                if let nail_api::AuthConfig::OAuth2 { .. } = &server.auth
+                    && let Some(secret) = server.auth.secret_ref(&account.id)
+                {
+                    taps.set(&secret, tap.clone());
+                }
+            }
+        }
     }
 
     /// Starts, restarts and stops engines to match `accounts.kdl`. Needs a
     /// tokio runtime.
     pub(crate) fn reconcile_engines(&self) {
         let config = self.inner.accounts.config();
+        self.register_oauth_taps(&config);
         let mut to_stop = Vec::new();
         {
             let mut running = lock(&self.inner.engines.running);

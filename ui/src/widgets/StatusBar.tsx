@@ -3,6 +3,7 @@ import { errorMessageId, errorMessageIdOf } from "../api/client";
 import { useLocale, useT } from "../i18n/I18nProvider";
 import { optionList, type WidgetProps } from "../layout/widgetRegistry";
 import { cancelRichSend } from "../features/composer/flows";
+import { ShowDetailsButton, type ErrorReport } from "../features/connlog";
 import { useComposeContext } from "../state/hooks";
 import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
 import { sendPercent, useUi } from "../state/uiStore";
@@ -21,6 +22,7 @@ function SyncItem() {
   const syncError = useUi((s) => s.syncError);
   let text: string;
   let state: string;
+  let report: ErrorReport | null = null;
   if (connection === "reconnecting" || connection === "closed") {
     text = t("status-offline");
     state = "offline";
@@ -37,6 +39,14 @@ function SyncItem() {
       : t(errorMessageId(syncError.code));
     text = t("status-sync-failed", { reason });
     state = "error";
+    if (syncError.details) {
+      report = {
+        accountId: syncError.accountId,
+        code: syncError.code,
+        localized: syncError.localized ?? null,
+        details: syncError.details,
+      };
+    }
   } else if (sync && sync.done < sync.total) {
     text = t("status-syncing", { done: sync.done, total: sync.total });
     state = "syncing";
@@ -46,7 +56,14 @@ function SyncItem() {
   }
   return (
     <span data-part="status-bar.item" data-item="sync-progress" data-state={state}>
-      {text}
+      {report ? (
+        <>
+          <span data-part="status-bar.text">{text}</span>
+          <ShowDetailsButton part="status-bar.button" report={report} />
+        </>
+      ) : (
+        text
+      )}
     </span>
   );
 }
@@ -77,6 +94,10 @@ function AccountStatusItem() {
   if (!first) return null;
   const name = accounts.data?.find((a) => a.id === first.account_id)?.name ?? first.account_id;
   const state = t(`account-state-${first.state}`);
+  const text =
+    problems.length === 1
+      ? t("status-account", { account: name, state })
+      : t("status-accounts", { account: name, state, count: problems.length - 1 });
   return (
     <span
       data-part="status-bar.item"
@@ -84,9 +105,18 @@ function AccountStatusItem() {
       data-state={first.state}
       data-account={first.account_id}
     >
-      {problems.length === 1
-        ? t("status-account", { account: name, state })
-        : t("status-accounts", { account: name, state, count: problems.length - 1 })}
+      {first.details ? <span data-part="status-bar.text">{text}</span> : text}
+      {first.details && (
+        <ShowDetailsButton
+          part="status-bar.button"
+          report={{
+            accountId: first.account_id,
+            code: first.error ?? first.details.code,
+            localized: first.localized ?? null,
+            details: first.details,
+          }}
+        />
+      )}
     </span>
   );
 }
@@ -168,6 +198,7 @@ function SendStatusItem() {
   const locale = useLocale();
   const ctx = useComposeContext();
   const entry = useUi((s) => s.lastSend);
+  const details = useUi((s) => s.lastSendDetails);
   const setLastSend = useUi((s) => s.setLastSend);
   const progress = useUi((s) => (s.lastSend ? s.sendProgress[s.lastSend.id] : undefined));
   const seconds = useSecondsUntil(entry?.state === "scheduled" ? entry.send_at : null);
@@ -230,6 +261,17 @@ function SendStatusItem() {
         >
           {t("common-undo")}
         </button>
+      )}
+      {entry.state === "failed" && details && (
+        <ShowDetailsButton
+          part="status-bar.button"
+          report={{
+            accountId: entry.account_id,
+            code: entry.error ?? details.code,
+            localized: null,
+            details,
+          }}
+        />
       )}
     </span>
   );

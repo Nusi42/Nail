@@ -90,7 +90,18 @@ impl ImapClient {
                         known_uids,
                     }),
                 )
-                .await?;
+                .await;
+            let opened = match opened {
+                Ok(opened) => opened,
+                // A server that enables QRESYNC but refuses its SELECT
+                // parameter: resync without it (ADR 0191).
+                Err(err @ (ImapError::No(_) | ImapError::Protocol(_))) if !self.broken => {
+                    tracing::info!(%err, "SELECT (QRESYNC) refused; resyncing without it");
+                    self.enabled.qresync = false;
+                    return Box::pin(self.resync_flags(path, known, local)).await;
+                }
+                Err(err) => return Err(err),
+            };
             let status = opened.status.ok_or_else(|| no_status(path))?;
             if status.uid_validity != known.uid_validity {
                 return Ok(validity_changed(status));

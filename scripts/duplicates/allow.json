@@ -3,6 +3,9 @@
     "rs CRATE = env!(\"CARGO_PKG_NAME\")": {
       "reason": "each crate's own name (the tracing target of its logs): one fact per crate, evaluated by the compiler in each crate"
     },
+    "rs MAX_DEPTH = 64": {
+      "reason": "two nesting limits that happen to agree: XML element depth of protocol documents (nail-net xml) and parenthesised IMAP response nesting (nail-proto-imap salvage)"
+    },
     "rs MAX_NAME_LEN = 64": {
       "reason": "two limits that happen to agree: a plug-in manifest name (nail-api plugins) and an MCP client name (nail-mcp admin)"
     },

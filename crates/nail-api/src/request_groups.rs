@@ -108,6 +108,19 @@ macro_rules! portability_requests {
     };
 }
 
+/// The connection log and the app log (administration; ADR 0190).
+#[macro_export]
+macro_rules! connlog_admin_requests {
+    () => {
+        $crate::Request::GetConnectionLog { .. }
+            | $crate::Request::ClearConnectionLog { .. }
+            | $crate::Request::ExportConnectionLog { .. }
+            | $crate::Request::GetConnectionLogSettings
+            | $crate::Request::SetConnectionLogSettings { .. }
+            | $crate::Request::GetAppLog
+    };
+}
+
 /// The plug-in administration requests on installed plug-ins (switching, grants, logs, settings, placements).
 #[macro_export]
 macro_rules! plugin_admin_requests {

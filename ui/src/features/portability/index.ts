@@ -197,6 +197,10 @@ export const settings: NonNullable<Feature["settings"]> = {
       "portability-settings-tab-diagnostics",
       "portability-diagnostics-title",
       "portability-diagnostics-open",
+      // ADR 0190: the connection log settings shown in the same widget.
+      "connlog-settings-title",
+      "connlog-settings-disk",
+      "connlog-settings-app-log",
     ],
     keywords: "settings-keywords-diagnostics",
   },

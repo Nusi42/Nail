@@ -13,6 +13,8 @@ nail-api.workspace = true
 nail-net = { workspace = true, features = ["io", "tls"] }
 # The Sieve lexer (shared with the mock ManageSieve server).
 nail-util.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 # ManageSieve client: tokio + rustls (ring provider chosen by the caller,
@@ -32,6 +34,7 @@ sha2.workspace = true
 hex.workspace = true
 
 [dev-dependencies]
+nail-connlog.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 nail-testkit.workspace = true

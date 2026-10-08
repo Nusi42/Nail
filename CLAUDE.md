@@ -180,6 +180,19 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
                        ThreadSummary.participants, ThreadSummary.latest_from / latest_message, ConversationMessage
                        (MessageSummary flattened + from_me); GetConversation {thread_id, folder_id?} → Conversation
+                       ADR 0190: connlog.rs (WireProtocol / WireDirection / WireLevel, ConnectionLogScope account /
+                       pim-source / setup, ConnectionLogEntry::line = the one line format, ConnectionLog, settings,
+                       ErrorStep, ErrorDetails, SyncErrorRecord, SkippedMessage, AppLog, REDACTED, limits); requests
+                       Get / Clear / ExportConnectionLog, Get / SetConnectionLogSettings, ListSyncErrors, GetAppLog;
+                       events ConnectionLogChanged (no content), SyncErrorsChanged; `details` on SyncFailed,
+                       SendStatus and AccountStatus
+crates/nail-connlog    ADR 0190: the one redactor of the workspace (redact.rs: secrets, registered secrets, masked
+                       addresses, subjects / display names, user paths — the diagnostics bundle uses it too), protocol
+                       rules (imap.rs, lines.rs SMTP / POP3 / ManageSieve, http.rs URLs / request / response lines /
+                       error summaries, tls.rs certificate summary); WireTap / ConnTap / HttpTap (protocol clients log
+                       only through these: text and literal *sizes*, never bytes), ConnectionLogs (rings per scope,
+                       disk mirror, throttled change notices), RotatingFile (also app.log); proptest "no secret
+                       survives"
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -234,7 +247,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        by kind), GetThemeDetails origins, id_from_name = NFKD without marks like the UI's themeIdFromName),
                        kdl_edit detach / put / reindent / replace_with / set_arg; golden files
                        tests/golden/{layout_edit,theme_edit} (NAIL_UPDATE_GOLDEN=1)
-crates/nail-store      SQLite metadata (v17), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v19), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -294,6 +307,8 @@ crates/nail-store      SQLite metadata (v17), blob store, per-account operation 
                        v17 (P3, ADR 0164): thread_activity (per folder + thread order key incl. the Sent join;
                        thread/activity.rs PAGE_SQL / COUNT_SQL; WP-perf maintains it from v18), mail_batches /
                        mail_batch_ops (mail actions with inverses for undo; mail_batches.rs)
+                       v19 (ADRs 0190 / 0191): sync_errors.rs (sync_errors: last error per account / folder,
+                       sync_skipped: messages a folder sync skipped, with attempts and ErrorDetails)
                        v18 (P3 WP-perf, ADR 0166): five triggers keep thread_activity equal to the backfill
                        (activity.rs MAINTENANCE_SQL; a later migration that rebuilds messages / folders must recreate
                        them); ListThreads pages are index ranges on the table, one batched read per page
@@ -316,10 +331,14 @@ crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rul
                        plug-ins; sanitize_mail_html_portable); no `{` / `}` in kept declarations (ADR 0145)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018);
                        bodies.rs (BodyFetch, fetch_batch_with, fetch_body), search.rs (SearchKey,
-                       search_messages) (ADR 0046)
-crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
-crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
-crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
+                       search_messages) (ADR 0046); ADR 0191: no ENVELOPE, salvage.rs (lenient FETCH reader),
+                       resilient.rs fetch_batch_resilient (split refused batches, FetchFailure per message),
+                       (CONDSTORE) / (QRESYNC) refusals fall back, oversized literals dropped in step;
+                       ImapConfig.tap, last_command / last_response (ADR 0190)
+crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017); SmtpConfig.tap (ADR 0190)
+crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017); Pop3Config.tap (ADR 0190)
+crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017); OAuthTaps:
+                       token requests log into the account's connection log, flows into setup's (ADR 0190)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017); system_dns.rs SystemDns
                        (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057);
                        M3b: Gmail API candidate first (DiscoverySource::Provider) for gmail.com / googlemail.com /
@@ -339,7 +358,8 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        conversation_corpus, MailStore::demo_with_conversations, DEMO_CONVERSATIONS; shown by the seeds of
                        nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged);
                        Q2 (ADR 0173): catalog, exchange (shared Exchange fixtures), tokens::FakeTokens, TEST_TIMEOUT (the
-                       one test wait)
+                       one test wait); ADR 0191: MessageFault refuse / malformed / withhold / garbage per UID,
+                       limit_fetch_uids, refuse_select_parameters (demo-multi controls imap-fault, imap-deny)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers (Q2: server.rs
                        shared accept loop, api_mock.rs shared JSON-API mock plumbing; ADR 0173); managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
@@ -897,7 +917,7 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
-npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 24 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 26 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
 npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
@@ -941,7 +961,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `ui/src/features/customization/editorModel.ts` `KEY_CONTEXTS` with a `customize-keys-context-*` label.
 - The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
-- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.
+- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`) and, redacted, to `<data-dir>/logs/app.log` (ADR 0190; the desktop app too). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.
 - M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
 - Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
 - Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets` (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine timing for tests: `EngineTiming::fast()`.
@@ -1255,7 +1275,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   (`layout-editor-settings`, `toolbar-editor-settings`) and → Appearance, right-click on a toolbar. Theme ids from
   names: NFKD without combining marks, `theme-` before a non-letter start, ≤ 60 chars — core and UI alike. A first
   `UpdateLayout` creates `layout.kdl`, so undoing it removes the file. E2E: `m5d.spec.ts`; the a11y window sweep
-  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 then; P2 adds `conversation`, `conversation-expanded`: 24).
+  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 then; P2 adds `conversation`, `conversation-expanded`: 24; ADR 0190 `connection-log`, `error-details`: 26).
 - P1 contract (ADR 0139): HTML mail broke because nail-mime's sanitizer drops `<style>` / `<head>` / `class` / body
   attributes and nobody resolves `cid:` (the srcdoc frame also inherits the page CSP, which has no `cid:`); the
   responsive standard (8 viewport sizes, windows at min-size and resized; no clipped text, overlaps, page scroll) is
@@ -1329,6 +1349,25 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   account, `RELOAD_KEYS` never reload; one `contextmenu` handler (Nail's menu or none; `context:text` /
   `context:folder-tree`), WebView2 default menus off (`app/src-tauri/src/webview_menus.rs`); shell test controls
   `default-context-menus`, `resize-main:<w>x<h>`, `resize-pop-outs:<w>x<h>`.
+- Connection log (ADR 0190): every protocol client logs through a `nail_connlog` tap (IMAP / SMTP / POP3 /
+  ManageSieve at their command layer, the HTTP clients one request + one response line, OAuth token requests,
+  discovery + Autodiscover); the core gives each engine its scope's tap (`Service::account_tap`, `connlog_tap`) and
+  keeps rings of 2,000 entries per scope in memory (`connlog.rs`); "Keep connection log on disk" (off by default)
+  mirrors to `<data-dir>/logs/connections/`, turning it off deletes the folder. Remote sessions need `admin`; MCP and
+  plug-ins never see it. New redaction rules go into `nail-connlog` only (one redactor, also for the diagnostics
+  bundle and app.log). `ErrorDetails` (step from the failing command, its server answer) ride on SyncFailed /
+  AccountStatus / SendStatus; the last error per account and folder is stored (`sync_errors`, schema v19) and cleared
+  by the next success (`Service::engine_failed` / `engine_online`, `report_pass`). The binaries attach
+  `<data-dir>/logs/app.log` (`nail_core::logs::attach_file`, redacted, rotated at 5 MiB).
+- Resilient IMAP sync (ADR 0191): one refused / unreadable / withheld / oversized message is skipped and recorded
+  (`sync_skipped`, schema v19) in the store call that moves the checkpoint past it, and retried by later passes
+  (`retry_skipped`); only mailbox-level refusals or more than five failures fail a batch.
+- Merge after Q2 (ADR 0185): the HTTP clients log through `nail_net::api::ApiClient::with_tap` /
+  `nail_net::http::send_logged` / `hide_credential` (feature `http` depends on `nail-connlog`); line clients log
+  after `nail_net::tls::connect`; `Service::protocol_failed` = `engine_failed` with details from the error;
+  `nail_api::connlog_admin_requests!`. `NAIL_DEMO_NOW` (RFC 3339, seeds only) pins demo-multi's calendar dates and
+  demo clock (`StartOptions.demoNow` in e2e; the visual suite uses `MAIN_TIME`). Every desktop e2e launch gets its
+  own `WEBVIEW2_USER_DATA_FOLDER`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

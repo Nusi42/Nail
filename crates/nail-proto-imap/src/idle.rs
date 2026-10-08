@@ -124,6 +124,7 @@ impl ImapClient {
         self.conn.read_timeout().set(Some(timeout));
         if !ended_by_server {
             with_timeout(timeout, async {
+                self.conn.tap().sent(&[nail_connlog::Part::Text("DONE")]);
                 self.conn.write(b"DONE\r\n").await?;
                 self.finish(&tag, &mut |_| Ok(false)).await
             })
@@ -138,9 +139,9 @@ impl ImapClient {
     /// Sends `IDLE` and waits for the continuation; `false` when the server
     /// completed the command instead.
     async fn start_idle(&mut self, tag: &str) -> Result<bool> {
-        self.conn
-            .write(format!("{tag} IDLE\r\n").as_bytes())
-            .await?;
+        let command = format!("{tag} IDLE");
+        self.conn.tap().sent(&[nail_connlog::Part::Text(&command)]);
+        self.conn.write(format!("{command}\r\n").as_bytes()).await?;
         loop {
             match self.conn.read().await? {
                 Incoming::Response(Response::Continue { .. }) => return Ok(true),

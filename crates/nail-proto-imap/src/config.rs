@@ -156,6 +156,9 @@ pub struct ImapConfig {
     pub compress: bool,
     /// Sent with `ID` when the server supports it; `None` sends nothing.
     pub client_id: Option<ClientId>,
+    /// The connection log every connection made with this configuration
+    /// records into (ADR 0190); off by default.
+    pub tap: nail_connlog::WireTap,
 }
 
 /// Upper bounds of one body-fetch batch (one `UID FETCH` command). A batch
@@ -190,7 +193,15 @@ impl ImapConfig {
             fetch_batch: FetchBatchLimits::default(),
             compress: true,
             client_id: Some(default_client_id()),
+            tap: nail_connlog::WireTap::off(),
         }
+    }
+
+    /// Records every connection into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::WireTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// Sets the port.

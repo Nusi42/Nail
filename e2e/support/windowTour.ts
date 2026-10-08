@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { openCalendar } from "./calendar";
+import { allowAllFolders, openWorkLog, otherMailbox, showRefusedFolderDetails } from "./connlog";
 import { control, repoRoot, type NailServer } from "./nail";
 import {
   messageRows,
@@ -77,6 +78,10 @@ export const FEATURE_DIALOGS = [
   "theme-new",
   "theme-rename",
   "theme-delete",
+  // ADR 0190: the connection log, an error's details and the application log.
+  "connection-log",
+  "error-details",
+  "application-log",
 ] as const;
 
 /** An Autocrypt Setup Message (the test corpus's). */
@@ -258,6 +263,22 @@ export async function settingsDialogsStep(tour: WindowTour): Promise<void> {
   await openSettings(page, "Plug-ins");
   await settings.getByRole("button", { name: "Install a plug-in…" }).click();
   await tour.visitAndClose("plugin-install");
+}
+
+/**
+ * ADR 0190: the connection log of the account Work, the details of an
+ * error (a folder the mock server refuses to open) and the application log.
+ */
+export async function connlogStep(tour: WindowTour, server: NailServer): Promise<void> {
+  const page = tour.page;
+  await openWorkLog(page);
+  await tour.visitAndClose("connection-log");
+  await showRefusedFolderDetails(page, server, await otherMailbox(server));
+  await tour.visitAndClose("error-details");
+  await allowAllFolders(page, server);
+  const settings = await openSettings(page, "Data & backup");
+  await settings.getByRole("button", { name: "Show recent lines" }).click();
+  await tour.visitAndClose("application-log");
 }
 
 /**

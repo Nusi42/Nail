@@ -204,6 +204,51 @@ pub trait ExchangeHttp: Send + Sync + fmt::Debug {
     ) -> BoxFuture<'a, Result<HttpResponse, HttpError>>;
 }
 
+/// [`ExchangeHttp`] that records every request into a connection log (ADR
+/// 0190): the request line (never a header value), the status, the size of
+/// the answer and, for a refused one, its error code / message.
+#[derive(Debug)]
+pub struct LoggedHttp {
+    inner: std::sync::Arc<dyn ExchangeHttp>,
+    tap: nail_connlog::HttpTap,
+}
+
+impl LoggedHttp {
+    /// `inner`, logged into `tap`.
+    pub fn new(inner: std::sync::Arc<dyn ExchangeHttp>, tap: nail_connlog::HttpTap) -> Self {
+        Self { inner, tap }
+    }
+}
+
+impl ExchangeHttp for LoggedHttp {
+    fn send<'a>(
+        &'a self,
+        request: &'a HttpRequest,
+    ) -> BoxFuture<'a, Result<HttpResponse, HttpError>> {
+        Box::pin(async move {
+            let exchange = self.tap.request(
+                request.method.as_str(),
+                request.url.as_str(),
+                request
+                    .headers
+                    .iter()
+                    .any(|(name, _)| name.eq_ignore_ascii_case("authorization")),
+                Some(u64::try_from(request.body.len()).unwrap_or(u64::MAX)),
+            );
+            let result = self.inner.send(request).await;
+            match &result {
+                Ok(response) => exchange.response(
+                    response.status,
+                    Some(u64::try_from(response.body.len()).unwrap_or(u64::MAX)),
+                    Some(&response.body),
+                ),
+                Err(err) => exchange.failed(&err.message),
+            }
+            result
+        })
+    }
+}
+
 /// [`ExchangeHttp`] on a [`reqwest::Client`] (build it with
 /// `nail_auth::http_client()`: rustls, platform verifier, no redirects).
 #[derive(Debug, Clone)]

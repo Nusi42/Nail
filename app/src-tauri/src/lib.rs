@@ -420,6 +420,12 @@ pub fn open_service_with(
     args: &AppArgs,
     options: ServiceOptions,
 ) -> Result<Service, Box<dyn std::error::Error>> {
+    // ADR 0190: the application log (redacted) next to the data, so a
+    // failure can be looked at after the fact.
+    match nail_core::logs::attach_file(&options.data_dir) {
+        Ok(path) => tracing::info!(log = %path.display(), "writing the application log"),
+        Err(err) => tracing::warn!(%err, "cannot write the application log"),
+    }
     let service = Service::open(options)?;
     if args.seed.as_deref() == Some("demo") {
         nail_core::demo::seed_demo(service.store(), service.blobs())?;

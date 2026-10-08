@@ -218,6 +218,13 @@ async fn label(
 /// core's token manager).
 pub(crate) fn engine_for(service: &Service, account: &AccountConfig) -> Result<GmailEngine> {
     GmailEngine::for_account(account, service.inner.tokens.clone())
+        .map(|engine| {
+            engine.with_tap(
+                service
+                    .account_tap(&account.id)
+                    .http(nail_api::connlog::WireProtocol::Gmail),
+            )
+        })
         .map_err(|e| CoreError::from(EngineError::from(e)))
 }
 
@@ -262,7 +269,14 @@ pub(crate) async fn run(
     let engine = match engine_for(&service, &account) {
         Ok(engine) => Arc::new(engine),
         Err(err) => {
-            service.report_offline(&account.id, &err);
+            service
+                .protocol_failed(
+                    &account.id,
+                    &err,
+                    nail_api::connlog::WireProtocol::Gmail,
+                    false,
+                )
+                .await;
             stopped(&mut stop).await;
             return;
         }
@@ -281,13 +295,20 @@ pub(crate) async fn run(
         let delay = match result {
             Ok(outcome) => {
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 poll.observe(&Ok(outcome));
                 timing.poll_override.unwrap_or_else(|| poll.next_delay())
             }
             Err(err) => {
                 tracing::info!(account = %account.id, %err, "Gmail sync failed");
-                service.report_sync_failure(&account.id, &err);
+                service
+                    .protocol_failed(
+                        &account.id,
+                        &err,
+                        nail_api::connlog::WireProtocol::Gmail,
+                        true,
+                    )
+                    .await;
                 let engine_err: EngineError = err.into();
                 poll.observe(&Err(engine_err));
                 let delay = poll.next_delay().max(backoff);

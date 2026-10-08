@@ -167,6 +167,124 @@ pub trait DnsLookup: Send + Sync + fmt::Debug {
     fn mx<'a>(&'a self, domain: &'a str) -> BoxFuture<'a, Result<Vec<MxRecord>, NetError>>;
 }
 
+/// [`HttpFetch`] that records every request into a connection log (ADR
+/// 0190): the request line, the status, the size of the answer.
+#[derive(Debug)]
+pub struct LoggedFetch {
+    inner: std::sync::Arc<dyn HttpFetch>,
+    tap: nail_connlog::HttpTap,
+}
+
+impl LoggedFetch {
+    /// `inner`, logged into `tap`.
+    pub fn new(inner: std::sync::Arc<dyn HttpFetch>, tap: nail_connlog::HttpTap) -> Self {
+        Self { inner, tap }
+    }
+
+    fn logged(
+        exchange: &nail_connlog::HttpExchange,
+        result: Result<HttpReply, NetError>,
+    ) -> Result<HttpReply, NetError> {
+        match &result {
+            Ok(reply) => exchange.response(
+                reply.status,
+                Some(u64::try_from(reply.body.len()).unwrap_or(u64::MAX)),
+                Some(&reply.body),
+            ),
+            Err(err) => exchange.failed(&err.0),
+        }
+        result
+    }
+}
+
+impl HttpFetch for LoggedFetch {
+    fn get<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<HttpReply, NetError>> {
+        Box::pin(async move {
+            let exchange = self.tap.request("GET", url.as_str(), false, None);
+            let result = self.inner.get(url).await;
+            Self::logged(&exchange, result)
+        })
+    }
+
+    fn post<'a>(
+        &'a self,
+        url: &'a Url,
+        content_type: &'a str,
+        body: Vec<u8>,
+    ) -> BoxFuture<'a, Result<HttpReply, NetError>> {
+        Box::pin(async move {
+            let exchange = self.tap.request(
+                "POST",
+                url.as_str(),
+                false,
+                Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+            );
+            let result = self.inner.post(url, content_type, body).await;
+            Self::logged(&exchange, result)
+        })
+    }
+}
+
+/// [`DnsLookup`] that notes every lookup and its answer in a connection
+/// log (ADR 0190).
+#[derive(Debug)]
+pub struct LoggedDns {
+    inner: std::sync::Arc<dyn DnsLookup>,
+    tap: nail_connlog::HttpTap,
+}
+
+impl LoggedDns {
+    /// `inner`, logged into `tap`.
+    pub fn new(inner: std::sync::Arc<dyn DnsLookup>, tap: nail_connlog::HttpTap) -> Self {
+        Self { inner, tap }
+    }
+
+    fn note<T>(
+        &self,
+        kind: &str,
+        name: &str,
+        result: &Result<Vec<T>, NetError>,
+        show: impl Fn(&T) -> String,
+    ) {
+        let (level, text) = match result {
+            Ok(records) if records.is_empty() => (
+                nail_connlog::WireLevel::Info,
+                format!("DNS {kind} {name}: no records"),
+            ),
+            Ok(records) => (
+                nail_connlog::WireLevel::Info,
+                format!(
+                    "DNS {kind} {name}: {}",
+                    records.iter().map(&show).collect::<Vec<_>>().join(", ")
+                ),
+            ),
+            Err(err) => (
+                nail_connlog::WireLevel::Warning,
+                format!("DNS {kind} {name} failed: {}", err.0),
+            ),
+        };
+        self.tap.note(level, &text);
+    }
+}
+
+impl DnsLookup for LoggedDns {
+    fn srv<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Vec<SrvRecord>, NetError>> {
+        Box::pin(async move {
+            let result = self.inner.srv(name).await;
+            self.note("SRV", name, &result, |r| format!("{}:{}", r.target, r.port));
+            result
+        })
+    }
+
+    fn mx<'a>(&'a self, domain: &'a str) -> BoxFuture<'a, Result<Vec<MxRecord>, NetError>> {
+        Box::pin(async move {
+            let result = self.inner.mx(domain).await;
+            self.note("MX", domain, &result, |r| r.exchange.clone());
+            result
+        })
+    }
+}
+
 /// [`DnsLookup`] with `hickory-resolver`.
 #[derive(Clone)]
 pub struct HickoryDns {

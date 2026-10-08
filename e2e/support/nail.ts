@@ -88,6 +88,12 @@ export interface StartOptions {
    * in `<dataDir>/demo-keychain.json`, so a restart finds them again.
    */
   dirs?: { dataDir: string; configDir: string };
+  /**
+   * The seeded run's "now" (ADR 0185, `NAIL_DEMO_NOW`): the demo-multi
+   * calendar content is dated from its day and the core's clock starts at
+   * it. Default: the real time.
+   */
+  demoNow?: Date;
 }
 
 /**
@@ -115,7 +121,11 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
   ];
   if (options.locale) args.push("--locale", options.locale);
   for (const target of options.launch ?? []) args.push("--launch", target);
-  const serve = await spawnServe(nailBinary(), args, { cwd: repoRoot, timeoutMs: 30_000 });
+  const serve = await spawnServe(nailBinary(), args, {
+    cwd: repoRoot,
+    timeoutMs: 30_000,
+    env: options.demoNow ? { NAIL_DEMO_NOW: options.demoNow.toISOString() } : {},
+  });
   return {
     url: serve.url,
     dataDir,

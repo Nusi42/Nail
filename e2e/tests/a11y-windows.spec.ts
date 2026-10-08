@@ -24,6 +24,7 @@ import {
   meetingStep,
   messageDialogsStep,
   paletteWindowStep,
+  connlogStep,
   settingsDialogsStep,
   settingsSectionNames,
   WindowTour,
@@ -211,6 +212,7 @@ for (const mode of MODES) {
 
       // Dialogs opened from settings sections.
       await settingsDialogsStep(sweep);
+      await connlogStep(sweep, server);
       // M5d: the toolbar customizer (right-click a toolbar).
       await showView(page, "Mail");
       await rows.filter({ hasText: "Welcome to Nail" }).click();

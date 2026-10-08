@@ -46,7 +46,9 @@ mod error;
 mod flags;
 mod folder;
 mod idle;
+mod resilient;
 mod resync;
+mod salvage;
 mod sasl;
 mod search;
 mod transport;
@@ -57,8 +59,7 @@ pub use bodies::{BodyFetch, ImapDate};
 pub use capabilities::Capabilities;
 pub use changes::{FlagUpdate, MailboxChange};
 pub use client::{
-    Envelope, FetchPlan, FetchedMessage, FolderStatus, ImapClient, IncrementalFetch, SyncState,
-    UidRange,
+    FetchPlan, FetchedMessage, FolderStatus, ImapClient, IncrementalFetch, SyncState, UidRange,
 };
 pub use config::{
     AuthMechanism, ClientId, Credentials, FetchBatchLimits, ImapConfig, Secret, Security, TlsTrust,
@@ -70,6 +71,7 @@ pub use folder::{
     RemoteFolder, decode_modified_utf7, encode_modified_utf7, folder_path, role_from_name,
 };
 pub use idle::{IDLE_REISSUE, IdleEnd, IdleOutcome};
+pub use resilient::{BatchFetch, FetchFailure, FetchFailureKind};
 pub use resync::{FlagResync, ResyncMethod, ResyncState};
 pub use search::SearchKey;
 pub use transport::ImapStream;

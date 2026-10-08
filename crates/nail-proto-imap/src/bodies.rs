@@ -107,29 +107,40 @@ impl ImapClient {
             BodyFetch::Full => self.fetch_uids(uids, false).await,
             BodyFetch::HeadersOnly => self.fetch_uids(uids, true).await,
             BodyFetch::Since(day) => {
-                let mut wanted = uids.to_vec();
-                wanted.sort_unstable();
-                wanted.dedup();
-                if wanted.is_empty() {
-                    return Ok(Vec::new());
-                }
-                let set = uid_set(&wanted);
-                let recent = self
-                    .search(&format!("UID {set} SINCE {day}"), |uid| {
-                        wanted.binary_search(&uid).is_ok()
-                    })
-                    .await?;
-                let older: Vec<u32> = wanted
-                    .iter()
-                    .copied()
-                    .filter(|uid| recent.binary_search(uid).is_err())
-                    .collect();
+                let (recent, older) = self.uids_since(uids, day).await?;
                 let mut messages = self.fetch_uids(&recent, false).await?;
                 messages.extend(self.fetch_uids(&older, true).await?);
                 messages.sort_by_key(|m| m.uid);
                 Ok(messages)
             }
         }
+    }
+
+    /// Splits `uids` into those that arrived since `day` (`UID SEARCH …
+    /// SINCE`) and the older ones.
+    pub(crate) async fn uids_since(
+        &mut self,
+        uids: &[u32],
+        day: ImapDate,
+    ) -> Result<(Vec<u32>, Vec<u32>)> {
+        let mut wanted = uids.to_vec();
+        wanted.sort_unstable();
+        wanted.dedup();
+        if wanted.is_empty() {
+            return Ok((Vec::new(), Vec::new()));
+        }
+        let set = uid_set(&wanted);
+        let recent = self
+            .search(&format!("UID {set} SINCE {day}"), |uid| {
+                wanted.binary_search(&uid).is_ok()
+            })
+            .await?;
+        let older = wanted
+            .iter()
+            .copied()
+            .filter(|uid| recent.binary_search(uid).is_err())
+            .collect();
+        Ok((recent, older))
     }
 
     /// Fetches one whole message from `path` (a body not fetched by the

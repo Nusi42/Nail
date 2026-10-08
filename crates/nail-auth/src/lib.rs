@@ -35,7 +35,7 @@ pub use http::{
     BuildError, HttpError, http_client, http_client_builder, tls_config, tls_config_with_roots,
 };
 pub use keychain::{CHUNK_BYTES, KeychainBackend, KeychainSecretStore, OsKeychain};
-pub use manager::{EXPIRY_MARGIN, TokenManager};
+pub use manager::{EXPIRY_MARGIN, OAuthTaps, TokenManager};
 pub use providers::{GOOGLE, MICROSOFT, ProviderRegistry, ProviderSpec, provider_for_host};
 
 /// The keychain service Nail's entries live under (see

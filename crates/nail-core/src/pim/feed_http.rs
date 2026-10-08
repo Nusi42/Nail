@@ -49,6 +49,8 @@ pub(crate) struct FeedRequest {
     pub allow_loopback: bool,
     /// Largest body accepted.
     pub max_bytes: usize,
+    /// The connection log (ADR 0190).
+    pub tap: nail_connlog::HttpTap,
 }
 
 /// What a fetch brought.
@@ -115,8 +117,14 @@ async fn fetch_inner(
         let login = same_origin(&url, &request.url)
             .then_some(request.basic.as_ref())
             .flatten();
-        let response = hop(&url, request, login, resolver, tls).await?;
+        let exchange = request
+            .tap
+            .request("GET", url.as_str(), login.is_some(), None);
+        let response = hop(&url, request, login, resolver, tls)
+            .await
+            .inspect_err(|err| exchange.failed(&err.message))?;
         let status = response.status();
+        exchange.response(status.as_u16(), response.content_length(), None);
         if status.is_redirection()
             && status != reqwest::StatusCode::NOT_MODIFIED
             && let Some(location) = response.headers().get(reqwest::header::LOCATION)
@@ -255,6 +263,7 @@ mod tests {
             basic: None,
             allow_loopback,
             max_bytes: 1024,
+            tap: nail_connlog::HttpTap::off(),
         }
     }
 

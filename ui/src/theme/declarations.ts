@@ -81,6 +81,9 @@ export const INLINE_GAP = "0.5em";
 /** The bar beside quoted text and the current item (quotes, event colours). */
 export const ACCENT_BAR = "3px";
 
+/** The width a text field or text block grows from (and a preview's height). */
+export const FIELD_BASIS = "16em";
+
 /** High contrast: the focus outline of the selected row in a focused list. */
 export const HC_RING = "3px";
 

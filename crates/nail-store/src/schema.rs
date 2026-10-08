@@ -382,6 +382,8 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     // Schema v18 (P3 WP-perf): triggers keep `thread_activity` current, and
     // the table is rebuilt once (`thread::activity::MAINTENANCE_SQL`).
     Migration::sql(crate::thread::activity::MAINTENANCE_SQL),
+    // Schema v19 (ADRs 0190 / 0191): stored sync errors and skipped messages.
+    Migration::sql(crate::sync_errors::V19),
 ];
 
 /// The schema version this build creates and understands.
@@ -605,6 +607,8 @@ mod tests {
                 "schema_version",
                 "sieve_state",
                 "snoozed_messages",
+                "sync_errors",
+                "sync_skipped",
                 "thread_activity",
                 "thread_refs",
                 "vault_state"

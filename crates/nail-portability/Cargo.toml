@@ -14,6 +14,8 @@ publish.workspace = true
 nail-api.workspace = true
 # Shared helpers (percent-decoding, the secret stand-in; ADR 0171).
 nail-util.workspace = true
+# The one redactor (ADR 0190).
+nail-connlog.workspace = true
 # Message parsing (headers, Message-ID, dates) and iCalendar / vCard.
 nail-ical.workspace = true
 mail-parser.workspace = true

@@ -11,6 +11,8 @@ publish.workspace = true
 nail-util.workspace = true
 nail-api.workspace = true
 nail-net = { workspace = true, features = ["io", "tls", "deflate"] }
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -21,6 +23,7 @@ tokio-rustls.workspace = true
 
 [dev-dependencies]
 nail-testkit.workspace = true
+nail-connlog.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]

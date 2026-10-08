@@ -19,6 +19,8 @@ nail-api.workspace = true
 nail-exchange.workspace = true
 nail-util.workspace = true
 nail-testkit-net = { workspace = true, optional = true }
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true

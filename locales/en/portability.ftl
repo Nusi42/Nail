@@ -266,7 +266,7 @@ portability-restore-plan-issues = Damaged parts (left out)
 portability-plan-item = Item
 portability-plan-effect = Change
 portability-plan-what = Entries
-portability-plan-note = Note
+portability-plan-note = { common-note }
 portability-plan-numbers = { $added } added, { $replaced } replaced, { $unchanged } unchanged
 portability-restore-note-passwords = { $count ->
     [one] 1 account needs its password
@@ -292,7 +292,7 @@ portability-settings-tab-diagnostics = Diagnostics
 portability-import-export-title = Import and export
 portability-import-export-text = Bring in mail, calendars and contacts from other programs and files, or write them out.
 portability-open-import = { common-import-open }
-portability-open-export = Export…
+portability-open-export = { common-export-ellipsis }
 portability-open-backup = Back up…
 portability-open-restore = Restore…
 

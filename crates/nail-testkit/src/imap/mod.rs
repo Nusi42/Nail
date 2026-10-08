@@ -31,6 +31,7 @@ mod deflate;
 mod encode;
 mod session;
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -179,6 +180,23 @@ impl Default for MockImapConfig {
     }
 }
 
+/// How the server misbehaves for one message (by UID, in any mailbox) when
+/// a client fetches its body or header block (ADR 0191 failure kinds).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageFault {
+    /// Any `UID FETCH` of a body / header section naming the UID is
+    /// answered `NO [SERVERBUG]` without data (Dovecot with a broken mail
+    /// file).
+    Refuse,
+    /// The message's `FETCH` response carries an extra item with raw 8-bit
+    /// bytes and an empty list, which strict IMAP parsers reject.
+    Malformed,
+    /// No `FETCH` response for the message at all, although it exists.
+    Withhold,
+    /// A `FETCH` response nothing can read (unbalanced parentheses).
+    Garbage,
+}
+
 /// Errors when starting the mock server.
 #[derive(Debug, thiserror::Error)]
 pub enum MockServerError {
@@ -204,6 +222,13 @@ pub(crate) struct Control {
     disconnect_after: Mutex<Option<(String, usize)>>,
     /// Mailboxes that `SELECT`/`EXAMINE` refuse (as if forbidden by ACLs).
     denied_mailboxes: Mutex<Vec<String>>,
+    /// Per-UID misbehaviour of body fetches.
+    message_faults: Mutex<BTreeMap<u32, MessageFault>>,
+    /// Most UIDs a `UID FETCH` may name before it is answered `BAD`.
+    max_fetch_uids: Mutex<Option<usize>>,
+    /// `SELECT` / `EXAMINE` with a `(CONDSTORE)` / `(QRESYNC …)` parameter
+    /// is answered `BAD` although the server advertises the extension.
+    refuse_select_parameters: std::sync::atomic::AtomicBool,
     /// Delay before answering commands (all, or one upper-case name).
     delay: Mutex<Option<(Option<String>, Duration)>>,
     /// Wakes sessions in `IDLE` to drop their connection.
@@ -262,6 +287,18 @@ impl Control {
 
     pub(crate) fn is_denied(&self, mailbox: &str) -> bool {
         lock(&self.denied_mailboxes).iter().any(|m| m == mailbox)
+    }
+
+    pub(crate) fn message_fault(&self, uid: u32) -> Option<MessageFault> {
+        lock(&self.message_faults).get(&uid).copied()
+    }
+
+    pub(crate) fn max_fetch_uids(&self) -> Option<usize> {
+        *lock(&self.max_fetch_uids)
+    }
+
+    pub(crate) fn refuses_select_parameters(&self) -> bool {
+        self.refuse_select_parameters.load(Ordering::SeqCst)
     }
 
     pub(crate) fn delay_for(&self, command: &str) -> Option<Duration> {
@@ -412,6 +449,30 @@ impl MockImapServer {
     /// (the mailboxes still appear in `LIST`, like folders an ACL forbids).
     pub fn deny_mailboxes(&self, mailboxes: &[&str]) {
         *lock(&self.control.denied_mailboxes) = mailboxes.iter().map(|m| (*m).to_owned()).collect();
+    }
+
+    /// Makes body / header fetches of the message with `uid` (any mailbox)
+    /// misbehave; `None` makes it behave again.
+    pub fn fault_message(&self, uid: u32, fault: Option<MessageFault>) {
+        let mut faults = lock(&self.control.message_faults);
+        match fault {
+            Some(fault) => faults.insert(uid, fault),
+            None => faults.remove(&uid),
+        };
+    }
+
+    /// Answers a `UID FETCH` naming more than `max` UIDs with `BAD`
+    /// (servers with short command lines); `None` lifts the limit.
+    pub fn limit_fetch_uids(&self, max: Option<usize>) {
+        *lock(&self.control.max_fetch_uids) = max;
+    }
+
+    /// Answers `SELECT` / `EXAMINE` with a `(CONDSTORE)` or `(QRESYNC …)`
+    /// parameter with `BAD`, although CONDSTORE / QRESYNC are advertised.
+    pub fn refuse_select_parameters(&self, refuse: bool) {
+        self.control
+            .refuse_select_parameters
+            .store(refuse, Ordering::SeqCst);
     }
 
     /// A slow server: waits `delay` before answering `command`

@@ -627,6 +627,54 @@ pub async fn read_limited(
     Ok(body)
 }
 
+/// Keeps the credential of an `Authorization` value (`Bearer <token>`,
+/// `Basic <pair>`, `Negotiate <blob>`) out of the connection log, also out
+/// of a server's error text that repeats it (ADR 0190).
+pub fn hide_credential(tap: &nail_connlog::HttpTap, authorization: &str) {
+    if let Some((_, credential)) = authorization.split_once(' ') {
+        tap.add_secret(credential);
+    }
+}
+
+/// A sent request's answer: status, headers and body.
+pub type Answer = (u16, HeaderMap, Vec<u8>);
+
+/// Sends `request` and reads its answer body (at most `max` bytes; `what`
+/// names the answer in errors), logging the answer or the failure on
+/// `exchange` (the connection log, ADR 0190).
+pub async fn send_logged<E: TransportFailure + fmt::Display>(
+    request: reqwest::RequestBuilder,
+    exchange: &nail_connlog::HttpExchange,
+    max: usize,
+    what: &str,
+) -> Result<Answer, E> {
+    let failed = |err: E| {
+        exchange.failed(&err.to_string());
+        err
+    };
+    let mut response = request
+        .send()
+        .await
+        .map_err(|e| failed(E::from(transport_error(e))))?;
+    let status = response.status().as_u16();
+    let headers = response.headers().clone();
+    let body = read_limited(&mut response, max)
+        .await
+        .map_err(|e| failed(E::from_body(e, what)))?;
+    exchange.response(
+        status,
+        Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+        Some(&body),
+    );
+    Ok((status, headers, body))
+}
+
+/// The size the connection log shows for a request body.
+#[must_use]
+pub fn logged_size(bytes: &[u8]) -> u64 {
+    u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+}
+
 /// Where a request for `url` goes: unchanged, or (with `route_all_to`)
 /// over plain HTTP to that address with the original host for the `Host`
 /// header ([`routed_to`]).

@@ -33,6 +33,11 @@ use crate::compose::{
 };
 use crate::config::layout::ResolvedLayout;
 use crate::config::theme::ResolvedTheme;
+// ADR 0190: the connection log and error details.
+use crate::connlog::{
+    AppLog, ConnectionLog, ConnectionLogScope, ConnectionLogSettings, ErrorDetails, SkippedMessage,
+    SyncErrorRecord,
+};
 use crate::context::UiContext;
 use crate::customize::{
     ConfigBackup, ConfigFile, ConfigIssue, ConfigMergePreview, LayoutPatch, MergeChoice, MergeTake,
@@ -3044,6 +3049,62 @@ pub enum Request {
         /// The user theme.
         theme_id: String,
     },
+
+    // --- Connection log, error details, application log (ADR 0190;
+    // remote sessions need the `admin` grant, MCP never) ---
+    /// The redacted protocol lines recorded for a scope (memory only unless
+    /// kept on disk). Answered with [`Response::ConnectionLog`].
+    GetConnectionLog {
+        /// Whose log.
+        scope: ConnectionLogScope,
+        /// Only entries after this position (`null` = from the oldest kept).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        after: Option<u64>,
+        /// At most this many entries, the newest ones (`null` = all kept).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        limit: Option<u32>,
+    },
+    /// Forget a scope's entries (memory and disk). Answered with
+    /// [`Response::Done`], followed by [`Event::ConnectionLogChanged`].
+    ClearConnectionLog {
+        /// Whose log.
+        scope: ConnectionLogScope,
+    },
+    /// The scope's log as text (one [`crate::connlog::ConnectionLogEntry::line`]
+    /// per entry, already redacted). With `path` (desktop only, absolute,
+    /// e.g. from [`Request::PickPath`]) it is written there; without, the
+    /// text is returned for a browser download. Answered with
+    /// [`Response::ConnectionLogExport`].
+    ExportConnectionLog {
+        /// Whose log.
+        scope: ConnectionLogScope,
+        /// Where to write it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        path: Option<String>,
+    },
+    /// The connection log settings. Answered with
+    /// [`Response::ConnectionLogSettings`].
+    GetConnectionLogSettings,
+    /// Store them; turning `keep_on_disk` off deletes the files. Answered
+    /// with [`Response::ConnectionLogSettings`].
+    SetConnectionLogSettings {
+        /// The new settings.
+        settings: ConnectionLogSettings,
+    },
+    /// The stored last errors of an account (or of every account) and the
+    /// messages its folders skipped. Answered with [`Response::SyncErrors`].
+    ListSyncErrors {
+        /// The account, `null` = every account the session may see.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        account_id: Option<AccountId>,
+    },
+    /// Where the application log is written and its recent lines (redacted).
+    /// Answered with [`Response::AppLog`].
+    GetAppLog,
 }
 
 /// The largest attachment [`Request::GetMessageAttachment`] returns
@@ -4174,6 +4235,43 @@ pub enum Response {
         /// Themes, selection, active theme, OS state.
         appearance: Box<Appearance>,
     },
+    /// Answer to [`Request::GetConnectionLog`] (ADR 0190).
+    ConnectionLog {
+        /// The entries.
+        log: ConnectionLog,
+    },
+    /// Answer to [`Request::ExportConnectionLog`].
+    ConnectionLogExport {
+        /// The file name to save it under
+        /// (`nail-connection-log-account-work.txt`).
+        file_name: String,
+        /// The text, when no path was given.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        text: Option<String>,
+        /// The file written, when a path was given.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        path: Option<String>,
+    },
+    /// Answer to [`Request::GetConnectionLogSettings`] and
+    /// [`Request::SetConnectionLogSettings`].
+    ConnectionLogSettings {
+        /// The settings.
+        settings: ConnectionLogSettings,
+    },
+    /// Answer to [`Request::ListSyncErrors`].
+    SyncErrors {
+        /// The last error per account and folder.
+        errors: Vec<SyncErrorRecord>,
+        /// Messages the folders skipped.
+        skipped: Vec<SkippedMessage>,
+    },
+    /// Answer to [`Request::GetAppLog`].
+    AppLog {
+        /// The log.
+        log: AppLog,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -4296,6 +4394,11 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         localized: Option<LocalizedMessage>,
+        /// The precise cause ("Show details", ADR 0190): of the failed pass,
+        /// or of the first failed folder.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        details: Option<Box<ErrorDetails>>,
     },
     /// A queued operation changed state.
     OpStatus {
@@ -4317,6 +4420,10 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         localized: Option<LocalizedMessage>,
+        /// The precise cause when `failed` ("Show details", ADR 0190).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        details: Option<Box<ErrorDetails>>,
     },
     /// New messages arrived from a server (for notifications; lists are
     /// refreshed through [`Event::MailChanged`]).
@@ -4696,6 +4803,22 @@ pub enum Event {
     EditHistoryChanged {
         /// The history now.
         history: EditHistory,
+    },
+    // --- Connection log (ADR 0190) ---
+    /// A scope's connection log has new entries or was cleared (at most a
+    /// few per second; no content: fetch with [`Request::GetConnectionLog`]).
+    /// Remote sessions get it only with the `admin` grant.
+    ConnectionLogChanged {
+        /// Whose log.
+        scope: ConnectionLogScope,
+        /// The newest position (0 after clearing).
+        last_seq: u64,
+    },
+    /// The stored errors or skipped messages of an account changed
+    /// (refetch with [`Request::ListSyncErrors`]).
+    SyncErrorsChanged {
+        /// The account.
+        account_id: AccountId,
     },
 }
 
@@ -5427,6 +5550,7 @@ mod tests {
             code: ErrorCode::Network,
             message: "down".into(),
             localized: None,
+            details: None,
         };
         assert!(
             serde_json::to_value(&failed)

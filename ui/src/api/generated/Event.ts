@@ -9,9 +9,11 @@ import type { CalendarId } from "./CalendarId";
 import type { ComposerEdit } from "./ComposerEdit";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { Confirmation } from "./Confirmation";
+import type { ConnectionLogScope } from "./ConnectionLogScope";
 import type { DraftId } from "./DraftId";
 import type { EditHistory } from "./EditHistory";
 import type { ErrorCode } from "./ErrorCode";
+import type { ErrorDetails } from "./ErrorDetails";
 import type { ExchangeArea } from "./ExchangeArea";
 import type { FolderId } from "./FolderId";
 import type { JobId } from "./JobId";
@@ -116,7 +118,12 @@ message: string,
  * The user-facing text (Fluent id + arguments) when the core has a more
  * specific one than the error class; else `null` (ADR 0043).
  */
-localized?: LocalizedMessage, } | { "type": "OpStatus", 
+localized?: LocalizedMessage, 
+/**
+ * The precise cause ("Show details", ADR 0190): of the failed pass,
+ * or of the first failed folder.
+ */
+details?: ErrorDetails, } | { "type": "OpStatus", 
 /**
  * The new status.
  */
@@ -141,7 +148,11 @@ message: string | null,
  * The user-facing text (Fluent id + arguments) when the core has a more
  * specific one than the error class; else `null` (ADR 0043).
  */
-localized?: LocalizedMessage, } | { "type": "NewMail", 
+localized?: LocalizedMessage, 
+/**
+ * The precise cause when `failed` ("Show details", ADR 0190).
+ */
+details?: ErrorDetails, } | { "type": "NewMail", 
 /**
  * The account.
  */
@@ -420,4 +431,16 @@ pop_outs: Array<PopOut>, } | { "type": "EditHistoryChanged",
 /**
  * The history now.
  */
-history: EditHistory, };
+history: EditHistory, } | { "type": "ConnectionLogChanged", 
+/**
+ * Whose log.
+ */
+scope: ConnectionLogScope, 
+/**
+ * The newest position (0 after clearing).
+ */
+last_seq: number, } | { "type": "SyncErrorsChanged", 
+/**
+ * The account.
+ */
+account_id: AccountId, };

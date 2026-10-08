@@ -23,6 +23,7 @@ http = [
     "dep:serde_json",
     "dep:tracing",
     "dep:nail-api",
+    "dep:nail-connlog",
 ]
 # Stream plumbing: delegating streams, idle timeout, bounded line reading.
 io = ["dep:tokio"]
@@ -37,6 +38,8 @@ xml = ["dep:quick-xml", "dep:thiserror"]
 # Shared facts without dependencies (the secret stand-in).
 nail-util.workspace = true
 nail-api = { workspace = true, optional = true }
+# The connection log of the API clients (ADR 0190).
+nail-connlog = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }

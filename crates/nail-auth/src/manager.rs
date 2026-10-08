@@ -23,6 +23,37 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Where the token requests of each refresh token are logged (ADR 0190):
+/// the core registers its accounts' references with their account's tap.
+/// Sign-in flows (no refresh token yet) log into the `flows` tap.
+#[derive(Debug, Default)]
+pub struct OAuthTaps {
+    secrets: Mutex<HashMap<SecretRef, nail_connlog::HttpTap>>,
+    flows: Mutex<nail_connlog::HttpTap>,
+}
+
+impl OAuthTaps {
+    /// Logs the token requests of `secret` into `tap`.
+    pub fn set(&self, secret: &SecretRef, tap: nail_connlog::HttpTap) {
+        lock(&self.secrets).insert(secret.clone(), tap);
+    }
+
+    /// The tap of `secret` (off when none is registered).
+    pub fn get(&self, secret: &SecretRef) -> nail_connlog::HttpTap {
+        lock(&self.secrets).get(secret).cloned().unwrap_or_default()
+    }
+
+    /// Logs the code exchanges of sign-in flows into `tap`.
+    pub fn set_flows(&self, tap: nail_connlog::HttpTap) {
+        *lock(&self.flows) = tap;
+    }
+
+    /// The tap of sign-in flows.
+    pub fn flows(&self) -> nail_connlog::HttpTap {
+        lock(&self.flows).clone()
+    }
+}
+
 /// OAuth2 token management for all accounts.
 pub struct TokenManager {
     registry: Arc<ProviderRegistry>,
@@ -31,6 +62,8 @@ pub struct TokenManager {
     cache: Mutex<HashMap<SecretRef, TokenSet>>,
     /// One refresh at a time per refresh token (single flight).
     locks: Mutex<HashMap<SecretRef, Arc<tokio::sync::Mutex<()>>>>,
+    /// The connection logs of the token requests.
+    taps: Arc<OAuthTaps>,
 }
 
 impl fmt::Debug for TokenManager {
@@ -74,7 +107,15 @@ impl TokenManager {
             http,
             cache: Mutex::default(),
             locks: Mutex::default(),
+            taps: Arc::default(),
         }
+    }
+
+    /// Logs token requests into the taps registered in `taps` (ADR 0190).
+    #[must_use]
+    pub fn with_taps(mut self, taps: Arc<OAuthTaps>) -> Self {
+        self.taps = taps;
+        self
     }
 
     /// The provider registry.
@@ -108,7 +149,8 @@ impl TokenManager {
         provider: &str,
         options: FlowOptions,
     ) -> Result<PendingFlow, AuthError> {
-        start_flow(self.client(provider).await?, options).await
+        let client = self.client(provider).await?.with_tap(self.taps.flows());
+        start_flow(client, options).await
     }
 
     /// Stores the tokens of a finished flow under `secret`: the refresh
@@ -161,7 +203,8 @@ impl TokenManager {
         let refresh_token = blocking(move || store.get(&r)).await?.ok_or_else(|| {
             AuthError::InvalidGrant(format!("no refresh token stored under {secret}"))
         })?;
-        let client = self.client(provider).await?;
+        let tap = self.taps.get(secret);
+        let client = self.client(provider).await?.with_tap(tap.clone());
         let mut tokens = match client.refresh(&refresh_token).await {
             Ok(tokens) => tokens,
             Err(err) => {
@@ -183,6 +226,10 @@ impl TokenManager {
         }
         tracing::debug!(%provider, %secret, "OAuth2 access token refreshed");
         let access = tokens.access_token.clone();
+        tap.add_secret(&access);
+        if let Some(rotated) = &tokens.refresh_token {
+            tap.add_secret(rotated);
+        }
         lock(&self.cache).insert(secret.clone(), tokens);
         Ok(access)
     }

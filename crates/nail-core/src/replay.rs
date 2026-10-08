@@ -1130,7 +1130,8 @@ impl Service {
         let config = self.inner.accounts.config().account(account)?.clone();
         match &config.incoming {
             IncomingServer::Imap { server, options } => Some(ImapSettings {
-                config: crate::creds::imap_config(server, options),
+                config: crate::creds::imap_config(server, options)
+                    .with_tap(self.account_tap(&config.id)),
                 credentials: Arc::new(self.endpoint_credentials(&config.id, &server.auth)),
             }),
             IncomingServer::Pop3 { .. }

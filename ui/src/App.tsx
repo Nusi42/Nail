@@ -263,6 +263,7 @@ function useCoreEvents(): void {
             accountId: event.account_id,
             code: event.code,
             localized: event.localized ?? null,
+            details: event.details ?? null,
           });
           break;
         case "SyncProgress":
@@ -296,6 +297,7 @@ function useCoreEvents(): void {
               error: event.error,
               message: event.message,
             });
+            ui().setLastSendDetails(event.details ?? null);
           }
           invalidate(queryKeys.outbox);
           break;

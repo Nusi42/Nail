@@ -40,6 +40,7 @@ import type { DuplicateReason } from "./DuplicateReason";
 import type { EditIssue } from "./EditIssue";
 import type { EditKind } from "./EditKind";
 import type { EditScope } from "./EditScope";
+import type { ErrorStep } from "./ErrorStep";
 import type { EventStatus } from "./EventStatus";
 import type { ExchangeCategoryIssue } from "./ExchangeCategoryIssue";
 import type { ExchangeEngine } from "./ExchangeEngine";
@@ -153,6 +154,9 @@ import type { WindowInstances } from "./WindowInstances";
 import type { WindowSnap } from "./WindowSnap";
 import type { WindowSpec } from "./WindowSpec";
 import type { WindowStateIssue } from "./WindowStateIssue";
+import type { WireDirection } from "./WireDirection";
+import type { WireLevel } from "./WireLevel";
+import type { WireProtocol } from "./WireProtocol";
 
 /** Every permission Nail offers (plus `network:<host>`), in display order. */
 export const PLUGIN_PERMISSIONS = ["mail.read","mail.read.body","calendar.read","ui.dialogs","notifications","storage","mail.organize","mail.send","calendar.write","contacts.write","tasks.write","hooks.arrival","hooks.beforeSend","hooks.open","composer","attachments","background","mcp.expose"] as const satisfies readonly PluginPermission[];
@@ -398,7 +402,7 @@ export const SMART_FOLDERS_SECTION_ID = "smart-folders" as const;
 export const CONTEXT_MENU_PREFIX = "context:" as const;
 
 /** Parts with context menus → the key context whose shortcuts they show. */
-export const CONTEXT_MENU_PARTS = {"calendar-list.calendar":"calendar","composer":"composer","folder-tree.account":"global","folder-tree.folder":"global","message-list.row":"list","message-view":"reader","message-view.attachment":"reader","nav-rail":"global","thread-view.message":"reader"} as const;
+export const CONTEXT_MENU_PARTS = {"calendar-list.calendar":"calendar","composer":"composer","folder-tree":"global","folder-tree.account":"global","folder-tree.folder":"global","message-list.row":"list","message-view":"reader","message-view.attachment":"reader","nav-rail":"global","text":"global","thread-view.message":"reader"} as const;
 
 /** Most window kinds remembered; a new kind beyond it is refused. */
 export const MAX_WINDOW_STATES = 256 as const;
@@ -768,6 +772,18 @@ export const ATTACHMENT_RISK_VALUES = ["executable","macro","disguised-name","co
 
 /** Every `VaultPhase`, in the contract's order. */
 export const VAULT_PHASE_VALUES = ["database","blobs","index"] as const satisfies readonly VaultPhase[];
+
+/** Every `WireProtocol`, in the contract's order. */
+export const WIRE_PROTOCOL_VALUES = ["imap","smtp","pop3","managesieve","caldav","carddav","feed","gmail","graph","ews","oauth","discovery"] as const satisfies readonly WireProtocol[];
+
+/** Every `WireLevel`, in the contract's order. */
+export const WIRE_LEVEL_VALUES = ["info","warning","error"] as const satisfies readonly WireLevel[];
+
+/** Every `WireDirection`, in the contract's order. */
+export const WIRE_DIRECTION_VALUES = ["sent","received","info"] as const satisfies readonly WireDirection[];
+
+/** Every `ErrorStep`, in the contract's order. */
+export const ERROR_STEP_VALUES = ["connect","tls","login","token","list","select","search","fetch","flags","store","write","send","idle","discover","other"] as const satisfies readonly ErrorStep[];
 
 /** Every `CryptoTechnology`, in the contract's order. */
 export const CRYPTO_TECHNOLOGY_VALUES = ["openpgp","smime"] as const satisfies readonly CryptoTechnology[];

@@ -422,9 +422,33 @@ pub const MULTI_EWS_EMAIL: &str = "ada@corp.example";
 /// Password of the mock EWS server (Basic over loopback).
 pub const MULTI_EWS_PASSWORD: &str = "corp-secret";
 
-/// An all-day event of a demo feed `days` after today.
+/// The environment variable that pins a seeded run's "now" (RFC 3339,
+/// e.g. `2026-10-05T08:00:00Z`; ADR 0185): the demo-multi calendar content
+/// is dated from its day and the demo clock starts at it, so screenshots
+/// and agenda tests do not drift with the calendar. Unset: the real time.
+pub const DEMO_NOW_VAR: &str = "NAIL_DEMO_NOW";
+
+/// The pinned "now" of a seeded run ([`DEMO_NOW_VAR`]), if set and valid.
+pub fn pinned_now() -> Option<chrono::DateTime<chrono::Utc>> {
+    let text = std::env::var(DEMO_NOW_VAR).ok()?;
+    match chrono::DateTime::parse_from_rfc3339(text.trim()) {
+        Ok(at) => Some(at.with_timezone(&chrono::Utc)),
+        Err(err) => {
+            tracing::warn!(%err, value = %text, "{DEMO_NOW_VAR} is no RFC 3339 time; using the real time");
+            None
+        }
+    }
+}
+
+/// The day the demo's calendar content counts from: the pinned "now"'s
+/// ([`pinned_now`]), else today.
+fn demo_today() -> chrono::NaiveDate {
+    pinned_now().unwrap_or_else(chrono::Utc::now).date_naive()
+}
+
+/// An all-day event of a demo feed `days` after the demo's today.
 fn feed_event(uid: &str, title: &str, days: i64) -> String {
-    let day = chrono::Utc::now().date_naive() + chrono::Duration::days(days);
+    let day = demo_today() + chrono::Duration::days(days);
     let next = day + chrono::Duration::days(1);
     format!(
         "BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:20260101T000000Z\r\nDTSTART;VALUE=DATE:{}\r\n\
@@ -443,10 +467,10 @@ fn feed(name: &str, events: &[String]) -> Vec<u8> {
     .into_bytes()
 }
 
-/// A timed demo event `days` after today at `hour`:00 UTC for an hour,
-/// weekly (12 times) when `weekly`.
+/// A timed demo event `days` after the demo's today at `hour`:00 UTC for an
+/// hour, weekly (12 times) when `weekly`.
 fn dav_event(uid: &str, title: &str, days: i64, hour: u32, weekly: bool) -> String {
-    let day = chrono::Utc::now().date_naive() + chrono::Duration::days(days);
+    let day = demo_today() + chrono::Duration::days(days);
     let stamp = |h: u32| format!("{}T{h:02}0000Z", day.format("%Y%m%d"));
     format!(
         "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail demo//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\n\
@@ -834,7 +858,7 @@ pub async fn start_demo_multi_with(mail: DemoMail) -> Result<DemoMulti> {
         graph,
         ews,
         autodiscover,
-        clock: Arc::new(crate::AdjustableClock::new()),
+        clock: Arc::new(demo_clock()),
         system_appearance: Arc::new(nail_api::appearance::ManualSystemAppearance::new(Some(
             nail_api::appearance::SystemAppearance::LIGHT,
         ))),
@@ -842,6 +866,16 @@ pub async fn start_demo_multi_with(mail: DemoMail) -> Result<DemoMulti> {
         discoverer: Arc::new(discoverer),
         pop3_counter: AtomicU32::new(0),
     })
+}
+
+/// The demo clock: the system time, or the pinned "now" ([`pinned_now`])
+/// moving on from there.
+fn demo_clock() -> crate::AdjustableClock {
+    let clock = crate::AdjustableClock::new();
+    if let Some(now) = pinned_now() {
+        clock.set(now.timestamp());
+    }
+    clock
 }
 
 /// The keychain entries of the demo-multi accounts and PIM sources (the
@@ -1170,6 +1204,12 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
     /// * `imap-messages {account?, mailbox?}` → `[{uid, subject, flags}]`
     /// * `imap-mailboxes {account?}` → `[{name, count}]`
     /// * `imap-offline {account?, offline}`
+    /// * `imap-deny {account?, mailboxes}`: `SELECT` / `EXAMINE` of these
+    ///   mailboxes is refused with `NO [NOPERM]` (`[]` allows all again;
+    ///   ADR 0190 error details)
+    /// * `imap-fault {account?, uid, kind?}`: body fetches of the message
+    ///   with this UID misbehave (`refuse`, `malformed`, `withhold`,
+    ///   `garbage`; no `kind` = behave again; ADR 0191)
     /// * `pop3-deliver {raw, uid?}` → `{uid}`
     /// * `pop3-state` → `{uids, deleted}`
     /// * `smtp-messages` → `[{from, to, data}]`
@@ -1272,6 +1312,34 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                     .ok_or("offline is required")?;
                 self.imap(account)?.set_offline(offline);
                 Ok(json!({ "offline": offline }))
+            }
+            "imap-deny" => {
+                let mailboxes: Vec<&str> = args
+                    .get("mailboxes")
+                    .and_then(Value::as_array)
+                    .ok_or("mailboxes is required")?
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect();
+                self.imap(account)?.deny_mailboxes(&mailboxes);
+                Ok(json!({ "mailboxes": mailboxes }))
+            }
+            "imap-fault" => {
+                let uid = args
+                    .get("uid")
+                    .and_then(Value::as_u64)
+                    .and_then(|u| u32::try_from(u).ok())
+                    .ok_or("uid is required")?;
+                let fault = match text("kind") {
+                    None => None,
+                    Some("refuse") => Some(nail_testkit::MessageFault::Refuse),
+                    Some("malformed") => Some(nail_testkit::MessageFault::Malformed),
+                    Some("withhold") => Some(nail_testkit::MessageFault::Withhold),
+                    Some("garbage") => Some(nail_testkit::MessageFault::Garbage),
+                    Some(other) => return Err(format!("unknown fault {other:?}")),
+                };
+                self.imap(account)?.fault_message(uid, fault);
+                Ok(json!({ "uid": uid }))
             }
             "pop3-deliver" => {
                 let raw = text("raw").ok_or("raw is required")?;

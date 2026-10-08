@@ -203,6 +203,17 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::DuplicateTheme { .. } => ("DuplicateTheme", Admin),
         Request::RenameTheme { .. } => ("RenameTheme", Admin),
         Request::DeleteTheme { .. } => ("DeleteTheme", Admin),
+        // ADR 0190: the connection log is for administrators (redacted, but
+        // it shows every account's server traffic); exporting to a path
+        // writes on the desktop; stored errors follow the account grant.
+        Request::GetConnectionLog { .. } => ("GetConnectionLog", Admin),
+        Request::ClearConnectionLog { .. } => ("ClearConnectionLog", Admin),
+        Request::ExportConnectionLog { path: Some(_), .. } => ("ExportConnectionLog", DesktopOnly),
+        Request::ExportConnectionLog { path: None, .. } => ("ExportConnectionLog", Admin),
+        Request::GetConnectionLogSettings => ("GetConnectionLogSettings", Admin),
+        Request::SetConnectionLogSettings { .. } => ("SetConnectionLogSettings", Admin),
+        Request::GetAppLog => ("GetAppLog", Admin),
+        Request::ListSyncErrors { .. } => ("ListSyncErrors", Scope(S::Read)),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),

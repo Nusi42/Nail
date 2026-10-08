@@ -37,6 +37,7 @@ import {
   meetingStep,
   messageDialogsStep,
   paletteWindowStep,
+  connlogStep,
   settingsDialogsStep,
   settingsSectionNames,
   WindowTour,
@@ -547,6 +548,13 @@ const GROUPS: Record<string, Group> = {
     ],
     run: async (sweep) => {
       await settingsDialogsStep(sweep);
+    },
+  },
+  // ADR 0190: the connection log, an error's details, the application log.
+  connlog: {
+    windows: ["connection-log", "error-details", "application-log"],
+    run: async (sweep, server) => {
+      await connlogStep(sweep, server);
     },
   },
   scheduling: {

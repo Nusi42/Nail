@@ -1,6 +1,6 @@
 # e2e/visual — visual-regression harness (M5a WP154)
 
-Playwright screenshots of 24 screens — the main window (navigation rail
+Playwright screenshots of 26 screens — the main window (navigation rail
 and mail view) with a message open, the reader's More menu (M5b), the composer,
 the settings page, the calendar's week, month, year, agenda and free-time views,
 the Contacts and Tasks views, the main window and the calendar at 1024 px (M5b
@@ -9,7 +9,8 @@ column and remote-content banner), a message with attachment cards before and
 after saving one, a dialog, a modal confirmation and the M5d editors
 (customize-layout mode, the toolbar customizer, Settings → Appearance, the
 theme editor) and the P2 conversation (its row and the reader's card feed,
-collapsed and with every card open) — for every
+collapsed and with every card open), the connection log and an error's
+details (ADR 0190; its time-dependent lines are masked) — for every
 built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) × density
 (Comfortable, Compact), compared with reviewed baselines. ADR 0106 (package),
 contract ADR 0102.

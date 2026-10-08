@@ -21,7 +21,7 @@ struct Fixture {
     service: Service,
     server: MockImapServer,
     account: AccountId,
-    _data_dir: TempDir,
+    data_dir: TempDir,
     _config_dir: TempDir,
 }
 
@@ -59,12 +59,26 @@ async fn setup_with(password: &str, tweak: impl FnOnce(ImapConfig) -> ImapConfig
         service,
         server,
         account: account.id,
-        _data_dir: data_dir,
+        data_dir,
         _config_dir: config_dir,
     }
 }
 
+/// The events so far, without the connection log's and stored errors'
+/// notices (ADR 0190; their own tests look at them).
 fn drain(rx: &mut broadcast::Receiver<Event>) -> Vec<Event> {
+    drain_all(rx)
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e,
+                Event::ConnectionLogChanged { .. } | Event::SyncErrorsChanged { .. }
+            )
+        })
+        .collect()
+}
+
+fn drain_all(rx: &mut broadcast::Receiver<Event>) -> Vec<Event> {
     let mut events = Vec::new();
     while let Ok(event) = rx.try_recv() {
         events.push(event);
@@ -451,4 +465,237 @@ async fn raw_mail_of_deleted_folders_is_removed() {
     f.server.store().reset_uid_validity("Sent").unwrap();
     f.service.sync_account(&f.account).await.unwrap();
     assert_eq!(blob_count(f.service.blobs().root()), before - 1);
+}
+
+// --- ADRs 0190 / 0191: skipped messages, stored errors, the connection log
+
+async fn sync_errors(
+    service: &Service,
+    account: &AccountId,
+) -> (
+    Vec<nail_api::connlog::SyncErrorRecord>,
+    Vec<nail_api::connlog::SkippedMessage>,
+) {
+    match service
+        .handle(Request::ListSyncErrors {
+            account_id: Some(account.clone()),
+        })
+        .await
+    {
+        Response::SyncErrors { errors, skipped } => (errors, skipped),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_message_the_server_refuses_is_skipped_and_retried() {
+    let f = setup("secret").await;
+    let mut events = f.service.subscribe();
+    f.server
+        .fault_message(2, Some(nail_testkit::MessageFault::Refuse));
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.failed_folders, []);
+    let with_two: Vec<String> = f
+        .server
+        .store()
+        .mailboxes()
+        .iter()
+        .filter(|m| m.messages.iter().any(|m| m.uid == 2))
+        .map(|m| m.name.clone())
+        .collect();
+    assert_eq!(report.skipped, u32::try_from(with_two.len()).unwrap());
+    let expected = corpus_totals();
+    let messages: u32 = expected.iter().map(|t| t.2).sum();
+    assert_eq!(report.new_messages, messages - report.skipped);
+
+    let (errors, skipped) = sync_errors(&f.service, &f.account).await;
+    assert_eq!(errors, []);
+    assert_eq!(skipped.len(), with_two.len());
+    let first = &skipped[0];
+    assert_eq!(first.uid, 2);
+    assert_eq!(first.details.step, nail_api::connlog::ErrorStep::Fetch);
+    assert!(
+        first
+            .details
+            .server_text
+            .as_deref()
+            .is_some_and(|t| t.contains("[SERVERBUG]")),
+        "{first:?}"
+    );
+    assert!(
+        first
+            .details
+            .command
+            .as_deref()
+            .is_some_and(|c| c.contains("UID FETCH 2 ")),
+        "{first:?}"
+    );
+    assert!(
+        drain_all(&mut events)
+            .iter()
+            .any(|e| matches!(e, Event::SyncErrorsChanged { .. }))
+    );
+
+    // The checkpoint moved past it; the next pass retries it.
+    f.server.fault_message(2, None);
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(
+        report.new_messages,
+        u32::try_from(with_two.len()).unwrap(),
+        "only the skipped ones"
+    );
+    let (_, skipped) = sync_errors(&f.service, &f.account).await;
+    assert_eq!(skipped, []);
+    assert_eq!(folder_totals(&f.service, &f.account).await, expected);
+}
+
+#[tokio::test]
+async fn unreadable_answers_and_long_uid_sets_do_not_fail_the_folder() {
+    let f = setup("secret").await;
+    f.server
+        .fault_message(1, Some(nail_testkit::MessageFault::Malformed));
+    f.server
+        .fault_message(3, Some(nail_testkit::MessageFault::Garbage));
+    f.server.limit_fetch_uids(Some(2));
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.failed_folders, []);
+    let (_, skipped) = sync_errors(&f.service, &f.account).await;
+    assert!(
+        skipped.iter().all(|s| s.uid == 3),
+        "the malformed one is read leniently: {skipped:?}"
+    );
+    assert_ne!(skipped, []);
+}
+
+#[tokio::test]
+async fn a_folder_error_is_stored_with_details_until_the_folder_syncs() {
+    let f = setup("secret").await;
+    let mut events = f.service.subscribe();
+    f.server.deny_mailboxes(&["Archive"]);
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.failed_folders.len(), 1);
+    let failure = &report.failed_folders[0];
+    assert_eq!(failure.details.step, nail_api::connlog::ErrorStep::Select);
+    assert_eq!(failure.details.folder.as_deref(), Some("Archive"));
+    assert!(
+        failure
+            .details
+            .server_text
+            .as_deref()
+            .is_some_and(|t| t.contains("NO [NOPERM]")),
+        "{failure:?}"
+    );
+    assert!(failure.details.log_seq.is_some());
+    let failed_event = drain(&mut events).into_iter().find_map(|e| match e {
+        Event::SyncFailed { details, .. } => details,
+        _ => None,
+    });
+    assert_eq!(failed_event.as_deref(), Some(&failure.details));
+
+    let (errors, _) = sync_errors(&f.service, &f.account).await;
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].folder_id.as_ref(), Some(&failure.folder_id));
+
+    f.server.deny_mailboxes(&[]);
+    f.service.sync_account(&f.account).await.unwrap();
+    let (errors, _) = sync_errors(&f.service, &f.account).await;
+    assert_eq!(errors, []);
+}
+
+#[tokio::test]
+async fn the_connection_log_records_the_pass_without_content() {
+    let f = setup("secret").await;
+    f.service.sync_account(&f.account).await.unwrap();
+    let scope = nail_api::connlog::ConnectionLogScope::account(&f.account);
+    let Response::ConnectionLog { log } = f
+        .service
+        .handle(Request::GetConnectionLog {
+            scope: scope.clone(),
+            after: None,
+            limit: None,
+        })
+        .await
+    else {
+        panic!("expected the log");
+    };
+    assert!(log.last_seq > 0 && !log.keep_on_disk);
+    let Response::ConnectionLogExport {
+        text: Some(text), ..
+    } = f
+        .service
+        .handle(Request::ExportConnectionLog {
+            scope: scope.clone(),
+            path: None,
+        })
+        .await
+    else {
+        panic!("expected the text");
+    };
+    assert_eq!(text.lines().count(), log.entries.len());
+    assert!(text.contains("AUTHENTICATE PLAIN <redacted>") || text.contains("LOGIN"));
+    assert!(!text.contains("secret"), "the password: {text}");
+    assert!(text.contains("EXAMINE \"INBOX\""), "{text}");
+    assert!(
+        text.lines()
+            .any(|l| l.contains(" FETCH (UID ") && l.contains(" bytes})")),
+        "{text}"
+    );
+    for folder in demo_corpus() {
+        for message in folder.messages {
+            let subject = nail_mime::parse_message(&message.raw).headers.subject;
+            if subject.len() > 3 {
+                assert!(!text.contains(&subject), "subject {subject:?} in the log");
+            }
+        }
+    }
+    // A later page, then clearing.
+    let Response::ConnectionLog { log: tail } = f
+        .service
+        .handle(Request::GetConnectionLog {
+            scope: scope.clone(),
+            after: Some(log.last_seq - 1),
+            limit: None,
+        })
+        .await
+    else {
+        panic!("expected the log");
+    };
+    assert_eq!(tail.entries.len(), 1);
+    assert_eq!(
+        f.service
+            .handle(Request::ClearConnectionLog {
+                scope: scope.clone()
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        f.service.connection_logs().get(&scope, None, None).entries,
+        []
+    );
+}
+
+#[tokio::test]
+async fn the_connection_log_is_kept_on_disk_only_when_asked() {
+    let f = setup("secret").await;
+    let settings = |keep_on_disk| Request::SetConnectionLogSettings {
+        settings: nail_api::connlog::ConnectionLogSettings { keep_on_disk },
+    };
+    let folder = f.data_dir.path().join("logs").join("connections");
+    f.service.sync_account(&f.account).await.unwrap();
+    assert!(!folder.exists(), "memory only by default");
+    f.service.handle(settings(true)).await;
+    f.service.sync_account(&f.account).await.unwrap();
+    let file = folder.join("account-imap-1.log");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains(" imap #"), "{text}");
+    assert!(!text.contains("\"secret\""), "{text}");
+    assert_eq!(
+        f.service.handle(Request::GetConnectionLogSettings).await,
+        Response::ConnectionLogSettings {
+            settings: nail_api::connlog::ConnectionLogSettings { keep_on_disk: true }
+        }
+    );
+    f.service.handle(settings(false)).await;
+    assert!(!folder.exists(), "turning it off deletes the files");
 }

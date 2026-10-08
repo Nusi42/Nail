@@ -126,6 +126,17 @@ pub(crate) fn collect(
         let mut text = crate::logs::recent().join("\n");
         text.push('\n');
         out.push(entry("logs/nail.log", DiagnosticsItem::Logs, text));
+        // ADR 0190: the connection logs (already redacted; the bundle's
+        // redactor runs over them once more).
+        let logs = service.connection_logs();
+        for scope in logs.scopes() {
+            let name = nail_connlog::file_name(&scope);
+            out.push(entry(
+                &format!("logs/connections/{name}"),
+                DiagnosticsItem::Logs,
+                logs.text(&scope),
+            ));
+        }
         let mut plugin_lines = Vec::new();
         for plugin in store.plugins()? {
             for line in store.plugin_logs(Some(&plugin.id), None, 200)? {

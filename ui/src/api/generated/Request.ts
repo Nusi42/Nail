@@ -21,6 +21,8 @@ import type { ConfirmationDecision } from "./ConfirmationDecision";
 import type { ConfirmationFilter } from "./ConfirmationFilter";
 import type { ConfirmationId } from "./ConfirmationId";
 import type { ConflictChoice } from "./ConflictChoice";
+import type { ConnectionLogScope } from "./ConnectionLogScope";
+import type { ConnectionLogSettings } from "./ConnectionLogSettings";
 import type { ContactFields } from "./ContactFields";
 import type { ContactGroupId } from "./ContactGroupId";
 import type { ContactId } from "./ContactId";
@@ -2376,4 +2378,36 @@ new_id?: string, } | { "type": "DeleteTheme",
 /**
  * The user theme.
  */
-theme_id: string, };
+theme_id: string, } | { "type": "GetConnectionLog", 
+/**
+ * Whose log.
+ */
+scope: ConnectionLogScope, 
+/**
+ * Only entries after this position (`null` = from the oldest kept).
+ */
+after?: number, 
+/**
+ * At most this many entries, the newest ones (`null` = all kept).
+ */
+limit?: number, } | { "type": "ClearConnectionLog", 
+/**
+ * Whose log.
+ */
+scope: ConnectionLogScope, } | { "type": "ExportConnectionLog", 
+/**
+ * Whose log.
+ */
+scope: ConnectionLogScope, 
+/**
+ * Where to write it.
+ */
+path?: string, } | { "type": "GetConnectionLogSettings" } | { "type": "SetConnectionLogSettings", 
+/**
+ * The new settings.
+ */
+settings: ConnectionLogSettings, } | { "type": "ListSyncErrors", 
+/**
+ * The account, `null` = every account the session may see.
+ */
+account_id?: AccountId, } | { "type": "GetAppLog" };

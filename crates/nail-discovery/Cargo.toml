@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 nail-net = { workspace = true, features = ["http"] }
 nail-api.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 nail-auth.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

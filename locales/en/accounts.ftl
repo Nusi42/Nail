@@ -4,7 +4,7 @@
 
 server-incoming = Incoming mail
 server-outgoing = Outgoing mail
-server-protocol = Protocol
+server-protocol = { common-protocol }
 server-protocol-imap = IMAP
 server-protocol-pop3 = POP3
 server-protocol-gmail = Gmail API

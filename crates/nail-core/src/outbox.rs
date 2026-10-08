@@ -23,10 +23,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use nail_api::connlog::{ErrorDetails, ErrorStep, WireProtocol};
 use nail_api::engine::{EngineError, OutgoingTransport};
 use nail_api::{
-    AccountConfig, ApiError, AutomaticMail, Draft, DraftId, Event, Flags, FolderRole, Identity,
-    IncomingServer, OutboxEntry, OutboxId, OutboxState, OutgoingServer, SendCrypto,
+    AccountConfig, ApiError, AutomaticMail, Draft, DraftId, ErrorCode, Event, Flags, FolderRole,
+    Identity, IncomingServer, OutboxEntry, OutboxId, OutboxState, OutgoingServer, SendCrypto,
 };
 use nail_proto_smtp::{SendOptions, SmtpAuth, SmtpConfig, SmtpTransport};
 use nail_store::{Operation, SendOutcome};
@@ -63,14 +64,24 @@ pub(crate) fn wants_sent_copy(account: &AccountConfig) -> bool {
         .unwrap_or_else(|| !saves_sent_automatically(account))
 }
 
-fn send_status(service: &Service, entry: &OutboxEntry) {
+fn send_status(service: &Service, entry: &OutboxEntry, details: Option<ErrorDetails>) {
     service.broadcast(Event::SendStatus {
         outbox_id: entry.id.clone(),
         state: entry.state,
         error: entry.error,
         message: entry.message.clone(),
         localized: None,
+        details: details.map(Box::new),
     });
+}
+
+/// The connection log protocol of an account's outgoing mail.
+fn send_protocol(account: &AccountConfig) -> WireProtocol {
+    match &account.incoming {
+        IncomingServer::Gmail { .. } => WireProtocol::Gmail,
+        IncomingServer::Exchange { .. } => crate::exchange::wire_protocol(account),
+        _ => WireProtocol::Smtp,
+    }
 }
 
 impl Service {
@@ -300,7 +311,7 @@ impl Service {
             .store
             .call(move |s| s.schedule_send_at(&draft_id, &account_id, at, expected.as_deref()))
             .await?;
-        send_status(self, &entry);
+        send_status(self, &entry, None);
         self.inner.outbox_wake.notify_one();
         Ok(entry)
     }
@@ -315,6 +326,7 @@ impl Service {
             error: None,
             message: None,
             localized: None,
+            details: None,
         });
         Ok(draft)
     }
@@ -348,7 +360,9 @@ impl Service {
             Arc::clone(&self.inner.secrets),
             self.inner.tokens.clone(),
         )?;
-        let config = SmtpConfig::from_endpoint(server).with_timeout(crate::creds::NETWORK_TIMEOUT);
+        let config = SmtpConfig::from_endpoint(server)
+            .with_timeout(crate::creds::NETWORK_TIMEOUT)
+            .with_tap(self.account_tap(&account.id));
         Ok(SmtpTransport::new(config, auth, SendOptions::from(options)))
     }
 
@@ -371,6 +385,29 @@ impl Service {
                 message: err.message.clone(),
             },
         };
+        // ADR 0190: what failed, for "Show details".
+        let details = result.as_ref().err().map(|err| {
+            let protocol = self
+                .inner
+                .accounts
+                .config()
+                .account(&entry.account_id)
+                .map_or(WireProtocol::Smtp, send_protocol);
+            self.account_error_details(
+                &entry.account_id,
+                err.code,
+                &err.message,
+                crate::connlog::ErrorContext {
+                    protocol: Some(protocol),
+                    step: Some(if err.code == ErrorCode::AuthFailed {
+                        ErrorStep::Login
+                    } else {
+                        ErrorStep::Send
+                    }),
+                    ..crate::connlog::ErrorContext::default()
+                },
+            )
+        });
         let id = entry.id.clone();
         let finished = self
             .inner
@@ -380,7 +417,7 @@ impl Service {
         match finished {
             Ok(updated) => {
                 tracing::info!(outbox = %updated.id, state = ?updated.state, "send finished");
-                send_status(self, &updated);
+                send_status(self, &updated, details);
                 if updated.state == OutboxState::Scheduled {
                     // A retry: the sender must wake for its new time.
                     self.inner.outbox_wake.notify_one();
@@ -635,7 +672,7 @@ pub(crate) async fn run_sender(service: Service) {
         match claimed {
             Ok(entries) => {
                 for entry in entries {
-                    send_status(&service, &entry);
+                    send_status(&service, &entry, None);
                     let service = service.clone();
                     tokio::spawn(async move { service.send_entry(entry).await });
                 }

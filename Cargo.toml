@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/nail-api",
+    "crates/nail-connlog",
     "crates/nail-config",
     "crates/nail-store",
     "crates/nail-mime",
@@ -47,6 +48,7 @@ members = [
 # or `-p nail-app` to include it.
 default-members = [
     "crates/nail-api",
+    "crates/nail-connlog",
     "crates/nail-config",
     "crates/nail-store",
     "crates/nail-mime",
@@ -98,6 +100,7 @@ repository = "https://example.invalid/nail"
 [workspace.dependencies]
 # Internal crates
 nail-api = { path = "crates/nail-api" }
+nail-connlog = { path = "crates/nail-connlog" }
 nail-config = { path = "crates/nail-config" }
 nail-store = { path = "crates/nail-store" }
 nail-mime = { path = "crates/nail-mime" }

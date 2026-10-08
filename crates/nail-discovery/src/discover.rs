@@ -64,6 +64,25 @@ pub struct Discoverer {
 }
 
 impl Discoverer {
+    /// The same discovery with its HTTP requests and DNS lookups recorded
+    /// into `tap` (the connection log, ADR 0190).
+    #[must_use]
+    pub fn with_tap(&self, tap: &nail_connlog::HttpTap) -> Self {
+        Self {
+            http: Arc::new(crate::net::LoggedFetch::new(
+                Arc::clone(&self.http),
+                tap.clone(),
+            )),
+            dns: Arc::new(crate::net::LoggedDns::new(
+                Arc::clone(&self.dns),
+                tap.clone(),
+            )),
+            ..self.clone()
+        }
+    }
+}
+
+impl Discoverer {
     /// Discovery over the given seams, with Mozilla's ISPDB, 10 s per
     /// source and guessing enabled.
     pub fn new(

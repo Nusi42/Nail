@@ -92,6 +92,13 @@ pub struct GraphEngine {
 }
 
 impl GraphEngine {
+    /// Records every request into `tap` (the connection log, ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        self.client = self.client.with_tap(tap);
+        self
+    }
+
     /// An engine on `client` with default options.
     pub fn new(client: GraphClient) -> Self {
         Self {

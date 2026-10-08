@@ -119,7 +119,9 @@ pub(crate) async fn run(
     let (engine, batch) = match super::setup::engines_for(&service, &account) {
         Ok(engines) => engines,
         Err(err) => {
-            service.report_offline(&account.id, &err);
+            service
+                .protocol_failed(&account.id, &err, super::wire_protocol(&account), false)
+                .await;
             stopped(&mut stop).await;
             return;
         }
@@ -167,14 +169,16 @@ pub(crate) async fn run(
         let delay = match result {
             Ok(()) => {
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 timing
                     .poll_override
                     .unwrap_or_else(|| state.poll.next_delay())
             }
             Err(err) => {
                 tracing::info!(account = %account.id, %err, "Exchange sync failed");
-                service.report_sync_failure(&account.id, &err);
+                service
+                    .protocol_failed(&account.id, &err, super::wire_protocol(&account), true)
+                    .await;
                 let engine_err: EngineError = err.into();
                 if let Some(secs) = engine_err.retry_after_secs {
                     record_throttle(&service, &account.id, secs).await;

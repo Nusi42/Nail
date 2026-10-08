@@ -44,7 +44,8 @@ pub use corpus::{
     demo_corpus_with_conversations, load_mail_dir,
 };
 pub use imap::{
-    ClientId, MockCapabilities, MockImapConfig, MockImapServer, MockServerError, MockTls,
+    ClientId, MessageFault, MockCapabilities, MockImapConfig, MockImapServer, MockServerError,
+    MockTls,
 };
 pub use mailstore::{
     FlagUpdate, MailStore, Mailbox, MailboxError, NO_FLAGS, StoreOutcome, StoredFlags,

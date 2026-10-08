@@ -2,7 +2,8 @@
 //! Graph): the base URL policy, a bearer token with one forced refresh on
 //! `401`, inline retries of broken connections, throttling and server
 //! errors per the [`RetryPolicy`] (or the server's `Retry-After`), bounded
-//! answers, and the client's own error type for everything else.
+//! answers, the connection log (ADR 0190), and the client's own error
+//! type for everything else.
 
 use reqwest::Method;
 use reqwest::header::HeaderMap;
@@ -53,7 +54,7 @@ pub enum RetryClass {
 }
 
 /// The error type of an API client.
-pub trait ApiFailure: TransportFailure {
+pub trait ApiFailure: TransportFailure + std::fmt::Display {
     /// The service's name in logs (`Gmail`, `Graph`).
     const SERVICE: &'static str;
     /// The URL is not allowed (scheme, host or another origin).
@@ -145,6 +146,14 @@ macro_rules! api_client_wrapper {
             pub fn auth(&self) -> &$crate::http::ApiAuth {
                 self.api.auth()
             }
+
+            /// Records every request into `tap` (ADR 0190).
+            #[must_use]
+            pub fn with_tap(self, tap: nail_connlog::HttpTap) -> Self {
+                Self {
+                    api: self.api.with_tap(tap),
+                }
+            }
         }
     };
 }
@@ -157,6 +166,8 @@ pub struct ApiClient {
     auth: ApiAuth,
     retry: RetryPolicy,
     max_answer: usize,
+    /// The connection log (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 impl ApiClient {
@@ -179,6 +190,7 @@ impl ApiClient {
             auth,
             retry: RetryPolicy::default(),
             max_answer,
+            tap: nail_connlog::HttpTap::off(),
         })
     }
 
@@ -186,6 +198,13 @@ impl ApiClient {
     #[must_use]
     pub fn with_retry(mut self, retry: RetryPolicy) -> Self {
         self.retry = retry;
+        self
+    }
+
+    /// Records every request into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        self.tap = tap;
         self
     }
 
@@ -220,12 +239,16 @@ impl ApiClient {
         same_origin(url, &self.base)
     }
 
-    /// The `Authorization` value (`force_refresh` after a refused token).
+    /// The `Authorization` value (`force_refresh` after a refused token);
+    /// its credential never reaches the connection log.
     pub async fn authorization<E: ApiFailure>(&self, force_refresh: bool) -> Result<String, E> {
-        self.auth
+        let value = self
+            .auth
             .authorization(force_refresh)
             .await
-            .map_err(E::token)
+            .map_err(E::token)?;
+        http::hide_credential(&self.tap, &value);
+        Ok(value)
     }
 
     /// Sends `call` with `headers`: one forced token refresh on `401`,
@@ -285,17 +308,20 @@ impl ApiClient {
         for (name, value) in headers {
             request = request.header(name.as_str(), value.as_str());
         }
-        let mut response = call
-            .body
-            .apply(request, &call.method)
-            .send()
-            .await
-            .map_err(|e| E::from(http::transport_error(e)))?;
-        let status = response.status().as_u16();
-        let headers = response.headers().clone();
-        let body = http::read_limited(&mut response, self.max_answer)
-            .await
-            .map_err(|e| E::from_body(e, &format!("answer to {}", call.what)))?;
+        let sent = match &call.body {
+            Body::None => None,
+            Body::Json(bytes) | Body::Raw { bytes, .. } => Some(http::logged_size(bytes)),
+        };
+        let exchange = self
+            .tap
+            .request(call.method.as_str(), call.url.as_str(), true, sent);
+        let (status, headers, body) = http::send_logged::<E>(
+            call.body.apply(request, &call.method),
+            &exchange,
+            self.max_answer,
+            &format!("answer to {}", call.what),
+        )
+        .await?;
         Ok(ApiReply {
             status,
             headers,
@@ -326,6 +352,12 @@ mod tests {
     }
 
     crate::transport_errors!(TestError);
+
+    impl std::fmt::Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{self:?}")
+        }
+    }
 
     impl ApiFailure for TestError {
         const SERVICE: &'static str = "Test";

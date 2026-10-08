@@ -72,7 +72,8 @@ pub(crate) async fn fetch(
     credentials: &EndpointCredentials,
 ) -> Result<FetchReport> {
     let login = credentials.login(false).await?;
-    let mut client = Pop3Client::connect(&pop3_config(server)).await?;
+    let mut client =
+        Pop3Client::connect(&pop3_config(server).with_tap(service.account_tap(account))).await?;
     client.login(&pop3_credentials(login)).await?;
     let listing = client.messages().await?;
     let state = {
@@ -216,13 +217,20 @@ pub(crate) async fn run(
             Ok(report) => {
                 tracing::info!(account = %account.id, ?report, "POP3 fetch finished");
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 poll
             }
             Err(err) => {
                 let err: CoreError = err;
                 tracing::info!(account = %account.id, %err, "POP3 fetch failed");
-                service.report_sync_failure(&account.id, &err);
+                service
+                    .protocol_failed(
+                        &account.id,
+                        &err,
+                        nail_api::connlog::WireProtocol::Pop3,
+                        true,
+                    )
+                    .await;
                 let delay = backoff;
                 backoff = (backoff * 2).min(timing.reconnect_max);
                 delay

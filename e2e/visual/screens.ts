@@ -6,8 +6,9 @@
  * and the calendar at 1024 px (M5b review), a context menu, HTML and
  * attachment messages, a dialog and a modal confirmation (M5c), and the M5d
  * editors (customize layout, the toolbar customizer, Settings → Appearance,
- * the theme editor) and the P2 conversation (its row and the card feed,
- * collapsed and expanded). Each starts from a freshly
+ * the theme editor), the P2 conversation (its row and the card feed,
+ * collapsed and expanded) and the connection log with an error's details
+ * (ADR 0190). Each starts from a freshly
  * loaded main window (so one screen never leaks state into the next) and
  * ends with the screen open and its content present; `support.ts` then
  * settles and captures it.
@@ -18,15 +19,29 @@
  * accessible name, as in the regular e2e suite.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
+import {
+  allowAllFolders,
+  errorDetailsWindow,
+  openWorkLog,
+  otherMailbox,
+  showRefusedFolderDetails,
+  workLogWindow,
+} from "../support/connlog";
+import type { NailServer } from "../support/nail";
 import { messageRows, READER_SUBJECT, runFromPalette, windowById } from "../support/views";
 
-/** The fixed clock of every screen but the calendar: after the demo mail's dates. */
+/**
+ * The fixed clock of every screen but the calendar: after the demo mail's
+ * dates. It is also the seeded run's pinned "now" (ADR 0185): the demo's
+ * feeds and meetings are dated from its day, the core's clock starts at it.
+ */
 export const MAIN_TIME = new Date("2026-09-30T10:00:00Z");
 
 /**
- * The calendar's fixed clock: a week long before any date the demo data
- * derives from the real "today" (its feeds and meetings start at the real
- * date), so only the fixed events of {@link CALENDAR_EVENTS} show.
+ * The calendar's fixed clock: weeks before the demo's own events (dated
+ * from {@link MAIN_TIME}), so the day / week / month screens show only the
+ * fixed events of {@link CALENDAR_EVENTS}; the year screen shows the demo's
+ * events of October as well, on the same days in every run.
  */
 export const CALENDAR_TIME = new Date("2026-08-12T10:00:00Z");
 
@@ -64,10 +79,10 @@ export interface Screen {
   time?: Date;
   /** The window size (default the harness's 1280 × 1000). */
   viewport?: { width: number; height: number };
-  /** Opens the screen on a freshly loaded main window. */
-  open(page: Page): Promise<void>;
+  /** Opens the screen on a freshly loaded main window (`server`: its test controls). */
+  open(page: Page, server: NailServer): Promise<void>;
   /** Undoes what `open` changed on the server, after the capture (the server is shared by the screens). */
-  close?(page: Page): Promise<void>;
+  close?(page: Page, server: NailServer): Promise<void>;
   /** Parts that legitimately differ between runs (none so far). */
   mask?(page: Page): Locator[];
 }
@@ -536,6 +551,40 @@ export const SCREENS: readonly Screen[] = [
         editor.getByRole("textbox", { name: "Value of color.accent", exact: true }),
       ).toBeVisible();
     },
+  },
+  // ADR 0190: the connection log (its lines carry times and durations, so
+  // the list is masked) and the details of a folder the server refused.
+  {
+    id: "connection-log",
+    title: "The connection log of the IMAP account (Settings → Accounts → Connection log)",
+    async open(page) {
+      await openWorkLog(page);
+      await expect(
+        workLogWindow(page).locator('[data-part="connection-log.entry"]').first(),
+      ).toBeVisible();
+    },
+    mask: (page) => [
+      workLogWindow(page).locator('[data-part="connection-log.list"]'),
+      workLogWindow(page).locator('[data-part="connection-log.status"]'),
+    ],
+  },
+  {
+    id: "error-details",
+    title: "Show details of a folder the server refused to open",
+    async open(page, server) {
+      await showRefusedFolderDetails(page, server, await otherMailbox(server));
+    },
+    async close(page, server) {
+      await errorDetailsWindow(page).locator('[data-part="window.close"]').click();
+      await allowAllFolders(page, server);
+    },
+    // The rows are `display: contents`: mask their values (time, command tag).
+    mask: (page) =>
+      ["at", "command", "server"].map((field) =>
+        errorDetailsWindow(page).locator(
+          `[data-field="${field}"] [data-part="error-details.value"]`,
+        ),
+      ),
   },
 ];
 

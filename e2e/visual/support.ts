@@ -56,7 +56,7 @@ export const test = base.extend<object, { nail: NailServer }>({
   nail: [
     // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
     async ({}, use) => {
-      const server = await startNail({ seed: "demo-multi", locale: "en" });
+      const server = await startNail({ seed: "demo-multi", locale: "en", demoNow: MAIN_TIME });
       try {
         await seedCalendar(server);
         await use(server);
@@ -231,7 +231,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
     CONVERSATION_UNREAD,
   ]);
   await loadMainWindow(page, server.url);
-  await screen.open(page);
+  await screen.open(page, server);
   await settle(page);
   const shot = await captureStable(() =>
     page.screenshot({
@@ -241,7 +241,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
       mask: screen.mask?.(page) ?? [],
     }),
   );
-  await screen.close?.(page);
+  await screen.close?.(page, server);
   return shot;
 }
 

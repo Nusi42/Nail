@@ -5,7 +5,6 @@
  * token-only and well-formed.
  */
 import { act, fireEvent, waitFor } from "@testing-library/react";
-import { BUILTIN_THEMES } from "../appearance";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { violations } from "../../test/axe";
@@ -18,12 +17,10 @@ import {
   CUSTOMIZER_SHORT,
   TOOLBAR_CUSTOMIZER_SKIN_CSS,
 } from "./skin";
-import { builtinTheme } from "../../test/themes";
-
-const THEMES = BUILTIN_THEMES.map(([id]) => id);
+import { BUILTIN_THEME_IDS, builtinTheme } from "../../test/themes";
 
 describe("toolbar customizer accessibility (M5d)", () => {
-  it.each(THEMES)(
+  it.each(BUILTIN_THEME_IDS)(
     "%s: the customizer window and the settings card have no violations",
     async (id) => {
       const theme = builtinTheme(id);

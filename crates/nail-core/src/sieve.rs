@@ -647,7 +647,7 @@ impl Service {
             self.inner.tokens.clone(),
         )
         .map_err(|e| SieveError::AuthUnsupported(e.message))?;
-        let config = SieveConfig::from_endpoint(endpoint);
+        let config = SieveConfig::from_endpoint(endpoint).with_tap(self.account_tap(&account.id));
         let credentials = auth
             .credentials(false)
             .await

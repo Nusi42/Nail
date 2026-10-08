@@ -42,6 +42,9 @@ pub struct SieveConfig {
     pub trust: TlsTrust,
     /// Timeout for connecting and for each response.
     pub timeout: Duration,
+    /// The connection log every session records into (ADR 0190); off by
+    /// default.
+    pub tap: nail_connlog::WireTap,
 }
 
 impl SieveConfig {
@@ -56,7 +59,15 @@ impl SieveConfig {
             tls: TlsMode::Starttls,
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
+            tap: nail_connlog::WireTap::off(),
         }
+    }
+
+    /// Records every session into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::WireTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// The connection part of an effective ManageSieve endpoint
@@ -73,6 +84,7 @@ impl SieveConfig {
             tls: endpoint.tls,
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
+            tap: nail_connlog::WireTap::off(),
         }
     }
 }
@@ -349,6 +361,14 @@ impl SieveSession {
     /// Logs in with SASL `PLAIN` (passwords) or `XOAUTH2` / `OAUTHBEARER`
     /// (tokens), sending the initial response with the command.
     pub async fn authenticate(&mut self, credentials: &SieveCredentials) -> Result<()> {
+        if let Some(conn) = &self.conn {
+            match credentials {
+                SieveCredentials::Password { password, .. } => conn.tap.add_secret(password),
+                SieveCredentials::OAuth2 { access_token, .. } => {
+                    conn.tap.add_secret(access_token);
+                }
+            }
+        }
         if self.config.tls != TlsMode::Plaintext && !self.is_tls() {
             return Err(SieveError::EncryptionNeeded(
                 "refusing to log in without TLS".to_owned(),

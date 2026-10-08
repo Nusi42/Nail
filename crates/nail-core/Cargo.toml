@@ -39,6 +39,8 @@ tempfile = { workspace = true, optional = true }
 nail-portability.workspace = true
 nail-pkcs11.workspace = true
 nail-api.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 nail-config.workspace = true
 nail-store.workspace = true
 nail-mime.workspace = true

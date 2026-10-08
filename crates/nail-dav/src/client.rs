@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use nail_api::accounts::SecretRef;
 use nail_api::engine::AccessTokenProvider;
-use nail_net::http::{self, TransportFailure as _};
+use nail_net::http;
 use reqwest::Method;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use url::Url;
@@ -125,6 +125,8 @@ pub struct DavClient {
     http: reqwest::Client,
     auth: DavAuth,
     route_all_to: Option<SocketAddr>,
+    /// The connection log (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 impl DavClient {
@@ -154,7 +156,15 @@ impl DavClient {
             http,
             auth,
             route_all_to: None,
+            tap: nail_connlog::HttpTap::off(),
         }
+    }
+
+    /// Records every request into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// Sends every request over plain HTTP to `addr`, keeping the original
@@ -174,7 +184,10 @@ impl DavClient {
     async fn authorization(&self, force_refresh: bool) -> Result<Option<String>, DavError> {
         Ok(match &self.auth {
             DavAuth::None => None,
-            DavAuth::Basic { username, password } => Some(http::basic(username, password)),
+            DavAuth::Basic { username, password } => {
+                self.tap.add_secret(password);
+                Some(http::basic(username, password))
+            }
             DavAuth::Bearer(token) => Some(http::bearer(token)),
             DavAuth::OAuth2 {
                 tokens,
@@ -278,7 +291,9 @@ impl DavClient {
             Some(force_refresh) => self.authorization(force_refresh).await?,
             None => None,
         };
+        let authorized = authorization.is_some();
         if let Some(authorization) = authorization {
+            http::hide_credential(&self.tap, &authorization);
             let mut value = HeaderValue::from_str(&authorization)
                 .map_err(|_| DavError::Protocol("credentials are not valid header text".into()))?;
             value.set_sensitive(true);
@@ -295,15 +310,19 @@ impl DavClient {
                 .header(reqwest::header::CONTENT_TYPE, *content_type)
                 .body(bytes.clone());
         }
-        let mut response = request
-            .send()
-            .await
-            .map_err(|e| DavError::from(http::transport_error(e)))?;
-        let status = response.status().as_u16();
-        let headers = response.headers().clone();
-        let body = http::read_limited(&mut response, MAX_RESPONSE)
-            .await
-            .map_err(|e| DavError::from_body(e, &format!("answer from {url}")))?;
+        let exchange = self.tap.request(
+            method.as_str(),
+            url.as_str(),
+            authorized,
+            body.map(|(_, bytes)| http::logged_size(bytes)),
+        );
+        let (status, headers, body) = http::send_logged::<DavError>(
+            request,
+            &exchange,
+            MAX_RESPONSE,
+            &format!("answer from {url}"),
+        )
+        .await?;
         Ok(Reply {
             status,
             url: url.clone(),

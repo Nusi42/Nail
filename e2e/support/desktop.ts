@@ -85,7 +85,8 @@ async function waitForCdp(url: string, child: ChildProcess, timeoutMs: number): 
 
 /**
  * Starts `nail-app --seed demo` (temporary data, config and WebView2
- * profile unless `--data-dir` / `--config-dir` are given; ADR 0021) with
+ * profile unless `--data-dir` / `--config-dir` are given; ADR 0021; never
+ * WebView2's default profile, ADR 0185) with
  * remote debugging on `port`, only for this process: the variable is set
  * in the child's environment. `options` may also be just the targets.
  */
@@ -106,6 +107,11 @@ export async function startDesktop(
       ...process.env,
       NAIL_LOG: process.env.NAIL_LOG ?? "warn",
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${String(port)}`,
+      // A throw-away default WebView2 profile for every launch: whatever a
+      // window does not give its own folder never reaches the profile of an
+      // installed Nail (WebView2 refuses a profile held with other options,
+      // 0x8007139F; ADR 0185).
+      WEBVIEW2_USER_DATA_FOLDER: tempDir("desktop-webview"),
       NAIL_TEST_BACKGROUND_WINDOWS: backgroundWindows,
       ...env,
     },

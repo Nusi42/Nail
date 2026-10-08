@@ -258,6 +258,7 @@ impl Service {
             | Request::ListIdentities { account_id: None }
             | Request::ListVirtualAccounts
             | Request::ListAccountStatuses
+            | Request::ListSyncErrors { account_id: None }
             | Request::GetThread { .. }
             | Request::CheckQuery { .. }
             | Request::ListDrafts
@@ -327,7 +328,7 @@ impl Service {
                 clippy::unnested_or_patterns,
                 reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
             )]
-            nail_api::remote_admin_requests!() | nail_api::desktop_requests!() | nail_api::portability_requests!() | nail_api::config_merge_requests!() | Request::DiscoverAccount { .. } | Request::TestAccount { .. } | Request::StartOAuth { .. } | Request::CancelOAuth { .. } | Request::GetAccountsConfig | Request::AddAccount { .. } | Request::UpdateAccount { .. } | Request::RemoveAccount { .. } | Request::AddVirtualAccount { .. } | Request::UpdateVirtualAccount { .. } | Request::RemoveVirtualAccount { .. } | Request::ListMcpClients | Request::CreateMcpClient { .. } | Request::UpdateMcpGrants { .. } | Request::RevokeMcpClient { .. } | Request::ListMcpAudit { .. } | Request::GetMcpServerInfo | Request::ReportUiContext { .. } | Request::UpdateLayout { .. } | Request::SetTheme { .. } | Request::SetThemePreferences { .. } | Request::UndoEdit { .. } | Request::RedoEdit { .. } | Request::EditTheme { .. } | Request::DuplicateTheme { .. } | Request::RenameTheme { .. } | Request::DeleteTheme { .. } | Request::ImportKeys { .. } | Request::ImportPkcs12 { .. } | Request::GenerateKey { .. } | Request::DeleteKey { .. } | Request::SetKeyTrust { .. } | Request::ListWindowsCertificates { .. } | Request::ImportWindowsCertificate { .. } | Request::SendAutocryptSetup { .. } | Request::ImportAutocryptSetup { .. } | Request::UpdateSecuritySettings { .. } | Request::SuggestAuthservId { .. } | Request::SetVaultEncryption { .. } | Request::TakeLaunchRequests | Request::ListPopOuts | Request::PopOutWindow { .. } | Request::ReturnPopOut { .. } | Request::ClosePopOut { .. } | Request::FocusPopOut { .. } | Request::ImportMessageFile { .. } | Request::CreateRecoveryKey { .. } | Request::VerifyRecoveryKey { .. } | Request::RestoreVaultKey { .. } | Request::RemoveRecoveryKey | Request::GetSmartcardSettings | Request::SetSmartcardSettings { .. } | Request::ListSmartcards | Request::UseSmartcardKey { .. } | Request::AnswerPinPrompt { .. } | Request::SavePrintPdf { .. } | Request::PreviewDiagnostics { .. } | Request::CreateDiagnosticsBundle { .. } | Request::PickPath { .. } | Request::SaveAttachment { .. } | Request::SyncSieve { .. } | Request::UpdateNotificationSettings { .. } | Request::SetFolderSyncPolicy { .. } | Request::GetMcpSettings | Request::UpdateMcpSettings { .. } => {
+            nail_api::remote_admin_requests!() | nail_api::desktop_requests!() | nail_api::portability_requests!() | nail_api::config_merge_requests!() | nail_api::connlog_admin_requests!() | Request::DiscoverAccount { .. } | Request::TestAccount { .. } | Request::StartOAuth { .. } | Request::CancelOAuth { .. } | Request::GetAccountsConfig | Request::AddAccount { .. } | Request::UpdateAccount { .. } | Request::RemoveAccount { .. } | Request::AddVirtualAccount { .. } | Request::UpdateVirtualAccount { .. } | Request::RemoveVirtualAccount { .. } | Request::ListMcpClients | Request::CreateMcpClient { .. } | Request::UpdateMcpGrants { .. } | Request::RevokeMcpClient { .. } | Request::ListMcpAudit { .. } | Request::GetMcpServerInfo | Request::ReportUiContext { .. } | Request::UpdateLayout { .. } | Request::SetTheme { .. } | Request::SetThemePreferences { .. } | Request::UndoEdit { .. } | Request::RedoEdit { .. } | Request::EditTheme { .. } | Request::DuplicateTheme { .. } | Request::RenameTheme { .. } | Request::DeleteTheme { .. } | Request::ImportKeys { .. } | Request::ImportPkcs12 { .. } | Request::GenerateKey { .. } | Request::DeleteKey { .. } | Request::SetKeyTrust { .. } | Request::ListWindowsCertificates { .. } | Request::ImportWindowsCertificate { .. } | Request::SendAutocryptSetup { .. } | Request::ImportAutocryptSetup { .. } | Request::UpdateSecuritySettings { .. } | Request::SuggestAuthservId { .. } | Request::SetVaultEncryption { .. } | Request::TakeLaunchRequests | Request::ListPopOuts | Request::PopOutWindow { .. } | Request::ReturnPopOut { .. } | Request::ClosePopOut { .. } | Request::FocusPopOut { .. } | Request::ImportMessageFile { .. } | Request::CreateRecoveryKey { .. } | Request::VerifyRecoveryKey { .. } | Request::RestoreVaultKey { .. } | Request::RemoveRecoveryKey | Request::GetSmartcardSettings | Request::SetSmartcardSettings { .. } | Request::ListSmartcards | Request::UseSmartcardKey { .. } | Request::AnswerPinPrompt { .. } | Request::SavePrintPdf { .. } | Request::PreviewDiagnostics { .. } | Request::CreateDiagnosticsBundle { .. } | Request::PickPath { .. } | Request::SaveAttachment { .. } | Request::SyncSieve { .. } | Request::UpdateNotificationSettings { .. } | Request::SetFolderSyncPolicy { .. } | Request::GetMcpSettings | Request::UpdateMcpSettings { .. } => {
                 // Defence in depth: this arm relies on `authorize`; if a
                 // request here were ever made a plain scope request, it
                 // would need its own target check instead.
@@ -343,6 +344,9 @@ impl Service {
 
             // Accounts and folders.
             Request::ListFolders { account_id }
+            | Request::ListSyncErrors {
+                account_id: Some(account_id),
+            }
             | Request::ListIdentities {
                 account_id: Some(account_id),
             }
@@ -1201,6 +1205,15 @@ impl Service {
                 statuses.retain(|s| access.allows_account(&s.account_id));
                 Response::AccountStatuses { statuses }
             }
+            // ADR 0190: stored errors of the granted accounts only.
+            Response::SyncErrors {
+                mut errors,
+                mut skipped,
+            } => {
+                errors.retain(|e| access.allows_account(&e.account_id));
+                skipped.retain(|m| access.allows_account(&m.account_id));
+                Response::SyncErrors { errors, skipped }
+            }
             Response::Identities { mut identities } => {
                 identities.retain(|i| access.allows_account(&i.account_id));
                 Response::Identities { identities }
@@ -1389,9 +1402,11 @@ impl Service {
                         .await
                         .unwrap_or(false)
             }
-            Event::SyncProgress { account_id, .. } | Event::SyncFailed { account_id, .. } => {
-                access.allows_account(account_id)
-            }
+            Event::SyncProgress { account_id, .. }
+            | Event::SyncFailed { account_id, .. }
+            | Event::SyncErrorsChanged { account_id } => access.allows_account(account_id),
+            // ADR 0190: the connection log is for administrators.
+            Event::ConnectionLogChanged { .. } => admin,
             Event::AccountStatus { status } => access.allows_account(&status.account_id),
             Event::OpStatus { status } => access.allows_account(&status.account_id),
             Event::SendStatus { outbox_id, .. } | Event::SendProgress { outbox_id, .. } => {

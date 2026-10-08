@@ -6,6 +6,7 @@
 mod common;
 
 mod bodies;
+mod faults;
 mod idle;
 mod mock_server;
 mod resync;

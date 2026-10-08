@@ -18,6 +18,13 @@ export const DATE_TIME_SECONDS = { dateStyle: "medium", timeStyle: "medium" } as
 export const SHORT_DATE_TIME_SECONDS = { dateStyle: "short", timeStyle: "medium" } as const;
 export const FULL_DATE_TIME = { dateStyle: "full", timeStyle: "short" } as const;
 export const DATE_ONLY = { dateStyle: "medium" } as const;
+/** A time of day with milliseconds (log entries, ADR 0190). */
+export const TIME_MILLIS = {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  fractionalSecondDigits: 3,
+} as const;
 
 const cache = new Map<string, Intl.DateTimeFormat>();
 
