@@ -1417,6 +1417,10 @@ like this:
 5. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
 6. The owner reviews proposals and milestone results as HTML pages (artifacts); keep replies short.
+7. The owner may stop a session after any step and resume with "Continue where we left off: follow 'If you are the
+   lead' in CLAUDE.md and .claude/memory/next-steps.md". So after every finished step, and whenever background work
+   starts, update `.claude/memory/next-steps.md` (state, running work with folder / branch, what waits for the owner,
+   next steps), commit it on `work-1` and fast-forward `main` before reporting.
 
 ## Git
 
