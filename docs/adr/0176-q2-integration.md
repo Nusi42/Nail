@@ -49,6 +49,11 @@ their branches unchanged and finished them on work-1.
 
 ## Consequences
 
+- Suites: `npm run check` (16 steps), `cargo test --workspace` (3,937 passed), Vitest, the
+  script and package tests and `npm run e2e` are green. `npm run visual` shows 10 changed
+  `calendar-year` screens (one per theme and density) that the pre-Q2 `main` shows too: the
+  demo's CalDAV events are dated from the real today (`Utc::now()` in nail-core `demo.rs`) and
+  the status bar's count differs; a follow-up pins the demo date and refreshes those baselines.
 - `node scripts/check-duplicates.mjs --strict` reports 0 findings; a new copy,
   hand mirror or repeated text fails the commit.
 - Behaviour is unchanged except for the small, listed deliberate changes of

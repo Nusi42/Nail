@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { defined } from "../support/defined";
+import { readTextOrEmpty } from "../support/files";
 import { nailPerTest } from "../support/nail";
 import {
   openSettings,
@@ -44,7 +45,7 @@ const server = nailPerTest({ seed: "demo" });
 
 function configFile(name: string): string {
   const file = path.join(server.configDir, name);
-  return existsSync(file) ? readFileSync(file, "utf8") : "";
+  return readTextOrEmpty(file);
 }
 
 const layoutFile = () => configFile("layout.kdl");

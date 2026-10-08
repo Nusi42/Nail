@@ -4,6 +4,7 @@ import { expect } from "@playwright/test";
 import { nailFixture } from "../support/nail";
 import { openSettings, toolbarAction, messageRows, messageList } from "../support/views";
 import { defined } from "../support/defined";
+import { readTextOrEmpty } from "../support/files";
 
 /**
  * Customization tooling (ADR 0026) on a private `nail serve`: the inspector,
@@ -66,7 +67,7 @@ test("dragging a divider writes the sizes into layout.kdl", async ({ page, nail 
 
   // Written once the dragging settles, as a sparse file over the defaults.
   await expect
-    .poll(() => (existsSync(layoutFile) ? readFileSync(layoutFile, "utf8") : ""), {
+    .poll(() => readTextOrEmpty(layoutFile), {
       timeout: 10_000,
     })
     .toMatch(/split "horizontal" id="panes"[\s\S]*sizes="\d+px 1fr 1\.4fr"/);
