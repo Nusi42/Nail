@@ -155,6 +155,8 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        MailActionKind / MailActionIssue, MailActionResult + MailBatchId undo); ApplyMailAction /
                        ResolveMailTargets / UndoMailAction; MCP `conversations` args; remote_content FRAME_HEIGHT_MESSAGE /
                        RENDER_PARENT_PARAM / MAX_FRAME_HEIGHT
+                       Q2 (ADR 0171): ts_constants.rs (ui_constants / plugin_constants → generated `constants.ts`, values
+                       re-exported by index.ts; add a contract constant there, then `npm run gen:api`)
                        P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
                        ThreadSummary.participants, ThreadSummary.latest_from / latest_message, ConversationMessage
                        (MessageSummary flattened + from_me); GetConversation {thread_id, folder_id?} → Conversation
@@ -557,6 +559,10 @@ crates/nail-bench      M4c WP123 (ADR 0097): corpus.rs (deterministic 100k corpu
                        child process), run.rs (metrics through Service; the account is handed over as local so
                        `nail serve` shows the data), memory.rs; bin nail-bench (run / check / corpus / mock-imap);
                        budgets = e2e/perf/budgets.json
+crates/nail-util       Q2 (ADR 0171): shared helpers without dependencies; time.rs (days_from_civil / civil_from_days,
+                       is_leap_year, days_in_month, unix_now, iso_date, rfc3339_utc: the one civil-date implementation)
+crates/nail-net        Q2 (ADR 0171): shared transport / line framing / HTTP retry plumbing of the protocol clients and
+                       mock servers (WP-rust-engines; starts empty)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -790,8 +796,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        config-preset-*), layout-editor.ftl (WP181), toolbar-editor.ftl (WP182), appearance.ftl (WP183
                        theme editor); P2: conversations.ftl (contract: "me", separators, counts / folds, modes),
                        conversation-list.ftl (WP202), conversation-reader.ftl (WP203); P3: core-mail-actions.ftl (contract ids), mail-actions.ftl
-                       (WP-actions-ui); every file is embedded in
-                       nail-config l10n.rs
+                       (WP-actions-ui); Q2: common.ftl (`common-*`, generic labels shared by features); every file is
+                       embedded in nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
@@ -805,6 +811,10 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
                        assertWorkFolder refuses development commands inside OneDrive); post-edit.mjs (the Claude Code
                        post-edit hook of .claude/settings.json) + lib/run-checks.mjs (per-file checks, shared with pre-commit.mjs)
+                       Q2 (ADR 0171): check-duplicates.mjs + lib/duplicates/ (config.mjs thresholds + ignores, jscpd.mjs,
+                       sources.mjs lexer, ssot.mjs checks, owners.mjs package of each finding, index.mjs, report.mjs, cli.mjs);
+                       duplicates/ = ratchet baselines (integrator only), allow.json (reasoned exceptions), mirrors.json
+                       (curated hand mirrors)
 Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: typescript-eslint strictTypeChecked +
                        stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
                        eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
@@ -827,6 +837,8 @@ cargo fmt --all --check
 npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`, perf + visual script tests
 cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
+npm run check:duplicates                   # duplicate / SSOT check (Q2, ADR 0171; a step of npm run check and the hooks): new findings fail
+node scripts/check-duplicates.mjs --owner WP-ui --list    # a Q2 package's findings; --strict [--owner …] = every finding fails; --update-baseline (integrator)
 npm run check                              # everything, 0 warnings (ADR 0123): rustfmt, taplo, Prettier, EditorConfig, typos, markdownlint, actionlint, ESLint, tsc, clippy + rustdoc -D warnings, cargo machete, cargo deny
 node scripts/check.mjs --only eslint,tsc   # a subset (--skip, --list, --advisories = cargo deny advisories, on in CI; --fail-fast)
 npm run lint                               # ESLint (whole repo, type-aware, --max-warnings 0) + tsc (every tsconfig) + Prettier (whole repo)
@@ -1174,6 +1186,14 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
   notice is off (`checks.bundlerTimings`). Vite configs that import a symlinked workspace package keep
   `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`; needed for checkouts inside OneDrive).
+- Q2 contract (ADR 0171): SSOT / ODR / DRY check = jscpd 5 (≥ 50 tokens, ≥ 5 lines; code + CSS-in-TS) + the SSOT checks
+  (mirror comments, `scripts/duplicates/mirrors.json`, Rust ↔ TS constants and string lists, constants defined twice,
+  one English text under several Fluent ids, colours / lengths in CSS-in-TS, repeated magic numbers). Ratchet: the
+  baselines in `scripts/duplicates/` record the findings at the contract, new ones fail (hooks: those touching the
+  files); packages never edit the baselines; a non-violation goes into `allow.json` with its reason (`pinnedBy` = the
+  test pinning a Rust ↔ TS pair). Contract constants for TS come from `nail_api::ts_constants` (`constants.ts`).
+  Packages: WP-rust-core, WP-rust-engines (+ clones shared by core and engine crates), WP-ui, WP-mirrors-tooling (every
+  Rust ↔ TS mirror, packages / examples / e2e / scripts); `scripts/lib/duplicates/owners.mjs` assigns each finding.
 - M5d contract: ADR 0131 (layout edits = new `LayoutPatch` kinds through `UpdateLayout` (+ `base_revision`); `hidden=`
   on layout nodes; `presets` section with four default mail presets; actions `layout.customize` / `toolbar.customize`,
   `menu "context:toolbar"`; theme edits `EditTheme` / `DuplicateTheme` / `RenameTheme` / `DeleteTheme` /

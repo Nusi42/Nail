@@ -17,6 +17,7 @@ import type {
   Response,
   ThreadId,
 } from "../../api/generated";
+import { MAX_MAIL_ACTION_TARGETS } from "../../api/generated/constants";
 import {
   listSelectionFor,
   messageIdsOf,
@@ -211,9 +212,6 @@ function showError(ctx: WriteContext, error: unknown): void {
     .show({ kind: "error", message: errorMessageOf(error) });
   if (!(error instanceof NailError)) console.error("nail: mail action failed", error);
 }
-
-/** Most targets one `ApplyMailAction` may name (`MAX_MAIL_ACTION_TARGETS`). */
-export const MAX_MAIL_ACTION_TARGETS = 500;
 
 /** Applies `action` to `apply`, at most `MAX_MAIL_ACTION_TARGETS` targets per request. */
 async function applyInChunks(

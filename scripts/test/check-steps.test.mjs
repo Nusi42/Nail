@@ -48,6 +48,7 @@ test("check covers every formatter and linter the quality baseline names", () =>
     "rustdoc",
     "machete",
     "deny",
+    "duplicates",
   ]) {
     assert.ok(ids.includes(id), `missing step ${id}`);
   }
@@ -197,6 +198,7 @@ test("pre-commit: checks per staged file kind", () => {
   ]);
   const byId = Object.fromEntries(hookChecks(files).map((c) => [c.id, c.files]));
   assert.deepEqual(byId.rustfmt, ["crates/a/src/lib.rs"]);
+  assert.deepEqual(byId.duplicates, ["crates/a/src/lib.rs", "ui/src/App.tsx"]);
   assert.deepEqual(byId.eslint, ["ui/src/App.tsx"]);
   assert.deepEqual(byId.prettier, ["ui/src/App.tsx"]);
   assert.deepEqual(byId["taplo-fmt"], ["Cargo.toml"]);

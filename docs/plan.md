@@ -965,6 +965,32 @@ Gates as in P2: every suite green, the responsive standard on changed screens, t
 
 *Status (review fixes):* done (ADR 0170). Delete (`trash`) never deletes for good (messages already in Trash stay; remote sessions need `permanent-delete` for the older `DeleteMessages` on Trash mail, MCP refuses it without `permanent`); Delete reaches Gmail's whole thread in the account (new reach `thread`: archived copies too, never Drafts / Junk); moving a conversation from Trash to the Inbox puts the user's replies back into Sent; Gmail Trash → Sent is an untrash (undo of Delete); waiting operations follow EWS's new item ids; "Delete permanently?" deletes exactly the counted messages; undo history kept per actor; MCP confirmations count only conversations within the grant; label / category windows show mixed states over the conversation or picked rows; tag toasts say added / removed / changed with label / category / tag. Next: verify, the owner's human gate.
 
+### Wave Q2 (SSOT / ODR / DRY)
+
+Owner rule, mandatory for existing and new code and for every source review: single source of truth, one definition rule, don't repeat yourself (CLAUDE.md non-negotiable rules; memory `ssot-odr-dry`). Like Q1 (ADR 0123) this is a quality wave: behaviour does not change and every suite stays green. Contract ADR 0171.
+
+**Automated gate:** `node scripts/check-duplicates.mjs --strict` reports 0 findings, the baselines in `scripts/duplicates/` are deleted (the check is blocking at 0 in `npm run check`, the hooks and CI), and every other suite stays green (`npm run check`, `cargo test --workspace`, `npm test`, the script tests, `npm run e2e:only`).
+
+#### Scope decisions for Q2
+
+- **The rule:** every fact (type, constant, id, limit, size, string, rule, mapping, schema) has one source and one definition; other places derive it (generated code, imports, shared tokens, shared helpers). Rust ↔ TypeScript facts are generated (`npm run gen:api`, constants through `crates/nail-api/src/ts_constants.rs`) or pinned by an equality test, never mirrored by hand. No copy-pasted logic: the second copy becomes a shared function, component or test helper.
+- **The check:** jscpd 5 (MIT; ≥ 50 tokens and ≥ 5 lines, its defaults, calibrated on the repository) over Rust, TypeScript, JavaScript and the CSS-in-TS, plus the SSOT checks jscpd cannot see: mirror comments, the curated mirror inventory (`scripts/duplicates/mirrors.json`), Rust ↔ TypeScript constants and string lists, constants defined twice, one English text under several Fluent ids, colours and lengths in CSS-in-TS, repeated magic numbers. Ignored: generated code, vendored bindings, fixtures, golden files, snapshots, corpora, visual baselines (ADR 0171 gives each reason).
+- **Ratchet:** during the wave the findings recorded at the contract are reported and new ones fail (`npm run check`, pre-commit and post-edit hooks); packages never edit the baselines; the integrator deletes them at 0. A finding that is no violation goes into `scripts/duplicates/allow.json` with its reason (reviewed like any change).
+- **Slots:** `crates/nail-util` (shared helpers without dependencies; the civil-date / Unix-time / RFC 3339 helpers are implemented by the contract, because eleven files of both Rust packages copied them), `crates/nail-net` (empty: the shared transport and HTTP plumbing of the protocol clients and mock servers), `locales/*/common.ftl` (generic labels, `common-*`), `crates/nail-api/src/ts_constants.rs` + the generated `constants.ts`.
+
+#### Packages of Q2
+
+- **Contract (done):** ADR 0171, the check (`scripts/check-duplicates.mjs`, `scripts/lib/duplicates/`, a step of `npm run check` and of the hooks), baselines, the ownership rules (`scripts/lib/duplicates/owners.mjs`), the slots above, the generated constants with their first two users.
+- **WP-rust-core (parallel):** crates nail-api, nail-core, nail-store, nail-config, nail-mcp, nail-server, nail-cli, nail-search, nail-rules, nail-triage, nail-sieve, nail-compose, nail-mime, nail-vault, nail-remote-auth, nail-proxy, nail-plugins, nail-portability, nail-bench, nail-util and the core Fluent catalogs: 584 findings.
+- **WP-rust-engines (parallel):** nail-proto-*, nail-exchange, nail-dav, nail-ical, nail-itip, nail-auth, nail-discovery, nail-pgp, nail-smime, nail-pkcs11, nail-mapi, nail-testkit, nail-testkit-net, nail-net, app/src-tauri, and the clones shared by core and engine crates: 404 findings.
+- **WP-ui (parallel):** `ui/` (not generated code), `defaults/`, the UI's Fluent catalogs (with `common.ftl`): 783 findings (444 of them Fluent texts).
+- **WP-mirrors-tooling (parallel):** every Rust ↔ TypeScript mirror (its TypeScript side, the generator / ts-rs export / shared JSON in nail-api), `packages/`, `examples/`, `e2e/`, `scripts/`, root configs, the flaky desktop `beforeAll` timeout of `p3-card-height.spec.ts`: 305 findings.
+- **Integration:** merge, renumber ADRs, `--strict` at 0, delete the baselines, the full suite, memory `q2-status`, `next-steps`.
+
+A package's work list: `node scripts/check-duplicates.mjs --owner WP-… --list`; its gate: `--strict --owner WP-…` at 0.
+
+*Status (contract):* done (ADR 0171). Baseline: 1818 files, 659,632 lines, 13,576 duplicated lines (2.1 %); 2,076 findings — 1,235 clones, 10 CSS-in-TS clones, 30 mirror comments, 5 inventory mirrors, 22 Rust ↔ TypeScript string lists, 122 Rust ↔ TypeScript constants, 84 constants defined twice, 457 repeated Fluent texts, 10 colour literals and 32 lengths in CSS-in-TS, 69 repeated magic numbers. Per package: WP-rust-core 584, WP-rust-engines 404, WP-ui 783, WP-mirrors-tooling 305 (ADR 0171 has the tables and the largest clusters). Next: the four packages in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

@@ -4675,6 +4675,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-net"
+version = "1.0.0-rc.1"
+
+[[package]]
 name = "nail-pgp"
 version = "1.0.0-rc.1"
 dependencies = [
@@ -5127,6 +5131,10 @@ dependencies = [
  "thiserror 2.0.21",
  "unicode-segmentation",
 ]
+
+[[package]]
+name = "nail-util"
+version = "1.0.0-rc.1"
 
 [[package]]
 name = "nail-vault"

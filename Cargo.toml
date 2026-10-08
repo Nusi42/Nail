@@ -35,6 +35,8 @@ members = [
     "crates/nail-portability",
     "crates/nail-pkcs11",
     "crates/nail-bench",
+    "crates/nail-util",
+    "crates/nail-net",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -78,6 +80,8 @@ default-members = [
     "crates/nail-portability",
     "crates/nail-pkcs11",
     "crates/nail-bench",
+    "crates/nail-util",
+    "crates/nail-net",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -127,6 +131,8 @@ nail-mapi = { path = "crates/nail-mapi" }
 nail-portability = { path = "crates/nail-portability" }
 nail-pkcs11 = { path = "crates/nail-pkcs11" }
 nail-bench = { path = "crates/nail-bench" }
+nail-util = { path = "crates/nail-util" }
+nail-net = { path = "crates/nail-net" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 

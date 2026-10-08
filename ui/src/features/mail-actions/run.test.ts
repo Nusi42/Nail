@@ -6,7 +6,8 @@
 import { act } from "@testing-library/react";
 import type { MessageTarget } from "../../api/generated";
 import { createEnv } from "../../test/harness";
-import { MAX_MAIL_ACTION_TARGETS, runMailAction } from "./run";
+import { MAX_MAIL_ACTION_TARGETS } from "../../api/generated/constants";
+import { runMailAction } from "./run";
 
 const TRASH = "acc-personal/Trash";
 

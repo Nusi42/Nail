@@ -36,6 +36,7 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "appearance.ftl",
         include_str!("../../../locales/en/appearance.ftl"),
     ),
+    ("common.ftl", include_str!("../../../locales/en/common.ftl")),
     (
         "compose.ftl",
         include_str!("../../../locales/en/compose.ftl"),
@@ -221,6 +222,7 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "appearance.ftl",
         include_str!("../../../locales/de/appearance.ftl"),
     ),
+    ("common.ftl", include_str!("../../../locales/de/common.ftl")),
     (
         "compose.ftl",
         include_str!("../../../locales/de/compose.ftl"),

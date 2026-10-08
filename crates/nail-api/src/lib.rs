@@ -169,6 +169,7 @@ pub mod sieve;
 pub mod smartcard;
 pub mod sync;
 pub mod triage;
+pub mod ts_constants;
 pub mod ui_state;
 pub mod views;
 pub mod windows;
@@ -443,6 +444,9 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     editing::DockSide::export_all(&cfg)?;
     editing::ValueOrigin::export_all(&cfg)?;
 
+    ts_constants::ui_constants()
+        .map_err(std::io::Error::other)?
+        .write(out_dir)?;
     write_index(out_dir)
 }
 
@@ -481,6 +485,9 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
     plugins::PluginPreview::export_all(&cfg)?;
     plugins::PluginJobTrigger::export_all(&cfg)?;
     plugins::ComposerEdit::export_all(&cfg)?;
+    ts_constants::plugin_constants()
+        .map_err(std::io::Error::other)?
+        .write(out_dir)?;
     write_index(out_dir)
 }
 
@@ -497,7 +504,12 @@ fn write_index(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     );
     for file in &files {
         let module = file.trim_end_matches(".ts");
-        index.push_str("export type * from \"./");
+        // The constants are values; every other module holds types only.
+        if file == ts_constants::TS_CONSTANTS_FILE {
+            index.push_str("export * from \"./");
+        } else {
+            index.push_str("export type * from \"./");
+        }
         index.push_str(module);
         index.push_str("\";\n");
     }

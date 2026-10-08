@@ -1,5 +1,5 @@
-// The pre-commit checks (quality baseline Q1, ADR 0123): which fast checks
-// run on which staged files. scripts/pre-commit.mjs runs them;
+// The pre-commit checks (quality baseline Q1, ADR 0123; the duplicate check
+// of wave Q2, ADR 0171): which fast checks run on which staged files. scripts/pre-commit.mjs runs them;
 // scripts/test/staged.test.mjs tests this module.
 
 /**
@@ -15,6 +15,11 @@ const RUST = /\.rs$/;
 const TOML = /\.toml$/;
 const MARKDOWN = /\.md$/;
 const SCRIPT = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
+/**
+ * Files the duplicate check reads (code, Fluent catalogs, the default KDL)
+ * and its own data (scripts/duplicates/).
+ */
+const DUPLICATES = /\.(rs|ts|tsx|mts|cts|js|mjs|cjs|ftl|kdl)$|^scripts\/duplicates\//;
 /** Extensions Prettier formats in this repository (it skips ignored files itself). */
 const PRETTIER = /\.(ts|tsx|mts|cts|js|mjs|cjs|json|jsonc|ya?ml|css|html)$/;
 
@@ -92,6 +97,15 @@ export function hookChecks(files) {
       tool: "node",
       args: ["scripts/check-editorconfig.mjs"],
       files,
+      install: "npm ci",
+    },
+    {
+      // Scans the whole checkout (about 3 s); fails on new copies and new
+      // SSOT findings that touch these files.
+      id: "duplicates",
+      tool: "node",
+      args: ["scripts/check-duplicates.mjs", "--files"],
+      files: pick(DUPLICATES),
       install: "npm ci",
     },
   ];

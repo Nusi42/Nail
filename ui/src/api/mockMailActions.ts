@@ -31,6 +31,7 @@ import {
   updateFlags,
   type MockCore,
 } from "./mockMail";
+import { MAIL_UNDO_SECS, MAX_MAIL_ACTION_TARGETS } from "./generated/constants";
 import type { MockData } from "./mockData";
 import { answerTriage } from "../features/triage/mock";
 
@@ -46,11 +47,6 @@ export type MailActionRequest = Extract<Request, { type: (typeof MAIL_ACTION_REQ
 export function isMailActionRequest(request: Request): request is MailActionRequest {
   return (MAIL_ACTION_REQUESTS as readonly string[]).includes(request.type);
 }
-
-/** `MAX_MAIL_ACTION_TARGETS`. */
-export const MAX_MAIL_ACTION_TARGETS = 500;
-/** `MAIL_UNDO_SECS`. */
-export const MAIL_UNDO_SECS = 3600;
 
 /** `MailAction::reach`. */
 export function reachOf(action: MailAction): ConversationReach {

@@ -1,0 +1,13 @@
+[package]
+name = "nail-util"
+description = "Small shared helpers without dependencies (calendar arithmetic, Unix time, RFC 3339), one definition for every crate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

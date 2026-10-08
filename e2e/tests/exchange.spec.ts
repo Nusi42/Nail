@@ -406,6 +406,10 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
 test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic replies and answers a meeting", async ({
   page,
 }) => {
+  // The meeting answered at the end is on 2026-10-07 and the calendar opens
+  // on the browser's today: the page's date is the fixture's day, so the
+  // agenda shows it whatever day the suite runs on.
+  await page.clock.setFixedTime(new Date("2026-10-07T08:00:00Z"));
   await page.goto(server.url);
   await enableAccount(page, "Corp", 3);
 

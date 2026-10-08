@@ -24,6 +24,8 @@ extend-exclude = [
     "ui/src/api/generated/",
     "packages/plugin-api/src/generated/",
     "crates/nail-store/libsqlite3-sys-sqlite3mc/bindings/",
+    # The duplicate check's generated baselines (hex fingerprints; keys quote code).
+    "scripts/duplicates/*-baseline.json",
     # insta snapshots: recorded output of the (byte-exact) mail corpus.
     "*.snap",
     # German text: typos only knows English.

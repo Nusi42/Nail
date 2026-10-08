@@ -1,5 +1,6 @@
 // The steps of `npm run check` (quality baseline Q1, ADR 0123): every
-// formatter check and linter of the repository, with zero warnings allowed.
+// formatter check and linter of the repository, with zero warnings allowed,
+// and the duplicate / SSOT check of wave Q2 (ADR 0171).
 // scripts/check.mjs runs them; scripts/test/check-steps.test.mjs tests this
 // module.
 import { spawnSync } from "node:child_process";
@@ -114,6 +115,13 @@ export function checkSteps(options = {}) {
       title: "TypeScript (every tsconfig)",
       tool: "node",
       args: ["<npm>", "run", "lint:types"],
+      install: INSTALL.npm,
+    },
+    {
+      id: "duplicates",
+      title: "Duplicates and SSOT (jscpd, mirrors, constants, Fluent texts; new findings fail)",
+      tool: "node",
+      args: ["scripts/check-duplicates.mjs"],
       install: INSTALL.npm,
     },
     {

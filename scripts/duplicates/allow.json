@@ -1,0 +1,7 @@
+{
+  "const-value": {
+    "rs CRATE = env!(\"CARGO_PKG_NAME\")": {
+      "reason": "each crate's own name (the tracing target of its logs): one fact per crate, evaluated by the compiler in each crate"
+    }
+  }
+}
