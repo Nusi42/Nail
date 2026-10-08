@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { UiContext } from "../../api/generated";
 import { useClient } from "../../state/queries";
-import { useUi } from "../../state/uiStore";
+import { useUiContextIds } from "../../state/hooks";
 
 /** Wait after the last change before reporting (ms). */
 export const REPORT_DELAY_MS = 250;
@@ -27,11 +27,7 @@ export function readerSelection(selection: Selection | null): string | null {
 
 export function UiContextReporter() {
   const client = useClient();
-  const accountId = useUi((s) => s.activeAccountId);
-  const folderId = useUi((s) => s.activeFolderId);
-  const messageId = useUi((s) => s.selectedMessageId);
-  const threadId = useUi((s) => s.selectedThreadId);
-  const draftId = useUi((s) => s.composer?.draftId ?? null);
+  const { accountId, folderId, messageId, threadId, draftId } = useUiContextIds();
   const [selectedText, setSelectedText] = useState<string | null>(null);
   const last = useRef<string | null>(null);
 

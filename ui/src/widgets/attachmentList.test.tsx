@@ -5,12 +5,17 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import type { AttachmentInfo } from "../api/generated";
 import { violations } from "../test/axe";
-import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../test/harness";
+import {
+  createEnv,
+  renderNode,
+  settleQueries,
+  widget,
+  stubElementSizesEachTest,
+} from "../test/harness";
 import { must } from "../test/must";
 import { listedAttachments } from "./AttachmentList";
+import { FIRST, INBOX } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-const FIRST = `${INBOX}#1`;
 const SECOND = `${INBOX}#2`;
 
 const LOGO: AttachmentInfo = {
@@ -30,13 +35,7 @@ const REPORT: AttachmentInfo = {
   shown_in_body: false,
 };
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 /** An env whose messages `id` have `attachments`; `FIRST` is selected. */
 function envWith(bodies: Readonly<Record<string, AttachmentInfo[]>>) {

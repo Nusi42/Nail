@@ -121,6 +121,18 @@ describe("WebSocketTransport", () => {
     await expect(result).rejects.toMatchObject({ name: "NailError", code: "not_found" });
   });
 
+  /** An open transport whose events are recorded and whose warnings are caught. */
+  function openWatched() {
+    const transport = create();
+    const socket = latest();
+    socket.open();
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+    const events: NailEvent[] = [];
+    const listener = vi.fn((e: NailEvent) => events.push(e));
+    transport.onEvent(listener);
+    return { transport, socket, warn, events, listener };
+  }
+
   it("delivers pushed events to subscribers", () => {
     const transport = create();
     const socket = latest();
@@ -134,12 +146,8 @@ describe("WebSocketTransport", () => {
   });
 
   it("ignores malformed frames", () => {
-    const transport = create();
+    const { warn, events } = openWatched();
     const socket = latest();
-    socket.open();
-    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
-    const events: NailEvent[] = [];
-    transport.onEvent((e) => events.push(e));
     socket.push("not json");
     socket.onmessage?.({ data: new ArrayBuffer(2) });
     expect(events).toEqual([]);
@@ -148,13 +156,7 @@ describe("WebSocketTransport", () => {
   });
 
   it("ignores frames of an unknown kind and non-object frames", async () => {
-    const transport = create();
-    const socket = latest();
-    socket.open();
-    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
-    const events: NailEvent[] = [];
-    const listener = vi.fn((e: NailEvent) => events.push(e));
-    transport.onEvent(listener);
+    const { transport, socket, warn, events, listener } = openWatched();
     socket.push(JSON.stringify({ kind: "future-frame", payload: { x: 1 } }));
     socket.push(JSON.stringify({ event: { type: "MailChanged", folder_ids: ["f1"] } }));
     socket.push("null");

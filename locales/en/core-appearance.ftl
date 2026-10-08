@@ -13,13 +13,13 @@ theme-name-frost = Frost
 theme-name-sage = Sage
 theme-name-graphite = Graphite
 theme-name-nocturne = Nocturne
-theme-name-high-contrast = High contrast
+theme-name-high-contrast = { common-high-contrast }
 
 ## Theme kinds and sources (ThemeKind, ThemeSource)
 
 theme-kind-light = Light
 theme-kind-dark = Dark
-theme-kind-high-contrast = High contrast
+theme-kind-high-contrast = { common-high-contrast }
 theme-source-builtin = Built in
 theme-source-user = Your theme
 

@@ -18,10 +18,9 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
 import { SelectField } from "../../widgets/forms";
-import { InputField, Toggle } from "./fields";
+import { InputField, Toggle, AccessPresetField } from "./fields";
 import {
   PAIRING_TTLS,
-  PRESETS,
   formatPairingCode,
   formatTime,
   groupFingerprint,
@@ -127,7 +126,7 @@ function CodePanel({ created, onClose }: { created: Created; onClose: () => void
           data-variant={current.state === "pending" ? undefined : "primary"}
           onClick={onClose}
         >
-          {t("remote-pair-close")}
+          {t("common-close")}
         </button>
       </div>
     </section>
@@ -219,15 +218,7 @@ function CreateForm({
         onChange={setDeviceName}
         maxLength={64}
       />
-      <SelectField
-        labelId="remote-access"
-        name="pair-access"
-        value={preset}
-        onChange={(v) => {
-          setPreset(v as RemoteAccessPreset);
-        }}
-        choices={PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` }))}
-      />
+      <AccessPresetField name="pair-access" preset={preset} onChange={setPreset} />
       <p data-part="form.hint">{t(`remote-preset-${preset}-hint`)}</p>
       <Toggle
         labelId="remote-access-admin"

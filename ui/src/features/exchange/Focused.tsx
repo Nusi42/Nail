@@ -13,23 +13,21 @@
  *   one classified message (reader toolbar).
  */
 import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
-import type {
-  InferenceClassification,
-  LocalizedMessage,
-  MessageSummary,
-} from "../../api/generated";
+import type { InferenceClassification, MessageSummary } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { findSummary } from "../../state/mailOps";
 import { useFolders } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
-import { Problem, useWriteContext } from "./common";
+import { useUiStoreApi } from "../../state/uiStore";
+import { DialogActions, useWriteContext } from "./common";
 import { focusOfQuery } from "./model";
 import { CLASSIFY_DIALOG } from "./names";
 import { classifyFocused, showFocus, useExchangeAccount, useExchangeStatus } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
+import { EmptyDialog } from "../../widgets/DialogStates";
+import { useBusyAction } from "../../state/busyAction";
+import { useActiveMailView } from "../../state/hooks";
 
 const TABS: readonly InferenceClassification[] = ["focused", "other"];
 
@@ -42,10 +40,7 @@ export function otherFocus(focus: InferenceClassification): InferenceClassificat
 export function FocusedTabs({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
-  const store = useUiStoreApi();
-  const accountId = useUi((s) => s.activeAccountId);
-  const activeFolderId = useUi((s) => s.activeFolderId);
-  const search = useUi((s) => s.search);
+  const { store, accountId, activeFolderId, search } = useActiveMailView();
   const account = useExchangeAccount(accountId);
   const folders = useFolders(account?.id ?? null);
   const status = useExchangeStatus(account?.id ?? null);
@@ -89,7 +84,7 @@ export function FocusedTabs({ node }: WidgetProps) {
                     showFocus(store, account.id, inbox.id, null);
                   }}
                 >
-                  {t("exchange-focus-all")}
+                  {t("common-all")}
                 </button>
               </li>
             )}
@@ -120,7 +115,7 @@ export function FocusedTabs({ node }: WidgetProps) {
           aria-checked={!off}
           onClick={toggle}
         >
-          {t("exchange-focused-switch")}
+          {t("exchange-focused-label")}
         </button>
       )}
     </nav>
@@ -168,20 +163,19 @@ export function ClassifyDialog({ close }: DialogProps) {
   const ctx = useWriteContext();
   const target = useExchangeUi((s) => s.classify);
   const [always, setAlways] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().classifyMessages(null);
     close();
   };
   if (target === null || target.messageIds.length === 0) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-nothing-chosen")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-nothing-chosen"
+        close={close}
+      />
     );
   }
   const senders = [
@@ -192,16 +186,10 @@ export function ClassifyDialog({ close }: DialogProps) {
     ),
   ];
   const move = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await classifyFocused(ctx, target.messageIds, target.to, always);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <div data-part="exchange.dialog" data-dialog="classify" aria-busy={busy}>
@@ -223,11 +211,7 @@ export function ClassifyDialog({ close }: DialogProps) {
             : t("exchange-classify-always")}
         </span>
       </label>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-cancel")}
-        </button>
+      <DialogActions problem={problem} onCancel={finish}>
         <button
           type="button"
           data-part="form.button"
@@ -237,7 +221,7 @@ export function ClassifyDialog({ close }: DialogProps) {
         >
           {t(`exchange-move-to-${target.to}`)}
         </button>
-      </div>
+      </DialogActions>
     </div>
   );
 }

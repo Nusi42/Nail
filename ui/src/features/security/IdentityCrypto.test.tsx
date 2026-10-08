@@ -1,15 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import type { Identity, Request } from "../../api/generated";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import type { Identity } from "../../api/generated";
+import { createEnv, renderNode, renderWithProviders, widget } from "../../test/harness";
 import { IdentityCryptoFields, identityText } from "./IdentityCrypto";
 import { makeKey } from "./mockSeed";
 import { must } from "../../test/must";
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf } from "../../test/env";
 
 describe("identity crypto fields", () => {
   const identity: Identity = {

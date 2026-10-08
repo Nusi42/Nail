@@ -101,7 +101,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [ABOUT_DIALOG]: AboutNailDialog,
   [FIRST_RUN_DIALOG]: FirstRunDialog,
 };
@@ -135,9 +135,9 @@ export const handleSystemEvent: FeatureEventHandler = (event, { queryClient }) =
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleSystemEvent];
+export const events: NonNullable<Feature["events"]> = [handleSystemEvent];
 /** Background components: offers the first-run screen once. */
-export const effects: Feature["effects"] = [FirstRunGate];
+export const effects: NonNullable<Feature["effects"]> = [FirstRunGate];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

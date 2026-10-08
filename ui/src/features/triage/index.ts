@@ -96,7 +96,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components (the layout's `snoozed` window wins when it has one). */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [SNOOZE_DIALOG]: SnoozeDialog,
   [SNOOZED_WINDOW]: SnoozedDialog,
 };
@@ -108,7 +108,6 @@ export const dialogs: Feature["dialogs"] = {
  */
 export const windows: NonNullable<Feature["windows"]> = {
   [SNOOZE_DIALOG]: { size: { width: 440, height: 480 }, min_size: { width: 360, height: 380 } },
-  [SNOOZED_WINDOW]: { size: { width: 720, height: 520 }, min_size: { width: 420, height: 300 } },
 };
 
 /** Keeps junk status, snoozed list and notification settings current. */
@@ -129,9 +128,9 @@ export const handleTriageEvent: FeatureEventHandler = (event, { queryClient }) =
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleTriageEvent];
+export const events: NonNullable<Feature["events"]> = [handleTriageEvent];
 /** Background components. */
-export const effects: Feature["effects"] = [WebNotifications];
+export const effects: NonNullable<Feature["effects"]> = [WebNotifications];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

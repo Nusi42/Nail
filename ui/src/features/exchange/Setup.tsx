@@ -46,12 +46,12 @@ import {
   type ExchangeSignIn,
 } from "./model";
 import { useExchangeStatus } from "./queries";
+import { ENGINES } from "./messages";
 
 /** What the user says the account is on the address step. */
 export type ExchangeSetupChoice = "auto" | ExchangeEngine;
 
 const CHOICES: readonly ExchangeSetupChoice[] = ["auto", "graph", "ews"];
-const ENGINES: readonly ExchangeEngine[] = ["graph", "ews"];
 const PACKAGES: readonly SspiPackage[] = ["negotiate", "kerberos", "ntlm"];
 
 /** Mount point `ExchangeAccountType` (address step). */
@@ -146,13 +146,13 @@ export function ExchangeServerReview({
   };
   return (
     <section data-part="exchange.setup.review" data-engine={engine}>
-      <h3 data-part="exchange.setup.title">{t("exchange-setup-found")}</h3>
+      <h3 data-part="exchange.setup.title">{t("common-microsoft-exchange")}</h3>
       <dl data-part="exchange.setup.details">
         <dt data-part="exchange.setup.term">{t("exchange-setup-source")}</dt>
         <dd data-part="exchange.setup.value">{t(`setup-source-${candidate.source}`)}</dd>
         <dt data-part="exchange.setup.term">{t("exchange-setup-engine")}</dt>
         <dd data-part="exchange.setup.value">{t(`exchange-engine-${engine}`)}</dd>
-        <dt data-part="exchange.setup.term">{t("exchange-setup-server")}</dt>
+        <dt data-part="exchange.setup.term">{t("common-server")}</dt>
         <dd data-part="exchange.setup.value">{exchangeHost(candidate)}</dd>
         {engine === "ews" && incoming.options.url && (
           <>
@@ -218,24 +218,12 @@ export function ExchangeServerReview({
               }}
             />
           </div>
-          <div data-part="form.field" data-field="exchange-url">
-            <label data-part="form.label" htmlFor={ids.url}>
-              {t("exchange-setup-url")}
-            </label>
-            <input
-              id={ids.url}
-              data-part="form.input"
-              type="url"
-              value={incoming.options.url ?? ""}
-              aria-describedby={`${ids.url}-hint`}
-              onChange={(e) => {
-                setUrl(e.target.value);
-              }}
-            />
-            <p id={`${ids.url}-hint`} data-part="form.hint">
-              {t("exchange-setup-url-hint", { host: incoming.server.host || "…" })}
-            </p>
-          </div>
+          <EwsUrlField
+            id={ids.url}
+            value={incoming.options.url ?? ""}
+            hint={t("exchange-setup-url-hint", { host: incoming.server.host || "…" })}
+            onChange={setUrl}
+          />
         </>
       )}
     </section>
@@ -276,7 +264,7 @@ export function ExchangeSignInFields({
   };
   return (
     <fieldset data-part="exchange.setup.sign-in" data-sign-in={signIn}>
-      <legend data-part="form.section.title">{t("exchange-sign-in")}</legend>
+      <legend data-part="form.section.title">{t("common-sign-in")}</legend>
       {engine === "graph" && <p data-part="form.hint">{t("exchange-sign-in-graph-hint")}</p>}
       {choices.length > 1 &&
         choices.map((c) => (
@@ -343,7 +331,7 @@ export function ExchangeSignInFields({
       {(signIn === "windows-account" || signIn === "password") && (
         <div data-part="form.field" data-field="password">
           <label data-part="form.label" htmlFor={ids.password}>
-            {t("exchange-sign-in-secret")}
+            {t("common-password")}
           </label>
           <input
             id={ids.password}
@@ -383,7 +371,7 @@ export function ExchangeOptionsFields({
   const number = (text: string) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null);
   return (
     <fieldset data-part="form.section" data-section="exchange">
-      <legend data-part="form.section.title">{t("exchange-options-title")}</legend>
+      <legend data-part="form.section.title">{t("common-exchange")}</legend>
       <p data-part="form.hint">{t(`exchange-engine-${options.engine}`)}</p>
       <div data-part="form.field" data-field="poll-interval">
         <label data-part="form.label" htmlFor={ids.poll}>
@@ -429,20 +417,13 @@ export function ExchangeOptionsFields({
       </div>
       {options.engine === "ews" && (
         <>
-          <div data-part="form.field" data-field="exchange-url">
-            <label data-part="form.label" htmlFor={ids.url}>
-              {t("exchange-setup-url")}
-            </label>
-            <input
-              id={ids.url}
-              data-part="form.input"
-              type="url"
-              value={options.url ?? ""}
-              onChange={(e) => {
-                onChange({ ...options, url: e.target.value.trim() || null });
-              }}
-            />
-          </div>
+          <EwsUrlField
+            id={ids.url}
+            value={options.url ?? ""}
+            onChange={(url) => {
+              onChange({ ...options, url: url.trim() || null });
+            }}
+          />
           <label data-part="form.check" data-field="streaming">
             <input
               data-part="form.checkbox"
@@ -497,7 +478,7 @@ export function ExchangeStatusPanel({ accountId }: { accountId: string }) {
         <dd data-part="exchange.status.value">{t(`exchange-push-${s.push}`)}</dd>
         <dt data-part="exchange.status.term">{t("exchange-status-last-sync")}</dt>
         <dd data-part="exchange.status.value">
-          {s.last_sync_at ? when(s.last_sync_at) : t("exchange-status-never")}
+          {s.last_sync_at ? when(s.last_sync_at) : t("common-never-inline")}
         </dd>
         <dt data-part="exchange.status.term">{t("exchange-status-folders")}</dt>
         <dd data-part="exchange.status.value">
@@ -522,5 +503,42 @@ export function ExchangeStatusPanel({ accountId }: { accountId: string }) {
         </ul>
       )}
     </section>
+  );
+}
+
+/** The EWS URL field (empty: Autodiscover finds it), with an optional hint. */
+function EwsUrlField({
+  id,
+  value,
+  hint,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  hint?: string;
+  onChange: (url: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div data-part="form.field" data-field="exchange-url">
+      <label data-part="form.label" htmlFor={id}>
+        {t("exchange-setup-url")}
+      </label>
+      <input
+        id={id}
+        data-part="form.input"
+        type="url"
+        value={value}
+        aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      />
+      {hint !== undefined && (
+        <p id={`${id}-hint`} data-part="form.hint">
+          {hint}
+        </p>
+      )}
+    </div>
   );
 }

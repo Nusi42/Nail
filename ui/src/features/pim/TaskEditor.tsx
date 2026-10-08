@@ -19,7 +19,15 @@ import type {
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { Problem, problemOf, useChangeContext } from "./common";
+import {
+  Problem,
+  problemOf,
+  useChangeContext,
+  EditorMain,
+  CategoriesField,
+  CalendarOptions,
+  OptionalSection,
+} from "./common";
 import { TASK_STATUSES } from "./constants";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { AlarmEditor } from "./EventEditor";
@@ -31,6 +39,9 @@ import { usePim, type TaskEditorTarget } from "./store";
 import { isDone } from "./TaskList";
 import { localZone, makePimTime, splitPimTime, todayIn, utcString } from "./time";
 import { nonEmpty } from "../../text/empty";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { TextField, TextAreaField } from "../../widgets/forms";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** Priority choices (iCalendar 1 = highest … 9 = lowest; 0 / none = undefined). */
 export const PRIORITIES = [
@@ -57,34 +68,27 @@ function pimTimeOf(when: WhenValue | null, tz: string): PimTime | null {
 }
 
 export function TaskEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = usePim((s) => s.taskEditor);
   const task = useTask(target?.mode === "edit" ? target.taskId : null);
   const calendars = useCalendars();
   if (target === null) {
     return (
-      <div data-part="pim.editor" data-state="empty">
-        <p data-part="pim.editor.empty">{t("pim-editor-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="pim.editor"
+        textPart="pim.editor.empty"
+        hintId="pim-editor-nothing"
+        close={close}
+      />
     );
   }
   if (calendars.isPending || (target.mode === "edit" && task.isPending)) {
-    return (
-      <div data-part="pim.editor" data-state="loading" aria-busy="true">
-        <p data-part="pim.editor.loading">{t("pim-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (task.isError || calendars.isError) {
     return (
       <div data-part="pim.editor" data-state="error">
         <Problem message={problemOf(task.error ?? calendars.error)} />
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     );
   }
@@ -279,8 +283,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
       aria-busy={busy}
       noValidate
     >
-      {readOnly && <p data-part="pim.editor.read-only">{t("pim-editor-read-only")}</p>}
-      <fieldset data-part="pim.editor.main" disabled={readOnly || busy}>
+      <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="title">
           <label data-part="form.label" htmlFor={ids.title}>
             {t("pim-task-title")}
@@ -314,7 +317,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
         )}
         <div data-part="form.field" data-field="list">
           <label data-part="form.label" htmlFor={ids.list}>
-            {t("pim-task-list")}
+            {t("common-task-list")}
           </label>
           <select
             id={ids.list}
@@ -324,11 +327,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
               setListId(e.target.value);
             }}
           >
-            {lists.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.settings.name}
-              </option>
-            ))}
+            <CalendarOptions calendars={lists} />
           </select>
         </div>
         <div data-part="form.field" data-field="parent">
@@ -346,14 +345,14 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             <option value="">{t("pim-task-no-parent")}</option>
             {parents.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.fields.title || t("pim-task-untitled")}
+                {p.fields.title || t("common-no-title")}
               </option>
             ))}
           </select>
         </div>
         <div data-part="form.field" data-field="status">
           <label data-part="form.label" htmlFor={ids.status}>
-            {t("pim-task-status")}
+            {t("common-status")}
           </label>
           <select
             id={ids.status}
@@ -426,7 +425,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
         </div>
 
         <OptionalWhen
-          label={t("pim-task-start")}
+          label={t("common-start")}
           field="start"
           value={start}
           onChange={setStart}
@@ -448,60 +447,42 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
           related="end"
         />
 
-        <div data-part="form.field" data-field="description">
-          <label data-part="form.label" htmlFor={ids.description}>
-            {t("pim-task-description")}
-          </label>
-          <textarea
-            id={ids.description}
-            data-part="form.textarea"
-            value={fields.description ?? ""}
-            onChange={(e) => {
-              update({ description: e.target.value });
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="location">
-          <label data-part="form.label" htmlFor={ids.location}>
-            {t("pim-event-location")}
-          </label>
-          <input
-            id={ids.location}
-            data-part="form.input"
-            value={fields.location ?? ""}
-            onChange={(e) => {
-              update({ location: e.target.value });
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="url">
-          <label data-part="form.label" htmlFor={ids.url}>
-            {t("pim-event-url")}
-          </label>
-          <input
-            id={ids.url}
-            data-part="form.input"
-            type="url"
-            value={fields.url ?? ""}
-            onChange={(e) => {
-              update({ url: e.target.value });
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="categories">
-          <label data-part="form.label" htmlFor={ids.categories}>
-            {t("pim-categories")}
-          </label>
-          <input
-            id={ids.categories}
-            data-part="form.input"
-            value={fields.categories.join(", ")}
-            onChange={(e) => {
-              update({ categories: e.target.value.split(",") });
-            }}
-          />
-        </div>
-      </fieldset>
+        <TextAreaField
+          id={ids.description}
+          name="description"
+          labelId="common-notes"
+          value={fields.description ?? ""}
+          onChange={(v) => {
+            update({ description: v });
+          }}
+        />
+        <TextField
+          id={ids.location}
+          name="location"
+          labelId="pim-event-location"
+          value={fields.location ?? ""}
+          onChange={(v) => {
+            update({ location: v });
+          }}
+        />
+        <TextField
+          id={ids.url}
+          name="url"
+          labelId="pim-event-url"
+          type="url"
+          value={fields.url ?? ""}
+          onChange={(v) => {
+            update({ url: v });
+          }}
+        />
+        <CategoriesField
+          id={ids.categories}
+          categories={fields.categories}
+          onChange={(categories) => {
+            update({ categories });
+          }}
+        />
+      </EditorMain>
 
       {task && (
         <fieldset data-part="pim.editor.subtasks" disabled={readOnly}>
@@ -524,7 +505,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
                       })
                     }
                   />
-                  <span>{sub.fields.title || t("pim-task-untitled")}</span>
+                  <span>{sub.fields.title || t("common-no-title")}</span>
                 </label>
                 <button
                   type="button"
@@ -534,7 +515,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
                     ctx.pim.getState().editTask({ mode: "edit", taskId: sub.id });
                   }}
                 >
-                  {t("pim-edit")}
+                  {t("common-edit")}
                 </button>
               </li>
             ))}
@@ -564,7 +545,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
               disabled={!subtaskTitle.trim()}
               onClick={() => void addSubtask()}
             >
-              {t("pim-task-add")}
+              {t("common-add")}
             </button>
           </div>
         </fieldset>
@@ -579,7 +560,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             data-variant="primary"
             disabled={busy || listId === ""}
           >
-            {t("pim-save")}
+            {t("common-save")}
           </button>
         )}
         {task && !readOnly && (
@@ -603,7 +584,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
             close();
           }}
         >
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -625,18 +606,15 @@ function OptionalWhen({
 }) {
   const t = useT();
   return (
-    <fieldset data-part="pim.editor.section" data-section={field}>
-      <legend data-part="form.section.title">{label}</legend>
-      <label data-part="form.check" data-field={`${field}-set`}>
-        <input
-          type="checkbox"
-          checked={value !== null}
-          onChange={(e) => {
-            onChange(e.target.checked ? { day: todayIn(tz), time: null } : null);
-          }}
-        />
-        <span>{t("pim-task-has-date", { field: label })}</span>
-      </label>
+    <OptionalSection
+      field={field}
+      label={label}
+      toggleText={t("pim-task-has-date", { field: label })}
+      set={value !== null}
+      onToggle={(on) => {
+        onChange(on ? { day: todayIn(tz), time: null } : null);
+      }}
+    >
       {value && (
         <>
           <label data-part="form.check" data-field={`${field}-time`}>
@@ -661,6 +639,6 @@ function OptionalWhen({
           />
         </>
       )}
-    </fieldset>
+    </OptionalSection>
   );
 }

@@ -65,8 +65,11 @@ export function errorMessageOf(error: unknown): LocalizedMessage {
 
 type ResponseOf<T extends Response["type"]> = Extract<Response, { type: T }>;
 
-/** The API the React tree uses. */
-export interface NailClient {
+/**
+ * The API the React tree uses: requests and events on top of the
+ * transport's connection state (`onStatus`, `status`, `close`).
+ */
+export interface NailClient extends Pick<Transport, "onStatus" | "status" | "close"> {
   /** Sends a request and returns the raw response (which may be `Error`). */
   call: (request: Request) => Promise<Response>;
   /**
@@ -76,12 +79,6 @@ export interface NailClient {
   request: <T extends Response["type"]>(request: Request, expected: T) => Promise<ResponseOf<T>>;
   /** Listens for events pushed by the core. */
   subscribe: (listener: (event: NailEvent) => void) => () => void;
-  /** Listens for connection changes. */
-  onStatus: (listener: (status: ConnectionStatus) => void) => () => void;
-  /** Current connection state. */
-  status: () => ConnectionStatus;
-  /** Closes the underlying transport. */
-  close: () => void;
 }
 
 /** The standard `NailClient` on top of any `Transport`. */
@@ -124,6 +121,47 @@ export class TransportClient implements NailClient {
 
   close(): void {
     this.transport.close();
+  }
+}
+
+/**
+ * What every transport shares: the event and status listeners. Subclasses
+ * emit through `events` / `statuses`.
+ */
+export abstract class TransportBase implements Transport {
+  protected readonly events = new Listeners<NailEvent>();
+  protected readonly statuses = new Listeners<ConnectionStatus>();
+
+  abstract send(request: Request): Promise<Response>;
+  abstract status(): ConnectionStatus;
+  abstract close(): void;
+
+  onEvent(listener: (event: NailEvent) => void): () => void {
+    return this.events.add(listener);
+  }
+
+  onStatus(listener: (status: ConnectionStatus) => void): () => void {
+    return this.statuses.add(listener);
+  }
+}
+
+/** A transport that is connected until it is closed (the mock, the desktop IPC). */
+export abstract class ClosableTransport extends TransportBase {
+  protected closed = false;
+
+  status(): ConnectionStatus {
+    return this.closed ? "closed" : "connected";
+  }
+
+  close(): void {
+    this.closed = true;
+    this.release();
+    this.statuses.emit("closed");
+  }
+
+  /** Frees what the transport holds when it closes. */
+  protected release(): void {
+    // Nothing by default.
   }
 }
 

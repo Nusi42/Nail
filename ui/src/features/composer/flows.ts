@@ -26,6 +26,7 @@ import type {
 } from "../../api/generated";
 import {
   cancelSend,
+  deleteSavedDraft,
   startCompose,
   startReply,
   type ComposeContext,
@@ -459,11 +460,7 @@ export async function discardRich(ctx: ComposeContext, window?: string | null): 
   const composer = composerOf(ctx.store.getState(), target);
   finish(ctx, target);
   if (composer?.draftId) {
-    try {
-      await ctx.client.request({ type: "DeleteDraft", draft_id: composer.draftId }, "Done");
-    } catch (error) {
-      if (!(error instanceof NailError && error.code === "not_found")) throw error;
-    }
+    await deleteSavedDraft(ctx, composer.draftId);
     void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
   }
 }

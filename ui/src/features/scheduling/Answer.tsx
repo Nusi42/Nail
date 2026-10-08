@@ -18,7 +18,9 @@ import { useT } from "../../i18n/I18nProvider";
 import { Problem } from "../pim/common";
 import { DateTimeInput, type Clock } from "../pim/DateTimeInput";
 import { makePimTime, pimTimeIn, splitPimTime, toCalendarDate } from "../pim/time";
-import { RESPONSES, responseOfStatus, splitAddresses, plausibleEmail } from "./model";
+import { RESPONSES, responseOfStatus, splitAddresses } from "./model";
+import { plausibleEmail } from "../../state/addresses";
+import { TextAreaField } from "../../widgets/forms";
 
 export interface AnswerFormProps {
   /** The user's current answer (pressed button). */
@@ -73,7 +75,7 @@ export function AnswerForm({
               onAnswer(pending, comment.trim() || null, true);
             }}
           >
-            {t("scheduling-answer-confirm-send")}
+            {t("common-send")}
           </button>
           <button
             type="button"
@@ -93,7 +95,7 @@ export function AnswerForm({
               setPending(null);
             }}
           >
-            {t("scheduling-back")}
+            {t("common-back")}
           </button>
         </div>
       </div>
@@ -129,7 +131,7 @@ export function AnswerForm({
       <div
         data-part="scheduling.answer.buttons"
         role="group"
-        aria-label={t("scheduling-answer-group")}
+        aria-label={t("invitation-my-status")}
       >
         {RESPONSES.filter((r) => available.includes(r)).map((response) => (
           <button
@@ -212,7 +214,7 @@ export function ProposeTimeForm({
   return (
     <form
       data-part="scheduling.propose"
-      aria-label={t("scheduling-propose-title")}
+      aria-label={t("invitation-action-propose-new-time")}
       onSubmit={submit}
       aria-busy={busy}
     >
@@ -244,22 +246,18 @@ export function ProposeTimeForm({
       />
       {invalid && (
         <p id={ids.problem} data-part="scheduling.problem" role="alert">
-          {t("scheduling-propose-end-before-start")}
+          {t("common-end-after-start")}
         </p>
       )}
-      <div data-part="form.field" data-field="propose-comment">
-        <label data-part="form.label" htmlFor={ids.comment}>
-          {t("scheduling-propose-comment")}
-        </label>
-        <textarea
-          id={ids.comment}
-          data-part="form.textarea"
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-          }}
-        />
-      </div>
+      <TextAreaField
+        id={ids.comment}
+        name="propose-comment"
+        labelId="scheduling-forward-comment"
+        value={comment}
+        onChange={(v) => {
+          setComment(v);
+        }}
+      />
       <Problem message={problem} part="scheduling.problem" />
       <div data-part="scheduling.propose.actions">
         <button
@@ -271,7 +269,7 @@ export function ProposeTimeForm({
           {t("scheduling-propose-send")}
         </button>
         <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("scheduling-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -328,26 +326,22 @@ export function ForwardForm({ busy, problem, onSubmit, onCancel }: ForwardFormPr
           {t("scheduling-forward-invalid")}
         </p>
       )}
-      <div data-part="form.field" data-field="forward-comment">
-        <label data-part="form.label" htmlFor={ids.comment}>
-          {t("scheduling-forward-comment")}
-        </label>
-        <textarea
-          id={ids.comment}
-          data-part="form.textarea"
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-          }}
-        />
-      </div>
+      <TextAreaField
+        id={ids.comment}
+        name="forward-comment"
+        labelId="scheduling-forward-comment"
+        value={comment}
+        onChange={(v) => {
+          setComment(v);
+        }}
+      />
       <Problem message={problem} part="scheduling.problem" />
       <div data-part="scheduling.forward.actions">
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("scheduling-forward-send")}
+          {t("common-forward")}
         </button>
         <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("scheduling-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>

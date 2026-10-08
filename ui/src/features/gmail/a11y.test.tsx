@@ -5,27 +5,22 @@
  * content (editor for a new and an existing label, delete confirmation,
  * apply labels). Contrast needs a real layout engine (Playwright).
  */
-import type { InfiniteData } from "@tanstack/react-query";
-import { act, screen, waitFor } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { violations } from "../../test/axe";
-import type { Response } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { queryKeys } from "../../state/queries";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+  shownDialog,
+} from "../../test/harness";
 import { dialogs, MessageLabels } from ".";
 import { GMAIL_ACCOUNT, GMAIL_FOLDERS, seedGmailDemo } from "./mockSeed";
 import { APPLY_LABELS_DIALOG, DIALOGS, LABEL_DELETE_DIALOG, LABEL_EDITOR_DIALOG } from "./names";
 import { gmailStoreFor } from "./store";
-import { must } from "../../test/must";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
+import { selectCached } from "../../test/env";
 
 function setup(): Env {
   const env = createEnv();
@@ -63,7 +58,7 @@ describe("axe: Gmail widgets", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("navigation", { name: "Inbox categories" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Queued, not synced yet/ })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
@@ -89,22 +84,7 @@ describe("axe: Gmail dialogs", () => {
     if (name === APPLY_LABELS_DIALOG) {
       const summary = env.transport.data.messages.find((m) => m.account_id === GMAIL_ACCOUNT);
       if (!summary) throw new Error("demo message missing");
-      env.queryClient.setQueryData<InfiniteData<Extract<Response, { type: "Messages" }>>>(
-        queryKeys.messages(summary.folder_id, 50),
-        {
-          pages: [
-            {
-              type: "Messages",
-              folder_id: summary.folder_id,
-              offset: 0,
-              total: 1,
-              messages: [summary],
-            },
-          ],
-          pageParams: [0],
-        },
-      );
-      env.store.getState().selectMessage(summary.id);
+      selectCached(env, summary);
     }
   }
 
@@ -114,14 +94,7 @@ describe("axe: Gmail dialogs", () => {
     async (name, existing) => {
       const env = setup();
       prepare(env, name, existing);
-      const Dialog = must(dialogs[name]);
-      const { container } = renderWithProviders(
-        <div role="dialog" aria-label={name}>
-          <Dialog name={name} close={() => undefined} />
-        </div>,
-        env,
-      );
-      await settle(env);
+      const container = await shownDialog(env, dialogs, name);
       expect(container.querySelector('[data-part="gmail.dialog"]')).not.toBeNull();
       expect(await violations(container)).toEqual([]);
     },

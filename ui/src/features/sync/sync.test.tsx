@@ -1,6 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request } from "../../api/generated";
 import { createDispatcher } from "../../actions/registry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import {
@@ -15,8 +14,8 @@ import { rowStates } from "../../widgets/MessageList";
 import { failingBodies } from "./mock";
 import { SYNC_FOLDER_DIALOG, SyncFolderDialog } from "./Sync";
 import { syncStoreFor } from "./store";
-
-const INBOX = "acc-personal/Inbox";
+import { requestsOf, actionContext } from "../../test/env";
+import { INBOX } from "../../test/mockIds";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -27,22 +26,17 @@ afterEach(() => {
   failingBodies.clear();
 });
 
-function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
+function dispatcher(env: Env) {
+  return createDispatcher(actionContext(env), { ...appRegistry.actions });
 }
 
-function dispatcher(env: Env) {
-  return createDispatcher(
-    {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id) => id,
-      locale: "en",
-    },
-    { ...appRegistry.actions },
-  );
+/** The personal Inbox with its first message downloaded without its body. */
+function headersOnlyInbox() {
+  const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+  const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
+  if (!message) throw new Error("no inbox message");
+  message.headers_only = true;
+  return { env, message };
 }
 
 describe("sync-folder-policies", () => {
@@ -64,7 +58,7 @@ describe("sync-folder-policies", () => {
     await user.selectOptions(within(section).getByLabelText(/Watch for new mail/), "yes");
     await user.click(within(section).getByRole("button", { name: "Save" }));
     expect(await within(section).findByText("Saved to accounts.kdl.")).toBeVisible();
-    expect(sent(env, "SetFolderSyncPolicy")[0]).toEqual({
+    expect(requestsOf(env, "SetFolderSyncPolicy")[0]).toEqual({
       type: "SetFolderSyncPolicy",
       folder_id: "acc-personal/Archive",
       bodies: { mode: "recent", days: 14 },
@@ -79,7 +73,7 @@ describe("sync-folder-policies", () => {
     await user.selectOptions(within(section).getByLabelText(/Watch for new mail/), "default");
     await user.click(within(section).getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(sent(env, "SetFolderSyncPolicy")[1]).toMatchObject({
+      expect(requestsOf(env, "SetFolderSyncPolicy")[1]).toMatchObject({
         bodies: null,
         enabled: null,
         idle: null,
@@ -101,7 +95,7 @@ describe("sync-folder-policies", () => {
     await user.selectOptions(await screen.findByLabelText("Download"), "headers-only");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(sent(env, "SetFolderSyncPolicy")[0]).toMatchObject({
+      expect(requestsOf(env, "SetFolderSyncPolicy")[0]).toMatchObject({
         folder_id: INBOX,
         bodies: { mode: "headers-only" },
       });
@@ -121,10 +115,7 @@ describe("bodies on demand", () => {
 
   it("downloads the full message from the reader bar", async () => {
     const user = userEvent.setup();
-    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
-    const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
-    if (!message) throw new Error("no inbox message");
-    message.headers_only = true;
+    const { env, message } = headersOnlyInbox();
     env.store.getState().selectMessage(message.id);
     const { container } = renderWithProviders(
       <>
@@ -145,17 +136,14 @@ describe("bodies on demand", () => {
     await waitFor(() => {
       expect(screen.queryByRole("status", { name: "Message download" })).toBeNull();
     });
-    expect(sent(env, "FetchMessageBodies")).toEqual([
+    expect(requestsOf(env, "FetchMessageBodies")).toEqual([
       { type: "FetchMessageBodies", message_ids: [message.id] },
     ]);
   });
 
   it("says when the download failed", async () => {
     const user = userEvent.setup();
-    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
-    const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
-    if (!message) throw new Error("no inbox message");
-    message.headers_only = true;
+    const { env, message } = headersOnlyInbox();
     failingBodies.add(message.id);
     env.store.getState().selectMessage(message.id);
     renderWithProviders(

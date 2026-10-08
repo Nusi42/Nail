@@ -5,6 +5,7 @@ import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegi
 import { useCheckQuery } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
+import { useDebounced } from "../state/debounce";
 
 /** Fields of the query language offered as hints, with their Fluent description ids. */
 export const QUERY_HINTS = [
@@ -64,19 +65,6 @@ export function applyHint(text: string, hint: string): string {
 /** Delay before the query is checked while typing. */
 export const CHECK_DELAY_MS = 250;
 
-function useDebounced(value: string, ms: number): string {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebounced(value);
-    }, ms);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, ms]);
-  return debounced;
-}
-
 function ErrorView({ id, text, error }: { id: string; text: string; error: SearchError }) {
   const t = useT();
   const start = Math.max(0, Math.min(error.start, text.length));
@@ -127,7 +115,7 @@ export function SearchBar({ node }: WidgetProps) {
   return (
     <SearchForm
       nodeId={node.id ?? undefined}
-      label={node.label ? label(node.label) : t("search-bar-label")}
+      label={node.label ? label(node.label) : t("common-search-noun")}
       scope={optionString(node, "scope", "account")}
       showHints={optionBool(node, "hints", true)}
       liveCheck={optionBool(node, "live-check", true)}
@@ -223,7 +211,7 @@ export function SearchForm({
           type="search"
           value={text}
           placeholder={placeholder ?? t("search-bar-placeholder")}
-          aria-label={t("search-bar-input")}
+          aria-label={t("common-search-mail")}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
           aria-controls={hints.length > 0 ? hintsId : undefined}

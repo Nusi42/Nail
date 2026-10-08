@@ -60,9 +60,10 @@ import {
   useRichStoreApi,
   type RichState,
 } from "./store";
+import { formatSize } from "../../widgets/AttachmentCard";
 
 /** The editing modes, in switcher order. */
-export const MODES: readonly ComposerMode[] = ["plain", "html", "markdown"];
+export const COMPOSER_MODES: readonly ComposerMode[] = ["plain", "html", "markdown"];
 
 /** `Ada Lovelace <ada@example.org>` for the identity picker. */
 export function identityLabel(identity: Identity): string {
@@ -125,21 +126,6 @@ export function ComposerWindowTitle({ id }: { id: string }) {
   return <>{title ?? t("window-composer")}</>;
 }
 
-function formatSize(bytes: number, locale: string): string {
-  const kb = bytes / 1024;
-  return kb < 1024
-    ? new Intl.NumberFormat(locale, {
-        style: "unit",
-        unit: "kilobyte",
-        maximumFractionDigits: 0,
-      }).format(Math.max(1, kb))
-    : new Intl.NumberFormat(locale, {
-        style: "unit",
-        unit: "megabyte",
-        maximumFractionDigits: 1,
-      }).format(kb / 1024);
-}
-
 function TextField({
   field,
   value,
@@ -176,8 +162,8 @@ function ModeSwitcher({ ctx, mode }: { ctx: ComposeContext; mode: ComposerMode }
   const window = useComposerWindow();
   const switching = useRich((s) => s.switching);
   return (
-    <div data-part="composer.modes" role="radiogroup" aria-label={t("composer-mode-label")}>
-      {MODES.map((m) => (
+    <div data-part="composer.modes" role="radiogroup" aria-label={t("common-format")}>
+      {COMPOSER_MODES.map((m) => (
         <button
           key={m}
           type="button"
@@ -205,7 +191,7 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
   if (attachments.length === 0 && uploads === 0) return null;
   return (
     <div data-part="composer.attachments">
-      <ul data-part="composer.attachments.list" aria-label={t("composer-attachments-label")}>
+      <ul data-part="composer.attachments.list" aria-label={t("common-attachments")}>
         {attachments.map((a, index) => (
           <li
             key={`${a.blob}-${String(index)}`}
@@ -222,13 +208,13 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
               type="button"
               data-part="form.button"
               data-action="remove-attachment"
-              aria-label={t("composer-attachment-remove", { name: a.filename })}
+              aria-label={t("common-remove-named", { name: a.filename })}
               onClick={() => {
                 removeAttachment(ctx, index, window);
               }}
             >
               <Icon name="x" part="form.button.icon" />
-              <span data-part="form.button.label">{t("composer-attachment-remove-short")}</span>
+              <span data-part="form.button.label">{t("common-remove")}</span>
             </button>
           </li>
         ))}
@@ -345,7 +331,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       rich.attachments.length,
       keywords,
     );
-  const bodyLabel = t("composer-field-body");
+  const bodyLabel = t("common-message-body");
 
   const send = (force = false) =>
     void sendRich(ctx, later ? localToIso(sendAt) : null, { window, force });
@@ -412,7 +398,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       data-key-context="composer"
       data-mode={mode}
       data-state={composer.busy ?? undefined}
-      aria-label={node.label ? label(node.label) : t("composer-label")}
+      aria-label={node.label ? label(node.label) : t("common-new-message")}
       aria-busy={busy}
       onSubmit={submit}
       onKeyDown={onKeyDown}
@@ -424,7 +410,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
       <ProgramDraftNotice />
       <div data-part="composer.field" data-field="identity">
         <label data-part="composer.field.label" htmlFor={`${ids}-identity`}>
-          {t("composer-field-from")}
+          {t("common-header-from")}
         </label>
         <select
           id={`${ids}-identity`}
@@ -517,7 +503,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
                 richApi.setState({ preview: !rich.preview });
               }}
             >
-              {t("composer-preview-toggle")}
+              {t("common-preview")}
             </button>
             <label data-part="composer.option">
               <input
@@ -585,7 +571,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
               cancelSwitch(ctx, window);
             }}
           >
-            {t("composer-lossy-cancel")}
+            {t("common-keep-editing")}
           </button>
         </div>
       )}
@@ -666,7 +652,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
                   send(true);
                 }}
               >
-                {t("composer-reminder-send-anyway")}
+                {t("common-send-anyway")}
               </button>
             ) : (
               <button
@@ -677,7 +663,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
                   richApi.setState({ reminder: "dismissed" });
                 }}
               >
-                {t("composer-reminder-dismiss")}
+                {t("common-dismiss")}
               </button>
             )}
           </div>
@@ -740,7 +726,7 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
             disabled={busy}
             onClick={() => void saveRich(ctx, { window })}
           >
-            {t("composer-save")}
+            {t("common-save-draft")}
           </button>
           {savedText !== null && (
             <span data-part="composer.saved" data-state={rich.autosave} aria-live="polite">

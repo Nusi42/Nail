@@ -4,7 +4,6 @@
  * left to the Playwright scan; this catches names, roles and landmarks.
  * Also checks the skin reaches the compiled theme.
  */
-import type { Density } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { WindowView } from "../../layout/LayoutRenderer";
 import { violations } from "../../test/axe";
@@ -12,7 +11,7 @@ import {
   createEnv,
   renderWithProviders,
   settleQueries,
-  stubElementSizes,
+  stubElementSizesEachTest,
 } from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
 import { BUILTIN_THEMES } from "../appearance";
@@ -20,19 +19,13 @@ import { resolveMockTheme } from "../appearance/themes";
 import { seedAgentsDemo } from "../agents/mockSeed";
 import { SHELL_SKIN_CSS } from "./skin";
 import { hostLayout } from "./testing";
+import { THEME_CASES } from "../../test/themes";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
-const DENSITIES: readonly Density[] = ["comfortable", "compact"];
 /** Every theme and density, each with one of the views (every view twice). */
 const VIEWS = ["mail", "calendar", "contacts", "tasks", "settings"] as const;
-const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const)).map(
+const CASES = THEME_CASES.map(
   ([id, density], i) => [id, density, VIEWS[i % VIEWS.length] ?? "mail"] as const,
 );
 

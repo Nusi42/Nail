@@ -31,6 +31,7 @@ import {
   type ConditionKind,
   type ConditionPath,
 } from "./model";
+import { FOLDER_ROLES } from "../../api/contract";
 
 export const ADDRESS_FIELDS: readonly AddressField[] = [
   "from",
@@ -41,7 +42,6 @@ export const ADDRESS_FIELDS: readonly AddressField[] = [
   "sender",
 ];
 export const FLAGS: readonly MessageFlag[] = ["seen", "flagged", "answered", "draft"];
-export const ROLES: readonly FolderRole[] = ["inbox", "sent", "drafts", "archive", "junk", "trash"];
 export const AUTH_METHODS: readonly AuthMethod[] = ["dkim", "spf", "dmarc"];
 export const AUTH_RESULTS: readonly AuthResult[] = [
   "pass",
@@ -159,7 +159,7 @@ export function FolderRefFields({
           labelId="rules-folder-role"
           name={`${name}-role`}
           value={value.role}
-          choices={choices(ROLES, "rules-role-")}
+          choices={choices(FOLDER_ROLES, "rules-role-")}
           onChange={(role) => {
             onChange({ ...value, role: role as FolderRole });
           }}
@@ -455,7 +455,7 @@ function DateField({
   return (
     <div data-part="form.field" data-field={name}>
       <label data-part="form.label" htmlFor={id}>
-        {t("rules-date")}
+        {t("common-date")}
       </label>
       <input
         id={id}
@@ -526,7 +526,7 @@ function ConditionNode({
           onChange(removeAt(root, path));
         }}
       >
-        {t("rules-remove")}
+        {t("common-remove")}
       </button>
     ) : null;
   if (condition.type === "all" || condition.type === "any" || condition.type === "not") {

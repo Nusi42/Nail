@@ -33,6 +33,7 @@ import {
   TRUST_LEVELS,
 } from "./model";
 import { LOOKUP_POLICIES, LOOKUP_SOURCES } from "./SecuritySettings";
+import { METHODS } from "./MessageSecurity";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["security-"];
@@ -127,7 +128,6 @@ const RECIPIENT_STATES = [
 const LOOKUP_STATES = ["found", "not-found", "failed"];
 const KEY_STATES = ["revoked", "expired", "rejected"];
 const TONES = ["good", "neutral", "warning", "danger"];
-const METHODS = ["dmarc", "dkim", "spf", "arc"];
 /** Settings tabs and actions the default layout labels (`@security.…`). */
 const LAYOUT_LABELS = [
   "security-settings-tab-keys",

@@ -27,24 +27,20 @@ plugin-permission-composer = Add actions and content blocks to the composer
 plugin-permission-attachments = Preview attachments and add attachment actions
 plugin-permission-background = Run in the background on a schedule or when things happen
 plugin-permission-mcp-expose = Offer tools to connected AI agents (MCP clients)
-plugin-permissions-label = Permissions
 plugin-permissions-none = This plug-in asks for no permissions.
 plugin-permission-allow = Allow
-plugin-permission-deny = Deny
 plugin-permission-needs-read = Needs the permission to read your mail.
 plugin-permission-accounts = Accounts for “{ $permission }”
-plugin-permission-all-accounts = All accounts
 plugin-permission-some-accounts = Only these accounts
-plugin-permission-no-accounts = Choose at least one account.
 
 ## Windows
 
 window-plugin-install = Install a plug-in
-window-plugin-manager = Plug-ins
+window-plugin-manager = { common-plug-ins }
 
 ## Layout labels (@plugin.…)
 
-plugin-manager-tab = Plug-ins
+plugin-manager-tab = { common-plug-ins }
 plugin-action-install = Install plug-in…
 plugin-action-load-dev = Load plug-in folder…
 plugin-action-manage = Manage plug-ins
@@ -60,8 +56,6 @@ plugin-install-location-file = Path of the .nailplugin file
 plugin-install-location-url = Web address (https)
 plugin-install-location-dev = Folder with manifest.json
 plugin-install-preview = Check the plug-in
-plugin-install-cancel = Cancel
-plugin-install-back = Back
 plugin-install-name = { $name } { $version }
 plugin-install-author = By { $author }
 plugin-install-homepage = Web page: { $url }
@@ -82,7 +76,6 @@ plugin-install-install = Install
 plugin-install-update-button = Update
 plugin-install-changed = The package changed after it was checked. Check it again before installing.
 plugin-install-done = { $name } is installed.
-plugin-install-close = Close
 
 ## Placements (proposed on install, confirmed like a merge)
 
@@ -93,10 +86,7 @@ plugin-placements-apply =
         [one] Add 1 item to the layout
        *[other] Add { $count } items to the layout
     }
-plugin-placements-skip = Not now
 plugin-placements-applied = Added to your layout. The previous layout was backed up.
-plugin-placements-undo = Undo
-plugin-placements-close = Close
 plugin-placements-nothing = The plug-in has nothing to add to your layout.
 plugin-placements-invalid =
     { $count ->
@@ -107,32 +97,29 @@ plugin-placements-unavailable = Suggested places cannot be shown yet.
 
 ## Plug-in manager
 
-plugin-manager-label = Plug-ins
+plugin-manager-label = { common-plug-ins }
 plugin-manager-install = Install a plug-in…
 plugin-manager-load-dev = Load a development folder…
 plugin-manager-empty = No plug-ins are installed.
-plugin-manager-name = { $name } { $version }
 plugin-manager-enabled = { $name } is on
 plugin-manager-source-file = Installed from { $path }
 plugin-manager-source-url = Installed from { $url }
 plugin-manager-source-dev = Loaded from the development folder { $folder }
 plugin-manager-crashed = The plug-in stopped: { $error }
-plugin-manager-show-permissions = Permissions
-plugin-manager-show-settings = Settings
+plugin-manager-show-permissions = { common-permissions }
+plugin-manager-show-settings = { common-settings }
 plugin-manager-show-log = Log
 plugin-manager-show-layout = Place in layout
 plugin-manager-grants-save = Save permissions
 plugin-manager-grants-saved = Permissions saved.
-plugin-manager-uninstall = Remove
 plugin-manager-uninstall-confirm = Remove { $name }? Its settings, data and log are deleted. Items it added to your layout stay until you remove them.
-plugin-manager-uninstall-yes = Remove
 plugin-manager-uninstall-no = Keep
 
 ## Run states
 
-plugin-state-disabled = Off
+plugin-state-disabled = { common-off }
 plugin-state-starting = Starting
-plugin-state-running = Running
+plugin-state-running = { portability-state-running }
 plugin-state-stopped = Not running
 plugin-state-crashed = Stopped after a problem
 plugin-state-incompatible = Not compatible with this version of Nail
@@ -141,15 +128,14 @@ plugin-state-incompatible = Not compatible with this version of Nail
 
 plugin-logs-label = Plug-in log
 plugin-logs-level = Show from level
-plugin-logs-refresh = Refresh
 plugin-logs-clear = Clear log
 plugin-logs-empty = The log is empty.
 plugin-log-level-debug = Debug
 plugin-log-level-info = Info
-plugin-log-level-warn = Warning
+plugin-log-level-warn = { common-warning }
 plugin-log-level-error = Error
 plugin-log-source-plugin = Plug-in
-plugin-log-source-host = Nail
+plugin-log-source-host = { common-nail }
 plugin-log-source-api = API call
 
 ## Settings page
@@ -157,23 +143,20 @@ plugin-log-source-api = API call
 plugin-settings-label = Plug-in settings
 plugin-settings-none = This plug-in has no settings.
 plugin-settings-save = Save settings
-plugin-settings-saved = Settings saved.
-
-## Plug-in dialogs
 
 ## Window titles of plug-in dialogs (M5c: windows of the window manager;
 ## the dialog's own title is shown when it has one)
 
-window-plugin-dialog-small = Plug-in dialog
-window-plugin-dialog-medium = Plug-in dialog
+window-plugin-dialog-small = { window-plugin-dialog-large }
+window-plugin-dialog-medium = { window-plugin-dialog-large }
 window-plugin-dialog-large = Plug-in dialog
-window-plugin-modal-small = Plug-in dialog
-window-plugin-modal-medium = Plug-in dialog
-window-plugin-modal-large = Plug-in dialog
+window-plugin-modal-small = { window-plugin-dialog-large }
+window-plugin-modal-medium = { window-plugin-dialog-large }
+window-plugin-modal-large = { window-plugin-dialog-large }
 window-plugin-send-veto = Message not sent
 
 plugin-dialog-from = from { $plugin }
-plugin-dialog-close = Close
+plugin-dialog-close = { common-close }
 plugin-dialog-invalid =
     { $count ->
         [one] Please correct the marked field.
@@ -198,19 +181,13 @@ plugin-message-list-label =
         [one] 1 message
        *[other] { $count } messages
     }
-plugin-message-no-subject = (no subject)
-plugin-table-label = Table
 plugin-table-select = Select
 plugin-table-select-row = Select row { $row }
-plugin-progress-label = Progress
 plugin-link-confirm = Open { $url } in your browser?
-plugin-link-open = Open
-plugin-link-cancel = Cancel
 
 ## Notifications
 
 plugin-notifications-label = Plug-in notifications
-plugin-notification-dismiss = Dismiss
 
 ## Panels
 
@@ -228,7 +205,7 @@ plugin-install-attachment-action = Attachment action “{ $title }”
 plugin-install-link-action = Link action “{ $title }”
 plugin-install-job = Background job “{ $title }”
 plugin-install-mcp-tool = Tool for AI agents: { $tool }
-plugin-manager-show-confirmations = Confirmations
+plugin-manager-show-confirmations = { common-confirmations }
 plugin-manager-show-activity = Activity
 
 ## Plug-in manager: activity (hooks, background jobs, CPU time)
@@ -239,17 +216,14 @@ plugin-activity-cpu-exhausted = The plug-in used all its CPU time for this hour.
 plugin-activity-hooks = Mail hooks
 plugin-activity-hook = Hook
 plugin-activity-calls = Calls
-plugin-activity-failures = Failed
 plugin-activity-timeouts = Too slow
 plugin-activity-vetoes = Stopped mail
 plugin-activity-time = Time (average / longest)
 plugin-activity-time-value = { $average } ms / { $max } ms
 plugin-activity-last = Last call
 plugin-activity-count = { NUMBER($count) }
-plugin-activity-never = Never
 plugin-activity-last-error = Last problem: { $error }
 plugin-activity-jobs = Background jobs
-plugin-activity-schedule = Schedule
 plugin-activity-events = Runs when
 plugin-activity-last-run = Last run
 plugin-activity-running = Running now
@@ -275,7 +249,6 @@ plugin-badge-tooltip = { $tooltip } (added by the plug-in { $plugin })
 plugin-extension-from = { $plugin }
 plugin-attachment-actions = Plug-in actions for { $name }
 plugin-link-actions = Plug-in actions for this link
-plugin-preview-label = Preview of { $name }
 plugin-preview-by = { $renderer }, shown by the plug-in { $plugin }
 plugin-preview-choose = Preview with
 plugin-preview-option = { $renderer } ({ $plugin })
@@ -285,7 +258,6 @@ plugin-preview-image-alt = Preview drawn by the plug-in { $plugin }
 
 ## Composer: plug-in actions, Markdown blocks, edits
 
-plugin-composer-label = Plug-ins
 plugin-composer-actions = Plug-in actions
 plugin-composer-blocks = Insert block
 plugin-composer-save-first = The draft could not be saved, so the plug-in cannot work on it yet.
@@ -304,6 +276,4 @@ plugin-veto-title =
     }
 plugin-veto-intro = The message was not sent. Check the reason, then keep editing or send it anyway.
 plugin-veto-plugin = Plug-in “{ $plugin }”:
-plugin-veto-keep-editing = Keep editing
-plugin-veto-send-anyway = Send anyway
 plugin-veto-expired = This was too long ago. Send the message again to check it once more.

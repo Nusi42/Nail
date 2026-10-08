@@ -74,7 +74,7 @@ export function RecurrenceEditor({
       <legend data-part="form.section.title">{t("pim-recurrence-legend")}</legend>
       <div data-part="form.field" data-field="freq">
         <label data-part="form.label" htmlFor={ids.freq}>
-          {t("pim-recurrence-repeat")}
+          {t("common-repeats")}
         </label>
         <select
           id={ids.freq}
@@ -118,7 +118,7 @@ export function RecurrenceEditor({
 
           {value.rule.freq === "weekly" && (
             <fieldset data-part="pim.recurrence.weekdays">
-              <legend data-part="form.label">{t("pim-recurrence-on-days")}</legend>
+              <legend data-part="form.label">{t("common-on")}</legend>
               {WEEKDAYS.map((day) => {
                 const checked = value.rule.weekdays.includes(day);
                 return (
@@ -189,7 +189,7 @@ export function RecurrenceEditor({
                   setRule({ end: { type: "never" } });
                 }}
               />
-              <span>{t("pim-recurrence-end-never")}</span>
+              <span>{t("common-never")}</span>
             </label>
             <label data-part="form.check">
               <input

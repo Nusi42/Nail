@@ -12,9 +12,7 @@ import {
   askDeletePermanently,
   pendingPermanentDelete,
 } from "./DeletePermanently";
-
-const INBOX = "acc-personal/Inbox";
-const TRASH = "acc-personal/Trash";
+import { INBOX, TRASH } from "../test/mockIds";
 
 /** Puts messages into Trash (only from there can they be deleted for good). */
 function toTrash(env: Env, ids: readonly string[]): void {

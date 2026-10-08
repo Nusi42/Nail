@@ -34,11 +34,10 @@ junk-verdict-score = This message looks like junk ({ $score } %).
 
 ## Settings → Junk mail
 
-junk-settings-tab = Junk mail
+junk-settings-tab = { junk-verdict-label }
 junk-settings-label = Junk mail settings
 junk-settings-intro = Nail honours the Junk flags your server sets and can learn from your own "Mark as junk" and "Not junk" choices. Junk is only ever moved, never deleted.
-junk-settings-no-accounts = Add an account first.
-junk-settings-account = Account
+junk-settings-account = { common-account }
 junk-settings-loading = Loading the classifier…
 junk-settings-classifier = Nail's own junk filter
 junk-settings-enabled = Classify arriving mail with Nail's junk filter
@@ -49,27 +48,23 @@ junk-settings-min-training-hint = The filter starts once it has seen this many j
 junk-settings-honor-server = Trust the server's Junk flags
 junk-settings-move = Move junk to the Junk folder
 junk-settings-never-deletes = Nail never deletes junk; you can always find it in the Junk folder.
-junk-settings-save = Save
-junk-settings-saved = Saved.
+junk-settings-saved = { common-saved }
 junk-settings-reset-done = The filter forgot everything it learned.
 junk-reset = Reset the filter…
 junk-reset-confirm = Forget everything the filter learned for this account?
 junk-reset-yes = Reset
-junk-reset-no = Cancel
 junk-status-label = Training status
-junk-status-state = State
 junk-status-ready = Ready: classifying arriving mail
 junk-status-learning = Learning (needs { $needed } junk and { $needed } good messages)
 junk-status-trained = Trained
 junk-status-trained-counts = { $junk } junk, { $ham } good
 junk-status-tokens = Words known
 junk-status-last-trained = Last trained
-junk-status-never = Never
 
 ## Snooze
 
-window-snooze = Snooze
-window-snoozed = Snoozed messages
+window-snooze = { common-snooze }
+window-snoozed = { snooze-action-list }
 snooze-intro = { $count ->
         [one] Hide the message until…
        *[other] Hide { $count } messages until…
@@ -86,34 +81,29 @@ snooze-preset-tomorrow = Tomorrow
 snooze-preset-weekend = This weekend
 snooze-preset-next-week = Next week
 snooze-custom-label = Date and time
-snooze-submit = Snooze
-snooze-cancel = Cancel
-snooze-error-past = Choose a time in the future.
+snooze-error-past = { common-time-in-future }
 snooze-error-time = Enter a date and a time.
-snooze-list-label = Snoozed messages
 snooze-list-empty = No snoozed messages.
 snooze-list-until = Back { $time }
 snooze-list-wake = Wake up now
 snooze-list-wake-label = Wake up "{ $subject }" now
-snooze-unknown-sender = Unknown sender
 
 ## Settings → Notifications
 
-notification-settings-tab = Notifications
+notification-settings-tab = { settings-section-notifications }
 notification-settings-label = Notification settings
 notification-settings-loading = Loading notification settings…
-notification-general-title = New mail
+notification-general-title = { common-new-mail }
 notification-enabled = Tell me about new mail
 notification-show-preview = Show sender and subject
-notification-sound = Play a sound
+notification-sound = { common-play-a-sound }
 notification-folders = Folders that notify
 notification-folders-inbox = Inboxes only
 notification-folders-all = Every folder
 notification-quiet-title = Quiet hours
 notification-quiet-enabled = No notifications during quiet hours
-notification-quiet-start = From
+notification-quiet-start = { common-range-from }
 notification-quiet-end = Until
-notification-quiet-days = On
 notification-quiet-days-hint = No day chosen means every day. Hours that pass midnight belong to the day they start on.
 notification-day-mon = Monday
 notification-day-tue = Tuesday
@@ -134,7 +124,6 @@ notification-override-off = Never notify
 notification-browser-needed = This browser shows notifications only after you allow them.
 notification-browser-denied = This browser blocks notifications from Nail. Allow them in the browser's site settings.
 notification-browser-allow = Allow notifications in this browser
-notification-settings-save = Save
-notification-settings-saved = Saved.
+notification-settings-saved = { common-saved }
 notification-test = Send a test notification
 notification-test-sent = A test notification is on its way.

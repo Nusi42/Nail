@@ -7,9 +7,7 @@ import { LaunchRequests } from "./LaunchRequests";
 
 export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = {};
-export const dialogs: Feature["dialogs"] = {};
-export const events: Feature["events"] = [];
 /** Takes the pending launch requests at start-up and on `LaunchRequested`. */
-export const effects: Feature["effects"] = [LaunchRequests];
+export const effects: NonNullable<Feature["effects"]> = [LaunchRequests];
 
 export { handleLaunch, LaunchRequests, type LaunchNotice } from "./LaunchRequests";

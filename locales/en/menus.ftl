@@ -10,15 +10,15 @@ context-menu-action-open = Open context menu
 
 ## Accessible names of the menus, by part
 
-context-menu-label-message-list-row = Message actions
+context-menu-label-message-list-row = { common-message-actions }
 context-menu-label-thread-view-message = Conversation message actions
-context-menu-label-message-view = Message actions
+context-menu-label-message-view = { common-message-actions }
 context-menu-label-message-view-attachment = Attachment actions
 context-menu-label-folder-tree-folder = Folder actions
 context-menu-label-folder-tree-account = Account actions
 context-menu-label-composer = Composer actions
-context-menu-label-calendar-list-calendar = Calendar actions
-context-menu-label-nav-rail = View
+context-menu-label-calendar-list-calendar = { common-calendar-actions }
+context-menu-label-nav-rail = { common-view }
 
 ## Key names in shortcuts (menus, key binding editor)
 

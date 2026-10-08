@@ -32,6 +32,7 @@ import { followUpManifest } from "../plugins/mockHost";
 import { barItems, moreItems } from "./model";
 import { PALETTE_LIMIT } from "./ToolbarCustomizer";
 import { toolbarToCustomize } from "./index";
+import { staleLayoutRevision } from "../../test/env";
 
 /** The layout the core announced last, as the app keeps it. */
 function Live({ env, children }: { env: Env; children: ReactNode }) {
@@ -170,12 +171,18 @@ function drag(
   fireEvent.dragEnd(source, { dataTransfer });
 }
 
+/** The reader toolbar's Reply button. */
+async function readerReply() {
+  const user = userEvent.setup();
+  const { env } = renderReader();
+  const bar = await screen.findByRole("toolbar", { name: "Message actions" });
+  const reply = within(bar).getByRole("button", { name: "Reply" });
+  return { user, env, bar, reply };
+}
+
 describe("toolbar context menu (M5d)", () => {
   it("opens on a right-click and customizes that toolbar", async () => {
-    const user = userEvent.setup();
-    const { env } = renderReader();
-    const bar = await screen.findByRole("toolbar", { name: "Message actions" });
-    const reply = within(bar).getByRole("button", { name: "Reply" });
+    const { user, env, bar, reply } = await readerReply();
     const notCancelled = fireEvent.contextMenu(reply, { clientX: 40, clientY: 20, button: 2 });
     expect(notCancelled).toBe(false);
     const menu = await screen.findByRole("menu", { name: "Toolbar" });
@@ -189,10 +196,7 @@ describe("toolbar context menu (M5d)", () => {
   });
 
   it("opens with Shift+F10 on a button and gives focus back on Escape", async () => {
-    const user = userEvent.setup();
-    const { env } = renderReader();
-    const bar = await screen.findByRole("toolbar", { name: "Message actions" });
-    const reply = within(bar).getByRole("button", { name: "Reply" });
+    const { user, env, reply } = await readerReply();
     act(() => {
       reply.focus();
     });
@@ -565,16 +569,8 @@ describe("toolbar customizer window (M5d)", () => {
     const dialog = await customizer();
     await settleQueries(env);
     env.transport.data.features.customization.layoutPatches.length = 0;
-    act(() => {
-      simulateExternalEdit(env.transport, "layout");
-    });
     // The UI still holds the old revision until the event arrives; a stale one answers conflict.
-    env.queryClient.setQueryData(["edit-history", "layout"], {
-      scope: "layout",
-      revision: "stale",
-      undo: [],
-      redo: [],
-    });
+    staleLayoutRevision(env);
     await user.click(option(dialog, "Toolbar", "Reply"));
     await user.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() => {

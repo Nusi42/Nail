@@ -149,7 +149,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [PRINT_DIALOG]: PrintDialog,
 };
 
@@ -162,7 +162,5 @@ export const windows: NonNullable<Feature["windows"]> = {
   [PRINT_DIALOG]: { size: { width: 760, height: 680 }, min_size: { width: 520, height: 480 } },
 };
 
-/** Handlers for the core's events. */
-export const events: Feature["events"] = [];
 /** Background components: the print view and local sheets. */
-export const effects: Feature["effects"] = [PrintHost];
+export const effects: NonNullable<Feature["effects"]> = [PrintHost];

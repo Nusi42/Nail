@@ -10,8 +10,7 @@ import {
 import { MOCK_MAX_FAILURES, MOCK_TOTP_CODE } from "./mock";
 import { MockAuthServer } from "./mockAuth";
 import { presetGrant } from "./model";
-
-const PASSWORD = "correct horse battery";
+import { PASSWORD } from "./testUtil";
 
 async function setup(options: { totp?: boolean } = {}) {
   const core = new MockTransport();

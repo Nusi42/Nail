@@ -23,9 +23,8 @@
  * - `window-snap-preview` (`data-snap` = `left` / `right`): the half a
  *   dragged window will fill when dropped
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+import { p } from "../../theme/selectors";
+import { QUIET_HOVER } from "../../theme/declarations";
 
 /** Token shorthands (fallbacks only where the schema may lack the token). */
 const T = {
@@ -84,22 +83,47 @@ ${p("window.maximize")} {
   width: ${T.control}; height: ${T.control}; padding: 0;
   border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent;
 }
-${p("window.maximize")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("window.maximize")}:hover { ${QUIET_HOVER} }
 ${p("window.maximize")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
 ${p("window.maximize.icon")} { width: ${T.icon}; height: ${T.icon}; }`;
 
 const edge = (name: string, rules: string) =>
   `${p("window.handle")}[data-edge="${name}"] { ${rules} }`;
 
-const HANDLES = `${p("window.handle")} { position: absolute; z-index: 3; touch-action: none; }
-${edge("n", `top: 0; left: ${CORNER}; right: ${CORNER}; height: ${EDGE}; cursor: ns-resize;`)}
-${edge("s", `bottom: 0; left: ${CORNER}; right: ${CORNER}; height: ${EDGE}; cursor: ns-resize;`)}
-${edge("e", `right: 0; top: ${CORNER}; bottom: ${CORNER}; width: ${EDGE}; cursor: ew-resize;`)}
-${edge("w", `left: 0; top: ${CORNER}; bottom: ${CORNER}; width: ${EDGE}; cursor: ew-resize;`)}
-${edge("ne", `top: 0; right: 0; width: ${CORNER}; height: ${CORNER}; cursor: nesw-resize;`)}
-${edge("sw", `bottom: 0; left: 0; width: ${CORNER}; height: ${CORNER}; cursor: nesw-resize;`)}
-${edge("nw", `top: 0; left: 0; width: ${CORNER}; height: ${CORNER}; cursor: nwse-resize;`)}
-${edge("se", `bottom: 0; right: 0; width: ${CORNER}; height: ${CORNER}; cursor: nwse-resize;`)}`;
+/** An edge handle: along the side `at`, between the corners, `EDGE` deep. */
+const side = (
+  name: string,
+  at: string,
+  along: readonly [string, string],
+  depth: string,
+  cursor: string,
+) =>
+  edge(
+    name,
+    `${at}: 0; ${along[0]}: ${CORNER}; ${along[1]}: ${CORNER}; ${depth}: ${EDGE}; cursor: ${cursor};`,
+  );
+
+/** A corner handle: `CORNER` square at the corner of `vertical` and `horizontal`. */
+const corner = (name: string, vertical: string, horizontal: string, cursor: string) =>
+  edge(
+    name,
+    `${vertical}: 0; ${horizontal}: 0; width: ${CORNER}; height: ${CORNER}; cursor: ${cursor};`,
+  );
+
+const ACROSS = ["left", "right"] as const;
+const DOWN = ["top", "bottom"] as const;
+
+const HANDLES = [
+  `${p("window.handle")} { position: absolute; z-index: 3; touch-action: none; }`,
+  side("n", "top", ACROSS, "height", "ns-resize"),
+  side("s", "bottom", ACROSS, "height", "ns-resize"),
+  side("e", "right", DOWN, "width", "ew-resize"),
+  side("w", "left", DOWN, "width", "ew-resize"),
+  corner("ne", "top", "right", "nesw-resize"),
+  corner("sw", "bottom", "left", "nesw-resize"),
+  corner("nw", "top", "left", "nwse-resize"),
+  corner("se", "bottom", "right", "nwse-resize"),
+].join("\n");
 
 const SNAP = `${p("window-snap-preview")} {
   position: absolute; top: ${T.sm}; bottom: ${T.sm}; width: calc(50% - 1.5 * ${T.sm});

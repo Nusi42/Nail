@@ -32,8 +32,16 @@ import {
   MAILBOX_REMOVE_DIALOG,
 } from "./names";
 import { exchangeStoreFor } from "./store";
-import { actionContext, cacheList, dialog, message, requests, setup } from "./testing";
+import { dialog, setup } from "./testing";
 import { must } from "../../test/must";
+import {
+  requestsOf,
+  messageWithSubject,
+  cacheList,
+  actionContext,
+  wireEvents,
+  clickAndClose,
+} from "../../test/env";
 
 describe("categories", () => {
   it("renders nothing for accounts that are not Exchange accounts", async () => {
@@ -83,7 +91,7 @@ describe("categories", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "A category with this name already exists.",
     );
-    expect(requests(env, "CreateExchangeCategory")).toHaveLength(0);
+    expect(requestsOf(env, "CreateExchangeCategory")).toHaveLength(0);
     await user.clear(name);
     await user.type(name, "Travel");
     await user.click(screen.getByRole("radio", { name: "Teal" }));
@@ -91,7 +99,7 @@ describe("categories", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "CreateExchangeCategory")[0]?.settings).toEqual({
+    expect(requestsOf(env, "CreateExchangeCategory")[0]?.settings).toEqual({
       name: "Travel",
       color: "preset5",
     });
@@ -113,9 +121,9 @@ describe("categories", () => {
     expect(screen.getByText("The category is renamed on 2 messages too.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(requests(env, "UpdateExchangeCategory")).toHaveLength(1);
+      expect(requestsOf(env, "UpdateExchangeCategory")).toHaveLength(1);
     });
-    expect(message(env, "Phoenix launch checklist").tags).toContain("Important");
+    expect(messageWithSubject(env, "Phoenix launch checklist").tags).toContain("Important");
   });
 
   it("deletes a category but keeps the tags", async () => {
@@ -132,15 +140,15 @@ describe("categories", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "DeleteExchangeCategory")[0]?.category_id).toBe("{0004-cat}");
-    expect(message(env, "Phoenix launch checklist").tags).toContain("Urgent");
+    expect(requestsOf(env, "DeleteExchangeCategory")[0]?.category_id).toBe("{0004-cat}");
+    expect(messageWithSubject(env, "Phoenix launch checklist").tags).toContain("Urgent");
   });
 
   it("applies categories to the selected message as tags", async () => {
     const env = setup();
     const user = userEvent.setup();
     const close = vi.fn();
-    const checklist = message(env, "Phoenix launch checklist");
+    const checklist = messageWithSubject(env, "Phoenix launch checklist");
     cacheList(env, [checklist]);
     const handler = actions["exchange.apply-categories"];
     expect(handler?.enabled?.(actionContext(env), [])).toBe(false);
@@ -154,11 +162,8 @@ describe("categories", () => {
     expect(urgent).toBeChecked();
     await user.click(urgent);
     await user.click(screen.getByRole("checkbox", { name: "Customers" }));
-    await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+    await clickAndClose(user, "Apply", close);
+    expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [{ kind: "message", message_id: checklist.id }],
       action: { type: "tags", add: ["Customers"], remove: ["Urgent"] },
     });
@@ -167,7 +172,7 @@ describe("categories", () => {
   it("shows a message's categories as coloured chips, nothing for other mail", async () => {
     const env = setup();
     renderWithProviders(
-      <MessageCategories message={message(env, "Phoenix launch checklist")} />,
+      <MessageCategories message={messageWithSubject(env, "Phoenix launch checklist")} />,
       env,
     );
     const list = await screen.findByRole("list", { name: "Categories" });
@@ -182,7 +187,7 @@ describe("categories", () => {
     expect(within(list).getByText("Project Phoenix")).toBeInTheDocument();
     // The tag `customers` is shown with the category's spelling.
     renderWithProviders(
-      <MessageCategories message={message(env, "Contract renewal for Fabrikam")} />,
+      <MessageCategories message={messageWithSubject(env, "Contract renewal for Fabrikam")} />,
       env,
     );
     await waitFor(() => expect(screen.getByText("Customers")).toBeInTheDocument());
@@ -216,13 +221,7 @@ describe("other mailboxes", () => {
     const user = userEvent.setup();
     const close = vi.fn();
     // The app refetches on the core's events.
-    env.transport.onEvent((event) => {
-      handleExchangeEvent(event, {
-        client: env.client,
-        queryClient: env.queryClient,
-        store: env.store,
-      });
-    });
+    wireEvents(env, handleExchangeEvent);
     renderWithProviders(<NodeView node={widget("exchange-mailboxes")} path="t/0" />, env);
     await user.click(await screen.findByRole("button", { name: "Add shared mailbox…" }));
     expect(env.store.getState().windows).toContain(MAILBOX_EDITOR_DIALOG);
@@ -239,7 +238,7 @@ describe("other mailboxes", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "AddExchangeMailbox")[0]?.settings).toEqual({
+    expect(requestsOf(env, "AddExchangeMailbox")[0]?.settings).toEqual({
       address: ADDABLE_MAILBOX,
       name: null,
       kind: "shared",
@@ -269,7 +268,7 @@ describe("other mailboxes", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "RemoveExchangeMailbox")[0]?.address).toBe(SHARED_MAILBOX);
+    expect(requestsOf(env, "RemoveExchangeMailbox")[0]?.address).toBe(SHARED_MAILBOX);
     expect(env.store.getState().activeFolderId).toBeNull();
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Support" })).toBeNull();
@@ -362,7 +361,7 @@ describe("Focused Inbox", () => {
     const env = setup();
     const user = userEvent.setup();
     const close = vi.fn();
-    const digest = message(env, "Phoenix launch checklist");
+    const digest = messageWithSubject(env, "Phoenix launch checklist");
     cacheList(env, [digest]);
     renderWithProviders(<FocusMoveButton message={digest} />, env);
     await user.click(screen.getByRole("button", { name: "Move to Other" }));
@@ -377,7 +376,7 @@ describe("Focused Inbox", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "ClassifyFocused")[0]).toEqual({
+    expect(requestsOf(env, "ClassifyFocused")[0]).toEqual({
       type: "ClassifyFocused",
       message_ids: [digest.id],
       classification: "other",
@@ -389,7 +388,7 @@ describe("Focused Inbox", () => {
 
   it("offers the classify action for classified Exchange mail only", async () => {
     const env = setup();
-    const digest = message(env, "Your weekly digest");
+    const digest = messageWithSubject(env, "Your weekly digest");
     cacheList(env, [digest]);
     const handler = actions["exchange.classify"];
     expect(handler?.enabled?.(actionContext(env), [])).toBe(false);
@@ -400,7 +399,7 @@ describe("Focused Inbox", () => {
       messageIds: [digest.id],
       to: "focused",
     });
-    const archived = message(env, "Dentist appointment reminder");
+    const archived = messageWithSubject(env, "Dentist appointment reminder");
     cacheList(env, [archived]);
     env.store.getState().selectMessage(archived.id);
     expect(handler?.enabled?.(actionContext(env), [])).toBe(false);

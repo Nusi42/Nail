@@ -1,7 +1,12 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { JsonValue, MenuItem, ResolvedLayout } from "../../api/generated";
-import { createEnv, renderWithProviders, stubElementSizes, widget } from "../../test/harness";
+import {
+  createEnv,
+  renderWithProviders,
+  widget,
+  stubElementSizesEachTest,
+} from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { ContextMenuHost } from "./ContextMenuHost";
 import { ariaShortcut, chordText, keyLabel } from "./keyLabels";
@@ -11,17 +16,11 @@ import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
 import { normalizeLayout } from "../../api/normalize";
 import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
 import { must } from "../../test/must";
+import { INBOX } from "../../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
 const FIELD = "field";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 const action = (id: string, args: JsonValue[] = []): MenuItem => ({
   type: "action",

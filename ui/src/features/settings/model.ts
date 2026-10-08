@@ -8,6 +8,9 @@ import type { LayoutNode, ResolvedLayout, SettingsSection } from "../../api/gene
 import { foldText, type SettingsSearchHit } from "../../layout/settingsIndex";
 import formerTabs from "./formerTabs.json";
 
+/** The window the settings page lives in when the layout has no `settings` view. */
+export const SETTINGS_WINDOW = "settings";
+
 type WidgetNode = Extract<LayoutNode, { type: "widget" }>;
 
 /**

@@ -4,9 +4,7 @@ import { useLabel, useT } from "../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../layout/widgetRegistry";
 import { useAccounts, useAccountStatuses } from "../state/queries";
 import { useUi } from "../state/uiStore";
-
-/** The built-in "All accounts" virtual account (`AccountId::ALL`). */
-export const ALL_ACCOUNTS = "all";
+import { ALL_ACCOUNTS } from "../api/contract";
 
 /** Display name of an account; the built-in "All accounts" has none of its own. */
 export function useAccountName(): (account: Account) => string {
@@ -38,7 +36,7 @@ export function AccountSwitcher({ node }: WidgetProps) {
       data-part="account-switcher"
       data-node-id={node.id ?? undefined}
       role="group"
-      aria-label={node.label ? label(node.label) : t("account-switcher-label")}
+      aria-label={node.label ? label(node.label) : t("common-accounts")}
     >
       {accounts.isError && (
         <div data-part="account-switcher.error">{t(errorMessageIdOf(accounts.error))}</div>

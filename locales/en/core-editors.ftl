@@ -9,8 +9,8 @@
 
 ## Undo histories (nail_api::editing::HistoryScope)
 
-history-scope-layout = Layout
-history-scope-appearance = Appearance
+history-scope-layout = { common-layout }
+history-scope-appearance = { common-appearance }
 
 ## Undo entries (nail_api::editing::EditKind; Undo / Redo labels and the history list)
 

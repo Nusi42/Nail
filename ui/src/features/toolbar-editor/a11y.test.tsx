@@ -11,7 +11,7 @@ import { resolveMockTheme } from "../appearance/themes";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { violations } from "../../test/axe";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders, widget, settleQueries } from "../../test/harness";
 import { must } from "../../test/must";
 import { compileTheme } from "../../theme/compile";
 import {
@@ -20,23 +20,12 @@ import {
   CUSTOMIZER_SHORT,
   TOOLBAR_CUSTOMIZER_SKIN_CSS,
 } from "./skin";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-    expect(env.queryClient.isMutating()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
+import { itCoversTheBuiltInThemes } from "../../test/themes";
 
 const THEMES = BUILTIN_THEMES.map(([id]) => id);
 
 describe("toolbar customizer accessibility (M5d)", () => {
-  it("covers the five built-in themes", () => {
-    expect(THEMES).toEqual(["frost", "sage", "graphite", "nocturne", "high-contrast"]);
-  });
+  itCoversTheBuiltInThemes();
 
   it.each(THEMES)(
     "%s: the customizer window and the settings card have no violations",
@@ -63,7 +52,7 @@ describe("toolbar customizer accessibility (M5d)", () => {
       const dialog = await waitFor(() =>
         must(container.ownerDocument.querySelector<HTMLElement>('[data-part="window"]')),
       );
-      await settle(env);
+      await settleQueries(env, 20);
       // An item chosen and a drop target shown.
       const first = await waitFor(() =>
         must(dialog.querySelector<HTMLElement>('[data-list="bar"] [role="option"]')),

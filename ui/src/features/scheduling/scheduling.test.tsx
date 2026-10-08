@@ -6,8 +6,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import type { Attendee, CalendarEvent, PimTime, Request } from "../../api/generated";
-import type { ActionContext } from "../../actions/registry";
+import type { Attendee, CalendarEvent, PimTime } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { pimStoreFor } from "../pim/store";
@@ -17,15 +16,12 @@ import { newAttendee } from "./AttendeePicker";
 import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
 import { CANCEL_DIALOG, FIND_TIME_DIALOG, SETTINGS_DIALOG } from "./names";
 import { schedulingStoreFor } from "./store";
+import { actionContext, requestsOf } from "../../test/env";
 
 function setup(): Env {
   const env = createEnv();
   seedSchedulingDemo(env.transport.data);
   return env;
-}
-
-function requests<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r) => r.type === type) as Extract<Request, { type: T }>[];
 }
 
 function event(env: Env, id: string): CalendarEvent {
@@ -90,7 +86,7 @@ describe("attendee picker and free/busy timeline", () => {
     expect(screen.getByText(/people are busy at the chosen time/)).toHaveTextContent(
       "Katherine Johnson",
     );
-    const query = requests(env, "QueryFreeBusy")[0];
+    const query = requestsOf(env, "QueryFreeBusy")[0];
     expect(query?.attendees).toEqual([
       "ada@work.example",
       "grace@navy.example",
@@ -119,15 +115,15 @@ describe("attendee picker and free/busy timeline", () => {
     await screen.findByRole("img", { name: /^grace@navy.example: / });
     await user.click(screen.getByRole("button", { name: "Next day" }));
     await waitFor(() => {
-      expect(requests(env, "QueryFreeBusy").length).toBe(2);
+      expect(requestsOf(env, "QueryFreeBusy").length).toBe(2);
     });
-    const [first, second] = requests(env, "QueryFreeBusy");
+    const [first, second] = requestsOf(env, "QueryFreeBusy");
     expect(Date.parse(second?.from ?? "") - Date.parse(first?.from ?? "")).toBeGreaterThan(
       20 * 3_600_000,
     );
     await user.click(screen.getByRole("button", { name: "Today" }));
     await waitFor(() => {
-      expect(requests(env, "QueryFreeBusy").length).toBe(3);
+      expect(requestsOf(env, "QueryFreeBusy").length).toBe(3);
     });
   });
 
@@ -182,7 +178,7 @@ describe("meeting panel", () => {
     await user.type(within(panel).getByLabelText("Note in the mail (optional)"), "Agenda inside");
     await user.click(within(panel).getByRole("button", { name: "Send invitations" }));
     await within(panel).findByText("The invitations are on their way.");
-    expect(requests(env, "SendInvitations")[0]).toMatchObject({
+    expect(requestsOf(env, "SendInvitations")[0]).toMatchObject({
       event_id: "ev-review",
       attendees: [],
       comment: "Agenda inside",
@@ -192,9 +188,9 @@ describe("meeting panel", () => {
     await user.click(within(panel).getByRole("checkbox", { name: /Katherine Johnson/ }));
     await user.click(within(panel).getByRole("button", { name: "Send invitations" }));
     await waitFor(() => {
-      expect(requests(env, "SendInvitations")).toHaveLength(2);
+      expect(requestsOf(env, "SendInvitations")).toHaveLength(2);
     });
-    expect(requests(env, "SendInvitations")[1]?.attendees).toEqual(["katherine@nasa.example"]);
+    expect(requestsOf(env, "SendInvitations")[1]?.attendees).toEqual(["katherine@nasa.example"]);
   });
 
   it("organizer cancels for some attendees through the dialog", async () => {
@@ -216,7 +212,7 @@ describe("meeting panel", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "CancelMeeting")[0]).toMatchObject({
+    expect(requestsOf(env, "CancelMeeting")[0]).toMatchObject({
       scope: "attendees",
       attendees: ["katherine@nasa.example"],
     });
@@ -243,9 +239,9 @@ describe("meeting panel", () => {
     await user.click(screen.getByRole("radio", { name: "The whole meeting" }));
     await user.click(screen.getByRole("button", { name: "Cancel and notify" }));
     await waitFor(() => {
-      expect(requests(env, "CancelMeeting")).toHaveLength(1);
+      expect(requestsOf(env, "CancelMeeting")).toHaveLength(1);
     });
-    expect(requests(env, "CancelMeeting")[0]).toMatchObject({
+    expect(requestsOf(env, "CancelMeeting")[0]).toMatchObject({
       scope: "meeting",
       recurrence_id: null,
     });
@@ -264,7 +260,7 @@ describe("meeting panel", () => {
     ).toBeChecked();
     await user.click(within(panel).getByRole("button", { name: "Decline" }));
     await within(panel).findByText("Declined. Your answer is on its way.");
-    expect(requests(env, "RespondToInvitation")[0]?.target).toEqual({
+    expect(requestsOf(env, "RespondToInvitation")[0]?.target).toEqual({
       type: "event",
       event_id: "ev-standup",
       recurrence_id: occurrence,
@@ -275,7 +271,7 @@ describe("meeting panel", () => {
     await user.click(within(panel).getByRole("button", { name: "Propose a new time" }));
     await user.click(within(panel).getByRole("button", { name: "Send proposal" }));
     await within(panel).findByText("Your proposal is on its way.");
-    expect(requests(env, "ProposeNewTime")[0]?.target).toEqual({
+    expect(requestsOf(env, "ProposeNewTime")[0]?.target).toEqual({
       type: "event",
       event_id: "ev-standup",
       recurrence_id: null,
@@ -290,7 +286,7 @@ describe("meeting panel", () => {
       env,
     );
     await waitFor(() => {
-      expect(requests(env, "ListIdentities").length).toBeGreaterThan(0);
+      expect(requestsOf(env, "ListIdentities").length).toBeGreaterThan(0);
     });
     expect(container.querySelector('[data-part="scheduling.meeting"]')).toBeNull();
   });
@@ -321,20 +317,9 @@ describe("scheduling settings and actions", () => {
     });
   });
 
-  function ctx(env: Env): ActionContext {
-    return {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id) => id,
-      locale: "en",
-    };
-  }
-
   it("answers the selected message's invitation from a key binding", async () => {
     const env = setup();
-    const c = ctx(env);
+    const c = actionContext(env);
     expect(actions["scheduling.accept"]?.enabled?.(c, [])).toBe(false);
     env.store.getState().selectMessage(DEMO_INVITATIONS.newRequest);
     const card = await env.client.request(
@@ -347,7 +332,7 @@ describe("scheduling settings and actions", () => {
     );
     expect(actions["scheduling.accept"]?.enabled?.(c, [])).toBe(true);
     await actions["scheduling.decline"]?.run(c, []);
-    expect(requests(env, "RespondToInvitation")[0]).toMatchObject({
+    expect(requestsOf(env, "RespondToInvitation")[0]).toMatchObject({
       response: "decline",
       send: true,
     });
@@ -355,8 +340,8 @@ describe("scheduling settings and actions", () => {
 
   it("opens its dialogs", async () => {
     const env = setup();
-    await actions["scheduling.settings"]?.run(ctx(env), []);
-    await actions["scheduling.find-time"]?.run(ctx(env), []);
+    await actions["scheduling.settings"]?.run(actionContext(env), []);
+    await actions["scheduling.find-time"]?.run(actionContext(env), []);
     expect(env.store.getState().windows).toEqual([SETTINGS_DIALOG, FIND_TIME_DIALOG]);
   });
 });

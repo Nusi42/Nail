@@ -11,19 +11,13 @@ import {
   createEnv,
   renderWithProviders,
   settleQueries,
-  stubElementSizes,
   type Env,
+  stubElementSizesEachTest,
 } from "../../test/harness";
 import { hostLayout } from "./testing";
 import { must } from "../../test/must";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 function renderShell(env: Env, layout: ResolvedLayout = hostLayout()) {
   return renderWithProviders(<WindowView layout={layout} name="main" />, env, { layout });
@@ -47,6 +41,17 @@ const railButton = (name: RegExp) =>
 async function storedView(env: Env): Promise<unknown> {
   const response = await env.client.call({ type: "GetUiState" });
   return response.type === "UiState" ? (response.state[UI_STATE_VIEW] ?? null) : undefined;
+}
+
+/** The shell after a switch to Tasks, which the UI state remembers. */
+async function tasksRemembered() {
+  const env = createEnv();
+  renderShell(env);
+  await settleQueries(env);
+  fireEvent.click(railButton(/^Tasks/));
+  await settleQueries(env);
+  expect(await storedView(env)).toBe("tasks");
+  return env;
 }
 
 describe("view-host", () => {
@@ -93,24 +98,14 @@ describe("view-host", () => {
   });
 
   it("remembers the last view in the UI state", async () => {
-    const env = createEnv();
-    renderShell(env);
-    await settleQueries(env);
-    fireEvent.click(railButton(/^Tasks/));
-    await settleQueries(env);
-    expect(await storedView(env)).toBe("tasks");
+    const env = await tasksRemembered();
     fireEvent.click(railButton(/^Mail/));
     await settleQueries(env);
     expect(await storedView(env)).toBe("mail");
   });
 
   it("does not write its view back when another session remembers a different one", async () => {
-    const env = createEnv();
-    renderShell(env);
-    await settleQueries(env);
-    fireEvent.click(railButton(/^Tasks/));
-    await settleQueries(env);
-    expect(await storedView(env)).toBe("tasks");
+    const env = await tasksRemembered();
     // A remote browser (sharing the UI state) switches to Calendar.
     await env.client.call({ type: "SetUiState", key: UI_STATE_VIEW, value: "calendar" });
     act(() => {

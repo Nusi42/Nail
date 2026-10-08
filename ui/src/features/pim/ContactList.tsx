@@ -23,6 +23,7 @@ import {
   type MouseEvent,
 } from "react";
 import type { ContactSummary } from "../../api/generated";
+import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 import { useT } from "../../i18n/I18nProvider";
 import {
   optionBool,
@@ -31,7 +32,7 @@ import {
   type WidgetProps,
 } from "../../layout/widgetRegistry";
 import { Icon } from "../../widgets/Icon";
-import { Problem, problemOf, useChangeContext } from "./common";
+import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { CONTACT_DIALOG, GROUPS_DIALOG, MERGE_DIALOG } from "./names";
 import { PimMenu, type PimMenuEntry } from "./PimMenu";
 import {
@@ -61,7 +62,7 @@ export function ContactList({ node }: WidgetProps) {
   const pageSize = Math.max(20, Math.trunc(optionNumber(node, "page-size", 200)));
   const header = optionBool(node, "header", false);
   const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const debounced = useDebounced(query.trim(), TYPING_PAUSE_MS);
   const [book, setBook] = useState<string>("");
   const [group, setGroup] = useState<string>("");
   const [limit, setLimit] = useState(pageSize);
@@ -76,17 +77,6 @@ export function ContactList({ node }: WidgetProps) {
   const anchorRef = useRef<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const focusNext = useRef(false);
-
-  useEffect(() => {
-    const next = query.trim();
-    if (next === debounced) return;
-    const timer = setTimeout(() => {
-      setDebounced(next);
-    }, 150);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [query, debounced]);
 
   const contacts: ContactSummary[] = useMemo(() => {
     if (debounced) {
@@ -227,28 +217,11 @@ export function ContactList({ node }: WidgetProps) {
   ];
 
   return (
-    <section
-      data-part="contact-list"
-      data-key-context="contacts"
-      aria-label={t("pim-contacts-label")}
-    >
+    <section data-part="contact-list" data-key-context="contacts" aria-label={t("common-contacts")}>
       {header ? (
         <div data-part="pim.view-header">
-          <h2 data-part="pim.view-header.title">{t("pim-contacts-label")}</h2>
-          <div data-part="form.field" data-field="search">
-            <label data-part="form.label" htmlFor={ids.search}>
-              {t("pim-contacts-search")}
-            </label>
-            <input
-              id={ids.search}
-              data-part="form.input"
-              type="search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-              }}
-            />
-          </div>
+          <h2 data-part="pim.view-header.title">{t("common-contacts")}</h2>
+          <ContactSearch id={ids.search} query={query} onChange={setQuery} />
           <div data-part="pim.view-header.actions">
             <button
               type="button"
@@ -258,10 +231,10 @@ export function ContactList({ node }: WidgetProps) {
               onClick={newContact}
             >
               <Icon name="plus" part="form.button.icon" />
-              {t("pim-contact-new")}
+              {t("pim-action-new-contact")}
             </button>
             <PimMenu
-              label={t("pim-view-more")}
+              label={t("common-more")}
               icon="ellipsis"
               field="contacts-more"
               entries={moreEntries}
@@ -270,22 +243,7 @@ export function ContactList({ node }: WidgetProps) {
         </div>
       ) : null}
       <div data-part="contact-list.toolbar">
-        {!header && (
-          <div data-part="form.field" data-field="search">
-            <label data-part="form.label" htmlFor={ids.search}>
-              {t("pim-contacts-search")}
-            </label>
-            <input
-              id={ids.search}
-              data-part="form.input"
-              type="search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-              }}
-            />
-          </div>
-        )}
+        {!header && <ContactSearch id={ids.search} query={query} onChange={setQuery} />}
         {fixedBooks.length !== 1 && (
           <div data-part="form.field" data-field="address-book">
             <label data-part="form.label" htmlFor={ids.book}>
@@ -301,13 +259,11 @@ export function ContactList({ node }: WidgetProps) {
               }}
             >
               <option value="">{t("pim-contacts-all-books")}</option>
-              {(books.data ?? [])
-                .filter((b) => fixedBooks.length === 0 || fixedBooks.includes(b.id))
-                .map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.role === "collected" ? t("pim-book-collected") : b.settings.name}
-                  </option>
-                ))}
+              <BookOptions
+                books={(books.data ?? []).filter(
+                  (b) => fixedBooks.length === 0 || fixedBooks.includes(b.id),
+                )}
+              />
             </select>
           </div>
         )}
@@ -332,7 +288,7 @@ export function ContactList({ node }: WidgetProps) {
           </select>
         </div>
         {!header && (
-          <div data-part="contact-list.actions" role="group" aria-label={t("pim-contacts-actions")}>
+          <div data-part="contact-list.actions" role="group" aria-label={t("pim-contact-actions")}>
             <button
               type="button"
               data-part="form.button"
@@ -340,7 +296,7 @@ export function ContactList({ node }: WidgetProps) {
               onClick={newContact}
             >
               <Icon name="plus" part="form.button.icon" />
-              {t("pim-contact-new")}
+              {t("pim-action-new-contact")}
             </button>
             <button type="button" data-part="form.button" data-action="groups" onClick={openGroups}>
               {t("pim-groups-open")}
@@ -379,7 +335,7 @@ export function ContactList({ node }: WidgetProps) {
           ref={listRef}
           role="listbox"
           aria-multiselectable="true"
-          aria-label={t("pim-contacts-list")}
+          aria-label={t("common-contacts")}
           data-part="contact-list.items"
           onKeyDown={onKeyDown}
         >
@@ -446,5 +402,34 @@ export function ContactList({ node }: WidgetProps) {
         </button>
       )}
     </section>
+  );
+}
+
+/** The search field of the contact list. */
+function ContactSearch({
+  id,
+  query,
+  onChange,
+}: {
+  id: string;
+  query: string;
+  onChange: (query: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div data-part="form.field" data-field="search">
+      <label data-part="form.label" htmlFor={id}>
+        {t("pim-contacts-search")}
+      </label>
+      <input
+        id={id}
+        data-part="form.input"
+        type="search"
+        value={query}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      />
+    </div>
   );
 }

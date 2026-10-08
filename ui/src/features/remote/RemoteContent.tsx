@@ -156,7 +156,7 @@ export function RemoteContentBar({ message }: { message: MessageBody }) {
       <div
         data-part="remote-content.actions"
         role="toolbar"
-        aria-label={t("remote-content-actions")}
+        aria-label={t("remote-action-load-content")}
       >
         {allowed ? (
           <button
@@ -276,7 +276,7 @@ function AllowRow({ entry }: { entry: RemoteContentAllow }) {
         aria-label={t("remote-allows-remove-label", { value: shown })}
         onClick={() => void remove()}
       >
-        {t("remote-allows-remove")}
+        {t("common-remove")}
       </button>
       {error && (
         <span data-part="remote-allows.error" role="alert">

@@ -273,15 +273,15 @@ export function TaskList({ node }: WidgetProps) {
       }}
     >
       <Icon name="plus" part="form.button.icon" />
-      {t("pim-task-new")}
+      {t("pim-action-new-task")}
     </button>
   );
 
   return (
-    <section data-part="task-list" data-key-context="tasks" aria-label={t("pim-tasks-label")}>
+    <section data-part="task-list" data-key-context="tasks" aria-label={t("common-tasks")}>
       {header && (
         <div data-part="pim.view-header">
-          <h2 data-part="pim.view-header.title">{t("pim-tasks-label")}</h2>
+          <h2 data-part="pim.view-header.title">{t("common-tasks")}</h2>
           <div data-part="pim.view-header.actions">{addTarget && newTask("primary")}</div>
         </div>
       )}
@@ -315,7 +315,7 @@ export function TaskList({ node }: WidgetProps) {
             }}
           />
           <button type="submit" data-part="form.button" disabled={title.trim() === ""}>
-            {t("pim-task-add")}
+            {t("common-add")}
           </button>
         </form>
       )}
@@ -328,7 +328,7 @@ export function TaskList({ node }: WidgetProps) {
           ref={treeRef}
           role="tree"
           data-part="task-list.items"
-          aria-label={t("pim-tasks-list")}
+          aria-label={t("common-tasks")}
           onKeyDown={onKeyDown}
         >
           {visible.map(({ task, level, children }) => {
@@ -341,7 +341,7 @@ export function TaskList({ node }: WidgetProps) {
               task.id === current ? "current" : null,
               task.read_only ? "read-only" : null,
             ].filter(Boolean);
-            const name = task.fields.title || t("pim-task-untitled");
+            const name = task.fields.title || t("common-no-title");
             return (
               <li
                 key={task.id}
@@ -424,7 +424,7 @@ export function TaskList({ node }: WidgetProps) {
                 )}
                 {task.recurrence && (
                   <span data-part="task-list.badge" data-badge="recurring">
-                    {t("pim-badge-recurring")}
+                    {t("common-repeats")}
                   </span>
                 )}
                 {children > 0 && (

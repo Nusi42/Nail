@@ -174,7 +174,7 @@ export function FreeBusyTimeline({
           }}
         >
           <Icon name="chevron-right" part="freebusy.nav.icon" />
-          <span data-part="freebusy.nav.text">{t("freebusy-next-short")}</span>
+          <span data-part="freebusy.nav.text">{t("common-next-period")}</span>
         </button>
         {day.compare(today) !== 0 && (
           <button
@@ -184,7 +184,7 @@ export function FreeBusyTimeline({
               onDay(today);
             }}
           >
-            {t("freebusy-today")}
+            {t("common-today")}
           </button>
         )}
       </div>

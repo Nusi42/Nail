@@ -13,7 +13,7 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { useDateFormat } from "../../i18n/format";
 import { useLocale } from "../../i18n/I18nProvider";
 import { dayDate, formatDay } from "./fmt";
-import { dateString, monthGrid, startOfWeekFor } from "./time";
+import { dateString, monthGrid, dayGridMove } from "./time";
 
 export interface MonthGridProps {
   /** Any day of the month shown. */
@@ -71,40 +71,13 @@ export function MonthGrid({
   }, [focusedKey, focusOnMount]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
-    let next: CalendarDate;
-    switch (event.key) {
-      case "ArrowLeft":
-        next = focused.add({ days: -1 });
-        break;
-      case "ArrowRight":
-        next = focused.add({ days: 1 });
-        break;
-      case "ArrowUp":
-        next = focused.add({ weeks: -1 });
-        break;
-      case "ArrowDown":
-        next = focused.add({ weeks: 1 });
-        break;
-      case "Home":
-        next = startOfWeekFor(focused, locale);
-        break;
-      case "End":
-        next = startOfWeekFor(focused, locale).add({ days: 6 });
-        break;
-      case "PageUp":
-        next = focused.add(event.shiftKey ? { years: -1 } : { months: -1 });
-        break;
-      case "PageDown":
-        next = focused.add(event.shiftKey ? { years: 1 } : { months: 1 });
-        break;
-      case "Enter":
-      case " ":
-        event.preventDefault();
-        onSelect(focused);
-        return;
-      default:
-        return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect(focused);
+      return;
     }
+    const next = dayGridMove(event.key, focused, locale, { pages: true, shift: event.shiftKey });
+    if (next === null) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault();
     keyboard.current = true;

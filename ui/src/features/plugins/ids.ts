@@ -1,3 +1,4 @@
+import { KEBAB } from "../../text/kebab";
 /**
  * Plug-in ids in the layout (ADR 0050), the same rules as
  * `nail_api::plugins`: plug-in ids and names of commands / panels are
@@ -11,8 +12,6 @@ export const MAX_NAME_LEN = 64;
 
 /** Prefix of plug-in action ids. */
 export const PLUGIN_ACTION_PREFIX = "plugin.";
-
-const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /** Whether `name` is a valid plug-in id or contribution name. */
 export function isPluginName(name: string): boolean {

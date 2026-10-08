@@ -31,18 +31,18 @@ mcp-tool-value-yes = Yes
 mcp-tool-value-no = No
 mcp-tool-value-mixed = Mixed
 mcp-tool-value-accept = Accept
-mcp-tool-value-tentative = Tentative
+mcp-tool-value-tentative = { common-tentative }
 mcp-tool-value-decline = Decline
 
 ## Before / after lines the contract has no field for
 
-mcp-tool-field-recurrence = Repeats
+mcp-tool-field-recurrence = { common-repeats }
 mcp-tool-field-description = Description
 mcp-tool-field-comment = Comment
 mcp-tool-field-phones = Phone numbers
 mcp-tool-field-organization = Organization
 mcp-tool-field-job-title = Job title
-mcp-tool-field-notes = Notes
+mcp-tool-field-notes = { common-notes }
 mcp-tool-field-priority = Priority
 mcp-tool-field-related-message = Linked message
 mcp-tool-field-enabled = Switched on

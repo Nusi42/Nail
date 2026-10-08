@@ -16,6 +16,7 @@ import { deleteEvent, getEvent, saveEvent, type PimWriteContext } from "./querie
 import { SCOPE_DIALOG } from "./names";
 import type { PimState } from "./store";
 import { pimTimeIn, sameKindAs, sameTime, shiftPimTime } from "./time";
+import { DAY_MS } from "../../state/clock";
 
 /** Wall-clock difference between two times of the same kind. */
 export function wallDelta(from: PimTime, to: PimTime): { days: number; minutes: number } {
@@ -23,7 +24,7 @@ export function wallDelta(from: PimTime, to: PimTime): { days: number; minutes: 
     if (from.type !== "date" || to.type !== "date") return { days: 0, minutes: 0 };
     const a = Date.parse(`${from.date}T00:00:00Z`);
     const b = Date.parse(`${to.date}T00:00:00Z`);
-    return { days: Math.round((b - a) / 86_400_000), minutes: 0 };
+    return { days: Math.round((b - a) / DAY_MS), minutes: 0 };
   }
   const a = Date.parse(`${from.local}Z`);
   const b = Date.parse(`${to.local}Z`);

@@ -4,9 +4,15 @@
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../../App";
-import type { Request, ThemeInfo } from "../../api/generated";
+import type { ThemeInfo } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
-import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  settleQueries,
+  widget,
+  stubElementSizesEachTest,
+} from "../../test/harness";
 import { accentIgnored, builtinThemes, mockConfigTheme, setMockSystemAppearance } from "./mock";
 import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } from "./themes";
 import { overridesOf } from "./AppearanceSettings";
@@ -14,25 +20,10 @@ import { must } from "../../test/must";
 import { stubProperties } from "../../test/stub";
 import { mockEditHistory } from "../../api/editHistoryMock";
 import { applyEditHistory } from "../../state/editHistory";
+import { recordRequests } from "../../test/env";
+import { renderApp } from "../../test/app";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
-
-/** Requests the mock received (for "what did the UI ask for"). */
-function recordRequests(env: ReturnType<typeof createEnv>): Request[] {
-  const seen: Request[] = [];
-  const send = env.transport.send.bind(env.transport);
-  env.transport.send = (request) => {
-    seen.push(request);
-    return send(request);
-  };
-  return seen;
-}
+stubElementSizesEachTest();
 
 /** Replaces `window.matchMedia`; returns a function that flips the answers. */
 function stubMedia(initial: { dark: boolean; contrast: boolean }) {
@@ -479,14 +470,16 @@ describe("appearance-settings widget", () => {
   });
 });
 
+/** The whole app once its message list shows, and its `app` part. */
+async function appReady(env = createEnv({ state: { connection: "connecting" } })) {
+  const { container } = renderApp(env);
+  await screen.findAllByRole("option");
+  return { env, app: container.querySelector('[data-part="app"]') };
+}
+
 describe("theme switching in the app", () => {
   it("restyles the app when the core reports another theme (ThemeChanged)", async () => {
-    const env = createEnv({ state: { connection: "connecting" } });
-    const { container } = render(
-      <App client={env.client} queryClient={env.queryClient} store={env.store} />,
-    );
-    await screen.findAllByRole("option");
-    const app = container.querySelector('[data-part="app"]');
+    const { env, app } = await appReady();
     await waitFor(() => expect(app).toHaveAttribute("data-theme", "Frost"));
     expect(document.documentElement.dataset.nailMode).toBe("light");
     act(() => {
@@ -504,12 +497,7 @@ describe("theme switching in the app", () => {
   });
 
   it("applies density to the root and the app part", async () => {
-    const env = createEnv({ state: { connection: "connecting" } });
-    const { container } = render(
-      <App client={env.client} queryClient={env.queryClient} store={env.store} />,
-    );
-    await screen.findAllByRole("option");
-    const app = container.querySelector('[data-part="app"]');
+    const { env, app } = await appReady();
     expect(app).toHaveAttribute("data-density", "comfortable");
     await act(async () => {
       await env.client.request(
@@ -538,11 +526,7 @@ describe("Follow Windows from the browser", () => {
     try {
       const env = createEnv({ state: { connection: "connecting" } });
       const requests = recordRequests(env);
-      const { container } = render(
-        <App client={env.client} queryClient={env.queryClient} store={env.store} />,
-      );
-      await screen.findAllByRole("option");
-      const app = container.querySelector('[data-part="app"]');
+      const { app } = await appReady(env);
       // The mock core already thinks "light": nothing to report.
       expect(requests.some((r) => (r.type as string) === "ReportSystemAppearance")).toBe(false);
       media.set({ dark: true, contrast: false });

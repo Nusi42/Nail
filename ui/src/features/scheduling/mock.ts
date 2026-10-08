@@ -39,7 +39,9 @@ import type {
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { answerPim, listInstances } from "../pim/mock";
 import { instantMs, localZone, pimTimeIn, sameTime, todayIn, utcString } from "../pim/time";
-import { isMine, mergeBusy, plausibleEmail, statusOfResponse } from "./model";
+import { isMine, mergeBusy, statusOfResponse } from "./model";
+import { plausibleEmail } from "../../state/addresses";
+import { DAY_MS } from "../../state/clock";
 
 /** The requests this feature answers. */
 export const SCHEDULING_REQUESTS = [
@@ -456,10 +458,22 @@ function respond(
   const sent = request.send
     ? [send(core, "reply", organizerOf(current.fields), current.transport, request.comment)]
     : [];
+  return answered(core, card, { event, sent, op_ids });
+}
+
+/**
+ * Stores the card after an answer, reports it changed and answers with the
+ * written event, the sent mail and the fresh card.
+ */
+function answered(
+  core: MockCore,
+  card: Invitation,
+  result: { event: CalendarEvent | null; sent: SentItip[]; op_ids: string[] },
+): Response {
   const after = refreshed(core, card);
   state(core).invitations[card.message_id] = after;
   changed(core, [card.message_id]);
-  return scheduled({ event, sent, op_ids, invitation: clone(after) });
+  return scheduled({ ...result, invitation: clone(after) });
 }
 
 /** The organizer and fields an attendee-side request (counter, refresh, forward) acts on. */
@@ -773,10 +787,7 @@ function respondToCounter(
     sent = [send(core, "decline-counter", from ? [from] : [], card.transport, request.comment)];
   }
   card.state = "outdated";
-  const after = refreshed(core, card);
-  state(core).invitations[card.message_id] = after;
-  changed(core, [card.message_id]);
-  return scheduled({ event, sent, op_ids, invitation: clone(after) });
+  return answered(core, card, { event, sent, op_ids });
 }
 
 // ---------------------------------------------------------------------------
@@ -791,7 +802,7 @@ function freeBusyIssue(request: Extract<SchedulingRequest, { type: "QueryFreeBus
   const from = Date.parse(request.from);
   const to = Date.parse(request.to);
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return issue("invalid-range");
-  if (to - from > MAX_FREE_BUSY_DAYS * 86_400_000) return issue("range-too-long");
+  if (to - from > MAX_FREE_BUSY_DAYS * DAY_MS) return issue("range-too-long");
   return null;
 }
 
@@ -822,8 +833,8 @@ function personBusy(
   const base = s.today ? todayFromString(s.today) : todayIn(s.tz);
   const out: AttendeeFreeBusy["periods"] = [];
   // Every day from a day before `from` to a day after `to`.
-  const firstOffset = Math.floor((from - pimDayStart(base, s.tz)) / 86_400_000) - 1;
-  const lastOffset = Math.ceil((to - pimDayStart(base, s.tz)) / 86_400_000) + 1;
+  const firstOffset = Math.floor((from - pimDayStart(base, s.tz)) / DAY_MS) - 1;
+  const lastOffset = Math.ceil((to - pimDayStart(base, s.tz)) / DAY_MS) + 1;
   for (let offset = firstOffset; offset <= lastOffset && offset - firstOffset < 120; offset++) {
     const dayStart = pimDayStart(base.add({ days: offset }), s.tz);
     for (const block of person.blocks) {

@@ -165,7 +165,7 @@ export function Settings({ pluginId }: { pluginId: string }) {
       )}
       {saved && (
         <p data-part="plugin-settings.status" role="status">
-          {t("plugin-settings-saved")}
+          {t("common-settings-saved")}
         </p>
       )}
       {schema.map((def) => (

@@ -2,7 +2,7 @@ import { act, fireEvent, renderHook, screen, waitFor, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import type { PluginDialog, PluginUiNode, Request } from "../../api/generated";
+import type { PluginDialog, PluginUiNode } from "../../api/generated";
 import { ClientContext } from "../../state/queries";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { appRegistry } from "../registry";
@@ -32,10 +32,7 @@ import {
 } from "./testUtil";
 import { PluginTree } from "./tree/PluginTree";
 import { WindowLayer } from "../../layout/WindowLayer";
-
-function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf } from "../../test/env";
 
 function openDialog(env: Env, dialog: Partial<PluginDialog> & { spec: PluginDialog["spec"] }) {
   act(() => {
@@ -315,7 +312,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     const button = screen.getByRole("button", { name: "Follow up" });
     expect(button).toBeEnabled();
     await user.click(button);
-    expect(sent(env, "RunPluginCommand")[0]).toMatchObject({
+    expect(requestsOf(env, "RunPluginCommand")[0]).toMatchObject({
       command: REMIND,
       context: { message_id: first.id },
       client_id: clientIdOf(env.client),
@@ -333,7 +330,7 @@ describe("plug-in commands, dialogs and notifications", () => {
 
     fireEvent.change(due, { target: { value: "" } });
     await user.click(within(dialog).getByRole("button", { name: "Save reminder" }));
-    expect(sent(env, "RespondPluginDialog")).toHaveLength(0);
+    expect(requestsOf(env, "RespondPluginDialog")).toHaveLength(0);
     expect(dialog.querySelector('[data-part="plugin.dialog"]')).toHaveAttribute(
       "data-state",
       "invalid",
@@ -348,7 +345,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     expect(due).not.toHaveAttribute("aria-invalid");
     await user.type(within(dialog).getByLabelText("Note"), "call back");
     await user.click(within(dialog).getByRole("button", { name: "Save reminder" }));
-    expect(sent(env, "RespondPluginDialog")[0]).toMatchObject({
+    expect(requestsOf(env, "RespondPluginDialog")[0]).toMatchObject({
       button: "ok",
       values: { due: "2026-10-01", note: "call back" },
     });
@@ -367,7 +364,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     const { env, unsubscribe } = await setup();
     fireEvent.keyDown(document.body, { key: "R", shiftKey: true });
     await waitFor(() => {
-      expect(sent(env, "RunPluginCommand")).toHaveLength(1);
+      expect(requestsOf(env, "RunPluginCommand")).toHaveLength(1);
     });
     unsubscribe();
   });
@@ -385,7 +382,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(sent(env, "RespondPluginDialog")[0]).toMatchObject({ button: null });
+    expect(requestsOf(env, "RespondPluginDialog")[0]).toMatchObject({ button: null });
     unsubscribe();
   });
 
@@ -456,7 +453,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     openDialog(env, { spec });
     await user.type(screen.getByRole("textbox", { name: "Query" }), "abc");
     await user.click(screen.getByRole("button", { name: "Find" }));
-    expect(sent(env, "PluginUiAction")[0]).toMatchObject({
+    expect(requestsOf(env, "PluginUiAction")[0]).toMatchObject({
       target: { kind: "dialog", dialog_id: "d1" },
       component_id: "find",
       values: { q: "abc" },
@@ -585,12 +582,12 @@ describe("plug-in panels", () => {
     const panel = screen.getByRole("region", { name: "Reminders" });
     expect(panel).toHaveAttribute("data-plugin", "follow-up");
     expect(await within(panel).findByRole("cell", { name: "2026-10-02" })).toBeInTheDocument();
-    expect(sent(env, "GetPluginPanel")[0]).toMatchObject({
+    expect(requestsOf(env, "GetPluginPanel")[0]).toMatchObject({
       panel: "follow-up.reminders",
       client_id: clientIdOf(env.client),
     });
     await user.click(within(panel).getByRole("button", { name: "Clear reminders" }));
-    expect(sent(env, "PluginUiAction")[0]).toMatchObject({
+    expect(requestsOf(env, "PluginUiAction")[0]).toMatchObject({
       target: { kind: "panel", panel: "follow-up.reminders" },
       component_id: "clear",
     });
@@ -607,7 +604,7 @@ describe("plug-in panels", () => {
     await tick();
     expect(panel).toHaveAttribute("data-state", "missing");
     expect(panel.textContent).toContain("not installed or not enabled");
-    expect(sent(env, "GetPluginPanel")).toHaveLength(0);
+    expect(requestsOf(env, "GetPluginPanel")).toHaveLength(0);
   });
 });
 
@@ -646,7 +643,7 @@ describe("install dialog", () => {
     expect(screen.getByRole("button", { name: "Install" })).toBeDisabled();
     await user.click(must(boxes[1]));
     await user.click(screen.getByRole("button", { name: "Install" }));
-    const install = must(sent(env, "InstallPlugin")[0]);
+    const install = must(requestsOf(env, "InstallPlugin")[0]);
     expect(install.package_sha256).toHaveLength(64);
     expect(install.enable).toBe(true);
     expect(install.grants.map((g) => g.permission)).toEqual([
@@ -660,7 +657,7 @@ describe("install dialog", () => {
     const items = await screen.findAllByRole("checkbox");
     expect(items.length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /Add 1 item to the layout/ }));
-    expect(sent(env, "ApplyConfigMerge")[0]).toMatchObject({
+    expect(requestsOf(env, "ApplyConfigMerge")[0]).toMatchObject({
       file: "layout",
       choices: [{ take: "theirs" }],
       default: "mine",
@@ -685,7 +682,7 @@ describe("install dialog", () => {
     await user.click(screen.getByRole("button", { name: "Check the plug-in" }));
     await user.click(await screen.findByRole("button", { name: "Install" }));
     await user.click(await screen.findByRole("button", { name: "Not now" }));
-    expect(sent(env, "ApplyConfigMerge")).toHaveLength(0);
+    expect(requestsOf(env, "ApplyConfigMerge")).toHaveLength(0);
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalled();
   });
@@ -729,7 +726,7 @@ describe("install dialog", () => {
     await user.type(screen.getByRole("textbox", { name: "Web address (https)" }), "https://nope");
     await user.click(screen.getByRole("button", { name: "Check the plug-in" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(must(sent(env, "PreviewPluginInstall")[0]).source).toEqual({
+    expect(must(requestsOf(env, "PreviewPluginInstall")[0]).source).toEqual({
       kind: "url",
       url: "https://nope",
     });
@@ -750,7 +747,7 @@ describe("install dialog", () => {
     expect(screen.queryByRole("checkbox", { name: "Turn it on right away" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Install" }));
     await screen.findByText("Follow-up is installed.");
-    expect(sent(env, "LoadDevPlugin")[0]).toMatchObject({
+    expect(requestsOf(env, "LoadDevPlugin")[0]).toMatchObject({
       folder: "C:/dev/follow-up",
       grants: ALL_GRANTS,
     });
@@ -779,7 +776,7 @@ describe("plug-in manager", () => {
     const toggle = within(row).getByRole("switch", { name: "Follow-up is on" });
     expect(toggle).toBeChecked();
     await user.click(toggle);
-    expect(sent(env, "DisablePlugin")).toHaveLength(1);
+    expect(requestsOf(env, "DisablePlugin")).toHaveLength(1);
     await waitFor(() => expect(within(row).getByText("Off")).toBeInTheDocument());
     unsubscribe();
   });
@@ -795,7 +792,7 @@ describe("plug-in manager", () => {
     const notifications = within(row).getByRole("group", { name: "Show notifications" });
     await user.click(within(notifications).getByRole("radio", { name: "Deny" }));
     await user.click(save);
-    expect(must(sent(env, "UpdatePluginGrants")[0]).grants.map((g) => g.permission)).toEqual([
+    expect(must(requestsOf(env, "UpdatePluginGrants")[0]).grants.map((g) => g.permission)).toEqual([
       "mail.read",
       "ui.dialogs",
       "storage",
@@ -832,7 +829,7 @@ describe("plug-in manager", () => {
     expect(within(log).queryByText("installed 1.0.0")).toBeNull();
     await user.click(within(log).getByRole("button", { name: "Clear log" }));
     expect(await within(log).findByText("The log is empty.")).toBeInTheDocument();
-    expect(sent(env, "ClearPluginLogs")).toHaveLength(1);
+    expect(requestsOf(env, "ClearPluginLogs")).toHaveLength(1);
     unsubscribe();
   });
 
@@ -852,7 +849,7 @@ describe("plug-in manager", () => {
     await user.type(days, "3");
     await user.click(within(row).getByRole("button", { name: "Save settings" }));
     expect(await within(row).findByText("Settings saved.")).toBeInTheDocument();
-    expect(sent(env, "UpdatePluginSettings").at(-1)?.values).toEqual({ days: 3 });
+    expect(requestsOf(env, "UpdatePluginSettings").at(-1)?.values).toEqual({ days: 3 });
     unsubscribe();
   });
 
@@ -861,7 +858,7 @@ describe("plug-in manager", () => {
     const { env, row, unsubscribe } = await renderManager();
     await user.click(within(row).getByRole("button", { name: "Place in layout" }));
     expect(await within(row).findByRole("button", { name: /Add 1 item/ })).toBeInTheDocument();
-    expect(sent(env, "PreviewPluginPlacements")).toHaveLength(1);
+    expect(requestsOf(env, "PreviewPluginPlacements")).toHaveLength(1);
     unsubscribe();
   });
 
@@ -871,14 +868,14 @@ describe("plug-in manager", () => {
     await user.click(within(row).getByRole("button", { name: "Remove" }));
     const confirm = within(row).getByRole("group", { name: "Remove" });
     await user.click(within(confirm).getByRole("button", { name: "Keep" }));
-    expect(sent(env, "UninstallPlugin")).toHaveLength(0);
+    expect(requestsOf(env, "UninstallPlugin")).toHaveLength(0);
     await user.click(within(row).getByRole("button", { name: "Remove" }));
     await user.click(
       within(within(row).getByRole("group", { name: "Remove" })).getByRole("button", {
         name: "Remove",
       }),
     );
-    expect(sent(env, "UninstallPlugin")).toHaveLength(1);
+    expect(requestsOf(env, "UninstallPlugin")).toHaveLength(1);
     expect(await screen.findByText("No plug-ins are installed.")).toBeInTheDocument();
     unsubscribe();
   });

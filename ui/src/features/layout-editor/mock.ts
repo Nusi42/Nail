@@ -34,6 +34,7 @@ import type {
 import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
 import { normalizeLayout } from "../../api/normalize";
 import { containsRef, nodeAt, nodeIds, presetPaneIds } from "./model";
+import { KEBAB } from "../../text/kebab";
 
 /** The ops this module applies. */
 export const LAYOUT_EDIT_OPS = [
@@ -291,8 +292,6 @@ function uniqueId(layout: ResolvedLayout, window: string, kind: string): string 
   while (taken.has(`${kind}-${String(n)}`)) n += 1;
   return `${kind}-${String(n)}`;
 }
-
-const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 function addWidget(layout: ResolvedLayout, widget: NewWidget, to: LayoutPlacement): void {
   if (!KEBAB.test(widget.kind)) fail("edit-issue-unknown-widget");

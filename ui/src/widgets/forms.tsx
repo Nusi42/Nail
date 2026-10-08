@@ -13,6 +13,7 @@ import type {
   TlsMode,
 } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
+import type { MessageArgs } from "../i18n/localizer";
 
 /**
  * A control that is small on purpose (ADR 0160): the skin sizes it
@@ -21,39 +22,112 @@ import { useT } from "../i18n/I18nProvider";
 export type ControlWidth = "short" | "medium" | "content";
 
 interface FieldProps {
+  /** The control's id when something else refers to it (else a fresh one). */
+  id?: string;
   /** Fluent id of the label. */
   labelId: string;
   /** Arguments of the label message. */
-  args?: Record<string, string | number>;
+  args?: MessageArgs;
   /** Fluent id of a hint shown under the control. */
   hintId?: string;
   name: string;
 }
 
-export function TextField({
+/**
+ * The frame of a labelled control: `form.field` with the label for the
+ * control `id`, the control (`children`) and an optional hint
+ * (`${id}-hint`, for the control's `aria-describedby`).
+ */
+export function LabelledField({
+  name,
+  id,
+  label,
+  hint,
+  children,
+}: {
+  name: string;
+  id: string;
+  /** The label text (already translated). */
+  label: string;
+  /** The hint text (already translated). */
+  hint?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <div data-part="form.field" data-field={name}>
+      <label data-part="form.label" htmlFor={id}>
+        {label}
+      </label>
+      {children}
+      {hint && (
+        <span data-part="form.hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A labelled field around the control `render(id)` builds; the hint is `hintId`'s text. */
+function Field({
+  id: givenId,
   labelId,
   args,
   hintId,
+  name,
+  render,
+}: FieldProps & { render: (id: string, hinted: string | undefined) => ReactNode }) {
+  const t = useT();
+  const freshId = useId();
+  const id = givenId ?? freshId;
+  return (
+    <LabelledField name={name} id={id} label={t(labelId, args)} hint={hintId ? t(hintId) : null}>
+      {render(id, hintId ? `${id}-hint` : undefined)}
+    </LabelledField>
+  );
+}
+
+export function TextField({
+  id: givenId,
+  labelId,
+  args,
+  hintId,
+  hint,
   name,
   value,
   onChange,
   type = "text",
   required = false,
   autoComplete = "off",
+  inputMode,
+  focusOnMount = false,
+  disabled = false,
+  readOnly = false,
+  invalid = false,
+  maxLength,
+  spellCheck,
 }: FieldProps & {
+  /** Hint text already translated (wins over `hintId`). */
+  hint?: string;
   value: string;
   onChange: (value: string) => void;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email" | "password" | "url";
   required?: boolean;
   autoComplete?: string;
+  inputMode?: "text" | "numeric";
+  focusOnMount?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
+  invalid?: boolean;
+  maxLength?: number;
+  spellCheck?: boolean;
 }) {
   const t = useT();
-  const id = useId();
+  const freshId = useId();
+  const id = givenId ?? freshId;
+  const hintText = hint ?? (hintId ? t(hintId) : null);
   return (
-    <div data-part="form.field" data-field={name}>
-      <label data-part="form.label" htmlFor={id}>
-        {t(labelId, args)}
-      </label>
+    <LabelledField name={name} id={id} label={t(labelId, args)} hint={hintText}>
       <input
         id={id}
         data-part="form.input"
@@ -62,90 +136,79 @@ export function TextField({
         value={value}
         required={required}
         autoComplete={autoComplete}
-        aria-describedby={hintId ? `${id}-hint` : undefined}
+        inputMode={inputMode}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- a login step moves the focus to its first field (the step replaced the previous one).
+        autoFocus={focusOnMount}
+        disabled={disabled}
+        readOnly={readOnly}
+        maxLength={maxLength}
+        spellCheck={spellCheck}
+        aria-invalid={invalid || undefined}
+        aria-describedby={hintText ? `${id}-hint` : undefined}
         onChange={(event) => {
           onChange(event.target.value);
         }}
       />
-      {hintId && (
-        <span data-part="form.hint" id={`${id}-hint`}>
-          {t(hintId)}
-        </span>
-      )}
-    </div>
+    </LabelledField>
   );
 }
 
 export function TextAreaField({
-  labelId,
-  args,
-  name,
   value,
   onChange,
+  ...field
 }: FieldProps & { value: string; onChange: (value: string) => void }) {
-  const t = useT();
-  const id = useId();
   return (
-    <div data-part="form.field" data-field={name}>
-      <label data-part="form.label" htmlFor={id}>
-        {t(labelId, args)}
-      </label>
-      <textarea
-        id={id}
-        data-part="form.textarea"
-        name={name}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      />
-    </div>
+    <Field
+      {...field}
+      render={(id) => (
+        <textarea
+          id={id}
+          data-part="form.textarea"
+          name={field.name}
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+      )}
+    />
   );
 }
 
 export function NumberField({
-  labelId,
-  args,
-  hintId,
-  name,
   value,
   onChange,
   min = 0,
   max,
+  ...field
 }: FieldProps & {
   value: number | null;
   onChange: (value: number | null) => void;
   min?: number;
   max?: number;
 }) {
-  const t = useT();
-  const id = useId();
   return (
-    <div data-part="form.field" data-field={name}>
-      <label data-part="form.label" htmlFor={id}>
-        {t(labelId, args)}
-      </label>
-      <input
-        id={id}
-        data-part="form.input"
-        data-width="short"
-        type="number"
-        name={name}
-        min={min}
-        max={max}
-        value={value ?? ""}
-        aria-describedby={hintId ? `${id}-hint` : undefined}
-        onChange={(event) => {
-          const n = event.target.value === "" ? null : Number(event.target.value);
-          onChange(n === null || Number.isNaN(n) ? null : n);
-        }}
-      />
-      {hintId && (
-        <span data-part="form.hint" id={`${id}-hint`}>
-          {t(hintId)}
-        </span>
+    <Field
+      {...field}
+      render={(id, hinted) => (
+        <input
+          id={id}
+          data-part="form.input"
+          data-width="short"
+          type="number"
+          name={field.name}
+          min={min}
+          max={max}
+          value={value ?? ""}
+          aria-describedby={hinted}
+          onChange={(event) => {
+            const n = event.target.value === "" ? null : Number(event.target.value);
+            onChange(n === null || Number.isNaN(n) ? null : n);
+          }}
+        />
       )}
-    </div>
+    />
   );
 }
 
@@ -157,13 +220,11 @@ export interface Choice {
 }
 
 export function SelectField({
-  labelId,
-  args,
-  name,
   value,
   choices,
   onChange,
   width,
+  ...field
 }: FieldProps & {
   value: string;
   choices: readonly Choice[];
@@ -172,29 +233,28 @@ export function SelectField({
   width?: ControlWidth;
 }) {
   const t = useT();
-  const id = useId();
   return (
-    <div data-part="form.field" data-field={name}>
-      <label data-part="form.label" htmlFor={id}>
-        {t(labelId, args)}
-      </label>
-      <select
-        id={id}
-        data-part="form.select"
-        data-width={width}
-        name={name}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        {choices.map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.literal ? c.label : t(c.label)}
-          </option>
-        ))}
-      </select>
-    </div>
+    <Field
+      {...field}
+      render={(id) => (
+        <select
+          id={id}
+          data-part="form.select"
+          data-width={width}
+          name={field.name}
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        >
+          {choices.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.literal ? c.label : t(c.label)}
+            </option>
+          ))}
+        </select>
+      )}
+    />
   );
 }
 
@@ -219,6 +279,18 @@ export function CheckField({
       />
       <span data-part="form.check.label">{t(labelId, args)}</span>
     </label>
+  );
+}
+
+/** A row with the primary Save button (part `part`). */
+export function SaveRow({ part, onSave }: { part: string; onSave: () => void }) {
+  const t = useT();
+  return (
+    <div data-part={part}>
+      <button type="button" data-part="form.button" data-variant="primary" onClick={onSave}>
+        {t("common-save")}
+      </button>
+    </div>
   );
 }
 
@@ -268,6 +340,11 @@ export function withTls(
   const port =
     server.port === defaultPort(protocol, server.tls) ? defaultPort(protocol, tls) : server.port;
   return { ...server, tls, port };
+}
+
+/** An incoming server with some of its protocol's options changed. */
+export function withOptions<S extends IncomingServer>(server: S, patch: Partial<S["options"]>): S {
+  return { ...server, options: { ...server.options, ...patch } };
 }
 
 /** Login name of an auth config (empty for `none`). */

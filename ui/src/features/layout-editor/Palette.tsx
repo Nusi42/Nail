@@ -134,7 +134,7 @@ export function Palette({ window, breakpoint }: PaletteProps) {
           </li>
         ))}
       </ul>
-      <h3 data-part="layout-editor.palette-title">{t("layout-editor-toolbars")}</h3>
+      <h3 data-part="layout-editor.palette-title">{t("customize-toolbar-tab")}</h3>
       <p data-part="form.hint">{t("layout-editor-toolbars-hint")}</p>
     </aside>
   );

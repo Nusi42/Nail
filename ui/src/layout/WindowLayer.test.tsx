@@ -16,13 +16,14 @@ import { runWindowCommand } from "../features/windows/commands";
 import { SAVE_DELAY_MS } from "../features/windows/geometry";
 import { WINDOWS_SKIN_CSS, actions as windowActions } from "../features/windows";
 import { violations } from "../test/axe";
-import { createEnv, renderWithProviders, type Env } from "../test/harness";
+import { createEnv, renderWithProviders, type Env, settleQueries } from "../test/harness";
 import type { WindowRegistry } from "../state/windows";
 import { WINDOW_CASCADE_OFFSET, WINDOW_KEYBOARD_STEP, WINDOW_MIN_VISIBLE } from "../state/windows";
 import { DialogRegistryContext, type DialogProps } from "./dialogRegistry";
 import { MAIN_OWNER, WindowLayer, modalOwner, openingOrder } from "./WindowLayer";
 import { WindowSpecsContext } from "./windowSpecs";
 import { must } from "../test/must";
+import { geometry } from "../test/env";
 
 /** A dialog with something to focus. */
 function Probe({ name, close }: DialogProps) {
@@ -75,24 +76,6 @@ afterEach(() => {
   skin?.remove();
 });
 
-/** The declarations of an element's geometry rule. */
-function geometry(element: Element): Record<string, string> {
-  const id = element.getAttribute("data-geom") ?? "";
-  const rule = [
-    ...(document.head.querySelector<HTMLStyleElement>("style[data-nail-theme]")?.sheet?.cssRules ??
-      []),
-  ].find(
-    (r): r is CSSStyleRule => r instanceof CSSStyleRule && r.selectorText === `[data-geom="${id}"]`,
-  );
-  const out: Record<string, string> = {};
-  if (!rule) return out;
-  for (let i = 0; i < rule.style.length; i++) {
-    const property = rule.style.item(i);
-    out[property] = rule.style.getPropertyValue(property);
-  }
-  return out;
-}
-
 /** left / top / width / height of a window, in px. */
 function rectOf(element: Element) {
   const g = geometry(element);
@@ -127,16 +110,6 @@ function Wrap({ children }: { children: ReactNode }) {
   );
 }
 
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-    expect(env.queryClient.isMutating()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
 async function setup(open: string[], options: { theme?: ReturnType<typeof defaultTheme> } = {}) {
   const env = createEnv();
   for (const id of open) env.store.getState().openWindow(id);
@@ -147,7 +120,7 @@ async function setup(open: string[], options: { theme?: ReturnType<typeof defaul
     env,
     options.theme ? { theme: options.theme } : {},
   );
-  await settle(env);
+  await settleQueries(env);
   return { env, ...view };
 }
 
@@ -173,6 +146,19 @@ const drag = (el: HTMLElement, from: [number, number], to: [number, number], up 
   fireEvent.pointerMove(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
   if (up) fireEvent.pointerUp(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
 };
+
+/** Opens a confirmation while the user works in the plug-in manager; it belongs to it. */
+async function confirmFromPluginManager(env: Env): Promise<HTMLElement> {
+  act(() => {
+    within(frame("plugin-manager")).getByRole("textbox").focus();
+  });
+  act(() => {
+    env.store.getState().openWindow("gmail-label-delete");
+  });
+  const confirm = await screen.findByRole("dialog", { name: "Delete label" });
+  await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
+  return confirm;
+}
 
 describe("window manager (M5c WP171)", () => {
   it("keeps the opening order of windows whatever their z-order", () => {
@@ -514,13 +500,13 @@ describe("window manager (M5c WP171)", () => {
     act(() => {
       env.store.getState().closeWindow("plugin-manager");
     });
-    await settle(env);
+    await settleQueries(env);
     expect((await remembered(env))["plugin-manager"]?.page?.maximized).toBe(true);
 
     act(() => {
       env.store.getState().openWindow("plugin-manager");
     });
-    await settle(env);
+    await settleQueries(env);
     expect(frame("plugin-manager")).toHaveAttribute("data-state", "active maximized");
     fireEvent.click(within(frame("plugin-manager")).getByRole("button", { name: "Restore" }));
     expect(rectOf(frame("plugin-manager"))).toEqual({
@@ -529,7 +515,7 @@ describe("window manager (M5c WP171)", () => {
       width: 600,
       height: 400,
     });
-    await settle(env);
+    await settleQueries(env);
   });
 
   it("restores remembered geometry that loads after the window opened, and cascades a second instance", async () => {
@@ -554,7 +540,7 @@ describe("window manager (M5c WP171)", () => {
       </Wrap>,
       env,
     );
-    await settle(env);
+    await settleQueries(env);
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 100, y: 120, width: 500, height: 350 });
     expect(rectOf(frame("plugin-manager:w2"))).toEqual({
       x: 100 + WINDOW_CASCADE_OFFSET,
@@ -580,7 +566,7 @@ describe("window manager (M5c WP171)", () => {
     });
     expect(await remembered(env)).toEqual({});
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 340, y: 200, width: 600, height: 400 });
-    await settle(env);
+    await settleQueries(env);
   });
 
   it("a confirmation from the main window covers only the main window", async () => {
@@ -627,14 +613,7 @@ describe("window manager (M5c WP171)", () => {
     document.body.append(outside);
     const { env, container } = await setup(["plugin-manager", "config-errors"]);
     // The user works in the plug-in manager when its confirmation opens.
-    act(() => {
-      within(frame("plugin-manager")).getByRole("textbox").focus();
-    });
-    act(() => {
-      env.store.getState().openWindow("gmail-label-delete");
-    });
-    const confirm = await screen.findByRole("dialog", { name: "Delete label" });
-    await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
+    const confirm = await confirmFromPluginManager(env);
     expect(confirm).not.toHaveAttribute("aria-modal");
     expect(frame("plugin-manager")).toHaveAttribute("inert");
     expect(frame("plugin-manager")).toHaveAttribute("data-blocked", "");
@@ -658,14 +637,7 @@ describe("window manager (M5c WP171)", () => {
     // The plug-in manager moved to the left (600 x 400 at 140 / 200).
     drag(header("plugin-manager"), [500, 210], [300, 210]);
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 140, y: 200, width: 600, height: 400 });
-    act(() => {
-      within(frame("plugin-manager")).getByRole("textbox").focus();
-    });
-    act(() => {
-      env.store.getState().openWindow("gmail-label-delete");
-    });
-    const confirm = await screen.findByRole("dialog", { name: "Delete label" });
-    await waitFor(() => expect(confirm).toHaveAttribute("data-owner", "plugin-manager"));
+    const confirm = await confirmFromPluginManager(env);
     // Centred over its owner (440 x 220), not over the page.
     await waitFor(() => {
       expect(rectOf(confirm)).toEqual({ x: 220, y: 290, width: 440, height: 220 });
@@ -717,7 +689,7 @@ describe("window manager (M5c WP171)", () => {
     act(() => {
       env.store.getState().openWindow("plugin-manager:w3");
     });
-    await settle(env);
+    await settleQueries(env);
     expect(rectOf(frame("plugin-manager:w3"))).toEqual(first);
     expect(rectOf(frame("plugin-manager:w2"))).toEqual(second);
   });
@@ -748,7 +720,7 @@ describe("window manager (M5c WP171)", () => {
       </Wrap>,
       env,
     );
-    await settle(env);
+    await settleQueries(env);
     expect(screen.getAllByRole("dialog").map((d) => d.getAttribute("data-window"))).toEqual([
       "plugin-manager",
     ]);

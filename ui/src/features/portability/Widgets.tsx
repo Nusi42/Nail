@@ -24,6 +24,7 @@ import {
 } from "./names";
 import { useJobs } from "./queries";
 import { portabilityStoreFor, usePortabilityState } from "./store";
+import { CloseButton } from "../../widgets/CloseButton";
 
 function JobRow({ job }: { job: JobStatus }) {
   const t = useT();
@@ -40,7 +41,7 @@ function JobRow({ job }: { job: JobStatus }) {
           <span data-part="portability.job.state">{t(jobPhaseId(job.progress.phase))}</span>
           <progress
             data-part="portability.job.progress"
-            aria-label={t("portability-progress-label")}
+            aria-label={t("common-progress")}
             max={1}
             {...(fraction === null ? {} : { value: fraction })}
           />
@@ -155,7 +156,6 @@ export function BackupRestoreWidget({ node }: WidgetProps) {
 
 /** Dialog `portability-report`: the job the lists chose. */
 export function ReportDialog({ close }: DialogProps) {
-  const t = useT();
   const jobId = usePortabilityState((s) => s.reportJobId);
   return (
     <div data-part="portability.report-dialog">
@@ -172,9 +172,7 @@ export function ReportDialog({ close }: DialogProps) {
         </JobView>
       )}
       <div data-part="wizard.buttons">
-        <button type="button" data-part="form.button" data-action="close" onClick={close}>
-          {t("portability-close")}
-        </button>
+        <CloseButton onClose={close} action="close" />
       </div>
     </div>
   );

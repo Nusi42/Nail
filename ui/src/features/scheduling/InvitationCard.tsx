@@ -86,7 +86,7 @@ export function InvitationCard({
   if (query.isError) {
     if (isUnsupported(query.error)) return null;
     return (
-      <section data-part="invitation" data-state="error" aria-label={t("invitation-label-error")}>
+      <section data-part="invitation" data-state="error" aria-label={t("common-invitation")}>
         <Problem message={errorMessageOf(query.error)} part="invitation.problem" />
       </section>
     );
@@ -132,7 +132,7 @@ function InvitationView({
   const [day, setDay] = useState(() => (seriesStart ? splitPimTime(seriesStart).day : todayIn(tz)));
   const canPickOccurrence = recurring && invitation.event_id !== null && seriesStart !== null;
 
-  const title = nonEmpty(fields?.title) ?? t("invitation-untitled");
+  const title = nonEmpty(fields?.title) ?? t("common-no-title");
   const has = (action: InvitationAction) => invitation.actions.includes(action);
 
   const run = async (request: SchedulingWrite, success: LocalizedMessage | null) => {
@@ -235,28 +235,28 @@ function InvitationView({
   if (fields) {
     details = (
       <dl data-part="invitation.details">
-        <Detail field="when" label={t("invitation-when")}>
+        <Detail field="when" label={t("common-when")}>
           {timeRangeText(t, format, fields.start, fields.end, tz)}
         </Detail>
         {invitation.recurrence && (
-          <Detail field="repeats" label={t("invitation-repeats")}>
+          <Detail field="repeats" label={t("common-repeats")}>
             {recurrenceText(t, format, invitation.recurrence, fields.start)}
           </Detail>
         )}
         {invitation.recurrence_id && (
-          <Detail field="occurrence" label={t("invitation-occurrence")}>
+          <Detail field="occurrence" label={t("common-occurrence")}>
             {timeRangeText(t, format, invitation.recurrence_id, invitation.recurrence_id, tz)}
           </Detail>
         )}
         {fields.location && (
-          <Detail field="where" label={t("invitation-where")}>
+          <Detail field="where" label={t("common-where")}>
             {fields.location}
           </Detail>
         )}
         {organizerText && (
-          <Detail field="organizer" label={t("invitation-organizer")}>
+          <Detail field="organizer" label={t("common-organizer")}>
             {invitation.organizer?.name
-              ? t("invitation-person", {
+              ? t("common-name-email", {
                   name: invitation.organizer.name,
                   email: invitation.organizer.email,
                 })
@@ -390,7 +390,7 @@ function InvitationView({
                 data-role={a.role}
               >
                 <span data-part="invitation.attendee.name">
-                  {a.name ? t("invitation-person", { name: a.name, email: a.email }) : a.email}
+                  {a.name ? t("common-name-email", { name: a.name, email: a.email }) : a.email}
                 </span>
                 <span data-part="invitation.attendee.role">
                   {a.kind === "room" || a.kind === "resource"
@@ -421,7 +421,7 @@ function InvitationView({
                     data-state={c.tentative ? "tentative" : undefined}
                   >
                     <span data-part="invitation.conflict.title">
-                      {c.title || t("invitation-untitled")}
+                      {c.title || t("common-no-title")}
                     </span>
                     <span data-part="invitation.conflict.time">
                       {c.all_day

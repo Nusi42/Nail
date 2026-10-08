@@ -11,8 +11,9 @@ import { renderWithProviders } from "../../test/harness";
 import { RoomFinder, TaskListBadge, TaskListChooser } from ".";
 import { EXCHANGE_ACCOUNT, EXCHANGE_CALENDARS } from "./mockSeed";
 import { eventRange } from "./RoomFinder";
-import { requests, setup } from "./testing";
+import { setup } from "./testing";
 import { must } from "../../test/must";
+import { requestsOf } from "../../test/env";
 
 const at = (local: string): PimTime => ({ type: "zoned", local, tz: "UTC" });
 
@@ -51,6 +52,16 @@ function Editor({
   );
 }
 
+/** An event editor of the Exchange calendar with the room finder open. */
+async function openRoomFinder() {
+  const env = setup();
+  const user = userEvent.setup();
+  const spy: Spy = { attendees: [], location: "" };
+  renderWithProviders(<Editor calendarId={EXCHANGE_CALENDARS.calendar} spy={spy} />, env);
+  await user.click(await screen.findByRole("button", { name: "Find a room…" }));
+  return { env, user, spy };
+}
+
 describe("room finder", () => {
   it("is absent for calendars of other accounts", async () => {
     const env = setup();
@@ -63,11 +74,7 @@ describe("room finder", () => {
   });
 
   it("finds rooms with their availability and books one", async () => {
-    const env = setup();
-    const user = userEvent.setup();
-    const spy: Spy = { attendees: [], location: "" };
-    renderWithProviders(<Editor calendarId={EXCHANGE_CALENDARS.calendar} spy={spy} />, env);
-    await user.click(await screen.findByRole("button", { name: "Find a room…" }));
+    const { env, user, spy } = await openRoomFinder();
     const results = await screen.findByRole("list", { name: "Rooms for this time" });
     const rows = within(results)
       .getAllByRole("listitem")
@@ -90,7 +97,7 @@ describe("room finder", () => {
     expect(within(ada).getByRole("list", { name: "Busy times" })).toHaveTextContent(
       "9:00 AM–9:30 AM",
     );
-    expect(requests(env, "FindRooms")[0]).toMatchObject({
+    expect(requestsOf(env, "FindRooms")[0]).toMatchObject({
       account_id: EXCHANGE_ACCOUNT,
       from: "2026-10-01T09:00:00Z",
       to: "2026-10-01T09:30:00Z",
@@ -112,16 +119,12 @@ describe("room finder", () => {
   });
 
   it("filters by room list, seats and free rooms", async () => {
-    const env = setup();
-    const user = userEvent.setup();
-    const spy: Spy = { attendees: [], location: "" };
-    renderWithProviders(<Editor calendarId={EXCHANGE_CALENDARS.calendar} spy={spy} />, env);
-    await user.click(await screen.findByRole("button", { name: "Find a room…" }));
+    const { env, user } = await openRoomFinder();
     await screen.findByRole("list", { name: "Rooms for this time" });
     await user.selectOptions(screen.getByLabelText("Room list"), "Building 2");
     await user.type(screen.getByLabelText("At least this many seats"), "5");
     await waitFor(() => {
-      expect(requests(env, "FindRooms").at(-1)).toMatchObject({
+      expect(requestsOf(env, "FindRooms").at(-1)).toMatchObject({
         room_list: "building2@contoso.example",
         min_capacity: 5,
       });
@@ -156,7 +159,7 @@ describe("room finder", () => {
     expect(
       screen.getByText("The event must end after it starts to find a room."),
     ).toBeInTheDocument();
-    expect(requests(env, "FindRooms")).toHaveLength(0);
+    expect(requestsOf(env, "FindRooms")).toHaveLength(0);
   });
 
   it("asks for whole days of all-day events", () => {

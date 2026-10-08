@@ -129,7 +129,7 @@ export function PolicyEditor({ actor, name, disabled = false }: Props) {
       )}
       {saved && (
         <p data-part="action-policies.status" role="status">
-          {t("agents-policy-saved")}
+          {t("common-saved")}
         </p>
       )}
       {policies.data && (

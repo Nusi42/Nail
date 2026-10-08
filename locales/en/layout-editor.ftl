@@ -16,15 +16,12 @@ layout-editor-palette = Layout palette
 # $window = the window being customized ("Mail")
 layout-editor-title = Customizing layout: { $window }
 layout-editor-hint = Drag panes by their handle onto another pane, or press a handle and choose where it goes. Changes are saved to layout.kdl.
-layout-editor-undo = Undo
-layout-editor-redo = Redo
 # $entry = what Undo / Redo would take back ("Swap panes")
 layout-editor-undo-entry = Undo: { $entry }
 layout-editor-redo-entry = Redo: { $entry }
-layout-editor-reset = Reset to default
-layout-editor-done = Done
-layout-editor-undo-anyway = Undo anyway
-layout-editor-redo-anyway = Redo anyway
+layout-editor-reset = { common-reset-to-default }
+layout-editor-undo-anyway = { appearance-undo-anyway }
+layout-editor-redo-anyway = { appearance-redo-anyway }
 
 ## Status messages (announced)
 
@@ -76,25 +73,25 @@ layout-editor-target-into = Add { $moving } to { $pane }
 
 ## Names of panes without a label of their own
 
-layout-editor-kind-folder-tree = Folders
-layout-editor-kind-message-list = Message list
-layout-editor-kind-message-view = Message
+layout-editor-kind-folder-tree = { common-folders }
+layout-editor-kind-message-list = { common-message-list }
+layout-editor-kind-message-view = { common-message }
 layout-editor-kind-list-header = List header
-layout-editor-kind-thread-view = Conversation
-layout-editor-kind-toolbar = Toolbar
+layout-editor-kind-thread-view = { thread-view-label }
+layout-editor-kind-toolbar = { customize-toolbar-choose }
 layout-editor-kind-mini-month = Mini month
-layout-editor-kind-agenda = Today's agenda
-layout-editor-kind-task-list = Task list
-layout-editor-kind-smart-folders = Smart folders
-layout-editor-kind-calendar = Calendar
-layout-editor-kind-calendar-list = Calendars
-layout-editor-kind-contact-list = Contacts
-layout-editor-kind-contact-card = Contact
+layout-editor-kind-agenda = { pim-agenda-today }
+layout-editor-kind-task-list = { common-task-list }
+layout-editor-kind-smart-folders = { common-smart-folders }
+layout-editor-kind-calendar = { common-calendar }
+layout-editor-kind-calendar-list = { common-calendars }
+layout-editor-kind-contact-list = { common-contacts }
+layout-editor-kind-contact-card = { common-contact }
 layout-editor-kind-nav-rail = Navigation rail
 layout-editor-kind-view-host = Views
 layout-editor-kind-status-bar = Status bar
-layout-editor-kind-settings-page = Settings
-layout-editor-kind-plugin-panel = Plug-in panel
+layout-editor-kind-settings-page = { common-settings }
+layout-editor-kind-plugin-panel = { plugin-panel-label }
 # $panel = "<plug-in>.<panel>"
 layout-editor-kind-plugin-panel-named = Plug-in panel { $panel }
 # $name = the node id or widget kind
@@ -108,25 +105,24 @@ layout-editor-window-other = Window “{ $name }”
 layout-editor-presets = Presets
 layout-editor-presets-none = This window has no presets.
 layout-editor-presets-missing = Presets that need a pane this window no longer has are unavailable. Reset to default brings the panes back.
-layout-editor-add = Add to layout
+layout-editor-add = { edit-kind-add-widget }
 layout-editor-add-hint = Drag a widget onto a pane, or press it and choose where it goes.
-layout-editor-widget-mini-month = Mini month
+layout-editor-widget-mini-month = { layout-editor-kind-mini-month }
 layout-editor-widget-mini-month-description = Small calendar for any pane
-layout-editor-widget-agenda = Today's agenda
+layout-editor-widget-agenda = { pim-agenda-today }
 layout-editor-widget-agenda-description = Events and tasks for today
-layout-editor-widget-task-list = Task list
+layout-editor-widget-task-list = { common-task-list }
 layout-editor-widget-task-list-description = Next to your inbox
-layout-editor-widget-smart-folders = Smart folders
+layout-editor-widget-smart-folders = { common-smart-folders }
 layout-editor-widget-smart-folders-description = Saved searches
 # $plugin = the plug-in's name
 layout-editor-widget-plugin-panel-description = Panel of { $plugin }
-layout-editor-toolbars = Toolbars
 layout-editor-toolbars-hint = Right-click any toolbar and choose “Customize toolbar” to move buttons between the bar and the “More” menu.
 
 ## Settings → Layout & toolbars (widget layout-editor-settings)
 
 layout-editor-settings-title = Window layout
 layout-editor-settings-hint = Rearrange the panes of a view, apply a preset or go back to the default. Nail writes your changes to layout.kdl and keeps your comments.
-layout-editor-settings-window = View
+layout-editor-settings-window = { common-view }
 layout-editor-settings-no-windows = This layout has no views to customize.
 layout-editor-settings-keywords = layout panes arrange customize presets reader below wide focus three

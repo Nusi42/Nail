@@ -22,11 +22,7 @@
  * - Two-pane widgets (a list beside its editor: accounts, rules) stack when
  *   the card or window that holds them is narrow (`TWO_PANES_NARROW`).
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
-/** Joined selectors of several parts. */
-const ps = (...parts: string[]) => parts.map(p).join(", ");
+import { p, ps } from "./selectors";
 
 /** Token shorthands. */
 const T = {
@@ -116,6 +112,9 @@ ${p("account-setup.steps")} {
  * label sits above its control). A control marked `data-width` keeps its
  * own size (`./skin.ts` `CONTROL_WIDTHS`).
  */
+/** A field's smallest share of a row before the row wraps. */
+const FIELD_MIN = "8rem";
+
 export const FIELD_ROWS = [
   "rules.add",
   "rules.condition",
@@ -129,7 +128,7 @@ export const FIELD_ROWS = [
 const fieldRows = FIELD_ROWS.map(p).join(", ");
 const ROWS = `:is(${fieldRows})[data-part] { align-items: flex-end; }
 :is(${fieldRows}) > :is(${ps("form.field", "form.input", "form.select", "form.textarea")}):not([data-width]) {
-  flex: 1 1 8rem; min-width: 0;
+  flex: 1 1 ${FIELD_MIN}; min-width: 0;
 }`;
 
 /**
@@ -152,7 +151,7 @@ const INLINE = `:is(${inlineRows}) { display: flex; flex-wrap: wrap; align-items
   display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; flex: 1 1 14rem; padding: 0; border: none;
 }
 ${p("settings-page.card")} :is(${inlineRows}) > ${p("form.field")} > :is(${ps("form.input", "form.select")}) {
-  flex: 1 1 8rem; width: auto; min-width: 8rem;
+  flex: 1 1 ${FIELD_MIN}; width: auto; min-width: ${FIELD_MIN};
 }
 ${p("settings-page.card")} :is(${inlineRows}) > ${p("form.check")} { padding: 0; border: none; }`;
 
@@ -206,10 +205,16 @@ ${p("portability.choice")} > ${p("form.check")} { flex: 0 1 auto; }
 ${p("portability.choice")} > ${p("form.hint")} { flex: 1 1 12rem; min-width: 0; }`;
 
 /**
- * The free/busy timeline (scheduling): the hour scale starts where the
- * tracks start (the theme's 160 px name column plus the row's gap).
+ * The free/busy timeline's name column: `freebusy.row`'s first column in
+ * defaults/theme.kdl (pinned by `ui/src/theme/declarations.test.ts`).
  */
-const FREEBUSY = `${p("freebusy")} > ${p("freebusy.scale")} { margin-inline-start: calc(160px + ${T.xs}); }`;
+export const FREEBUSY_NAME_COLUMN = "160px";
+
+/**
+ * The free/busy timeline (scheduling): the hour scale starts where the
+ * tracks start (the theme's name column plus the row's gap).
+ */
+const FREEBUSY = `${p("freebusy")} > ${p("freebusy.scale")} { margin-inline-start: calc(${FREEBUSY_NAME_COLUMN} + ${T.xs}); }`;
 
 /** The configuration status says "all valid" in the success colour, not the error one. */
 const CONFIG_STATUS = `${p("config-errors")}[data-state="valid"] > ${p("config-errors.summary")} {

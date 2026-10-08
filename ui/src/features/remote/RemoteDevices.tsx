@@ -13,7 +13,7 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
-import { ConfirmButton, InputField, Toggle } from "./fields";
+import { ConfirmButton, InputField, Toggle, RenameActions } from "./fields";
 import { formatTime, presetOf } from "./model";
 import { PAIR_DIALOG } from "./PairDevice";
 import {
@@ -96,24 +96,12 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
             onChange={setName}
             focusOnMount
           />
-          <button
-            type="submit"
-            data-part="form.button"
-            data-action="save-name"
+          <RenameActions
             disabled={name.trim() === ""}
-          >
-            {t("remote-save")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="cancel"
-            onClick={() => {
+            onCancel={() => {
               setName(null);
             }}
-          >
-            {t("remote-cancel")}
-          </button>
+          />
         </form>
       )}
       <span data-part="remote-devices.meta">
@@ -122,7 +110,7 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
           paired: formatTime(device.paired_at, locale),
           seen:
             device.last_seen_at === null
-              ? t("remote-never")
+              ? t("common-never-inline")
               : formatTime(device.last_seen_at, locale),
           ip: device.last_ip ?? "",
         })}
@@ -152,7 +140,7 @@ function DeviceRow({ device, users }: { device: RemoteDevice; users: readonly Re
                 setName(device.name);
               }}
             >
-              {t("remote-rename")}
+              {t("common-rename")}
             </button>
             <ConfirmButton
               labelId="remote-device-revoke"
@@ -230,7 +218,7 @@ function SessionRow({ session }: { session: RemoteSession }) {
               )
             }
           >
-            {t("remote-session-revoke")}
+            {t("remote-action-logout")}
           </button>
         </>
       )}

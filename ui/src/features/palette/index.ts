@@ -95,7 +95,7 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [PALETTE_DIALOG]: PaletteDialog,
 };
 
@@ -111,8 +111,3 @@ export const windows: NonNullable<Feature["windows"]> = {
     pop_out: false,
   },
 };
-
-/** Handlers for the core's events. */
-export const events: Feature["events"] = [];
-/** Background components. */
-export const effects: Feature["effects"] = [];

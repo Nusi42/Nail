@@ -166,7 +166,7 @@ function Card({
   ].filter((s) => s !== null);
   const date = new Date(m.date);
   const valid = !Number.isNaN(date.getTime());
-  const sender = m.from_me ? me : displayName(m.from) || t("composer-unknown-sender");
+  const sender = m.from_me ? me : displayName(m.from) || t("common-unknown-sender");
   return (
     <article
       data-part="thread-view.card"
@@ -438,11 +438,11 @@ export function ThreadFeed({ node, nodeKey }: WidgetProps) {
     >
       <header data-part="thread-view.header">
         <h1 data-part="thread-view.subject" id={`${ids}-subject`}>
-          {thread.subject || t("message-no-subject")}
+          {thread.subject || t("common-no-subject")}
         </h1>
         <p data-part="thread-view.participants">{participants}</p>
         <span data-part="thread-view.count">
-          {t("conversations-count", { count: messages.length })}
+          {t("common-message-count-spelled", { count: messages.length })}
         </span>
         {messages.length > 1 && (
           <button

@@ -1,10 +1,11 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { MessageBody, Request, SecurityStatus } from "../../api/generated";
+import type { MessageBody, SecurityStatus } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { AuthBadge, SecurityBadge } from "./MessageSecurity";
 import { securityDemoBySender } from "./mockSeed";
 import { must } from "../../test/must";
+import { requestsOf } from "../../test/env";
 
 const demo = securityDemoBySender();
 
@@ -12,10 +13,6 @@ function statusOf(sender: string): SecurityStatus {
   const s = demo[sender]?.security;
   if (!s) throw new Error(sender);
   return structuredClone(s);
-}
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
 }
 
 describe("security badge", () => {

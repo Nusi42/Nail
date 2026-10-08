@@ -59,6 +59,7 @@ import {
 } from "./time";
 import { fromAbsolute } from "@internationalized/date";
 import { nonEmpty } from "../../text/empty";
+import { plausibleEmail } from "../../state/addresses";
 
 /** The requests this feature answers. */
 export const PIM_REQUESTS = [
@@ -187,6 +188,37 @@ function forbidden(what: string): Response {
   return errorResponse("forbidden", `${what} is read-only`);
 }
 
+/** The event `id` when it may be changed, else the refusal (unknown, read-only). */
+function writableEvent(
+  pim: PimMockState,
+  id: string,
+): { event: CalendarEvent } | { refused: Response } {
+  const event = pim.events.find((e) => e.id === id);
+  if (!event) return { refused: notFound(`event ${id}`) };
+  if (event.read_only || calendarOf(pim, event.calendar_id)?.read_only)
+    return { refused: forbidden("the calendar") };
+  return { event };
+}
+
+/** The task `id` when it may be changed, else the refusal (unknown, read-only). */
+function writableTask(pim: PimMockState, id: string): { task: Task } | { refused: Response } {
+  const task = pim.tasks.find((t) => t.id === id);
+  if (!task) return { refused: notFound(`task ${id}`) };
+  if (task.read_only || calendarOf(pim, task.calendar_id)?.read_only)
+    return { refused: forbidden("the task list") };
+  return { task };
+}
+
+/** Saves a changed task: pending, queued on its source, answered as `TaskSaved`. */
+function taskSaved(core: MockCore, pim: PimMockState, task: Task): Response {
+  task.updated_at = now();
+  task.sync = "pending";
+  const op_ids = queue(core, sourceOfCalendar(pim, task.calendar_id), [
+    tasksChanged([task.calendar_id]),
+  ]);
+  return { type: "TaskSaved", task: clone(task), op_ids };
+}
+
 /** Queues a PIM write: answers its op id; the "replay" reports and emits `changed`. */
 function queue(
   core: MockCore,
@@ -230,11 +262,6 @@ function sourceOfBook(pim: PimMockState, id: string): string {
 }
 
 const now = () => utcString(Date.now());
-
-function plausibleEmail(text: string): boolean {
-  const at = text.lastIndexOf("@");
-  return at > 0 && at < text.length - 1 && !/\s/.test(text) && !text.slice(at + 1).startsWith(".");
-}
 
 function timeIssue(time: PimTime): PimIssue | null {
   if (time.type === "date") return parseDay(time.date) ? null : "invalid-date";
@@ -384,10 +411,9 @@ function updateEvent(
   request: Extract<PimRequest, { type: "UpdateEvent" }>,
 ): Response {
   const pim = state(core);
-  const event = pim.events.find((e) => e.id === request.event_id);
-  if (!event) return notFound(`event ${request.event_id}`);
-  if (event.read_only || calendarOf(pim, event.calendar_id)?.read_only)
-    return forbidden("the calendar");
+  const found = writableEvent(pim, request.event_id);
+  if ("refused" in found) return found.refused;
+  const { event } = found;
   const issue = eventIssue(request.fields, request.recurrence);
   if (issue) return invalid(issue);
   const recurring = event.recurrence !== null;
@@ -455,10 +481,9 @@ function deleteEvent(
   request: Extract<PimRequest, { type: "DeleteEvent" }>,
 ): Response {
   const pim = state(core);
-  const event = pim.events.find((e) => e.id === request.event_id);
-  if (!event) return notFound(`event ${request.event_id}`);
-  if (event.read_only || calendarOf(pim, event.calendar_id)?.read_only)
-    return forbidden("the calendar");
+  const found = writableEvent(pim, request.event_id);
+  if ("refused" in found) return found.refused;
+  const { event } = found;
   const recurring = event.recurrence !== null;
   const scope = recurring ? request.scope : "all";
   if (scope !== "all" && request.recurrence_id === null) return invalid("invalid-scope");
@@ -1422,10 +1447,9 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
       return { type: "TaskSaved", task: clone(task), op_ids };
     }
     case "UpdateTask": {
-      const task = pim.tasks.find((t) => t.id === request.task_id);
-      if (!task) return notFound(`task ${request.task_id}`);
-      if (task.read_only || calendarOf(pim, task.calendar_id)?.read_only)
-        return forbidden("the task list");
+      const found = writableTask(pim, request.task_id);
+      if ("refused" in found) return found.refused;
+      const { task } = found;
       const issue = taskIssue(request.fields);
       if (issue) return invalid(issue);
       const parentId = request.fields.parent_id;
@@ -1441,18 +1465,12 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
       task.fields = clone(request.fields);
       if (wasParent !== parentId) setParent(pim, task, parentId);
       task.recurrence = request.recurrence ? clone(request.recurrence) : null;
-      task.updated_at = now();
-      task.sync = "pending";
-      const op_ids = queue(core, sourceOfCalendar(pim, task.calendar_id), [
-        tasksChanged([task.calendar_id]),
-      ]);
-      return { type: "TaskSaved", task: clone(task), op_ids };
+      return taskSaved(core, pim, task);
     }
     case "CompleteTask": {
-      const task = pim.tasks.find((t) => t.id === request.task_id);
-      if (!task) return notFound(`task ${request.task_id}`);
-      if (task.read_only || calendarOf(pim, task.calendar_id)?.read_only)
-        return forbidden("the task list");
+      const found = writableTask(pim, request.task_id);
+      if ("refused" in found) return found.refused;
+      const { task } = found;
       if (request.completed && task.recurrence) {
         advanceTask(task);
         task.fields.status = "needs-action";
@@ -1467,12 +1485,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
         task.fields.percent_complete = null;
         task.fields.completed_at = null;
       }
-      task.updated_at = now();
-      task.sync = "pending";
-      const op_ids = queue(core, sourceOfCalendar(pim, task.calendar_id), [
-        tasksChanged([task.calendar_id]),
-      ]);
-      return { type: "TaskSaved", task: clone(task), op_ids };
+      return taskSaved(core, pim, task);
     }
     case "MoveTask": {
       const task = pim.tasks.find((t) => t.id === request.task_id);
@@ -1487,10 +1500,9 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
       return { type: "TaskSaved", task: clone(task), op_ids };
     }
     case "DeleteTask": {
-      const task = pim.tasks.find((t) => t.id === request.task_id);
-      if (!task) return notFound(`task ${request.task_id}`);
-      if (task.read_only || calendarOf(pim, task.calendar_id)?.read_only)
-        return forbidden("the task list");
+      const found = writableTask(pim, request.task_id);
+      if ("refused" in found) return found.refused;
+      const { task } = found;
       const gone = request.with_subtasks ? [task, ...descendants(pim, task.id)] : [task];
       if (!request.with_subtasks) {
         for (const sub of task.subtask_ids) {

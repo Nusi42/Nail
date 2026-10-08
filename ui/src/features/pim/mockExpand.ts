@@ -21,15 +21,8 @@ import type {
   Weekday,
 } from "../../api/generated";
 import { weekdayOf } from "./recurrence";
-import {
-  WEEKDAYS,
-  dateString,
-  localString,
-  parseDay,
-  parseLocal,
-  pimTimeIn,
-  utcString,
-} from "./time";
+import { WEEKDAYS, likeAt, localString, parseDay, parseLocal, pimTimeIn, utcString } from "./time";
+import { DAY_MS } from "../../state/clock";
 
 /** Most occurrences one series produces in the mock. */
 const MAX_OCCURRENCES = 2000;
@@ -41,18 +34,6 @@ function frameOf(time: PimTime): CalendarDateTime {
     return new CalendarDateTime(day.year, day.month, day.day);
   }
   return parseLocal(time.local) ?? new CalendarDateTime(1970, 1, 1);
-}
-
-/** A `PimTime` like `like` at wall-clock `value`. */
-function withFrame(like: PimTime, value: CalendarDateTime): PimTime {
-  switch (like.type) {
-    case "date":
-      return { type: "date", date: dateString(value) };
-    case "floating":
-      return { type: "floating", local: localString(value) };
-    case "zoned":
-      return { type: "zoned", local: localString(value), tz: like.tz };
-  }
 }
 
 /** Instant (ms) of a `PimTime`, dates and floating times seen in `tz`. */
@@ -166,7 +147,7 @@ export function occurrenceStarts(event: CalendarEvent, untilMs: number, tz: stri
     for (let k = 0; !done && k < MAX_OCCURRENCES; k++) {
       const dates = periodDates(rule, startDay, k);
       for (const day of dates) {
-        const time = withFrame(
+        const time = likeAt(
           first,
           new CalendarDateTime(
             day.year,
@@ -228,7 +209,7 @@ export function endFor(fields: EventFields, start: PimTime): PimTime {
     const end = fromAbsolute(instantOf(start, "UTC") + length, fields.end.tz);
     return { type: "zoned", local: localString(end), tz: fields.end.tz };
   }
-  return withFrame(start, frame);
+  return likeAt(start, frame);
 }
 
 /** The instances of one series overlapping `[fromMs, toMs)` for a viewer in `tz`. */
@@ -272,7 +253,7 @@ export function expandEvent(
     return instances;
   }
   // Overrides may move an occurrence into the range from far away: look a year around.
-  const starts = occurrenceStarts(event, toMs + 366 * 86_400_000, tz);
+  const starts = occurrenceStarts(event, toMs + 366 * DAY_MS, tz);
   for (const start of starts) {
     const override = event.overrides.find((o) => sameOccurrence(o.recurrence_id, start));
     if (override) add(override.fields, start, true);

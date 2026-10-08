@@ -27,10 +27,10 @@ action-kind-rule = Create or change filter rules
 
 confirmation-state-pending = Waiting for you
 confirmation-state-approved = Approved
-confirmation-state-denied = Denied
+confirmation-state-denied = { common-denied }
 confirmation-state-expired = Expired
-confirmation-state-cancelled = Cancelled
-confirmation-state-failed = Failed
+confirmation-state-cancelled = { common-cancelled }
+confirmation-state-failed = { common-failed }
 
 ## Policy problems (ActionPolicyIssue)
 
@@ -72,26 +72,26 @@ confirmation-summary-plugin-tool = { $actor } wants to run “{ $tool }”.
 
 ## Before / after lines (ACTION_FIELD_IDS)
 
-action-field-folder = Folder
-action-field-flagged = Flagged
+action-field-folder = { common-folder }
+action-field-flagged = { common-flagged }
 action-field-read = Read
 action-field-tags = Tags
 action-field-snoozed-until = Snoozed until
-action-field-to = To
-action-field-cc = Cc
+action-field-to = { common-header-to }
+action-field-cc = { common-cc }
 action-field-bcc = Bcc
-action-field-subject = Subject
+action-field-subject = { common-subject }
 action-field-body = Text
-action-field-attachments = Attachments
+action-field-attachments = { common-attachments }
 action-field-send-at = Send at
 action-field-title = Title
-action-field-start = Start
-action-field-end = End
+action-field-start = { common-start }
+action-field-end = { common-end }
 action-field-location = Location
-action-field-attendees = Attendees
+action-field-attendees = { common-attendees }
 action-field-response = Answer
-action-field-name = Name
+action-field-name = { common-name }
 action-field-emails = Email addresses
 action-field-due = Due
-action-field-completed = Done
-action-field-rule = Rule
+action-field-completed = { common-state-done }
+action-field-rule = { common-rule }

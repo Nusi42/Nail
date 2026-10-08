@@ -108,7 +108,7 @@ export function SmartFolders({ node }: WidgetProps) {
     <nav
       data-part="smart-folders"
       data-node-id={node.id ?? undefined}
-      aria-label={node.label ? label(node.label) : t("saved-search-label")}
+      aria-label={node.label ? label(node.label) : t("common-smart-folders")}
       aria-busy={saved.isFetching}
     >
       {saved.isError && (
@@ -177,7 +177,7 @@ export function SmartFolders({ node }: WidgetProps) {
               data-action="save"
               disabled={name.trim() === ""}
             >
-              {t("saved-search-save")}
+              {t("common-save")}
             </button>
             <button
               type="button"
@@ -188,7 +188,7 @@ export function SmartFolders({ node }: WidgetProps) {
                 setName("");
               }}
             >
-              {t("saved-search-cancel")}
+              {t("common-cancel")}
             </button>
           </form>
         ) : (

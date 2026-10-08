@@ -15,6 +15,7 @@ import { openThemeEditor, themeEditorStoreFor, useThemeEditorState } from "./edi
 import { THEME_NAME_MAX, isThemeName, themeIdFromName } from "./model";
 import { useAppearance } from "./queries";
 import { useThemeName } from "./ThemeEditor";
+import { CloseButton } from "../../widgets/CloseButton";
 
 function NameField({
   id,
@@ -31,7 +32,7 @@ function NameField({
   return (
     <div data-part="form.field" data-field="name">
       <label data-part="form.label" htmlFor={id}>
-        {t("theme-dialog-name")}
+        {t("common-name")}
       </label>
       <input
         id={id}
@@ -120,26 +121,13 @@ export function NewThemeDialog({ close }: DialogProps) {
         />
         <span data-part="form.check.label">{t("theme-dialog-use")}</span>
       </label>
-      {(invalid || failure) && (
-        <p data-part="form.error" role="alert">
-          {invalid
-            ? t("edit-issue-invalid-theme-name")
-            : t(errorMessageOf(failure).id, errorMessageOf(failure).args)}
-        </p>
-      )}
-      <div data-part="theme-dialog.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("theme-dialog-cancel")}
-        </button>
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={duplicate.isPending || from === ""}
-        >
-          {t("theme-dialog-create")}
-        </button>
-      </div>
+      <NameDialogFooter
+        invalid={invalid}
+        failure={failure}
+        close={close}
+        submitLabel={t("common-create")}
+        disabled={duplicate.isPending || from === ""}
+      />
     </form>
   );
 }
@@ -187,9 +175,7 @@ export function RenameThemeDialog({ close }: DialogProps) {
       <div data-part="theme-dialog" data-dialog="rename">
         <p data-part="theme-dialog.gone">{t("edit-issue-theme-not-found")}</p>
         <div data-part="theme-dialog.actions">
-          <button type="button" data-part="form.button" onClick={close}>
-            {t("theme-dialog-close")}
-          </button>
+          <CloseButton onClose={close} />
         </div>
       </div>
     );
@@ -209,26 +195,13 @@ export function RenameThemeDialog({ close }: DialogProps) {
           {t("theme-dialog-rename-file", { file: theme.file })}
         </span>
       </label>
-      {(invalid || failure) && (
-        <p data-part="form.error" role="alert">
-          {invalid
-            ? t("edit-issue-invalid-theme-name")
-            : t(errorMessageOf(failure).id, errorMessageOf(failure).args)}
-        </p>
-      )}
-      <div data-part="theme-dialog.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("theme-dialog-cancel")}
-        </button>
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={rename.isPending}
-        >
-          {t("theme-dialog-rename")}
-        </button>
-      </div>
+      <NameDialogFooter
+        invalid={invalid}
+        failure={failure}
+        close={close}
+        submitLabel={t("common-rename")}
+        disabled={rename.isPending}
+      />
     </form>
   );
 }
@@ -280,12 +253,49 @@ export function DeleteThemeDialog({ close }: DialogProps) {
             });
           }}
         >
-          {t("theme-dialog-delete")}
+          {t("common-delete")}
         </button>
         <button ref={cancel} type="button" data-part="form.button" onClick={close}>
-          {t("theme-dialog-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </div>
+  );
+}
+
+/** The name problem (or the core's refusal) and Cancel / submit of a theme dialog. */
+function NameDialogFooter({
+  invalid,
+  failure,
+  close,
+  submitLabel,
+  disabled,
+}: {
+  invalid: boolean;
+  failure: unknown;
+  close: () => void;
+  submitLabel: string;
+  disabled: boolean;
+}) {
+  const t = useT();
+  const refusal = failure ? errorMessageOf(failure) : null;
+  return (
+    <>
+      {(invalid || refusal) && (
+        <p data-part="form.error" role="alert">
+          {invalid || refusal === null
+            ? t("edit-issue-invalid-theme-name")
+            : t(refusal.id, refusal.args)}
+        </p>
+      )}
+      <div data-part="theme-dialog.actions">
+        <button type="button" data-part="form.button" onClick={close}>
+          {t("common-cancel")}
+        </button>
+        <button type="submit" data-part="form.button" data-variant="primary" disabled={disabled}>
+          {submitLabel}
+        </button>
+      </div>
+    </>
   );
 }

@@ -24,7 +24,7 @@
  */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { JsonValue, ResolvedMenuEntry, ToolbarItem } from "../api/generated";
-import { useActions } from "../actions/ActionsProvider";
+import { useActions, useEnabledInputs } from "../actions/ActionsProvider";
 import { comboFromEvent } from "../actions/keys";
 import { keyLabel } from "../features/menus";
 import { ContextMenu } from "../features/menus/ContextMenu";
@@ -48,6 +48,7 @@ import {
   tooltipMessage,
   wrapEdges,
 } from "./toolbarModel";
+import { HORIZONTAL, moveRovingFocus } from "./rovingFocus";
 
 type ActionItem = Extract<ToolbarItem, { type: "action" }>;
 
@@ -56,18 +57,7 @@ const FOCUSABLE = '[data-part="toolbar.button"]:not(:disabled), [data-part="tool
 
 /** Left / Right / Home / End move between a toolbar's enabled buttons. */
 export function onToolbarKeyDown(event: KeyboardEvent<HTMLElement>): void {
-  const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
-  if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
-  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(FOCUSABLE)];
-  if (buttons.length === 0) return;
-  const at = buttons.indexOf(event.target as HTMLButtonElement);
-  let next: number;
-  if (event.key === "Home") next = 0;
-  else if (event.key === "End") next = buttons.length - 1;
-  else if (at < 0) next = 0;
-  else next = (at + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-  event.preventDefault();
-  buttons[next]?.focus();
+  moveRovingFocus(event, FOCUSABLE, HORIZONTAL);
 }
 
 /**
@@ -79,10 +69,7 @@ function useEnabledCheck(): (action: string, args: readonly JsonValue[]) => bool
   // The whole order: checks that read the loaded summaries (rules, Gmail
   // labels) change when the list loads.
   useUi((s) => s.messageOrder);
-  useUi((s) => s.selectedMessageId);
-  useUi((s) => s.composer !== null);
-  useUi((s) => s.windows.length);
-  useUi((s) => s.lastSend?.state);
+  useEnabledInputs();
   return (action, args) => dispatcher.isEnabled(action, args);
 }
 
@@ -397,7 +384,7 @@ export function Toolbar({ node }: WidgetProps) {
         data-state={measuring ? "measuring" : undefined}
         data-customizing={customizing ? "" : undefined}
         role="toolbar"
-        aria-label={node.label ? label(node.label) : t("toolbar-label")}
+        aria-label={node.label ? label(node.label) : t("common-message-actions")}
         onKeyDown={onKeyDown}
         onContextMenu={onContextMenu}
       >
@@ -448,7 +435,7 @@ export function Toolbar({ node }: WidgetProps) {
       {menu && (
         <ContextMenu
           items={menu.items}
-          label={t("toolbar-editor-menu-label")}
+          label={t("customize-toolbar-choose")}
           x={menu.x}
           y={menu.y}
           focusOnOpen

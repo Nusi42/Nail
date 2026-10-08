@@ -14,7 +14,7 @@ import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient, useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
 import { CheckField, NumberField, SelectField } from "../../widgets/forms";
-import { junkIssues } from "./model";
+import { junkIssues, MAX_MIN_TRAINING } from "./model";
 import { triageKeys, useJunkStatus } from "./queries";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
 
@@ -153,7 +153,7 @@ function SettingsEditor({
   return (
     <div data-part="junk-settings.account">
       <dl data-part="junk-settings.status" aria-label={t("junk-status-label")}>
-        <dt data-part="junk-settings.status.term">{t("junk-status-state")}</dt>
+        <dt data-part="junk-settings.status.term">{t("common-state")}</dt>
         <dd data-part="junk-settings.status.value" data-state={s.ready ? "ready" : "learning"}>
           {s.ready
             ? t("junk-status-ready")
@@ -170,7 +170,7 @@ function SettingsEditor({
         <dt data-part="junk-settings.status.term">{t("junk-status-last-trained")}</dt>
         <dd data-part="junk-settings.status.value">
           {last === null || Number.isNaN(last.getTime())
-            ? t("junk-status-never")
+            ? t("common-never")
             : formatDateTime(last, locale, DATE_TIME)}
         </dd>
       </dl>
@@ -200,7 +200,7 @@ function SettingsEditor({
           hintId="junk-settings-min-training-hint"
           name="min-training"
           min={1}
-          max={10000}
+          max={MAX_MIN_TRAINING}
           value={draft.min_training}
           onChange={(value) => {
             update({ min_training: value ?? 0 });
@@ -237,7 +237,7 @@ function SettingsEditor({
           data-variant="primary"
           onClick={() => void save()}
         >
-          {t("junk-settings-save")}
+          {t("common-save")}
         </button>
         {confirmReset ? (
           <div data-part="junk-settings.confirm" role="group" aria-label={t("junk-reset-confirm")}>
@@ -257,7 +257,7 @@ function SettingsEditor({
                 setConfirmReset(false);
               }}
             >
-              {t("junk-reset-no")}
+              {t("common-cancel")}
             </button>
           </div>
         ) : (
@@ -292,7 +292,7 @@ export function JunkSettingsWidget({ node }: WidgetProps) {
     >
       <p data-part="junk-settings.intro">{t("junk-settings-intro")}</p>
       {accounts.length === 0 ? (
-        <p data-part="junk-settings.empty">{t("junk-settings-no-accounts")}</p>
+        <p data-part="junk-settings.empty">{t("common-no-accounts-yet")}</p>
       ) : (
         <>
           <SelectField

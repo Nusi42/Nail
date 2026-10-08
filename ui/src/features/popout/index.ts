@@ -115,11 +115,8 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
   },
 };
 
-/** Dialogs by name. */
-export const dialogs: Feature["dialogs"] = {};
-
 /** Core event handlers. */
-export const events: Feature["events"] = [
+export const events: NonNullable<Feature["events"]> = [
   // The main page: a window that popped out leaves it, a returned one comes back.
   (event, { store }) => {
     if (event.type !== "PopOutChanged" || popOutPageWindow() !== null) return;
@@ -138,4 +135,4 @@ export const events: Feature["events"] = [
 ];
 
 /** Background components. */
-export const effects: Feature["effects"] = [PopOutRouter];
+export const effects: NonNullable<Feature["effects"]> = [PopOutRouter];

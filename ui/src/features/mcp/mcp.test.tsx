@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { McpClient, Request } from "../../api/generated";
+import type { McpClient } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { handleMcpEvent } from "./index";
 import { runtimeIds } from "./messages";
@@ -10,16 +10,13 @@ import { emptyGrant, grantIsEmpty, toggled } from "./queries";
 import { INDICATOR_MS, mcpStore } from "./state";
 import { readerSelection, REPORT_DELAY_MS, UiContextReporter } from "./UiContextReporter";
 import { must } from "../../test/must";
+import { requestsOf } from "../../test/env";
 
 /** Feeds core events to the feature's event handler, as the app shell does. */
 function wireEvents(env: Env) {
   return env.client.subscribe((event) => {
     handleMcpEvent(event, { client: env.client, queryClient: env.queryClient, store: env.store });
   });
-}
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
 }
 
 afterEach(() => {

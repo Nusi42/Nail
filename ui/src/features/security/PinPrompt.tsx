@@ -13,8 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage, PinPrompt, PinPromptCloseReason } from "../../api/generated";
+import type { PinPrompt, PinPromptCloseReason } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -23,6 +22,7 @@ import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import type { FeatureEventHandler } from "../types";
 import { pinIsPlausible } from "./smartcardModel";
 import { smartcardKeys } from "./Smartcards";
+import { useBusyAction } from "../../state/busyAction";
 
 export const PIN_DIALOG = "smartcard-pin";
 
@@ -110,17 +110,14 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
   const ui = useUiStoreApi();
   const id = useId();
   const [pin, setPin] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => inputRef.current?.focus(), []);
 
   const answer = async (value: string | null) => {
     const pins = pinStoreFor(ui);
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await client.request(
         { type: "AnswerPinPrompt", prompt_id: prompt.prompt_id, pin: value },
         "Done",
@@ -130,11 +127,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
       void queryClient.invalidateQueries({ queryKey: smartcardKeys.tokens });
       // A wrong PIN comes back as a new prompt; nothing waiting → done.
       if (pins.getState().prompts.length === 0) close();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const submit = (event: SubmitEvent) => {
@@ -200,7 +193,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
           data-action="answer"
           disabled={busy || !pinIsPlausible(pin)}
         >
-          {t("security-pin-ok")}
+          {t("common-ok")}
         </button>
         <button
           type="button"
@@ -209,7 +202,7 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
           disabled={busy}
           onClick={() => void answer(null)}
         >
-          {t("security-pin-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
@@ -256,7 +249,7 @@ export function PinPromptView({ close }: { close: () => void }) {
             close();
           }}
         >
-          {t("security-pin-close")}
+          {t("common-close")}
         </button>
       </div>
     </div>

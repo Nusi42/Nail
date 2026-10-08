@@ -4,25 +4,23 @@
  */
 import { vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { MessageSummary, ResolvedTheme } from "../api/generated";
+import type { ErrorCode, MessageSummary, ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
-import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../test/harness";
+import {
+  createEnv,
+  renderNode,
+  settleQueries,
+  widget,
+  stubElementSizesEachTest,
+} from "../test/harness";
 import { colorSlot } from "../theme/skin";
 import { fileType, formatSize } from "./AttachmentCard";
 import { extrasOf, messageTags } from "./MessageList";
 import { must } from "../test/must";
 import { stubProperties } from "../test/stub";
+import { FIRST, INBOX } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-const FIRST = `${INBOX}#1`;
-
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
+stubElementSizesEachTest();
 
 function listEnv() {
   return createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
@@ -34,6 +32,38 @@ function row(container: HTMLElement, id: string): HTMLElement {
   );
   if (!el) throw new Error(`no row ${id}`);
   return el;
+}
+
+/** The first row's tag line. */
+function tagLineOf(container: HTMLElement): HTMLElement {
+  return must(
+    row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
+  );
+}
+
+/** Waits for the first row's tag line. */
+async function tagLine(container: HTMLElement): Promise<HTMLElement> {
+  await waitFor(() => {
+    expect(
+      row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
+    ).not.toBeNull();
+  });
+  return tagLineOf(container);
+}
+
+/** The kinds of the tags on a tag line, in order. */
+const tagKinds = (line: HTMLElement) =>
+  [...line.querySelectorAll('[data-part="tag"]')].map((t) => t.getAttribute("data-kind"));
+
+/** Makes the mock core refuse attachment downloads with `code`. */
+function refuseAttachments(
+  env: ReturnType<typeof listEnv>,
+  code: ErrorCode,
+  message: string,
+): void {
+  const send = env.transport.send.bind(env.transport);
+  env.transport.send = async (request) =>
+    request.type === "GetMessageAttachment" ? { type: "Error", code, message } : send(request);
 }
 
 describe("message list rows (M5a)", () => {
@@ -62,17 +92,8 @@ describe("message list rows (M5a)", () => {
   it("puts attachments, flag and labels on the tag line, no account inside one account's folder", async () => {
     const env = listEnv();
     const { container } = renderNode(widget("message-list"), env);
-    await waitFor(() => {
-      expect(
-        row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
-      ).not.toBeNull();
-    });
-    const line = must(
-      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
-    );
-    const kinds = [...line.querySelectorAll('[data-part="tag"]')].map((t) =>
-      t.getAttribute("data-kind"),
-    );
+    const line = await tagLine(container);
+    const kinds = tagKinds(line);
     // P2 review: every row of one account's folder would repeat the account.
     expect(kinds).toEqual(["attachments", "flagged", "label"]);
     expect(within(line).getByText("Attachment")).toBeInTheDocument();
@@ -95,12 +116,8 @@ describe("message list rows (M5a)", () => {
         row(container, FIRST).querySelector('[data-part="tag"][data-kind="account"]'),
       ).not.toBeNull();
     });
-    const line = must(
-      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
-    );
-    const kinds = [...line.querySelectorAll('[data-part="tag"]')].map((t) =>
-      t.getAttribute("data-kind"),
-    );
+    const line = tagLineOf(container);
+    const kinds = tagKinds(line);
     expect(kinds).toEqual(["account", "attachments", "flagged", "label"]);
     const account = within(line).getByText("Personal").closest('[data-part="tag"]');
     // M5b: the account colour follows the account order, like the folder
@@ -151,23 +168,14 @@ describe("message list rows (M5a)", () => {
       ).not.toBeNull();
     });
     expect(document.documentElement.dataset.nailDensity).toBe("compact");
-    const line = must(
-      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
-    );
+    const line = tagLineOf(container);
     expect(getComputedStyle(line).display).toBe("none");
   });
 
   it("keeps the tag line in Comfortable", async () => {
     const env = listEnv();
     const { container } = renderNode(widget("message-list"), env);
-    await waitFor(() => {
-      expect(
-        row(container, FIRST).querySelector('[data-part="message-list.row.tag-line"]'),
-      ).not.toBeNull();
-    });
-    const line = must(
-      row(container, FIRST).querySelector<HTMLElement>('[data-part="message-list.row.tag-line"]'),
-    );
+    const line = await tagLine(container);
     expect(getComputedStyle(line).display).toBe("flex");
   });
 
@@ -275,11 +283,7 @@ describe("attachment cards (M5a)", () => {
   it("say so when the core cannot save attachments", async () => {
     const env = listEnv();
     env.store.getState().selectMessage(FIRST);
-    const send = env.transport.send.bind(env.transport);
-    env.transport.send = async (request) =>
-      request.type === "GetMessageAttachment"
-        ? { type: "Error", code: "unsupported", message: "no" }
-        : send(request);
+    refuseAttachments(env, "unsupported", "no");
     renderNode(widget("message-view"), env);
     const save = await screen.findByRole("button", { name: "Save report.pdf" });
     fireEvent.click(save);
@@ -293,11 +297,7 @@ describe("attachment cards (M5a)", () => {
   it("report a failed save", async () => {
     const env = listEnv();
     env.store.getState().selectMessage(FIRST);
-    const send = env.transport.send.bind(env.transport);
-    env.transport.send = async (request) =>
-      request.type === "GetMessageAttachment"
-        ? { type: "Error", code: "not_found", message: "gone" }
-        : send(request);
+    refuseAttachments(env, "not_found", "gone");
     renderNode(widget("message-view"), env);
     fireEvent.click(await screen.findByRole("button", { name: "Save report.pdf" }));
     expect(await screen.findByRole("status")).toHaveTextContent(

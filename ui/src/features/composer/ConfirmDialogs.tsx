@@ -36,6 +36,36 @@ function useSafeFocus() {
   return ref;
 }
 
+/** "Keep editing": closes the question and brings the composer back (focused first). */
+function KeepEditing({
+  window,
+  close,
+  disabled = false,
+}: {
+  window: string;
+  close: () => void;
+  disabled?: boolean;
+}) {
+  const t = useT();
+  const ctx = useComposeContext();
+  const keep = useSafeFocus();
+  return (
+    <button
+      ref={keep}
+      type="button"
+      data-part="form.button"
+      data-action="keep-editing"
+      disabled={disabled}
+      onClick={() => {
+        close();
+        ctx.store.getState().focusWindow(window);
+      }}
+    >
+      {t("common-keep-editing")}
+    </button>
+  );
+}
+
 function Gone({ close }: { close: () => void }) {
   const t = useT();
   return (
@@ -43,7 +73,7 @@ function Gone({ close }: { close: () => void }) {
       <p data-part="composer.confirm.question">{t("composer-empty")}</p>
       <div data-part="composer.confirm.actions">
         <button type="button" data-part="form.button" onClick={close}>
-          {t("composer-confirm-ok")}
+          {t("common-ok")}
         </button>
       </div>
     </div>
@@ -59,7 +89,6 @@ export function CloseConfirmDialog({ name, close }: DialogProps) {
   const t = useT();
   const ctx = useComposeContext();
   const { window, composer } = useComposerOfDialog(name);
-  const keep = useSafeFocus();
   const [busy, setBusy] = useState(false);
   if (!composer) return <Gone close={close} />;
 
@@ -86,7 +115,7 @@ export function CloseConfirmDialog({ name, close }: DialogProps) {
           disabled={busy}
           onClick={() => void save()}
         >
-          {t("composer-close-save")}
+          {t("common-save-draft")}
         </button>
         <button
           type="button"
@@ -100,19 +129,7 @@ export function CloseConfirmDialog({ name, close }: DialogProps) {
         >
           {t("composer-close-discard")}
         </button>
-        <button
-          ref={keep}
-          type="button"
-          data-part="form.button"
-          data-action="keep-editing"
-          disabled={busy}
-          onClick={() => {
-            close();
-            ctx.store.getState().focusWindow(window);
-          }}
-        >
-          {t("composer-confirm-keep")}
-        </button>
+        <KeepEditing window={window} close={close} disabled={busy} />
       </div>
     </div>
   );
@@ -123,7 +140,6 @@ export function DiscardConfirmDialog({ name, close }: DialogProps) {
   const t = useT();
   const ctx = useComposeContext();
   const { window, composer } = useComposerOfDialog(name);
-  const keep = useSafeFocus();
   if (!composer) return <Gone close={close} />;
   return (
     <div data-part="composer.confirm" data-confirm="discard">
@@ -145,18 +161,7 @@ export function DiscardConfirmDialog({ name, close }: DialogProps) {
         >
           {t("composer-discard")}
         </button>
-        <button
-          ref={keep}
-          type="button"
-          data-part="form.button"
-          data-action="keep-editing"
-          onClick={() => {
-            close();
-            ctx.store.getState().focusWindow(window);
-          }}
-        >
-          {t("composer-confirm-keep")}
-        </button>
+        <KeepEditing window={window} close={close} />
       </div>
     </div>
   );

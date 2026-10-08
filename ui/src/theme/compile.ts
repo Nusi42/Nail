@@ -52,11 +52,11 @@ import type {
 } from "../api/generated";
 
 /** States that map to CSS pseudo-classes; all others to `[data-state~=…]`. */
-const PSEUDO_STATES = new Set(["hover", "active", "focus", "focus-visible", "focus-within"]);
+export const PSEUDO_STATES = new Set(["hover", "active", "focus", "focus-visible", "focus-within"]);
 
 const PART_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 const IDENT_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PROPERTY_RE = /^-?[a-z][a-z0-9-]*$/;
+export const PROPERTY_RE = /^-?[a-z][a-z0-9-]*$/;
 
 export class ThemeCompileError extends Error {}
 

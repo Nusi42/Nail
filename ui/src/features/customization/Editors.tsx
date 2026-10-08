@@ -155,7 +155,7 @@ function ToolbarDraft({
       />
       <div data-part="toolbar-editor.add" role="group" aria-label={t("customize-toolbar-add")}>
         <label data-part="form.label" htmlFor={`${ids}-action`}>
-          {t("customize-toolbar-action")}
+          {t("common-action")}
         </label>
         <select
           id={`${ids}-action`}
@@ -179,7 +179,7 @@ function ToolbarDraft({
             add({ type: "action", action: adding, args: [], label: null, icon: null });
           }}
         >
-          {t("customize-toolbar-add-action")}
+          {t("common-add-action")}
         </button>
         <button
           type="button"
@@ -228,7 +228,7 @@ function ToolbarDraft({
             setDraft(keyed(items));
           }}
         >
-          {t("customize-discard")}
+          {t("common-undo-changes")}
         </button>
         <button
           type="button"
@@ -417,7 +417,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
               )
             }
           >
-            {t("customize-remove-short")}
+            {t("common-remove")}
           </button>
           <button
             type="button"
@@ -471,7 +471,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
         </div>
         <div data-part="form.field" data-field="action">
           <label data-part="form.label" htmlFor={`${ids}-action`}>
-            {t("customize-keys-action")}
+            {t("common-action")}
           </label>
           <select
             id={`${ids}-action`}
@@ -533,7 +533,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
       <StatusLine status={status} part="key-binding-editor" />
       <div data-part="form.field" data-field="filter">
         <label data-part="form.label" htmlFor={`${ids}-filter`}>
-          {t("customize-keys-filter")}
+          {t("common-show")}
         </label>
         <select
           id={`${ids}-filter`}
@@ -556,7 +556,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
         <thead>
           <tr data-part="key-binding-editor.head">
             <th scope="col">{t("customize-keys-key")}</th>
-            <th scope="col">{t("customize-keys-action")}</th>
+            <th scope="col">{t("common-action")}</th>
             <th scope="col">{t("customize-keys-context")}</th>
             <th scope="col">{t("customize-keys-actions")}</th>
           </tr>
@@ -650,7 +650,7 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
               setColumns([...columns, addable]);
             }}
           >
-            {t("customize-columns-add-column")}
+            {t("common-add-column")}
           </button>
         </div>
       )}
@@ -674,7 +674,7 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
             setColumns(initial);
           }}
         >
-          {t("customize-discard")}
+          {t("common-undo-changes")}
         </button>
       </div>
     </div>
@@ -710,7 +710,7 @@ export function ColumnEditor({ node }: WidgetProps) {
         <>
           <div data-part="form.field" data-field="list">
             <label data-part="form.label" htmlFor={`${ids}-list`}>
-              {t("customize-columns-choose")}
+              {t("common-list")}
             </label>
             <select
               id={`${ids}-list`}

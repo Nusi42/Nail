@@ -48,6 +48,8 @@ import {
 } from "./queries";
 import { usePim } from "./store";
 import { nonEmpty } from "../../text/empty";
+import { CloseButton } from "../../widgets/CloseButton";
+import { TextAreaField } from "../../widgets/forms";
 
 function bookLabel(
   t: (id: string) => string,
@@ -191,9 +193,7 @@ export function GroupsDialog({ close }: DialogProps) {
       </form>
       <Problem message={problem} />
       <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     </div>
   );
@@ -282,19 +282,15 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
             </label>
           ))}
         </fieldset>
-        <div data-part="form.field" data-field="member-emails">
-          <label data-part="form.label" htmlFor={ids.emails}>
-            {t("pim-group-member-emails")}
-          </label>
-          <textarea
-            id={ids.emails}
-            data-part="form.textarea"
-            value={emails}
-            onChange={(e) => {
-              setEmails(e.target.value);
-            }}
-          />
-        </div>
+        <TextAreaField
+          id={ids.emails}
+          name="member-emails"
+          labelId="pim-group-member-emails"
+          value={emails}
+          onChange={(v) => {
+            setEmails(v);
+          }}
+        />
       </fieldset>
       <Problem message={problem} />
       {saved && (
@@ -305,7 +301,7 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
       {!group.read_only && (
         <div data-part="pim.editor.actions">
           <button type="submit" data-part="form.button" data-variant="primary">
-            {t("pim-save")}
+            {t("common-save")}
           </button>
           <button
             type="button"
@@ -363,7 +359,7 @@ export function MergeDialog({ close }: DialogProps) {
   return (
     <div data-part="pim.merge" data-state="duplicates">
       <p data-part="pim.merge.intro">{t("pim-merge-duplicates-intro")}</p>
-      {duplicates.isPending && <p data-part="pim.merge.loading">{t("pim-loading")}</p>}
+      {duplicates.isPending && <p data-part="pim.merge.loading">{t("common-loading")}</p>}
       {duplicates.isError && <Problem message={problemOf(duplicates.error)} />}
       {duplicates.data?.length === 0 && (
         <p data-part="pim.merge.none">{t("pim-merge-no-duplicates")}</p>
@@ -372,9 +368,7 @@ export function MergeDialog({ close }: DialogProps) {
         <DuplicateList groups={duplicates.data} onChoose={setChosen} />
       )}
       <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     </div>
   );
@@ -427,14 +421,12 @@ function MergeForm({
 }) {
   const t = useT();
   const { contacts, pending, error } = useFullContacts(ids);
-  if (pending) return <p data-part="pim.merge.loading">{t("pim-loading")}</p>;
+  if (pending) return <p data-part="pim.merge.loading">{t("common-loading")}</p>;
   if (error || contacts.length < 2) {
     return (
       <div data-part="pim.merge" data-state="error">
         <Problem message={error ? problemOf(error) : { id: "pim-merge-too-few" }} />
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     );
   }
@@ -484,7 +476,7 @@ function MergeChoices({
           value as { year: number | null; month: number; day: number },
         );
       case "photo":
-        return t("pim-merge-photo");
+        return t("pim-contact-photo");
       default:
         return typeof value === "string" ? value : JSON.stringify(value);
     }
@@ -545,7 +537,7 @@ function MergeChoices({
               }}
             />
             <span>
-              {t("pim-merge-contact", {
+              {t("pim-contact-linked-item", {
                 name: c.fields.display_name,
                 book: book(c.address_book_id),
               })}
@@ -632,11 +624,11 @@ function MergeChoices({
         </button>
         {onBack && (
           <button type="button" data-part="form.button" onClick={onBack}>
-            {t("pim-merge-back")}
+            {t("common-back")}
           </button>
         )}
         <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>

@@ -11,9 +11,9 @@ import type {
   McpScope,
 } from "../../api/generated";
 import { useClient } from "../../state/queries";
+import { AUDIT_PAGE } from "../../state/queries";
 
 /** Audit entries per page. */
-export const AUDIT_PAGE = 50;
 
 /** Query keys; everything lives under `mcp` so one invalidation refreshes all. */
 export const mcpKeys = {
@@ -58,12 +58,15 @@ export const DEFAULT_RATE_LIMITS: McpRateLimits = {
   sends_per_hour: 10,
 };
 
+/** The highest rate limit the core accepts (`McpRateLimits::issues` "too-high"). */
+export const MAX_RATE_LIMIT = 10_000;
+
 /** Problems with rate limits (`McpRateLimits::issues`). */
 export function rateLimitIssues(limits: McpRateLimits): McpRateLimitIssue[] {
   const values = [limits.requests_per_minute, limits.writes_per_minute, limits.sends_per_hour];
   const issues: McpRateLimitIssue[] = [];
   if (values.includes(0)) issues.push("zero");
-  if (values.some((v) => v !== null && v > 10_000)) issues.push("too-high");
+  if (values.some((v) => v !== null && v > MAX_RATE_LIMIT)) issues.push("too-high");
   return issues;
 }
 

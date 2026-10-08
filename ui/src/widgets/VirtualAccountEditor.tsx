@@ -18,7 +18,7 @@ import {
   useFolders,
   useVirtualAccounts,
 } from "../state/queries";
-import { NoticeView, type Notice } from "./AccountSettings";
+import { NoticeView, useNoticeRun, type Notice } from "./AccountSettings";
 import { CheckField, Section, SelectField, TextField, type Choice } from "./forms";
 
 /** A new virtual account over all real accounts. */
@@ -196,7 +196,7 @@ function VirtualForm({
   const client = useClient();
   const queryClient = useQueryClient();
   const [config, setConfig] = useState(initial);
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useNoticeRun(setMessage);
   const isNew = initial.id === "";
   const identities = accounts.flatMap((a) => a.identities);
   const memberAccounts = accounts.filter((a) => config.members.includes(a.id));
@@ -218,18 +218,6 @@ function VirtualForm({
     identities,
   );
   const problems = virtualProblems(toSave);
-
-  const run = async (work: () => Promise<string>) => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      setMessage({ id: await work(), error: false });
-    } catch (e) {
-      setMessage({ id: errorMessageIdOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const refresh = () =>
     Promise.all([

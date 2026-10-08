@@ -56,7 +56,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CENTER_DIALOG]: ConfirmationCenterDialog,
 };
 
@@ -87,9 +87,9 @@ export const handleAgentsEvent: FeatureEventHandler = (event, { queryClient, sto
 };
 
 /** Handlers for the core's events. */
-export const events: Feature["events"] = [handleAgentsEvent];
+export const events: NonNullable<Feature["events"]> = [handleAgentsEvent];
 /** Background components: the "something waits" notices. */
-export const effects: Feature["effects"] = [ConfirmationNotices];
+export const effects: NonNullable<Feature["effects"]> = [ConfirmationNotices];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

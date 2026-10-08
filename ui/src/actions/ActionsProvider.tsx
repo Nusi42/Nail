@@ -178,6 +178,17 @@ function useSelectedMessageData(): unknown {
 }
 
 /**
+ * Subscribes to the UI state the built-in `enabled` checks read besides the
+ * message list (the selection, the composer, the windows, the last send).
+ */
+export function useEnabledInputs(): void {
+  useUi((s) => s.selectedMessageId);
+  useUi((s) => s.composer !== null);
+  useUi((s) => s.windows.length);
+  useUi((s) => s.lastSend?.state);
+}
+
+/**
  * Whether an action is enabled, re-evaluated when the UI state it depends
  * on changes.
  */
@@ -185,10 +196,7 @@ export function useActionEnabled(id: string, args: readonly JsonValue[] = []): b
   const dispatcher = useActions();
   // Subscribe to the state the built-in `enabled` checks read.
   useUi((s) => s.messageOrder.length > 0);
-  useUi((s) => s.selectedMessageId);
-  useUi((s) => s.composer !== null);
-  useUi((s) => s.windows.length);
-  useUi((s) => s.lastSend?.state);
+  useEnabledInputs();
   useUi((s) => s.activeFolderId);
   // Checks that read the loaded message (Autocrypt setup, junk verdict).
   useSelectedMessageData();

@@ -133,9 +133,9 @@ function useItemText() {
         return { text, icon: item.icon ?? def?.icon ?? info?.icon ?? null };
       }
       case "separator":
-        return { text: t("toolbar-editor-item-separator"), icon: "minus" };
+        return { text: t("customize-toolbar-separator"), icon: "minus" };
       case "spacer":
-        return { text: t("toolbar-editor-item-spacer"), icon: "arrow-left-right" };
+        return { text: t("customize-toolbar-spacer"), icon: "arrow-left-right" };
       case "header":
         return { text: t("toolbar-editor-item-header", { label: label(item.label) }), icon: null };
       case "submenu":
@@ -179,14 +179,14 @@ export function useAvailable(): AvailableEntry[] {
       {
         key: "separator",
         item: { type: "separator" },
-        title: t("toolbar-editor-item-separator"),
+        title: t("customize-toolbar-separator"),
         icon: "minus",
         plugin: false,
       },
       {
         key: "spacer",
         item: { type: "spacer" },
-        title: t("toolbar-editor-item-spacer"),
+        title: t("customize-toolbar-spacer"),
         icon: "arrow-left-right",
         plugin: false,
       },
@@ -596,7 +596,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
         <p data-part="toolbar-customizer.intro">{t("toolbar-editor-no-toolbars")}</p>
         <div data-part="toolbar-customizer.footer">
           <button type="button" data-part="form.button" onClick={close}>
-            {t("toolbar-editor-done")}
+            {t("common-done")}
           </button>
         </div>
       </div>
@@ -614,7 +614,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
       <div data-part="toolbar-customizer.header">
         <div data-part="form.field" data-field="toolbar">
           <label data-part="form.label" htmlFor={`${base}-toolbar`}>
-            {t("toolbar-editor-choose")}
+            {t("customize-toolbar-choose")}
           </label>
           <select
             id={`${base}-toolbar`}
@@ -715,7 +715,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
                 if (selectedSlot) void remove(selectedSlot, false);
               }}
             >
-              {t("toolbar-editor-remove")}
+              {t("common-remove")}
             </button>
             <button
               type="button"
@@ -824,7 +824,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
                   <span data-part="toolbar-customizer.item.label">{entry.title}</span>
                   {entry.plugin && (
                     <span data-part="toolbar-customizer.item.badge" data-badge="plugin">
-                      {t("toolbar-editor-badge-plugin")}
+                      {t("plugin-log-source-plugin")}
                     </span>
                   )}
                   {inUse && (
@@ -884,7 +884,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
           }}
         >
           <Icon name="undo-2" part="form.button.icon" />
-          {t("toolbar-editor-undo")}
+          {t("common-undo")}
         </button>
         <button
           type="button"
@@ -901,7 +901,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
           }}
         >
           <Icon name="redo-2" part="form.button.icon" />
-          {t("toolbar-editor-redo")}
+          {t("common-redo")}
         </button>
         <button
           type="button"
@@ -913,7 +913,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
           }}
         >
           <Icon name="rotate-ccw" part="form.button.icon" />
-          {t("toolbar-editor-reset")}
+          {t("common-reset-to-default")}
         </button>
         <span data-part="toolbar-customizer.footer.spacer" />
         <button
@@ -923,7 +923,7 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
           data-command="done"
           onClick={close}
         >
-          {t("toolbar-editor-done")}
+          {t("common-done")}
         </button>
       </div>
     </div>

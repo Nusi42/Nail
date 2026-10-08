@@ -14,7 +14,6 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
 import type {
   AccountProposal,
   ImportFormat,
@@ -49,6 +48,8 @@ import {
 } from "./model";
 import { PathField } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars, useImportSources } from "./queries";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 type Step = "source" | "options" | "job";
 
@@ -181,7 +182,7 @@ function TargetFields({
     <fieldset data-part="form.section" data-field="mail-target">
       <legend data-part="form.section.title">{t("portability-import-target")}</legend>
       <SelectField
-        label={t("portability-import-target-account")}
+        label={t("common-account")}
         field="target-account"
         value={target ?? ""}
         onChange={(v) => {
@@ -294,7 +295,7 @@ function OptionsStep({
       <Counts counts={preview.counts} part="portability.preview-counts" />
       {preview.folders.length > 0 && (
         <CheckGroup
-          legend={t("portability-import-folders")}
+          legend={t("common-folders")}
           field="folders"
           selected={folders}
           onChange={setFolders}
@@ -310,7 +311,7 @@ function OptionsStep({
       )}
       {preview.collections.length > 0 && (
         <CheckGroup
-          legend={t("portability-import-collections")}
+          legend={t("common-pim-sources")}
           field="collections"
           selected={collections}
           onChange={setCollections}
@@ -358,7 +359,7 @@ function OptionsStep({
             setCalendarId(v === "" ? null : v);
           }}
         >
-          <option value="">{t("portability-import-default-calendar")}</option>
+          <option value="">{t("common-default-calendar")}</option>
           {(calendars.data ?? [])
             .filter((c) => !c.read_only)
             .map((c) => (
@@ -409,7 +410,7 @@ function OptionsStep({
           disabled={busy}
           onClick={onBack}
         >
-          {t("portability-back")}
+          {t("common-back")}
         </button>
         <button
           type="button"
@@ -431,7 +432,7 @@ function OptionsStep({
             });
           }}
         >
-          {t("portability-import-start")}
+          {t("common-import")}
         </button>
       </WizardButtons>
     </div>
@@ -455,14 +456,11 @@ export function Proposals({
   const [chosenRules, setChosenRules] = useState(() => rules.map((r) => r.key));
   const [added, setAdded] = useState<string[]>([]);
   const [saved, setSaved] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   if (accounts.length === 0 && rules.length === 0) return null;
 
   const addAccounts = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       for (const proposal of accounts.filter(
         (a) => chosenAccounts.includes(a.key) && !added.includes(a.key),
       )) {
@@ -474,17 +472,11 @@ export function Proposals({
         setAdded((list) => [...list, proposal.key]);
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const saveRules = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       for (const proposal of rules.filter(
         (r) => chosenRules.includes(r.key) && !saved.includes(r.key),
       )) {
@@ -500,11 +492,7 @@ export function Proposals({
         setSaved((list) => [...list, proposal.key]);
       }
       void queryClient.invalidateQueries({ queryKey: ["rules"] });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -625,7 +613,6 @@ export function Proposals({
 
 /** The import wizard's content. */
 export function ImportWizard({ close }: { close: () => void }) {
-  const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("source");
@@ -633,31 +620,22 @@ export function ImportWizard({ close }: { close: () => void }) {
   const [path, setPath] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, setProblem, run } = useBusyAction();
 
   const read = async (f: ImportFormat, p: string) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         { type: "PreviewImport", source: { format: f, path: p.trim() } },
         "ImportPreview",
       );
       setPreview(answer.preview);
       setStep("options");
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const start = async (o: StartOptions) => {
     if (!preview) return;
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const answer = await client.request(
         {
           type: "StartImport",
@@ -684,11 +662,7 @@ export function ImportWizard({ close }: { close: () => void }) {
       rememberJob(queryClient, answer.job);
       setJobId(answer.job.job_id);
       setStep("job");
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -731,9 +705,7 @@ export function ImportWizard({ close }: { close: () => void }) {
             {(report: JobReport) => <Proposals accounts={report.accounts} rules={report.rules} />}
           </JobView>
           <WizardButtons>
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("portability-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </WizardButtons>
         </div>
       )}

@@ -19,6 +19,7 @@ import { pimTimeIn, utcString } from "../pim/time";
 import { Problem } from "./common";
 import { addRoom, isRoom, removeRoom, roomState } from "./model";
 import { useExchangeAccount, useRoomLists, useRooms } from "./queries";
+import { RemoveButton } from "../../widgets/RemoveButton";
 
 export interface RoomFinderProps {
   /** The event's calendar (its account decides whether rooms can be found). */
@@ -51,7 +52,7 @@ function Busy({ periods, tz }: { periods: readonly BusyPeriod[]; tz: string }) {
     <ul data-part="exchange.room.busy" aria-label={t("exchange-room-busy-label")}>
       {periods.map((p) => (
         <li key={`${p.start}-${p.end}`} data-part="exchange.room.busy.item" data-kind={p.kind}>
-          {t("exchange-room-busy-period", { start: clock(p.start), end: clock(p.end) })}
+          {t("common-time-range-tight", { start: clock(p.start), end: clock(p.end) })}
         </li>
       ))}
     </ul>
@@ -116,7 +117,7 @@ function RoomRow({
           aria-label={t("exchange-room-remove-named", { name: room.name })}
           onClick={onRemove}
         >
-          {t("exchange-room-remove")}
+          {t("common-remove")}
         </button>
       ) : (
         <button
@@ -126,7 +127,7 @@ function RoomRow({
           aria-label={t("exchange-room-add-named", { name: room.name })}
           onClick={onAdd}
         >
-          {t("exchange-room-add")}
+          {t("common-add")}
         </button>
       )}
     </li>
@@ -196,17 +197,13 @@ function Finder({
               <span data-part="exchange.room.response">
                 {t(`exchange-room-response-${a.status}`)}
               </span>
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="remove-room"
-                aria-label={t("exchange-room-remove-named", { name: a.name ?? a.email })}
-                onClick={() => {
+              <RemoveButton
+                label={t("exchange-room-remove-named", { name: a.name ?? a.email })}
+                action="remove-room"
+                onRemove={() => {
                   remove(a.email, a.name);
                 }}
-              >
-                {t("exchange-room-remove")}
-              </button>
+              />
             </li>
           ))}
         </ul>

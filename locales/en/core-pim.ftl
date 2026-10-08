@@ -11,7 +11,7 @@
 pim-issue-invalid-date = A date is not valid.
 pim-issue-invalid-time = A time is not valid.
 pim-issue-invalid-time-zone = The time zone is not known.
-pim-issue-end-before-start = The end is before the start.
+pim-issue-end-before-start = { common-end-before-start }
 pim-issue-mixed-all-day = Start and end must both be all-day or both have a time.
 pim-issue-invalid-recurrence = The repetition rule is not valid.
 pim-issue-invalid-scope = Choose which occurrences to change.
@@ -57,7 +57,7 @@ notification-reminders-body = { $more ->
 
 ## Snoozing reminders (nail-triage reminders)
 
-reminder-error-not-in-future = Choose a time in the future.
+reminder-error-not-in-future = { common-time-in-future }
 reminder-error-too-far = Reminders can be snoozed for up to a year.
 reminder-error-store = The reminder could not be saved.
 

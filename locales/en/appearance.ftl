@@ -5,12 +5,12 @@
 
 ## Appearance (WP153)
 
-appearance-title = Appearance
+appearance-title = { common-appearance }
 # The Settings tab of the appearance page (layout label "@settings.tab.appearance").
-settings-tab-appearance = Appearance
+settings-tab-appearance = { common-appearance }
 appearance-loading = Loading themes…
 
-appearance-themes-title = Theme
+appearance-themes-title = { backup-item-theme }
 appearance-follow-system = Follow Windows
 appearance-follow-system-hint = Switch between a light and a dark theme when Windows changes between light and dark mode.
 appearance-light-theme = Light theme
@@ -39,16 +39,13 @@ appearance-accent-high-contrast = High contrast uses its own colours.
 appearance-override-default = Theme default
 appearance-overrides-not-a-number = Enter whole numbers for the text size and the corner radius.
 appearance-overrides-reset = Use theme defaults
-appearance-overrides-apply = Apply
 
 ## Appearance additions (M5d WP183)
 
-appearance-new-theme = New theme
-appearance-edit-theme = Edit theme
+appearance-new-theme = { appearance-action-new-theme }
+appearance-edit-theme = { edit-kind-edit-theme }
 appearance-editor-hint = Edit theme opens every colour, size and part style of the theme with a live preview. Built-in themes stay as they are: duplicate one to make your own.
 appearance-history-label = Undo and redo appearance changes
-appearance-undo = Undo
-appearance-redo = Redo
 # $action (string) — what the step undoes, e.g. "Edit theme"
 appearance-undo-named = Undo { $action }
 # $action (string) — what the step redoes, e.g. "Edit theme"
@@ -57,7 +54,7 @@ appearance-undo-anyway = Undo anyway
 appearance-redo-anyway = Redo anyway
 # The inspector's button: open the theme editor at the picked element's part.
 appearance-edit-style = Edit style
-appearance-action-edit-theme = Edit theme
+appearance-action-edit-theme = { edit-kind-edit-theme }
 appearance-action-edit-theme-keywords = theme editor colours colors tokens style parts appearance customize
 appearance-action-new-theme = New theme
 appearance-action-new-theme-keywords = create theme duplicate copy appearance
@@ -68,33 +65,30 @@ appearance-action-reset-keywords = default built-in theme restore unreadable con
 
 ## Theme editor (M5d WP183)
 
-window-theme-editor = Theme editor
+window-theme-editor = { theme-editor-title }
 theme-editor-title = Theme editor
-theme-editor-theme = Theme
+theme-editor-theme = { backup-item-theme }
 # $name (string) — the name of one of the user's own themes
 theme-editor-theme-user = { $name } (your theme)
 theme-editor-loading = Loading the theme…
 theme-editor-no-theme = There is no theme to edit.
 theme-editor-sections = Theme sections
 theme-editor-group-color = Colours
-theme-editor-group-type = Type
+theme-editor-group-type = { common-type }
 theme-editor-group-spacing = Spacing
 theme-editor-group-radius = Corners
 theme-editor-group-motion = Motion
-theme-editor-group-other = More
+theme-editor-group-other = { common-more }
 theme-editor-parts = Parts
 theme-editor-mode = Values for
 theme-editor-mode-base = All modes (base value)
 theme-editor-mode-dark = Dark mode
-theme-editor-mode-high-contrast = High contrast
+theme-editor-mode-high-contrast = { common-high-contrast }
 theme-editor-mode-print = Printing
 theme-editor-mode-compact = Compact density
 theme-editor-use = Use this theme
 theme-editor-in-use = In use
 theme-editor-duplicate = Duplicate as new theme
-theme-editor-rename = Rename
-theme-editor-delete = Delete
-theme-editor-saving = Saving…
 # The edited colours make text hard to read (M5d review). $fg / $bg are
 # token names (color.fg), $ratio / $needed contrast ratios (4.5).
 theme-editor-contrast-warning = Hard to read: { $fg } on { $bg } has a contrast of only { $ratio }:1 (text needs at least { $needed }:1). Undo with Ctrl+Z, or run “Reset appearance” from the command palette (Ctrl+K).
@@ -126,7 +120,6 @@ theme-editor-parts-more = { $count ->
 theme-editor-add-part = Style another part
 theme-editor-selector = Part
 theme-editor-selector-invalid = Enter a part name such as message-list.row, optionally with :hover or [state="unread"].
-theme-editor-add = Add
 theme-editor-pick-part = Choose a part to see and change its style.
 theme-editor-reset-part = Reset part
 theme-editor-part-no-rules = No theme styles this part yet. Add a property to style it.
@@ -142,59 +135,39 @@ theme-editor-add-property = Add a property
 theme-editor-property = Property
 theme-editor-value = Value
 theme-editor-property-invalid = Enter a property name such as background-color and a value.
-# $name (string) — the theme's name
-theme-editor-preview-label = Preview of { $name }
 theme-editor-preview-caption = Preview with unsaved changes
-theme-editor-preview-inbox = Inbox
-theme-editor-preview-sent = Sent
-theme-editor-preview-archive = Archive
 theme-editor-preview-initials = AL
 theme-editor-preview-from = Ada Lovelace
 theme-editor-preview-snippet = Notes on the engine
 theme-editor-preview-initials-2 = CB
 theme-editor-preview-from-2 = Charles Babbage
 theme-editor-preview-snippet-2 = Tables for Tuesday
-theme-editor-preview-subject = Notes on the engine
-theme-editor-preview-tag = Work
 theme-editor-preview-body = The figures for the second table are attached.
-theme-editor-preview-reply = Reply
-theme-editor-preview-archive-action = Archive
-theme-editor-preview-search = Search mail
 
 ## Theme windows (M5d WP183)
 
-window-theme-new = New theme
-window-theme-rename = Rename theme
+window-theme-new = { appearance-action-new-theme }
+window-theme-rename = { edit-kind-rename-theme }
 window-theme-delete = Delete theme?
-theme-dialog-name = Name
 # $file (string) — the theme's file in the configuration folder
 theme-dialog-file = Saved as { $file }
 theme-dialog-new-hint = A new theme starts as a copy of another one. Change it afterwards in the theme editor.
 theme-dialog-base = Start from
 theme-dialog-use = Use the new theme now
-theme-dialog-cancel = Cancel
-theme-dialog-create = Create
-theme-dialog-close = Close
 # $file (string) — the theme's current file
 theme-dialog-rename-file = Also rename the file ({ $file })
-theme-dialog-rename = Rename
 # $name (string) — the theme's name
 theme-dialog-delete-question = Delete the theme “{ $name }”?
 # $file (string) — the theme's file
 theme-dialog-delete-note = { $file } is removed. Where the theme was in use, Nail switches to the default theme. You can undo this.
-theme-dialog-delete = Delete
 
 ## Message list rows (WP153): the tag line under each message
 
-message-list-tag-attachment = Attachment
 # $count (number) — attachments of the message
 message-list-tag-attachments = { $count ->
     [one] 1 attachment
    *[other] { $count } attachments
 }
-message-list-tag-invitation = Invitation
-message-list-tag-warning = Warning
-message-list-tag-flagged = Flagged
 
 ## Attachment cards in the reader (WP153)
 
@@ -202,7 +175,7 @@ message-list-tag-flagged = Flagged
 message-view-attachment-preview = Preview { $name }
 # $name (string) — the attachment's file name
 message-view-attachment-save = Save { $name }
-message-view-attachment-save-saved = Saved.
+message-view-attachment-save-saved = { common-saved }
 message-view-attachment-save-downloaded = Downloaded.
 # The title of the desktop's Save dialog for an attachment.
 message-view-attachment-save-title = Save attachment

@@ -4,13 +4,10 @@
  * validation), deleting, applying labels to a message, the category tabs,
  * the message label chips and the feature's actions.
  */
-import type { InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
-import type { MessageSummary, Request, Response } from "../../api/generated";
 import { listSelectionFor } from "../../actions/mailTargets";
-import type { ActionContext } from "../../actions/registry";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { queryKeys } from "../../state/queries";
@@ -19,6 +16,13 @@ import { actions, dialogs, MessageLabels } from ".";
 import { GMAIL_ACCOUNT, GMAIL_FOLDERS, seedGmailDemo } from "./mockSeed";
 import { APPLY_LABELS_DIALOG, LABEL_DELETE_DIALOG, LABEL_EDITOR_DIALOG } from "./names";
 import { gmailStoreFor } from "./store";
+import {
+  actionContext,
+  cacheList,
+  clickAndClose,
+  messageWithSubject,
+  requestsOf,
+} from "../../test/env";
 
 function setup(account = GMAIL_ACCOUNT): Env {
   const env = createEnv();
@@ -28,50 +32,26 @@ function setup(account = GMAIL_ACCOUNT): Env {
   return env;
 }
 
-function requests<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r) => r.type === type) as Extract<Request, { type: T }>[];
-}
-
 function dialog(name: string): ComponentType<DialogProps> {
   const found = dialogs[name];
   if (!found) throw new Error(`no dialog ${name}`);
   return found;
 }
 
-function message(env: Env, subject: string): MessageSummary {
-  const found = env.transport.data.messages.find((m) => m.subject === subject);
-  if (!found) throw new Error(`no message ${subject}`);
-  return found;
+/** The apply-labels window, rendered on its own; its `close`. */
+function renderApplyLabels(env: Env) {
+  const Apply = dialog(APPLY_LABELS_DIALOG);
+  const close = vi.fn();
+  renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+  return close;
 }
 
-/** Puts messages (of one folder) into the list cache, as the message list would. */
-function cacheList(env: Env, summary: MessageSummary, ...more: MessageSummary[]): void {
-  env.queryClient.setQueryData<InfiniteData<Extract<Response, { type: "Messages" }>>>(
-    queryKeys.messages(summary.folder_id, 50),
-    {
-      pages: [
-        {
-          type: "Messages",
-          folder_id: summary.folder_id,
-          offset: 0,
-          total: 1 + more.length,
-          messages: [summary, ...more],
-        },
-      ],
-      pageParams: [0],
-    },
-  );
-}
-
-function ctx(env: Env): ActionContext {
-  return {
-    client: env.client,
-    store: env.store,
-    queryClient: env.queryClient,
-    layout: env.transport.data.layout,
-    t: (id) => id,
-    locale: "en",
-  };
+/** The label editor, set up for a new top-level label. */
+function newLabelEditor(env: Env) {
+  gmailStoreFor(env.store)
+    .getState()
+    .editLabel({ accountId: GMAIL_ACCOUNT, labelId: null, parent: null });
+  return dialog(LABEL_EDITOR_DIALOG);
 }
 
 describe("label list", () => {
@@ -86,7 +66,7 @@ describe("label list", () => {
     });
     await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
     expect(container.querySelector('[data-part="label-list"]')).toBeNull();
-    expect(requests(env, "ListGmailLabels")).toEqual([]);
+    expect(requestsOf(env, "ListGmailLabels")).toEqual([]);
   });
 
   it("shows the label tree with counts, hiding hidden labels", async () => {
@@ -155,10 +135,7 @@ describe("label dialogs", () => {
   it("creates a nested label with a palette colour", async () => {
     const user = userEvent.setup();
     const env = setup();
-    gmailStoreFor(env.store)
-      .getState()
-      .editLabel({ accountId: GMAIL_ACCOUNT, labelId: null, parent: null });
-    const Editor = dialog(LABEL_EDITOR_DIALOG);
+    const Editor = newLabelEditor(env);
     const close = vi.fn();
     renderWithProviders(<Editor name={LABEL_EDITOR_DIALOG} close={close} />, env);
     await user.type(await screen.findByLabelText("Name"), "Family");
@@ -168,7 +145,7 @@ describe("label dialogs", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "CreateGmailLabel")[0]?.settings).toEqual({
+    expect(requestsOf(env, "CreateGmailLabel")[0]?.settings).toEqual({
       name: "Work/Family",
       color: { background: "#c9daf8", text: "#1c4587" },
       list_visibility: "show",
@@ -180,15 +157,12 @@ describe("label dialogs", () => {
   it("refuses a duplicate name before asking the core", async () => {
     const user = userEvent.setup();
     const env = setup();
-    gmailStoreFor(env.store)
-      .getState()
-      .editLabel({ accountId: GMAIL_ACCOUNT, labelId: null, parent: null });
-    const Editor = dialog(LABEL_EDITOR_DIALOG);
+    const Editor = newLabelEditor(env);
     renderWithProviders(<Editor name={LABEL_EDITOR_DIALOG} close={() => undefined} />, env);
     await user.type(await screen.findByLabelText("Name"), "travel");
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByRole("alert")).toHaveTextContent("A label with this name already exists.");
-    expect(requests(env, "CreateGmailLabel")).toEqual([]);
+    expect(requestsOf(env, "CreateGmailLabel")).toEqual([]);
   });
 
   it("edits a nested label: renames, changes visibility and removes the colour", async () => {
@@ -212,7 +186,7 @@ describe("label dialogs", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "UpdateGmailLabel")[0]).toMatchObject({
+    expect(requestsOf(env, "UpdateGmailLabel")[0]).toMatchObject({
       label_id: "Label_4",
       settings: { name: "Work/Research", color: null, list_visibility: "show-if-unread" },
     });
@@ -250,18 +224,16 @@ describe("label dialogs", () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
-    expect(requests(env, "DeleteGmailLabel")[0]?.label_id).toBe("Label_2");
+    expect(requestsOf(env, "DeleteGmailLabel")[0]?.label_id).toBe("Label_2");
   });
 
   it("applies and removes labels on the selected message as one mail action", async () => {
     const user = userEvent.setup();
     const env = setup();
-    const summary = message(env, "Your train tickets to Lisbon");
-    cacheList(env, summary);
+    const summary = messageWithSubject(env, "Your train tickets to Lisbon");
+    cacheList(env, [summary]);
     env.store.getState().selectMessage(summary.id);
-    const Apply = dialog(APPLY_LABELS_DIALOG);
-    const close = vi.fn();
-    renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+    const close = renderApplyLabels(env);
     const travel = await screen.findByRole("checkbox", { name: "Travel" });
     await waitFor(() => {
       expect(travel).toBeChecked();
@@ -271,23 +243,20 @@ describe("label dialogs", () => {
     await user.click(screen.getByRole("checkbox", { name: "Receipts" }));
     await user.clear(screen.getByLabelText("Find a label"));
     await user.click(screen.getByRole("checkbox", { name: "Travel" }));
-    await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+    await clickAndClose(user, "Apply", close);
+    expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [{ kind: "message", message_id: summary.id }],
       action: { type: "tags", add: ["Receipts"], remove: ["Travel"] },
     });
-    expect(requests(env, "UpdateFlags")).toEqual([]);
+    expect(requestsOf(env, "UpdateFlags")).toEqual([]);
     expect(env.store.getState().pendingOps.length).toBeGreaterThan(0);
   });
 
   it("labels the whole selected conversation when the list shows conversations", async () => {
     const user = userEvent.setup();
     const env = setup();
-    const summary = message(env, "Your train tickets to Lisbon");
-    cacheList(env, summary);
+    const summary = messageWithSubject(env, "Your train tickets to Lisbon");
+    cacheList(env, [summary]);
     listSelectionFor(env.store).setState({
       scope: { conversations: true, folderId: summary.folder_id },
     });
@@ -295,16 +264,11 @@ describe("label dialogs", () => {
       env.store.getState().selectMessage(summary.id);
       env.store.getState().selectThread(summary.thread_id);
     });
-    await actions["gmail.apply-labels"]?.run(ctx(env), []);
-    const Apply = dialog(APPLY_LABELS_DIALOG);
-    const close = vi.fn();
-    renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+    await actions["gmail.apply-labels"]?.run(actionContext(env), []);
+    const close = renderApplyLabels(env);
     await user.click(await screen.findByRole("checkbox", { name: "Receipts" }));
-    await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+    await clickAndClose(user, "Apply", close);
+    expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [
         { kind: "conversation", thread_id: summary.thread_id, folder_id: summary.folder_id },
       ],
@@ -315,10 +279,10 @@ describe("label dialogs", () => {
   it("shows labels some picked messages have as mixed and applies the user's choice to all", async () => {
     const user = userEvent.setup();
     const env = setup();
-    const lisbon = message(env, "Your train tickets to Lisbon");
-    const receipt = message(env, "Receipt for your order #4711");
+    const lisbon = messageWithSubject(env, "Your train tickets to Lisbon");
+    const receipt = messageWithSubject(env, "Receipt for your order #4711");
     expect(receipt.folder_id).toBe(lisbon.folder_id);
-    cacheList(env, lisbon, receipt);
+    cacheList(env, [lisbon, receipt]);
     act(() => {
       env.store.getState().selectMessage(lisbon.id);
     });
@@ -331,10 +295,8 @@ describe("label dialogs", () => {
         child: false,
       })),
     });
-    await actions["gmail.apply-labels"]?.run(ctx(env), []);
-    const Apply = dialog(APPLY_LABELS_DIALOG);
-    const close = vi.fn();
-    renderWithProviders(<Apply name={APPLY_LABELS_DIALOG} close={close} />, env);
+    await actions["gmail.apply-labels"]?.run(actionContext(env), []);
+    const close = renderApplyLabels(env);
     const travel = await screen.findByRole("checkbox", { name: "Travel" });
     const receipts = screen.getByRole("checkbox", { name: "Receipts" });
     await waitFor(() => {
@@ -345,7 +307,7 @@ describe("label dialogs", () => {
     expect(travel).not.toBeChecked();
     // A selection change behind the window changes nothing in it.
     act(() => {
-      env.store.getState().selectMessage(message(env, "Hotel confirmation").id);
+      env.store.getState().selectMessage(messageWithSubject(env, "Hotel confirmation").id);
     });
     expect(travel).toHaveAttribute("data-mixed", "true");
     await user.click(travel);
@@ -353,11 +315,8 @@ describe("label dialogs", () => {
     await user.click(receipts);
     expect(travel).toBeChecked();
     expect(receipts).not.toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => {
-      expect(close).toHaveBeenCalled();
-    });
-    expect(requests(env, "ApplyMailAction")[0]).toMatchObject({
+    await clickAndClose(user, "Apply", close);
+    expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [
         { kind: "message", message_id: lisbon.id },
         { kind: "message", message_id: receipt.id },
@@ -422,7 +381,10 @@ describe("categories and chips", () => {
 
   it("shows a message's labels and category", async () => {
     const env = setup();
-    renderWithProviders(<MessageLabels message={message(env, "Hotel confirmation")} />, env);
+    renderWithProviders(
+      <MessageLabels message={messageWithSubject(env, "Hotel confirmation")} />,
+      env,
+    );
     const list = await screen.findByRole("list", { name: "Labels" });
     await within(list).findByText("Travel");
     expect(within(list).getByText("Receipts")).toBeInTheDocument();
@@ -441,7 +403,7 @@ describe("categories and chips", () => {
 describe("gmail actions", () => {
   it("are enabled for Gmail accounts and open views and dialogs", async () => {
     const env = setup();
-    const c = ctx(env);
+    const c = actionContext(env);
     expect(actions["gmail.new-label"]?.enabled?.(c, [])).toBe(false);
     await env.queryClient.query({
       queryKey: queryKeys.accounts,
@@ -462,8 +424,8 @@ describe("gmail actions", () => {
     await actions["gmail.category"]?.run(c, ["promotions"]);
     expect(env.store.getState().search?.text).toBe("category:promotions");
     expect(actions["gmail.apply-labels"]?.enabled?.(c, [])).toBe(false);
-    const summary = message(env, "Lunch on Friday?");
-    cacheList(env, summary);
+    const summary = messageWithSubject(env, "Lunch on Friday?");
+    cacheList(env, [summary]);
     env.store.getState().selectMessage(summary.id);
     expect(actions["gmail.apply-labels"]?.enabled?.(c, [])).toBe(true);
   });

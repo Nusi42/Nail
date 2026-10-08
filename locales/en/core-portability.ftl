@@ -27,17 +27,17 @@ export-format-ics = { import-format-ics }
 export-format-vcard = { import-format-vcard }
 mbox-variant-mboxrd = mboxrd (recommended)
 mbox-variant-mboxo = mboxo (older programs)
-import-collection-calendar = Calendar
-import-collection-task-list = Task list
+import-collection-calendar = { common-calendar }
+import-collection-task-list = { common-task-list }
 import-collection-address-book = Address book
 
 ## Jobs (JobKind, JobPhase, JobState, IssueSeverity)
 
-portability-job-import = Import
+portability-job-import = { common-import }
 portability-job-export = Export
 portability-job-backup = Backup
 portability-job-verify-backup = Backup check
-portability-job-restore = Restore
+portability-job-restore = { common-restore }
 portability-phase-queued = Waiting
 portability-phase-scanning = Counting
 portability-phase-reading = Reading
@@ -45,10 +45,10 @@ portability-phase-writing = Writing
 portability-phase-verifying = Checking
 portability-phase-finishing = Finishing
 portability-state-running = Running
-portability-state-completed = Done
+portability-state-completed = { common-state-done }
 portability-state-completed-with-issues = Done, with problems
-portability-state-failed = Failed
-portability-state-cancelled = Cancelled
+portability-state-failed = { common-failed }
+portability-state-cancelled = { common-cancelled }
 portability-severity-warning = Changed
 portability-severity-skipped = Left out
 
@@ -76,15 +76,15 @@ portability-issue-needs-attention = This needs your attention after the restore.
 
 ## Backups (BackupItem, BackupIssue, RestoreEffect)
 
-backup-item-settings = Settings
+backup-item-settings = { common-settings }
 backup-item-theme = Theme
-backup-item-layout = Layout
+backup-item-layout = { common-layout }
 backup-item-rules = Rules and saved searches
 backup-item-accounts = Accounts (without passwords)
 backup-item-local-mail = Local folders
 backup-item-keys = Encryption keys
 backup-item-pim-local = Local calendars, contacts and tasks
-backup-item-plugins = Plug-ins
+backup-item-plugins = { common-plug-ins }
 backup-issue-nothing-chosen = Choose at least one thing to back up.
 backup-issue-duplicate-item = An item is listed twice.
 backup-issue-passphrase-too-short = The passphrase must have at least 12 characters.
@@ -92,7 +92,7 @@ backup-issue-passphrase-too-long = The passphrase is too long.
 backup-wrong-passphrase = The passphrase is wrong, or this is not a Nail backup.
 restore-effect-replace = Replace
 restore-effect-merge = Add what is missing
-restore-effect-add = Add
+restore-effect-add = { common-add }
 restore-effect-skip = Leave as is
 
 ## Diagnostics (DiagnosticsItem, Redaction, DiagnosticsIssue)
@@ -103,7 +103,7 @@ diagnostics-item-config = Configuration files
 diagnostics-item-account-status = Account status
 diagnostics-item-store-stats = Database statistics
 diagnostics-item-operation-queue = Pending changes
-diagnostics-item-plugins = Plug-ins
+diagnostics-item-plugins = { common-plug-ins }
 diagnostics-item-mail-headers = Headers of chosen messages
 diagnostics-item-mail-content = Chosen messages (full content)
 diagnostics-redaction-secrets = Passwords and keys removed
@@ -143,9 +143,9 @@ portability-issue-folder-merged = This folder does not exist in the account; its
 portability-error-account-folders = Nail creates new folders only in Local Folders. To import into this account, choose one of its existing folders.
 portability-error-virtual-target = Mail cannot be imported into a combined account. Choose one of its accounts.
 portability-error-path-not-absolute = Type the full path of the file or folder.
-portability-error-missing-path = There is no file or folder at this path.
+portability-error-missing-path = { common-path-missing }
 portability-error-format-mismatch = This format cannot export what you chose.
 portability-error-nothing-chosen = Choose what to export.
 portability-job-unknown = This job is not known (any more).
 local-folders-account = Local Folders
-portability-export-messages-folder = Messages
+portability-export-messages-folder = { common-messages }

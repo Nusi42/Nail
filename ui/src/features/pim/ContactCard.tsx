@@ -118,7 +118,7 @@ export function ContactCard() {
   const contact = useContact(id);
   if (id === null) {
     return (
-      <section data-part="contact-card" data-state="empty" aria-label={t("pim-contact-card-label")}>
+      <section data-part="contact-card" data-state="empty" aria-label={t("common-contact")}>
         <p data-part="contact-card.empty">{t("pim-contact-none")}</p>
       </section>
     );
@@ -129,15 +129,15 @@ export function ContactCard() {
         data-part="contact-card"
         data-state="loading"
         aria-busy="true"
-        aria-label={t("pim-contact-card-label")}
+        aria-label={t("common-contact")}
       >
-        <p data-part="contact-card.loading">{t("pim-loading")}</p>
+        <p data-part="contact-card.loading">{t("common-loading")}</p>
       </section>
     );
   }
   if (contact.isError) {
     return (
-      <section data-part="contact-card" data-state="error" aria-label={t("pim-contact-card-label")}>
+      <section data-part="contact-card" data-state="error" aria-label={t("common-contact")}>
         <Problem message={problemOf(contact.error)} />
       </section>
     );
@@ -227,7 +227,7 @@ function ContactDetails({ contact }: { contact: Contact }) {
                 ctx.store.getState().openWindow(CONTACT_DIALOG);
               }}
             >
-              {t("pim-edit")}
+              {t("common-edit")}
             </button>
           )}
           {!contact.read_only && (
@@ -347,7 +347,7 @@ function ContactDetails({ contact }: { contact: Contact }) {
       )}
       {f.notes && (
         <div data-part="contact-card.section" data-field="notes">
-          <h3 data-part="contact-card.heading">{t("pim-contact-notes")}</h3>
+          <h3 data-part="contact-card.heading">{t("common-notes")}</h3>
           <p data-part="contact-card.notes">{f.notes}</p>
         </div>
       )}

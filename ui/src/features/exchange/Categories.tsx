@@ -11,25 +11,16 @@
  * - mount point `MessageCategories`: the categories of one Exchange
  *   message as coloured chips (list rows, reader).
  */
-import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type SubmitEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
-import type {
-  CategoryColor,
-  ExchangeCategory,
-  LocalizedMessage,
-  MessageSummary,
-} from "../../api/generated";
+import type { CategoryColor, ExchangeCategory, MessageSummary } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
-import { findSummary } from "../../state/mailOps";
 import { TagCheckbox } from "../mail-actions/TagCheckbox";
-import { NO_TAGS, applyTags, tagChange, tagMark, useTargetTags } from "../mail-actions/tags";
-import { useClient } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { useTagWindow } from "../mail-actions/tags";
 import { Icon } from "../../widgets/Icon";
-import { CategorySwatch, Problem, useWriteContext } from "./common";
+import { CategorySwatch, Problem, useWriteContext, DialogActions, DangerActions } from "./common";
 import { CATEGORY_COLORS } from "./messages";
 import { categoryIssues, categoryOfTag, tagQuery } from "./model";
 import { CATEGORY_DELETE_DIALOG, CATEGORY_EDITOR_DIALOG } from "./names";
@@ -41,14 +32,16 @@ import {
   useExchangeAccount,
 } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { TextField } from "../../widgets/forms";
+import { useBusyAction } from "../../state/busyAction";
+import { useActiveMailView } from "../../state/hooks";
 
 /** Widget `exchange-categories`. Renders nothing for other accounts. */
 export function CategoryList({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
-  const store = useUiStoreApi();
-  const accountId = useUi((s) => s.activeAccountId);
-  const search = useUi((s) => s.search);
+  const { store, accountId, search } = useActiveMailView();
   const account = useExchangeAccount(accountId);
   const categories = useCategories(account?.id ?? null);
   const showCounts = optionBool(node, "show-counts", true);
@@ -82,7 +75,9 @@ export function CategoryList({ node }: WidgetProps) {
           }}
         >
           <Icon name="plus" part="exchange-categories.icon" />
-          <span data-part="exchange-categories.action.text">{t("exchange-category-new")}</span>
+          <span data-part="exchange-categories.action.text">
+            {t("exchange-action-new-category")}
+          </span>
         </button>
       </div>
       {categories.isError && (
@@ -121,11 +116,13 @@ export function CategoryList({ node }: WidgetProps) {
                   <span data-part="exchange-categories.name">{c.name}</span>
                   {showCounts && c.unread > 0 && (
                     <span data-part="exchange-categories.unread">
-                      {t("exchange-category-unread", { count: c.unread })}
+                      {t("common-unread-count", { count: c.unread })}
                     </span>
                   )}
                   {c.sync === "pending" && (
-                    <span data-part="exchange-categories.pending">{t("exchange-pending")}</span>
+                    <span data-part="exchange-categories.pending">
+                      {t("common-not-synced-yet")}
+                    </span>
                   )}
                 </button>
                 <button
@@ -138,9 +135,7 @@ export function CategoryList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="settings" part="exchange-categories.icon" />
-                  <span data-part="exchange-categories.action.text">
-                    {t("exchange-edit-short")}
-                  </span>
+                  <span data-part="exchange-categories.action.text">{t("common-edit")}</span>
                 </button>
                 <button
                   type="button"
@@ -153,9 +148,7 @@ export function CategoryList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="trash" part="exchange-categories.icon" />
-                  <span data-part="exchange-categories.action.text">
-                    {t("exchange-delete-short")}
-                  </span>
+                  <span data-part="exchange-categories.action.text">{t("common-delete")}</span>
                 </button>
               </li>
             );
@@ -178,7 +171,7 @@ export function MessageCategories({ message }: { message: MessageSummary }) {
   const tags = message.tags.filter((tag) => !tag.startsWith("$"));
   if (tags.length === 0) return null;
   return (
-    <ul data-part="exchange.categories" aria-label={t("exchange-message-categories")}>
+    <ul data-part="exchange.categories" aria-label={t("exchange-categories-title")}>
       {tags.map((tag) => {
         const category = categoryOfTag(categories.data ?? [], tag);
         const color: CategoryColor = category?.color ?? "none";
@@ -221,25 +214,20 @@ function ColorOption({
 
 /** Dialog `exchange-category-editor`. */
 export function CategoryEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = useExchangeUi((s) => s.categoryEditor);
   const categories = useCategories(target?.accountId ?? null);
   if (target === null) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-nothing-chosen")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-nothing-chosen"
+        close={close}
+      />
     );
   }
   if (!categories.data) {
-    return (
-      <div data-part="exchange.dialog" data-state="loading" aria-busy="true">
-        <p data-part="exchange.hint">{t("exchange-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="exchange.dialog" textPart="exchange.hint" />;
   }
   const category = target.categoryId
     ? (categories.data.find((c) => c.id === target.categoryId) ?? null)
@@ -268,11 +256,10 @@ function CategoryEditor({
 }) {
   const t = useT();
   const ctx = useWriteContext();
-  const ids = { name: useId(), colors: useId() };
+  const ids = { colors: useId() };
   const [name, setName] = useState(category?.name ?? "");
   const [color, setColor] = useState<CategoryColor>(category?.color ?? "preset7");
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, setProblem, run } = useBusyAction();
   const renaming = category !== null && name.trim() !== category.name;
 
   const finish = () => {
@@ -291,16 +278,10 @@ function CategoryEditor({
       setProblem({ id: `exchange-category-issue-${issue}` });
       return;
     }
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await saveCategory(ctx, accountId, category?.id ?? null, settings);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -310,28 +291,21 @@ function CategoryEditor({
       aria-busy={busy}
       onSubmit={(e) => void submit(e)}
     >
-      <div data-part="form.field" data-field="name">
-        <label data-part="form.label" htmlFor={ids.name}>
-          {t("exchange-category-name")}
-        </label>
-        <input
-          id={ids.name}
-          data-part="form.input"
-          value={name}
-          maxLength={255}
-          aria-invalid={problem !== null}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-      </div>
+      <TextField
+        labelId="common-name"
+        name="name"
+        value={name}
+        maxLength={255}
+        invalid={problem !== null}
+        onChange={setName}
+      />
       {renaming && (
         <p data-part="exchange.hint" data-hint="rename">
           {t("exchange-category-rename-hint", { count: category.total })}
         </p>
       )}
       <fieldset data-part="exchange.colors">
-        <legend data-part="form.section.title">{t("exchange-category-color")}</legend>
+        <legend data-part="form.section.title">{t("common-colour")}</legend>
         {CATEGORY_COLORS.map((c) => (
           <ColorOption
             key={c}
@@ -344,15 +318,11 @@ function CategoryEditor({
           />
         ))}
       </fieldset>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-cancel")}
-        </button>
+      <DialogActions problem={problem} onCancel={finish}>
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
           {t(category ? "exchange-save" : "exchange-category-create")}
         </button>
-      </div>
+      </DialogActions>
     </form>
   );
 }
@@ -362,33 +332,26 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
   const t = useT();
   const ctx = useWriteContext();
   const category = useExchangeUi((s) => s.deleting);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().deleteCategory(null);
     close();
   };
   if (category === null) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-nothing-chosen")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-nothing-chosen"
+        close={close}
+      />
     );
   }
   const remove = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await deleteCategory(ctx, category.account_id, category.id);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <div data-part="exchange.dialog" data-dialog="category-delete" aria-busy={busy}>
@@ -398,21 +361,13 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
       <p data-part="exchange.hint">
         {t("exchange-category-delete-hint", { count: category.total })}
       </p>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-cancel")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={busy}
-          onClick={() => void remove()}
-        >
-          {t("exchange-category-delete")}
-        </button>
-      </div>
+      <DangerActions
+        problem={problem}
+        busy={busy}
+        onCancel={finish}
+        onConfirm={() => void remove()}
+        label={t("exchange-category-delete")}
+      />
     </div>
   );
 }
@@ -424,63 +379,30 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
  */
 export function ApplyCategoriesDialog({ close }: DialogProps) {
   const t = useT();
-  const client = useClient();
-  const queryClient = useQueryClient();
-  const store = useUiStoreApi();
-  // What the window opened with: a selection change behind it changes nothing.
-  const [messageId] = useState(() => store.getState().selectedMessageId);
-  const summary = useMemo(
-    () => (messageId ? findSummary(queryClient, messageId) : undefined),
-    [messageId, queryClient],
-  );
+  const tags = useTagWindow("category", close);
+  const { summary } = tags;
   const categories = useCategories(summary?.exchange ? summary.account_id : null);
-  const { counts } = useTargetTags();
-  const [decided, setDecided] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
   if (!summary?.exchange) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-apply-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-apply-nothing"
+        close={close}
+      />
     );
   }
   const list = categories.data ?? [];
-
-  const apply = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const { add, remove } = tagChange(
-      list.map((c) => c.name),
-      counts ?? NO_TAGS,
-      decided,
-    );
-    if (add.length === 0 && remove.length === 0) {
-      close();
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      // The whole conversation (or the picked rows / the card), as one undoable batch.
-      if ((await applyTags({ client, store, queryClient }, add, remove, "category")) !== null) {
-        close();
-      }
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <form
       data-part="exchange.dialog"
       data-dialog="apply-categories"
-      aria-busy={busy}
-      onSubmit={(e) => void apply(e)}
+      aria-busy={tags.busy}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void tags.apply(list.map((c) => c.name));
+      }}
     >
       <p data-part="exchange.intro">{t("exchange-apply-intro", { subject: summary.subject })}</p>
       <fieldset data-part="exchange.colors">
@@ -489,10 +411,10 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
         {list.map((c) => (
           <label key={c.id} data-part="form.check" data-color={c.color}>
             <TagCheckbox
-              mark={tagMark(counts ?? NO_TAGS, c.name)}
-              decided={decided.get(c.name)}
+              mark={tags.mark(c.name)}
+              decided={tags.decision(c.name)}
               onDecide={(checked) => {
-                setDecided(new Map(decided).set(c.name, checked));
+                tags.decide(c.name, checked);
               }}
             />
             <CategorySwatch color={c.color} />
@@ -500,13 +422,13 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
           </label>
         ))}
       </fieldset>
-      <Problem message={problem} />
+      <Problem message={tags.problem} />
       <div data-part="exchange.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("exchange-apply")}
+        <button type="submit" data-part="form.button" data-variant="primary" disabled={tags.busy}>
+          {t("common-apply")}
         </button>
         <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>

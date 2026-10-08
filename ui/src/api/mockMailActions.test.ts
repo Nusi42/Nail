@@ -10,11 +10,9 @@ import { createMockData } from "./mockData";
 import { reachOf } from "./mockMailActions";
 import type { MessageTarget } from "./generated";
 import { must } from "../test/must";
+import { INBOX, SENT, TRASH } from "../test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-const SENT = "acc-personal/Sent";
 const ARCHIVE = "acc-personal/Archive";
-const TRASH = "acc-personal/Trash";
 
 function setup() {
   const transport = new MockTransport({ data: createMockData(8) });

@@ -29,9 +29,11 @@
  * - the settings card: `layout-editor.settings-actions` (the card itself
  *   is the shared `card`)
  */
+import { p } from "../../theme/selectors";
+import { QUIET_HOVER, smallTag } from "../../theme/declarations";
 
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+/** The panes of a preset's miniature: barely rounded at that size. */
+const PREVIEW_RADIUS = "3px";
 
 const T = {
   bg: "var(--nail-color-bg)",
@@ -129,7 +131,7 @@ ${p("layout-editor.handle")} {
   width: ${T.control}; height: ${T.control}; padding: 0; border: none; border-radius: ${T.rSm};
   color: ${T.muted}; background-color: transparent; cursor: grab; touch-action: none;
 }
-${p("layout-editor.handle")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("layout-editor.handle")}:hover { ${QUIET_HOVER} }
 ${p("layout-editor.handle")}:focus-visible { ${focusRing} outline-offset: -2px; }
 ${p("layout-editor.handle")}[aria-pressed="true"] { color: ${T.accent}; background-color: ${T.accentSoft}; }
 ${p("layout-editor.handle")}:disabled { opacity: ${T.disabled}; }
@@ -139,10 +141,7 @@ ${p("layout-editor.pane-title")} {
   flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: ${T.small}; font-weight: ${T.semibold}; line-height: ${T.tight};
 }
-${p("layout-editor.pane-badge")} {
-  flex: 0 0 auto; padding: 0 ${T.xs}; border-radius: ${T.pill};
-  font-size: ${T.label}; color: ${T.fg}; background-color: ${T.raised};
-}
+${p("layout-editor.pane-badge")} { ${smallTag(T.pill, T.fg, T.raised)} }
 ${p("layout-editor.pane-body")} { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
 ${p("layout-editor.pane-body")} > * { flex: 1 1 auto; min-height: 0; }
 ${p("layout-editor.targets")} {
@@ -187,7 +186,7 @@ ${p("layout-editor.preset")}:disabled { opacity: ${T.disabled}; }
 ${p("layout-editor.preset-preview")} { display: flex; height: calc(${T.control} + ${T.xs}); }
 ${p("layout-editor.preset-preview.group")} { display: flex; flex: 1 1 0; gap: 2px; min-width: 0; min-height: 0; }
 ${p("layout-editor.preset-preview.group")}[data-orientation="vertical"] { flex-direction: column; }
-${p("layout-editor.preset-preview.pane")} { flex: 1 1 0; min-width: 0; min-height: 0; border-radius: 3px; background-color: color-mix(in srgb, ${T.fg} 22%, ${T.bg}); }
+${p("layout-editor.preset-preview.pane")} { flex: 1 1 0; min-width: 0; min-height: 0; border-radius: ${PREVIEW_RADIUS}; background-color: color-mix(in srgb, ${T.fg} 22%, ${T.bg}); }
 ${p("layout-editor.preset")}[aria-pressed="true"] ${p("layout-editor.preset-preview.pane")} { background-color: color-mix(in srgb, ${T.accent} 55%, ${T.bg}); }
 ${p("layout-editor.preset-name")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("layout-editor.widgets.item")} { display: block; min-width: 0; }

@@ -49,6 +49,3 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     availability: ["list"],
   },
 };
-export const dialogs: Feature["dialogs"] = {};
-export const events: Feature["events"] = [];
-export const effects: Feature["effects"] = [];

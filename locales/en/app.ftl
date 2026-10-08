@@ -5,49 +5,49 @@
 # Every file here has a counterpart with the same name in each other locale
 # directory; missing keys fall back to English per key.
 
-app-name = Nail
+app-name = { common-nail }
 
 ## Panes (layout labels)
 
-layout-pane-folders = Folders
-layout-pane-messages = Messages
-layout-pane-message = Message
-layout-menu-view = View
+layout-pane-folders = { common-folders }
+layout-pane-messages = { common-messages }
+layout-pane-message = { common-message }
+layout-menu-view = { common-view }
 toolbar-main = Main toolbar
 toolbar-customize = Customization
-settings-tab-accounts = Accounts
-settings-tab-virtual-accounts = Virtual accounts
+settings-tab-accounts = { common-accounts }
+settings-tab-virtual-accounts = { common-virtual-accounts }
 settings-tab-customize = Customize
 
 ## Mail actions
 
 mail-action-next = Next message
 mail-action-previous = Previous message
-mail-action-reply = Reply
+mail-action-reply = { common-reply }
 mail-action-reply-all = Reply all
-mail-action-forward = Forward
-mail-action-archive = Archive
-mail-action-delete = Delete
+mail-action-forward = { common-forward }
+mail-action-archive = { common-archive }
+mail-action-delete = { common-delete }
 mail-action-toggle-read = Mark as read/unread
-mail-action-toggle-flag = Flag
-mail-action-compose = New message
+mail-action-toggle-flag = { common-flag }
+mail-action-compose = { common-new-message }
 mail-action-move = Move to…
 mail-action-move-to = Move
 mail-action-delete-permanently = Delete permanently
 
 ## Composer, outbox, search, window and account actions
 
-composer-action-send = Send
-composer-action-save = Save draft
-composer-action-discard = Discard
-outbox-action-open = Outbox
+composer-action-send = { common-send }
+composer-action-save = { common-save-draft }
+composer-action-discard = { common-discard }
+outbox-action-open = { common-outbox }
 outbox-action-undo = Undo send
-search-action-focus = Search
-search-action-clear = Clear search
+search-action-focus = { common-search }
+search-action-clear = { search-bar-clear }
 window-action-open = Open window
 window-action-close = Close window
-account-action-add = Add account
-settings-action-open = Settings
+account-action-add = { common-add-account }
+settings-action-open = { common-settings }
 
 ## View and sync actions
 
@@ -56,37 +56,34 @@ sync-action-now = Check for new mail
 
 ## App shell
 
-app-loading = Loading…
+app-loading = { common-loading }
 
 ## Layout engine
 
 layout-missing-window = This layout has no window named “{ $name }”.
 layout-unknown-widget = Unknown widget “{ $kind }”.
-layout-divider = Resize panes
+layout-divider = { edit-kind-split-sizes }
 layout-tab-untitled = Tab { $index }
 
 ## Accounts and folders
 
-account-switcher-label = Accounts
 # Name of the built-in "All accounts" virtual account (id "all").
-account-all = All accounts
-folder-tree-label = Folders
+account-all = { common-all-accounts }
 folder-tree-unread = { $count ->
     [one] One unread message
    *[other] { $count } unread messages
 }
 # Names of special-use folders in the folder pane and the list title
 # (the server's own name, e.g. "INBOX", is the tooltip).
-folder-role-inbox = Inbox
-folder-role-drafts = Drafts
-folder-role-sent = Sent
-folder-role-archive = Archive
-folder-role-junk = Junk
-folder-role-trash = Trash
+folder-role-inbox = { common-inbox }
+folder-role-drafts = { common-drafts }
+folder-role-sent = { common-folder-sent }
+folder-role-archive = { common-folder-archive }
+folder-role-junk = { common-junk }
+folder-role-trash = { common-trash }
 
 ## Message list
 
-message-list-label = Messages
 message-list-empty = No messages in this folder.
 message-list-loading = Loading messages…
 message-list-search-results = { $count ->
@@ -97,27 +94,20 @@ message-list-search-results = { $count ->
 message-list-search-empty = No messages match this search.
 message-list-search-invalid = The search could not be run. Check the query above.
 # Column titles of a list with `columns` (Settings → Customize → Columns).
-message-list-column-from = From
-message-list-column-subject = Subject
-message-list-column-date = Date
-message-list-column-preview = Preview
-message-list-column-tags = Tags
-message-list-column-account = Account
+message-list-column-from = { common-header-from }
+message-list-column-subject = { common-subject }
+message-list-column-date = { common-date }
+message-list-column-preview = { common-preview }
+message-list-column-tags = { action-field-tags }
+message-list-column-account = { common-account }
 
 ## Thread view
 
 thread-view-label = Conversation
-thread-view-count = { $count ->
-    [one] One message
-   *[other] { $count } messages
-}
-thread-view-open = Open
 thread-view-show-quote = Show quoted text
 
 ## Search bar and query-language hints
 
-search-bar-label = Search
-search-bar-input = Search mail
 search-bar-placeholder = Search, e.g. from:ada is:unread
 search-bar-clear = Clear search
 search-bar-hints = Search fields
@@ -142,21 +132,18 @@ search-hint-operators = Combine terms with AND, OR, NOT and parentheses; quote p
 
 ## Move to folder
 
-folder-picker-label = Move to folder
 folder-picker-filter = Find a folder
-folder-picker-folders = Folders
 folder-picker-no-match = No folder matches.
 folder-picker-no-selection = Select a message first.
 
 ## Secondary windows ("window-" + the layout window name)
 
-window-close = Close
-window-mail = Mail
-window-composer = New message
-window-outbox = Outbox
-window-move = Move to folder
-window-account-setup = Add account
-window-settings = Settings
+window-mail = { common-mail }
+window-composer = { common-new-message }
+window-outbox = { common-outbox }
+window-move = { common-move-to-folder }
+window-account-setup = { common-add-account }
+window-settings = { common-settings }
 window-mail-delete-permanently = Delete permanently?
 
 ## "Delete permanently?" (a modal confirmation, M5c)
@@ -166,36 +153,24 @@ mail-delete-permanently-question = { $count ->
    *[other] Delete { $count } messages permanently?
 }
 mail-delete-permanently-note = This cannot be undone.
-mail-delete-permanently-confirm = Delete permanently
-mail-delete-permanently-cancel = Cancel
 
 ## Message view
 
-message-view-label = Message
 message-view-empty = Select a message to read it.
 message-view-loading = Loading message…
 message-view-body-title = Message content: { $subject }
-message-view-attachments = Attachments
-message-view-attachment-unnamed = Unnamed attachment
 # The reader leaves out the images the message body shows; this button lists them too. $count = all attachments.
 message-view-attachments-show-all = Show all attachments ({ $count })
 message-view-attachments-hide-embedded = Hide images shown in the message
-message-no-subject = (no subject)
-message-header-from = From
-message-header-to = To
-message-header-cc = Cc
-message-header-reply-to = Reply to
-message-header-date = Date
-
-## Toolbar
-
-toolbar-label = Message actions
+message-header-from = { common-header-from }
+message-header-to = { common-header-to }
+message-header-cc = { common-cc }
+message-header-reply-to = { common-reply-to }
+message-header-date = { common-date }
 
 ## Status bar
 
-# Accessible name of the status bar (there are other status regions).
-status-bar-label = Status
-status-ready = Up to date
+status-ready = { pim-source-state-idle }
 status-offline = Offline – reconnecting…
 status-syncing = Syncing… { $done } of { $total }
 status-sync-failed = Synchronization failed: { $reason }
@@ -207,7 +182,6 @@ status-ops-pending = { $count ->
    *[other] Saving { $count } changes…
 }
 status-op-failed = A change could not be saved: { $reason }
-status-dismiss = Dismiss
 # Queues a failed change again.
 status-retry = Retry
 status-send-countdown = { $seconds ->
@@ -220,7 +194,6 @@ status-sending = Sending…
 status-sending-progress = Sending… { $percent }% uploaded
 status-sent = Message sent.
 status-send-failed = Sending failed: { $reason }
-status-undo-send = Undo
 status-folder-counts = { $total ->
     [one] One message
    *[other] { $total } messages
@@ -240,7 +213,7 @@ error-conflict = This conflicts with the current state. Please reload and try ag
 error-tls = A secure connection to the server could not be established.
 error-too-large = The message is larger than the server accepts.
 error-rejected = The server refused the request.
-error-cancelled = The operation was cancelled.
+error-cancelled = { common-operation-cancelled }
 error-locked = A key is locked. Enter its passphrase and try again.
 error-no-key = A needed key or certificate is missing or cannot be used.
 error-crypto = Signing, encryption or verification failed.
@@ -252,7 +225,7 @@ error-rate-limited = Too many attempts. Please wait a moment and try again.
 
 account-state-online = Online
 account-state-connecting = Connecting…
-account-state-offline = Offline
+account-state-offline = { pim-source-state-offline }
 account-state-auth-error = Sign-in required
 account-state-disabled = Disabled
 
@@ -276,16 +249,15 @@ oauth-callback-failure = Sign-in did not complete. Close this window and try aga
 
 # Name of the local account that opened .eml files are shown in.
 opened-files-account = Opened files
-opened-files-folder = Opened files
+opened-files-folder = { opened-files-account }
 launch-notice-label = Opening links and files
 launch-open-failed = The file could not be opened: { $reason }
-launch-dismiss = Dismiss
 
 ## Mail view (M5b WP162): toolbars, folder pane, list header
 
 # Tooltip of a toolbar button with its key binding, e.g. "Archive (E)".
 # $label (string) — the action; $shortcut (string) — the key, as shown in menus
-toolbar-button-tooltip = { $label } ({ $shortcut })
+toolbar-button-tooltip = { common-tooltip-shortcut }
 # $count (number) — drafts in every account (Favorites → Drafts)
 folder-tree-drafts = { $count ->
     [one] One draft
@@ -298,10 +270,6 @@ folder-tree-outbox = { $count ->
 # The heading of an account's section in the folder pane.
 # $name (string) — the account's name; $email (string) — its address
 folder-tree-account-title = { $name } · { $email }
-# Accessible name of the area above the message list.
-list-header-label = Message list
-# The list's title while it shows search results.
-list-header-title-search = Search results
 # $count (number) — unread messages in the folder the list shows
 list-header-unread = { $count ->
     [0] Nothing unread
@@ -318,7 +286,7 @@ list-header-counts = { $unread } · { $accounts }
 list-header-filters = Filter messages
 message-list-filter-empty = No messages match this filter.
 # An attachment card while the attachment is being saved.
-attachment-card-saving = Saving…
+attachment-card-saving = { common-saving }
 # Command-palette titles (actions with an argument, used through aliases).
 list-action-filter = Filter the message list
 list-action-filter-keywords = unread flagged attachments chips

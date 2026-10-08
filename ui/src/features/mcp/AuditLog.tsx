@@ -7,6 +7,7 @@ import type { McpAuditEntry, McpClientId } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useMcpAudit } from "./queries";
 import { SHORT_DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
+import { RefreshButton } from "../../widgets/RefreshButton";
 
 /** A date-time for the log (the raw string when it does not parse). */
 export function formatAuditTime(iso: string, locale: string): string {
@@ -49,14 +50,7 @@ export function AuditLog({ clientId }: { clientId: McpClientId | null }) {
       aria-busy={audit.isFetching}
     >
       <div data-part="mcp-audit.toolbar">
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="refresh-audit"
-          onClick={() => void audit.refetch()}
-        >
-          {t("mcp-audit-refresh")}
-        </button>
+        <RefreshButton action="refresh-audit" refetch={audit.refetch} />
       </div>
       {audit.isError && (
         <div data-part="mcp-audit.error" role="alert">
@@ -70,10 +64,10 @@ export function AuditLog({ clientId }: { clientId: McpClientId | null }) {
         <table data-part="mcp-audit.table">
           <thead data-part="mcp-audit.head">
             <tr>
-              <th scope="col">{t("mcp-audit-time")}</th>
+              <th scope="col">{t("common-time")}</th>
               <th scope="col">{t("mcp-audit-client")}</th>
               <th scope="col">{t("mcp-audit-call")}</th>
-              <th scope="col">{t("mcp-audit-outcome")}</th>
+              <th scope="col">{t("common-result")}</th>
               <th scope="col">{t("mcp-audit-detail")}</th>
             </tr>
           </thead>

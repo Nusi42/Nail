@@ -25,7 +25,6 @@ import type {
   ConfigMergePreview,
   EditKind,
   KeyBinding,
-  LayoutNode,
   LayoutPatch,
   MergeChoice,
   MergeItem,
@@ -49,6 +48,7 @@ import {
 } from "../../api/editHistoryMock";
 import { applyLayoutEditPatch, isLayoutEditPatch } from "../layout-editor/mock";
 import { applyToolbarEditPatch, isToolbarEditPatch } from "../toolbar-editor/mock";
+import { nodeAt } from "../../layout/engine";
 
 /** The requests this feature answers. */
 export const CUSTOMIZATION_REQUESTS = [
@@ -137,15 +137,6 @@ function announce(core: MockCore): void {
 }
 
 // --- UpdateLayout ------------------------------------------------------------
-
-function nodeAt(root: LayoutNode, path: readonly number[]): LayoutNode | null {
-  let node: LayoutNode | undefined = root;
-  for (const index of path) {
-    if (!node || node.type === "widget") return null;
-    node = node.children[index];
-  }
-  return node ?? null;
-}
 
 /** The shipped default layout (what the reset patches go back to). */
 function defaultLayout(): ResolvedLayout {

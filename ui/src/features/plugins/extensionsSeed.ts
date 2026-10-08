@@ -15,6 +15,8 @@
  * Plug-in texts are the plug-ins' own (their manifests and answers).
  */
 import type {
+  ComposerEdit,
+  DraftId,
   AttachmentInfo,
   Draft,
   PluginGrant,
@@ -198,30 +200,33 @@ export function snippetsManifest(): PluginManifest {
   };
 }
 
+/** The snippets plug-in asks the composer of `draftId` for `edit`. */
+function snippetEdit(core: MockCore, draftId: DraftId, edit: ComposerEdit): void {
+  core.emit({
+    type: "ComposerEditRequested",
+    draft_id: draftId,
+    client_id: null,
+    by: { actor: { kind: "plugin", plugin_id: "snippets" }, name: "Snippets" },
+    edit,
+  });
+}
+
 const snippets: ExtensionBehaviour = {
   actions: {
     greeting: (_api, target, _clientId, core) => {
       if (target.kind !== "composer") return;
-      core.emit({
-        type: "ComposerEditRequested",
-        draft_id: target.draft_id,
-        client_id: null,
-        by: { actor: { kind: "plugin", plugin_id: "snippets" }, name: "Snippets" },
-        edit: { op: "insert", text: "Kind regards,\nAda", format: "text" },
+      snippetEdit(core, target.draft_id, {
+        op: "insert",
+        text: "Kind regards,\nAda",
+        format: "text",
       });
     },
     shout: (_api, target, _clientId, core) => {
       if (target.kind !== "composer") return;
-      core.emit({
-        type: "ComposerEditRequested",
-        draft_id: target.draft_id,
-        client_id: null,
-        by: { actor: { kind: "plugin", plugin_id: "snippets" }, name: "Snippets" },
-        edit: {
-          op: "replace-selection",
-          text: target.selection.text.toUpperCase(),
-          format: "text",
-        },
+      snippetEdit(core, target.draft_id, {
+        op: "replace-selection",
+        text: target.selection.text.toUpperCase(),
+        format: "text",
       });
     },
   },

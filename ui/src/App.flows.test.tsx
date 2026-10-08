@@ -2,71 +2,29 @@
  * M1a flows through the whole app (default layout, key bindings, windows,
  * events) against the mock core.
  */
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { App } from "./App";
-import { createEnv, setWindowWidth, stubElementSizes, type Env } from "./test/harness";
+import { appWindowEachTest, eventually, renderApp, settleUntil } from "./test/app";
 import { must } from "./test/must";
+import { type OutboxEntry } from "./api/generated";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-  setWindowWidth(1200);
-});
-afterEach(() => {
-  restoreSizes();
-  setWindowWidth(1024);
-});
+appWindowEachTest();
 
-function renderApp(env: Env = createEnv({ state: { connection: "connecting" } })) {
-  const result = render(
-    <App client={env.client} queryClient={env.queryClient} store={env.store} />,
-  );
-  return { ...result, env };
-}
-
-/**
- * Waits are bounded by event-loop turns, not by wall-clock time: the mock
- * core answers within a turn or two and nothing here needs a real delay, so
- * a loaded machine (cargo builds in parallel) makes the waits slower but
- * never flaky, unlike `findBy*` / `waitFor` with their 1 s budget.
- */
-const TURNS = 100;
-
-/** One event-loop turn inside `act`, so React commits what it received. */
-async function turn(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
-/** Turns until `query` finds something. */
-async function settleUntil<T>(query: () => T | null, what: string): Promise<T> {
-  for (let n = 0; n < TURNS; n++) {
-    const found = query();
-    if (found !== null) return found;
-    await turn();
-  }
-  throw new Error(`${what} did not appear within ${String(TURNS)} event-loop turns`);
-}
-
-/**
- * Turns until `assertion` passes (a turn-bounded `waitFor`). It starts with
- * a turn, so what the last event started (an action's request and the store
- * updates after its answer) finishes inside `act`.
- */
-async function eventually(assertion: () => void): Promise<void> {
-  let failure: unknown = null;
-  for (let n = 0; n < TURNS; n++) {
-    await turn();
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      failure = error;
-    }
-  }
-  throw failure;
+/** An outbox entry being sent (the status bar shows it). */
+function sendingEntry(id: string): OutboxEntry {
+  return {
+    id,
+    draft_id: "d",
+    account_id: "acc-personal",
+    identity_id: "ada@example.org",
+    subject: "S",
+    recipients: [],
+    send_at: new Date().toISOString(),
+    state: "sending",
+    attempts: 0,
+    error: null,
+    message: null,
+  };
 }
 
 /** The message list's rows once the app has loaded. */
@@ -150,21 +108,8 @@ describe("M1a flows", () => {
   it("reports the send result from SendStatus events", async () => {
     const { env } = renderApp();
     await ready();
-    const entry = {
-      id: "out-9",
-      draft_id: "d",
-      account_id: "acc-personal",
-      identity_id: "ada@example.org",
-      subject: "S",
-      recipients: [],
-      send_at: new Date().toISOString(),
-      state: "sending" as const,
-      attempts: 0,
-      error: null,
-      message: null,
-    };
     act(() => {
-      env.store.getState().setLastSend(entry);
+      env.store.getState().setLastSend(sendingEntry("out-9"));
     });
     const status = screen.getByRole("status", { name: "Status" });
     expect(within(status).getByText("Sending…")).toBeInTheDocument();
@@ -185,21 +130,8 @@ describe("M1a flows", () => {
   it("shows SendProgress events of a large upload until the send finishes", async () => {
     const { env } = renderApp();
     await ready();
-    const entry = {
-      id: "out-7",
-      draft_id: "d",
-      account_id: "acc-personal",
-      identity_id: "ada@example.org",
-      subject: "S",
-      recipients: [],
-      send_at: new Date().toISOString(),
-      state: "sending" as const,
-      attempts: 0,
-      error: null,
-      message: null,
-    };
     act(() => {
-      env.store.getState().setLastSend(entry);
+      env.store.getState().setLastSend(sendingEntry("out-7"));
     });
     const status = screen.getByRole("status", { name: "Status" });
     act(() => {

@@ -9,9 +9,9 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useUiStoreApi } from "../../state/uiStore";
 import { formatTime } from "./model";
 import { remoteStore, useRemoteState, type ShownAlert } from "./state";
+import { SETTINGS_WINDOW } from "../settings/model";
 
 /** The layout window that holds the remote-access settings. */
-export const SETTINGS_WINDOW = "settings";
 
 function Toast({ shown }: { shown: ShownAlert }) {
   const t = useT();
@@ -69,7 +69,7 @@ function Toast({ shown }: { shown: ShownAlert }) {
           {t("remote-alert-review")}
         </button>
         <button type="button" data-part="form.button" data-action="dismiss" onClick={dismiss}>
-          {t("remote-alert-dismiss")}
+          {t("common-dismiss")}
         </button>
       </div>
     </div>

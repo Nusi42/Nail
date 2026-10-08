@@ -9,7 +9,6 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import { describe, expect, it } from "vitest";
-import { useActions } from "../../actions/ActionsProvider";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -27,6 +26,7 @@ import { advancePortabilityJobs, finishPortabilityJobs } from "./mock";
 import { defaultBackupContents } from "./model";
 import { must } from "../../test/must";
 import { arrayContaining, notArrayContaining } from "../../test/matchers";
+import { RunAction } from "../../test/actions";
 
 /** Routes the core's events to the feature, like the app shell. */
 function listen(env: Env): () => void {
@@ -47,13 +47,12 @@ function setup(options: { desktop?: boolean } = {}) {
   return { env, stop };
 }
 
-function Run({ id }: { id: string }) {
-  const actions = useActions();
-  return (
-    <button type="button" onClick={() => void actions.dispatch(id)}>
-      {`run ${id}`}
-    </button>
-  );
+/** Renders the dialogs and opens the wizard `dialog`. */
+function openWizard(env: Env, dialog: string): void {
+  renderDialogs(env);
+  act(() => {
+    env.store.getState().openWindow(dialog);
+  });
 }
 
 function renderDialogs(env: Env, extra: React.ReactNode = null) {
@@ -82,7 +81,7 @@ describe("import wizard", () => {
   it("imports an mbox file with progress and a report of every problem", async () => {
     const { env, stop } = setup();
     const user = userEvent.setup();
-    const { container } = renderDialogs(env, <Run id={IMPORT_ACTION} />);
+    const { container } = renderDialogs(env, <RunAction id={IMPORT_ACTION} />);
     await user.click(screen.getByRole("button", { name: `run ${IMPORT_ACTION}` }));
     const dialog = await screen.findByRole("dialog", {
       name: "Import mail, calendars and contacts",
@@ -133,10 +132,7 @@ describe("import wizard", () => {
   it("imports a Thunderbird profile and adds only the chosen proposals", async () => {
     const { env, stop } = setup({ desktop: true });
     const user = userEvent.setup();
-    renderDialogs(env);
-    act(() => {
-      env.store.getState().openWindow(IMPORT_DIALOG);
-    });
+    openWizard(env, IMPORT_DIALOG);
     const dialog = await screen.findByRole("dialog");
     await user.click(await within(dialog).findByRole("button", { name: "Use this profile" }));
     expect(await within(dialog).findByText("Step 2 of 3")).toBeVisible();
@@ -183,10 +179,7 @@ describe("import wizard", () => {
     const { env, stop } = setup();
     env.transport.data.features.portability.missing = ["C:\\gone"];
     const user = userEvent.setup();
-    renderDialogs(env);
-    act(() => {
-      env.store.getState().openWindow(IMPORT_DIALOG);
-    });
+    openWizard(env, IMPORT_DIALOG);
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("radio", { name: "Maildir folder" }));
     await user.type(within(dialog).getByLabelText("Folder"), "C:\\gone");
@@ -293,10 +286,7 @@ describe("backup and restore", () => {
   it("replaces an existing archive only when the Save dialog confirmed it", async () => {
     const { env, stop } = setup({ desktop: true });
     const user = userEvent.setup();
-    renderDialogs(env);
-    act(() => {
-      env.store.getState().openWindow(BACKUP_DIALOG);
-    });
+    openWizard(env, BACKUP_DIALOG);
     const dialog = await screen.findByRole("dialog", { name: "Back up Nail" });
     await user.type(within(dialog).getByLabelText("Passphrase"), "correct horse battery");
     await user.type(within(dialog).getByLabelText("Passphrase again"), "correct horse battery");
@@ -446,7 +436,7 @@ describe("diagnostics bundle", () => {
       env.store.getState().selectMessage(first?.id ?? null);
     });
     const user = userEvent.setup();
-    const { container } = renderDialogs(env, <Run id={DIAGNOSTICS_ACTION} />);
+    const { container } = renderDialogs(env, <RunAction id={DIAGNOSTICS_ACTION} />);
     await user.click(screen.getByRole("button", { name: `run ${DIAGNOSTICS_ACTION}` }));
     const dialog = await screen.findByRole("dialog", { name: "Diagnostics for support" });
     expect(

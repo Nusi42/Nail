@@ -4,24 +4,15 @@
  * Nail", the first-run screen and the composer notice. Contrast needs a
  * real layout engine (Playwright).
  */
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders, widget, settleQueries } from "../../test/harness";
 import { systemStoreFor } from ".";
 import { setUpdateState } from "./mock";
 import { AboutNail } from "./AboutNail";
 import { FirstRun } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
 
 const update = {
   version: "1.1.0",
@@ -46,7 +37,7 @@ describe("axe: desktop settings", () => {
     const env = createEnv();
     env.transport.data.features.system.autoProgress = false;
     const { container } = renderWithProviders(widgets(), env);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("button", { name: "Check now" })).toBeVisible();
     expect(await violations(container)).toEqual([]);
     const states = [
@@ -59,7 +50,7 @@ describe("axe: desktop settings", () => {
       await act(async () => {
         await env.queryClient.invalidateQueries();
       });
-      await settle(env);
+      await settleQueries(env, 20);
       expect(await violations(container)).toEqual([]);
     }
   });
@@ -74,7 +65,7 @@ describe("axe: desktop settings", () => {
       mapi_installed: false,
     });
     const { container } = renderWithProviders(widgets(), env);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByText("Your organization installs updates for Nail.")).toBeVisible();
     expect(await violations(container)).toEqual([]);
   });
@@ -91,7 +82,7 @@ describe("axe: desktop settings", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("note")).toBeVisible();
     expect(screen.getByRole("button", { name: "Get started" })).toBeVisible();
     expect(await violations(container)).toEqual([]);
@@ -101,7 +92,7 @@ describe("axe: desktop settings", () => {
     const env = createEnv();
     env.transport.data.features.system.desktop = false;
     const { container } = renderWithProviders(<AboutNail />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   });
 });

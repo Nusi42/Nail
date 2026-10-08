@@ -8,6 +8,7 @@
  * The integrator appends this to the compiled theme's base CSS
  * (`ui/src/theme/compile.ts`, next to `PIM_BASE_CSS`).
  */
+import { LINE_BOX } from "../../theme/declarations";
 
 /** Lists that show no bullets and no indentation. */
 const PLAIN_LISTS = [
@@ -27,7 +28,7 @@ const sel = (parts: readonly string[]) => parts.map((p) => `[data-part="${p}"]`)
 export const SCHEDULING_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; padding: 0; }
 [data-part="invitation.details"] { margin: 0; }
 [data-part="invitation.detail.value"] { margin: 0; }
-[data-part="freebusy.scale"], [data-part="freebusy.track"] { position: relative; min-height: 1.5em; }
+[data-part="freebusy.scale"], [data-part="freebusy.track"] { position: relative; min-height: ${LINE_BOX}; }
 [data-part="freebusy.hour"], [data-part="freebusy.busy"], [data-part="freebusy.meeting"] { position: absolute; top: 0; bottom: 0; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
 [data-part="freebusy.hour"] { text-overflow: ellipsis; }
 [data-part="freebusy.meeting"] { pointer-events: none; }

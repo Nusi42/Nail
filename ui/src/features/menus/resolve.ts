@@ -67,6 +67,21 @@ export function shortcut(
   return find(keyContext) ?? find("global");
 }
 
+/** A separator between groups: never first, never twice in a row. */
+function pushSeparator(out: ResolvedMenuEntry[]): void {
+  dropOrphanHeader(out);
+  const last = out[out.length - 1];
+  if (last !== undefined && last.type !== "separator") out.push({ type: "separator" });
+}
+
+/** The entries with tidy ends; headings and separators alone have nothing to run. */
+function finished(out: ResolvedMenuEntry[]): ResolvedMenuEntry[] {
+  dropOrphanHeader(out);
+  if (out[out.length - 1]?.type === "separator") out.pop();
+  if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
+  return out;
+}
+
 /** Removes a trailing heading nothing follows (`drop_orphan_header`). */
 function dropOrphanHeader(out: ResolvedMenuEntry[]): void {
   if (out[out.length - 1]?.type === "header") out.pop();
@@ -90,9 +105,7 @@ function resolveItems(
         shortcut: shortcut(layout, item.action, item.args, keyContext),
       });
     } else if (item.type === "separator") {
-      dropOrphanHeader(out);
-      const last = out[out.length - 1];
-      if (last !== undefined && last.type !== "separator") out.push({ type: "separator" });
+      pushSeparator(out);
     } else if (item.type === "header") {
       dropOrphanHeader(out);
       out.push({ type: "header", label: item.label });
@@ -101,11 +114,7 @@ function resolveItems(
       if (children.length > 0) out.push({ type: "submenu", label: item.label, items: children });
     }
   }
-  dropOrphanHeader(out);
-  if (out[out.length - 1]?.type === "separator") out.pop();
-  // Headings and separators alone have nothing to run.
-  if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
-  return out;
+  return finished(out);
 }
 
 /** Resolves the layout menu `name`; `null` when missing or without actions. */
@@ -135,9 +144,7 @@ export function withoutDisabled(
     if (entry.type === "action") {
       if (isEnabled(entry.action, entry.args)) out.push(entry);
     } else if (entry.type === "separator") {
-      dropOrphanHeader(out);
-      const last = out[out.length - 1];
-      if (last !== undefined && last.type !== "separator") out.push(entry);
+      pushSeparator(out);
     } else if (entry.type === "header") {
       dropOrphanHeader(out);
       out.push(entry);
@@ -146,10 +153,7 @@ export function withoutDisabled(
       if (children.length > 0) out.push({ ...entry, items: children });
     }
   }
-  dropOrphanHeader(out);
-  if (out[out.length - 1]?.type === "separator") out.pop();
-  if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
-  return out;
+  return finished(out);
 }
 
 /**

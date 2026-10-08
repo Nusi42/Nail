@@ -69,6 +69,18 @@ function ofType<T extends Event["type"]>(events: Event[], type: T): Extract<Even
   return events.filter((e): e is Extract<Event, { type: T }> => e.type === type);
 }
 
+/** Runs the follow-up plug-in's command on the first message and lets it finish. */
+async function remindOnFirstMessage(t: MockTransport): Promise<void> {
+  await t.send({
+    type: "RunPluginCommand",
+    command: "plugin.follow-up.remind",
+    surface: "reader",
+    context: { ...t.data.uiContext, message_id: must(t.data.messages[0]).id },
+    client_id: null,
+  });
+  await settle();
+}
+
 describe("plugins mock: administration", () => {
   it("routes exactly its requests", () => {
     expect(new Set(PLUGINS_REQUESTS).size).toBe(PLUGINS_REQUESTS.length);
@@ -310,14 +322,7 @@ describe("plugins mock: host", () => {
 
   it("gates API calls by the grants and logs refusals", async () => {
     const { t, events } = await installed([{ permission: "mail.read", accounts: null }]);
-    await t.send({
-      type: "RunPluginCommand",
-      command: "plugin.follow-up.remind",
-      surface: "reader",
-      context: { ...t.data.uiContext, message_id: must(t.data.messages[0]).id },
-      client_id: null,
-    });
-    await settle();
+    await remindOnFirstMessage(t);
     expect(ofType(events, "PluginDialogOpened")).toHaveLength(0);
     expect(ofType(events, "PluginLogLine").map((e) => e.entry.message)).toContain(
       "permission denied: ui.dialogs",
@@ -341,14 +346,7 @@ describe("plugins mock: host", () => {
 
   it("closes a crashed plug-in's dialogs and says why it stopped", async () => {
     const { t, events } = await installed();
-    await t.send({
-      type: "RunPluginCommand",
-      command: "plugin.follow-up.remind",
-      surface: "reader",
-      context: { ...t.data.uiContext, message_id: must(t.data.messages[0]).id },
-      client_id: null,
-    });
-    await settle();
+    await remindOnFirstMessage(t);
     crashPlugin(t, "follow-up", "cpu-budget");
     expect(ofType(events, "PluginDialogClosed")).toHaveLength(1);
     expect(ofType(events, "PluginStopped")[0]).toMatchObject({

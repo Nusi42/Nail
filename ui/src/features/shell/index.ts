@@ -94,10 +94,3 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
   [VIEW_NEXT_ACTION]: { title: "view-action-next" },
   [VIEW_PREVIOUS_ACTION]: { title: "view-action-previous" },
 };
-
-/** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
-/** Handlers for core events. */
-export const events: Feature["events"] = [];
-/** Background components. */
-export const effects: Feature["effects"] = [];

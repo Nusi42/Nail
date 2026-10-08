@@ -1,13 +1,9 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { manageSieveIssues, parseAddressList } from "./model";
-
-function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf } from "../../test/env";
 
 function withSieve(): Env {
   const env = createEnv();
@@ -52,7 +48,7 @@ describe("sieve-status", () => {
     const table = within(section).getByRole("table", { name: "Where your rules run" });
     expect(within(table).getAllByRole("row").length).toBeGreaterThan(1);
     expect(within(table).getByText("Server")).toBeVisible();
-    expect(sent(env, "SyncSieve")).toEqual([{ type: "SyncSieve", account_id: "acc-work" }]);
+    expect(requestsOf(env, "SyncSieve")).toEqual([{ type: "SyncSieve", account_id: "acc-work" }]);
   });
 
   it("turns ManageSieve on for an account and validates the settings", async () => {
@@ -68,9 +64,9 @@ describe("sieve-status", () => {
     await user.clear(screen.getByLabelText("Server"));
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(sent(env, "UpdateAccount")).toHaveLength(1);
+      expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
     });
-    expect(sent(env, "UpdateAccount")[0]?.config.sieve).toEqual({
+    expect(requestsOf(env, "UpdateAccount")[0]?.config.sieve).toEqual({
       enabled: true,
       host: null,
       port: null,
@@ -109,7 +105,7 @@ describe("vacation-editor", () => {
     await user.type(within(section).getByLabelText("Also my addresses"), "me@work.example");
     await user.click(within(section).getByRole("button", { name: "Save" }));
     expect(await within(section).findByRole("status")).toHaveTextContent("Saved.");
-    expect(sent(env, "UpdateVacation")[0]).toMatchObject({
+    expect(requestsOf(env, "UpdateVacation")[0]).toMatchObject({
       account_id: "acc-work",
       settings: { enabled: true, body: "Back on Monday.", addresses: ["me@work.example"] },
     });

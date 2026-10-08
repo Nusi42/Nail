@@ -22,29 +22,20 @@ import { syncStoreFor } from "./features/sync/store";
 import { NodeView, WindowView } from "./layout/LayoutRenderer";
 import { WindowLayer, tabbables } from "./layout/WindowLayer";
 import { compileTheme } from "./theme/compile";
-import { createEnv, renderWithProviders, stubElementSizes, widget, type Env } from "./test/harness";
+import {
+  createEnv,
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+  stubElementSizesEachTest,
+} from "./test/harness";
 import { must } from "./test/must";
+import { snoozeForADay } from "./test/env";
+import { INBOX } from "./test/mockIds";
 
-const INBOX = "acc-personal/Inbox";
-
-let restoreSizes: () => void;
 beforeAll(() => Promise.all([loadHtmlEditor(), loadMarkdownEditor()]));
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
-
-/** Waits until queries settled (nothing busy) and effects ran. */
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
+stubElementSizesEachTest();
 
 function mailEnv(): Env {
   const env = createEnv({
@@ -99,7 +90,7 @@ describe("axe: windows of the default layout", () => {
       const env = mailEnv();
       if (tabKey !== "") env.store.getState().setActiveTab(tabKey, tab);
       const { container } = renderWithProviders(<WindowView layout={layout} name={name} />, env);
-      await settle(env);
+      await settleQueries(env, 20);
       // Only the shown tab: hidden panels are out of the accessibility tree anyway.
       const scope =
         tabKey === ""
@@ -132,7 +123,7 @@ describe("axe: dialogs", () => {
       env.store.getState().openWindow(name);
     });
     const { container } = renderWithProviders(<WindowLayer layout={layout} />, env, { layout });
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });
@@ -164,15 +155,7 @@ describe("axe: M2c widgets", () => {
           { type: "MarkJunk", message_ids: [message.id], junk: true },
           "Queued",
         );
-        await env.client.request(
-          {
-            type: "SnoozeMessages",
-            message_ids: [message.id],
-            until: new Date(Date.now() + 86_400_000).toISOString(),
-            wake_folder_id: null,
-          },
-          "Queued",
-        );
+        await snoozeForADay(env, message.id);
         env.store.getState().selectMessage(message.id);
       }
       const { container } = renderWithProviders(
@@ -182,7 +165,7 @@ describe("axe: M2c widgets", () => {
         </>,
         env,
       );
-      await settle(env);
+      await settleQueries(env, 20);
       expect(container.querySelector("[data-part]")).not.toBeNull();
       expect(await violations(container)).toEqual([]);
       // The editors are large trees for axe in jsdom: past 20 s under load.
@@ -220,7 +203,7 @@ describe("axe: context menu, composer modes and login", () => {
     const env = mailEnv();
     richStoreFor(env.store).setState({ mode, html: "<p>Hi</p>", markdown: "Hi" });
     const { container } = renderWithProviders(<NodeView node={widget("composer")} path="t" />, env);
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   });
 
@@ -249,7 +232,7 @@ describe("keyboard and motion", () => {
     });
     renderWithProviders(<WindowLayer layout={layout} />, env);
     const dialog = await screen.findByRole("dialog");
-    await settle(env);
+    await settleQueries(env, 20);
     const items = tabbables(dialog);
     expect(items.length).toBeGreaterThan(0);
     const first = must(items[0]);

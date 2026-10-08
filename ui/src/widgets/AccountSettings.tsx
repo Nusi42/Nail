@@ -22,6 +22,7 @@ import {
   Section,
   TextAreaField,
   TextField,
+  withOptions,
 } from "./forms";
 
 /** A new, empty identity for an account. */
@@ -210,6 +211,26 @@ function NoticeView({ part, notice }: { part: string; notice: Notice }) {
 
 export { NoticeView };
 
+/**
+ * Runs one write at a time: busy meanwhile, then the notice of its outcome
+ * (the id of the success text it answers, or the error's text).
+ */
+export function useNoticeRun(setMessage: (notice: Notice) => void) {
+  const [busy, setBusy] = useState(false);
+  const run = async (work: () => Promise<string>) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      setMessage({ id: await work(), error: false });
+    } catch (e) {
+      setMessage({ id: errorMessageIdOf(e), error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, run };
+}
+
 function AccountForm({
   account,
   onRemoved,
@@ -224,7 +245,7 @@ function AccountForm({
   const queryClient = useQueryClient();
   const [config, setConfig] = useState(account);
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useNoticeRun(setMessage);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const problems = accountProblems(config);
 
@@ -234,18 +255,6 @@ function AccountForm({
       queryClient.invalidateQueries({ queryKey: queryKeys.accounts }),
       queryClient.invalidateQueries({ queryKey: queryKeys.allIdentities }),
     ]);
-
-  const run = async (work: () => Promise<string>) => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      setMessage({ id: await work(), error: false });
-    } catch (e) {
-      setMessage({ id: errorMessageIdOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const save = (event: SubmitEvent) => {
     event.preventDefault();
@@ -333,10 +342,7 @@ function AccountForm({
           min={30}
           value={incoming.options.poll_interval_secs}
           onChange={(v) => {
-            setConfig({
-              ...config,
-              incoming: { ...incoming, options: { ...incoming.options, poll_interval_secs: v } },
-            });
+            setConfig({ ...config, incoming: withOptions(incoming, { poll_interval_secs: v }) });
           }}
         />
       )}
@@ -349,10 +355,7 @@ function AccountForm({
             min={10}
             value={incoming.options.poll_interval_secs}
             onChange={(v) => {
-              setConfig({
-                ...config,
-                incoming: { ...incoming, options: { ...incoming.options, poll_interval_secs: v } },
-              });
+              setConfig({ ...config, incoming: withOptions(incoming, { poll_interval_secs: v }) });
             }}
           />
           <NumberField
@@ -363,10 +366,7 @@ function AccountForm({
             onChange={(v) => {
               setConfig({
                 ...config,
-                incoming: {
-                  ...incoming,
-                  options: { ...incoming.options, max_poll_interval_secs: v },
-                },
+                incoming: withOptions(incoming, { max_poll_interval_secs: v }),
               });
             }}
           />
@@ -512,7 +512,7 @@ function AccountForm({
           data-variant="primary"
           disabled={busy || problems.length > 0}
         >
-          {t("settings-save")}
+          {t("common-save")}
         </button>
         {!confirmRemove ? (
           <button
@@ -540,7 +540,7 @@ function AccountForm({
               disabled={busy}
               onClick={() => void remove()}
             >
-              {t("settings-remove-yes")}
+              {t("common-remove")}
             </button>
             <button
               type="button"
@@ -550,7 +550,7 @@ function AccountForm({
                 setConfirmRemove(false);
               }}
             >
-              {t("settings-cancel")}
+              {t("common-cancel")}
             </button>
           </span>
         )}

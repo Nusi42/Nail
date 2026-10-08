@@ -15,7 +15,7 @@ import type {
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { Problem, problemOf, useChangeContext } from "./common";
+import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { pimWrite, useAddressBooks, useCalendars } from "./queries";
 import { usePim, usePimStore } from "./store";
 import { nonEmpty } from "../../text/empty";
@@ -132,7 +132,7 @@ export function ImportDialog({ close }: DialogProps) {
       <p data-part="pim.import.intro">{t("pim-import-intro")}</p>
       <div data-part="form.field" data-field="file">
         <label data-part="form.label" htmlFor={ids.file}>
-          {t("pim-import-file")}
+          {t("common-file")}
         </label>
         <input
           id={ids.file}
@@ -210,11 +210,7 @@ export function ImportDialog({ close }: DialogProps) {
                   setBookId(e.target.value);
                 }}
               >
-                {writableBooks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.role === "collected" ? t("pim-book-collected") : b.settings.name}
-                  </option>
-                ))}
+                <BookOptions books={writableBooks} />
               </select>
             </div>
           )}
@@ -239,11 +235,11 @@ export function ImportDialog({ close }: DialogProps) {
             disabled={busy}
             onClick={() => void run()}
           >
-            {t("pim-import-run")}
+            {t("common-import")}
           </button>
         )}
         <button type="button" data-part="form.button" onClick={close}>
-          {result ? t("pim-close") : t("pim-cancel")}
+          {result ? t("common-close") : t("common-cancel")}
         </button>
       </div>
     </div>

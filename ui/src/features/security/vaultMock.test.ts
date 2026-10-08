@@ -15,8 +15,7 @@ import {
   simulatePinRequest,
   smartcardSettingsIssue,
 } from "./vaultMock";
-
-const MODULE = "C:\\Windows\\System32\\opensc-pkcs11.dll";
+import { PKCS11_MODULE } from "../../test/mockIds";
 
 function transport() {
   const t = new MockTransport();
@@ -130,7 +129,7 @@ describe("recovery key and smartcard mock", () => {
     const { t, events } = transport();
     const settings = {
       modules: [
-        { path: MODULE, name: null, enabled: true },
+        { path: PKCS11_MODULE, name: null, enabled: true },
         { path: "C:\\missing\\vendor.dll", name: "Vendor", enabled: true },
       ],
       pin_cache_minutes: 5,
@@ -145,7 +144,7 @@ describe("recovery key and smartcard mock", () => {
     expect(listed.problems).toMatchObject([{ error: "module-not-found" }]);
     const token = listed.tokens[0];
     expect(token?.objects.length).toBeGreaterThan(0);
-    const ref = { module: MODULE, token_serial: token?.serial ?? "", object_id: "01" };
+    const ref = { module: PKCS11_MODULE, token_serial: token?.serial ?? "", object_id: "01" };
     const used = await t.send({ type: "UseSmartcardKey", key: ref, technology: "smime" });
     expect(used).toMatchObject({
       type: "Key",

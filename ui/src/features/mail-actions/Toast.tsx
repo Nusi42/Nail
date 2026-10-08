@@ -123,14 +123,14 @@ export function MailActionToast() {
             void undoLast({ client, store, queryClient }, batchId);
           }}
         >
-          {t("mail-actions-undo")}
+          {t("common-undo")}
         </button>
       )}
       <button
         type="button"
         data-part="mail-actions.toast.dismiss"
-        aria-label={t("mail-actions-dismiss")}
-        title={t("mail-actions-dismiss")}
+        aria-label={t("common-dismiss")}
+        title={t("common-dismiss")}
         onClick={dismiss}
       >
         <Icon name="x" part="mail-actions.toast.dismiss.icon" />

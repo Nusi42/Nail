@@ -10,13 +10,11 @@
  * asks for a fresh preview first.
  */
 import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
 import type {
   DiagnosticsBundle,
   DiagnosticsItem,
   DiagnosticsManifest,
   DiagnosticsOptions,
-  LocalizedMessage,
   MessageId,
 } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
@@ -42,6 +40,8 @@ import {
 import { DIAGNOSTICS_DIALOG } from "./names";
 import { PathField, useSavePath } from "./PathField";
 import { usePortabilityState } from "./store";
+import { useBusyAction } from "../../state/busyAction";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** `nail_api::diagnostics::DIAGNOSTICS_MANIFEST_ENTRY`. */
 const MANIFEST_ENTRY = "manifest.json";
@@ -129,8 +129,7 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
   // `overwrite`: the Save dialog confirmed replacing an existing file.
   const { path, overwrite, onChange: setPath } = useSavePath();
   const [bundle, setBundle] = useState<DiagnosticsBundle | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const issues = diagnosticsIssues(options);
   const mail = options.items.some(diagnosticsIsMail);
   const candidates: MessageId[] = [
@@ -146,15 +145,9 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
   };
 
   const guarded = async (work: () => Promise<void>) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await work();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const showPreview = () =>
@@ -179,7 +172,7 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
     <div data-part="diagnostics" data-state={bundle ? "saved" : preview ? "previewed" : "options"}>
       <p data-part="wizard.intro">{t("portability-diagnostics-intro")}</p>
       <CheckGroup<DiagnosticsItem>
-        legend={t("portability-diagnostics-items")}
+        legend={t("portability-backup-items")}
         field="items"
         selected={options.items}
         onChange={(items) => {
@@ -262,7 +255,7 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
       {bundle && (
         <section data-part="diagnostics.saved" role="status">
           <p data-part="diagnostics.saved.text">
-            {t("portability-diagnostics-saved", {
+            {t("common-saved-to-path", {
               path: bundle.path,
               size: formatBytes(bundle.size_bytes, locale),
             })}
@@ -299,11 +292,7 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
             {t("portability-diagnostics-save")}
           </button>
         )}
-        {close && (
-          <button type="button" data-part="form.button" data-action="close" onClick={close}>
-            {t("portability-close")}
-          </button>
-        )}
+        {close && <CloseButton onClose={close} action="close" />}
       </WizardButtons>
     </div>
   );

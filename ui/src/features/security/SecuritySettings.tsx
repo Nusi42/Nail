@@ -90,7 +90,7 @@ function Vault() {
             data-part="security-vault.bar"
             max={100}
             value={percent}
-            aria-label={t("security-vault-progress-label")}
+            aria-label={t("common-progress")}
           />
           <span data-part="security-vault.phase">
             {status.phase
@@ -116,7 +116,7 @@ function Vault() {
             data-action="vault-retry"
             onClick={() => void set(status.state === "encrypting")}
           >
-            {t("security-vault-retry")}
+            {t("common-try-again")}
           </button>
         </div>
       )}

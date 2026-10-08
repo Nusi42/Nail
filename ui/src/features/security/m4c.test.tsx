@@ -8,7 +8,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -19,8 +19,8 @@ import { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
 import { handleSecurityEvent } from ".";
 import { closePinPrompt, simulateLostVaultKey, simulatePinRequest } from "./vaultMock";
 import { must } from "../../test/must";
-
-const MODULE = "C:\\Windows\\System32\\opensc-pkcs11.dll";
+import { stubPrintEachTest } from "../../test/env";
+import { PKCS11_MODULE } from "../../test/mockIds";
 
 function listen(env: Env): () => void {
   return env.client.subscribe((event) => {
@@ -41,14 +41,24 @@ function render(env: Env, nodes: React.ReactNode) {
   );
 }
 
-let print: ReturnType<typeof vi.fn>;
-beforeEach(() => {
-  print = vi.fn(() => window.dispatchEvent(new Event("afterprint")));
-  window.print = print as unknown as typeof window.print;
-});
+const printed = stubPrintEachTest();
 afterEach(() => {
   delete document.documentElement.dataset.nailMode;
 });
+
+/** The smartcard PIN dialog for a request the core sends (`over` changes it). */
+async function pinDialog(over?: Parameters<typeof simulatePinRequest>[1]) {
+  const env = createEnv();
+  const stop = listen(env);
+  const user = userEvent.setup({ delay: null });
+  render(env, null);
+  let prompt = { prompt_id: "" };
+  act(() => {
+    prompt = simulatePinRequest(env.transport, over);
+  });
+  const dialog = await screen.findByRole("dialog", { name: "Smartcard PIN" });
+  return { env, stop, user, prompt, dialog };
+}
 
 describe("recovery key", () => {
   it("is offered only for encrypted data", async () => {
@@ -81,7 +91,7 @@ describe("recovery key", () => {
     expect(within(dialog).getByRole("button", { name: "Copied" })).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
     await waitFor(() => {
-      expect(print).toHaveBeenCalled();
+      expect(printed.spy).toHaveBeenCalled();
     });
     expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
     await user.click(within(dialog).getByRole("checkbox", { name: /I have written down/ }));
@@ -232,7 +242,7 @@ describe("smartcards", () => {
   it("configures modules, lists cards and uses a key", async () => {
     const env = createEnv();
     env.transport.data.features.portability.desktop = true;
-    env.transport.data.features.portability.pickAnswers = [MODULE];
+    env.transport.data.features.portability.pickAnswers = [PKCS11_MODULE];
     const stop = listen(env);
     const user = userEvent.setup({ delay: null });
     const { container } = render(env, <NodeView node={widget("security-smartcards")} path="t" />);
@@ -253,7 +263,7 @@ describe("smartcards", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Ada's YubiKey")).toBeVisible();
     expect(env.transport.data.features.vault.smartcards).toEqual({
-      modules: [{ path: MODULE, name: null, enabled: true }],
+      modules: [{ path: PKCS11_MODULE, name: null, enabled: true }],
       pin_cache_minutes: 15,
     });
     expect(await violations(container)).toEqual([]);
@@ -319,15 +329,8 @@ describe("PIN dialog", () => {
   });
 
   it("cancels and says why the core stopped waiting", async () => {
-    const env = createEnv();
-    const stop = listen(env);
-    const user = userEvent.setup({ delay: null });
-    render(env, null);
-    let prompt = { prompt_id: "" };
-    act(() => {
-      prompt = simulatePinRequest(env.transport, { attempts_left: 1 });
-    });
-    const dialog = await screen.findByRole("dialog", { name: "Smartcard PIN" });
+    const { env, stop, user, dialog, ...first } = await pinDialog({ attempts_left: 1 });
+    let prompt = first.prompt;
     expect(within(dialog).getByText("Last attempt: a wrong PIN locks the card.")).toBeVisible();
     act(() => {
       closePinPrompt(env.transport, prompt.prompt_id, "token-removed");
@@ -354,15 +357,7 @@ describe("PIN dialog", () => {
   });
 
   it("cancels a waiting prompt when the dialog is closed", async () => {
-    const env = createEnv();
-    const stop = listen(env);
-    const user = userEvent.setup({ delay: null });
-    render(env, null);
-    let prompt = { prompt_id: "" };
-    act(() => {
-      prompt = simulatePinRequest(env.transport);
-    });
-    const dialog = await screen.findByRole("dialog", { name: "Smartcard PIN" });
+    const { env, stop, user, prompt, dialog } = await pinDialog();
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(env.transport.requests).toContainEqual({

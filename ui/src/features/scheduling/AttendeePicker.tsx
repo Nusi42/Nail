@@ -9,7 +9,7 @@
  * uses the same picker on its own and then opens the PIM event editor with
  * the people and the chosen time.
  */
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import type {
   Attendee,
   AttendeeKind,
@@ -39,11 +39,15 @@ import { openNewEvent } from "../pim/newEvent";
 import { useContactSearch } from "../pim/queries";
 import { pimStoreFor } from "../pim/store";
 import { FreeBusyTimeline } from "./FreeBusyTimeline";
-import { isMine, plausibleEmail, type Span } from "./model";
+import { isMine, type Span } from "./model";
 import { useScheduling, useSchedulingStore } from "./store";
 import { useMyAddresses } from "./queries";
 import { fromAbsolute } from "@internationalized/date";
 import { nonEmpty } from "../../text/empty";
+import { RemoveButton } from "../../widgets/RemoveButton";
+import { plausibleEmail } from "../../state/addresses";
+import { CloseButton } from "../../widgets/CloseButton";
+import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 
 /** Kinds the picker offers (`CUTYPE`). */
 export const PICKER_KINDS = [
@@ -108,7 +112,6 @@ export function AttendeePicker({
   const mine = useMyAddresses();
   const [email, setEmail] = useState("");
   const [kind, setKind] = useState<AttendeeKind>("individual");
-  const [query, setQuery] = useState("");
   const [invalid, setInvalid] = useState(false);
   const startDay =
     start.type === "date"
@@ -120,14 +123,7 @@ export function AttendeePicker({
     setLastStart(startDay);
     setDay(startDay);
   }
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setQuery(email.trim().length >= 2 ? email.trim() : "");
-    }, 150);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [email]);
+  const query = useDebounced(email.trim().length >= 2 ? email.trim() : "", TYPING_PAUSE_MS);
   const matches = useContactSearch(query, null);
 
   const add = (address: string, display: string | null) => {
@@ -182,7 +178,7 @@ export function AttendeePicker({
           >
             <span data-part="scheduling.attendee.name">
               {attendee.name
-                ? t("invitation-person", { name: attendee.name, email: attendee.email })
+                ? t("common-name-email", { name: attendee.name, email: attendee.email })
                 : attendee.email}
               {isMine(attendee.email, mine) && (
                 <span data-part="scheduling.attendee.me">{t("scheduling-attendee-me")}</span>
@@ -212,24 +208,19 @@ export function AttendeePicker({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove"
-              aria-label={t("scheduling-attendee-remove", { email: attendee.email })}
-              onClick={() => {
+            <RemoveButton
+              label={t("common-remove-attendee", { email: attendee.email })}
+              onRemove={() => {
                 onChange(value.filter((_, i) => i !== index));
               }}
-            >
-              {t("scheduling-remove")}
-            </button>
+            />
           </li>
         ))}
       </ul>
       <div data-part="scheduling.attendee-add">
         <div data-part="form.field" data-field="attendee-email">
           <label data-part="form.label" htmlFor={`${id}-email`}>
-            {t("scheduling-attendee-email")}
+            {t("common-email-address-short")}
           </label>
           <input
             id={`${id}-email`}
@@ -253,7 +244,7 @@ export function AttendeePicker({
         </div>
         <div data-part="form.field" data-field="attendee-kind">
           <label data-part="form.label" htmlFor={`${id}-kind`}>
-            {t("scheduling-attendee-kind")}
+            {t("common-kind")}
           </label>
           <select
             id={`${id}-kind`}
@@ -278,7 +269,7 @@ export function AttendeePicker({
             add(email, null);
           }}
         >
-          {t("scheduling-attendee-add")}
+          {t("common-add")}
         </button>
       </div>
       {invalid && (
@@ -287,7 +278,7 @@ export function AttendeePicker({
         </p>
       )}
       {suggestions.length > 0 && (
-        <ul data-part="scheduling.suggestions" aria-label={t("scheduling-attendee-suggestions")}>
+        <ul data-part="scheduling.suggestions" aria-label={t("common-attendee-suggestions")}>
           {suggestions.map((s) => (
             <li key={`${s.id}-${s.address}`} data-part="scheduling.suggestion">
               <button
@@ -297,7 +288,7 @@ export function AttendeePicker({
                   add(s.address, s.name);
                 }}
               >
-                {t("invitation-person", { name: s.name, email: s.address })}
+                {t("common-name-email", { name: s.name, email: s.address })}
               </button>
             </li>
           ))}
@@ -473,14 +464,11 @@ export function FreeBusyWidget({ node, nodeKey }: WidgetProps) {
 
 /** Dialog `scheduling-find-time`. */
 export function FindTimeDialog({ close }: DialogProps) {
-  const t = useT();
   return (
     <div data-part="scheduling.dialog" data-dialog="find-time">
       <FindTime nodeKey="find-time-dialog" onOpened={close} />
       <div data-part="scheduling.dialog.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("scheduling-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     </div>
   );

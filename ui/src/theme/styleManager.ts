@@ -9,6 +9,7 @@
  * re-parsing the theme, and re-inserted after each theme swap.
  */
 import { cssString, isSafeValue } from "./compile";
+import { PROPERTY_RE } from "./compile";
 
 export type Declarations = Record<string, string>;
 
@@ -16,8 +17,6 @@ interface GeometryRule {
   declarations: Declarations;
   rule: CSSStyleRule | null;
 }
-
-const PROPERTY_RE = /^-?[a-z][a-z0-9-]*$/;
 
 /** Selector of a geometry rule. */
 export function geometrySelector(id: string): string {

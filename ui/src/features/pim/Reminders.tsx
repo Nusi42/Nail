@@ -116,7 +116,7 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
         <Problem message={problem} />
         <div data-part="pim.toast.actions">
           <button type="button" data-part="form.button" onClick={open}>
-            {t("pim-reminder-open")}
+            {t("common-open")}
           </button>
           <label data-part="form.label" htmlFor={select}>
             {t("pim-reminder-snooze-for")}
@@ -145,7 +145,7 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
               void act(() => snoozeReminders(ctx, [r.id], snoozeUntil(choice, Date.now(), tz)))
             }
           >
-            {t("pim-reminder-snooze")}
+            {t("common-snooze")}
           </button>
           <button
             type="button"
@@ -154,7 +154,7 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
             data-variant="primary"
             onClick={() => void act(() => dismissReminders(ctx, [r.id]))}
           >
-            {t("pim-reminder-dismiss")}
+            {t("common-dismiss")}
           </button>
         </div>
       </div>
@@ -178,7 +178,7 @@ function ProblemToast({ toast }: { toast: Extract<PimToast, { kind: "problem" }>
             dismissToast(toast.id);
           }}
         >
-          {t("pim-close")}
+          {t("common-close")}
         </button>
       </div>
     </li>
@@ -197,7 +197,7 @@ export function PimToasts() {
   return (
     <>
       <ReminderStartup />
-      <section data-part="pim.toasts" aria-label={t("pim-toasts-label")}>
+      <section data-part="pim.toasts" aria-label={t("pim-alarms-legend")}>
         {reminders.length > 1 && (
           <button
             type="button"

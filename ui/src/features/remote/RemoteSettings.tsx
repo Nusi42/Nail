@@ -366,7 +366,7 @@ function SettingsForm({
         />
       </fieldset>
       {shown.length > 0 && (
-        <ul data-part="remote-settings.issues" aria-label={t("remote-settings-issues")}>
+        <ul data-part="remote-settings.issues" aria-label={t("common-problems")}>
           {shown.map((issue) => (
             <li key={issue} data-part="remote-settings.issue" data-issue={issue}>
               {t(`remote-issue-${issue}`)}
@@ -382,7 +382,7 @@ function SettingsForm({
           data-action="save-remote-settings"
           disabled={busy || !dirty || issues.length > 0}
         >
-          {t("remote-settings-save")}
+          {t("common-save")}
         </button>
         <button
           type="button"
@@ -397,7 +397,7 @@ function SettingsForm({
             setServerIssue(null);
           }}
         >
-          {t("remote-settings-reset")}
+          {t("common-undo-changes")}
         </button>
       </div>
       {notice && (

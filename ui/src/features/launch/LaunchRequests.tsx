@@ -121,7 +121,7 @@ export function LaunchRequests() {
           setNotice(null);
         }}
       >
-        {t("launch-dismiss")}
+        {t("common-dismiss")}
       </button>
     </div>
   );

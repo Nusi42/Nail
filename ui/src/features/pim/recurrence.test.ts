@@ -5,6 +5,7 @@ import {
   defaultRule,
   describe as describeRule,
   recurrenceOf,
+  plainRule,
   ruleOf,
   simpleOf,
   untilFor,
@@ -14,20 +15,7 @@ import {
 import { objectContaining } from "../../test/matchers";
 
 const START: PimTime = { type: "zoned", local: "2026-10-01T09:00:00", tz: "Europe/Berlin" };
-const BASE: Omit<RecurrenceRule, "freq"> = {
-  interval: 1,
-  end: { type: "never" },
-  by_second: [],
-  by_minute: [],
-  by_hour: [],
-  by_day: [],
-  by_month_day: [],
-  by_year_day: [],
-  by_week_no: [],
-  by_month: [],
-  by_set_pos: [],
-  week_start: null,
-};
+const BASE: Omit<RecurrenceRule, "freq"> = plainRule("daily");
 
 describe("recurrence editor model", () => {
   it("knows weekdays and their ordinals", () => {

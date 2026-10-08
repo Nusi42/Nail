@@ -20,7 +20,7 @@ import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { SelectField } from "../../widgets/forms";
-import { ConfirmButton, InputField, Toggle } from "./fields";
+import { ConfirmButton, InputField, Toggle, AccessPresetField, RenameActions } from "./fields";
 import { MIN_PASSWORD_LENGTH, PRESETS, extrasOf, formatTime, presetGrant, presetOf } from "./model";
 import { PAIR_DIALOG } from "./PairDevice";
 import { QrCode } from "./QrCode";
@@ -116,15 +116,7 @@ function CreateUser({ onCreated }: { onCreated: (id: RemoteUserId) => void }) {
         value={displayName}
         onChange={setDisplayName}
       />
-      <SelectField
-        labelId="remote-access"
-        name="user-access"
-        value={preset}
-        onChange={(v) => {
-          setPreset(v as RemoteAccessPreset);
-        }}
-        choices={PRESETS.map((p) => ({ value: p, label: `remote-preset-${p}` }))}
-      />
+      <AccessPresetField name="user-access" preset={preset} onChange={setPreset} />
       <Toggle labelId="remote-access-admin" name="user-admin" checked={admin} onChange={setAdmin} />
       <button
         type="submit"
@@ -200,7 +192,7 @@ function Access({ user }: { user: RemoteUser }) {
         disabled={busy || !dirty}
         onClick={save}
       >
-        {t("remote-user-access-save")}
+        {t("common-save-access")}
       </button>
       <NoticeLine notice={notice} />
     </fieldset>
@@ -422,7 +414,7 @@ function Totp({ user }: { user: RemoteUser }) {
                 setNotice(null);
               }}
             >
-              {t("remote-cancel")}
+              {t("common-cancel")}
             </button>
           </div>
         </form>
@@ -460,7 +452,7 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
               created: formatTime(passkey.created_at, locale),
               used:
                 passkey.last_used_at === null
-                  ? t("remote-never")
+                  ? t("common-never-inline")
                   : formatTime(passkey.last_used_at, locale),
             })}
           </span>
@@ -473,7 +465,7 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
               setName(passkey.name);
             }}
           >
-            {t("remote-rename")}
+            {t("common-rename")}
           </button>
           <ConfirmButton
             labelId="remote-passkey-delete"
@@ -500,24 +492,12 @@ function PasskeyRow({ passkey }: { passkey: Passkey }) {
             onChange={setName}
             focusOnMount
           />
-          <button
-            type="submit"
-            data-part="form.button"
-            data-action="save-name"
+          <RenameActions
             disabled={busy || name.trim() === ""}
-          >
-            {t("remote-save")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="cancel"
-            onClick={() => {
+            onCancel={() => {
               setName(null);
             }}
-          >
-            {t("remote-cancel")}
-          </button>
+          />
         </form>
       )}
       <NoticeLine notice={notice} />
@@ -546,7 +526,7 @@ function UserDetail({ user }: { user: RemoteUser }) {
           created: formatTime(user.created_at, locale),
           login:
             user.last_login_at === null
-              ? t("remote-never")
+              ? t("common-never-inline")
               : formatTime(user.last_login_at, locale),
         })}
       </p>

@@ -25,9 +25,9 @@
 
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 import { CONTROL_WIDTH_VAR } from "../../theme/skin";
+import { p } from "../../theme/selectors";
+import { QUIET_BUTTON, QUIET_HOVER, SECTION_LABEL } from "../../theme/declarations";
 
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
 /** A part inside the settings page's cards. */
 const inCard = (part: string) => `${p("settings-page.card")} ${p(part)}`;
 
@@ -88,7 +88,7 @@ ${p("settings-page.nav")} {
 }
 ${p("settings-page.content")} { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 ${p("settings-page.header")} { display: grid; gap: ${T.xxs}; padding: ${T.xl} ${T.xxl} ${T.md}; }
-${p("settings-page.breadcrumb")} { font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted}; }
+${p("settings-page.breadcrumb")} { ${SECTION_LABEL} }
 ${p("settings-page.title")} { margin: 0; font-family: ${T.fontDisplay}; font-size: ${T.title}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("settings-page.title")}:focus { outline: none; }
 ${p("settings-page.title")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
@@ -118,15 +118,14 @@ ${p("settings-page.search.input")}::-webkit-search-cancel-button { display: none
 ${p("settings-page.search.clear")} {
   display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
   width: calc(${T.control} - ${T.sm}); height: calc(${T.control} - ${T.sm}); padding: 0;
-  border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent;
+  ${QUIET_BUTTON}
 }
-${p("settings-page.search.clear")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("settings-page.search.clear")}:hover { ${QUIET_HOVER} }
 ${p("settings-page.search.clear")}:focus-visible { ${focusRing} }
 ${p("settings-page.search.clear.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("settings-page.group")} { display: grid; gap: ${T.xxs}; }
 ${p("settings-page.group.label")} {
-  padding: ${T.md} ${T.md} ${T.xs}; font-size: ${T.label}; font-weight: ${T.semibold};
-  letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted};
+  padding: ${T.md} ${T.md} ${T.xs}; ${SECTION_LABEL}
 }
 ${p("settings-page.group.list")}, ${p("settings-page.results")}, ${p("settings-page.result.settings")} {
   display: grid; gap: ${T.xxs}; margin: 0; padding: 0; list-style: none;
@@ -213,8 +212,11 @@ ${p("settings-page.card")} > ${p("appearance")} { max-width: none; padding: 0; o
  * P1 (WP191): the page measures its own width, not the viewport's — a
  * narrow window, a pop-out or the rail beside it make it narrow too.
  */
+/** Below this content width the settings cards stack their columns. */
+const ONE_COLUMN = "40rem";
+
 const NARROW = `${p("settings-page.content")} { container: nail-settings-content / inline-size; }
-@container nail-settings-content (max-width: 40rem) {
+@container nail-settings-content (max-width: ${ONE_COLUMN}) {
   ${p("settings-page.header")} { padding: ${T.lg} ${T.lg} ${T.sm}; }
   ${p("settings-page.body")} { padding: ${T.xs} ${T.lg} ${T.xl}; }
 }

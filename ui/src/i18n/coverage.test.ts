@@ -47,6 +47,7 @@ import * as layoutEditorMessages from "../features/layout-editor/messages";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
 import { must } from "../test/must";
+import { sourceFiles } from "../test/sourceFiles";
 
 /** Each feature slot lists its own message prefixes and runtime ids. */
 const FEATURE_MESSAGES = [
@@ -81,18 +82,8 @@ const srcDir = resolve(process.cwd(), "src");
 const repoDir = resolve(process.cwd(), "..");
 const localesDir = join(repoDir, "locales");
 
-function sources(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name !== "generated" && entry.name !== "test") out.push(...sources(path));
-    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
-      out.push(path);
-    }
-  }
-  return out;
-}
+const sources = (dir: string) =>
+  sourceFiles(dir, { include: /\.tsx?$/, exclude: /\.test\.tsx?$/, skipDirs: ["test"] });
 
 function catalogIds(locale: string): Set<string> {
   const ids = new Set<string>();
@@ -129,6 +120,7 @@ const PREFIXES = [
   "toolbar-",
   "layout-",
   "app-",
+  "common-",
   "launch-",
   ...FEATURE_MESSAGES.flatMap((m) => m.prefixes),
 ];

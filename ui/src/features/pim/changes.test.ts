@@ -1,5 +1,4 @@
 import { QueryClient } from "@tanstack/react-query";
-import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import type { EventInstance } from "../../api/generated";
 import { TransportClient } from "../../api/client";
 import { MockTransport } from "../../api/mock";
@@ -16,20 +15,11 @@ import { candidates, defaultChoice, mergedFields } from "./merge";
 import { SCOPE_DIALOG } from "./names";
 import { pimStoreFor } from "./store";
 import { stringMatching } from "../../test/matchers";
+import { inTimeZone } from "../../test/env";
+import { must } from "../../test/must";
+import { BERLIN } from "../../test/mockIds";
 
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing test data");
-  return value;
-}
-
-const BERLIN = "Europe/Berlin";
-beforeAll(() => {
-  setLocalTimeZone(BERLIN);
-});
-afterAll(() => {
-  resetLocalTimeZone();
-});
+inTimeZone(BERLIN);
 
 function instanceOf(over: Partial<EventInstance>): EventInstance {
   return {

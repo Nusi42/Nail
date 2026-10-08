@@ -134,7 +134,7 @@ export function DateTimeInput({
             }}
           >
             <Icon name="calendar" part="pim.datetime.pick.icon" />
-            <span data-part="pim.datetime.pick.label">{t("pim-datetime-pick-short")}</span>
+            <span data-part="pim.datetime.pick.label">{t("common-choose")}</span>
           </button>
           {time !== null && (
             <TimeField

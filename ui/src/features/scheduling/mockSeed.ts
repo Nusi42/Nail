@@ -27,6 +27,7 @@ import { emptyEventFields } from "../pim/defaults";
 import { answerPim } from "../pim/mock";
 import { dateString, localZone, makePimTime, todayIn } from "../pim/time";
 import { actionsFor, conflictsOf, type DemoPerson } from "./mock";
+import { plainRecurrence } from "../pim/recurrence";
 
 /** Message ids of the demo invitations. */
 export const DEMO_INVITATIONS = {
@@ -88,7 +89,8 @@ function saved(response: Response): CalendarEvent {
   return response.event;
 }
 
-function invitation(
+/** An invitation card with everything not in `partial` empty (a new iMIP card). */
+export function invitation(
   partial: Partial<Invitation> & Pick<Invitation, "message_id" | "method" | "uid" | "role">,
 ): Invitation {
   return {
@@ -246,27 +248,7 @@ export function seedSchedulingDemo(data: MockData, options: SeedOptions = {}): v
     organizer: GRACE,
     attendees: [attendee(GRACE, "accepted", "chair"), attendee(ADA_WORK, "needs-action")],
   });
-  const seriesRecurrence: CalendarEvent["recurrence"] = {
-    rules: [
-      {
-        freq: "weekly",
-        interval: 1,
-        end: { type: "count", count: 10 },
-        by_second: [],
-        by_minute: [],
-        by_hour: [],
-        by_day: [],
-        by_month_day: [],
-        by_year_day: [],
-        by_week_no: [],
-        by_month: [],
-        by_set_pos: [],
-        week_start: null,
-      },
-    ],
-    dates: [],
-    exceptions: [],
-  };
+  const seriesRecurrence = plainRecurrence("weekly", { end: { type: "count", count: 10 } });
   const series = saved(
     answerPim(core, {
       type: "CreateEvent",

@@ -194,7 +194,7 @@ export function ActionEditor({
                 onChange(moveItem(value, index, -1));
               }}
             >
-              {t("rules-move-up")}
+              {t("common-move-up")}
             </button>
             <button
               type="button"
@@ -205,7 +205,7 @@ export function ActionEditor({
                 onChange(moveItem(value, index, 1));
               }}
             >
-              {t("rules-move-down")}
+              {t("common-move-down")}
             </button>
             <button
               type="button"
@@ -215,7 +215,7 @@ export function ActionEditor({
                 onChange(value.filter((_, i) => i !== index));
               }}
             >
-              {t("rules-remove")}
+              {t("common-remove")}
             </button>
           </li>
         ))}
@@ -238,7 +238,7 @@ export function ActionEditor({
             onChange([...value, newAction(kind)]);
           }}
         >
-          {t("rules-add-action")}
+          {t("common-add-action")}
         </button>
       </div>
     </div>

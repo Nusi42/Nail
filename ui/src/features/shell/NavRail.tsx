@@ -35,23 +35,13 @@ import {
   railEntries,
   viewShortcuts,
 } from "./model";
+import { VERTICAL, moveRovingFocus } from "../../widgets/rovingFocus";
 
 const ITEM_SELECTOR = '[data-part="nav-rail.item"]:not(:disabled)';
 
 /** Up / Down / Home / End move focus between the rail's enabled buttons. */
 export function onRailKeyDown(event: KeyboardEvent<HTMLElement>): void {
-  const keys = ["ArrowUp", "ArrowDown", "Home", "End"];
-  if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
-  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR)];
-  if (buttons.length === 0) return;
-  const at = buttons.indexOf(event.target as HTMLButtonElement);
-  let next: number;
-  if (event.key === "Home") next = 0;
-  else if (event.key === "End") next = buttons.length - 1;
-  else if (at < 0) next = 0;
-  else next = (at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
-  event.preventDefault();
-  buttons[next]?.focus();
+  moveRovingFocus(event, ITEM_SELECTOR, VERTICAL);
 }
 
 interface ItemText {

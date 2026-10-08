@@ -1,6 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ActionContext } from "../../actions/registry";
 import type { Rule } from "../../api/generated";
 import { queryKeys } from "../../state/queries";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -10,6 +9,7 @@ import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
 import { must } from "../../test/must";
+import { actionContext } from "../../test/env";
 
 function setup(): Env {
   const env = createEnv();
@@ -265,20 +265,9 @@ describe("rule manager", () => {
 });
 
 describe("create rule from message", () => {
-  function ctxFor(env: Env): ActionContext {
-    return {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id) => id,
-      locale: "en",
-    };
-  }
-
   it("opens the rules window with a rule pre-filled from the selected message", async () => {
     const env = setup();
-    const ctx = ctxFor(env);
+    const ctx = actionContext(env);
     const handler = actions["rules.create-from-message"];
     expect(handler?.enabled?.(ctx, [])).toBe(false);
 
@@ -310,7 +299,7 @@ describe("create rule from message", () => {
 
   it("opens the rules window", () => {
     const env = setup();
-    void actions["rules.open"]?.run(ctxFor(env), []);
+    void actions["rules.open"]?.run(actionContext(env), []);
     expect(env.store.getState().windows).toEqual(["rules"]);
   });
 });

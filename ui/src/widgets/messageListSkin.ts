@@ -26,9 +26,8 @@
  * Colours: only `fg` / `fg-muted` / `border` on `bg` / `bg-subtle` and
  * `selection-fg` on `selection` — pairs `tests/theme_contrast.rs` checks.
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
+import { HC, p } from "../theme/selectors";
+import { HC_RING } from "../theme/declarations";
 
 const T = {
   fg: "var(--nail-color-fg)",
@@ -65,7 +64,6 @@ const CHILD = p("message-list.child");
 const CHILD_PAD = `calc(${T.row} * 5 / 6)`;
 const EXPANDER = p("message-list.row.expander");
 const COMPACT = [':root[data-nail-density="compact"]', `${p("app")}[data-density="compact"]`];
-const HC = ':root[data-nail-mode="high-contrast"]';
 
 export const MESSAGE_LIST_SKIN_CSS = `${p("message-list.row.count")} {
   flex: 0 0 auto; box-sizing: border-box; min-width: calc(${T.lg} + ${T.xs}); padding: 0 ${T.xs};
@@ -110,7 +108,7 @@ ${CHILD}:has(+ :not(${CHILD})) { border-bottom-color: ${T.border}; }
 ${CHILD}:hover { background-color: ${T.subtle}; }
 ${CHILD}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("message-list")}:focus-visible ${CHILD}[aria-selected="true"] { outline: 2px solid ${T.focus}; outline-offset: -2px; }
-${HC} ${p("message-list")}:focus-visible ${CHILD}[aria-selected="true"] { outline: 3px solid ${T.focus}; }
+${HC} ${p("message-list")}:focus-visible ${CHILD}[aria-selected="true"] { outline: ${HC_RING} solid ${T.focus}; }
 ${p("message-list.child.rail")} {
   justify-self: center; align-self: stretch; width: 2px; margin-block: calc(-1 * ${CHILD_PAD});
   border-radius: 1px; background-color: ${T.border};

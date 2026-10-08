@@ -46,13 +46,20 @@
  *
  * Everything sits on the 4 px grid (`space.*`); panes share `space.pane`.
  */
-
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
-/** Joined selectors of several parts. */
-const ps = (...parts: string[]) => parts.map(p).join(", ");
-/** Joined selectors of several parts, each with the same state suffix (`:hover`). */
-const pss = (suffix: string, ...parts: string[]) => parts.map((x) => p(x) + suffix).join(", ");
+import { HC, p, ps, pss } from "./selectors";
+import {
+  AVATAR_FG,
+  CAPS_TIGHT,
+  HC_RING,
+  initialsAvatar,
+  INITIALS_TRACKING,
+  INLINE_ROW,
+  QUIET_HOVER,
+  READER_MEASURE,
+  READER_NARROW,
+  SECTION_LABEL,
+  TINY_TEXT,
+} from "./declarations";
 
 /** Token shorthands (with derived fallbacks where the schema has none yet). */
 const T = {
@@ -134,6 +141,29 @@ export const AVATAR_COLORS = [
   "#1864ab",
 ] as const;
 
+/**
+ * File-type badge colours of attachment cards (`data-kind`; `other` for the
+ * rest), dark enough for white text like {@link AVATAR_COLORS}. A theme can
+ * replace any of them with `color "file-<kind>"`.
+ */
+export const FILE_COLORS = {
+  other: "#5c5f66",
+  pdf: "#c92a2a",
+  image: "#0b7285",
+  document: "#1864ab",
+  spreadsheet: "#2f7d3a",
+  archive: "#7048e8",
+  calendar: "#c2410c",
+} as const;
+
+const fileColors = Object.entries(FILE_COLORS)
+  .filter(([kind]) => kind !== "other")
+  .map(
+    ([kind, color]) =>
+      `${p("attachment-card.type")}[data-kind="${kind}"] { background-color: var(--nail-color-file-${kind}, ${color}); }`,
+  )
+  .join("\n");
+
 /** Stable small hash of a string (FNV-1a, 32 bit). */
 export function stableHash(text: string): number {
   let hash = 0x811c9dc5;
@@ -167,6 +197,13 @@ const avatarColors = AVATAR_COLORS.map(
     `${PALETTE_PARTS.map((part) => `[data-color="${String(i)}"]${p(part)}`).join(", ")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
 ).join("\n");
 
+/** A folder-pane row (folders, favourites, smart folders): icon, name, count. */
+const FOLDER_ROW = `display: grid; grid-template-columns: ${T.icon} minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
+  min-height: ${T.control}; padding: 0 ${T.sm}; border-radius: ${T.rSm}; font-size: ${T.body}; color: ${T.fg};`;
+
+/** Menus: as wide as their items, never wider than 30em or the window. */
+const MENU_MAX_WIDTH = `min(30em, calc(100vw - 2 * ${T.sm}))`;
+
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 
 const BUTTONS = `${p("form.button")} {
@@ -191,7 +228,7 @@ ${p("form.button")}[data-variant~="danger"]:hover { background-color: color-mix(
 ${p("form.button")}[data-variant~="ghost"] { border-color: transparent; background-color: transparent; }
 ${p("form.button")}[data-variant~="ghost"]:hover { background-color: ${T.raised}; }
 ${p("form.button")}[data-variant~="icon"] { width: ${T.control}; padding: 0; border-color: transparent; background-color: transparent; color: ${T.muted}; }
-${p("form.button")}[data-variant~="icon"]:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("form.button")}[data-variant~="icon"]:hover { ${QUIET_HOVER} }
 ${p("form.button")}[data-state~="selected"], ${p("form.button")}[aria-pressed="true"] {
   color: ${T.accent}; background-color: ${T.accentSoft}; border-color: transparent; font-weight: ${T.semibold};
 }
@@ -216,7 +253,7 @@ ${p("toolbar.separator")} { align-self: center; flex: 0 0 auto; width: 1px; heig
 ${p("toolbar.separator")}[data-wrap-edge="start"] { display: none; }
 ${p("toolbar.separator")}[data-wrap-edge="end"] { visibility: hidden; }
 ${p("window.close")} { display: inline-flex; align-items: center; justify-content: center; width: ${T.control}; height: ${T.control}; padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent; }
-${p("window.close")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("window.close")}:hover { ${QUIET_HOVER} }
 ${p("window.close")}:focus-visible { ${focusRing} }
 ${p("window.close.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} { width: ${T.icon}; height: ${T.icon}; }
@@ -329,7 +366,7 @@ ${p("badge")} {
 ${p("badge")}[data-tone="danger"] { color: ${T.bg}; background-color: ${T.danger}; }`;
 
 const MENUS = `${p("context-menu")} {
-  width: max-content; min-width: calc(16 * ${T.lg}); max-width: min(30em, calc(100vw - 2 * ${T.sm}));
+  width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
 }
 ${p("context-menu.list")} {
   display: grid; padding: ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rMd};
@@ -352,8 +389,7 @@ ${p("context-menu.item.shortcut")} { grid-column: 3; font-family: ${T.fontMono};
 ${p("context-menu.item.arrow")} { grid-column: 4; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("context-menu.separator")} { height: 1px; margin: ${T.xs} ${T.xs}; background-color: ${T.border}; }
 ${p("context-menu.header")} {
-  padding: ${T.sm} ${T.md} ${T.xxs}; font-size: ${T.label}; font-weight: ${T.semibold};
-  letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted};
+  padding: ${T.sm} ${T.md} ${T.xxs}; ${SECTION_LABEL}
 }`;
 
 const TABS = `${p("tabs.tab-list")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; padding: 0 ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
@@ -408,11 +444,7 @@ ${p("message-list.row.unread-dot")} {
   position: absolute; inset-inline-start: calc((${T.pane} - ${T.xs} - ${T.xxs} - 1px) / 2); inset-block-start: calc(${T.row} + ${T.md} + 1px);
   width: calc(${T.xs} + ${T.xxs} + 1px); height: calc(${T.xs} + ${T.xxs} + 1px); border-radius: 50%; background-color: var(--nail-skin-unread-dot);
 }
-${p("message-list.row.avatar")} {
-  display: grid; place-items: center; width: ${T.avatar}; height: ${T.avatar}; border-radius: 50%;
-  font-size: calc(${T.avatar} * 0.37); font-weight: ${T.semibold}; line-height: 1; letter-spacing: 0.02em;
-  color: var(--nail-color-avatar-fg, #ffffff); user-select: none;
-}
+${p("message-list.row.avatar")} { ${initialsAvatar(T.avatar, `calc(${T.avatar} * 0.37)`)} }
 ${p("message-list.row.body")} { display: grid; gap: ${T.xxs}; min-width: 0; }
 ${p("message-list.row.line")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: ${T.body}; line-height: ${T.normal}; }
 ${p("message-list.row.from")}, ${p("message-list.row.subject")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -436,12 +468,12 @@ const READER_SLOTS = [
 const READER = `${p("message-view")} { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable both-edges; background-color: ${T.bg}; }
 ${p("stack")}:has(> ${p("message-view")}) { container: nail-reader / inline-size; }
 ${ps(...READER_SLOTS)} {
-  box-sizing: border-box; width: min(68ch, 100% - 2 * ${T.xxl}); margin-inline: auto; margin-block-start: ${T.sm};
+  box-sizing: border-box; width: min(${READER_MEASURE}, 100% - 2 * ${T.xxl}); margin-inline: auto; margin-block-start: ${T.sm};
   font-family: ${T.fontUi};
 }
 ${p("message-view.column")} {
   display: flex; flex-direction: column; flex: 1 0 auto; gap: ${T.lg}; min-height: 0;
-  width: 100%; max-width: calc(68ch + 2 * ${T.xxl}); margin-inline: auto; padding: ${T.xl} ${T.xxl} 0;
+  width: 100%; max-width: calc(${READER_MEASURE} + 2 * ${T.xxl}); margin-inline: auto; padding: ${T.xl} ${T.xxl} 0;
   font-family: ${T.fontUi};
 }
 ${p("message-view.header")} { display: grid; gap: ${T.xs}; padding: 0; border: none; }
@@ -449,10 +481,10 @@ ${p("message-view.header.subject")} { margin: 0 0 ${T.xs}; font-family: ${T.font
 ${p("message-view.header.field")} { display: grid; grid-template-columns: calc(4 * ${T.lg}) minmax(0, 1fr); column-gap: ${T.sm}; font-size: ${T.small}; color: ${T.muted}; }
 ${p("message-view.header.label")} { min-width: 0; }
 ${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
-${p("message-view.text")} { max-width: 68ch; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
+${p("message-view.text")} { max-width: ${READER_MEASURE}; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
 ${p("message-view.body")} { display: block; flex: 0 0 auto; box-sizing: border-box; width: 100%; height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
 ${p("message-view.column")}:has(> ${p("message-view.body")}[data-state~="designed"]) { max-width: calc(45 * ${T.lg} + 2 * ${T.xxl}); }
-@container nail-reader (max-width: 640px) {
+@container nail-reader (max-width: ${READER_NARROW}) {
   ${p("message-view.column")} { padding: ${T.lg} ${T.pane} 0; }
   ${ps(...READER_SLOTS)} { width: calc(100% - 2 * ${T.pane}); }
 }
@@ -474,14 +506,9 @@ ${p("attachment-card")} {
 }
 ${p("attachment-card.type")} {
   display: grid; place-items: center; width: calc(${T.control} + ${T.xs}); height: calc(${T.control} + ${T.xs}); border-radius: ${T.rSm};
-  font-size: calc(${T.label} - 1.5px); font-weight: ${T.semibold}; letter-spacing: 0.02em; color: var(--nail-color-avatar-fg, #ffffff); background-color: var(--nail-color-file-other, #5c5f66);
+  font-size: ${TINY_TEXT}; font-weight: ${T.semibold}; ${INITIALS_TRACKING} color: ${AVATAR_FG}; background-color: var(--nail-color-file-other, ${FILE_COLORS.other});
 }
-${p("attachment-card.type")}[data-kind="pdf"] { background-color: var(--nail-color-file-pdf, #c92a2a); }
-${p("attachment-card.type")}[data-kind="image"] { background-color: var(--nail-color-file-image, #0b7285); }
-${p("attachment-card.type")}[data-kind="document"] { background-color: var(--nail-color-file-document, #1864ab); }
-${p("attachment-card.type")}[data-kind="spreadsheet"] { background-color: var(--nail-color-file-spreadsheet, #2f7d3a); }
-${p("attachment-card.type")}[data-kind="archive"] { background-color: var(--nail-color-file-archive, #7048e8); }
-${p("attachment-card.type")}[data-kind="calendar"] { background-color: var(--nail-color-file-calendar, #c2410c); }
+${fileColors}
 ${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }
 ${p("attachment-card.name")} { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
 ${p("attachment-card.size")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
@@ -504,8 +531,7 @@ ${p("account-switcher.item")}[data-state~="selected"] { color: ${T.selectionFg};
 ${p("account-switcher.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("folder-tree")} { padding: ${T.sm}; background-color: ${T.subtle}; }
 ${p("folder-tree.item")} {
-  display: grid; grid-template-columns: ${T.icon} minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
-  min-height: ${T.control}; padding: 0 ${T.sm}; border-radius: ${T.rSm}; font-size: ${T.body}; color: ${T.fg};
+  ${FOLDER_ROW}
 }
 ${p("folder-tree.item")}:hover { background-color: ${T.raised}; }
 ${p("folder-tree.item")}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; font-weight: ${T.semibold}; }
@@ -531,18 +557,17 @@ ${p("folder-tree.section")} { display: grid; gap: ${T.xxs}; outline: none; }
 ${p("folder-tree.group")} { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
 ${ps("folder-tree.section.header", "folder-tree.account")} {
   display: flex; align-items: center; gap: ${T.sm}; min-width: 0; min-height: calc(${T.control} - ${T.sm}); padding: 0 ${T.sm};
-  border-radius: ${T.rSm}; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.04em; text-transform: uppercase;
+  border-radius: ${T.rSm}; font-size: ${T.label}; font-weight: ${T.semibold}; ${CAPS_TIGHT}
   color: ${T.muted}; user-select: none;
 }
 ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
-${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.section.header")}:hover, ${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.account")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.section.header")}:hover, ${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.account")}:hover { ${QUIET_HOVER} }
 ${p("folder-tree.section.chevron")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
 ${p("folder-tree.section.dot")} { flex: 0 0 auto; width: ${T.sm}; height: ${T.sm}; border-radius: 50%; }
 ${p("folder-tree.section.title")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ${p("folder-tree.section.unread-count")} { margin-inline-start: auto; font-size: ${T.small}; font-weight: ${T.semibold}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: ${T.accent}; }
 ${ps("folder-tree.favorite", "folder-tree.smart-folder")} {
-  display: grid; grid-template-columns: ${T.icon} minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
-  min-height: ${T.control}; padding: 0 ${T.sm}; border-radius: ${T.rSm}; font-size: ${T.body}; color: ${T.fg};
+  ${FOLDER_ROW}
 }
 ${pss(":hover", "folder-tree.favorite", "folder-tree.smart-folder")} { background-color: ${T.raised}; }
 ${pss(":focus-visible", "folder-tree.favorite", "folder-tree.smart-folder")} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
@@ -590,14 +615,13 @@ ${p("form.error")} { margin: 0; font-size: ${T.small}; color: ${T.danger}; }`;
  * item uses `selection-fg`, hover is the soft accent, focus rings are 3px,
  * buttons get the thin (2px) border.
  */
-const HC = ':root[data-nail-mode="high-contrast"]';
 const HIGH_CONTRAST = `${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon")}, ${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")}, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: inherit; }
 ${HC} ${p("folder-tree.favorite")}:hover, ${HC} ${p("folder-tree.smart-folder")}:hover, ${HC} ${p("toolbar.more")}:hover { background-color: ${T.accentSoft}; }
 ${HC} ${p("folder-tree.favorite")}[data-state~="selected"]:hover, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"]:hover { background-color: ${T.selection}; }
-${HC} ${p("folder-tree.favorite")}:focus-visible, ${HC} ${p("folder-tree.smart-folder")}:focus-visible, ${HC} ${p("toolbar.more")}:focus-visible, ${HC} ${p("folder-tree.compose")}:focus-visible, ${HC} ${p("list-header.chips")} ${p("chip")}:focus-visible { outline: 3px solid ${T.focus}; }
-${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: 3px solid ${T.focus}; }
+${HC} ${p("folder-tree.favorite")}:focus-visible, ${HC} ${p("folder-tree.smart-folder")}:focus-visible, ${HC} ${p("toolbar.more")}:focus-visible, ${HC} ${p("folder-tree.compose")}:focus-visible, ${HC} ${p("list-header.chips")} ${p("chip")}:focus-visible { outline: ${HC_RING} solid ${T.focus}; }
+${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: ${HC_RING} solid ${T.focus}; }
 ${HC} ${p("toolbar.more")} { border: var(--nail-border-thin, 2px solid ${T.border}); }
-${HC} ${p("message-list")}:focus-visible ${p("message-list.row")}[aria-selected="true"] { outline: 3px solid ${T.focus}; }
+${HC} ${p("message-list")}:focus-visible ${p("message-list.row")}[aria-selected="true"] { outline: ${HC_RING} solid ${T.focus}; }
 ${HC} ${p("segmented.option")}[aria-checked="true"], ${HC} ${p("segmented.option")}[aria-pressed="true"] {
   color: ${T.accentFg}; background-color: ${T.accent}; box-shadow: none; outline: 2px solid ${T.fg}; outline-offset: -2px;
 }
@@ -619,7 +643,7 @@ const M5B_INTEGRATION = `${p("layout-offer")} {
 ${p("layout-offer.title")} { margin: 0; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("layout-offer.text")} { margin: 0; font-size: ${T.body}; line-height: ${T.normal}; color: ${T.muted}; }
 ${p("layout-offer.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
-${p("security-compose.toggles")} > ${p("form.field")} { display: inline-flex; align-items: center; gap: ${T.sm}; }
+${p("security-compose.toggles")} > ${p("form.field")} { ${INLINE_ROW} gap: ${T.sm}; }
 ${p("security-compose.toggles")} > ${p("form.field")} > ${p("form.label")} {
   /* P1 verify: "Technology" reads like the "Sign" / "Encrypt" check labels beside it, not like a bold field label. */
   font-size: ${T.body}; font-weight: ${T.regular};

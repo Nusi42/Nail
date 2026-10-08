@@ -10,7 +10,7 @@
  * calls it from `createMockData`; tests call it themselves).
  */
 import type { GmailCategory, GmailLabel, Identity, MessageSummary } from "../../api/generated";
-import type { MockData } from "../../api/mockData";
+import { mockBody, type MockData } from "../../api/mockData";
 import { categoryLabel, CATEGORIES } from "./model";
 
 export const GMAIL_ACCOUNT = "acc-gmail";
@@ -248,22 +248,13 @@ export function seedGmailDemo(data: MockData, options: { now?: number } = {}): v
       },
     };
     data.messages.push(summary);
-    data.bodies.set(id, {
+    data.bodies.set(
       id,
-      headers: {
-        subject: mail.subject,
-        from: [mail.from],
-        to: summary.to,
-        cc: [],
-        reply_to: [],
-        date: summary.date,
-        message_id: `${gmailId}@mail.gmail.example`,
-      },
-      text: `${mail.subject}\n\n(mock Gmail message)`,
-      sanitized_html: null,
-      attachments: [],
-      remote_content_blocked: false,
-    });
+      mockBody(summary, {
+        text: `${mail.subject}\n\n(mock Gmail message)`,
+        messageId: `${gmailId}@mail.gmail.example`,
+      }),
+    );
     const folder = data.folders.find((f) => f.id === folderId);
     if (folder) {
       folder.total++;

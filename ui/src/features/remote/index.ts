@@ -94,7 +94,7 @@ export const actions: Feature["actions"] = {
 };
 
 /** Named dialogs (opened with `window.open "<name>"`). */
-export const dialogs: Feature["dialogs"] = {
+export const dialogs: NonNullable<Feature["dialogs"]> = {
   [PAIR_DIALOG]: PairDeviceDialog,
   [REAUTH_WINDOW]: ReauthWindow,
 };
@@ -152,10 +152,10 @@ export const handleRemoteEvent: FeatureEventHandler = (event, { queryClient }) =
 };
 
 /** Handlers for core events. */
-export const events: Feature["events"] = [handleRemoteEvent];
+export const events: NonNullable<Feature["events"]> = [handleRemoteEvent];
 
 /** Background components mounted once in the app shell (the alert toasts). */
-export const effects: Feature["effects"] = [RemoteAlerts];
+export const effects: NonNullable<Feature["effects"]> = [RemoteAlerts];
 
 // ---------------------------------------------------------------------------
 // Mount points for the app shell and the reader (ADR 0039).

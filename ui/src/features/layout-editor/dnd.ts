@@ -15,9 +15,9 @@ import {
 } from "react";
 import type { DropZone, Moving } from "./model";
 import { editorStore } from "./store";
+import { DRAG_THRESHOLD } from "../windows/geometry";
 
 /** Pixels the pointer must move before a press becomes a drag. */
-export const DRAG_THRESHOLD = 4;
 
 /** The part of a drop target button. */
 export const TARGET_PART = "layout-editor.target";

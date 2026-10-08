@@ -54,6 +54,7 @@ import {
   type MockKey,
   type SecurityOverlay,
 } from "./mockSeed";
+import { DAY_MS } from "../../state/clock";
 
 export { securityDemoBySender } from "./mockSeed";
 export type { SecurityOverlay } from "./mockSeed";
@@ -610,6 +611,13 @@ function storageOf(protection: SecretProtection): {
     : { storage: "keychain", passphrase: null };
 }
 
+/** Stores `key` (or refreshes the stored copy) and answers it as imported. */
+function importedOne(core: MockCore, s: SecurityMockState, key: CryptoKey): Response {
+  const created = upsert(s, key, null);
+  const stored = s.keys.find((k) => k.key.fingerprint === key.fingerprint)?.key ?? key;
+  return imported(core, [stored], created ? 1 : 0, []);
+}
+
 function imported(
   core: MockCore,
   keys: CryptoKey[],
@@ -747,7 +755,7 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
       const expires =
         request.expires_days === null
           ? null
-          : new Date(now.getTime() + request.expires_days * 86_400_000).toISOString();
+          : new Date(now.getTime() + request.expires_days * DAY_MS).toISOString();
       const key = newOwnKey(s, "openpgp", [uid], {
         fingerprint: mockFingerprint("openpgp", `${uid}|${now.toISOString()}|${String(s.counter)}`),
         algorithm: request.algorithm === "rsa4096" ? "RSA 4096" : "Ed25519",
@@ -867,9 +875,7 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
         issuer: cert.certificate.issuer,
         serial: cert.certificate.serial,
       });
-      const created = upsert(s, key, null);
-      const stored = s.keys.find((k) => k.key.fingerprint === key.fingerprint)?.key ?? key;
-      return imported(core, [stored], created ? 1 : 0, []);
+      return importedOne(core, s, key);
     }
     case "CheckRecipientKeys": {
       const identity = identities(core).find((i) => i.id === request.identity_id);
@@ -912,9 +918,7 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
         source: "setup-message",
         secret_storage: "keychain",
       });
-      const created = upsert(s, key, null);
-      const stored = s.keys.find((k) => k.key.fingerprint === key.fingerprint)?.key ?? key;
-      return imported(core, [stored], created ? 1 : 0, []);
+      return importedOne(core, s, key);
     }
   }
 }

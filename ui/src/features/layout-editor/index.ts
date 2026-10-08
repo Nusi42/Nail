@@ -101,14 +101,5 @@ export const settings: NonNullable<Feature["settings"]> = {
   },
 };
 
-/** Dialogs by name. */
-export const dialogs: Feature["dialogs"] = {};
-
-/** Window model registrations by kind. */
-export const windows: NonNullable<Feature["windows"]> = {};
-
-/** Core event handlers. */
-export const events: Feature["events"] = [];
-
 /** Background components. */
-export const effects: Feature["effects"] = [CustomizeViewWatcher];
+export const effects: NonNullable<Feature["effects"]> = [CustomizeViewWatcher];

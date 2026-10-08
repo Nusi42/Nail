@@ -8,29 +8,25 @@
  */
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Density } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { UI_STATE_SETTINGS_SECTION } from "../../state/uiState";
 import { violations } from "../../test/axe";
-import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  settleQueries,
+  widget,
+  stubElementSizesEachTest,
+} from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
-import { BUILTIN_THEMES } from "../appearance";
 import { resolveMockTheme } from "../appearance/themes";
 import { SETTINGS_SKIN_CSS } from "./skin";
+import { THEME_CASES } from "../../test/themes";
 
-let restoreSizes: () => void;
-beforeEach(() => {
-  restoreSizes = stubElementSizes();
-});
-afterEach(() => {
-  restoreSizes();
-});
-
-const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
+stubElementSizesEachTest();
 
 describe("settings page: axe in every theme and density", () => {
-  it.each(CASES)(
+  it.each(THEME_CASES)(
     "%s / %s",
     async (id, density) => {
       const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });

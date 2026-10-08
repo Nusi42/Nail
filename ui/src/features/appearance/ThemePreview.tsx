@@ -139,7 +139,7 @@ export function ThemePreview({
     </Element>
   );
   return (
-    <figure data-part="theme-editor.preview" aria-label={t("theme-editor-preview-label", { name })}>
+    <figure data-part="theme-editor.preview" aria-label={t("common-preview-of", { name })}>
       {el(
         "frame",
         "frame",
@@ -149,9 +149,9 @@ export function ThemePreview({
             "sidebar",
             "sidebar",
             <>
-              {el("folder", "inbox", t("theme-editor-preview-inbox"), "folder-selected")}
-              {el("folder", "sent", t("theme-editor-preview-sent"))}
-              {el("folder", "archive", t("theme-editor-preview-archive"))}
+              {el("folder", "inbox", t("common-inbox"), "folder-selected")}
+              {el("folder", "sent", t("common-folder-sent"))}
+              {el("folder", "archive", t("common-folder-archive"))}
             </>,
           )}
           {el(
@@ -198,19 +198,19 @@ export function ThemePreview({
             "reader",
             "reader",
             <>
-              {el("title", "title", t("theme-editor-preview-subject"))}
-              {el("tag", "tag", t("theme-editor-preview-tag"))}
+              {el("title", "title", t("theme-editor-preview-snippet"))}
+              {el("tag", "tag", t("common-work"))}
               {el("body", "body", t("theme-editor-preview-body"))}
               {el(
                 "actions",
                 "actions",
                 <>
-                  {el("primary", "primary", t("theme-editor-preview-reply"))}
-                  {el("secondary", "secondary", t("theme-editor-preview-archive-action"))}
+                  {el("primary", "primary", t("common-reply"))}
+                  {el("secondary", "secondary", t("common-archive"))}
                 </>,
                 "none",
               )}
-              {el("field", "field", t("theme-editor-preview-search"))}
+              {el("field", "field", t("common-search-mail"))}
             </>,
           )}
         </>,

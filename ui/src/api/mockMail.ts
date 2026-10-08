@@ -24,9 +24,7 @@ import type {
 import type { MockData } from "./mockData";
 import { matches, parseQuery, type Searchable } from "./mockSearch";
 import type { Event as NailEvent } from "./generated";
-
-/** The built-in "All accounts" virtual account id (`AccountId::ALL`). */
-export const ALL_ACCOUNTS = "all";
+import { ALL_ACCOUNTS } from "./contract";
 
 /** Roles merged across the members of a virtual account. */
 export const MERGED_ROLES: readonly FolderRole[] = [
@@ -530,7 +528,14 @@ export function getConversation(
 // ---------------------------------------------------------------------------
 // Search
 
-function searchable(d: MockData, m: MessageSummary): Searchable {
+/** A message's size as the mock counts it: its text plus its attachments. */
+export function messageSize(d: MockData, m: MessageSummary): number {
+  const body = d.bodies.get(m.id);
+  return (body?.text.length ?? 0) + (body?.attachments.reduce((s, a) => s + a.size, 0) ?? 0);
+}
+
+/** What the query language matches a message on (searches, rule conditions). */
+export function searchable(d: MockData, m: MessageSummary): Searchable {
   const body = d.bodies.get(m.id);
   const address = (a: { name: string | null; email: string } | null) =>
     a ? `${a.name ?? ""} ${a.email}` : "";
@@ -544,7 +549,7 @@ function searchable(d: MockData, m: MessageSummary): Searchable {
     accountName: d.accounts.find((a) => a.id === m.account_id)?.name ?? "",
     folder: d.folders.find((f) => f.id === m.folder_id)?.path ?? "",
     date: Date.parse(m.date),
-    size: (body?.text.length ?? 0) + (body?.attachments.reduce((s, a) => s + a.size, 0) ?? 0),
+    size: messageSize(d, m),
     unread: !m.flags.seen,
     flagged: m.flags.flagged,
     answered: m.flags.answered,

@@ -25,7 +25,7 @@ export function timeRangeText(
     const day = formatDay(format, first, { dateStyle: "full" });
     return last.compare(first) <= 0
       ? t("scheduling-time-all-day", { day })
-      : t("scheduling-time-days", {
+      : t("common-time-range-all-day", {
           start: day,
           end: formatDay(format, last, { dateStyle: "full" }),
         });
@@ -41,7 +41,7 @@ export function timeRangeText(
       end: formatClock(format, to.toDate().getTime(), tz),
     });
   }
-  return t("scheduling-time-range", {
+  return t("common-time-range", {
     start: formatPimTime(format, start, tz),
     end: formatPimTime(format, end, tz),
   });
@@ -49,7 +49,7 @@ export function timeRangeText(
 
 /** "14:30 – 15:30" of two instants (RFC 3339) in a zone. */
 export function clockRange(t: T, format: DateFormatter, start: string, end: string, tz: string) {
-  return t("scheduling-clock-range", {
+  return t("common-time-range", {
     start: formatClock(format, start, tz),
     end: formatClock(format, end, tz),
   });

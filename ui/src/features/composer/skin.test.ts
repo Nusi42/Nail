@@ -12,35 +12,16 @@ import {
   COMPOSER_SKIN_PARTS,
   COMPOSER_TIGHT,
 } from "./skin";
+import { cssBlocks } from "../../test/css";
 
 const sources = readdirSync(__dirname)
   .filter((f) => /\.tsx?$/.test(f) && !f.includes(".test.") && f !== "skin.ts")
   .map((f) => readFileSync(join(__dirname, f), "utf8"))
   .join("\n");
 
-/** Every `{ … }` block with what precedes it, at any nesting depth. */
-function blocks(css: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < css.length; i++) {
-    if (css[i] === "{") depth++;
-    if (css[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        out.push(css.slice(start, i + 1));
-        start = i + 1;
-      }
-    }
-    expect(depth).toBeGreaterThanOrEqual(0);
-  }
-  expect(depth).toBe(0);
-  return out;
-}
-
 describe("composer skin", () => {
   it("is balanced and uses tokens, not literal colours", () => {
-    expect(blocks(COMPOSER_SKIN_CSS).length).toBeGreaterThan(5);
+    expect(cssBlocks(COMPOSER_SKIN_CSS).length).toBeGreaterThan(5);
     expect(COMPOSER_SKIN_CSS).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(COMPOSER_SKIN_CSS).not.toMatch(/rgb\(|hsl\(/);
     expect(COMPOSER_SKIN_CSS).toContain("var(--nail-color-bg)");

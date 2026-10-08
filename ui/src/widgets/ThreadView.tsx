@@ -146,10 +146,10 @@ function ThreadStrip({ node }: WidgetProps) {
         <>
           <div data-part="thread-view.header">
             <span data-part="thread-view.subject">
-              {query.data.thread.subject || t("message-no-subject")}
+              {query.data.thread.subject || t("common-no-subject")}
             </span>
             <span data-part="thread-view.count">
-              {t("thread-view-count", { count: messages.length })}
+              {t("common-message-count-spelled", { count: messages.length })}
             </span>
           </div>
           {folded > 0 && (
@@ -201,7 +201,7 @@ function ThreadStrip({ node }: WidgetProps) {
                       <span data-part="thread-view.item.from">
                         {m.from_me
                           ? t("conversations-me")
-                          : displayName(m.from) || t("composer-unknown-sender")}
+                          : displayName(m.from) || t("common-unknown-sender")}
                       </span>
                       <span data-part="thread-view.item.date">
                         {Number.isNaN(date.getTime()) ? m.date : formatRelative(date, now, locale)}
@@ -216,7 +216,7 @@ function ThreadStrip({ node }: WidgetProps) {
                         selectMessage(m.id);
                       }}
                     >
-                      {t("thread-view-open")}
+                      {t("common-open")}
                     </button>
                   </div>
                   {expanded && <MessageText id={m.id} />}

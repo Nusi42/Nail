@@ -25,6 +25,8 @@ import type {
 } from "../../api/generated";
 import { emptyContactFields, emptyEventFields, emptyTaskFields } from "./defaults";
 import { dateString, localString, localZone, makePimTime, pimTimeIn, utcString } from "./time";
+import { plainRecurrence } from "./recurrence";
+import { DAY_MS } from "../../state/clock";
 
 /** A tiny SVG portrait (the mock's contact photo), base64. */
 export const DEMO_PHOTO_SVG =
@@ -300,30 +302,12 @@ export function demoPim(now: number = Date.now(), tz: string = localZone()): Pim
         ],
       },
       {
-        recurrence: {
-          rules: [
-            {
-              freq: "weekly",
-              interval: 1,
-              end: { type: "never" },
-              by_second: [],
-              by_minute: [],
-              by_hour: [],
-              by_day: ["mon", "tue", "wed", "thu", "fri"].map((d) => ({
-                day: d as "mon",
-                ordinal: null,
-              })),
-              by_month_day: [],
-              by_year_day: [],
-              by_week_no: [],
-              by_month: [],
-              by_set_pos: [],
-              week_start: null,
-            },
-          ],
-          dates: [],
-          exceptions: [],
-        },
+        recurrence: plainRecurrence("weekly", {
+          by_day: ["mon", "tue", "wed", "thu", "fri"].map((d) => ({
+            day: d as "mon",
+            ordinal: null,
+          })),
+        }),
       },
     ),
     event("ev-lunch", "cal-personal", {
@@ -373,27 +357,10 @@ export function demoPim(now: number = Date.now(), tz: string = localZone()): Pim
       "cal-personal",
       { title: "Grace's birthday", start: date(5), end: date(6), transparency: "free" },
       {
-        recurrence: {
-          rules: [
-            {
-              freq: "yearly",
-              interval: 1,
-              end: { type: "never" },
-              by_second: [],
-              by_minute: [],
-              by_hour: [],
-              by_day: [],
-              by_month_day: [day(5).day],
-              by_year_day: [],
-              by_week_no: [],
-              by_month: [day(5).month],
-              by_set_pos: [],
-              week_start: null,
-            },
-          ],
-          dates: [],
-          exceptions: [],
-        },
+        recurrence: plainRecurrence("yearly", {
+          by_month_day: [day(5).day],
+          by_month: [day(5).month],
+        }),
       },
     ),
     event(
@@ -556,7 +523,7 @@ export function demoPim(now: number = Date.now(), tz: string = localZone()): Pim
       parent_id: "tk-report",
       status: "completed",
       percent_complete: 100,
-      completed_at: utcString(now - 86_400_000),
+      completed_at: utcString(now - DAY_MS),
     }),
     task("tk-report-draft", "list-tasks", {
       title: "Draft the text",
@@ -569,34 +536,14 @@ export function demoPim(now: number = Date.now(), tz: string = localZone()): Pim
       "list-tasks",
       { title: "Weekly review", due: at(4, 16, 0) },
       {
-        recurrence: {
-          rules: [
-            {
-              freq: "weekly",
-              interval: 1,
-              end: { type: "never" },
-              by_second: [],
-              by_minute: [],
-              by_hour: [],
-              by_day: [],
-              by_month_day: [],
-              by_year_day: [],
-              by_week_no: [],
-              by_month: [],
-              by_set_pos: [],
-              week_start: null,
-            },
-          ],
-          dates: [],
-          exceptions: [],
-        },
+        recurrence: plainRecurrence("weekly"),
       },
     ),
     task("tk-done", "list-tasks", {
       title: "Book the flights",
       status: "completed",
       percent_complete: 100,
-      completed_at: utcString(now - 2 * 86_400_000),
+      completed_at: utcString(now - 2 * DAY_MS),
     }),
     task("tk-work", "cal-work", { title: "Review the pull request", due: date(2), priority: 3 }),
   ];
@@ -612,7 +559,7 @@ export function demoPim(now: number = Date.now(), tz: string = localZone()): Pim
       description: null,
       starts_at: utcString(pimTimeIn(reviewStart, tz)),
       all_day: false,
-      fire_at: utcString(now + 86_400_000),
+      fire_at: utcString(now + DAY_MS),
       state: "pending",
       snoozed_until: null,
     },

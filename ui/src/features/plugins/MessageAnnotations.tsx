@@ -9,25 +9,21 @@
  * Mount points (reader): `PluginBanners` above the message body,
  * `PluginBadges` in the message header. Both share one query.
  */
-import { useState } from "react";
-import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage, MessageId, PluginBanner } from "../../api/generated";
+import type { MessageId, PluginBanner } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { Icon } from "../../widgets/Icon";
 import { clientIdOf } from "./context";
 import { useMessageAnnotations } from "./queries";
+import { useBusyAction } from "../../state/busyAction";
 
 function Banner({ messageId, banner }: { messageId: MessageId; banner: PluginBanner }) {
   const t = useT();
   const client = useClient();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const level = banner.banner.level ?? "info";
   const press = async (componentId: string) => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await client.request(
         {
           type: "PluginUiAction",
@@ -42,11 +38,7 @@ function Banner({ messageId, banner }: { messageId: MessageId; banner: PluginBan
         },
         "Done",
       );
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <li

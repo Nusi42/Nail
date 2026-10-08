@@ -1,29 +1,16 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request, VaultStatus } from "../../api/generated";
-import { createEnv, renderNode, widget, type Env } from "../../test/harness";
+import type { VaultStatus } from "../../api/generated";
+import { createEnv, renderNode, widget } from "../../test/harness";
 import { handleSecurityEvent } from "./index";
 import { vaultPercent } from "./SecuritySettings";
-
-function wireEvents(env: Env) {
-  return env.client.subscribe((event) => {
-    handleSecurityEvent(event, {
-      client: env.client,
-      queryClient: env.queryClient,
-      store: env.store,
-    });
-  });
-}
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf, wireEvents } from "../../test/env";
 
 async function open() {
   const user = userEvent.setup();
   const env = createEnv();
   env.transport.data.behaviour.workMs = 5;
-  wireEvents(env);
+  wireEvents(env, handleSecurityEvent);
   renderNode(widget("security-settings"), env);
   const vault = await screen.findByRole("region", { name: "Encryption at rest" });
   return { user, env, vault };

@@ -7,6 +7,7 @@ import { shippedCatalogs, groupCatalogs } from "./catalogs";
 import { I18nProvider, useLabel, useT } from "./I18nProvider";
 import { createLocalizer, labelMessageId, negotiateLocale, resolveLabel } from "./localizer";
 import { must } from "../test/must";
+import { sourceFiles } from "../test/sourceFiles";
 
 const catalogs = {
   en: ["hello = Hello\nbye = Goodbye\ncount = { $n ->\n [one] One mail\n *[other] { $n } mails\n}"],
@@ -87,19 +88,15 @@ describe("shipped catalogs", () => {
   it("contains every message id used by the UI source and the default layout", () => {
     const en = createLocalizer(shippedCatalogs, ["en"]);
     const ids = new Set<string>();
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name !== "generated" && entry.name !== "test") walk(path);
-        } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
-          const source = readFileSync(path, "utf8");
-          for (const m of source.matchAll(/\bt\(\s*"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
-          for (const m of source.matchAll(/messageId(?:=|: )"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
-        }
-      }
-    };
-    walk(srcDir);
+    for (const path of sourceFiles(srcDir, {
+      include: /\.tsx?$/,
+      exclude: /\.test\.tsx?$/,
+      skipDirs: ["test"],
+    })) {
+      const source = readFileSync(path, "utf8");
+      for (const m of source.matchAll(/\bt\(\s*"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
+      for (const m of source.matchAll(/messageId(?:=|: )"([a-z0-9-]+)"/g)) ids.add(must(m[1]));
+    }
     for (const field of ["from", "to", "cc", "reply-to", "date"])
       ids.add(`message-header-${field}`);
     for (const code of [

@@ -49,7 +49,7 @@ function Facts({ info }: { info: InstallationInfo }) {
         />
       )}
       {info.install_dir !== null && (
-        <Fact name="folder" label={t("system-about-folder")} value={info.install_dir} />
+        <Fact name="folder" label={t("common-disk-folder")} value={info.install_dir} />
       )}
       {info.webview_version !== null && (
         <Fact name="webview" label={t("system-about-webview")} value={info.webview_version} />
@@ -69,7 +69,7 @@ export function AboutNail() {
   const installation = useInstallation();
   return (
     <div data-part="about-nail">
-      <h3 data-part="about-nail.title">{t("system-about-product")}</h3>
+      <h3 data-part="about-nail.title">{t("common-nail")}</h3>
       <p data-part="about-nail.tagline">{t("system-about-tagline")}</p>
       {installation.isError && (
         <p data-part="about-nail.unavailable" role="status">

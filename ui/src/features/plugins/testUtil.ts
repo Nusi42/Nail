@@ -10,6 +10,7 @@ import { handlePluginsEvent } from ".";
 import { withPluginActions } from "./commands";
 import { followUpManifest } from "./mockHost";
 import { pluginKeys } from "./queries";
+import { type AttachmentInfo } from "../../api/generated";
 
 export const PACKAGE = { kind: "file", path: "C:/plugins/follow-up.nailplugin" } as const;
 export const REMIND = "plugin.follow-up.remind";
@@ -69,8 +70,18 @@ export async function tick(ms = 20): Promise<void> {
   });
 }
 
-/** The value, failing the test when it is missing. */
-export function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("expected a value");
-  return value;
+export { must } from "../../test/must";
+
+/** A mock message with two attachments (a PDF, then a CSV). */
+export function withAttachments(env: Env): {
+  messageId: string;
+  pdf: AttachmentInfo;
+  csv: AttachmentInfo;
+} {
+  const m = env.transport.data.messages.find(
+    (x) => (env.transport.data.bodies.get(x.id)?.attachments.length ?? 0) > 1,
+  );
+  const body = m ? env.transport.data.bodies.get(m.id) : undefined;
+  if (!m || !body?.attachments[0] || !body.attachments[1]) throw new Error("no attachments");
+  return { messageId: m.id, pdf: body.attachments[0], csv: body.attachments[1] };
 }

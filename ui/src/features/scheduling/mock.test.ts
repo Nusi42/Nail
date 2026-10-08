@@ -6,7 +6,7 @@ import type { FeatureEventContext } from "../types";
 import { SCHEDULING_EVENTS, handleSchedulingEvent, schedulingKeys } from ".";
 import { runtimeIds } from "./messages";
 import { SCHEDULING_REQUESTS, actionsFor, decorateInvitation, isSchedulingRequest } from "./mock";
-import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
+import { DEMO_INVITATIONS, seedSchedulingDemo, invitation } from "./mockSeed";
 
 const TZ = "Europe/Berlin";
 
@@ -416,29 +416,7 @@ describe("scheduling mock", () => {
   });
 
   it("offers actions by role, method and state", () => {
-    const base = {
-      message_id: "m",
-      uid: "u",
-      recurrence_id: null,
-      sequence: 0,
-      dtstamp: null,
-      organizer: null,
-      attendees: [],
-      my_address: null,
-      my_status: null,
-      identity_id: null,
-      from_attendee: null,
-      fields: null,
-      recurrence: null,
-      counter: null,
-      comment: null,
-      event_id: null,
-      calendar_id: null,
-      conflicts: [],
-      actions: [],
-      transport: "imip" as const,
-      issues: [],
-    };
+    const base = invitation({ message_id: "m", uid: "u", method: "request", role: "attendee" });
     expect(actionsFor({ ...base, method: "request", role: "attendee", state: "invalid" })).toEqual(
       [],
     );

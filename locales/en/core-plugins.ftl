@@ -148,11 +148,11 @@ plugin-package-missing-file = The plug-in file { $path } is missing.
 
 ## M4a (ADR 0079): hooks and background jobs (plug-in manager, logs)
 
-plugin-hook-arrival = New mail
+plugin-hook-arrival = { common-new-mail }
 plugin-hook-before-send = Before sending
 plugin-hook-open = Opening a message
 plugin-job-outcome-ok = Finished
-plugin-job-outcome-error = Failed
+plugin-job-outcome-error = { common-failed }
 plugin-job-outcome-timeout = Took too long
 plugin-job-outcome-cpu-quota = Skipped: the plug-in used its CPU time for this hour
 plugin-job-outcome-overlap = Skipped: the previous run had not finished

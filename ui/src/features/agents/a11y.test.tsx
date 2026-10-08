@@ -5,24 +5,15 @@
  * editor, and the MCP client settings with their M4a parts. Contrast
  * needs a real layout engine (Playwright).
  */
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import { createEnv, renderWithProviders, widget, settleQueries } from "../../test/harness";
 import { handleAgentsEvent, PolicyEditor } from ".";
 import { seedAgentsDemo } from "./mockSeed";
 import { ConfirmationCenterDialog } from "./ConfirmationCenter";
 import { ConfirmationNotices } from "./ConfirmationNotices";
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-}
 
 describe("axe: confirmation center", () => {
   it("the widget (pending and history), indicator and policy editor have no violations", async () => {
@@ -37,10 +28,10 @@ describe("axe: confirmation center", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "History" }));
-    await settle(env);
+    await settleQueries(env, 20);
     expect(await violations(container)).toEqual([]);
   });
 
@@ -63,7 +54,7 @@ describe("axe: confirmation center", () => {
     act(() => {
       seedAgentsDemo(env.transport);
     });
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getAllByRole("button", { name: "Review" }).length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
     stop();
@@ -76,7 +67,7 @@ describe("axe: confirmation center", () => {
       <NodeView node={widget("mcp-clients")} path="t/0" />,
       env,
     );
-    await settle(env);
+    await settleQueries(env, 20);
     expect(screen.getByRole("form", { name: "Limits for Claude Desktop" })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });

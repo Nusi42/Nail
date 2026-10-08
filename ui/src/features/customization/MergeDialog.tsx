@@ -30,6 +30,7 @@ import { chooseAll, choiceList, differs, summarize, takeOf, type Choices } from 
 import { MERGE_FILES } from "./names";
 import { customizationStore } from "./state";
 import { DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
+import { CloseButton } from "../../widgets/CloseButton";
 
 /** Delay before the live preview follows a change of choices (ms). */
 export const PREVIEW_DELAY_MS = 150;
@@ -523,7 +524,7 @@ export function MergeDialog({ close }: DialogProps) {
           <ol data-part="merge-dialog.error-list">
             {preview.errors.map((issue, index) => (
               <li key={index} data-part="merge-dialog.error-item">
-                {t("merge-dialog-error-at", {
+                {t("common-error-at-line", {
                   line: issue.line,
                   column: issue.column,
                   message: issue.message,
@@ -539,7 +540,7 @@ export function MergeDialog({ close }: DialogProps) {
               setStage({ kind: "input" });
             }}
           >
-            {t("merge-dialog-back")}
+            {t("common-back")}
           </button>
         </section>
       )}
@@ -580,9 +581,7 @@ export function MergeDialog({ close }: DialogProps) {
                 {t("merge-dialog-revert")}
               </button>
             )}
-            <button type="button" data-part="form.button" data-action="close" onClick={close}>
-              {t("merge-dialog-close")}
-            </button>
+            <CloseButton onClose={close} action="close" />
           </div>
         </section>
       )}
@@ -691,7 +690,7 @@ function PreviewView({
       ))}
       <div data-part="merge-dialog.actions">
         <button type="button" data-part="form.button" data-action="back" onClick={onBack}>
-          {t("merge-dialog-back")}
+          {t("common-back")}
         </button>
         <button
           type="button"
@@ -700,7 +699,7 @@ function PreviewView({
           disabled={busy || summary.taken === 0}
           onClick={onApply}
         >
-          {t("merge-dialog-apply")}
+          {t("common-apply")}
         </button>
       </div>
     </section>

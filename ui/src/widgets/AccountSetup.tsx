@@ -386,7 +386,7 @@ export function AccountSetup({ node }: WidgetProps) {
       aria-label={node.label ? label(node.label) : t("setup-label")}
       aria-busy={busy}
     >
-      <ol data-part="account-setup.steps" aria-label={t("setup-steps")}>
+      <ol data-part="account-setup.steps" aria-label={t("common-setup-steps")}>
         {(["address", "servers", "test", "done"] as const).map((s) => (
           <li
             key={s}
@@ -659,7 +659,7 @@ export function AccountSetup({ node }: WidgetProps) {
                       setOAuth(null);
                     }}
                   >
-                    {t("setup-oauth-retry")}
+                    {t("common-try-again")}
                   </button>
                 </>
               )}
@@ -674,7 +674,7 @@ export function AccountSetup({ node }: WidgetProps) {
                 setStep("address");
               }}
             >
-              {t("setup-back")}
+              {t("common-back")}
             </button>
             <button
               type="submit"
@@ -707,7 +707,7 @@ export function AccountSetup({ node }: WidgetProps) {
                 setStep("servers");
               }}
             >
-              {t("setup-back")}
+              {t("common-back")}
             </button>
             <button
               type="button"

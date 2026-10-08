@@ -242,7 +242,7 @@ function Link({ plugin, href, children }: { plugin: string; href: string; childr
               window.open(href, "_blank", "noopener,noreferrer");
             }}
           >
-            {t("plugin-link-open")}
+            {t("common-open")}
           </button>
           <button
             type="button"
@@ -252,7 +252,7 @@ function Link({ plugin, href, children }: { plugin: string; href: string; childr
               setConfirming(false);
             }}
           >
-            {t("plugin-link-cancel")}
+            {t("common-cancel")}
           </button>
         </span>
       )}

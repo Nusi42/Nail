@@ -23,7 +23,8 @@ import type {
   VirtualAccountConfig,
 } from "./generated";
 import { mockFolderId, NEW_ACCOUNT_FOLDERS, type MockData } from "./mockData";
-import { ALL_ACCOUNTS, errorResponse, virtualConfig, type MockCore } from "./mockMail";
+import { errorResponse, virtualConfig, type MockCore } from "./mockMail";
+import { ALL_ACCOUNTS } from "./contract";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;

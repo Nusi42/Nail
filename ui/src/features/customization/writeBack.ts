@@ -19,20 +19,12 @@ import type {
 } from "../../api/generated";
 import { selectBreakpointIndex } from "../../layout/engine";
 import { findNodeById } from "./inspect";
+import { nodeAt } from "../../layout/engine";
 
 /** Quiet time after the last size change before it is written (ms). */
 export const WRITE_DELAY_MS = 600;
 
 const PATH_KEY = /^([a-z0-9]+(?:-[a-z0-9]+)*)\/(\d+)((?:\/\d+)*)$/;
-
-function nodeAt(root: LayoutNode, path: readonly number[]): LayoutNode | null {
-  let node: LayoutNode | undefined = root;
-  for (const index of path) {
-    if (!node || node.type === "widget") return null;
-    node = node.children[index];
-  }
-  return node ?? null;
-}
 
 /**
  * The `LayoutNodeRef` of a split, from its UI-store key: a tree path

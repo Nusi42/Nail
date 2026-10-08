@@ -25,10 +25,12 @@
  * so they win over the theme's single-part rules only where the width asks
  * for it.
  */
+import { p } from "../../theme/selectors";
 
-/** `[data-part="…"]` for one part. */
-const p = (part: string) => `[data-part="${part}"]`;
 /** A part inside the composer. */
+/** The message body's editors keep room for a few lines. */
+const BODY_MIN_HEIGHT = "9rem";
+
 const inComposer = (part: string) => `${p("composer")} ${p(part)}`;
 
 /** Token shorthands. */
@@ -74,7 +76,7 @@ ${p("composer.confirm.actions")} { display: flex; flex-wrap: wrap; justify-conte
 const NARROW = `@container ${COMPOSER_CONTAINER} (max-width: ${COMPOSER_NARROW}) {
 ${inComposer("composer.field")} { grid-template-columns: minmax(0, 1fr); gap: ${T.xxs}; }
 ${inComposer("composer.markdown")}[data-state~="split"] { grid-template-columns: minmax(0, 1fr); }
-${inComposer("composer.body")}, ${inComposer("composer.html.content")}, ${inComposer("composer.html.source")}, ${inComposer("composer.markdown.editor")}, ${inComposer("composer.preview")} { min-height: 9rem; }
+${inComposer("composer.body")}, ${inComposer("composer.html.content")}, ${inComposer("composer.html.source")}, ${inComposer("composer.markdown.editor")}, ${inComposer("composer.preview")} { min-height: ${BODY_MIN_HEIGHT}; }
 }`;
 
 const TIGHT = `@container ${COMPOSER_CONTAINER} (max-width: ${COMPOSER_TIGHT}) {

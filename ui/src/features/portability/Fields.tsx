@@ -5,6 +5,7 @@
  */
 import { useId, type ReactNode } from "react";
 import { useT } from "../../i18n/I18nProvider";
+import { LabelledField } from "../../widgets/forms";
 
 export interface Choice<T extends string> {
   value: T;
@@ -13,6 +14,44 @@ export interface Choice<T extends string> {
   /** Extra text under the label. */
   hint?: string;
   disabled?: boolean;
+}
+
+/** A fieldset of choices, each with its input (`input`), label and optional hint. */
+function Choices<T extends string>({
+  legend,
+  field,
+  choices,
+  input,
+}: {
+  legend: string;
+  field: string;
+  choices: readonly Choice<T>[];
+  input: (choice: Choice<T>, hintId: string | undefined) => ReactNode;
+}) {
+  const id = useId();
+  return (
+    <fieldset data-part="form.section" data-field={field}>
+      <legend data-part="form.section.title">{legend}</legend>
+      <ul data-part="portability.choices">
+        {choices.map((choice, index) => {
+          const hintId = choice.hint ? `${id}-${String(index)}-hint` : undefined;
+          return (
+            <li key={choice.value} data-part="portability.choice">
+              <label data-part="form.check" data-value={choice.value}>
+                {input(choice, hintId)}
+                <span data-part="form.check.label">{choice.label}</span>
+              </label>
+              {choice.hint && (
+                <p data-part="form.hint" id={hintId}>
+                  {choice.hint}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
+  );
 }
 
 /** A fieldset of checkboxes. */
@@ -29,42 +68,28 @@ export function CheckGroup<T extends string>({
   selected: readonly T[];
   onChange: (next: T[]) => void;
 }) {
-  const id = useId();
   return (
-    <fieldset data-part="form.section" data-field={field}>
-      <legend data-part="form.section.title">{legend}</legend>
-      <ul data-part="portability.choices">
-        {choices.map((choice, index) => {
-          const hintId = choice.hint ? `${id}-${String(index)}-hint` : undefined;
-          return (
-            <li key={choice.value} data-part="portability.choice">
-              <label data-part="form.check" data-value={choice.value}>
-                <input
-                  data-part="form.checkbox"
-                  type="checkbox"
-                  checked={selected.includes(choice.value)}
-                  disabled={choice.disabled}
-                  aria-describedby={hintId}
-                  onChange={(e) => {
-                    onChange(
-                      e.target.checked
-                        ? [...selected, choice.value]
-                        : selected.filter((v) => v !== choice.value),
-                    );
-                  }}
-                />
-                <span data-part="form.check.label">{choice.label}</span>
-              </label>
-              {choice.hint && (
-                <p data-part="form.hint" id={hintId}>
-                  {choice.hint}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </fieldset>
+    <Choices
+      legend={legend}
+      field={field}
+      choices={choices}
+      input={(choice, hintId) => (
+        <input
+          data-part="form.checkbox"
+          type="checkbox"
+          checked={selected.includes(choice.value)}
+          disabled={choice.disabled}
+          aria-describedby={hintId}
+          onChange={(e) => {
+            onChange(
+              e.target.checked
+                ? [...selected, choice.value]
+                : selected.filter((v) => v !== choice.value),
+            );
+          }}
+        />
+      )}
+    />
   );
 }
 
@@ -84,37 +109,24 @@ export function RadioGroup<T extends string>({
 }) {
   const name = useId();
   return (
-    <fieldset data-part="form.section" data-field={field}>
-      <legend data-part="form.section.title">{legend}</legend>
-      <ul data-part="portability.choices">
-        {choices.map((choice, index) => {
-          const hintId = choice.hint ? `${name}-${String(index)}-hint` : undefined;
-          return (
-            <li key={choice.value} data-part="portability.choice">
-              <label data-part="form.check" data-value={choice.value}>
-                <input
-                  data-part="form.radio"
-                  type="radio"
-                  name={name}
-                  checked={value === choice.value}
-                  disabled={choice.disabled}
-                  aria-describedby={hintId}
-                  onChange={() => {
-                    onChange(choice.value);
-                  }}
-                />
-                <span data-part="form.check.label">{choice.label}</span>
-              </label>
-              {choice.hint && (
-                <p data-part="form.hint" id={hintId}>
-                  {choice.hint}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </fieldset>
+    <Choices
+      legend={legend}
+      field={field}
+      choices={choices}
+      input={(choice, hintId) => (
+        <input
+          data-part="form.radio"
+          type="radio"
+          name={name}
+          checked={value === choice.value}
+          disabled={choice.disabled}
+          aria-describedby={hintId}
+          onChange={() => {
+            onChange(choice.value);
+          }}
+        />
+      )}
+    />
   );
 }
 
@@ -177,10 +189,7 @@ export function SelectField({
 }) {
   const id = useId();
   return (
-    <div data-part="form.field" data-field={field}>
-      <label data-part="form.label" htmlFor={id}>
-        {label}
-      </label>
+    <LabelledField name={field} id={id} label={label}>
       <select
         id={id}
         data-part="form.select"
@@ -193,7 +202,7 @@ export function SelectField({
       >
         {children}
       </select>
-    </div>
+    </LabelledField>
   );
 }
 

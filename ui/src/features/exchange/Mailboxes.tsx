@@ -20,15 +20,13 @@ import type {
   ExchangeMailboxKind,
   ExchangeMailboxSettings,
   Folder,
-  LocalizedMessage,
 } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccounts } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
-import { Problem, useWriteContext } from "./common";
+import { Problem, useWriteContext, DialogActions, DangerActions } from "./common";
 import {
   mailboxIssues,
   mailboxName,
@@ -39,6 +37,9 @@ import {
 import { MAILBOX_EDITOR_DIALOG, MAILBOX_REMOVE_DIALOG } from "./names";
 import { removeMailbox, saveMailbox, useExchangeAccount, useMailboxes } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { useBusyAction } from "../../state/busyAction";
+import { useActiveMailView } from "../../state/hooks";
 
 const KINDS: readonly ExchangeMailboxKind[] = ["shared", "delegate"];
 const SHOWS = ["mail", "calendar", "contacts", "tasks"] as const;
@@ -47,9 +48,7 @@ const SHOWS = ["mail", "calendar", "contacts", "tasks"] as const;
 export function MailboxList({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
-  const store = useUiStoreApi();
-  const accountId = useUi((s) => s.activeAccountId);
-  const activeFolderId = useUi((s) => s.activeFolderId);
+  const { store, accountId, activeFolderId } = useActiveMailView();
   const account = useExchangeAccount(accountId);
   const mailboxes = useMailboxes(account?.id ?? null);
   if (!account) return null;
@@ -144,7 +143,7 @@ export function MailboxList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="settings" part="exchange-mailboxes.icon" />
-                  <span data-part="exchange-mailboxes.action.text">{t("exchange-edit-short")}</span>
+                  <span data-part="exchange-mailboxes.action.text">{t("common-edit")}</span>
                 </button>
                 <button
                   type="button"
@@ -157,9 +156,7 @@ export function MailboxList({ node }: WidgetProps) {
                   }}
                 >
                   <Icon name="trash" part="exchange-mailboxes.icon" />
-                  <span data-part="exchange-mailboxes.action.text">
-                    {t("exchange-remove-short")}
-                  </span>
+                  <span data-part="exchange-mailboxes.action.text">{t("common-remove")}</span>
                 </button>
               </li>
             );
@@ -197,27 +194,22 @@ export function MailboxFolderBadge({ folder }: { folder: Pick<Folder, "account_i
 
 /** Dialog `exchange-mailbox-editor`. */
 export function MailboxEditorDialog({ close }: DialogProps) {
-  const t = useT();
   const target = useExchangeUi((s) => s.mailboxEditor);
   const accounts = useAccounts();
   const account = useExchangeAccount(target?.accountId ?? null);
   const mailboxes = useMailboxes(target?.accountId ?? null);
   if (target === null || (account === null && accounts.data !== undefined)) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-nothing-chosen")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-nothing-chosen"
+        close={close}
+      />
     );
   }
   if (!mailboxes.data || !account) {
-    return (
-      <div data-part="exchange.dialog" data-state="loading" aria-busy="true">
-        <p data-part="exchange.hint">{t("exchange-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="exchange.dialog" textPart="exchange.hint" />;
   }
   const mailbox = target.address
     ? (mailboxes.data.find((m) => m.settings.address === target.address) ?? null)
@@ -254,8 +246,7 @@ function MailboxEditor({
     mailbox?.settings ?? newMailboxSettings(),
   );
   const [name, setName] = useState(mailbox?.settings.name ?? "");
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, setProblem, run } = useBusyAction();
   const change = (patch: Partial<ExchangeMailboxSettings>) => {
     setSettings({ ...settings, ...patch });
   };
@@ -282,16 +273,10 @@ function MailboxEditor({
       setProblem({ id: `exchange-mailbox-issue-${issue}` });
       return;
     }
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await saveMailbox(ctx, accountId, next, mailbox !== null);
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   return (
@@ -321,7 +306,7 @@ function MailboxEditor({
       </div>
       <div data-part="form.field" data-field="name">
         <label data-part="form.label" htmlFor={ids.name}>
-          {t("exchange-mailbox-name")}
+          {t("common-name")}
         </label>
         <input
           id={ids.name}
@@ -353,7 +338,7 @@ function MailboxEditor({
         ))}
       </fieldset>
       <fieldset data-part="form.section" data-section="shows">
-        <legend data-part="form.section.title">{t("exchange-mailbox-shows")}</legend>
+        <legend data-part="form.section.title">{t("common-show")}</legend>
         {SHOWS.map((key) => (
           <label key={key} data-part="form.check" data-field={key}>
             <input
@@ -368,15 +353,11 @@ function MailboxEditor({
           </label>
         ))}
       </fieldset>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-cancel")}
-        </button>
+      <DialogActions problem={problem} onCancel={finish}>
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
           {t(mailbox ? "exchange-save" : "exchange-mailbox-open")}
         </button>
-      </div>
+      </DialogActions>
     </form>
   );
 }
@@ -386,27 +367,24 @@ export function MailboxRemoveDialog({ close }: DialogProps) {
   const t = useT();
   const ctx = useWriteContext();
   const mailbox = useExchangeUi((s) => s.removing);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, problem, run } = useBusyAction();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().removeMailbox(null);
     close();
   };
   if (mailbox === null) {
     return (
-      <div data-part="exchange.dialog" data-state="empty">
-        <p data-part="exchange.hint">{t("exchange-nothing-chosen")}</p>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("exchange-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="exchange.dialog"
+        textPart="exchange.hint"
+        hintId="exchange-nothing-chosen"
+        close={close}
+      />
     );
   }
   const automapped = mailbox.origin === "automapped";
   const remove = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       await removeMailbox(ctx, mailbox.account_id, mailbox.settings.address);
       // Its folders are gone: leave them if one was open.
       const state = ctx.store.getState();
@@ -414,11 +392,7 @@ export function MailboxRemoveDialog({ close }: DialogProps) {
         state.selectFolder(null);
       }
       finish();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <div data-part="exchange.dialog" data-dialog="mailbox-remove" aria-busy={busy}>
@@ -430,21 +404,13 @@ export function MailboxRemoveDialog({ close }: DialogProps) {
       <p data-part="exchange.hint">
         {t(automapped ? "exchange-mailbox-hide-hint" : "exchange-mailbox-remove-hint")}
       </p>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("exchange-cancel")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={busy}
-          onClick={() => void remove()}
-        >
-          {t(automapped ? "exchange-mailbox-hide" : "exchange-mailbox-remove-confirm")}
-        </button>
-      </div>
+      <DangerActions
+        problem={problem}
+        busy={busy}
+        onCancel={finish}
+        onConfirm={() => void remove()}
+        label={t(automapped ? "exchange-mailbox-hide" : "exchange-mailbox-remove-confirm")}
+      />
     </div>
   );
 }

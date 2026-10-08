@@ -33,12 +33,8 @@ export const actions: Feature["actions"] = {
   },
 };
 
-/** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
-/** Handlers for the core's events. */
-export const events: Feature["events"] = [];
 /** Background components. */
-export const effects: Feature["effects"] = [ContextMenuHost];
+export const effects: NonNullable<Feature["effects"]> = [ContextMenuHost];
 
 export { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
 export { contextTarget, menuStoreFor, openContextMenu } from "./store";

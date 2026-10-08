@@ -2,11 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {
-  addMockConversation,
-  MOCK_CONVERSATION_ID,
-  MOCK_CONVERSATION_SUBJECT,
-} from "../api/mockConversations";
+import { MOCK_CONVERSATION_SUBJECT } from "../api/mockConversations";
 import { mockBody } from "../api/mockData";
 import type { MessageSummary } from "../api/generated";
 import { createEnv, renderNode, settleQueries, widget, type Env } from "../test/harness";
@@ -23,8 +19,8 @@ import {
 } from "./ThreadViewModel";
 import { cardShowsSubject, scopedUiStore } from "./ThreadViewScope";
 import { createUiStore } from "../state/uiStore";
-
-const INBOX = "acc-personal/Inbox";
+import { selectMockConversation } from "../test/env";
+import { INBOX } from "../test/mockIds";
 
 afterEach(() => {
   cleanup();
@@ -170,19 +166,25 @@ function addOlder(env: Env, first: MessageSummary, count: number): MessageSummar
 
 function setup(older = 0) {
   const env = createEnv({ inboxSize: 12, state: { activeFolderId: INBOX } });
-  const messages = addMockConversation(env.transport.data);
+  const messages = selectMockConversation(env);
   const extra = older > 0 ? addOlder(env, must(messages[0]), older) : [];
   const newest = must(messages[5]);
-  act(() => {
-    env.store.getState().selectMessage(newest.id);
-    env.store.getState().selectThread(MOCK_CONVERSATION_ID);
-  });
   const view = renderNode(widget("thread-view", { options: { mode: "cards" } }), env);
   return { env, messages, extra, newest, ...view };
 }
 
 const cards = () =>
   screen.getAllByRole("article").filter((a) => a.dataset.part === "thread-view.card");
+
+/** Waits until the fold opened (ten cards) with the first card it revealed focused. */
+async function foldRevealed(toggleOf: (card: HTMLElement) => HTMLElement): Promise<void> {
+  await waitFor(() => {
+    expect(cards()).toHaveLength(10);
+  });
+  await waitFor(() => {
+    expect(document.activeElement).toBe(toggleOf(must(cards()[1])));
+  });
+}
 
 describe("thread-view mode=cards", () => {
   it("shows the conversation as cards, oldest first, the unread and newest open", async () => {
@@ -320,13 +322,8 @@ describe("thread-view mode=cards", () => {
     await user.keyboard("{Enter}");
     const toggleOf = (card: HTMLElement) =>
       must(card.querySelector<HTMLElement>('[data-part="thread-view.card.toggle"]'));
-    await waitFor(() => {
-      expect(cards()).toHaveLength(10);
-    });
     // The first card the fold revealed holds the focus, so j goes on.
-    await waitFor(() => {
-      expect(document.activeElement).toBe(toggleOf(must(cards()[1])));
-    });
+    await foldRevealed(toggleOf);
     expect(env.store.getState().selectedMessageId).toBe(must(extra[1]).id);
     await user.keyboard("j");
     expect(document.activeElement).toBe(toggleOf(must(cards()[2])));
@@ -355,12 +352,7 @@ describe("thread-view mode=cards", () => {
     expect(document.activeElement).toBe(toggleOf(must(cards()[0])));
     // n: the next message is behind the fold, which opens.
     await user.keyboard("n");
-    await waitFor(() => {
-      expect(cards()).toHaveLength(10);
-    });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(toggleOf(must(cards()[1])));
-    });
+    await foldRevealed(toggleOf);
     expect(env.store.getState().selectedMessageId).toBe(must(extra[1]).id);
     await user.keyboard("p");
     expect(document.activeElement).toBe(toggleOf(must(cards()[0])));

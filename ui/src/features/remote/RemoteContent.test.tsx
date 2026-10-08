@@ -3,16 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { MessageSummary, Request } from "../../api/generated";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { actions, handleRemoteEvent } from "./index";
-
-function wireEvents(env: Env) {
-  return env.client.subscribe((event) => {
-    handleRemoteEvent(event, {
-      client: env.client,
-      queryClient: env.queryClient,
-      store: env.store,
-    });
-  });
-}
+import { requestsOf, wireEvents, actionContext } from "../../test/env";
 
 /**
  * The mock's `GetMessage` fills `MessageBody.remote_content` like the core.
@@ -38,13 +29,9 @@ function blockedMessage(env: Env): MessageSummary {
   return found;
 }
 
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
-
 async function open(options: { decorated?: boolean } = {}) {
   const env = createEnv();
-  wireEvents(env);
+  wireEvents(env, handleRemoteEvent);
   if (!(options.decorated ?? true)) undecorate(env);
   const message = blockedMessage(env);
   env.store.getState().selectMessage(message.id);
@@ -148,14 +135,7 @@ describe("remote content bar", () => {
 describe("remote.content.allow action", () => {
   it("is enabled only for blocked content and allows the given scope", async () => {
     const { env } = await open();
-    const ctx = {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id: string) => id,
-      locale: "en",
-    };
+    const ctx = actionContext(env);
     const action = actions["remote.content.allow"];
     if (action === undefined) throw new Error("no action");
     expect(action.enabled?.(ctx, ["domain"])).toBe(true);
@@ -174,7 +154,7 @@ describe("remote.content.allow action", () => {
 describe("remote-content-allows (privacy settings)", () => {
   it("lists entries by scope and removes them", async () => {
     const env = createEnv();
-    wireEvents(env);
+    wireEvents(env, handleRemoteEvent);
     const message = blockedMessage(env);
     for (const scope of ["message", "sender", "domain"] as const) {
       await env.transport.send({ type: "AllowRemoteContent", message_id: message.id, scope });

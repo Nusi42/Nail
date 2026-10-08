@@ -4,10 +4,16 @@
  * keyboard and the pointer (single and recurring), the mini-month and the
  * agenda, in the UI locale.
  */
-import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  renderWithProviders,
+  widget,
+  type Env,
+  settleQueries,
+} from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { EVENT_DIALOG, SCOPE_DIALOG } from "./names";
 import { PIM_SKIN_CSS } from "./skin";
@@ -15,20 +21,10 @@ import { pimStoreFor } from "./store";
 import { dateString, localZone, todayIn } from "./time";
 import { must } from "../../test/must";
 import { stringMatching } from "../../test/matchers";
+import { inTimeZone } from "../../test/env";
+import { BERLIN } from "../../test/mockIds";
 
-const BERLIN = "Europe/Berlin";
-beforeAll(() => {
-  setLocalTimeZone(BERLIN);
-});
-afterAll(() => {
-  resetLocalTimeZone();
-});
-
-async function settle(env: Env): Promise<void> {
-  await waitFor(() => {
-    expect(env.queryClient.isFetching()).toBe(0);
-  });
-}
+inTimeZone(BERLIN);
 
 function geometryText(): string {
   const style = document.querySelector<HTMLStyleElement>("style[data-nail-theme]");
@@ -66,13 +62,13 @@ describe("calendar widget", () => {
     const { unmount } = renderNode(widget("calendar", { options: { view: "week" } }), env, {
       locale: "de",
     });
-    await settle(env);
+    await settleQueries(env);
     const first =
       document.querySelector('[data-part="calendar.day-head"]')?.getAttribute("data-day") ?? "";
     expect(new Date(`${first}T12:00:00Z`).getUTCDay()).toBe(1);
     unmount();
     renderNode(widget("calendar", { options: { view: "week" } }), env, { locale: "en" });
-    await settle(env);
+    await settleQueries(env);
     const sunday =
       document.querySelector('[data-part="calendar.day-head"]')?.getAttribute("data-day") ?? "";
     expect(new Date(`${sunday}T12:00:00Z`).getUTCDay()).toBe(0);
@@ -105,7 +101,7 @@ describe("calendar widget", () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week", "scroll-to": 9 } }), env);
-    await settle(env);
+    await settleQueries(env);
     const active = document.querySelector<HTMLElement>('[data-part="calendar.slot"][tabindex="0"]');
     expect(active).not.toBeNull();
     active?.focus();
@@ -124,7 +120,7 @@ describe("calendar widget", () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week" } }), env);
-    await settle(env);
+    await settleQueries(env);
     const last = document.querySelector<HTMLElement>(
       '[data-part="calendar.slot"][data-slot="6-9"]',
     );
@@ -164,7 +160,7 @@ describe("calendar widget", () => {
   it("asks this / this and following / all before moving a recurring event", async () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "work-week" } }), env);
-    await settle(env);
+    await settleQueries(env);
     const standups = await screen.findAllByRole("button", { name: /Stand-up/ });
     expect(standups).toHaveLength(5);
     fireEvent.keyDown(must(standups[0]), { key: "ArrowRight", altKey: true });
@@ -265,7 +261,7 @@ describe("calendar widget", () => {
       </>,
       env,
     );
-    await settle(env);
+    await settleQueries(env);
     const grid = screen.getByRole("grid", { name: /\d{4}/ });
     expect(
       within(grid)
@@ -305,7 +301,7 @@ describe("calendar toolbar and event cards (M5b)", () => {
       }),
       env,
     );
-    await settle(env);
+    await settleQueries(env);
     const toolbar = must(document.querySelector<HTMLElement>('[data-part="calendar.toolbar"]'));
     const order = [...toolbar.children]
       .flatMap((el) =>
@@ -360,7 +356,7 @@ describe("calendar toolbar and event cards (M5b)", () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week", "view-switch": "menu" } }), env);
-    await settle(env);
+    await settleQueries(env);
     expect(screen.queryByRole("group", { name: "View" })).toBeNull();
     await user.selectOptions(screen.getByLabelText("View"), "month");
     expect(document.querySelector('[data-part="calendar"]')).toHaveAttribute("data-view", "month");
@@ -395,7 +391,7 @@ describe("calendar views after the M5b review", () => {
       env,
       { locale: "en" },
     );
-    await settle(env);
+    await settleQueries(env);
     const days = [...document.querySelectorAll('[data-part="calendar.free-time.day"]')];
     expect(days).toHaveLength(5);
     for (const day of days) {
@@ -412,7 +408,7 @@ describe("calendar views after the M5b review", () => {
   it("gives the year's months a visible name", async () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "year" } }), env, { locale: "en" });
-    await settle(env);
+    await settleQueries(env);
     const titles = [...document.querySelectorAll('[data-part="calendar.year.month.title"]')];
     expect(titles.map((t) => t.textContent)).toEqual([
       "January",
@@ -433,7 +429,7 @@ describe("calendar views after the M5b review", () => {
   it("puts the month grid into a frame that gives the weeks the view's height", async () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "month" } }), env);
-    await settle(env);
+    await settleQueries(env);
     const grid = screen.getByRole("grid");
     expect(grid.parentElement).toHaveAttribute("data-part", "calendar.month.frame");
   });
@@ -495,7 +491,7 @@ describe("calendar views after the M5b review", () => {
         widget("calendar", { options: { view: "week", views: "day week month agenda" } }),
         env,
       );
-      await settle(env);
+      await settleQueries(env);
       // 700 px: the switch would need 380 but gets 120 → the menu.
       const menu = screen.getByRole("combobox", { name: "View" });
       expect(menu).toHaveValue("week");

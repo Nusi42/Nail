@@ -30,9 +30,6 @@ export const actions: Feature["actions"] = {
   },
 };
 
-/** Named dialogs (opened with `window.open "<name>"`). */
-export const dialogs: Feature["dialogs"] = {};
-
 /** Refreshes the MCP settings and drives the indicator. */
 export const handleMcpEvent: FeatureEventHandler = (event, { queryClient }) => {
   switch (event.type) {
@@ -47,10 +44,10 @@ export const handleMcpEvent: FeatureEventHandler = (event, { queryClient }) => {
 };
 
 /** Handlers for core events. */
-export const events: Feature["events"] = [handleMcpEvent];
+export const events: NonNullable<Feature["events"]> = [handleMcpEvent];
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [UiContextReporter];
+export const effects: NonNullable<Feature["effects"]> = [UiContextReporter];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

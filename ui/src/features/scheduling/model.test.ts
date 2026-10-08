@@ -7,13 +7,13 @@ import {
   isMine,
   mergeBusy,
   placeSpan,
-  plausibleEmail,
   responseOfStatus,
   splitAddresses,
   statusOfResponse,
   suggestSlots,
 } from "./model";
 import { SCHEDULING_BASE_CSS } from "./parts";
+import { plausibleEmail } from "../../state/addresses";
 import { firstStart } from "./AttendeePicker";
 
 const H = 3_600_000;

@@ -82,7 +82,7 @@ export function Outbox({ node }: WidgetProps) {
     <section
       data-part="outbox"
       data-node-id={node.id ?? undefined}
-      aria-label={node.label ? label(node.label) : t("outbox-label")}
+      aria-label={node.label ? label(node.label) : t("common-outbox")}
       aria-busy={outbox.isFetching}
     >
       {outbox.isError && (
@@ -106,7 +106,7 @@ export function Outbox({ node }: WidgetProps) {
             data-state={entry.state}
             data-account={entry.account_id}
           >
-            <div data-part="outbox.item.subject">{entry.subject || t("message-no-subject")}</div>
+            <div data-part="outbox.item.subject">{entry.subject || t("common-no-subject")}</div>
             <div data-part="outbox.item.recipients">
               {t("outbox-recipients", {
                 recipients: entry.recipients.map((a) => displayName(a)).join(", "),
@@ -132,7 +132,7 @@ export function Outbox({ node }: WidgetProps) {
                   data-action="edit"
                   onClick={() => void edit(entry)}
                 >
-                  {t("outbox-edit")}
+                  {t("common-edit")}
                 </button>
                 <button
                   type="button"
@@ -148,14 +148,12 @@ export function Outbox({ node }: WidgetProps) {
         ))}
       </ul>
       {(drafts.data?.length ?? 0) > 0 && (
-        <section data-part="outbox.drafts" aria-label={t("outbox-drafts-label")}>
-          <h3 data-part="outbox.drafts.title">{t("outbox-drafts-label")}</h3>
+        <section data-part="outbox.drafts" aria-label={t("common-drafts")}>
+          <h3 data-part="outbox.drafts.title">{t("common-drafts")}</h3>
           <ul data-part="outbox.list">
             {(drafts.data ?? []).map((draft) => (
               <li key={draft.id ?? ""} data-part="outbox.item" data-state="draft">
-                <div data-part="outbox.item.subject">
-                  {draft.subject || t("message-no-subject")}
-                </div>
+                <div data-part="outbox.item.subject">{draft.subject || t("common-no-subject")}</div>
                 <div data-part="outbox.item.recipients">
                   {t("outbox-recipients", {
                     recipients: [...draft.to, ...draft.cc].map((a) => displayName(a)).join(", "),
@@ -176,7 +174,7 @@ export function Outbox({ node }: WidgetProps) {
                     data-action="discard-draft"
                     onClick={() => void discardDraft(draft)}
                   >
-                    {t("outbox-draft-discard")}
+                    {t("common-discard")}
                   </button>
                 </div>
               </li>

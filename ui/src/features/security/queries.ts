@@ -4,7 +4,6 @@
  * other events refresh it with one invalidation (see `index.ts`).
  */
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import type {
   IdentityId,
   KeyFilter,
@@ -12,8 +11,11 @@ import type {
   VaultStatus,
   WindowsCertStore,
 } from "../../api/generated";
-import { useClient } from "../../state/queries";
+import { useState } from "react";
+import { nonEmpty } from "../../text/empty";
+import { useClient, useIdentities } from "../../state/queries";
 import { distinctRecipients } from "./model";
+import { useDebounced } from "../../state/debounce";
 
 export const securityKeys = {
   all: ["security"] as const,
@@ -79,21 +81,6 @@ export function useWindowsCertificates(store: WindowsCertStore, enabled: boolean
 /** Delay after the last recipient change before the key status is checked. */
 export const RECIPIENT_CHECK_MS = 300;
 
-/** `value`, but only after it stopped changing for `ms`. */
-export function useDebounced<T>(value: T, ms: number, same: (a: T, b: T) => boolean): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    if (same(settled, value)) return;
-    const timer = setTimeout(() => {
-      setSettled(value);
-    }, ms);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, settled, ms, same]);
-  return settled;
-}
-
 const sameList = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -128,4 +115,12 @@ export function useRecipientKeys(
     placeholderData: (previous) => previous,
   });
   return { ...query, pending: !sameList(list, settled) };
+}
+
+/** The identity a key tool works for: the one picked, else the first. */
+export function useIdentityChoice() {
+  const identities = useIdentities(null).data ?? [];
+  const [identity, setIdentity] = useState("");
+  const chosen = nonEmpty(identity) ?? identities[0]?.id ?? "";
+  return { identities, setIdentity, chosen };
 }

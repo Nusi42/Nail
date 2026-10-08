@@ -192,7 +192,7 @@ function VetoView() {
               close(null);
             }}
           >
-            {t("plugin-veto-keep-editing")}
+            {t("common-keep-editing")}
           </button>
           {!expired && (
             <button
@@ -203,7 +203,7 @@ function VetoView() {
               disabled={busy}
               onClick={() => void sendAnyway()}
             >
-              {t("plugin-veto-send-anyway")}
+              {t("common-send-anyway")}
             </button>
           )}
         </div>

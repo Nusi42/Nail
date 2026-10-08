@@ -40,6 +40,15 @@ const draft = (patch: Partial<Draft> = {}): Draft => ({
 
 afterEach(() => vi.useRealTimers());
 
+/** The mock conversation's row in the personal Inbox's thread list. */
+async function conversationRow(client: TransportClient) {
+  const page = await client.request(
+    { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
+    "Threads",
+  );
+  return must(page.threads.find((t) => t.id === MOCK_CONVERSATION_ID));
+}
+
 describe("virtual accounts in the mock core", () => {
   it("merges role folders of all accounts and keeps the rest in per-account subtrees", async () => {
     const { client } = setup();
@@ -227,11 +236,7 @@ describe("threads and search in the mock core", () => {
       id: "acc-personal/Sent#newest-reply",
       date: new Date(Date.parse(must(added[5]).date) + 60_000).toISOString(),
     });
-    const page = await client.request(
-      { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
-      "Threads",
-    );
-    const row = must(page.threads.find((t) => t.id === MOCK_CONVERSATION_ID));
+    const row = await conversationRow(client);
     expect(row.latest_from).toMatchObject({ me: true });
     expect(row.latest_message_id).toBe(added[5]?.id);
   });
@@ -261,11 +266,7 @@ describe("threads and search in the mock core", () => {
   it('lists conversations with the user\'s replies from Sent and "me" resolved (P2)', async () => {
     const { client, transport } = setup(12);
     const added = addMockConversation(transport.data);
-    const page = await client.request(
-      { type: "ListThreads", folder_id: "acc-personal/Inbox", offset: 0, limit: 100 },
-      "Threads",
-    );
-    const row = must(page.threads.find((t) => t.id === MOCK_CONVERSATION_ID));
+    const row = await conversationRow(client);
     // Four in the Inbox plus two replies from Sent; never the draft.
     expect(row.message_count).toBe(6);
     expect(row.unread_count).toBe(1);

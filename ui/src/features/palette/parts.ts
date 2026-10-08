@@ -8,10 +8,11 @@
  * The integrator appends this to the compiled theme's base CSS
  * (`ui/src/theme/compile.ts`).
  */
+import { INLINE_GAP } from "../../theme/declarations";
 export const PALETTE_BASE_CSS = `[data-part="palette"] { display: flex; flex-direction: column; min-height: 0; }
 [data-part="palette.input"] { width: 100%; box-sizing: border-box; }
 [data-part="palette.list"] { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 60vh; }
-[data-part="palette.item"] { display: flex; align-items: center; gap: 0.5em; cursor: default; }
+[data-part="palette.item"] { display: flex; align-items: center; gap: ${INLINE_GAP}; cursor: default; }
 [data-part="palette.item.title"] { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-part="palette.shortcuts"] { display: flex; gap: 0.25em; flex: 0 0 auto; }
 [data-part="palette.match"] { background: none; color: inherit; font-weight: bold; }

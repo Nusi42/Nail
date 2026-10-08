@@ -12,7 +12,7 @@
  * Plus the cancel dialog and the scheduling settings dialog.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId, useState, type Dispatch, type SetStateAction } from "react";
 import type {
   CalendarEvent,
   CancelScope,
@@ -44,6 +44,10 @@ import {
   type SchedulingWrite,
 } from "./queries";
 import { schedulingStoreFor, useScheduling } from "./store";
+import { useBusyAction } from "../../state/busyAction";
+import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { CloseButton } from "../../widgets/CloseButton";
+import { TextAreaField } from "../../widgets/forms";
 
 export interface MeetingPanelProps {
   event: CalendarEvent;
@@ -108,7 +112,7 @@ function OrganizerPanel({
       data-part="scheduling.meeting"
       data-role="organizer"
       aria-label={t("scheduling-meeting-label", {
-        title: event.fields.title || t("invitation-untitled"),
+        title: event.fields.title || t("common-no-title"),
       })}
     >
       <p data-part="scheduling.meeting.summary">
@@ -137,40 +141,24 @@ function OrganizerPanel({
         ))}
         {who === "chosen" && (
           <ul data-part="scheduling.meeting.people">
-            {others.map((a) => (
-              <li key={a.email} data-part="scheduling.meeting.person">
-                <label data-part="form.check">
-                  <input
-                    type="checkbox"
-                    checked={chosen.includes(a.email)}
-                    onChange={(e) => {
-                      setChosen((c) =>
-                        e.target.checked ? [...c, a.email] : c.filter((x) => x !== a.email),
-                      );
-                    }}
-                  />
-                  <span>
-                    {a.name ? t("invitation-person", { name: a.name, email: a.email }) : a.email}
-                  </span>
-                </label>
-              </li>
-            ))}
+            <PeopleChecks
+              people={others}
+              part="scheduling.meeting.person"
+              chosen={chosen}
+              setChosen={setChosen}
+            />
           </ul>
         )}
       </fieldset>
-      <div data-part="form.field" data-field="note">
-        <label data-part="form.label" htmlFor={ids.comment}>
-          {t("scheduling-send-note")}
-        </label>
-        <textarea
-          id={ids.comment}
-          data-part="form.textarea"
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-          }}
-        />
-      </div>
+      <TextAreaField
+        id={ids.comment}
+        name="note"
+        labelId="scheduling-cancel-note"
+        value={comment}
+        onChange={(v) => {
+          setComment(v);
+        }}
+      />
       <div data-part="scheduling.meeting.actions">
         <button
           type="button"
@@ -248,7 +236,7 @@ function AttendeePanel({
       data-part="scheduling.meeting"
       data-role="attendee"
       aria-label={t("scheduling-meeting-label", {
-        title: event.fields.title || t("invitation-untitled"),
+        title: event.fields.title || t("common-no-title"),
       })}
     >
       {organizer && (
@@ -349,12 +337,12 @@ export function CancelMeetingDialog({ close }: DialogProps) {
   };
   if (target === null) {
     return (
-      <div data-part="scheduling.dialog" data-state="empty">
-        <p data-part="scheduling.hint">{t("scheduling-cancel-nothing")}</p>
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("scheduling-close")}
-        </button>
-      </div>
+      <EmptyDialog
+        part="scheduling.dialog"
+        textPart="scheduling.hint"
+        hintId="scheduling-cancel-nothing"
+        close={finish}
+      />
     );
   }
   const scopes = CANCEL_SCOPES.filter(
@@ -383,7 +371,7 @@ export function CancelMeetingDialog({ close }: DialogProps) {
       }}
     >
       <p data-part="scheduling.dialog.intro">
-        {t("scheduling-cancel-intro", { title: target.title || t("invitation-untitled") })}
+        {t("scheduling-cancel-intro", { title: target.title || t("common-no-title") })}
       </p>
       <fieldset data-part="scheduling.cancel.scopes">
         <legend data-part="form.section.title">{t("scheduling-cancel-legend")}</legend>
@@ -409,39 +397,23 @@ export function CancelMeetingDialog({ close }: DialogProps) {
       </fieldset>
       {scope === "attendees" && (
         <ul data-part="scheduling.cancel.people" aria-label={t("scheduling-cancel-people")}>
-          {target.attendees.map((a) => (
-            <li key={a.email} data-part="scheduling.cancel.person">
-              <label data-part="form.check">
-                <input
-                  type="checkbox"
-                  checked={chosen.includes(a.email)}
-                  onChange={(e) => {
-                    setChosen((c) =>
-                      e.target.checked ? [...c, a.email] : c.filter((x) => x !== a.email),
-                    );
-                  }}
-                />
-                <span>
-                  {a.name ? t("invitation-person", { name: a.name, email: a.email }) : a.email}
-                </span>
-              </label>
-            </li>
-          ))}
+          <PeopleChecks
+            people={target.attendees}
+            part="scheduling.cancel.person"
+            chosen={chosen}
+            setChosen={setChosen}
+          />
         </ul>
       )}
-      <div data-part="form.field" data-field="note">
-        <label data-part="form.label" htmlFor={ids.note}>
-          {t("scheduling-cancel-note")}
-        </label>
-        <textarea
-          id={ids.note}
-          data-part="form.textarea"
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-          }}
-        />
-      </div>
+      <TextAreaField
+        id={ids.note}
+        name="note"
+        labelId="scheduling-cancel-note"
+        value={comment}
+        onChange={(v) => {
+          setComment(v);
+        }}
+      />
       <Problem message={problem} part="scheduling.problem" />
       <div data-part="scheduling.dialog.actions">
         <button
@@ -477,44 +449,31 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
   const calendars = useCalendars();
   const ids = { calendar: useId() };
   const [draft, setDraft] = useState<SchedulingSettings | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, run } = useBusyAction();
   const current = draft ?? settings.data ?? null;
   if (settings.isError) {
     return (
       <div data-part="scheduling.dialog" data-state="error">
         <Problem message={errorMessageOf(settings.error)} part="scheduling.problem" />
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("scheduling-close")}
-        </button>
+        <CloseButton onClose={close} />
       </div>
     );
   }
   if (current === null) {
-    return (
-      <div data-part="scheduling.dialog" data-state="loading" aria-busy="true">
-        <p data-part="scheduling.hint">{t("scheduling-loading")}</p>
-      </div>
-    );
+    return <LoadingDialog part="scheduling.dialog" textPart="scheduling.hint" />;
   }
   const writable = (calendars.data ?? []).filter(
     (c) => !c.read_only && c.components.includes("event"),
   );
   const save = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
+    await run(async () => {
       const { settings: saved } = await client.request(
         { type: "SetSchedulingSettings", settings: current },
         "SchedulingSettings",
       );
       queryClient.setQueryData(schedulingKeys.settings, saved);
       close();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <form
@@ -560,7 +519,7 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
             setDraft({ ...current, calendar_id: e.target.value || null });
           }}
         >
-          <option value="">{t("scheduling-setting-calendar-default")}</option>
+          <option value="">{t("common-default-calendar")}</option>
           {writable.map((c) => (
             <option key={c.id} value={c.id}>
               {c.settings.name}
@@ -571,12 +530,49 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
       <Problem message={problem} part="scheduling.problem" />
       <div data-part="scheduling.dialog.actions">
         <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("scheduling-save")}
+          {t("common-save")}
         </button>
         <button type="button" data-part="form.button" onClick={close}>
-          {t("scheduling-cancel")}
+          {t("common-cancel")}
         </button>
       </div>
     </form>
+  );
+}
+
+/** One check box per person (`name <email>`), checked when chosen. */
+function PeopleChecks({
+  people,
+  part,
+  chosen,
+  setChosen,
+}: {
+  people: readonly { name: string | null; email: string }[];
+  part: string;
+  chosen: readonly string[];
+  setChosen: Dispatch<SetStateAction<string[]>>;
+}) {
+  const t = useT();
+  return (
+    <>
+      {people.map((a) => (
+        <li key={a.email} data-part={part}>
+          <label data-part="form.check">
+            <input
+              type="checkbox"
+              checked={chosen.includes(a.email)}
+              onChange={(e) => {
+                setChosen((c) =>
+                  e.target.checked ? [...c, a.email] : c.filter((x) => x !== a.email),
+                );
+              }}
+            />
+            <span>
+              {a.name ? t("common-name-email", { name: a.name, email: a.email }) : a.email}
+            </span>
+          </label>
+        </li>
+      ))}
+    </>
   );
 }

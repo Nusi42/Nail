@@ -8,7 +8,14 @@
  * the series are always kept.
  */
 import { CalendarDate, CalendarDateTime, toZoned } from "@internationalized/date";
-import type { PimTime, Recurrence, RecurrenceRule, Weekday, WeekdayNum } from "../../api/generated";
+import type {
+  Frequency,
+  PimTime,
+  Recurrence,
+  RecurrenceRule,
+  Weekday,
+  WeekdayNum,
+} from "../../api/generated";
 import type { MessageArgs } from "../../i18n/localizer";
 import { WEEKDAYS, dateString, localString, parseDay, splitPimTime, utcString } from "./time";
 
@@ -192,6 +199,16 @@ const NO_PARTS = {
   by_set_pos: [],
   week_start: null,
 } satisfies Partial<RecurrenceRule>;
+
+/** A rule every `freq` (interval 1, never ending, nothing narrowed) changed by `over`. */
+export function plainRule(freq: Frequency, over: Partial<RecurrenceRule> = {}): RecurrenceRule {
+  return { freq, interval: 1, end: { type: "never" }, by_day: [], ...NO_PARTS, ...over };
+}
+
+/** A recurrence of the one rule {@link plainRule} builds. */
+export function plainRecurrence(freq: Frequency, over: Partial<RecurrenceRule> = {}): Recurrence {
+  return { rules: [plainRule(freq, over)], dates: [], exceptions: [] };
+}
 
 /** The contract's rule for a simple rule of a series starting at `start`. */
 export function ruleOf(simple: SimpleRule, start: PimTime): RecurrenceRule {

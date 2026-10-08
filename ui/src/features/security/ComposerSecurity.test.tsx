@@ -1,7 +1,7 @@
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import type { RecipientKeysReport, Request, SendCrypto } from "../../api/generated";
+import type { RecipientKeysReport, SendCrypto } from "../../api/generated";
 import { emptyComposer } from "../../state/compose";
 import {
   createEnv,
@@ -9,7 +9,6 @@ import {
   renderWithProviders,
   settleQueries,
   widget,
-  type Env,
 } from "../../test/harness";
 import { ComposerSecurity, composerRecipients } from "./ComposerSecurity";
 import {
@@ -19,10 +18,7 @@ import {
   loadComposerCrypto,
 } from "./composerStore";
 import { must } from "../../test/must";
-
-function requestsOf<T extends Request["type"]>(env: Env, type: T) {
-  return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
-}
+import { requestsOf } from "../../test/env";
 
 afterEach(() => {
   // Unmount before resetting module-level stores.

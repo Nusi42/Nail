@@ -7,15 +7,15 @@
 # (formats, job states, issues, backup items, diagnostics items) are in
 # core-portability.ftl.
 
-portability-title = Import and export
+portability-title = { portability-import-export-title }
 
 ## Window titles
 
 window-import-wizard = Import mail, calendars and contacts
-window-export-wizard = Export
+window-export-wizard = { portability-job-export }
 window-backup-wizard = Back up Nail
 window-restore-wizard = Restore from a backup
-window-diagnostics-bundle = Diagnostics for support
+window-diagnostics-bundle = { portability-diagnostics-title }
 window-portability-report = Report
 
 ## Command palette
@@ -34,16 +34,13 @@ portability-action-diagnostics-keywords = support logs bug report problem debug
 ## Shared
 
 portability-step = Step { $step } of { $steps }
-portability-back = Back
-portability-close = Close
-portability-loading = Loading…
 portability-reading = Reading…
 portability-browse = Browse…
 portability-browse-folder = Choose folder…
 portability-path-hint = Type the full path or browse.
 portability-path-type-hint = Type the full path of the file or folder on the computer running Nail.
 portability-path-not-absolute = Type the full path, for example C:\Users\you\Documents\mail.mbox.
-portability-path-missing = There is no file or folder at this path.
+portability-path-missing = { common-path-missing }
 portability-account-option = { $hasEmail ->
     [yes] { $name } ({ $email })
    *[no] { $name }
@@ -58,22 +55,16 @@ portability-filter-zip = Zip files
 
 ## Jobs: progress and reports
 
-portability-progress-label = Progress
 portability-progress-phase = { $kind }: { $phase }
-portability-progress-items = { $done } of { $total }
 portability-progress-bytes = { $done } of { $total }
 portability-progress-current = Working on { $name }
-portability-cancel-job = Cancel
 portability-cancel-hint = What is already done stays; the report says what.
 portability-report-title = { $kind }: { $state }
 portability-report-when = Started { $started }, finished { $finished }
 portability-job-failed = The job stopped with an error.
 portability-job-gone = This job is no longer known. Finished jobs are kept for a day.
 portability-counts-none = Nothing was changed.
-portability-count-messages = { $count ->
-    [one] 1 message
-   *[other] { $count } messages
-}
+portability-count-messages = { common-message-count }
 portability-count-folders = { $count ->
     [one] 1 folder
    *[other] { $count } folders
@@ -114,13 +105,13 @@ portability-count-skipped = { $count ->
     [one] 1 left out because of a problem
    *[other] { $count } left out because of problems
 }
-portability-issues-title = Problems
+portability-issues-title = { common-problems }
 portability-preview-issues-title = Problems found so far
 portability-issues-truncated = { $count ->
     [one] 1 more problem is not listed.
    *[other] { $count } more problems are not listed.
 }
-portability-issue-details = Details
+portability-issue-details = { itip-label-description }
 portability-issue-index = item { $index }
 portability-jobs-import-export = Recent imports and exports
 portability-jobs-backup = Recent backups and restores
@@ -145,24 +136,21 @@ portability-import-format-hint-maildir = A Maildir tree with cur, new and tmp (D
 portability-import-format-hint-thunderbird-profile = Local folders, address books, and your accounts and filters as suggestions.
 portability-import-format-hint-ics = Events and tasks from an iCalendar file.
 portability-import-format-hint-vcard = Contacts and groups from a vCard file.
-portability-import-file = File
-portability-import-folder = Folder
+portability-import-file = { common-file }
+portability-import-folder = { common-disk-folder }
 portability-import-pick-title = Choose what to import
 portability-import-read = Read source
 portability-import-options-title = What and where
 portability-import-preview-intro = Nail found the following in this { $format }. Choose what to import and where it goes.
-portability-import-folders = Folders
 portability-import-folder-size = { $count ->
     [one] 1 message, { $size }
    *[other] { $count } messages, { $size }
 }
-portability-import-collections = Calendars and address books
 portability-import-collection-size = { $kind }, { $count ->
     [one] 1 item
    *[other] { $count } items
 }
 portability-import-target = Where the mail goes
-portability-import-target-account = Account
 portability-import-target-local = Local Folders (on this computer only)
 portability-import-target-local-hint = Local Folders are never synchronized with a server.
 portability-import-target-account-hint = The messages go into an existing folder of the account (a source folder with the same name below it, else the chosen folder) and are uploaded to the server like any change, one by one through the account’s queue. Large imports take a while. New folders are only created in Local Folders.
@@ -176,7 +164,6 @@ portability-import-skip-duplicates = Leave out messages that are already there
 portability-import-skip-duplicates-hint = Same Message-ID, date and size. An interrupted import can then simply be started again.
 portability-import-keep-flags = Keep read, flagged and answered marks
 portability-import-calendar = Events and tasks go to
-portability-import-default-calendar = The default calendar
 portability-import-address-book = Contacts go to
 portability-import-default-address-book = The default address book
 portability-import-proposals-later = { $accounts ->
@@ -187,7 +174,6 @@ portability-import-proposals-later = { $accounts ->
     [one] 1 account and { $rules } filters are offered after the import; nothing is added without you.
    *[other] { $accounts } accounts and { $rules } filters are offered after the import; nothing is added without you.
 }
-portability-import-start = Import
 portability-import-job-title = Importing
 
 ## Thunderbird proposals
@@ -202,37 +188,29 @@ portability-proposal-added = Added. Sign in to start syncing.
 portability-proposal-saved = Saved as a rule.
 portability-proposal-rule-complete = Everything in this filter has a rule equivalent.
 portability-proposal-rule-incomplete = Parts of this filter have no rule equivalent; the rule starts switched off so you can check it.
-portability-proposal-issues = Notes
+portability-proposal-issues = { common-notes }
 
 ## Export
 
 portability-export-title = What to export
-portability-export-what = Export
+portability-export-what = { portability-job-export }
 portability-export-source-folders = Mail folders
 portability-export-source-messages = The selected message
-portability-export-source-calendars = Calendars
-portability-export-source-address-books = Address books
-portability-export-account = Account
-portability-export-folders = Folders
-portability-export-folder-count = { $count ->
-    [one] 1 message
-   *[other] { $count } messages
-}
+portability-export-source-calendars = { common-calendars }
+portability-export-source-address-books = { portability-export-address-books }
 portability-export-subfolders = Include subfolders
 portability-export-selected-message = The message selected in the message list is exported.
-portability-export-calendars = Calendars
 portability-export-address-books = Address books
-portability-export-format = Format
 portability-export-mbox-variant = mbox variant
 portability-export-target-file = Save as
-portability-export-target-folder = Into the folder
+portability-export-target-folder = { portability-import-target-parent }
 portability-export-pick-title = Choose where to export
 portability-export-default-name = Nail export
 portability-export-overwrite = Replace existing files
 portability-export-overwrite-hint = Without this, Nail stops when the file exists or the folder is not empty.
 portability-export-headers-only = Write messages Nail only has the headers of as they are
 portability-export-headers-only-hint = Otherwise their content is downloaded first, which needs the server.
-portability-export-start = Export
+portability-export-start = { portability-job-export }
 portability-export-job-title = Exporting
 portability-export-mismatch = This format cannot hold what you chose.
 portability-target-exists = The file exists or the folder is not empty. Tick “Replace existing files” or choose another place.
@@ -252,7 +230,6 @@ portability-backup-item-hint-keys = Your OpenPGP and S/MIME keys including secre
 portability-backup-item-hint-pim-local = Calendars, contacts and tasks kept only in Nail.
 portability-backup-item-hint-plugins = Installed plug-ins with their settings and data.
 portability-backup-keys-warning = The backup will contain your secret keys. Use a strong passphrase and keep the file safe.
-portability-backup-passphrase = Passphrase
 portability-backup-passphrase-hint = At least 12 characters. Nail does not store it.
 portability-backup-passphrase-repeat = Passphrase again
 portability-backup-passphrase-mismatch = The two passphrases are different.
@@ -262,7 +239,7 @@ portability-backup-default-name = Nail backup { $date }
 portability-backup-start = Back up
 portability-backup-job-title = Backing up
 portability-backup-verify = Check this backup
-portability-verify-title = Backup check
+portability-verify-title = { portability-job-verify-backup }
 portability-backup-restore-title = Backup and restore
 portability-backup-restore-text = Back up your settings, local mail and local calendars into one encrypted file, check a backup, or restore one.
 portability-manifest-title = In this backup
@@ -277,13 +254,10 @@ portability-manifest-accounts = { $count ->
 }
 portability-restore-open-title = Open a backup
 portability-restore-intro = Nail first shows what the backup contains and exactly what a restore would change. Nothing changes before you confirm.
-portability-restore-file = Backup file
+portability-restore-file = { portability-backup-file }
 portability-restore-pick-title = Choose a backup
-portability-restore-passphrase = Passphrase
-portability-restore-open = Open
 portability-restore-choose-title = Choose what to restore
 portability-restore-verify = Check the backup first
-portability-restore-items = Restore
 portability-restore-dry-run = Show what would change
 portability-restore-plan-title = What the restore would do
 portability-restore-plan-intro = This is a dry run: nothing has changed yet.
@@ -312,12 +286,12 @@ portability-restore-restart = Restart Nail to finish the restore.
 
 ## Settings widgets
 
-portability-settings-tab-import-export = Import and export
+portability-settings-tab-import-export = { portability-import-export-title }
 portability-settings-tab-backup = Backups
 portability-settings-tab-diagnostics = Diagnostics
 portability-import-export-title = Import and export
 portability-import-export-text = Bring in mail, calendars and contacts from other programs and files, or write them out.
-portability-open-import = Import…
+portability-open-import = { common-import-open }
 portability-open-export = Export…
 portability-open-backup = Back up…
 portability-open-restore = Restore…
@@ -328,7 +302,6 @@ portability-diagnostics-title = Diagnostics for support
 portability-diagnostics-widget-text = If support asks for it, Nail writes a zip with logs and settings. You see exactly what goes in before it is saved, and nothing is sent anywhere.
 portability-diagnostics-open = Create diagnostics bundle…
 portability-diagnostics-intro = Choose what to include. Passwords, tokens and keys are always removed. Mail content is only included for messages you pick.
-portability-diagnostics-items = Include
 portability-diagnostics-item-hint-system-info = Nail and Windows versions, WebView2, settings that affect behaviour.
 portability-diagnostics-item-hint-logs = The recent log files.
 portability-diagnostics-item-hint-config = accounts.kdl, layout.kdl, theme.kdl, rules.kdl without secrets.
@@ -359,6 +332,5 @@ portability-diagnostics-file = Save the bundle as
 portability-diagnostics-pick-title = Save the diagnostics bundle as
 portability-diagnostics-default-name = Nail diagnostics { $date }
 portability-diagnostics-save = Save bundle
-portability-diagnostics-saved = Saved to { $path } ({ $size }).
 portability-diagnostics-sha256 = Checksum (SHA-256): { $hash }
 portability-diagnostics-saved-hint = Send the file to support yourself. Nail does not upload it.

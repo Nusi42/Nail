@@ -8,16 +8,14 @@
 
 toolbar-editor-action-customize = Customize toolbar
 toolbar-editor-action-keywords = toolbar buttons actions customize edit more menu arrange
-toolbar-editor-menu-label = Toolbar
 
 ## The customizer window (`toolbar-customizer:<toolbar>`)
 
-window-toolbar-customizer = Customize toolbar
-toolbar-editor-choose = Toolbar
+window-toolbar-customizer = { toolbar-editor-action-customize }
 toolbar-editor-intro = Drag buttons between the toolbar, its More menu and the available actions. With the keyboard: the arrow keys choose a button, Ctrl+arrow keys move it, M moves it between the toolbar and More, Delete removes it. In Available actions, Enter adds the action to the toolbar and Shift+Enter adds it to More.
 toolbar-editor-no-toolbars = This layout has no toolbars.
-toolbar-editor-area-bar = Toolbar
-toolbar-editor-area-more = More menu
+toolbar-editor-area-bar = { customize-toolbar-choose }
+toolbar-editor-area-more = { customize-toolbar-more }
 toolbar-editor-area-palette = Available actions
 toolbar-editor-empty-bar = The toolbar is empty. Drag actions here.
 toolbar-editor-empty-more = The More menu has no entries of its own. Drag buttons here.
@@ -25,14 +23,11 @@ toolbar-editor-search = Find an action
 toolbar-editor-no-match = No action matches.
 toolbar-editor-more-matches = Showing { $shown } of { $total } actions. Type to find the others.
 toolbar-editor-drop-to-remove = Drop a button here to remove it from the toolbar.
-toolbar-editor-badge-plugin = Plug-in
 toolbar-editor-badge-used = On toolbar
 toolbar-editor-commands = Change the chosen button
 
 ## Items
 
-toolbar-editor-item-separator = Separator
-toolbar-editor-item-spacer = Flexible space
 toolbar-editor-item-header = Heading: { $label }
 toolbar-editor-item-submenu = Submenu: { $label }
 
@@ -42,17 +37,12 @@ toolbar-editor-move-earlier = Move earlier
 toolbar-editor-move-later = Move later
 toolbar-editor-move-to-more = Move to More
 toolbar-editor-move-to-bar = Move to toolbar
-toolbar-editor-remove = Remove
 toolbar-editor-add-to-bar = Add to toolbar
 toolbar-editor-add-to-more = Add to More
-toolbar-editor-undo = Undo
 toolbar-editor-undo-title = Undo: { $change }
-toolbar-editor-redo = Redo
 toolbar-editor-redo-title = Redo: { $change }
-toolbar-editor-reset = Reset to default
-toolbar-editor-done = Done
-toolbar-editor-undo-anyway = Undo anyway
-toolbar-editor-redo-anyway = Redo anyway
+toolbar-editor-undo-anyway = { appearance-undo-anyway }
+toolbar-editor-redo-anyway = { appearance-redo-anyway }
 
 ## Status line (announced to assistive technology)
 
@@ -68,19 +58,19 @@ toolbar-editor-redone = Redone: { $change }
 
 ## Names of the default toolbars
 
-toolbar-editor-toolbar-main = Main toolbar
-toolbar-editor-toolbar-reader = Message actions
-toolbar-editor-toolbar-calendar = Calendar
-toolbar-editor-toolbar-customize = Customize
+toolbar-editor-toolbar-main = { toolbar-main }
+toolbar-editor-toolbar-reader = { common-message-actions }
+toolbar-editor-toolbar-calendar = { common-calendar }
+toolbar-editor-toolbar-customize = { settings-tab-customize }
 
 ## Settings card (`toolbar-editor-settings`)
 
-toolbar-editor-settings-title = Toolbars
+toolbar-editor-settings-title = { customize-toolbar-tab }
 toolbar-editor-settings-intro = Right-click any toolbar and choose Customize toolbar, or pick one here.
 toolbar-editor-settings-count =
     { $count ->
         [one] 1 button
        *[other] { $count } buttons
     }
-toolbar-editor-settings-customize = Customize
+toolbar-editor-settings-customize = { settings-tab-customize }
 toolbar-editor-settings-customize-named = Customize { $toolbar }
