@@ -30,9 +30,9 @@ use nail_exchange::mapping::rules::{PlacementContext, RulePlan, applies_to, dige
 use nail_store::exchange::{ExchangeCategoryRecord, ExchangeOp};
 
 use super::{RunningEngine, changed, exchange_parts};
-use crate::engine::unix_now;
 use crate::error::{CoreError, Result};
 use crate::service::Service;
+use nail_util::time::unix_now;
 
 /// Reads (and writes) the account's settings: categories, automatic
 /// replies, rules.
@@ -351,7 +351,7 @@ pub(crate) async fn rules_status(
         },
         rules,
         server_rules,
-        synced_at: synced_at.and_then(super::rfc3339),
+        synced_at: nail_util::time::rfc3339_utc_opt(synced_at),
         error: error.map(|e| e.code),
         localized,
     })

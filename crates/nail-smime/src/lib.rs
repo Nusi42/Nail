@@ -44,7 +44,6 @@ pub mod oids;
 pub mod pkcs12;
 pub mod signed;
 pub mod smartcard;
-pub mod time;
 #[cfg(windows)]
 pub mod windows;
 

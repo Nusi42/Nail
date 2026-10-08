@@ -37,5 +37,8 @@
   "MAX_UI_DEPTH": 8,
   "MAX_UI_ITEMS": 500,
   "IMAGE_TYPES": ["image/png","image/jpeg","image/gif","image/webp"],
-  "MAX_ATTACHMENT_BYTES": 26214400
+  "MAX_ATTACHMENT_BYTES": 26214400,
+  "PLUGIN_HOOK_KIND_VALUES": ["arrival","beforeSend","open"],
+  "PLUGIN_COMMAND_SURFACE_VALUES": ["list","reader","composer","global"],
+  "INVITATION_RESPONSE_VALUES": ["accept","tentative","decline"]
 }

@@ -2,7 +2,9 @@
 
 import type { ActionKind } from "./ActionKind";
 import type { ActionPolicyMode } from "./ActionPolicyMode";
+import type { InvitationResponse } from "./InvitationResponse";
 import type { McpScope } from "./McpScope";
+import type { PluginCommandSurface } from "./PluginCommandSurface";
 import type { PluginEventName } from "./PluginEventName";
 import type { PluginHookKind } from "./PluginHookKind";
 import type { PluginPermission } from "./PluginPermission";
@@ -123,3 +125,12 @@ export const IMAGE_TYPES = ["image/png","image/jpeg","image/gif","image/webp"] a
 
 /** Largest attachment a draft may carry (bytes). */
 export const MAX_ATTACHMENT_BYTES = 26214400 as const;
+
+/** Every `PluginHookKind`, in the contract's order. */
+export const PLUGIN_HOOK_KIND_VALUES = ["arrival","beforeSend","open"] as const satisfies readonly PluginHookKind[];
+
+/** Every `PluginCommandSurface`, in the contract's order. */
+export const PLUGIN_COMMAND_SURFACE_VALUES = ["list","reader","composer","global"] as const satisfies readonly PluginCommandSurface[];
+
+/** Every `InvitationResponse`, in the contract's order. */
+export const INVITATION_RESPONSE_VALUES = ["accept","tentative","decline"] as const satisfies readonly InvitationResponse[];

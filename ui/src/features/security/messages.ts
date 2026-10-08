@@ -12,6 +12,7 @@ import {
   SMARTCARD_KEY_USAGE_MESSAGE_IDS,
   SMARTCARD_OBJECT_KIND_MESSAGE_IDS,
   SMARTCARD_SETTINGS_ISSUE_MESSAGE_IDS,
+  VAULT_PHASE_VALUES,
 } from "../../api/generated";
 import type {
   CertificateChain,
@@ -121,7 +122,7 @@ const SOURCES: KeySource[] = [
 ];
 const STORAGE: SecretStorage[] = ["keychain", "passphrase", "windows-store", "smartcard"];
 const VAULT_STATES: VaultState[] = ["plain", "encrypting", "encrypted", "decrypting"];
-const VAULT_PHASES: VaultPhase[] = ["database", "blobs", "index"];
+const VAULT_PHASES: readonly VaultPhase[] = VAULT_PHASE_VALUES;
 const AUTOCRYPT: RecipientKeysReport["autocrypt"][] = ["discourage", "available", "encrypt"];
 const RECIPIENT_STATES = [
   "usable",

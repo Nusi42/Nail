@@ -409,6 +409,69 @@
         "empty-external-reply",
         "reply-too-long"
       ]
+    },
+    {
+      "args": [
+        "outlook.office365.com"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": true
+    },
+    {
+      "args": [
+        "Outlook.Office365.com."
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": true
+    },
+    {
+      "args": [
+        "outlook.office.com"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": true
+    },
+    {
+      "args": [
+        "eur.outlook.com"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": true
+    },
+    {
+      "args": [
+        "notoffice365.com"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": false
+    },
+    {
+      "args": [
+        "office365.com.evil.example"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": false
+    },
+    {
+      "args": [
+        "mail.contoso.example"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": false
+    },
+    {
+      "args": [
+        "hotmail.com"
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isExchangeOnlineHost",
+      "out": false
     }
   ]
 }

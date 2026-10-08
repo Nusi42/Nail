@@ -1,4 +1,3 @@
-import { chars } from "../../text/chars";
 /**
  * Calendar colours (WP164, ADR 0109): the palette the calendar list's "…"
  * menu and the calendar dialogs offer, which colour values the UI accepts
@@ -77,50 +76,4 @@ export function swatchDeclarations(color: string | null): Record<string, string>
   if (!isCssColor(color)) return {};
   const c = color.trim();
   return { "background-color": c, "border-color": c };
-}
-
-// ---------------------------------------------------------------------------
-// Colour math (WCAG 2.x), for the contrast checks of the event cards.
-
-/** `#rgb` / `#rrggbb` → [r, g, b] (0–255); `null` for anything else. */
-export function parseHex(hex: string): [number, number, number] | null {
-  const h = hex.trim().replace(/^#/, "");
-  const full =
-    h.length === 3
-      ? chars(h)
-          .map((c) => c + c)
-          .join("")
-      : h.length === 6 || h.length === 8
-        ? h.slice(0, 6)
-        : null;
-  if (full === null || !/^[0-9a-f]{6}$/i.test(full)) return null;
-  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
-}
-
-/** `color-mix(in srgb, a p%, b)` of two hex colours. */
-export function mixHex(a: string, percent: number, b: string): [number, number, number] {
-  const x = parseHex(a);
-  const y = parseHex(b);
-  if (!x || !y) throw new Error(`not a hex colour: ${x ? b : a}`);
-  const p = percent / 100;
-  const mix = (u: number, v: number) => u * p + v * (1 - p);
-  return [mix(x[0], y[0]), mix(x[1], y[1]), mix(x[2], y[2])];
-}
-
-/** WCAG relative luminance of an sRGB colour (0–255 channels). */
-export function luminance([r, g, b]: readonly [number, number, number]): number {
-  const channel = (v: number) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-/** WCAG contrast ratio of two colours (1–21). */
-export function contrastRatio(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number],
-): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
 }

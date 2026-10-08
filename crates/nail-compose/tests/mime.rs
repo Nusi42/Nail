@@ -98,15 +98,8 @@ fn golden(name: &str, message: &OutgoingMessage) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/golden")
         .join(format!("{name}.eml"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual.as_bytes()).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("missing {}: run with NAIL_UPDATE_GOLDEN=1", path.display()));
-    // Git may check the files out with LF line ends.
-    assert_eq!(actual.replace("\r\n", "\n"), expected.replace("\r\n", "\n"));
+    // Git may check the files out with LF line ends: compared as LF.
+    nail_util::snapshot::check_text(&path, &actual, nail_util::snapshot::UPDATE_GOLDEN);
 }
 
 fn check_wire_format(message: &OutgoingMessage) {

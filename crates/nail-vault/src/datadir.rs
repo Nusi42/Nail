@@ -185,7 +185,7 @@ impl LockedVault {
         recovery::restore_into_keychain(&file, &self.keys, text)?;
         self.file.update(|file| {
             if let Some(entry) = file.recovery.as_mut() {
-                entry.verified_at = Some(recovery::now_rfc3339());
+                entry.verified_at = Some(nail_util::time::rfc3339_now());
             }
         })?;
         let mut status = self.status();

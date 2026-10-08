@@ -10,15 +10,13 @@
  */
 import { defaultTheme } from "../../api/mockData";
 import { BUILTIN_THEME_FILES } from "../appearance/themes";
+import { contrastRatio, mixHex, parseHex } from "../../theme/contrast";
 import {
   CALENDAR_COLORS,
   EVENT_TINT,
-  contrastRatio,
   eventCardDeclarations,
   isCssColor,
-  mixHex,
   paletteColorOf,
-  parseHex,
   swatchDeclarations,
 } from "./colors";
 
@@ -89,7 +87,8 @@ describe("event card colours", () => {
     expect(mixHex("#ff0000", 100, "#000000")).toEqual([255, 0, 0]);
     expect(contrastRatio([0, 0, 0], [255, 255, 255])).toBeCloseTo(21, 5);
     expect(parseHex("#abc")).toEqual([170, 187, 204]);
-    expect(parseHex("#11223380")).toEqual([17, 34, 51]);
+    // Like nail_util::color: no alpha.
+    expect(parseHex("#11223380")).toBeNull();
     expect(parseHex("blue")).toBeNull();
     expect(() => mixHex("blue", 10, "#000000")).toThrow(/not a hex colour/);
   });

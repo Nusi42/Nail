@@ -101,9 +101,7 @@ pub fn message_id_query(message_id: &str) -> String {
 
 /// A boundary that does not occur in `content`.
 pub(crate) fn boundary_for(prefix: &str, content: &[u8]) -> String {
-    let mut n: u64 = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| u64::from(d.subsec_nanos()));
+    let mut n: u64 = u64::try_from(nail_util::time::unix_now_nanos() % 1_000_000_000).unwrap_or(0);
     loop {
         let candidate = format!("{prefix}_{n:016x}");
         let needle = candidate.as_bytes();

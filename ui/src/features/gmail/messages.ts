@@ -5,8 +5,13 @@
  * the core builds, `locales/en/core-gmail.ftl`); ids built at runtime are
  * listed by `runtimeIds`.
  */
+import {
+  GMAIL_CATEGORY_VALUES,
+  GMAIL_LABEL_ISSUE_VALUES,
+  GMAIL_LABEL_LIST_VISIBILITY_VALUES,
+  GMAIL_MESSAGE_LIST_VISIBILITY_VALUES,
+} from "../../api/generated";
 import type {
-  GmailCategory,
   GmailLabelIssue,
   GmailLabelListVisibility,
   GmailMessageListVisibility,
@@ -21,31 +26,16 @@ export const prefixes: readonly string[] = ["gmail-"];
 export const notMessages: readonly string[] = [...DIALOGS];
 
 /** Label problems the core reports (`GmailLabelIssue::message_id`). */
-export const LABEL_ISSUES: readonly GmailLabelIssue[] = [
-  "missing-name",
-  "name-too-long",
-  "invalid-name",
-  "invalid-color",
-  "duplicate-name",
-];
+export const LABEL_ISSUES: readonly GmailLabelIssue[] = GMAIL_LABEL_ISSUE_VALUES;
 
-/** Inbox categories (`GmailCategory::message_id`). */
-export const CATEGORIES: readonly GmailCategory[] = [
-  "primary",
-  "social",
-  "promotions",
-  "updates",
-  "forums",
-];
-
-const LIST: readonly GmailLabelListVisibility[] = ["show", "show-if-unread", "hide"];
-const ON_MESSAGES: readonly GmailMessageListVisibility[] = ["show", "hide"];
+const LIST: readonly GmailLabelListVisibility[] = GMAIL_LABEL_LIST_VISIBILITY_VALUES;
+const ON_MESSAGES: readonly GmailMessageListVisibility[] = GMAIL_MESSAGE_LIST_VISIBILITY_VALUES;
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   return [
     ...LABEL_ISSUES.map((i) => `gmail-label-issue-${i}`),
-    ...CATEGORIES.map((c) => `gmail-category-${c}`),
+    ...GMAIL_CATEGORY_VALUES.map((c) => `gmail-category-${c}`),
     ...["none", "current", ...LABEL_COLORS.map((c) => c.name)].map((c) => `gmail-color-${c}`),
     ...LIST.map((v) => `gmail-list-visibility-${v}`),
     ...ON_MESSAGES.map((v) => `gmail-message-visibility-${v}`),

@@ -302,7 +302,7 @@ pub(crate) fn preview(
         collected,
         options,
         &mut redactor,
-        &crate::rules::rfc3339(crate::engine::unix_now()),
+        &nail_util::time::rfc3339_utc(nail_util::time::unix_now()),
         env!("CARGO_PKG_VERSION"),
     )
     .map_err(|e| e.to_api_error())?;

@@ -24,31 +24,12 @@
  *   dragged window will fill when dropped
  */
 import { p } from "../../theme/selectors";
-import { QUIET_HOVER } from "../../theme/declarations";
-
-/** Token shorthands (fallbacks only where the schema may lack the token). */
-const T = {
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  raised: "var(--nail-color-bg-raised)",
-  border: "var(--nail-color-border)",
-  accent: "var(--nail-color-accent)",
-  focus: "var(--nail-color-focus-ring)",
-  scrim: "var(--nail-color-scrim)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  rSm: "var(--nail-radius-sm)",
-  rLg: "var(--nail-radius-lg)",
-} as const;
+import { QUIET_HOVER, VISUALLY_HIDDEN } from "../../theme/declarations";
+import { T } from "../../theme/tokens";
 
 /** The grab width of an edge handle and the size of a corner handle. */
 const EDGE = "6px";
 const CORNER = "14px";
-
-const VISUALLY_HIDDEN =
-  "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;";
 
 const LAYER = `${p("window-layer")} {
   position: fixed; inset: 0; z-index: 100; display: block;

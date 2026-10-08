@@ -15,6 +15,7 @@
  * `state.unsupported` makes every request answer `unsupported` (the core
  * before WP85).
  */
+import { MAX_FREE_BUSY_ATTENDEES, MAX_FREE_BUSY_DAYS } from "../../api/generated";
 import type {
   AttendeeFreeBusy,
   BusyKind,
@@ -66,8 +67,6 @@ export function isSchedulingRequest(request: Request): request is SchedulingRequ
 }
 
 /** Limits of `QueryFreeBusy` (`nail_api::scheduling`). */
-export const MAX_FREE_BUSY_ATTENDEES = 100;
-export const MAX_FREE_BUSY_DAYS = 92;
 
 /** A recurring busy block of a demo person, in minutes after midnight (mock zone). */
 export interface DemoBusyBlock {

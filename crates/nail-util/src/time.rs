@@ -112,12 +112,75 @@ pub fn parse_iso_date(text: &str) -> Option<(i64, u32, u32)> {
     (day >= 1 && day <= days_in_month(year, month)?).then_some((year, month, day))
 }
 
+/// The time since the Unix epoch (zero when the clock is before 1970).
+fn since_epoch() -> std::time::Duration {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+}
+
+/// A system time (a file's modification time, …) as Unix seconds; `None`
+/// before 1970.
+#[must_use]
+pub fn unix_secs_of(time: std::time::SystemTime) -> Option<i64> {
+    time.duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_secs()).ok())
+}
+
+/// The current Unix time in nanoseconds (0 when the clock is before 1970):
+/// a cheap varying seed for boundaries, jitter and unique names, never a
+/// secret.
+#[must_use]
+pub fn unix_now_nanos() -> u128 {
+    since_epoch().as_nanos()
+}
+
 /// The current Unix time in seconds (0 when the clock is before 1970).
 #[must_use]
 pub fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+    i64::try_from(since_epoch().as_secs()).unwrap_or(i64::MAX)
+}
+
+/// The current Unix time in milliseconds (0 when the clock is before 1970).
+#[must_use]
+pub fn unix_now_millis() -> u64 {
+    u64::try_from(since_epoch().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// The current Unix time in seconds, unsigned (0 when the clock is before
+/// 1970).
+#[must_use]
+pub fn unix_now_secs() -> u64 {
+    since_epoch().as_secs()
+}
+
+/// Now as RFC 3339 UTC with whole seconds ([`rfc3339_utc`] of
+/// [`unix_now`]).
+#[must_use]
+pub fn rfc3339_now() -> String {
+    rfc3339_utc(unix_now())
+}
+
+/// Optional Unix seconds as RFC 3339 UTC ([`rfc3339_utc`]).
+#[must_use]
+pub fn rfc3339_utc_opt(secs: Option<i64>) -> Option<String> {
+    secs.map(rfc3339_utc)
+}
+
+/// Unix milliseconds as RFC 3339 UTC with milliseconds
+/// (`2026-09-29T10:15:00.123Z`).
+#[must_use]
+pub fn rfc3339_utc_millis(millis: u64) -> String {
+    let whole = rfc3339_utc(i64::try_from(millis / 1000).unwrap_or(i64::MAX));
+    format!("{}.{:03}Z", whole.trim_end_matches('Z'), millis % 1000)
+}
+
+/// Now as RFC 3339 UTC with milliseconds ([`rfc3339_utc_millis`] of
+/// [`unix_now_millis`]).
+#[must_use]
+pub fn rfc3339_now_millis() -> String {
+    rfc3339_utc_millis(unix_now_millis())
 }
 
 /// `YYYY-MM-DD` of a day number.
@@ -222,5 +285,39 @@ mod tests {
     #[test]
     fn the_clock_is_after_2026() {
         assert!(unix_now() > 1_788_998_400);
+        assert!(unix_now_secs() > 1_788_998_400);
+        assert!(unix_now_millis() > 1_788_998_400_000);
+        assert!(rfc3339_now().as_str() > "2026-09-10T00:00:00Z" && rfc3339_now().ends_with('Z'));
+        assert_eq!(rfc3339_now().len(), "2026-09-10T00:00:00Z".len());
+        assert_eq!(rfc3339_now_millis().len(), "2026-09-10T00:00:00.000Z".len());
+    }
+
+    #[test]
+    fn system_times() {
+        let at = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_790_000_000);
+        assert_eq!(unix_secs_of(at), Some(1_790_000_000));
+        assert_eq!(
+            unix_secs_of(std::time::UNIX_EPOCH - std::time::Duration::from_secs(1)),
+            None
+        );
+        assert!(unix_now_nanos() > 1_788_998_400_000_000_000);
+    }
+
+    #[test]
+    fn millisecond_forms() {
+        assert_eq!(rfc3339_utc_millis(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(
+            rfc3339_utc_millis(951_782_400_000),
+            "2000-02-29T00:00:00.000Z"
+        );
+        assert_eq!(
+            rfc3339_utc_millis(1_790_590_500_123),
+            "2026-09-28T10:15:00.123Z"
+        );
+        assert_eq!(
+            rfc3339_utc_opt(Some(0)).as_deref(),
+            Some("1970-01-01T00:00:00Z")
+        );
+        assert_eq!(rfc3339_utc_opt(None), None);
     }
 }

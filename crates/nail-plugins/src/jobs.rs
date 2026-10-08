@@ -202,7 +202,7 @@ fn unix(at: DateTime<Utc>) -> i64 {
 }
 
 fn rfc3339(at: DateTime<Utc>) -> String {
-    at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    nail_util::time::rfc3339_utc(at.timestamp())
 }
 
 /// Why a run was not started.

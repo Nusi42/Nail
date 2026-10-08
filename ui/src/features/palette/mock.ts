@@ -4,6 +4,7 @@
  * counted, at most 20, malformed ids refused). `../../api/mock.ts` routes
  * exactly these requests here.
  */
+import { MAX_RECENT_ACTIONS } from "../../api/generated";
 import type { RecentActions, Request, Response } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { charCount } from "../../text/chars";
@@ -21,8 +22,7 @@ export function isPaletteRequest(request: Request): request is PaletteRequest {
   return (PALETTE_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/** `nail_api::palette::MAX_RECENT_ACTIONS`. */
-export const MAX_RECENT_ACTIONS = 20;
+export { MAX_RECENT_ACTIONS } from "../../api/generated";
 
 /** `nail_api::palette::is_action_id`. */
 export function isActionId(id: string): boolean {

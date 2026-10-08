@@ -9,9 +9,11 @@ import {
 import {
   composerWindow,
   composerWindows,
+  messageRows,
   newMessageButton,
   runFromPalette,
-  messageRows,
+  windowById,
+  windowSelector,
 } from "../support/views";
 import { defined } from "../support/defined";
 
@@ -98,7 +100,7 @@ test("a composer pops out, is sent from its own window, and the window closes", 
   const page = await launch();
 
   const id = await newComposer(page, "From its own window");
-  const inPage = page.locator(`[data-part="window"][data-window="${id}"]`);
+  const inPage = windowById(page, id);
   await inPage.getByRole("button", { name: "Open in new window" }).click();
   // It left the page and has an OS window titled by its subject.
   await expect(inPage).toHaveCount(0);
@@ -135,7 +137,7 @@ test("a popped-out composer returns to the main window with what was typed", asy
   const page = await launch();
 
   const id = await newComposer(page, "Round trip");
-  const inPage = page.locator(`[data-part="window"][data-window="${id}"]`);
+  const inPage = windowById(page, id);
   await inPage.getByRole("button", { name: "Open in new window" }).click();
   await expect(inPage).toHaveCount(0);
   const popped = await popOutPage(id);
@@ -157,16 +159,14 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   // Discard: the question shows in the pop-out page, and discarding closes
   // the OS window.
   const first = await newComposer(page, "Throw away");
-  const firstInPage = page.locator(`[data-part="window"][data-window="${first}"]`);
+  const firstInPage = windowById(page, first);
   await firstInPage.getByRole("button", { name: "Open in new window" }).click();
   await expect(firstInPage).toHaveCount(0);
   const thrown = await popOutPage(first);
   const thrownHost = thrown.locator(`[data-part="pop-out"][data-window="${first}"]`);
   await expect(thrownHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Throw away");
   await thrownHost.getByRole("button", { name: "Discard", exact: true }).click();
-  const discard = thrown.locator(
-    `[data-part="window"][data-window="composer-discard:${first.split(":")[1] ?? ""}"]`,
-  );
+  const discard = thrown.locator(windowSelector(`composer-discard:${first.split(":")[1] ?? ""}`));
   await expect(discard).toBeVisible();
   await clickClosing(discard.getByRole("button", { name: "Discard", exact: true }), thrown);
   await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
@@ -174,7 +174,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   // The OS close button (Alt+F4) with unsaved typing: the page asks first,
   // and "Save draft" keeps the text and closes the OS window.
   const second = await newComposer(page, "Keep this");
-  const secondInPage = page.locator(`[data-part="window"][data-window="${second}"]`);
+  const secondInPage = windowById(page, second);
   await secondInPage.getByRole("button", { name: "Open in new window" }).click();
   await expect(secondInPage).toHaveCount(0);
   const kept = await popOutPage(second);
@@ -182,9 +182,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await expect(keptHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Keep this");
   await keptHost.getByRole("textbox", { name: "Message" }).fill("The last words.");
   await shellControl(page, "close-pop-outs");
-  const question = kept.locator(
-    `[data-part="window"][data-window="composer-close:${second.split(":")[1] ?? ""}"]`,
-  );
+  const question = kept.locator(windowSelector(`composer-close:${second.split(":")[1] ?? ""}`));
   await expect(question).toBeVisible();
   // Still open while it asks.
   expect((await popOuts(page)).map((p) => p.label)).toEqual([`popout-${second}`]);

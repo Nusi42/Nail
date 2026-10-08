@@ -21,6 +21,7 @@
  *   changes arrive, last sync, throttling, folders, queued changes,
  *   warnings.
  */
+import { SSPI_PACKAGE_VALUES } from "../../api/generated";
 import { useId } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
@@ -43,16 +44,17 @@ import {
   redirectedHost,
   withEngine,
   withExchangeSignIn,
+  EXCHANGE_SETUP_CHOICES,
+  type ExchangeSetupChoice,
   type ExchangeSignIn,
 } from "./model";
 import { useExchangeStatus } from "./queries";
 import { ENGINES } from "./messages";
 
-/** What the user says the account is on the address step. */
-export type ExchangeSetupChoice = "auto" | ExchangeEngine;
+const CHOICES = EXCHANGE_SETUP_CHOICES;
 
-const CHOICES: readonly ExchangeSetupChoice[] = ["auto", "graph", "ews"];
-const PACKAGES: readonly SspiPackage[] = ["negotiate", "kerberos", "ntlm"];
+export type { ExchangeSetupChoice };
+const PACKAGES: readonly SspiPackage[] = SSPI_PACKAGE_VALUES;
 
 /** Mount point `ExchangeAccountType` (address step). */
 export function ExchangeAccountType({

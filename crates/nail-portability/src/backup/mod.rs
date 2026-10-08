@@ -573,9 +573,7 @@ pub fn write_backup(
         format_version: BACKUP_FORMAT_VERSION,
         app_version: info.app_version,
         schema_version: info.schema_version,
-        created_at: options
-            .now
-            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        created_at: nail_util::time::rfc3339_utc(options.now.timestamp()),
         contents: options.contents.clone(),
         entries,
         counts,

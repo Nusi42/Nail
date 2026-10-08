@@ -26,7 +26,12 @@ import {
   windowKind,
 } from "../state/windows";
 import { charCount } from "../text/chars";
-import { POP_OUT_ISSUE_MESSAGE_IDS, WINDOW_STATE_ISSUE_MESSAGE_IDS } from "./generated";
+import {
+  MAX_POP_OUT_CONTEXT_BYTES,
+  MAX_POP_OUT_TITLE_CHARS,
+  POP_OUT_ISSUE_MESSAGE_IDS,
+  WINDOW_STATE_ISSUE_MESSAGE_IDS,
+} from "./generated";
 
 /** The requests answered here. */
 export const WINDOW_STATE_REQUESTS = [
@@ -45,10 +50,6 @@ export type WindowStateRequest = Extract<Request, { type: (typeof WINDOW_STATE_R
 export function isWindowStateRequest(request: Request): request is WindowStateRequest {
   return (WINDOW_STATE_REQUESTS as readonly string[]).includes(request.type);
 }
-
-/** `MAX_POP_OUT_CONTEXT_BYTES`, `MAX_POP_OUT_TITLE_CHARS`. */
-export const MAX_POP_OUT_CONTEXT_BYTES = 16 * 1024;
-export const MAX_POP_OUT_TITLE_CHARS = 256;
 
 interface MockWindows {
   states: Record<string, WindowState>;

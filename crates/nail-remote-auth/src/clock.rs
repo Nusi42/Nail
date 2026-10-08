@@ -5,7 +5,6 @@
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unix seconds (UTC).
 pub trait Clock: Send + Sync + fmt::Debug {
@@ -19,10 +18,7 @@ pub struct SystemClock;
 
 impl Clock for SystemClock {
     fn now(&self) -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-            .unwrap_or_default()
+        nail_util::time::unix_now()
     }
 }
 
@@ -61,12 +57,7 @@ pub(crate) fn parse_rfc3339(text: &str) -> Option<i64> {
 }
 
 /// Formats Unix seconds as RFC 3339 (UTC, seconds), like the store.
-pub(crate) fn rfc3339(secs: i64) -> String {
-    chrono::DateTime::from_timestamp(secs, 0)
-        .unwrap_or_default()
-        .format("%Y-%m-%dT%H:%M:%SZ")
-        .to_string()
-}
+pub(crate) use nail_util::time::rfc3339_utc as rfc3339;
 
 #[cfg(test)]
 mod tests {

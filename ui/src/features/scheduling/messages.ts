@@ -5,6 +5,13 @@
  * texts the core builds, `locales/en/core-scheduling.ftl`); ids built at
  * runtime are listed by `runtimeIds`.
  */
+import {
+  BUSY_KIND_VALUES,
+  CANCEL_SCOPE_VALUES,
+  FREE_BUSY_ISSUE_VALUES,
+  ITIP_ISSUE_VALUES,
+  ITIP_METHOD_VALUES,
+} from "../../api/generated";
 import type {
   CancelScope,
   FreeBusyIssue,
@@ -14,6 +21,7 @@ import type {
   ItipMethod,
 } from "../../api/generated";
 import { DIALOGS, FREEBUSY_WIDGET, INVITATION_CARD_WIDGET } from "./names";
+import { PICKER_KINDS } from "./AttendeePicker";
 import { RESPONSES } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
@@ -23,40 +31,12 @@ export const prefixes: readonly string[] = ["scheduling-", "invitation-", "freeb
 export const notMessages: readonly string[] = [...DIALOGS, INVITATION_CARD_WIDGET, FREEBUSY_WIDGET];
 
 /** Problems with invitation messages the core reports (`ItipIssue::message_id`). */
-export const ITIP_ISSUES: readonly ItipIssue[] = [
-  "unparsable",
-  "unknown-method",
-  "no-event",
-  "missing-uid",
-  "missing-organizer",
-  "attendee-count",
-  "sender-not-organizer",
-  "sender-not-attendee",
-  "not-addressed-to-me",
-  "several-events",
-  "organizer-changed",
-  "sent-on-behalf",
-  "uninvited-attendee",
-];
+export const ITIP_ISSUES: readonly ItipIssue[] = ITIP_ISSUE_VALUES;
 
 /** Problems with free/busy questions (`FreeBusyIssue::message_id`). */
-export const FREE_BUSY_ISSUES: readonly FreeBusyIssue[] = [
-  "attendee-count",
-  "invalid-attendee",
-  "invalid-range",
-  "range-too-long",
-];
+export const FREE_BUSY_ISSUES: readonly FreeBusyIssue[] = FREE_BUSY_ISSUE_VALUES;
 
-export const METHODS: readonly ItipMethod[] = [
-  "publish",
-  "request",
-  "reply",
-  "add",
-  "cancel",
-  "refresh",
-  "counter",
-  "decline-counter",
-];
+export const METHODS: readonly ItipMethod[] = ITIP_METHOD_VALUES;
 
 export const STATES: readonly InvitationState[] = [
   "new",
@@ -96,11 +76,11 @@ export const APPLIED: readonly InvitationAction[] = [
   "decline-counter",
 ];
 
-export const CANCEL_SCOPES: readonly CancelScope[] = ["meeting", "occurrence", "attendees"];
+export const CANCEL_SCOPES: readonly CancelScope[] = CANCEL_SCOPE_VALUES;
 /** Kinds of free/busy sources (`FreeBusySource.type`). */
 export const SOURCES = ["own", "caldav", "exchange", "unknown"] as const;
 /** Busy kinds (`BusyKind`). */
-export const BUSY = ["tentative", "busy", "unavailable"] as const;
+export const BUSY = BUSY_KIND_VALUES;
 /** The scheduling settings' switches. */
 export const SETTING_SWITCHES = [
   "add-invitations",
@@ -127,7 +107,7 @@ export function runtimeIds(): string[] {
     ...BUSY.map((b) => `freebusy-kind-${b}`),
     ...SETTING_SWITCHES.flatMap((s) => [`scheduling-setting-${s}`, `scheduling-setting-${s}-hint`]),
     ...DIALOGS.map((d) => `window-${d}`),
-    ...["individual", "room", "resource"].map((k) => `scheduling-kind-${k}`),
+    ...PICKER_KINDS.map((k) => `scheduling-kind-${k}`),
     ...["series", "occurrence"].map((s) => `scheduling-scope-${s}`),
     ...["everyone", "chosen"].map((s) => `scheduling-send-to-${s}`),
   ];

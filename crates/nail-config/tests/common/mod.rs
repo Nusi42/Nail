@@ -22,15 +22,15 @@ pub(crate) fn golden(folder: &str, name: &str, actual: &str) {
         .join("tests/golden")
         .join(folder)
         .join(format!("{name}.kdl"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_GOLDEN=1)", path.display()))
-        .replace("\r\n", "\n");
-    assert_eq!(expected, actual, "golden file {}", path.display());
+    let env = nail_util::snapshot::UPDATE_GOLDEN;
+    let expected = nail_util::snapshot::stored(&path, actual, env);
+    assert_eq!(
+        expected,
+        actual,
+        "golden file {} ({})",
+        path.display(),
+        nail_util::snapshot::hint(env)
+    );
 }
 
 /// Compares a JSON Schema with `schema/<name>` (as JSON values, so key
@@ -41,13 +41,8 @@ pub(crate) fn schema_snapshot(name: &str, schema: &schemars::Schema, test: &str)
         .join("schema")
         .join(name);
     let actual = serde_json::to_string_pretty(schema).unwrap() + "\n";
-    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, &actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_SNAPSHOTS=1)", path.display()));
+    let expected =
+        nail_util::snapshot::stored(&path, &actual, nail_util::snapshot::UPDATE_SNAPSHOTS);
     // Compare as JSON values so key order (serde_json's `preserve_order`
     // feature may be switched on by other crates) does not matter.
     let expected: Value = serde_json::from_str(&expected).unwrap();

@@ -13,14 +13,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import {
-  THEME_KIND_MESSAGE_IDS,
   DENSITY_MESSAGE_IDS,
-  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
+  DENSITY_VALUES,
   PREVIEW_TOKENS,
+  THEME_KIND_MESSAGE_IDS,
+  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
 } from "../../api/generated";
 import type {
   Appearance,
-  Density,
   LocalizedMessage,
   ThemeInfo,
   ThemeKind,
@@ -539,9 +539,7 @@ export function AppearanceSettings({ node }: WidgetProps) {
             label={t("appearance-density-title")}
             value={s.density}
             disabled={busy}
-            options={(["comfortable", "compact"] as const satisfies readonly Density[]).map(
-              (d) => ({ value: d, label: t(DENSITY_MESSAGE_IDS[d]) }),
-            )}
+            options={DENSITY_VALUES.map((d) => ({ value: d, label: t(DENSITY_MESSAGE_IDS[d]) }))}
             onChange={(value) => {
               update({ density: value === "compact" ? "compact" : "comfortable" });
             }}

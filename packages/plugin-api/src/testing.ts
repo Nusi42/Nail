@@ -82,7 +82,13 @@ import type {
   PluginRenderPurpose,
   PluginUiNode,
 } from "./generated";
-import { ACCOUNT_PERMISSIONS, ACTION_KIND_RULES, PLUGIN_PERMISSIONS } from "./generated";
+import {
+  ACCOUNT_PERMISSIONS,
+  ACTION_KIND_RULES,
+  INVITATION_RESPONSE_VALUES,
+  PLUGIN_HOOK_KIND_VALUES,
+  PLUGIN_PERMISSIONS,
+} from "./generated";
 import { toBytes, decodeUtf8, encodeUtf8 } from "./bytes";
 import {
   arrivalProblems,
@@ -743,7 +749,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
 
   const hooksRegistry: PluginHooksRegistry = {
     register(hook, handler) {
-      if (!["arrival", "beforeSend", "open"].includes(hook)) {
+      if (!(PLUGIN_HOOK_KIND_VALUES as readonly string[]).includes(hook)) {
         throw createPluginApiError("invalid_request", `unknown hook ${hook}`);
       }
       register(
@@ -1021,7 +1027,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         if ((answer.messageId === undefined) === (answer.eventId === undefined)) {
           throw invalid("pass either messageId or eventId");
         }
-        if (!["accept", "tentative", "decline"].includes(answer.response)) {
+        if (!(INVITATION_RESPONSE_VALUES as readonly string[]).includes(answer.response)) {
           throw invalid(`unknown response ${answer.response}`);
         }
         if (answer.messageId !== undefined) need("mail.read", message(answer.messageId).accountId);

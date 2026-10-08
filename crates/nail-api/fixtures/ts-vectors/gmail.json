@@ -1,0 +1,244 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Work"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "color": {
+            "background": "#fb4c2f",
+            "text": "#ffffff"
+          },
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Work/Projects"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": ""
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "missing-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "   "
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "missing-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "INBOX"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Category_Social"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "/Work"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Work/"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "a//b"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "tab\there"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "xy"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "xy"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Ünïcödé"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "name-too-long"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": null,
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "color": {
+            "background": "red",
+            "text": "#ffffff"
+          },
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": "Work"
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "invalid-color"
+      ]
+    },
+    {
+      "args": [
+        {
+          "color": {
+            "background": "#fb4c2f",
+            "text": "#fff"
+          },
+          "list_visibility": "show",
+          "message_visibility": "show",
+          "name": ""
+        }
+      ],
+      "fn": "labelIssues",
+      "out": [
+        "missing-name",
+        "invalid-color"
+      ]
+    }
+  ]
+}

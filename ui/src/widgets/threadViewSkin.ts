@@ -15,45 +15,9 @@
  * stays an alias for one release).
  */
 import { p, ps } from "../theme/selectors";
+import { READER_SLOTS } from "../theme/skin";
 import { ACCENT_BAR, AVATAR_FG, READER_MEASURE, READER_NARROW } from "../theme/declarations";
-
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  accent: "var(--nail-color-accent)",
-  focus: "var(--nail-color-focus-ring)",
-  quote: "var(--nail-color-quote-1, var(--nail-color-border))",
-  fontReader: "var(--nail-font-reader, var(--nail-font-ui))",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  normal: "var(--nail-line-height-normal)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  xxl: "var(--nail-space-xxl)",
-  pane: "var(--nail-space-pane)",
-  row: "var(--nail-space-row)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  disabled: "var(--nail-opacity-disabled)",
-  fontUi: "var(--nail-font-ui)",
-  fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
-  heading: "var(--nail-font-size-heading)",
-  tight: "var(--nail-line-height-tight)",
-  lg: "var(--nail-space-lg)",
-  xl: "var(--nail-space-xl)",
-  rLg: "var(--nail-radius-lg)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  /** 28 px in Comfortable (size.avatar 34 scaled by 28 / 34), 23 px in Compact. */
-  avatar: "var(--nail-skin-avatar-sm)",
-} as const;
+import { T } from "../theme/tokens";
 
 /** The strip's rows: half the list's row padding above and below. */
 const ROW_PAD = `calc(${T.row} / 2)`;
@@ -102,8 +66,8 @@ ${p("thread-view.item")}[data-state~="selected"] { background-color: ${T.subtle}
 ${p("thread-view.item.header")} { display: flex; align-items: center; gap: ${T.sm}; padding-inline-end: ${T.sm}; }
 ${p("thread-view.item.toggle")} { ${toggle(T.sm, T.rMd)} }
 ${ps("thread-view.item.avatar", "thread-view.card.avatar")} {
-  display: grid; flex: 0 0 auto; place-items: center; width: ${T.avatar}; height: ${T.avatar}; border-radius: 50%;
-  font-size: calc(${T.avatar} * 0.4); font-weight: ${T.semibold}; line-height: 1;
+  display: grid; flex: 0 0 auto; place-items: center; width: ${T.avatarSm}; height: ${T.avatarSm}; border-radius: 50%;
+  font-size: calc(${T.avatarSm} * 0.4); font-weight: ${T.semibold}; line-height: 1;
   color: ${AVATAR_FG}; user-select: none;
 }
 ${p("thread-view.item.from")} { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
@@ -116,21 +80,13 @@ ${p("thread-view.item.open")} {
 }
 ${p("thread-view.item.open")}:hover { background-color: ${T.subtle}; }
 ${p("thread-view.item.open")}:disabled { opacity: ${T.disabled}; cursor: default; }
-${p("thread-view.text")} { padding: 0 ${T.sm} ${T.sm} calc(${T.sm} + ${T.avatar} + ${T.md}); }
+${p("thread-view.text")} { padding: 0 ${T.sm} ${T.sm} calc(${T.sm} + ${T.avatarSm} + ${T.md}); }
 ${p("thread-view.body")} { font-family: ${T.fontReader}; font-size: ${T.body}; }
 ${p("thread-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.quote}; color: ${T.muted}; }
 ${p("thread-view.quote-toggle")} { font-size: ${T.small}; color: ${T.accent}; cursor: pointer; }`;
 
 /** The reader's per-message widgets an open card holds besides `message-view` (`ThreadViewFeed.tsx`). */
-const CARD_SLOTS = [
-  "security-message",
-  "security-warnings",
-  "remote-content",
-  "junk-verdict",
-  "sync-message-body",
-]
-  .map(p)
-  .join(", ");
+const CARD_SLOTS = READER_SLOTS.map(p).join(", ");
 
 /** A part inside an open card. */
 const inCard = (part: string) => `${p("thread-view.card.body")} ${p(part)}`;
@@ -211,7 +167,7 @@ ${p("thread-view.card.toggle")}:focus-visible, ${p("thread-view.card.action")}:f
 }
 ${p("thread-view.card.body")} {
   display: flex; flex: 1 0 auto; flex-direction: column; gap: ${T.sm}; min-width: 0;
-  padding: 0 ${T.md} ${T.md} calc(${T.md} + ${T.avatar} + ${T.md});
+  padding: 0 ${T.md} ${T.md} calc(${T.md} + ${T.avatarSm} + ${T.md});
 }
 ${p("thread-view.card.body")} > :is(${CARD_SLOTS}) { width: 100%; margin: 0; }
 ${p("thread-view.card.body")} > ${p("message-view")} {

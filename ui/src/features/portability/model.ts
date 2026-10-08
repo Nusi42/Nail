@@ -302,3 +302,11 @@ export function baseName(path: string): string {
 export function isAbsolutePath(path: string): boolean {
   return /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(path.trim());
 }
+
+/** What the export wizard can export, in the order it offers them. */
+export const EXPORT_SOURCE_KINDS: readonly ExportSource["type"][] = [
+  "folders",
+  "messages",
+  "calendars",
+  "address-books",
+];

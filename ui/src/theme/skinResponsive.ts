@@ -23,19 +23,8 @@
  *   the card or window that holds them is narrow (`TWO_PANES_NARROW`).
  */
 import { p, ps } from "./selectors";
-
-/** Token shorthands. */
-const T = {
-  bg: "var(--nail-color-bg)",
-  border: "var(--nail-color-border)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  pane: "var(--nail-space-pane)",
-  control: "var(--nail-size-control)",
-} as const;
+import { VISUALLY_HIDDEN } from "./declarations";
+import { T } from "./tokens";
 
 /**
  * The container name of window bodies and settings cards: what their form
@@ -192,8 +181,7 @@ ${p("merge-dialog.upload")} {
 ${p("merge-dialog.upload")}:hover { background-color: var(--nail-color-bg-subtle); }
 ${p("merge-dialog.upload")}:focus-within { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 2px; }
 ${p("merge-dialog.upload")} > ${p("merge-dialog.upload.input")} {
-  display: block; position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  display: block; ${VISUALLY_HIDDEN}
 }`;
 
 /**

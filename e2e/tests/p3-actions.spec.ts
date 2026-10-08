@@ -1,7 +1,5 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { buildOutputDir, nailPerTest, control } from "../support/nail";
+import { control, nailPerTest, screenshotFile } from "../support/nail";
 import { rpcOk } from "../support/remote";
 import {
   accountSection,
@@ -86,11 +84,7 @@ async function select(page: Page, subject: string): Promise<Locator> {
   return row;
 }
 
-function screenshotPath(name: string): string {
-  const dir = buildOutputDir(path.join("screens", "p3-actions"));
-  mkdirSync(dir, { recursive: true });
-  return path.join(dir, `${name}.png`);
-}
+const screenshotPath = (name: string): string => screenshotFile("p3-actions", name);
 
 test("Archive (e) archives the conversation's Inbox messages, the replies stay in Sent", async ({
   page,

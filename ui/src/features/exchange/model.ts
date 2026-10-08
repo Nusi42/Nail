@@ -14,10 +14,13 @@ import {
   type AutomaticRepliesIssue,
   type AutomaticRepliesSettings,
   type BusyPeriod,
-  type Calendar,
   CATEGORY_PRESET_RGB,
+  type Calendar,
   type CategoryColor,
   type DiscoveredAccount,
+  EXCHANGE_ENGINE_VALUES,
+  EXCHANGE_ONLINE_DOMAINS,
+  MICROSOFT_DOMAIN,
   type ExchangeCategory,
   type ExchangeCategoryIssue,
   type ExchangeCategorySettings,
@@ -35,6 +38,7 @@ import {
   type SecretInput,
   type SspiPackage,
 } from "../../api/generated";
+import { parseHex, textOn } from "../../theme/contrast";
 import { charCount } from "../../text/chars";
 export {
   CATEGORY_PRESET_RGB as PRESET_RGB,
@@ -67,18 +71,8 @@ export function categoryRgb(color: CategoryColor): string | null {
 /** A readable text colour on the category colour (dark presets get white text). */
 export function categoryTextRgb(color: CategoryColor): string | null {
   const rgb = categoryRgb(color);
-  if (rgb === null) return null;
-  const n = Number.parseInt(rgb.slice(1), 16);
-  const channel = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance =
-    0.2126 * channel((n >> 16) & 255) +
-    0.7152 * channel((n >> 8) & 255) +
-    0.0722 * channel(n & 255);
-  // The text with the better contrast (WCAG): black above ~0.18.
-  return luminance > 0.179 ? "#000000" : "#ffffff";
+  const parsed = rgb === null ? null : parseHex(rgb);
+  return parsed === null ? null : textOn(parsed);
 }
 
 /** `ExchangeCategorySettings::issues` plus duplicates among `others`. */
@@ -187,11 +181,14 @@ export function mailboxName(mailbox: Pick<ExchangeMailbox, "settings">): string 
   return mailbox.settings.name ?? mailbox.settings.address;
 }
 
+/** The parts of another mailbox Nail can show (its settings' switches). */
+export const MAILBOX_SHOW_KEYS = ["mail", "calendar", "contacts", "tasks"] as const;
+
 /** What a mailbox shows, for its summary (`mail`, `calendar`, …). */
 export function mailboxShows(
   settings: ExchangeMailboxSettings,
-): ("mail" | "calendar" | "contacts" | "tasks")[] {
-  return (["mail", "calendar", "contacts", "tasks"] as const).filter((k) => settings[k]);
+): (typeof MAILBOX_SHOW_KEYS)[number][] {
+  return MAILBOX_SHOW_KEYS.filter((k) => settings[k]);
 }
 
 /** Fresh settings for a new mailbox: shared mailboxes show mail, delegates the calendar too. */
@@ -258,14 +255,15 @@ export function repliesUpcoming(settings: AutomaticRepliesSettings, now: number)
 // Account setup
 
 /** Well-known Microsoft hosts an Autodiscover answer may point to without a warning. */
-const MICROSOFT_DOMAINS = ["office365.com", "outlook.office.com", "outlook.com", "microsoft.com"];
+const MICROSOFT_DOMAINS: readonly string[] = [...EXCHANGE_ONLINE_DOMAINS, MICROSOFT_DOMAIN];
 
+/** `nail_api::hosts::is_under_domain` (both already without a trailing dot, lower case). */
 const under = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
 
-/** `is_exchange_online_host`. */
+/** `nail_api::hosts::is_exchange_online_host` (pinned by the `exchange` vectors). */
 export function isExchangeOnlineHost(host: string): boolean {
   const h = host.replace(/\.$/, "").toLowerCase();
-  return under(h, "office365.com") || under(h, "outlook.office.com") || under(h, "outlook.com");
+  return EXCHANGE_ONLINE_DOMAINS.some((d) => under(h, d));
 }
 
 /** The host of a URL (`null` when it is not one). */
@@ -382,13 +380,27 @@ export function withEngine(
 }
 
 /** How an Exchange account signs in. */
-export type ExchangeSignIn = "windows-current" | "windows-account" | "password" | "oauth2";
+/** Every sign-in method of an Exchange account, in the order the setup offers them. */
+export const EXCHANGE_SIGN_INS = [
+  "windows-current",
+  "windows-account",
+  "password",
+  "oauth2",
+] as const;
+export type ExchangeSignIn = (typeof EXCHANGE_SIGN_INS)[number];
+
+/** What the user says the account is on the address step. */
+export type ExchangeSetupChoice = "auto" | ExchangeEngine;
+
+/** The setup's account types: Autodiscover first, then the engines. */
+export const EXCHANGE_SETUP_CHOICES: readonly ExchangeSetupChoice[] = [
+  "auto",
+  ...EXCHANGE_ENGINE_VALUES,
+];
 
 /** The sign-in methods an engine accepts (Graph: OAuth only). */
 export function exchangeSignIns(engine: ExchangeEngine): readonly ExchangeSignIn[] {
-  return engine === "graph"
-    ? ["oauth2"]
-    : ["windows-current", "windows-account", "password", "oauth2"];
+  return engine === "graph" ? ["oauth2"] : EXCHANGE_SIGN_INS;
 }
 
 export function exchangeSignInOf(auth: AuthConfig): ExchangeSignIn {

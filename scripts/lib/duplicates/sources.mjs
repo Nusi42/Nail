@@ -66,6 +66,24 @@ export function isTestPath(file) {
 }
 
 /**
+ * Whether `file` is part of the UI's mock core (the stand-in for the core in
+ * Vitest and `?mock=1`: `mock*.ts`, `*Mock.ts`, seeds). It counts as test
+ * code for the magic-number check, but its contract limits and lists are
+ * checked like production code: they must come from the generated
+ * constants, not be copied.
+ *
+ * @param {string} file
+ */
+export function isMockCorePath(file) {
+  return (
+    file.startsWith("ui/src/") &&
+    !/\.(test|spec)\.[cm]?[jt]sx?$/.test(file) &&
+    !/(^|\/)(tests?|__tests__)\//.test(file) &&
+    /(^|\/)mock[A-Z\w]*\.tsx?$|[Mm]ock\.tsx?$|mockSeed\.ts$|Seed\.ts$/.test(file)
+  );
+}
+
+/**
  * The files of the checkout below `root` (`/` separators): tracked and
  * new ones, without git-ignored ones and without {@link IGNORES}.
  *

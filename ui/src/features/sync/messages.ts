@@ -4,7 +4,7 @@
  * one of `prefixes` must exist in `locales/en/sync.ftl`; ids built at
  * runtime are listed by `runtimeIds`.
  */
-import { BODY_MODES } from "./model";
+import { BODY_MODES, TRI_CHOICES } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["sync-"];
@@ -23,7 +23,7 @@ export function runtimeIds(): string[] {
   return [
     ...BODY_MODES.map((m) => `sync-bodies-${m}`),
     ...BODY_MODES.map((m) => `sync-choice-${m}`),
-    ...["enabled", "idle"].flatMap((f) => ["default", "yes", "no"].map((v) => `sync-${f}-${v}`)),
+    ...["enabled", "idle"].flatMap((f) => TRI_CHOICES.map((v) => `sync-${f}-${v}`)),
     "window-sync-folder",
     "sync-message-body-failed",
     "sync-message-body-missing",

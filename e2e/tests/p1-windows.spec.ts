@@ -14,16 +14,17 @@ import {
   type Size,
 } from "../support/responsive";
 import {
+  DEMO_MULTI_CONVERSATIONS,
   messageRows,
-  nextFrames,
   newMessageButton,
+  nextFrames,
+  openMail,
   openSettings,
   runFromPalette,
   showView,
   syncAccount,
   toolbarAction,
-  DEMO_MULTI_CONVERSATIONS,
-  openMail,
+  windowSelector,
 } from "../support/views";
 import {
   contextMenusStep,
@@ -292,7 +293,7 @@ ${formatIssues(issues)}`,
     const frame = this.window(name);
     await expect(frame).toBeVisible();
     const id = await frame.getAttribute("data-window");
-    const scope = `[data-part="window"][data-window="${id ?? name}"]`;
+    const scope = windowSelector(id ?? name);
     await this.sizes(what, scope, options);
     await this.windowSizes(what, frame, scope, options);
     this.checked.add(name);

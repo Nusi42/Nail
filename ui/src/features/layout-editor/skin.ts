@@ -31,44 +31,10 @@
  */
 import { p } from "../../theme/selectors";
 import { QUIET_HOVER, smallTag } from "../../theme/declarations";
+import { T } from "../../theme/tokens";
 
 /** The panes of a preset's miniature: barely rounded at that size. */
 const PREVIEW_RADIUS = "3px";
-
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  accent: "var(--nail-color-accent)",
-  accentFg: "var(--nail-color-accent-fg)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  danger: "var(--nail-color-danger)",
-  focus: "var(--nail-color-focus-ring)",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  heading: "var(--nail-font-size-heading)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  tight: "var(--nail-line-height-tight)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  pane: "var(--nail-space-pane)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  pill: "var(--nail-radius-pill)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-  disabled: "var(--nail-opacity-disabled)",
-} as const;
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 

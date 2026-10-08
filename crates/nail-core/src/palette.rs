@@ -32,7 +32,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }),
         Request::RecordActionUsed { action_id } => {
             let mut recent = load(service).await?;
-            let now = crate::rules::rfc3339(crate::engine::unix_now());
+            let now = nail_util::time::rfc3339_utc(nail_util::time::unix_now());
             if !recent.record(&action_id, &now) {
                 return Err(ApiError::invalid_localized(
                     "not an action id",

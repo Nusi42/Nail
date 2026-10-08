@@ -1,10 +1,14 @@
 // Tests of scripts/lib/work-folder.mjs (master repository and work folders). Run: node --test scripts/test/
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
+  HOOKS_DIR,
+  HOOKS_PATH_ARGS,
   MASTER_RUSTC_WRAPPER,
+  REPO_ROOT,
   branchOf,
   claudeLocalSettings,
   folderOf,
@@ -60,4 +64,10 @@ test("the master's cargo config names the refusing wrapper", () => {
 test("a work folder keeps Claude Code's memory in its checkout", () => {
   const settings = parseJson(claudeLocalSettings("C:\\w\\nail-work-3"));
   assert.deepEqual(settings, { autoMemoryDirectory: "C:/w/nail-work-3/.claude/memory" });
+});
+
+test("hooks: install-hooks and new work folders point git at one directory", () => {
+  assert.equal(HOOKS_DIR, ".githooks");
+  assert.deepEqual(HOOKS_PATH_ARGS, ["config", "core.hooksPath", HOOKS_DIR]);
+  assert.ok(fs.existsSync(path.join(REPO_ROOT, HOOKS_DIR, "pre-commit")));
 });

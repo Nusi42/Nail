@@ -4,6 +4,7 @@
  * KDL subset, the same node and property names). Only `MockTransport`
  * uses this; the real core answers with nail-config's reader and writer.
  */
+import { ADDRESS_FIELD_VALUES, RULE_SIMPLE_TRIGGERS, TEXT_OP_VALUES } from "../../api/generated";
 import type {
   Condition,
   ConfigIssue,
@@ -155,8 +156,6 @@ function scopeSpec(s: RuleScope): [string, string | null] {
     : [`role:${s.folder.role}`, s.folder.account_id];
 }
 
-const SIMPLE_TRIGGERS = ["arrival", "on-send", "manual"];
-
 /** The canonical text form of one rule (like `nail_config::rules::rule_to_text`). */
 export function ruleToText(rule: Rule): string {
   let head = `rule ${quote(rule.name.trim())}`;
@@ -164,7 +163,11 @@ export function ruleToText(rule: Rule): string {
   if (!rule.enabled) head += " enabled=#false";
   const children: string[] = [];
   const [onlyTrigger] = rule.triggers;
-  if (rule.triggers.length === 1 && onlyTrigger && SIMPLE_TRIGGERS.includes(onlyTrigger.type)) {
+  if (
+    rule.triggers.length === 1 &&
+    onlyTrigger &&
+    (RULE_SIMPLE_TRIGGERS as readonly string[]).includes(onlyTrigger.type)
+  ) {
     head += ` trigger=${quote(onlyTrigger.type)}`;
   } else {
     for (const t of rule.triggers) {
@@ -380,13 +383,11 @@ const bool = (n: Node, key: string, fallback: boolean): boolean => {
 const err = (n: Node | Entry, message: string): never => {
   throw new Issue(n.line, n.column, message);
 };
-const TEXT_OPS: readonly TextOp[] = ["equals", "contains", "starts-with", "ends-with", "regex"];
-const ADDRESS_FIELDS = ["from", "to", "cc", "recipients", "reply-to", "sender"] as const;
 
 function textMatch(n: Node, required: true): TextMatch;
 function textMatch(n: Node, required: false): TextMatch | null;
 function textMatch(n: Node, required: boolean): TextMatch | null {
-  const found = n.entries.find((e) => e.name !== null && TEXT_OPS.includes(e.name as TextOp));
+  const found = n.entries.find((e) => e.name !== null && TEXT_OP_VALUES.includes(e.name as TextOp));
   if (!found) {
     if (required) return err(n, `\`${n.name}\` needs a comparison`);
     return null;
@@ -412,10 +413,10 @@ function folderRef(n: Node): FolderRef {
 function condition(n: Node): Condition {
   const [first] = args(n);
   const firstStr = typeof first?.value === "string" ? first.value : "";
-  if ((ADDRESS_FIELDS as readonly string[]).includes(n.name)) {
+  if ((ADDRESS_FIELD_VALUES as readonly string[]).includes(n.name)) {
     return {
       type: "address",
-      field: n.name as (typeof ADDRESS_FIELDS)[number],
+      field: n.name as (typeof ADDRESS_FIELD_VALUES)[number],
       matches: textMatch(n, true),
     };
   }

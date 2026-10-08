@@ -52,6 +52,13 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   values in `ui/src/api/contract.ts`, test ids in `ui/src/test/mockIds.ts`, shared skin rules / lengths in
   `ui/src/theme/declarations.ts`; one English text under two ids = a Fluent reference (`id = { common-… }`; generic
   labels in `locales/en/common.ftl`); a reasoned non-violation goes into `scripts/duplicates/allow.json`.
+  Q2 review (ADR 0177): a contract enum the UI lists is exported as `<ENUM>_VALUES` (`ts_constants.rs` `enum_values`
+  with `ALL` or `every!`) and imported, never typed out (the check's `generated-list` finds hand copies, `ts-list` a list
+  defined twice in TS; the UI's mock core counts as contract code); skins use the one token map `ui/src/theme/tokens.ts`
+  (`T`) and `VISUALLY_HIDDEN`; WCAG colour math is `nail_util::color` / `ui/src/theme/contrast.ts`; provider domains are
+  `nail_api::hosts`; times are `nail_util::time` (`unix_now`, `rfc3339_utc`, `rfc3339_now`, millis forms); snapshot /
+  golden files go through `nail_util::snapshot`; Vitest `must` / `mailEnv` and e2e `windowById` / `closeWindow` /
+  `screenshotFile` live in `ui/src/test` and `e2e/support`.
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
@@ -576,8 +583,10 @@ crates/nail-bench      M4c WP123 (ADR 0097): corpus.rs (deterministic 100k corpu
                        `nail serve` shows the data), memory.rs; bin nail-bench (run / check / corpus / mock-imap);
                        budgets = e2e/perf/budgets.json
 crates/nail-util       Q2 (ADRs 0171, 0173): shared helpers without dependencies; time.rs (days_from_civil / civil_from_days,
-                       is_leap_year, days_in_month, unix_now, iso_date, parse_iso_date, rfc3339_utc, weekday_from_monday,
-                       last_weekday_of_month, SECS_PER_DAY: the one civil-date implementation), batch (batched writes
+                       is_leap_year, days_in_month, unix_now (+ _secs / _millis / _nanos, unix_secs_of), iso_date,
+                       parse_iso_date, rfc3339_utc (+ _opt / _millis), rfc3339_now (+ _millis), weekday_from_monday,
+                       last_weekday_of_month, SECS_PER_DAY: the one civil-date and clock implementation), color.rs (WCAG
+                       hex / luminance / contrast), snapshot.rs (write-or-compare of snapshot and golden files), batch (batched writes
                        with a one-by-one fallback), expiring (expiring map), ical_text, markup (HTML escaping), mime_text,
                        named (case-insensitive pair lookups), percent, redact, sieve_lex (the Sieve lexer)
 crates/nail-net        Q2 (ADR 0173): shared plumbing of the protocol clients and mock servers, features http / io /

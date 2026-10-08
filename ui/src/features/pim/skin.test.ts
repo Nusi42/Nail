@@ -8,7 +8,9 @@
 import type { ResolvedTheme } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { compileTheme } from "../../theme/compile";
-import { AVATAR_COLORS, SKIN_CSS } from "../../theme/skin";
+import { ACCOUNT_COLOR_SLOTS } from "../../api/generated";
+import { VISUALLY_HIDDEN } from "../../theme/declarations";
+import { SKIN_CSS } from "../../theme/skin";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PIM_BASE_CSS } from "./parts";
@@ -113,7 +115,7 @@ describe("PIM skin", () => {
     ]) {
       expect(PIM_SKIN_CSS).toContain(`[data-part="${part}"]`);
     }
-    for (let i = 0; i < AVATAR_COLORS.length; i++) {
+    for (let i = 0; i < ACCOUNT_COLOR_SLOTS; i++) {
       expect(PIM_SKIN_CSS).toContain(
         `[data-color="${String(i)}"][data-part="contact-list.avatar"]`,
       );
@@ -229,8 +231,8 @@ describe("PIM skin", () => {
       expect(narrow).toMatch(/\[data-part="calendar.toolbar"\] \{ flex-wrap: wrap;/);
       expect(narrow).toMatch(/> \[data-part="calendar.title"\] \{ order: 99; flex: 1 0 100%;/);
       // Labels are hidden visually only: the select and the button keep their names.
-      expect(narrow).toMatch(
-        /\[data-part="calendar.view-menu"\] > \[data-part="form.label"\] \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/,
+      expect(narrow).toContain(
+        `[data-part="calendar.view-menu"] > [data-part="form.label"] { ${VISUALLY_HIDDEN} }`,
       );
       expect(narrow).toMatch(
         /\[data-field="calendar-new-event"\] > \[data-part="form.button.label"\] \{ position: absolute;/,

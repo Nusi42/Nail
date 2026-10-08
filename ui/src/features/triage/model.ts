@@ -141,7 +141,8 @@ export function fromLocalInput(value: string): Date | null {
 // ---- Notifications ---------------------------------------------------------
 
 /** How an account or folder notifies: the default, always, never. */
-export type OverrideChoice = "default" | "on" | "off";
+export const OVERRIDE_CHOICES = ["default", "on", "off"] as const;
+export type OverrideChoice = (typeof OVERRIDE_CHOICES)[number];
 
 /** The override of a scope in the settings. */
 export function overrideOf(

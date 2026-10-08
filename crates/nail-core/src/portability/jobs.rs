@@ -66,7 +66,7 @@ impl PortabilityCtl {
             job_id: JobId::new(format!("job-{n}")),
             kind,
             state: JobState::Running,
-            started_at: crate::rules::rfc3339(crate::engine::unix_now()),
+            started_at: nail_util::time::rfc3339_utc(nail_util::time::unix_now()),
             path: path.to_owned(),
             progress: JobProgress::queued(),
             report: None,
@@ -184,7 +184,7 @@ impl Service {
                 (result, after, ctx.into_report())
             })
             .await;
-            let now = || crate::rules::rfc3339(crate::engine::unix_now());
+            let now = || nail_util::time::rfc3339_utc(nail_util::time::unix_now());
             let report = match joined {
                 Ok((result, after, report)) => {
                     let mut report = match after {

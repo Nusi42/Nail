@@ -7,9 +7,10 @@
  */
 import type { ActionAvailability } from "../../api/generated";
 import type { UiState } from "../../state/uiStore";
+import { PIM_KEY_CONTEXTS } from "../shell/model";
 import { ACTION_AVAILABILITIES } from "./messages";
 
-const PIM: readonly ActionAvailability[] = ["calendar", "contacts", "tasks"];
+const PIM: readonly ActionAvailability[] = PIM_KEY_CONTEXTS;
 
 function isAvailability(value: string): value is ActionAvailability {
   return (ACTION_AVAILABILITIES as readonly string[]).includes(value);

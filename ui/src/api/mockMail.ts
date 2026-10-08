@@ -24,17 +24,10 @@ import type {
 import type { MockData } from "./mockData";
 import { matches, parseQuery, type Searchable } from "./mockSearch";
 import type { Event as NailEvent } from "./generated";
-import { ALL_ACCOUNTS } from "./contract";
+import { ALL_ACCOUNTS, FOLDER_ROLES } from "./contract";
 
-/** Roles merged across the members of a virtual account. */
-export const MERGED_ROLES: readonly FolderRole[] = [
-  "inbox",
-  "sent",
-  "drafts",
-  "archive",
-  "junk",
-  "trash",
-];
+/** Roles merged across the members of a virtual account: every special-use role, in the contract's order. */
+export const MERGED_ROLES: readonly FolderRole[] = FOLDER_ROLES;
 
 /** What the mock core needs from its transport. */
 export interface MockCore {

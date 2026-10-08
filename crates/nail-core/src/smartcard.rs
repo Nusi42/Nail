@@ -67,7 +67,7 @@ impl PinSource for CorePinSource {
             let prompt_id = PinPromptId::new(format!("pin-{n}"));
             let (tx, rx) = oneshot::channel();
             lock(&self.waiting).insert(prompt_id.clone(), tx);
-            let expires = crate::engine::unix_now()
+            let expires = nail_util::time::unix_now()
                 + i64::try_from(PIN_PROMPT_TIMEOUT_SECS).unwrap_or(i64::MAX);
             drop(self.events.send(Event::PinRequested {
                 prompt: PinPrompt {
@@ -78,7 +78,7 @@ impl PinSource for CorePinSource {
                     key_label: request.key_label,
                     attempts_left: request.attempts_left,
                     retry: request.retry,
-                    expires_at: crate::rules::rfc3339(expires),
+                    expires_at: nail_util::time::rfc3339_utc(expires),
                 },
             }));
             match tokio::time::timeout(Duration::from_secs(PIN_PROMPT_TIMEOUT_SECS), rx).await {

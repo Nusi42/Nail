@@ -90,7 +90,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 job_id: PrintJobId::new(String::new()),
                 target,
                 options,
-                created_at: crate::rules::rfc3339(crate::engine::unix_now()),
+                created_at: nail_util::time::rfc3339_utc(nail_util::time::unix_now()),
                 view: String::new(),
                 ready: false,
             });

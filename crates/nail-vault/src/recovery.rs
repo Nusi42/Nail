@@ -84,11 +84,6 @@ impl RecoveryKey {
     }
 }
 
-/// Now as RFC 3339 (UTC, seconds).
-pub(crate) fn now_rfc3339() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
-
 /// The recovery part of [`nail_api::security::VaultStatus`].
 pub(crate) fn status_of(file: &VaultFile) -> RecoveryKeyStatus {
     match &file.recovery {
@@ -108,7 +103,7 @@ pub(crate) fn new_record(
 ) -> Result<RecoveryRecord, VaultError> {
     Ok(RecoveryRecord {
         wrapped_key: recovery.wrap(data_key)?,
-        created_at: now_rfc3339(),
+        created_at: nail_util::time::rfc3339_now(),
         verified_at: None,
     })
 }

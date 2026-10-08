@@ -12,6 +12,7 @@
  *   is coming up) for an Exchange account, a banner with "Turn off" and
  *   "Edit…".
  */
+import { AUTOMATIC_REPLIES_STATUS_VALUES, EXTERNAL_AUDIENCE_VALUES } from "../../api/generated";
 import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
@@ -47,8 +48,8 @@ import { exchangeStoreFor, useExchangeUi } from "./store";
 import { EmptyDialog } from "../../widgets/DialogStates";
 import { CloseButton } from "../../widgets/CloseButton";
 
-const STATUSES: readonly AutomaticRepliesStatus[] = ["disabled", "always-enabled", "scheduled"];
-const AUDIENCES: readonly ExternalAudience[] = ["none", "contacts-only", "all"];
+const STATUSES: readonly AutomaticRepliesStatus[] = AUTOMATIC_REPLIES_STATUS_VALUES;
+const AUDIENCES: readonly ExternalAudience[] = EXTERNAL_AUDIENCE_VALUES;
 
 /** A UTC instant as a day and a wall-clock time in `tz`. */
 export function wallOf(utc: string, tz: string): { day: CalendarDate; time: Clock } {

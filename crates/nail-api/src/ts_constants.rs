@@ -66,6 +66,9 @@ pub fn ui_constants() -> Result<Constants, serde_json::Error> {
     let c = agents(c)?;
     let c = triage(c)?;
     let c = sieve(c)?;
+    let c = limits(c)?;
+    let c = hosts(c)?;
+    let c = contract_enums(c)?;
     labeled_enums(c)
 }
 
@@ -230,6 +233,15 @@ pub fn plugin_constants() -> Result<Constants, serde_json::Error> {
             "MAX_ATTACHMENT_BYTES",
             "Largest attachment a draft may carry (bytes).",
             &crate::compose::MAX_ATTACHMENT_BYTES,
+        )?
+        .enum_values("PluginHookKind", &hooks::PluginHookKind::ALL)?
+        .enum_values(
+            "PluginCommandSurface",
+            &crate::plugins::runtime::PluginCommandSurface::ALL,
+        )?
+        .enum_values(
+            "InvitationResponse",
+            &every!(crate::scheduling::InvitationResponse: Accept, Tentative, Decline),
         )
 }
 
@@ -771,6 +783,11 @@ fn desktop(c: Constants) -> Result<Constants, serde_json::Error> {
         "MapiResult",
         &mapi::MapiResult::ALL,
         mapi::MapiResult::message_id,
+    )?
+    .add(
+        "UPDATE_MANIFEST_FILE",
+        "File name of an update channel's manifest (`<channel>/latest.json`).",
+        &crate::desktop::UPDATE_MANIFEST_FILE,
     )
 }
 
@@ -803,6 +820,340 @@ fn providers(c: Constants) -> Result<Constants, serde_json::Error> {
         "GMAIL_LABEL_PALETTE",
         "The colours Gmail accepts for labels (background and text alike, lower case).",
         crate::gmail::LABEL_PALETTE.as_slice(),
+    )?
+    .add(
+        "GMAIL_SYSTEM_LABELS",
+        "Gmail's system label ids (`gmail::system::ALL`); user labels cannot take these names.",
+        &crate::gmail::system::ALL,
+    )?
+    .typed(
+        "GMAIL_CATEGORY_LABELS",
+        "The system label of each inbox category (`GmailCategory::label`).",
+        &crate::gmail::GmailCategory::ALL
+            .iter()
+            .map(|&c| Ok((wire_name(&c)?, c.label())))
+            .collect::<Result<BTreeMap<_, _>, serde_json::Error>>()?,
+        "Readonly<Record<GmailCategory, string>>",
+        &["GmailCategory"],
+    )
+}
+
+/// Limits the UI's mock core and forms check the way the core does.
+fn limits(c: Constants) -> Result<Constants, serde_json::Error> {
+    use crate::{editing, palette, scheduling, ui_state, windows as w};
+    c.add(
+        "MAX_EDIT_HISTORY",
+        "Most undo entries kept per history scope.",
+        &editing::MAX_EDIT_HISTORY,
+    )?
+    .add(
+        "MAX_UI_STATE_KEY_CHARS",
+        "Longest UI-state key (characters).",
+        &ui_state::MAX_UI_STATE_KEY_CHARS,
+    )?
+    .add(
+        "MAX_UI_STATE_VALUE_BYTES",
+        "Largest UI-state value (bytes of JSON).",
+        &ui_state::MAX_UI_STATE_VALUE_BYTES,
+    )?
+    .add(
+        "MAX_UI_STATE_KEYS",
+        "Most keys in `ui-state.json`.",
+        &ui_state::MAX_UI_STATE_KEYS,
+    )?
+    .add(
+        "MAX_POP_OUT_CONTEXT_BYTES",
+        "Largest pop-out context (bytes of JSON).",
+        &w::MAX_POP_OUT_CONTEXT_BYTES,
+    )?
+    .add(
+        "MAX_POP_OUT_TITLE_CHARS",
+        "Longest pop-out window title (characters).",
+        &w::MAX_POP_OUT_TITLE_CHARS,
+    )?
+    .add(
+        "MAX_RECENT_ACTIONS",
+        "Most recent actions the palette remembers.",
+        &palette::MAX_RECENT_ACTIONS,
+    )?
+    .add(
+        "MAX_FREE_BUSY_ATTENDEES",
+        "Most attendees of one free/busy query.",
+        &scheduling::MAX_FREE_BUSY_ATTENDEES,
+    )?
+    .add(
+        "MAX_FREE_BUSY_DAYS",
+        "Longest range of one free/busy query (days).",
+        &scheduling::MAX_FREE_BUSY_DAYS,
+    )?
+    .add(
+        "DEFAULT_UNDO_SEND_SECS",
+        "Default undo-send delay (`AccountsConfig::DEFAULT_UNDO_SEND_SECS`, seconds).",
+        &crate::accounts::AccountsConfig::DEFAULT_UNDO_SEND_SECS,
+    )?
+    .add(
+        "CPU_QUOTA_MS_PER_HOUR",
+        "CPU time a plug-in's background jobs may use per hour (ms).",
+        &crate::plugins::jobs::CPU_QUOTA_MS_PER_HOUR,
+    )?
+    .add(
+        "MAX_QUERY_BYTES",
+        "Longest search query (bytes).",
+        &crate::search::MAX_QUERY_BYTES,
+    )?
+    .add(
+        "MAX_QUERY_NESTING",
+        "Deepest nesting of parentheses and `NOT` / `-` in a search query.",
+        &crate::search::MAX_QUERY_NESTING,
+    )?
+    .add(
+        "MIN_PASSWORD_CHARS",
+        "Shortest password of a remote-UI user (characters).",
+        &crate::remote::MIN_PASSWORD_CHARS,
+    )?
+    .add(
+        "ALL_ACCOUNTS",
+        "The virtual account of all accounts (`AccountId::ALL`).",
+        &crate::AccountId::ALL,
+    )
+}
+
+/// The mail providers' domains (`nail_api::hosts`).
+fn hosts(c: Constants) -> Result<Constants, serde_json::Error> {
+    use crate::hosts as h;
+    c.add(
+        "GMAIL_DOMAINS",
+        "Gmail's consumer mail domains.",
+        &h::GMAIL_DOMAINS,
+    )?
+    .add(
+        "EXCHANGE_ONLINE_DOMAINS",
+        "The domains of Exchange Online (`is_exchange_online_host`).",
+        &h::EXCHANGE_ONLINE_DOMAINS,
+    )?
+    .add(
+        "MICROSOFT_DOMAIN",
+        "Microsoft's own domain.",
+        &h::MICROSOFT_DOMAIN,
+    )
+}
+
+/// The kinds of `MessageWarning` (its `kind` tags), in declaration order.
+fn message_warning_kinds() -> Result<Vec<String>, serde_json::Error> {
+    use crate::security::{AttachmentRisk, MessageWarning as W};
+    #[expect(
+        dead_code,
+        reason = "only compiled: the match is the exhaustiveness check"
+    )]
+    const fn listed(warning: &W) {
+        match warning {
+            W::LinkMismatch { .. }
+            | W::LookalikeDomain { .. }
+            | W::SuspiciousLink { .. }
+            | W::DangerousAttachment { .. } => {}
+        }
+    }
+    let samples = [
+        W::LinkMismatch {
+            link: 0,
+            href: String::new(),
+            shown_host: String::new(),
+            target_host: String::new(),
+        },
+        W::LookalikeDomain {
+            link: 0,
+            href: String::new(),
+            ascii_host: String::new(),
+            unicode_host: String::new(),
+            resembles: None,
+        },
+        W::SuspiciousLink {
+            link: 0,
+            href: String::new(),
+        },
+        W::DangerousAttachment {
+            index: 0,
+            filename: String::new(),
+            risk: AttachmentRisk::Executable,
+        },
+    ];
+    samples
+        .iter()
+        .map(|w| {
+            let value = serde_json::to_value(w)?;
+            match value.get("kind").and_then(serde_json::Value::as_str) {
+                Some(kind) => Ok(kind.to_owned()),
+                None => Err(serde::ser::Error::custom("a warning without a kind")),
+            }
+        })
+        .collect()
+}
+
+/// Every value of the contract enums the UI lists (options, runtime message
+/// ids, mock checks), in the order the UI shows them.
+fn contract_enums(c: Constants) -> Result<Constants, serde_json::Error> {
+    use crate::accounts::SspiPackage;
+    use crate::agents::{ActionTargetKind, ConfirmationSource};
+    use crate::config::layout::{BadgeSource, ItemDisplay};
+    use crate::editing::DockSide;
+    use crate::exchange::oof::{AutomaticRepliesIssue, AutomaticRepliesStatus, ExternalAudience};
+    use crate::exchange::rules::ExchangeRulesState;
+    use crate::exchange::{
+        CategoryColor, ExchangeCategoryIssue, ExchangeEngine, ExchangeMailboxIssue,
+        ExchangeMailboxKind, ExchangeMailboxState, ExchangeWarning, InferenceClassification,
+    };
+    use crate::gmail::{
+        GmailCategory, GmailLabelIssue, GmailLabelListVisibility, GmailMessageListVisibility,
+    };
+    use crate::pim::calendar::{
+        AlarmAction, AttendeeRole, EditScope, EventStatus, Transparency, Visibility,
+    };
+    use crate::pim::contact::{ContactKind, DuplicateReason};
+    use crate::pim::source::{PimItemSync, PimSourceKind, PimSourceState};
+    use crate::pim::{PimIssue, TaskStatus};
+    use crate::plugins::admin::{
+        PluginLogLevel, PluginLogSource, PluginRunState, PluginStopReason,
+    };
+    use crate::plugins::extensions::ComposerEditOp;
+    use crate::plugins::jobs::PluginJobOutcome;
+    use crate::scheduling::{BusyKind, CancelScope, FreeBusyIssue, ItipIssue, ItipMethod};
+    use crate::security::{
+        AttachmentRisk, AuthVerdict, CryptoPreference, CryptoTechnology, KeyLookupPolicy,
+        KeyLookupSource, TrustDecision, TrustLevel, VaultPhase,
+    };
+    c.typed(
+        "MESSAGE_WARNING_KINDS",
+        "Every `MessageWarning` kind, in the contract's order.",
+        &message_warning_kinds()?,
+        "readonly MessageWarning[\"kind\"][]",
+        &["MessageWarning"],
+    )?
+    .enum_values(
+        "AuthVerdict",
+        &every!(AuthVerdict: Pass, Fail, Softfail, Neutral, None, Temperror, Permerror, Policy, Unknown),
+    )?
+    .enum_values(
+        "AttachmentRisk",
+        &every!(AttachmentRisk: Executable, Macro, DisguisedName, Container, Shortcut, TypeMismatch),
+    )?
+    .enum_values("VaultPhase", &VaultPhase::ALL)?
+    .enum_values("CryptoTechnology", &CryptoTechnology::ALL)?
+    .enum_values(
+        "KeyLookupSource",
+        &every!(KeyLookupSource: Wkd, KeysOpenpgpOrg),
+    )?
+    .enum_values(
+        "TrustLevel",
+        &every!(TrustLevel: Rejected, Unknown, AutocryptGossip, Autocrypt, Verified, Own),
+    )?
+    .enum_values("TrustDecision", &every!(TrustDecision: Unset, Verified, Rejected))?
+    .enum_values("CryptoPreference", &every!(CryptoPreference: Auto, OpenPgp, Smime))?
+    .enum_values("KeyLookupPolicy", &every!(KeyLookupPolicy: Off, OnDemand, Automatic))?
+    .enum_values("ExchangeWarning", &ExchangeWarning::ALL)?
+    .enum_values("ExchangeEngine", &ExchangeEngine::ALL)?
+    .enum_values("InferenceClassification", &InferenceClassification::ALL)?
+    .enum_values("ExchangeMailboxIssue", &ExchangeMailboxIssue::ALL)?
+    .enum_values("ExchangeMailboxState", &ExchangeMailboxState::ALL)?
+    .enum_values("ExchangeMailboxKind", &every!(ExchangeMailboxKind: Shared, Delegate))?
+    .enum_values("ExchangeCategoryIssue", &ExchangeCategoryIssue::ALL)?
+    .enum_values("CategoryColor", &CategoryColor::ALL)?
+    .enum_values("AutomaticRepliesIssue", &AutomaticRepliesIssue::ALL)?
+    .enum_values(
+        "AutomaticRepliesStatus",
+        &every!(AutomaticRepliesStatus: Disabled, AlwaysEnabled, Scheduled),
+    )?
+    .enum_values("ExternalAudience", &every!(ExternalAudience: None, ContactsOnly, All))?
+    .enum_values("ExchangeRulesState", &ExchangeRulesState::ALL)?
+    .enum_values("SspiPackage", &every!(SspiPackage: Negotiate, Kerberos, Ntlm))?
+    .enum_values("GmailLabelIssue", &GmailLabelIssue::ALL)?
+    .enum_values("GmailCategory", &GmailCategory::ALL)?
+    .enum_values(
+        "GmailLabelListVisibility",
+        &every!(GmailLabelListVisibility: Show, ShowIfUnread, Hide),
+    )?
+    .enum_values(
+        "GmailMessageListVisibility",
+        &every!(GmailMessageListVisibility: Show, Hide),
+    )?
+    .enum_values("DockSide", &DockSide::ALL)?
+    .enum_values("BadgeSource", BadgeSource::ALL)?
+    .enum_values("ItemDisplay", ItemDisplay::ALL)?
+    .enum_values(
+        "ActionTargetKind",
+        &every!(ActionTargetKind: Message, Draft, Folder, Event, Contact, Task, Rule, Recipient),
+    )?
+    .enum_values(
+        "ConfirmationSource",
+        &every!(ConfirmationSource: Nail, Elicitation, System),
+    )?
+    .enum_values(
+        "EventStatus",
+        &every!(EventStatus: Confirmed, Tentative, Cancelled),
+    )?
+    .enum_values("Transparency", &every!(Transparency: Busy, Free))?
+    .enum_values("Visibility", &every!(Visibility: Public, Private, Confidential))?
+    .enum_values(
+        "AttendeeRole",
+        &every!(AttendeeRole: Chair, Required, Optional, NonParticipant),
+    )?
+    .enum_values("AlarmAction", &every!(AlarmAction: Display, Audio, Email))?
+    .enum_values("EditScope", &every!(EditScope: This, ThisAndFollowing, All))?
+    .enum_values(
+        "ContactKind",
+        &every!(ContactKind: Individual, Organization, Location),
+    )?
+    .enum_values(
+        "TaskStatus",
+        &every!(TaskStatus: NeedsAction, InProcess, Completed, Cancelled),
+    )?
+    .enum_values("DuplicateReason", &every!(DuplicateReason: Email, Phone, Name))?
+    .enum_values("PimIssue", &PimIssue::ALL)?
+    .enum_values("PimSourceKind", &every!(PimSourceKind: Local, Ics, Caldav, Carddav, Exchange))?
+    .enum_values("PimSourceState", &PimSourceState::ALL)?
+    .enum_values("PimItemSync", &every!(PimItemSync: Synced, Pending, Conflict))?
+    .enum_values("ItipMethod", &ItipMethod::ALL)?
+    .enum_values("ItipIssue", &ItipIssue::ALL)?
+    .enum_values("FreeBusyIssue", &FreeBusyIssue::ALL)?
+    .enum_values("BusyKind", &every!(BusyKind: Tentative, Busy, Unavailable))?
+    .enum_values("CancelScope", &every!(CancelScope: Meeting, Occurrence, Attendees))?
+    .enum_values("PluginLogLevel", &every!(PluginLogLevel: Debug, Info, Warn, Error))?
+    .enum_values("PluginLogSource", &every!(PluginLogSource: Plugin, Host, Api))?
+    .enum_values(
+        "PluginRunState",
+        &every!(PluginRunState: Disabled, Starting, Running, Stopped, Crashed, Incompatible),
+    )?
+    .enum_values("PluginStopReason", &PluginStopReason::ALL)?
+    .enum_values(
+        "PluginJobOutcome",
+        &every!(PluginJobOutcome: Ok, Error, Timeout, CpuQuota, Overlap),
+    )?
+    .enum_values(
+        "ComposerEditOp",
+        &every!(ComposerEditOp: Insert, ReplaceSelection, ReplaceAll),
+    )?
+    .enum_values(
+        "PluginManifestIssueKind",
+        &crate::plugins::manifest::PluginManifestIssueKind::ALL,
+    )?
+    .enum_values(
+        "ParticipationStatus",
+        &every!(crate::pim::calendar::ParticipationStatus: NeedsAction, Accepted, Declined, Tentative, Delegated),
+    )?
+    .typed(
+        "RULE_SIMPLE_TRIGGERS",
+        "The rule triggers without parameters (`RuleTrigger::SIMPLE`), by their `type`.",
+        &crate::rules::RuleTrigger::SIMPLE
+            .iter()
+            .map(|t| {
+                let value = serde_json::to_value(t)?;
+                match value.get("type").and_then(serde_json::Value::as_str) {
+                    Some(tag) => Ok(tag.to_owned()),
+                    None => Err(serde::ser::Error::custom("a trigger without a type")),
+                }
+            })
+            .collect::<Result<Vec<_>, serde_json::Error>>()?,
+        "readonly RuleTrigger[\"type\"][]",
+        &["RuleTrigger"],
     )
 }
 
@@ -931,7 +1282,21 @@ fn triage(c: Constants) -> Result<Constants, serde_json::Error> {
         i.message_id().to_owned()
     })?
     .enum_values("JunkSource", &every!(JunkSource: Server, Classifier, User))?
-    .enum_values("Weekday", &Weekday::ALL)
+    .enum_values("Weekday", &Weekday::ALL)?
+    .enum_values(
+        "NotifyFolders",
+        &every!(crate::triage::NotifyFolders: Inbox, All),
+    )?
+    .add(
+        "JUNK_KEYWORD",
+        "IMAP keyword of messages marked or classified as junk.",
+        &crate::triage::JUNK_KEYWORD,
+    )?
+    .add(
+        "NOT_JUNK_KEYWORD",
+        "IMAP keyword of messages marked as not junk.",
+        &crate::triage::NOT_JUNK_KEYWORD,
+    )
 }
 
 /// Server-side rules and vacation replies (`nail_api::sieve`).

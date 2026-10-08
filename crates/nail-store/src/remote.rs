@@ -103,14 +103,7 @@ row_id!(
     "pairing code"
 );
 
-/// RFC 3339 (UTC, seconds) of Unix seconds.
-pub(crate) fn rfc3339(secs: i64) -> String {
-    nail_util::time::rfc3339_utc(secs)
-}
-
-fn opt_rfc3339(secs: Option<i64>) -> Option<String> {
-    secs.map(rfc3339)
-}
+use nail_util::time::{rfc3339_utc as rfc3339, rfc3339_utc_opt as opt_rfc3339};
 
 use crate::util::{enum_from, enum_name as enum_str};
 

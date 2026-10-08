@@ -29,9 +29,8 @@ export function formatSize(bytes: number, locale: string): string {
       }).format(kb / 1024);
 }
 
-/** The colour group of the type badge (`data-kind`). */
-export type FileKind =
-  "pdf" | "image" | "document" | "spreadsheet" | "archive" | "calendar" | "other";
+export type { FileKind } from "./fileKinds";
+import type { FileKind } from "./fileKinds";
 
 const KIND_BY_EXTENSION: Readonly<Record<string, FileKind>> = {
   pdf: "pdf",

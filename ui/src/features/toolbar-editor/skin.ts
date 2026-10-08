@@ -26,41 +26,9 @@
 import { CUSTOMIZER_PART, SETTINGS_PART } from "./ids";
 import { p } from "../../theme/selectors";
 import { CAPS_TIGHT, LINE_BOX } from "../../theme/declarations";
+import { T } from "../../theme/tokens";
 
 const c = (part: string) => p(`toolbar-customizer.${part}`);
-
-/** Token shorthands (the same derived fallbacks as the shared skin). */
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  accent: "var(--nail-color-accent)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  danger: "var(--nail-color-danger)",
-  success: "var(--nail-color-success)",
-  focus: "var(--nail-color-focus-ring)",
-  small: "var(--nail-font-size-small)",
-  label: "var(--nail-font-size-label)",
-  semibold: "var(--nail-font-weight-semibold)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  pill: "var(--nail-radius-pill)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-} as const;
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 1px;`;
 

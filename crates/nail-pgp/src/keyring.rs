@@ -49,11 +49,7 @@ use crate::key::{self, KeyInfo, ParsedKey};
 pub(crate) use nail_util::time::unix_now;
 
 /// RFC 3339 (UTC, seconds) of Unix seconds.
-pub(crate) fn rfc3339(secs: i64) -> String {
-    chrono::DateTime::from_timestamp(secs, 0)
-        .unwrap_or_default()
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
+pub(crate) use nail_util::time::rfc3339_utc as rfc3339;
 
 /// Passphrases of unlocked keys, in memory only (per process; the core
 /// owns one). Entries expire after the time given to

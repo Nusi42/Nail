@@ -26,22 +26,13 @@
  * for it.
  */
 import { p } from "../../theme/selectors";
+import { T } from "../../theme/tokens";
 
 /** A part inside the composer. */
 /** The message body's editors keep room for a few lines. */
 const BODY_MIN_HEIGHT = "9rem";
 
 const inComposer = (part: string) => `${p("composer")} ${p(part)}`;
-
-/** Token shorthands. */
-const T = {
-  bg: "var(--nail-color-bg)",
-  border: "var(--nail-color-border)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-} as const;
 
 /** The container the queries below measure. */
 export const COMPOSER_CONTAINER = "nail-composer";

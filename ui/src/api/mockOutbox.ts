@@ -4,15 +4,13 @@
  * with fake timers; sending emits `SendStatus` events and files a copy in
  * the account's Sent folder.
  */
+import { DEFAULT_UNDO_SEND_SECS } from "./generated";
 import { htmlToText, saveRichDraft } from "../features/composer/mock";
 import { checkSendCrypto } from "../features/security/mock";
 import type { Draft, OutboxEntry, Response, SendCrypto } from "./generated";
 import { mockBody } from "./mockData";
 import { draftSaveRefusal, identityOf } from "./mockDrafts";
 import { errorResponse, type MockCore } from "./mockMail";
-
-/** Default undo-send delay (`AccountsConfig::DEFAULT_UNDO_SEND_SECS`). */
-export const DEFAULT_UNDO_SEND_SECS = 10;
 
 const timers = new WeakMap<OutboxEntry, ReturnType<typeof setTimeout>>();
 

@@ -10,6 +10,7 @@
  *   unary   := ( "NOT" | "-" ) unary | primary
  *   primary := "(" or ")" | field ":" value | "size" (">"|"<") number | word | "quoted"
  */
+import { MAX_QUERY_BYTES, MAX_QUERY_NESTING } from "./generated";
 import type { SearchError, SearchErrorKind } from "./generated";
 
 /** Fields of the query language, in the order the search bar suggests them. */
@@ -165,11 +166,6 @@ function tokenize(text: string): Token[] {
   return tokens;
 }
 
-/** Longest query accepted (the core counts bytes; close enough here). */
-const MAX_QUERY_LENGTH = 4096;
-/** Deepest nesting of parentheses and NOT / minus (as in nail-search). */
-const MAX_NESTING = 64;
-
 class Parser {
   private pos = 0;
   private nesting = 0;
@@ -222,7 +218,7 @@ class Parser {
   }
 
   private enter(token: Token) {
-    if (this.nesting >= MAX_NESTING) {
+    if (this.nesting >= MAX_QUERY_NESTING) {
       throw new QueryError("too-complex", "nested too deeply", token.start, token.end);
     }
     this.nesting++;
@@ -281,7 +277,7 @@ class Parser {
 /** Parses a query; throws nothing, returns the error instead. */
 export function parseQuery(text: string): { node: QueryNode | null; error: SearchError | null } {
   try {
-    if (text.length > MAX_QUERY_LENGTH) {
+    if (new TextEncoder().encode(text).length > MAX_QUERY_BYTES) {
       throw new QueryError("too-complex", "the query is too long", 0, text.length);
     }
     const tokens = tokenize(text);

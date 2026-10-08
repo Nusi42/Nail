@@ -11,23 +11,7 @@
  */
 import { p } from "../../theme/selectors";
 import { CAPS_TIGHT, floatingWidth } from "../../theme/declarations";
-
-const T = {
-  fg: "var(--nail-color-fg)",
-  bg: "var(--nail-color-bg)",
-  accent: "var(--nail-color-accent)",
-  danger: "var(--nail-color-danger)",
-  focus: "var(--nail-color-focus-ring)",
-  fontUi: "var(--nail-font-ui)",
-  body: "var(--nail-font-size-body)",
-  semibold: "var(--nail-font-weight-semibold)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  rMd: "var(--nail-radius-md)",
-  overlay: "var(--nail-shadow-overlay)",
-  control: "var(--nail-size-control)",
-};
+import { T } from "../../theme/tokens";
 
 export const MAIL_ACTIONS_SKIN_CSS = `${p("mail-actions.toast")} {
   position: fixed; inset: auto auto 24px 50%; transform: translateX(-50%); margin: 0;

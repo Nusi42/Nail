@@ -23,12 +23,13 @@ use nail_proto_pop3::{LeavePolicy, Pop3Client, plan_deletions, plan_downloads, v
 use tokio::sync::watch;
 
 use crate::creds::{EndpointCredentials, pop3_config, pop3_credentials};
-use crate::engine::{Signals, stopped, unix_now};
+use crate::engine::{Signals, stopped};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest};
 use crate::replay::replay_locally;
 use crate::service::Service;
+use nail_util::time::unix_now;
 
 /// The local folders of a POP3 account: path, role.
 pub(crate) const POP3_FOLDERS: [(&str, FolderRole); 4] = [

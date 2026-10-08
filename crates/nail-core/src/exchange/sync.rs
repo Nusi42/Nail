@@ -46,7 +46,7 @@ use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
 
 use super::{MAX_PAGES, RunningEngine, changed, exchange_parts};
-use crate::engine::{Signals, stopped, unix_now};
+use crate::engine::{Signals, stopped};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message};
@@ -54,6 +54,7 @@ use crate::replay::{
     Grouped, OpExecutor, group_results, group_slots, recorded_or, replay_account, sort_group,
 };
 use crate::service::{Service, lock};
+use nail_util::time::unix_now;
 
 /// Settings (categories, automatic replies, rules) are read every this
 /// many passes (and after local changes or "Sync").
@@ -1619,7 +1620,7 @@ async fn store_messages(
                 id: Some(id.clone()),
                 flags: m.flags,
                 keywords: tags,
-                internal_date: crate::ingest::internal_date(m.internal_date),
+                internal_date: nail_util::time::rfc3339_utc_opt(m.internal_date),
                 raw,
                 headers_only,
                 size: m.size,

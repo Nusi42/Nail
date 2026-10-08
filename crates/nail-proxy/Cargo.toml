@@ -14,6 +14,8 @@ test-support = ["dep:tokio-rustls"]
 
 [dependencies]
 nail-api.workspace = true
+# The clock and the fixed test instant (ADR 0171).
+nail-util.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -34,8 +36,6 @@ zeroize.workspace = true
 tokio-rustls = { workspace = true, optional = true }
 
 [dev-dependencies]
-# The fixed test instant (ADR 0171).
-nail-util.workspace = true
 pretty_assertions.workspace = true
 nail-proxy = { workspace = true, features = ["test-support"] }
 rcgen.workspace = true

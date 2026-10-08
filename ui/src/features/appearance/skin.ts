@@ -13,46 +13,12 @@
 import { FIELDS_NARROW } from "../settings/skin";
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 import { p } from "../../theme/selectors";
+import { T } from "../../theme/tokens";
 
 /** The editor's own parts. */
 const e = (part: string) => p(`theme-editor.${part}`);
 /** The preview's parts. */
 const v = (part: string) => p(`theme-editor.preview.${part}`);
-
-/** Token shorthands. */
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  line: "var(--nail-color-border-strong, var(--nail-color-border))",
-  accent: "var(--nail-color-accent)",
-  warning: "var(--nail-color-warning)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  focus: "var(--nail-color-focus-ring)",
-  mono: "var(--nail-font-mono)",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  semibold: "var(--nail-font-weight-semibold)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  xl: "var(--nail-space-xl)",
-  control: "var(--nail-size-control)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  rLg: "var(--nail-radius-lg)",
-  pill: "var(--nail-radius-pill)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-} as const;
 
 /** The container the editor's layout query measures. */
 export const THEME_EDITOR_CONTAINER = "nail-theme-editor";
@@ -129,7 +95,7 @@ ${e("token.text")} { display: contents; }
 ${e("token.text")} > ${e("token.name")} { grid-column: 1; grid-row: 1; min-width: 0; }
 ${e("token.text")} > ${p("tag")}[data-kind="origin"] { grid-column: 2; grid-row: 1; justify-self: end; white-space: nowrap; }
 ${e("token.text")} > :nth-child(n + 3) { grid-column: 1 / 3; justify-self: start; }
-${e("token.name")}, ${e("part.selector")}, ${e("property.name")}, ${e("property.text")} { font-family: ${T.mono}; font-size: ${T.small}; overflow-wrap: anywhere; }
+${e("token.name")}, ${e("part.selector")}, ${e("property.name")}, ${e("property.text")} { font-family: ${T.fontMono}; font-size: ${T.small}; overflow-wrap: anywhere; }
 ${e("token.controls")} { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: ${T.xs}; min-width: 0; }
 ${e("token.controls")} > ${p("form.input")} { flex: 1 1 auto; width: auto; min-width: 0; }
 ${e("token.color")} { width: calc(${T.control} + ${T.md}); height: ${T.control}; padding: ${T.xxs}; border: 1px solid ${T.line}; border-radius: ${T.rSm}; background: none; }
@@ -137,7 +103,7 @@ ${e("token.color")}:focus-visible { ${focusRing} }
 ${e("parts")} { display: grid; grid-template-columns: minmax(calc(12 * ${T.lg}), 1fr) minmax(0, 2fr); gap: ${T.lg}; align-items: start; }
 ${e("part-picker")} { display: flex; flex-direction: column; gap: ${T.sm}; min-width: 0; }
 ${e("part-list")} { max-height: calc(24 * ${T.lg}); overflow: auto; }
-${e("part-button")} { display: block; width: 100%; padding: ${T.xs} ${T.sm}; border: 0; background: none; color: ${T.fg}; font-family: ${T.mono}; font-size: ${T.small}; text-align: start; overflow-wrap: anywhere; cursor: pointer; border-radius: ${T.rSm}; transition: background-color ${T.fast} ${T.ease}; }
+${e("part-button")} { display: block; width: 100%; padding: ${T.xs} ${T.sm}; border: 0; background: none; color: ${T.fg}; font-family: ${T.fontMono}; font-size: ${T.small}; text-align: start; overflow-wrap: anywhere; cursor: pointer; border-radius: ${T.rSm}; transition: background-color ${T.fast} ${T.ease}; }
 ${e("part-button")}:hover { background-color: ${T.raised}; }
 ${e("part-button")}:focus-visible { ${focusRing} }
 ${e("part-button")}[aria-pressed="true"] { background-color: ${T.selection}; color: ${T.selectionFg}; }

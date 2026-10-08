@@ -518,10 +518,7 @@ fn cut(text: &str, max: usize) -> String {
 }
 
 fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or_default()
+    i64::try_from(nail_util::time::unix_now_millis()).unwrap_or(i64::MAX)
 }
 
 fn invalid(message: impl Into<String>) -> ApiError {

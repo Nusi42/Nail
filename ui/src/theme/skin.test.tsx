@@ -2,14 +2,9 @@ import { render } from "@testing-library/react";
 import type { ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { BASE_CSS, COMPACT_VARIANT, compileTheme, resolveTokenRefs } from "./compile";
-import {
-  AVATAR_COLORS,
-  CONTROL_WIDTHS,
-  CONTROL_WIDTH_VAR,
-  SKIN_CSS,
-  colorSlot,
-  stableHash,
-} from "./skin";
+import { ACCOUNT_COLOR_SLOTS } from "../api/generated";
+import { FILE_KINDS } from "../widgets/fileKinds";
+import { CONTROL_WIDTHS, CONTROL_WIDTH_VAR, SKIN_CSS, colorSlot, stableHash } from "./skin";
 import { ThemeProvider } from "./ThemeProvider";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
 import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
@@ -20,20 +15,10 @@ import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { MESSAGE_LIST_SKIN_CSS } from "../widgets/messageListSkin";
 import { THREAD_VIEW_SKIN_CSS } from "../widgets/threadViewSkin";
 import { must } from "../test/must";
+import { hexContrastRatio } from "./contrast";
 
-/** WCAG relative luminance of `#rrggbb`. */
-function luminance(hex: string): number {
-  const channel = (i: number) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
-}
+/** WCAG contrast ratio of two hex colours. */
+const contrast = (a: string, b: string): number => must(hexContrastRatio(a, b));
 
 describe("M5a skin (theme/skin.ts)", () => {
   it("sits between the structure and the theme's part rules", () => {
@@ -301,14 +286,18 @@ describe("M5a skin (theme/skin.ts)", () => {
     );
   });
 
-  it("gives white text enough contrast on every avatar and file-type colour (WCAG AA)", () => {
-    const fallbacks = [
-      ...SKIN_CSS.matchAll(/--nail-color-(?:avatar-\d+|file-[a-z]+), (#[0-9a-f]{6})\)/g),
+  it("uses the theme's avatar and file-type colours, which keep white text readable (WCAG AA)", () => {
+    const colors = must(defaultTheme().tokens.color);
+    const names = [
+      ...Array.from({ length: ACCOUNT_COLOR_SLOTS }, (_, i) => `avatar-${String(i + 1)}`),
+      ...FILE_KINDS.map((kind) => `file-${kind}`),
     ];
-    expect(fallbacks.length).toBeGreaterThan(AVATAR_COLORS.length);
-    for (const color of [...AVATAR_COLORS, ...fallbacks.map((m) => must(m[1]))]) {
-      expect(contrast(color, "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    for (const name of names) {
+      expect(SKIN_CSS).toContain(`var(--nail-color-${name})`);
+      expect(contrast(must(colors[name]), "#ffffff"), name).toBeGreaterThanOrEqual(4.5);
     }
+    // No hard-coded fallback colours: the theme is the only source.
+    expect(SKIN_CSS).not.toMatch(/--nail-color-(?:avatar-\d+|file-[a-z]+), #/);
   });
 
   it("hashes addresses to stable palette slots", () => {
@@ -318,7 +307,7 @@ describe("M5a skin (theme/skin.ts)", () => {
       ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"].map((x) => colorSlot(`${x}@x.org`)),
     );
     expect(slots.size).toBeGreaterThan(3);
-    for (const slot of slots) expect(slot).toBeLessThan(AVATAR_COLORS.length);
+    for (const slot of slots) expect(slot).toBeLessThan(ACCOUNT_COLOR_SLOTS);
   });
 });
 

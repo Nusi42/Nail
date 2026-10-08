@@ -372,12 +372,7 @@ pub(crate) async fn autodiscover(
 }
 
 /// Whether a mail exchanger is Microsoft's (Exchange Online Protection).
-fn is_microsoft_mx(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    ["mail.protection.outlook.com", "outlook.com", "hotmail.com"]
-        .iter()
-        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
-}
+use nail_api::hosts::is_microsoft_mail_host as is_microsoft_mx;
 
 /// Stores the automapped mailboxes Autodiscover found for a new Exchange
 /// account (`AddAccount`).
@@ -390,7 +385,7 @@ pub(crate) async fn store_discovered_mailboxes(service: &Service, account: &Acco
         return;
     }
     let id = account.id.clone();
-    let now = crate::engine::unix_now();
+    let now = nail_util::time::unix_now();
     if let Err(err) = service
         .store()
         .call(move |s| s.merge_automapped_mailboxes(&id, &found, now))

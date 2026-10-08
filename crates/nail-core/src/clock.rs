@@ -27,7 +27,7 @@ impl AdjustableClock {
 
     /// Sets the clock to `unix` seconds now.
     pub fn set(&self, unix: i64) {
-        let real = Utc::now().timestamp();
+        let real = nail_util::time::unix_now();
         self.offset_secs.store(unix - real, Ordering::SeqCst);
     }
 
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn moves_and_jumps() {
         let clock = AdjustableClock::new();
-        let real = Utc::now().timestamp();
+        let real = nail_util::time::unix_now();
         assert!((clock.unix() - real).abs() <= 1);
         clock.advance(3600);
         assert!((clock.unix() - real - 3600).abs() <= 1);

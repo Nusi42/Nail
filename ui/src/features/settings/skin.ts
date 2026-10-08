@@ -27,52 +27,10 @@ import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 import { CONTROL_WIDTH_VAR } from "../../theme/skin";
 import { p } from "../../theme/selectors";
 import { QUIET_BUTTON, QUIET_HOVER, SECTION_LABEL } from "../../theme/declarations";
+import { T } from "../../theme/tokens";
 
 /** A part inside the settings page's cards. */
 const inCard = (part: string) => `${p("settings-page.card")} ${p(part)}`;
-
-/** Token shorthands (the same derived fallbacks as the shared skin). */
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  controlBorder:
-    "var(--nail-border-control, 1px solid var(--nail-color-border-strong, var(--nail-color-border)))",
-  accent: "var(--nail-color-accent)",
-  accentFg: "var(--nail-color-accent-fg)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  focus: "var(--nail-color-focus-ring)",
-  fontUi: "var(--nail-font-ui)",
-  fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  title: "var(--nail-font-size-title)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  tight: "var(--nail-line-height-tight)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  xl: "var(--nail-space-xl)",
-  xxl: "var(--nail-space-xxl)",
-  pane: "var(--nail-space-pane)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  rLg: "var(--nail-radius-lg)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-} as const;
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: -2px;`;
 

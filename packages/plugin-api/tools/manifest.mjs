@@ -41,7 +41,7 @@ export const { MCP_SCOPE_VALUES: MCP_SCOPES } = CONTRACT;
  */
 export const { MAX_PREVIEW_INPUT, MAX_MCP_TOOL_NAME, MAX_MCP_TOOL_SCHEMA } = CONTRACT;
 
-const COMMAND_CONTEXTS = ["list", "reader", "composer", "global"];
+const { PLUGIN_COMMAND_SURFACE_VALUES: COMMAND_CONTEXTS } = CONTRACT;
 const { KEY_CONTEXTS } = CONTRACT;
 
 /**

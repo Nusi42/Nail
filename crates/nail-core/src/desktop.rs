@@ -278,7 +278,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::CompleteFirstRun => {
             let state = FirstRunState {
                 completed: true,
-                completed_at: Some(crate::rules::rfc3339(crate::engine::unix_now())),
+                completed_at: Some(nail_util::time::rfc3339_utc(nail_util::time::unix_now())),
                 completed_version: Some(env!("CARGO_PKG_VERSION").to_owned()),
             };
             let saved = state.clone();

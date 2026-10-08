@@ -31,6 +31,7 @@ import {
 import {
   globMatches,
   isIgnored,
+  isMockCorePath,
   isTestPath,
   lex,
   withoutRustTests,
@@ -43,18 +44,20 @@ import {
   cssLengths,
   fluentDuplicates,
   fluentEntries,
+  generatedLists,
   literalsOf,
   magicNumbers,
   maskedCss,
   mirrorComments,
   mirrorInventory,
-  normalizeValue,
+  canonicalValue,
   rustTsConstants,
   rustTsLists,
   sameConstants,
   SSOT_CHECKS,
   statementAt,
   themeLiterals,
+  tsLists,
 } from "../lib/duplicates/ssot.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -166,10 +169,13 @@ test("mirror-comment: hand mirrors unless pinned by an existing test", () => {
 });
 
 test("constant definitions, values and literals", () => {
-  assert.equal(normalizeValue("64 * 1_024 * 1_024; // bytes"), "64 * 1024 * 1024");
-  assert.equal(normalizeValue("[11, 20] as const;"), "[11, 20]");
-  assert.equal(normalizeValue("["), "");
-  assert.equal(normalizeValue("foo("), "");
+  assert.equal(canonicalValue("64 * 1_024 * 1_024; // bytes", false), "64 * 1024 * 1024");
+  assert.equal(canonicalValue("[11, 20] as const;", false), "[11, 20]");
+  // One value on one line or over several, with a trailing comma, compares equal.
+  assert.equal(canonicalValue('[\n  "a", // first\n  "b",\n] as const', false), '["a", "b"]');
+  // `//` inside a string is no comment.
+  assert.equal(canonicalValue('"https://example.org"; // x', false), '"https://example.org"');
+  assert.equal(canonicalValue("{\n  a: 1,\n}", false), "{a: 1}");
   const text =
     'pub const LIST: &[&str] = &[\n    "a", // x\n    "b;c",\n];\nconst N: u32 = 1_000;\n';
   assert.equal(statementAt(text, text.indexOf("= &[") + 2), '&[\n    "a", // x\n    "b;c",\n]');
@@ -178,7 +184,7 @@ test("constant definitions, values and literals", () => {
   assert.deepEqual(
     defs.map((d) => [d.name, d.line, d.value, d.literals]),
     [
-      ["LIST", 1, "", ['"a"', '"b;c"']],
+      ["LIST", 1, '&["a", "b;c"]', ['"a"', '"b;c"']],
       ["N", 5, "1000", ["1000"]],
     ],
   );
@@ -205,6 +211,73 @@ test("rust-ts-const: one name in Rust and TypeScript, unless the values share no
   assert.deepEqual(
     found.map((f) => [f.key, f.files]),
     [["MAX_X", ["crates/nail-api/src/a.rs", "ui/src/features/a/model.ts"]]],
+  );
+});
+
+test("rust-ts-const: the UI's mock core counts, aliases of other constants do not", () => {
+  assert.ok(isMockCorePath("ui/src/api/editHistoryMock.ts"));
+  assert.ok(isMockCorePath("ui/src/features/gmail/mockSeed.ts"));
+  assert.ok(!isMockCorePath("ui/src/api/editHistoryMock.test.ts"));
+  assert.ok(!isMockCorePath("crates/nail-testkit/src/mock.rs"));
+  const found = rustTsConstants([
+    file("crates/nail-api/src/editing.rs", "pub const MAX_EDIT_HISTORY: usize = 50;\n"),
+    file("ui/src/api/editHistoryMock.ts", "export const MAX_EDIT_HISTORY = 50;\n"),
+    file(
+      "crates/nail-core/src/virtuals.rs",
+      'pub(crate) const MERGED_ROLES: [&str; 1] = ["inbox"];\n',
+    ),
+    file("ui/src/api/mockMail.ts", "export const MERGED_ROLES = FOLDER_ROLES;\n"),
+    file("crates/nail-api/src/desktop.rs", 'pub const MANIFEST_FILE: &str = "latest.json";\n'),
+    file("scripts/lib/update.mjs", "export const MANIFEST_FILE = contract.UPDATE_MANIFEST_FILE;\n"),
+  ]);
+  assert.deepEqual(
+    found.map((f) => f.key),
+    ["MAX_EDIT_HISTORY"],
+  );
+});
+
+test("ts-list: one string list defined twice in TypeScript", () => {
+  const found = tsLists([
+    file("ui/src/features/a/messages.ts", 'const SIDES = ["left", "right", "top"];\n'),
+    file(
+      "ui/src/features/a/model.ts",
+      'export const DOCK = [\n  "top",\n  "left",\n  "right",\n];\nconst B = ["x", "y", "z"];\n',
+    ),
+    file("ui/src/features/a/model.test.ts", 'const C = ["x", "y", "z"];\n'),
+  ]);
+  assert.deepEqual(
+    found.map((f) => [f.key, f.files]),
+    [["left, right, top", ["ui/src/features/a/messages.ts", "ui/src/features/a/model.ts"]]],
+  );
+});
+
+test("generated-list: a hand copy of a generated contract list", () => {
+  const generated = {
+    DOCK_SIDE_VALUES: ["left", "right", "top", "bottom"],
+    MAX_X: 5,
+    BUILTIN_THEMES: [["frost", "light"]],
+  };
+  const found = generatedLists(
+    [
+      file(
+        "ui/src/features/a/model.ts",
+        'const SIDES = ["bottom", "top", "right", "left"];\nconst SOME = ["left", "right"];\n',
+      ),
+      file(
+        "ui/src/features/a/model.test.ts",
+        'const SIDES = ["left", "right", "top", "bottom"];\n',
+      ),
+    ],
+    generated,
+  );
+  assert.deepEqual(
+    found.map((f) => [f.key, f.detail]),
+    [
+      [
+        "ui/src/features/a/model.ts: bottom, left, right, top",
+        "ui/src/features/a/model.ts:1: [bottom, left, right, top] = generated DOCK_SIDE_VALUES",
+      ],
+    ],
   );
 });
 

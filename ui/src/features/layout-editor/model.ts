@@ -5,6 +5,7 @@
  * breakpoint. Pure functions over the resolved layout; the write itself is
  * an `UpdateLayout` request (`./useLayoutEdit.ts`).
  */
+import { DOCK_SIDE_VALUES } from "../../api/generated";
 import type {
   DockSide,
   JsonValue,
@@ -26,7 +27,7 @@ export type DropZone = DockSide | "swap" | "into";
 export { nodeAt };
 
 /** The dock sides, in the order the keyboard reaches them. */
-export const DOCK_SIDES: readonly DockSide[] = ["left", "right", "top", "bottom"];
+export const DOCK_SIDES: readonly DockSide[] = DOCK_SIDE_VALUES;
 
 /** What is being moved (picked up with the keyboard, or dragged). */
 export type Moving =

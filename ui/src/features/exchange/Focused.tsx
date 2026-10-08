@@ -12,6 +12,7 @@
  * - mount point `FocusMoveButton`: "Move to Other" / "Move to Focused" for
  *   one classified message (reader toolbar).
  */
+import { INFERENCE_CLASSIFICATION_VALUES } from "../../api/generated";
 import { useState } from "react";
 import type { InferenceClassification, MessageSummary } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
@@ -29,7 +30,7 @@ import { EmptyDialog } from "../../widgets/DialogStates";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
 
-const TABS: readonly InferenceClassification[] = ["focused", "other"];
+const TABS: readonly InferenceClassification[] = INFERENCE_CLASSIFICATION_VALUES;
 
 /** The other tab. */
 export function otherFocus(focus: InferenceClassification): InferenceClassification {

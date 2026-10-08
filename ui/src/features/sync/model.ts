@@ -72,3 +72,7 @@ export function withFolderRule(
   }
   return { ...account, sync: { ...account.sync, folders: kept } };
 }
+
+/** A folder setting that may follow the account's default (`sync-<setting>-<choice>`). */
+export const TRI_CHOICES = ["default", "yes", "no"] as const;
+export type Tri = (typeof TRI_CHOICES)[number];

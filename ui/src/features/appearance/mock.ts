@@ -6,13 +6,15 @@
  * requests here; `setMockSystemAppearance` plays Windows switching modes.
  */
 import {
-  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
   type Appearance,
   type AppearanceSettings,
+  PREVIEW_TOKENS,
   type Request,
   type ResolvedTheme,
   type Response,
   type SystemAppearance,
+  THEME_KIND_VALUES,
+  THEME_OVERRIDES_ISSUE_MESSAGE_IDS,
   type ThemeInfo,
   type ThemeKind,
 } from "../../api/generated";
@@ -88,8 +90,7 @@ function previewOf(id: string): Record<string, string> {
   );
 }
 
-/** `nail_api::appearance::PREVIEW_TOKENS`. */
-export const PREVIEW_TOKENS = ["bg-subtle", "bg", "accent", "fg"] as const;
+export { PREVIEW_TOKENS } from "../../api/generated";
 
 /** `AppearanceSettings::default()`: Follow Windows with Frost / Graphite. */
 export function defaultSettings(): AppearanceSettings {
@@ -322,7 +323,7 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
       return { type: "Themes", appearance: snapshot(state) };
     }
     case "SetTheme": {
-      if (!usable(request.theme_id, ["light", "dark", "high-contrast"])) {
+      if (!usable(request.theme_id, THEME_KIND_VALUES)) {
         return invalid(`no usable theme ${request.theme_id}`, "theme-problem-unknown");
       }
       const before = themeKey(core);

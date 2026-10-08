@@ -48,9 +48,9 @@ use nail_api::{
 use nail_store::exchange::ExchangeOp;
 use nail_store::{MessageFilter, Operation};
 
-use crate::engine::unix_now;
 use crate::error::{CoreError, Result};
 use crate::service::{Service, lock};
+use nail_util::time::unix_now;
 
 /// Most pages of one folder or collection in one pass (a runaway cursor).
 pub(crate) const MAX_PAGES: u32 = 1_000;
@@ -269,11 +269,6 @@ pub(crate) fn engine_of(
         return Ok(Arc::clone(&running.engine));
     }
     setup::engine_for(service, account)
-}
-
-fn rfc3339(secs: i64) -> Option<String> {
-    chrono::DateTime::from_timestamp(secs, 0)
-        .map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
 /// Tells clients that areas of an account changed.
@@ -616,8 +611,8 @@ async fn status(service: &Service, account_id: &AccountId) -> Result<ExchangeSta
         last_sync_at: record
             .as_ref()
             .and_then(|r| r.last_sync_at)
-            .and_then(rfc3339),
-        throttled_until: throttled.and_then(rfc3339),
+            .map(nail_util::time::rfc3339_utc),
+        throttled_until: nail_util::time::rfc3339_utc_opt(throttled),
         folders_synced: synced,
         folders_total: total,
         pending_ops: pending,
@@ -1023,6 +1018,5 @@ mod tests {
             ctl.warnings_of(&account),
             vec![ExchangeWarning::RoomsNeedConsent]
         );
-        assert_eq!(rfc3339(0).as_deref(), Some("1970-01-01T00:00:00Z"));
     }
 }

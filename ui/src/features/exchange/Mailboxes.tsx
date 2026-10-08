@@ -13,6 +13,7 @@
  * - mount point `MailboxFolderBadge`: on a folder-tree row of another
  *   mailbox's root, its kind and (when not synced) its state.
  */
+import { EXCHANGE_MAILBOX_KIND_VALUES } from "../../api/generated";
 import { useId, useState, type SubmitEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
@@ -32,6 +33,7 @@ import {
   mailboxName,
   mailboxOfFolder,
   mailboxShows,
+  MAILBOX_SHOW_KEYS,
   newMailboxSettings,
 } from "./model";
 import { MAILBOX_EDITOR_DIALOG, MAILBOX_REMOVE_DIALOG } from "./names";
@@ -41,8 +43,8 @@ import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
 
-const KINDS: readonly ExchangeMailboxKind[] = ["shared", "delegate"];
-const SHOWS = ["mail", "calendar", "contacts", "tasks"] as const;
+const KINDS: readonly ExchangeMailboxKind[] = EXCHANGE_MAILBOX_KIND_VALUES;
+const SHOWS = MAILBOX_SHOW_KEYS;
 
 /** Widget `exchange-mailboxes`. Renders nothing for other accounts. */
 export function MailboxList({ node }: WidgetProps) {

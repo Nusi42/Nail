@@ -70,9 +70,7 @@ fn item_parts(item: &ReminderItem) -> (ReminderItemKind, &str) {
     }
 }
 
-fn wall_now() -> i64 {
-    chrono::Utc::now().timestamp()
-}
+use nail_util::time::unix_now as wall_now;
 
 impl ReminderStore for StoreReminders {
     type Error = nail_store::Error;

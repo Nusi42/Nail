@@ -387,7 +387,7 @@ fn merge_prepared(
         .flat_map(|(_, a)| a)
         .collect();
     if !learned.is_empty()
-        && let Err(err) = store.record_addresses(&learned, crate::engine::unix_now())
+        && let Err(err) = store.record_addresses(&learned, nail_util::time::unix_now())
     {
         tracing::debug!(%err, "cannot record addresses");
     }
@@ -528,14 +528,6 @@ pub(crate) async fn remove_messages(
         })
         .await?;
     Ok(())
-}
-
-/// An API server's internal date (Unix seconds) as RFC 3339.
-pub(crate) fn internal_date(secs: Option<i64>) -> Option<String> {
-    secs.and_then(|t| {
-        chrono::DateTime::from_timestamp(t, 0)
-            .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-    })
 }
 
 #[cfg(test)]

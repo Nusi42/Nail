@@ -13,8 +13,8 @@ use nail_api::triage::{JunkStatus, SnoozedMessage};
 use nail_api::{AccountId, ApiError, Event, Request, Response};
 
 use crate::error::Result;
-use crate::rules::rfc3339;
 use crate::service::Service;
+use nail_util::time::rfc3339_utc as rfc3339;
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {

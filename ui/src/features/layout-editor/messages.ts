@@ -5,6 +5,7 @@
  * contract ids in `core-editors.ftl`); ids built at runtime are listed by
  * `runtimeIds`.
  */
+import { DOCK_SIDE_VALUES } from "../../api/generated";
 import type { DockSide } from "../../api/generated";
 import { PALETTE_WIDGETS, type DropZone } from "./model";
 import { NAMED_KINDS } from "./names";
@@ -15,7 +16,7 @@ export const prefixes: readonly string[] = ["layout-editor-"];
 /** Literals with those prefixes that are not message ids (widget kinds). */
 export const notMessages: readonly string[] = ["layout-editor-settings"];
 
-const SIDES: readonly DockSide[] = ["left", "right", "top", "bottom"];
+const SIDES: readonly DockSide[] = DOCK_SIDE_VALUES;
 const ZONES: readonly DropZone[] = [...SIDES, "swap", "into"];
 
 /** Message ids built at runtime. */

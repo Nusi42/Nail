@@ -315,8 +315,7 @@ fn received_at(path: &Path, base: &str) -> Option<i64> {
     fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .and_then(|d| i64::try_from(d.as_secs()).ok())
+        .and_then(nail_util::time::unix_secs_of)
 }
 
 /// Reads the messages of one Maildir folder (`cur`, then `new`).
@@ -469,9 +468,7 @@ impl MaildirWriter {
         sorted.sort_unstable();
         sorted.dedup();
         info.extend(sorted);
-        let time = received_at
-            .unwrap_or_else(|| chrono::Utc::now().timestamp())
-            .max(0);
+        let time = received_at.unwrap_or_else(nail_util::time::unix_now).max(0);
         let unique = UNIQUE.fetch_add(1, Ordering::Relaxed);
         let base = format!("{time}.M{unique}P{}Q{unique}.nail", std::process::id());
         let tmp = dir.join("tmp").join(&base);

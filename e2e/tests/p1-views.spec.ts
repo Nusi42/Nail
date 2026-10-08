@@ -9,13 +9,16 @@ import {
   type CheckOptions,
 } from "../support/responsive";
 import {
+  closeWindow,
+  messageRows,
   nextFrames,
   openApp,
   openSettings,
   readerToolbar,
   runFromPalette,
   showView,
-  messageRows,
+  windowById,
+  windowSelector,
 } from "../support/views";
 
 /**
@@ -61,17 +64,6 @@ async function chooseCalendarView(calendar: Locator, name: string): Promise<void
   await calendar.page().getByRole("menuitem", { name, exact: true }).click();
 }
 
-/** Closes a window of the window manager when it is open. */
-async function closeWindow(dialog: Locator): Promise<void> {
-  if (!(await dialog.isVisible())) return;
-  // The close button may sit outside a viewport that just shrank.
-  await dialog.locator('[data-part="window.close"]').first().dispatchEvent("click");
-  await expect(dialog).toBeHidden();
-}
-
-const windowFrame = (page: Page, id: string) =>
-  page.locator(`[data-part="window"][data-window="${id}"]`);
-
 /**
  * A window at its min-size and resized larger (1.5 × its default size,
  * within the viewport): no layout issue inside it, screenshots of both.
@@ -85,7 +77,7 @@ async function expectWindowSizes(
   await page.setViewportSize({ width: 1280, height: 1000 });
   const start = await frame.boundingBox();
   if (!start) throw new Error(`${name} is not visible`);
-  const scope = `[data-part="window"][data-window="${String(await frame.getAttribute("data-window"))}"]`;
+  const scope = windowSelector(String(await frame.getAttribute("data-window")));
   const sizes = [
     { width: 1, height: 1 },
     { width: Math.round(start.width * 1.5), height: Math.round(start.height * 1.5) },
@@ -171,7 +163,7 @@ test("the toolbar customizer at every size, min-size and larger", async ({ page 
     // Opened afresh at each size: an open window keeps its place when the
     // viewport shrinks (window manager, see the report), a new one opens
     // inside the page.
-    await closeWindow(dialog);
+    await closeWindow(dialog, { ifOpen: true, dispatch: true });
     await showView(page, "Mail");
     // Below 900 px the mail window shows its panes as tabs.
     const tab = (name: string) => page.getByRole("tab", { name, exact: true });
@@ -208,7 +200,7 @@ test("the toolbar customizer at every size, min-size and larger", async ({ page 
 
   await expectWindowSizes(
     page,
-    windowFrame(page, (await dialog.getAttribute("data-window")) ?? ""),
+    windowById(page, (await dialog.getAttribute("data-window")) ?? ""),
     "views-toolbar-customizer",
   );
 });
@@ -266,7 +258,7 @@ test("the theme editor at every size, min-size and larger; its title once, tags 
   await open(page);
   const dialog = page.getByRole("dialog", { name: "Theme editor" });
   const prepare = async () => {
-    await closeWindow(dialog);
+    await closeWindow(dialog, { ifOpen: true, dispatch: true });
     await runFromPalette(page, "edit theme", "Edit theme");
     await expect(dialog.locator('[data-part="theme-editor.token"]').first()).toBeVisible();
   };
@@ -303,5 +295,5 @@ test("the theme editor at every size, min-size and larger; its title once, tags 
   });
 
   await dialog.getByRole("tab").first().click();
-  await expectWindowSizes(page, windowFrame(page, "theme-editor"), "views-theme-editor");
+  await expectWindowSizes(page, windowById(page, "theme-editor"), "views-theme-editor");
 });

@@ -37,6 +37,7 @@ import {
   TRANSPARENCIES,
   VISIBILITIES,
   type AlarmUnit,
+  ALARM_WHEN,
 } from "./constants";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -1091,7 +1092,7 @@ export function AlarmEditor({
                   });
                 }}
               >
-                {(["before-start", "after-start", "before-end", "after-end"] as const).map((v) => (
+                {ALARM_WHEN.map((v) => (
                   <option key={v} value={v}>
                     {t(`pim-alarm-${v}`)}
                   </option>

@@ -14,13 +14,15 @@
  * of marked mail to `GetMessage`.
  */
 import {
-  JUNK_ISSUE_MESSAGE_IDS,
-  NOTIFICATION_ISSUE_MESSAGE_IDS,
   type FolderId,
+  JUNK_ISSUE_MESSAGE_IDS,
+  JUNK_KEYWORD,
   type JunkSettings,
   type JunkStatus,
   type MessageBody,
   type MessageSummary,
+  NOTIFICATION_ISSUE_MESSAGE_IDS,
+  NOT_JUNK_KEYWORD,
   type NotificationSettings,
   type Request,
   type Response,
@@ -80,8 +82,6 @@ export function snoozedFolderId(accountId: string): FolderId {
   return `${accountId}/Snoozed`;
 }
 
-const JUNK_KEYWORD = "$Junk";
-const NOT_JUNK_KEYWORD = "$NotJunk";
 const SNOOZED_KEYWORD = "$Snoozed";
 
 function withTags(m: MessageSummary, add: string[], remove: string[]): string[] {

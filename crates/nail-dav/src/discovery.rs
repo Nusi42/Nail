@@ -74,13 +74,10 @@ impl DavService {
 
     /// The fixed endpoint of a well-known provider for `domain`.
     pub fn provider_url(self, domain: &str) -> Option<&'static str> {
-        match domain.to_ascii_lowercase().as_str() {
-            "gmail.com" | "googlemail.com" => Some(match self {
-                Self::CalDav => GOOGLE_CALDAV_URL,
-                Self::CardDav => GOOGLE_CARDDAV_URL,
-            }),
-            _ => None,
-        }
+        nail_api::hosts::is_gmail_domain(domain).then_some(match self {
+            Self::CalDav => GOOGLE_CALDAV_URL,
+            Self::CardDav => GOOGLE_CARDDAV_URL,
+        })
     }
 }
 

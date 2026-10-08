@@ -203,9 +203,7 @@ pub fn public_key_of_spki(
 
 fn rfc3339(time: x509_cert::time::Time) -> String {
     let secs = time.to_unix_duration().as_secs();
-    chrono::DateTime::<chrono::Utc>::from_timestamp(i64::try_from(secs).unwrap_or(i64::MAX), 0)
-        .map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-        .unwrap_or_default()
+    nail_util::time::rfc3339_utc(i64::try_from(secs).unwrap_or(i64::MAX))
 }
 
 /// Facts about a DER certificate on a token (subject, issuer, serial,

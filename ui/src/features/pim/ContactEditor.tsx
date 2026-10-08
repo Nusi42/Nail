@@ -42,10 +42,12 @@ import { TextField, TextAreaField } from "../../widgets/forms";
 import { RemoveButton } from "../../widgets/RemoveButton";
 import { CloseButton } from "../../widgets/CloseButton";
 
-export const EMAIL_KINDS = ["home", "work", "other"] as const;
+/** The `TYPE` choices of emails, addresses and URLs (vCard home / work / other). */
+const PLACE_KINDS = ["home", "work", "other"] as const;
+export const EMAIL_KINDS = PLACE_KINDS;
 export const PHONE_KINDS = ["cell", "home", "work", "fax", "other"] as const;
-export const ADDRESS_KINDS = ["home", "work", "other"] as const;
-export const URL_KINDS = ["home", "work", "other"] as const;
+export const ADDRESS_KINDS = PLACE_KINDS;
+export const URL_KINDS = PLACE_KINDS;
 /** Largest photo the editor accepts (bytes). */
 export const MAX_PHOTO_BYTES = 512 * 1024;
 

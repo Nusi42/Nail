@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+nail-util.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true

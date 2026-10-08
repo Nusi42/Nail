@@ -78,9 +78,7 @@ impl DataDirLock {
         let holder = LockHolder {
             pid: std::process::id(),
             owner: owner.to_owned(),
-            since: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
+            since: nail_util::time::unix_now(),
         };
         // Best effort: the lock works without the description.
         if let Err(err) = write_info(dir, &holder) {

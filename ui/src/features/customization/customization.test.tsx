@@ -25,12 +25,7 @@ import { answerCustomization, isCustomizationRequest } from "./mock";
 import { customizationStore } from "./state";
 import { WRITE_DELAY_MS } from "./writeBack";
 import { requestsOf, wireEvents } from "../../test/env";
-
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing value");
-  return value;
-}
+import { must } from "../../test/must";
 
 async function call(env: Env, request: Request): Promise<Response> {
   return env.client.call(request);

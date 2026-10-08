@@ -468,7 +468,7 @@ pub(crate) async fn sync_folder(
     folder: &Folder,
     bodies: &BodyPolicy,
 ) -> Result<FolderOutcome> {
-    let now = crate::engine::unix_now();
+    let now = nail_util::time::unix_now();
     let fetch = BodyFetch::from_policy(bodies, now);
     let store = &ctx.store;
     let stored_state = {

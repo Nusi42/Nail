@@ -21,7 +21,7 @@
  * Structure the views need in every theme stays in `parts.ts`
  * (`PIM_BASE_CSS`).
  */
-import { AVATAR_COLORS } from "../../theme/skin";
+import { avatarPaletteRules } from "../../theme/skin";
 import { hc, p, ps, pss } from "../../theme/selectors";
 import {
   ACCENT_BAR,
@@ -31,48 +31,9 @@ import {
   QUIET_HOVER,
   SECTION_LABEL,
   smallTag,
+  VISUALLY_HIDDEN,
 } from "../../theme/declarations";
-
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  line: "var(--nail-color-border-strong, var(--nail-color-border))",
-  accent: "var(--nail-color-accent)",
-  accentFg: "var(--nail-color-accent-fg)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  danger: "var(--nail-color-danger)",
-  focus: "var(--nail-color-focus-ring)",
-  fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  heading: "var(--nail-font-size-heading)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  tight: "var(--nail-line-height-tight)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  pane: "var(--nail-space-pane)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  avatar: "var(--nail-size-avatar)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  pill: "var(--nail-radius-pill)",
-  raisedShadow: "var(--nail-shadow-raised)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-} as const;
+import { T } from "../../theme/tokens";
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 /** One line, cut with an ellipsis. */
@@ -270,13 +231,10 @@ ${p("pim.colors.input")} { position: absolute; inset: 0; width: 100%; height: 10
 ${p("pim.colors.swatch")} { width: calc(${T.control} - ${T.md}); height: calc(${T.control} - ${T.md}); border-radius: ${T.pill}; background-color: ${T.accent}; }
 ${p("pim.colors.option")}:has(:checked) { box-shadow: 0 0 0 2px ${T.fg}; }
 ${p("pim.colors.option")}:has(:focus-visible) { outline: 2px solid ${T.focus}; outline-offset: 2px; }
-${p("pim.colors.name")} { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+${p("pim.colors.name")} { ${VISUALLY_HIDDEN} }
 ${p("pim-settings")} { display: grid; gap: ${T.lg}; }`;
 
-const avatars = AVATAR_COLORS.map(
-  (color, i) =>
-    `[data-color="${String(i)}"]${p("contact-list.avatar")}, [data-color="${String(i)}"]${p("contact-card.avatar")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
-).join("\n");
+const avatars = avatarPaletteRules(["contact-list.avatar", "contact-card.avatar"]);
 
 const CONTACTS = `${ps("contact-list.avatar", "contact-card.avatar")} {
   display: grid; place-items: center; border-radius: 50%; font-weight: ${T.semibold}; line-height: 1;
@@ -347,9 +305,7 @@ export const CALENDAR_NARROW = "40rem";
 /** The widest a contact card's or the task list's content gets (Edit / Delete stay near the name). */
 const READING = "56rem";
 
-/** Visually hidden, still read (the accessible name stays). */
-const srOnly =
-  "position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;";
+const srOnly = VISUALLY_HIDDEN;
 
 /**
  * P1 (WP192, ADR 0142): the panes of the calendar window's split give way

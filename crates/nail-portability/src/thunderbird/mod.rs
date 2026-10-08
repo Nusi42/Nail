@@ -438,10 +438,8 @@ pub fn find_profiles(data_dir: &Path) -> Vec<FoundImportSource> {
         let last_used_at = fs::metadata(full.join("prefs.js"))
             .and_then(|m| m.modified())
             .ok()
-            .map(|t| {
-                chrono::DateTime::<chrono::Utc>::from(t)
-                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-            });
+            .and_then(nail_util::time::unix_secs_of)
+            .map(nail_util::time::rfc3339_utc);
         out.push(FoundImportSource {
             source: ImportSource {
                 format: ImportFormat::ThunderbirdProfile,

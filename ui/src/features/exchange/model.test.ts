@@ -397,4 +397,5 @@ describeVectors("exchange", exchangeVectors, {
     mailboxIssues(settings, own, []),
   isPlausibleEmail,
   automaticRepliesIssues,
+  isExchangeOnlineHost,
 });

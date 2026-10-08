@@ -166,18 +166,9 @@ const PRINT_TEXT: &[&str] = &[
 struct Rgb([f64; 3]);
 
 impl Rgb {
-    /// WCAG 2.x relative luminance.
+    /// WCAG 2.x relative luminance (`nail_util::color`).
     fn luminance(self) -> f64 {
-        let lin = |c: f64| {
-            let c = c / 255.0;
-            if c <= 0.040_45 {
-                c / 12.92
-            } else {
-                ((c + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        let [r, g, b] = self.0.map(lin);
-        0.2126 * r + 0.7152 * g + 0.0722 * b
+        nail_util::color::relative_luminance(self.0)
     }
 
     #[expect(
@@ -191,30 +182,13 @@ impl Rgb {
     }
 }
 
-/// WCAG contrast ratio of two colours (1..=21).
+/// WCAG contrast ratio of two colours (1..=21; `nail_util::color`).
 fn contrast(a: Rgb, b: Rgb) -> f64 {
-    let (la, lb) = (a.luminance(), b.luminance());
-    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    nail_util::color::contrast_ratio(a.0, b.0)
 }
 
 fn parse_hex(value: &str) -> Option<Rgb> {
-    let digits = value.strip_prefix('#')?;
-    let channel = |s: &str| u8::from_str_radix(s, 16).ok().map(f64::from);
-    match digits.len() {
-        3 => {
-            let mut out = [0.0; 3];
-            for (i, c) in digits.chars().enumerate() {
-                out[i] = channel(&format!("{c}{c}"))?;
-            }
-            Some(Rgb(out))
-        }
-        6 => Some(Rgb([
-            channel(&digits[0..2])?,
-            channel(&digits[2..4])?,
-            channel(&digits[4..6])?,
-        ])),
-        _ => None,
-    }
+    nail_util::color::parse_hex(value).map(Rgb)
 }
 
 /// Splits at commas that are not inside parentheses.

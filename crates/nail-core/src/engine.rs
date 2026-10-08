@@ -105,16 +105,6 @@ async fn stop(engine: Running) {
     }
 }
 
-/// Now as RFC 3339 (UTC).
-pub(crate) fn now_rfc3339() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
-
-/// Now as Unix seconds.
-pub(crate) fn unix_now() -> i64 {
-    chrono::Utc::now().timestamp()
-}
-
 /// The error class of a failed connection as an account state.
 pub(crate) fn state_for_error(code: ErrorCode) -> AccountState {
     if code == ErrorCode::AuthFailed {
@@ -194,7 +184,7 @@ impl Service {
             let status = AccountStatus {
                 account_id: account.clone(),
                 state,
-                since: now_rfc3339(),
+                since: nail_util::time::rfc3339_now(),
                 error,
                 message,
                 localized,
@@ -224,7 +214,7 @@ impl Service {
                         } else {
                             AccountState::Disabled
                         },
-                        since: now_rfc3339(),
+                        since: nail_util::time::rfc3339_now(),
                         error: None,
                         message: None,
                         localized: None,
@@ -351,8 +341,6 @@ mod tests {
             AccountState::AuthError
         );
         assert_eq!(state_for_error(ErrorCode::Network), AccountState::Offline);
-        assert!(now_rfc3339().ends_with('Z'));
-        assert!(unix_now() > 1_700_000_000);
     }
 
     #[tokio::test]

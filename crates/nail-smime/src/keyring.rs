@@ -40,7 +40,7 @@ use crate::error::{Error, Result};
 use crate::keys::{PrivateKeyOps, SoftwareKey};
 use crate::mime::{self, ReadContext, ReadOutcome};
 use crate::signed::Signer;
-use crate::time::rfc3339;
+use nail_util::time::rfc3339_utc as rfc3339;
 
 const MAGIC: &[u8; 4] = b"NSM1";
 const MODE_KEYCHAIN: u8 = 1;
@@ -252,7 +252,7 @@ impl<'a> Keyring<'a> {
     }
 
     fn now(&self) -> i64 {
-        self.now.unwrap_or_else(crate::time::now)
+        self.now.unwrap_or_else(nail_util::time::unix_now)
     }
 
     // -- import -----------------------------------------------------------

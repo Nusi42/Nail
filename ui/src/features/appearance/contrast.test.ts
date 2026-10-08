@@ -3,7 +3,8 @@
  * history buttons' Ctrl+Z / Ctrl+Y keys.
  */
 import { describe, expect, it } from "vitest";
-import { contrastProblems, contrastRatio, parseHex } from "./contrast";
+import { hexContrastRatio as contrastRatio, parseHex } from "../../theme/contrast";
+import { contrastProblems } from "./contrast";
 import { historyKey } from "../../state/editHistory";
 
 describe("contrast", () => {

@@ -19,46 +19,8 @@
  * rail about 60 px wide, a 34 px app mark (`size.avatar`), a 16 px badge.
  */
 import { p } from "../../theme/selectors";
-import { initialsAvatar, QUIET_HOVER, TINY_TEXT } from "../../theme/declarations";
-
-/** Token shorthands (fallbacks only where the schema may lack the token). */
-const T = {
-  rail: "var(--nail-color-rail, var(--nail-color-bg-subtle))",
-  canvas: "var(--nail-color-canvas, var(--nail-color-bg))",
-  raised: "var(--nail-color-bg-raised)",
-  bg: "var(--nail-color-bg)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  accent: "var(--nail-color-accent)",
-  accentFg: "var(--nail-color-accent-fg)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  danger: "var(--nail-color-danger)",
-  focus: "var(--nail-color-focus-ring)",
-  fontUi: "var(--nail-font-ui)",
-  fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  heading: "var(--nail-font-size-heading)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  tight: "var(--nail-line-height-tight)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  avatar: "var(--nail-size-avatar)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  rLg: "var(--nail-radius-lg)",
-  pill: "var(--nail-radius-pill)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-  disabled: "var(--nail-opacity-disabled)",
-} as const;
+import { initialsAvatar, QUIET_HOVER, TINY_TEXT, VISUALLY_HIDDEN } from "../../theme/declarations";
+import { T } from "../../theme/tokens";
 
 /** The rail button: control + 10 px (42 px in Comfortable). */
 const ITEM = `calc(${T.control} + ${T.sm} + ${T.xxs})`;
@@ -94,9 +56,7 @@ ${p("nav-rail.item")}[aria-current="page"], ${p("nav-rail.item")}[data-state~="a
   color: ${T.accent}; background-color: ${T.accentSoft};
 }
 ${p("nav-rail.icon")} { width: calc(${T.icon} + ${T.xs}); height: calc(${T.icon} + ${T.xs}); }
-${p("nav-rail.label")} {
-  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
-}
+${p("nav-rail.label")} { ${VISUALLY_HIDDEN} }
 ${p("nav-rail")}[data-labels="shown"] ${p("nav-rail.item")} {
   width: calc(${ITEM} * 1.5); height: auto; min-height: ${ITEM};
   grid-auto-flow: row; gap: ${T.xxs}; padding: ${T.xs} ${T.xxs};

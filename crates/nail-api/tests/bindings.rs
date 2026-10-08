@@ -73,7 +73,7 @@ fn check_up_to_date(export: Export, target: &Path, name: &str) {
     let fresh = read_tree(fresh_dir.path());
     assert_eq!(written, fresh.keys().cloned().collect::<Vec<_>>());
 
-    if std::env::var_os("NAIL_UPDATE_BINDINGS").is_some() {
+    if nail_util::snapshot::updating(nail_util::snapshot::UPDATE_BINDINGS) {
         if target.exists() {
             std::fs::remove_dir_all(target).unwrap();
         }

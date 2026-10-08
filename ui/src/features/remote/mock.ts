@@ -14,6 +14,7 @@
  * real store keeps only Argon2id hashes, `keychain:` references and
  * SHA-256 hashes.
  */
+import { MIN_PASSWORD_CHARS } from "../../api/generated";
 import type {
   MessageBody,
   PairingCode,
@@ -32,7 +33,7 @@ import type {
   Response,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
-import { normalizePairingCode, settingsIssues } from "./model";
+import { CONTENT_SCOPES, normalizePairingCode, settingsIssues } from "./model";
 import { charCount } from "../../text/chars";
 import { nonEmpty } from "../../text/empty";
 
@@ -80,7 +81,6 @@ export const MOCK_MAX_FAILURES = 5;
 /** Lockout length of the mock, in seconds. */
 export const MOCK_LOCKOUT_SECS = 300;
 /** Shortest password the mock accepts. */
-export const MOCK_MIN_PASSWORD = 12;
 
 /** Test-double secrets (see the module docs). */
 export interface RemoteMockSecrets {
@@ -499,7 +499,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
         forget(s.secrets.passwords, found.id);
         found.has_password = false;
       } else {
-        if (charCount(request.password) < MOCK_MIN_PASSWORD) {
+        if (charCount(request.password) < MIN_PASSWORD_CHARS) {
           return errorResponse("invalid_request", "password-too-short");
         }
         s.secrets.passwords[found.id] = request.password;
@@ -740,7 +740,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       return { type: "RemoteContentAllowed", entry: structuredClone(entry) };
     }
     case "ListRemoteContentAllows": {
-      const order: RemoteContentScope[] = ["message", "sender", "domain"];
+      const order: readonly RemoteContentScope[] = CONTENT_SCOPES;
       const entries = [...s.allows].sort(
         (a, b) =>
           order.indexOf(a.scope) - order.indexOf(b.scope) ||

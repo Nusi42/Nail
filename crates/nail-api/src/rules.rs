@@ -89,6 +89,11 @@ pub enum RuleTrigger {
     },
 }
 
+impl RuleTrigger {
+    /// The triggers without parameters (`trigger="…"` in `rules.kdl`).
+    pub const SIMPLE: [Self; 3] = [Self::Arrival, Self::OnSend, Self::Manual];
+}
+
 /// Part of a rule's scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]

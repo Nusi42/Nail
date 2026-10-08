@@ -85,6 +85,12 @@ export function masterRefusal(root, what) {
 }
 
 /** Root of the checkout this module belongs to. */
+/** The repository's git hooks (pre-commit, pre-push; ADR 0123), relative to a checkout. */
+export const HOOKS_DIR = ".githooks";
+
+/** The `git` arguments that point a checkout at {@link HOOKS_DIR}. */
+export const HOOKS_PATH_ARGS = ["config", "core.hooksPath", HOOKS_DIR];
+
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /**

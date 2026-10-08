@@ -23,7 +23,6 @@
 //!   state the server wrote per attendee ([`schedule_statuses`]).
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use nail_api::ErrorCode;
 use nail_api::engine::{BoxFuture, EngineError, FreeBusyProvider};
@@ -318,17 +317,11 @@ pub fn parse_schedule_response(body: &str) -> Result<Vec<RecipientResponse>, Dav
 
 static UID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
+use nail_util::time::unix_now as now_unix;
 
 /// A unique `UID` for a free/busy request.
 pub fn request_uid() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
+    let nanos = nail_util::time::unix_now_nanos();
     let n = UID_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("nail-freebusy-{nanos:x}-{n}")
 }

@@ -630,6 +630,99 @@
       ],
       "fn": "pinIsPlausible",
       "out": false
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": []
+        }
+      ],
+      "fn": "authSummary",
+      "out": "none"
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": [],
+          "spf": {
+            "verdict": "softfail"
+          }
+        }
+      ],
+      "fn": "authSummary",
+      "out": "softfail"
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": [
+            {
+              "verdict": "fail"
+            },
+            {
+              "verdict": "pass"
+            }
+          ],
+          "spf": {
+            "verdict": "fail"
+          }
+        }
+      ],
+      "fn": "authSummary",
+      "out": "pass"
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": [
+            {
+              "verdict": "temperror"
+            },
+            {
+              "verdict": "neutral"
+            }
+          ]
+        }
+      ],
+      "fn": "authSummary",
+      "out": "temperror"
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": [
+            {
+              "verdict": "pass"
+            }
+          ],
+          "dmarc": {
+            "verdict": "policy"
+          }
+        }
+      ],
+      "fn": "authSummary",
+      "out": "policy"
+    },
+    {
+      "args": [
+        {
+          "authserv_id": "mx",
+          "dkim": [],
+          "dmarc": {
+            "verdict": "fail"
+          },
+          "spf": {
+            "verdict": "pass"
+          }
+        }
+      ],
+      "fn": "authSummary",
+      "out": "fail"
     }
   ]
 }

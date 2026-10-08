@@ -22,6 +22,7 @@ import {
   showAllInboxes,
   toolbarAction,
 } from "./views";
+import { windowSelector } from "./views";
 
 /**
  * Dialogs features register by name (`window.open "<name>"`) that are not
@@ -105,7 +106,7 @@ export abstract class WindowTour {
   window(name: string): Locator {
     return this.page
       .locator(
-        `[data-part="window"][data-window="${name}"], [data-part="window"][data-window^="${name}:"], [data-part="view-host.view"][data-window="${name}"]`,
+        `${windowSelector(name)}, [data-part="window"][data-window^="${name}:"], [data-part="view-host.view"][data-window="${name}"]`,
       )
       .last();
   }

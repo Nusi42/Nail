@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertWorkFolder } from "./lib/work-folder.mjs";
+import { HOOKS_PATH_ARGS, assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -17,4 +17,4 @@ try {
 } catch {
   process.exit(0);
 }
-execFileSync("git", ["config", "core.hooksPath", ".githooks"], { cwd: root, stdio: "inherit" });
+execFileSync("git", HOOKS_PATH_ARGS, { cwd: root, stdio: "inherit" });

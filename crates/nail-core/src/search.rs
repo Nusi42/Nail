@@ -13,9 +13,9 @@ use nail_api::{ApiError, Event, Response, SavedSearch, SavedSearchId, SearchQuer
 use nail_search::{SearchContext, SearchIndex, SearchScope, VirtualAccountScope, run_request};
 use nail_store::MessageFilter;
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::service::{MAX_PAGE_SIZE, Service};
+use nail_util::time::unix_now;
 
 /// The search index, replaceable at run time: encryption at rest (M2a)
 /// closes the on-disk index while it converts the index files and opens it

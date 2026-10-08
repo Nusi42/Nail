@@ -37,9 +37,9 @@ use nail_remote_auth::{AuthConfig, AuthDeps, AuthPolicy, EventSink, RemoteAuth, 
 use nail_store::{REMOTE_UI_SETTINGS_KEY, Store};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::service::{Service, lock};
+use nail_util::time::unix_now;
 
 /// How long `RegenerateRemoteCertificate` waits for the host.
 const REGENERATE_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(1);
@@ -494,7 +494,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     scope: RemoteContentScope::Once,
                     value: message_id.to_string(),
                     label: Some(message.summary.subject),
-                    created_at: crate::rules::rfc3339(now),
+                    created_at: nail_util::time::rfc3339_utc(now),
                 },
             })
         }

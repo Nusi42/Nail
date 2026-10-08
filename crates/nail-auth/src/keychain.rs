@@ -332,10 +332,7 @@ mod tests {
             assert!(!err.message.is_empty(), "{:?}", err.message);
             return;
         }
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        let nanos = nail_util::time::unix_now_nanos();
         let service = format!("nail-test-{}-{nanos}", std::process::id());
         let store = KeychainSecretStore::new();
         let r = SecretRef::parse(&format!("keychain:{service}/acct/password")).unwrap();

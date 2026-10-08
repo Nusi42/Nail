@@ -1,8 +1,6 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { desktopTests, desktopPerFile } from "../support/desktop";
-import { buildOutputDir, control, nailOnDemand } from "../support/nail";
+import { control, nailOnDemand, screenshotFile } from "../support/nail";
 import { rpcOk, openInDarkTheme, pairedRemoteMail } from "../support/remote";
 import { showView, messageRow } from "../support/views";
 
@@ -169,11 +167,7 @@ async function expectFitted(frame: Locator): Promise<Fit> {
   return fitOf(frame);
 }
 
-function screenshotPath(name: string): string {
-  const dir = buildOutputDir(path.join("screens", "p3"));
-  mkdirSync(dir, { recursive: true });
-  return path.join(dir, `card-height-${name}.png`);
-}
+const screenshotPath = (name: string): string => screenshotFile("p3", `card-height-${name}`);
 
 /** A document that would act if anything in it ran: a script, a handler, a `javascript:` link, a meta refresh, a CSS expression. */
 const HOSTILE =

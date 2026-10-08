@@ -185,9 +185,29 @@ export async function showAllInboxes(page: Page): Promise<void> {
   await page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]').click();
 }
 
-/** Closes a window or dialog with its Close button and waits until it is gone. */
-export async function closeWindow(window: Locator): Promise<void> {
-  await window.getByRole("button", { name: "Close" }).first().click();
+/** The CSS selector of a window of the window manager by its id (`settings`, `composer:d1`). */
+export const windowSelector = (id: string): string => `[data-part="window"][data-window="${id}"]`;
+
+/** A window of the window manager by its id. */
+export const windowById = (page: Page, id: string): Locator => page.locator(windowSelector(id));
+
+/**
+ * Closes a window or dialog with its Close button (the title bar's) and
+ * waits until it is gone. `ifOpen`: do nothing when it is not shown;
+ * `dispatch`: send the click to the button even when a viewport that just
+ * shrank put it out of reach.
+ */
+export async function closeWindow(
+  window: Locator,
+  options: { ifOpen?: boolean; dispatch?: boolean } = {},
+): Promise<void> {
+  if (options.ifOpen === true && !(await window.isVisible())) return;
+  const close = window
+    .locator('[data-part="window.close"]')
+    .or(window.getByRole("button", { name: "Close" }))
+    .first();
+  if (options.dispatch === true) await close.dispatchEvent("click");
+  else await close.click();
   await expect(window).toBeHidden();
 }
 
@@ -228,10 +248,8 @@ export async function discardComposer(page: Page, composer: Locator): Promise<vo
   const window = await composer.getAttribute("data-window");
   await composer.getByRole("button", { name: "Discard" }).click();
   const key = window?.split(":")[1];
-  const confirm = page.locator(
-    `[data-part="window"][data-window="composer-discard${key ? `:${key}` : ""}"]`,
-  );
-  const gone = page.locator(`[data-part="window"][data-window="${window ?? ""}"]`);
+  const confirm = page.locator(windowSelector(`composer-discard${key ? `:${key}` : ""}`));
+  const gone = windowById(page, window ?? "");
   await expect(confirm.or(gone))
     .toHaveCount(1)
     .catch(() => undefined);

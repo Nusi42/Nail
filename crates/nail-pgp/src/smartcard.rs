@@ -447,7 +447,7 @@ Subject: Card mail\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSigned on t
     }
 
     fn now() -> i64 {
-        chrono::Utc::now().timestamp()
+        nail_util::time::unix_now()
     }
 
     #[test]

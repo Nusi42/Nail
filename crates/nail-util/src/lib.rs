@@ -2,6 +2,7 @@
 //! ADR 0171): code that several crates had copied, defined once.
 //!
 //! - [`batch`]: batched writes with a one-by-one fallback.
+//! - [`color`]: sRGB hex colours, WCAG luminance and contrast ratios.
 //! - [`expiring`]: a thread-safe map whose entries expire (unlock caches).
 //! - [`ical_text`]: iCalendar UTC stamps and durations (RFC 5545 texts).
 //! - [`markup`]: HTML escaping.
@@ -11,8 +12,10 @@
 //! - [`percent`]: percent-decoding of URL parts.
 //! - [`redact`]: the stand-in text of a secret.
 //! - [`sieve_lex`]: the lexer of Sieve scripts.
+//! - [`snapshot`]: snapshot and golden files of tests (write or compare).
 //! - [`time`]: proleptic Gregorian calendar arithmetic (Howard Hinnant's
-//!   civil-date algorithms), the current Unix time, RFC 3339 / ISO dates.
+//!   civil-date algorithms), the current Unix time, RFC 3339 / ISO dates
+//!   (seconds and milliseconds, now and of a given time).
 //!
 //! A helper belongs here when crates on both sides of the dependency graph
 //! (the engines and the core) need it and it needs no dependency; anything
@@ -21,6 +24,7 @@
 //! file).
 
 pub mod batch;
+pub mod color;
 pub mod expiring;
 pub mod ical_text;
 pub mod markup;
@@ -29,4 +33,5 @@ pub mod named;
 pub mod percent;
 pub mod redact;
 pub mod sieve_lex;
+pub mod snapshot;
 pub mod time;

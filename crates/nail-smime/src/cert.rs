@@ -21,7 +21,7 @@ use x509_cert::ext::pkix::{
 use crate::error::{Error, Result};
 use crate::keys::PublicKey;
 use crate::oids;
-use crate::time::rfc3339;
+use nail_util::time::rfc3339_utc as rfc3339;
 
 /// A parsed certificate with its original DER encoding.
 #[derive(Clone)]

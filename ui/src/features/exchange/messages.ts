@@ -5,6 +5,22 @@
  * the core builds, `locales/en/core-exchange.ftl`); ids built at runtime
  * are listed by `runtimeIds`.
  */
+import {
+  AUTOMATIC_REPLIES_ISSUE_VALUES,
+  AUTOMATIC_REPLIES_STATUS_VALUES,
+  CATEGORY_COLOR_VALUES,
+  EXCHANGE_CATEGORY_ISSUE_VALUES,
+  EXCHANGE_ENGINE_VALUES,
+  EXCHANGE_MAILBOX_ISSUE_VALUES,
+  EXCHANGE_MAILBOX_STATE_VALUES,
+  EXCHANGE_RULES_STATE_VALUES,
+  EXCHANGE_WARNING_VALUES,
+  EXTERNAL_AUDIENCE_VALUES,
+  INFERENCE_CLASSIFICATION_VALUES,
+  PARTICIPATION_STATUS_VALUES,
+  RULE_PLACEMENT_VALUES,
+  SSPI_PACKAGE_VALUES,
+} from "../../api/generated";
 import type {
   AutomaticRepliesIssue,
   CategoryColor,
@@ -15,6 +31,7 @@ import type {
   ExchangeWarning,
   InferenceClassification,
 } from "../../api/generated";
+import { EXCHANGE_SETUP_CHOICES, EXCHANGE_SIGN_INS, MAILBOX_SHOW_KEYS } from "./model";
 import { DIALOGS, WIDGETS } from "./names";
 
 /** Prefixes of message ids written literally in this feature's sources. */
@@ -41,80 +58,47 @@ export const notMessages: readonly string[] = [
 ];
 
 /** Warnings (`ExchangeWarning::message_id`). */
-export const WARNINGS: readonly ExchangeWarning[] = [
-  "ews-retired-online",
-  "focused-inbox-unavailable",
-  "rooms-need-consent",
-  "throttled",
-];
+export const WARNINGS: readonly ExchangeWarning[] = EXCHANGE_WARNING_VALUES;
 
 /** Engines (`ExchangeEngine::message_id`). */
-export const ENGINES: readonly ExchangeEngine[] = ["graph", "ews"];
+export const ENGINES: readonly ExchangeEngine[] = EXCHANGE_ENGINE_VALUES;
 
 /** Focused Inbox tabs (`InferenceClassification::message_id`). */
-export const FOCUS: readonly InferenceClassification[] = ["focused", "other"];
+export const FOCUS: readonly InferenceClassification[] = INFERENCE_CLASSIFICATION_VALUES;
 
 /** Mailbox problems (`ExchangeMailboxIssue::message_id`). */
-export const MAILBOX_ISSUES: readonly ExchangeMailboxIssue[] = [
-  "missing-address",
-  "invalid-address",
-  "own-mailbox",
-  "duplicate",
-  "empty-name",
-  "nothing-shown",
-];
+export const MAILBOX_ISSUES: readonly ExchangeMailboxIssue[] = EXCHANGE_MAILBOX_ISSUE_VALUES;
 
 /** Mailbox states (`ExchangeMailboxState::message_id`). */
-export const MAILBOX_STATES: readonly ExchangeMailboxState[] = [
-  "pending",
-  "synced",
-  "access-denied",
-  "not-found",
-  "error",
-];
+export const MAILBOX_STATES: readonly ExchangeMailboxState[] = EXCHANGE_MAILBOX_STATE_VALUES;
 
 /** Category problems (`ExchangeCategoryIssue::message_id`). */
-export const CATEGORY_ISSUES: readonly ExchangeCategoryIssue[] = [
-  "missing-name",
-  "name-too-long",
-  "invalid-name",
-  "duplicate-name",
-];
+export const CATEGORY_ISSUES: readonly ExchangeCategoryIssue[] = EXCHANGE_CATEGORY_ISSUE_VALUES;
 
 /** Category colours (`CategoryColor::message_id`), `none` first. */
-export const CATEGORY_COLORS: readonly CategoryColor[] = [
-  "none",
-  ...Array.from({ length: 25 }, (_, i) => `preset${String(i)}` as CategoryColor),
-];
+export const CATEGORY_COLORS: readonly CategoryColor[] = CATEGORY_COLOR_VALUES;
 
 /** Automatic-reply problems (`AutomaticRepliesIssue::message_id`). */
-export const OOF_ISSUES: readonly AutomaticRepliesIssue[] = [
-  "empty-internal-reply",
-  "empty-external-reply",
-  "reply-too-long",
-  "invalid-time",
-  "missing-schedule",
-  "end-before-start",
-];
+export const OOF_ISSUES: readonly AutomaticRepliesIssue[] = AUTOMATIC_REPLIES_ISSUE_VALUES;
 
 /** Texts of the UI built at runtime, by prefix → values. */
 const UI_RUNTIME: Record<string, readonly string[]> = {
   "exchange-mailbox-kind-": ["shared", "delegate", "shared-long", "delegate-long"],
-  "exchange-mailbox-show-": ["mail", "calendar", "contacts", "tasks"],
+  "exchange-mailbox-show-": MAILBOX_SHOW_KEYS,
   "exchange-move-to-": FOCUS,
   "exchange-classify-question-": FOCUS,
-  "exchange-oof-status-": ["disabled", "always-enabled", "scheduled"],
-  "exchange-oof-audience-": ["none", "contacts-only", "all"],
+  "exchange-oof-status-": AUTOMATIC_REPLIES_STATUS_VALUES,
+  "exchange-oof-audience-": EXTERNAL_AUDIENCE_VALUES,
   "exchange-oof-": ["start", "end"],
-  "exchange-placement-": ["server", "client", "not-expressible"],
-  "exchange-placement-short-": ["server", "client", "not-expressible"],
-  "exchange-rules-state-": ["disabled", "pending", "syncing", "in-sync", "failed"],
+  "exchange-placement-": RULE_PLACEMENT_VALUES,
+  "exchange-placement-short-": RULE_PLACEMENT_VALUES,
+  "exchange-rules-state-": EXCHANGE_RULES_STATE_VALUES,
   "exchange-room-": ["free", "busy", "unknown"],
-  "exchange-room-response-": ["needs-action", "accepted", "declined", "tentative", "delegated"],
+  "exchange-room-response-": PARTICIPATION_STATUS_VALUES,
   "exchange-tasks-kind-": ["todo", "flagged", "tasks"],
-  "exchange-setup-type-": ["auto", "graph", "ews"],
-  "exchange-sign-in-": ["windows-current", "windows-account", "password", "oauth2"],
-  "exchange-sspi-": ["negotiate", "kerberos", "ntlm"],
+  "exchange-setup-type-": EXCHANGE_SETUP_CHOICES,
+  "exchange-sign-in-": EXCHANGE_SIGN_INS,
+  "exchange-sspi-": SSPI_PACKAGE_VALUES,
   "exchange-push-": ["streaming", "polling", "none"],
 };
 

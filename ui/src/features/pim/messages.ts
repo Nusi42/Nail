@@ -5,6 +5,14 @@
  * core builds, `locales/en/core-pim.ftl`); ids built at runtime are listed
  * by `runtimeIds`.
  */
+import {
+  DUPLICATE_REASON_VALUES,
+  PARTICIPATION_STATUS_VALUES,
+  PIM_ISSUE_VALUES,
+  PIM_ITEM_SYNC_VALUES,
+  PIM_SOURCE_KIND_VALUES,
+  PIM_SOURCE_STATE_VALUES,
+} from "../../api/generated";
 import type {
   DuplicateReason,
   PimIssue,
@@ -14,6 +22,7 @@ import type {
 } from "../../api/generated";
 import {
   ALARM_ACTIONS,
+  ALARM_WHEN,
   ALARM_UNITS,
   ATTENDEE_ROLES,
   CONTACT_KINDS,
@@ -36,51 +45,15 @@ export const prefixes: readonly string[] = ["pim-"];
 export const notMessages: readonly string[] = [...DIALOGS, PIM_SETTINGS_WIDGET];
 
 /** Validation issues the core reports (`PimIssue::message_id`). */
-export const PIM_ISSUES: readonly PimIssue[] = [
-  "invalid-date",
-  "invalid-time",
-  "invalid-time-zone",
-  "end-before-start",
-  "mixed-all-day",
-  "invalid-recurrence",
-  "invalid-scope",
-  "invalid-email",
-  "missing-name",
-  "invalid-priority",
-  "invalid-color",
-  "invalid-alarm",
-  "invalid-url",
-  "task-cycle",
-  "too-many",
-];
+export const PIM_ISSUES: readonly PimIssue[] = PIM_ISSUE_VALUES;
 
 /** Source states (`PimSourceState::message_id`). */
-export const SOURCE_STATES: readonly PimSourceState[] = [
-  "idle",
-  "syncing",
-  "offline",
-  "auth-error",
-  "error",
-  "disabled",
-];
+export const SOURCE_STATES: readonly PimSourceState[] = PIM_SOURCE_STATE_VALUES;
 
-export const SOURCE_KINDS_ALL: readonly PimSourceKind[] = [
-  "local",
-  "ics",
-  "caldav",
-  "carddav",
-  "exchange",
-];
-export const SYNC_STATES: readonly PimItemSync[] = ["synced", "pending", "conflict"];
-export const DUPLICATE_REASONS: readonly DuplicateReason[] = ["email", "phone", "name"];
-export const PARTSTATS = [
-  "needs-action",
-  "accepted",
-  "declined",
-  "tentative",
-  "delegated",
-] as const;
-export const ALARM_WHEN = ["before-start", "after-start", "before-end", "after-end"] as const;
+export const SOURCE_KINDS_ALL: readonly PimSourceKind[] = PIM_SOURCE_KIND_VALUES;
+export const SYNC_STATES: readonly PimItemSync[] = PIM_ITEM_SYNC_VALUES;
+export const DUPLICATE_REASONS: readonly DuplicateReason[] = DUPLICATE_REASON_VALUES;
+export const PARTSTATS = PARTICIPATION_STATUS_VALUES;
 export const PRIORITY_KEYS = ["none", "high", "medium", "low"] as const;
 
 /** Message ids built at runtime. */

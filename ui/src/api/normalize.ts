@@ -7,6 +7,7 @@
  * at the boundary keeps the renderer free of `?? []` noise. This is not
  * validation: `nail-config` owns that.
  */
+import { BADGE_SOURCE_VALUES, ITEM_DISPLAY_VALUES } from "./generated";
 import type {
   ActionDef,
   AncestorSelector,
@@ -198,8 +199,8 @@ function normalizeNodeFields(n: Loose): LayoutNode {
   }
 }
 
-const ITEM_DISPLAYS: readonly ItemDisplay[] = ["icon", "label", "icon-label"];
-const BADGES: readonly BadgeSource[] = ["unread", "confirmations"];
+const ITEM_DISPLAYS: readonly ItemDisplay[] = ITEM_DISPLAY_VALUES;
+const BADGES: readonly BadgeSource[] = BADGE_SOURCE_VALUES;
 
 function toolbarItem(value: unknown): ToolbarItem {
   const i = obj(value);

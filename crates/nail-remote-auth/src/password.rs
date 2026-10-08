@@ -35,8 +35,8 @@ impl Default for Argon2Cost {
 /// What a new password must look like.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PasswordPolicy {
-    /// Minimum length in characters (NIST SP 800-63B asks for at least 8;
-    /// the remote UI is reachable from the network, so the default is 12).
+    /// Minimum length in characters (default
+    /// [`nail_api::remote::MIN_PASSWORD_CHARS`]).
     pub min_chars: usize,
     /// Maximum length in bytes (bounds the hashing work).
     pub max_bytes: usize,
@@ -47,7 +47,7 @@ pub struct PasswordPolicy {
 impl Default for PasswordPolicy {
     fn default() -> Self {
         Self {
-            min_chars: 12,
+            min_chars: nail_api::remote::MIN_PASSWORD_CHARS,
             max_bytes: 1024,
             cost: Argon2Cost::default(),
         }

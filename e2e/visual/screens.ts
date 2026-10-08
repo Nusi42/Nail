@@ -18,7 +18,7 @@
  * accessible name, as in the regular e2e suite.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
-import { READER_SUBJECT, messageRows, runFromPalette } from "../support/views";
+import { messageRows, READER_SUBJECT, runFromPalette, windowById } from "../support/views";
 
 /** The fixed clock of every screen but the calendar: after the demo mail's dates. */
 export const MAIN_TIME = new Date("2026-09-30T10:00:00Z");
@@ -117,8 +117,7 @@ async function chooseView(calendar: Locator, label: string, value: string): Prom
     value,
   );
 }
-export const layoutWindow = (page: Page, name: string) =>
-  page.locator(`[data-part="window"][data-window="${name}"]`);
+export const layoutWindow = windowById;
 
 /** Loads the app and waits until the demo mail is listed. */
 export async function loadMainWindow(page: Page, url: string): Promise<void> {

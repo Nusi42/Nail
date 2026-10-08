@@ -21,9 +21,9 @@ use nail_api::{
 use nail_search::IndexPolicy;
 use nail_store::SECURITY_SETTINGS_KEY;
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::service::Service;
+use nail_util::time::unix_now;
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {

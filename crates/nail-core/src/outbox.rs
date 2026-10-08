@@ -31,11 +31,11 @@ use nail_api::{
 use nail_proto_smtp::{SendOptions, SmtpAuth, SmtpConfig, SmtpTransport};
 use nail_store::{Operation, SendOutcome};
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest};
 use crate::service::Service;
+use nail_util::time::unix_now;
 
 /// Attempts before a temporarily failing send is given up.
 pub(crate) const MAX_SEND_ATTEMPTS: u32 = 5;
@@ -50,17 +50,9 @@ fn saves_sent_automatically(account: &AccountConfig) -> bool {
         Some(account.incoming.server().host.as_str()),
         account.outgoing.as_ref().map(|o| o.server().host.as_str()),
     ];
+    // Google's and Microsoft's servers file the Sent copy themselves.
     hosts.into_iter().flatten().any(|host| {
-        let host = host.to_ascii_lowercase();
-        [
-            "gmail.com",
-            "googlemail.com",
-            "outlook.com",
-            "office365.com",
-            "hotmail.com",
-        ]
-        .iter()
-        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
+        nail_api::hosts::is_google_mail_host(host) || nail_api::hosts::is_microsoft_mail_host(host)
     })
 }
 

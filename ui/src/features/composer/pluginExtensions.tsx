@@ -19,20 +19,13 @@ import {
 import { saveRich } from "./flows";
 import { composerOf, patchComposer } from "./sessions";
 import { richStoreFor, useComposerWindow, useRich } from "./store";
+import { escapeHtml } from "../../text/html";
 
 /** What an edit changes: the source text of the draft's mode. */
 export interface EditableBody {
   text: string;
   html: string;
   markdown: string;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Plain text as HTML paragraphs (an edit in the HTML editor). */

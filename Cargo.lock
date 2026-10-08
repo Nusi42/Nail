@@ -3909,6 +3909,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "url",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4635,6 +4636,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "nail-api",
  "nail-mapi",
+ "nail-util",
  "pretty_assertions",
  "serde_json",
  "tempfile",
@@ -4657,6 +4659,7 @@ dependencies = [
  "nail-ical",
  "nail-mime",
  "nail-store",
+ "nail-util",
  "reqwest",
  "rmcp",
  "serde",
@@ -4740,7 +4743,6 @@ dependencies = [
 name = "nail-pkcs11"
 version = "1.0.0-rc.1"
 dependencies = [
- "chrono",
  "const-oid 0.9.6",
  "cryptoki",
  "der",
@@ -4748,6 +4750,7 @@ dependencies = [
  "nail-api",
  "nail-pkcs11",
  "nail-testkit",
+ "nail-util",
  "p256",
  "pretty_assertions",
  "rand 0.8.8",
@@ -4772,6 +4775,7 @@ dependencies = [
  "hex",
  "nail-api",
  "nail-mime",
+ "nail-util",
  "notify-debouncer-mini",
  "pretty_assertions",
  "rand 0.8.8",
@@ -4973,6 +4977,7 @@ dependencies = [
  "hmac 0.13.0",
  "nail-api",
  "nail-store",
+ "nail-util",
  "pretty_assertions",
  "rand 0.8.8",
  "serde",
@@ -5087,7 +5092,6 @@ dependencies = [
  "aes-kw",
  "base64 0.23.1",
  "cbc 0.1.2",
- "chrono",
  "cms",
  "const-oid 0.9.6",
  "der",
@@ -5201,11 +5205,11 @@ name = "nail-vault"
 version = "1.0.0-rc.1"
 dependencies = [
  "chacha20poly1305",
- "chrono",
  "hex",
  "nail-api",
  "nail-search",
  "nail-store",
+ "nail-util",
  "pretty_assertions",
  "rand 0.8.8",
  "serde",

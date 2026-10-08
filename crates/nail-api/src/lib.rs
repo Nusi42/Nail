@@ -475,6 +475,8 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
     plugins::PluginCalendarEvent::export_all(&cfg)?;
     PluginPermission::export_all(&cfg)?;
     plugins::PluginLogLevel::export_all(&cfg)?;
+    // `nail.calendar.respond` answers (`INVITATION_RESPONSE_VALUES`).
+    InvitationResponse::export_all(&cfg)?;
     // M4a: hooks, extensions, jobs, composer edits.
     plugins::PluginArrivalResult::export_all(&cfg)?;
     plugins::PluginBeforeSendResult::export_all(&cfg)?;

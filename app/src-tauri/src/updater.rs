@@ -262,7 +262,7 @@ impl Updater {
             if state.generation != generation {
                 return;
             }
-            state.host.last_checked_at = Some(rfc3339_now());
+            state.host.last_checked_at = Some(nail_util::time::rfc3339_now());
             // A release already downloaded stays ready unless the check
             // found a different version: never download it again.
             let ready = state
@@ -486,19 +486,6 @@ impl Updater {
             }
         }))
     }
-}
-
-/// Now as RFC 3339 (UTC, seconds).
-pub fn rfc3339_now() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    rfc3339(secs)
-}
-
-/// Unix seconds as RFC 3339 UTC (`1970-01-01T00:00:00Z`).
-pub fn rfc3339(secs: u64) -> String {
-    nail_util::time::rfc3339_utc(i64::try_from(secs).unwrap_or(i64::MAX))
 }
 
 #[cfg(test)]
@@ -966,13 +953,5 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(UPDATE_CHECK_INTERVAL_SECS * 2)).await;
         assert_eq!(asked(), 2);
         task.abort();
-    }
-
-    #[test]
-    fn rfc3339_dates() {
-        assert_eq!(rfc3339(0), "1970-01-01T00:00:00Z");
-        assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
-        assert_eq!(rfc3339(1_791_000_000), "2026-10-03T04:00:00Z");
-        assert!(rfc3339_now().ends_with('Z'));
     }
 }

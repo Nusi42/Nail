@@ -6,7 +6,7 @@
 // scripts/test/duplicates.test.mjs.
 import { COMMON_NUMBERS, MAGIC_NUMBER_MIN, MAGIC_NUMBER_MIN_FILES, SELF } from "./config.mjs";
 import { ownerOfPath } from "./owners.mjs";
-import { isTestPath, lex, withoutRustTests } from "./sources.mjs";
+import { isMockCorePath, isTestPath, lex, withoutRustTests } from "./sources.mjs";
 
 /**
  * @typedef {import("./sources.mjs").SourceFile} SourceFile
@@ -70,6 +70,10 @@ export const SSOT_CHECKS = {
     "a constant of the same name defined in Rust and in TypeScript / JavaScript: generate the TypeScript side (gen:api) or pin it with a test",
   "const-value":
     "the same constant (name and value) defined in several files of one language: define it once and import it",
+  "ts-list":
+    "the same list of string literals defined twice in TypeScript / JavaScript (production code and the UI's mock core): define it once and import it",
+  "generated-list":
+    "a hand-written TypeScript list with the values of a generated contract constant (ui/src/api/generated/constants.json): import the generated one",
   "fluent-text":
     "the same English text under several Fluent ids: one id per meaning (exceptions for different meanings in allow.json)",
   "theme-literal": "a colour literal in CSS-in-TS: use the theme's token (`var(--nail-color-…)`)",
@@ -134,7 +138,7 @@ export function mirrorComments(files, exists) {
  * @property {string} file
  * @property {number} line
  * @property {string} name
- * @property {string} value normalized single-line value ("" when it spans lines)
+ * @property {string} value the whole value, normalized ({@link canonicalValue})
  * @property {string[]} literals the string and number literals of the whole
  *   definition (up to its `;`), for telling two facts of one name apart
  */
@@ -144,25 +148,32 @@ const RUST_CONST =
 const TS_CONST = /^[ \t]*(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=\n]*)?=\s*([^\n]*)$/gm;
 
 /**
- * Normalizes a constant's value for comparison: whitespace collapsed, digit
- * separators dropped, `as const` / trailing `;` removed; a value that
- * continues on the next line is "" (not compared).
+ * Normalizes a constant's value (its code up to the `;`, over any number of
+ * lines) for comparison: comments dropped (also `//` inside strings stays),
+ * strings re-quoted, whitespace collapsed, digit separators, trailing commas,
+ * `as const` and a trailing `;` removed. One value written on one line or
+ * spread over several compares equal.
  *
- * @param {string} raw
+ * @param {string} code
+ * @param {boolean} rust
  */
-export function normalizeValue(raw) {
-  const value = raw
-    .replace(/\/\/.*$/, "")
+export function canonicalValue(code, rust) {
+  let out = "";
+  for (const seg of lex(code, { rust })) {
+    if (seg.kind === "comment") out += " ";
+    else if (seg.kind === "string") out += JSON.stringify(seg.text);
+    else if (seg.kind === "template") out += `\`${seg.text}\``;
+    else out += seg.text.replace(/(\d)_(?=\d)/g, "$1");
+  }
+  return out
+    .replace(/\s+/g, " ")
     .trim()
     .replace(/;$/, "")
     .replace(/\s+as\s+const$/, "")
-    .replace(/(\d)_(?=\d)/g, "$1")
-    .replace(/\s+/g, " ")
+    .replace(/,\s*([\])}])/g, "$1")
+    .replace(/([[({])\s+/g, "$1")
+    .replace(/\s+([\])}])/g, "$1")
     .trim();
-  const open = (value.match(/[[({]/g) ?? []).length;
-  const close = (value.match(/[\])}]/g) ?? []).length;
-  if (value === "" || open !== close || /[=,+(]$/.test(value)) return "";
-  return value;
 }
 
 /**
@@ -179,12 +190,13 @@ export function constDefs(file, options = {}) {
   const out = [];
   for (const m of text.matchAll(rust ? RUST_CONST : TS_CONST)) {
     const line = text.slice(0, m.index).split("\n").length;
+    const statement = statementAt(text, m.index + m[0].length - (m[2] ?? "").length);
     out.push({
       file: file.path,
       line,
       name: m[1] ?? "",
-      value: normalizeValue(m[2] ?? ""),
-      literals: literalsOf(statementAt(text, m.index + m[0].length - (m[2] ?? "").length), rust),
+      value: canonicalValue(statement, rust),
+      literals: literalsOf(statement, rust),
     });
   }
   return out;
@@ -236,10 +248,27 @@ export function literalsOf(code, rust) {
 }
 
 /**
+ * Whether the cross-language checks read `file`: non-test code, and the
+ * UI's mock core (it stands in for the core, so its limits and lists must
+ * be the core's).
+ *
+ * @param {string} file
+ */
+function contractCode(file) {
+  return !isTestPath(file) || isMockCorePath(file);
+}
+
+/** A value that only names another constant (an identifier or a member path). */
+const ALIAS = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
+
+/**
  * `rust-ts-const`: a constant name defined in non-test Rust code and in
- * non-test TypeScript / JavaScript, unless the two definitions share no
- * literal at all (then they are two facts that happen to share a name, like
- * `LISTS` of a corpus and of a skin).
+ * non-test TypeScript / JavaScript (the UI's mock core included), unless the
+ * two definitions share no literal at all (then they are two facts that
+ * happen to share a name, like `LISTS` of a corpus and of a skin). A
+ * TypeScript definition that only names another constant
+ * (`const MERGED_ROLES = FOLDER_ROLES`, `contract.UPDATE_MANIFEST_FILE`)
+ * derives its value and is no copy.
  *
  * @param {SourceFile[]} files code files
  * @returns {Finding[]}
@@ -250,9 +279,13 @@ export function rustTsConstants(files) {
   /** @type {Map<string, ConstDef[]>} */
   const ts = new Map();
   for (const file of files) {
-    if (isTestPath(file.path)) continue;
-    const target = file.path.endsWith(".rs") ? rust : ts;
-    for (const def of constDefs(file, { skipTests: true })) push(target, def.name, def);
+    if (!contractCode(file.path)) continue;
+    const isRust = file.path.endsWith(".rs");
+    const target = isRust ? rust : ts;
+    for (const def of constDefs(file, { skipTests: true })) {
+      if (!isRust && ALIAS.test(def.value)) continue;
+      push(target, def.name, def);
+    }
   }
   /** @type {Finding[]} */
   const out = [];
@@ -332,6 +365,92 @@ export function rustTsLists(files) {
     });
   }
   return out;
+}
+
+/** A bracketed list of at least two string literals (one line or several). */
+const SHORT_STRING_LIST = /\[\s*(?:"(?:[^"\\\n]|\\.)*"\s*,\s*)+"(?:[^"\\\n]|\\.)*"\s*,?\s*\]/g;
+
+/**
+ * The string lists of the TypeScript / JavaScript code the checks read
+ * ({@link contractCode}): sorted unique items, and where.
+ *
+ * @param {SourceFile[]} files
+ * @param {RegExp} pattern {@link STRING_LIST} or {@link SHORT_STRING_LIST}
+ * @returns {{ key: string, at: string }[]}
+ */
+function tsStringLists(files, pattern) {
+  /** @type {{ key: string, at: string }[]} */
+  const out = [];
+  for (const file of files) {
+    if (file.path.endsWith(".rs") || !contractCode(file.path)) continue;
+    for (const m of file.text.matchAll(pattern)) {
+      const items = [...m[0].matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((i) => i[1] ?? "");
+      const line = file.text.slice(0, m.index).split("\n").length;
+      out.push({ key: [...new Set(items)].sort().join(", "), at: `${file.path}:${String(line)}` });
+    }
+  }
+  return out;
+}
+
+/**
+ * `ts-list`: the same set of at least three string literals as a list in
+ * two places of the TypeScript / JavaScript code (a value list copied
+ * inside a feature or between features).
+ *
+ * @param {SourceFile[]} files code files
+ * @returns {Finding[]}
+ */
+export function tsLists(files) {
+  /** @type {Map<string, string[]>} */
+  const lists = new Map();
+  for (const { key, at } of tsStringLists(files, STRING_LIST)) push(lists, key, at);
+  /** @type {Finding[]} */
+  const out = [];
+  for (const [key, at] of lists) {
+    if (at.length < 2) continue;
+    out.push({
+      check: "ts-list",
+      key,
+      files: unique(at.map((p) => p.replace(/:\d+$/, ""))),
+      members: at.map((p) => p.replace(/:\d+$/, "")).sort(),
+      detail: `[${key.length > 80 ? `${key.slice(0, 80)}…` : key}]: ${at.join(", ")}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * `generated-list`: a TypeScript / JavaScript list of string literals with
+ * exactly the values (in any order) of a generated contract constant, i.e.
+ * a hand copy of `<ENUM>_VALUES` or another exported list.
+ *
+ * @param {SourceFile[]} files code files
+ * @param {Record<string, unknown>} generated the generated constants (`constants.json`)
+ * @returns {Finding[]}
+ */
+export function generatedLists(files, generated) {
+  /** @type {Map<string, string[]>} */
+  const names = new Map();
+  for (const [name, value] of Object.entries(generated)) {
+    if (!Array.isArray(value) || value.length < 2) continue;
+    if (!value.every((v) => typeof v === "string")) continue;
+    push(names, [...new Set(/** @type {string[]} */ (value))].sort().join(", "), name);
+  }
+  /** @type {Finding[]} */
+  const out = [];
+  for (const { key, at } of tsStringLists(files, SHORT_STRING_LIST)) {
+    const constants = names.get(key);
+    if (constants === undefined) continue;
+    const file = at.replace(/:\d+$/, "");
+    out.push({
+      check: "generated-list",
+      key: `${file}: ${key}`,
+      files: [file],
+      detail: `${at}: [${key.length > 60 ? `${key.slice(0, 60)}…` : key}] = generated ${constants.join(" / ")}`,
+      mirror: true,
+    });
+  }
+  return dedupe(out);
 }
 
 /**

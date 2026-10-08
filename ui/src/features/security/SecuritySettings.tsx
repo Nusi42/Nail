@@ -6,6 +6,11 @@
  * Encryption at rest ships off until the maintainer decides the default (plan
  * section 7, scope decisions); the UI recommends turning it on.
  */
+import {
+  KEY_LOOKUP_POLICY_VALUES,
+  KEY_LOOKUP_SOURCE_VALUES,
+  VAULT_PHASE_VALUES,
+} from "../../api/generated";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errorMessageId, errorMessageIdOf } from "../../api/client";
@@ -21,16 +26,16 @@ import { useAccounts, useClient } from "../../state/queries";
 import { CheckField, SelectField } from "../../widgets/forms";
 import { applyVaultStatus, securityKeys, useSecuritySettings, useVaultStatus } from "./queries";
 
-export const LOOKUP_POLICIES: readonly KeyLookupPolicy[] = ["off", "on-demand", "automatic"];
-export const LOOKUP_SOURCES: readonly KeyLookupSource[] = ["wkd", "keys-openpgp-org"];
+export const LOOKUP_POLICIES: readonly KeyLookupPolicy[] = KEY_LOOKUP_POLICY_VALUES;
+export const LOOKUP_SOURCES: readonly KeyLookupSource[] = KEY_LOOKUP_SOURCE_VALUES;
 
 /** Share of the whole migration done (phases weigh equally), 0–100. */
 export function vaultPercent(status: VaultStatus): number {
   if (status.phase === null)
     return status.state === "encrypted" || status.state === "plain" ? 100 : 0;
-  const index = ["database", "blobs", "index"].indexOf(status.phase);
+  const index = VAULT_PHASE_VALUES.indexOf(status.phase);
   const inPhase = status.total > 0 ? status.done / status.total : 0;
-  return Math.round(((index + inPhase) / 3) * 100);
+  return Math.round(((index + inPhase) / VAULT_PHASE_VALUES.length) * 100);
 }
 
 function Vault() {

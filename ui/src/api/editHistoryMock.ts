@@ -20,7 +20,7 @@ import type {
   Response,
 } from "./generated";
 import type { MockCore } from "./mockMail";
-import { EDIT_KIND_MESSAGE_IDS } from "./generated";
+import { EDIT_KIND_MESSAGE_IDS, MAX_EDIT_HISTORY } from "./generated";
 
 /** The requests answered here. */
 export const EDIT_HISTORY_REQUESTS = [
@@ -35,8 +35,7 @@ export function isEditHistoryRequest(request: Request): request is EditHistoryRe
   return (EDIT_HISTORY_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/** `nail_api::editing::MAX_EDIT_HISTORY`. */
-export const MAX_EDIT_HISTORY = 50;
+export { MAX_EDIT_HISTORY } from "./generated";
 
 /** How a feature mock takes and restores what a scope covers. */
 export interface MockHistoryScope {

@@ -37,9 +37,9 @@ use nail_search::IndexPolicy;
 use nail_smime::mime::SmimeKind;
 use nail_store::{MessageSecurityRecord, StoredKey};
 
-use crate::engine::unix_now;
 use crate::error::{CoreError, Result};
 use crate::service::{Service, ServiceOptions};
+use nail_util::time::unix_now;
 
 /// Recent inbox messages looked at to suggest the `authserv-id`.
 const LEARN_AUTHSERV_SAMPLE: u32 = 20;

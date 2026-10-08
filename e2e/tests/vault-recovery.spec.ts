@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { tempDir, type NailServer, nailOnDemand } from "../support/nail";
 import { axeViolations } from "../support/axe";
 import { rpcOk } from "../support/remote";
-import { openSettingsTab, showView, messageRows } from "../support/views";
+import { messageRows, openSettingsTab, showView, windowSelector } from "../support/views";
 
 /**
  * M4c WP125 (ADRs 0095, 0099): the recovery key opens encrypted data after
@@ -55,7 +55,7 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
     .toBe("encrypted");
   const settings = await openSettingsTab(page, "Recovery key");
   await settings.getByRole("button", { name: "Create recovery key" }).click();
-  const createWindow = '[data-part="window"][data-window="security-recovery-create"]';
+  const createWindow = windowSelector("security-recovery-create");
   const create = page.locator(createWindow);
   await expect(create.getByRole("button", { name: "Create recovery key" })).toBeVisible();
   await expectAccessible(page, createWindow);

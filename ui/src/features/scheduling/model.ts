@@ -8,6 +8,7 @@
  * (`QueryFreeBusy`): the core decides who is busy when; the UI only looks
  * for gaps of the meeting's length inside the visible working hours.
  */
+import { BUSY_KIND_VALUES, INVITATION_RESPONSE_VALUES } from "../../api/generated";
 import type {
   AttendeeFreeBusy,
   BusyKind,
@@ -19,10 +20,10 @@ import type {
 } from "../../api/generated";
 
 /** The answers in the order the card offers them. */
-export const RESPONSES: readonly InvitationResponse[] = ["accept", "tentative", "decline"];
+export const RESPONSES: readonly InvitationResponse[] = INVITATION_RESPONSE_VALUES;
 
 /** `BusyKind` order of strength (the stronger one is drawn on top). */
-export const BUSY_KINDS: readonly BusyKind[] = ["tentative", "busy", "unavailable"];
+export const BUSY_KINDS: readonly BusyKind[] = BUSY_KIND_VALUES;
 
 /** The participation status an answer sets. */
 export function statusOfResponse(response: InvitationResponse): ParticipationStatus {

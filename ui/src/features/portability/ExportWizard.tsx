@@ -25,6 +25,7 @@ import {
   exportIsDirectory,
   isAbsolutePath,
   mboxVariantId,
+  EXPORT_SOURCE_KINDS,
 } from "./model";
 import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
@@ -32,7 +33,7 @@ import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
 
 type SourceKind = ExportSource["type"];
-const SOURCE_KINDS: readonly SourceKind[] = ["folders", "messages", "calendars", "address-books"];
+const SOURCE_KINDS: readonly SourceKind[] = EXPORT_SOURCE_KINDS;
 
 /** The export wizard's content. */
 export function ExportWizard({ close }: { close: () => void }) {

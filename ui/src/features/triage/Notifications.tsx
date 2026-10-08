@@ -10,10 +10,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import {
-  NOTIFICATION_ISSUE_MESSAGE_IDS,
   type AccountConfig,
   type LocalizedMessage,
   type MailNotification,
+  NOTIFICATION_ISSUE_MESSAGE_IDS,
+  NOTIFY_FOLDERS_VALUES,
   type NotificationSettings,
   type NotifyFolders,
   type Weekday,
@@ -29,11 +30,11 @@ import {
   overrideOf,
   withOverride,
   type OverrideChoice,
+  OVERRIDE_CHOICES,
 } from "./model";
 import { triageKeys, useNotificationSettings } from "./queries";
 
-const FOLDER_CHOICES: readonly NotifyFolders[] = ["inbox", "all"];
-const OVERRIDE_CHOICES: readonly OverrideChoice[] = ["default", "on", "off"];
+const FOLDER_CHOICES: readonly NotifyFolders[] = NOTIFY_FOLDERS_VALUES;
 
 /** Whether this page may show Web Notifications itself (browser, not the desktop app). */
 export function webNotificationsAvailable(): boolean {

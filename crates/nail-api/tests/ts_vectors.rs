@@ -472,6 +472,38 @@ fn appearance_vectors() {
             appearance::accent_ignored(active, &from::<Vec<ThemeInfo>>(&themes)),
         );
     }
+    // WCAG colour math (`nail_util::color`, the UI's `theme/contrast.ts`).
+    for color in [
+        "#000",
+        "#ffffff",
+        "#767676",
+        "#1A2b3C",
+        " #fb4c2f ",
+        "#0a0a0a",
+        "#0b0b0b",
+        "red",
+        "#12345",
+        "var(--x)",
+    ] {
+        v.case(
+            "parseHex",
+            json!([color]),
+            nail_util::color::parse_hex(color),
+        );
+    }
+    for (a, b) in [
+        ("#000", "#fff"),
+        ("#767676", "#ffffff"),
+        ("#fb4c2f", "#202124"),
+        ("#0a0a0a", "#0b0b0b"),
+        ("#ffffff", "#ffffff"),
+        ("red", "#ffffff"),
+    ] {
+        let ratio = nail_util::color::parse_hex(a)
+            .zip(nail_util::color::parse_hex(b))
+            .map(|(a, b)| (nail_util::color::contrast_ratio(a, b) * 1e6).round() / 1e6);
+        v.case("hexContrastRatio", json!([a, b]), ratio);
+    }
     v.check("appearance");
 }
 
@@ -542,6 +574,21 @@ fn security_vectors() {
             "pinIsPlausible",
             json!([pin]),
             smartcard::pin_is_plausible(pin),
+        );
+    }
+    let method = |verdict: &str| json!({ "verdict": verdict });
+    for results in [
+        json!({ "authserv_id": "mx", "dkim": [] }),
+        json!({ "authserv_id": "mx", "dkim": [], "spf": method("softfail") }),
+        json!({ "authserv_id": "mx", "dkim": [method("fail"), method("pass")], "spf": method("fail") }),
+        json!({ "authserv_id": "mx", "dkim": [method("temperror"), method("neutral")] }),
+        json!({ "authserv_id": "mx", "dkim": [method("pass")], "dmarc": method("policy") }),
+        json!({ "authserv_id": "mx", "dkim": [], "spf": method("pass"), "dmarc": method("fail") }),
+    ] {
+        v.case(
+            "authSummary",
+            json!([results]),
+            from::<nail_api::security::AuthResults>(&results).summary(),
         );
     }
     v.check("security");
@@ -776,7 +823,66 @@ fn exchange_vectors() {
             from::<AutomaticRepliesSettings>(&settings).issues(),
         );
     }
+    for host in [
+        "outlook.office365.com",
+        "Outlook.Office365.com.",
+        "outlook.office.com",
+        "eur.outlook.com",
+        "notoffice365.com",
+        "office365.com.evil.example",
+        "mail.contoso.example",
+        "hotmail.com",
+        "",
+    ] {
+        v.case(
+            "isExchangeOnlineHost",
+            json!([host]),
+            nail_api::hosts::is_exchange_online_host(host),
+        );
+    }
     v.check("exchange");
+}
+
+#[test]
+fn gmail_vectors() {
+    use nail_api::gmail::GmailLabelSettings;
+    let mut v = Vectors::default();
+    let long = "l".repeat(nail_api::gmail::MAX_LABEL_NAME + 1);
+    let fits = "l".repeat(nail_api::gmail::MAX_LABEL_NAME);
+    let label = |name: &str, color: Option<(&str, &str)>| {
+        json!({
+            "name": name,
+            "color": color.map(|(background, text)| json!({ "background": background, "text": text })),
+            "list_visibility": "show",
+            "message_visibility": "show",
+        })
+    };
+    for settings in [
+        label("Work", None),
+        label("Work/Projects", Some(("#fb4c2f", "#ffffff"))),
+        label("", None),
+        label("   ", None),
+        label("INBOX", None),
+        label("Category_Social", None),
+        label("/Work", None),
+        label("Work/", None),
+        label("a//b", None),
+        label("tab\there", None),
+        label("x\u{7f}y", None),
+        label("x\u{9f}y", None),
+        label("Ünïcödé", None),
+        label(long.as_str(), None),
+        label(fits.as_str(), None),
+        label("Work", Some(("red", "#ffffff"))),
+        label("", Some(("#fb4c2f", "#fff"))),
+    ] {
+        v.case(
+            "labelIssues",
+            json!([settings]),
+            from::<GmailLabelSettings>(&settings).issues(),
+        );
+    }
+    v.check("gmail");
 }
 
 #[test]

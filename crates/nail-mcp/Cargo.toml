@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 # `json-schema`: the write tools' input schemas come from nail-api's argument types (M4a).
 nail-api = { workspace = true, features = ["json-schema"] }
+nail-util.workspace = true
 nail-store.workspace = true
 nail-mime.workspace = true
 # TLS configuration for the bridge's reqwest client (the workspace builds

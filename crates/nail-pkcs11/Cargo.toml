@@ -17,6 +17,7 @@ testing = ["dep:p256", "dep:rand", "dep:sha1", "dep:sha2-legacy"]
 
 [dependencies]
 nail-api.workspace = true
+nail-util.workspace = true
 cryptoki.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -28,7 +29,6 @@ x509-cert.workspace = true
 der.workspace = true
 const-oid.workspace = true
 rsa.workspace = true
-chrono.workspace = true
 # The soft token (feature `testing`).
 p256 = { workspace = true, features = ["ecdsa", "ecdh"], optional = true }
 rand = { workspace = true, optional = true }

@@ -26,7 +26,7 @@ use crate::chain::{self, TrustAnchors};
 use crate::error::{Error, Result};
 use crate::keys::{HashAlg, PrivateKeyOps};
 use crate::oids;
-use crate::time::rfc3339;
+use nail_util::time::rfc3339_utc as rfc3339;
 
 /// Tolerated clock skew for a signing time in the future (one day).
 const FUTURE_SKEW: i64 = 86_400;

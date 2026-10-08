@@ -28,31 +28,7 @@
  */
 import { HC, p } from "../theme/selectors";
 import { HC_RING } from "../theme/declarations";
-
-const T = {
-  fg: "var(--nail-color-fg)",
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  focus: "var(--nail-color-focus-ring)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  semibold: "var(--nail-font-weight-semibold)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  pane: "var(--nail-space-pane)",
-  row: "var(--nail-space-row)",
-  avatar: "var(--nail-size-avatar)",
-  normal: "var(--nail-line-height-normal)",
-  rSm: "var(--nail-radius-sm)",
-  pill: "var(--nail-radius-pill)",
-} as const;
+import { T } from "../theme/tokens";
 
 const ROW = p("message-list.row");
 const CHILD = p("message-list.child");

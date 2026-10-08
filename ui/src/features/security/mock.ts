@@ -12,6 +12,7 @@
  * reports progress with `VaultProgress` events. Sending with sign / encrypt
  * stays refused (`api/mockOutbox.ts`) until WP35.
  */
+import { KEY_LOOKUP_SOURCE_VALUES, VAULT_PHASE_VALUES } from "../../api/generated";
 import type {
   AutocryptPeer,
   CryptoKey,
@@ -95,7 +96,6 @@ export const VAULT_ITEMS: Readonly<Record<VaultPhase, number>> = {
   blobs: 4,
   index: 2,
 };
-const PHASES: readonly VaultPhase[] = ["database", "blobs", "index"];
 
 /** An Autocrypt setup message the mock "sent". */
 export interface SetupMessage {
@@ -145,7 +145,7 @@ export function createSecurityMockState(): SecurityMockState {
     settings: {
       index_decrypted: [],
       key_lookup: "on-demand",
-      lookup_sources: ["wkd", "keys-openpgp-org"],
+      lookup_sources: [...KEY_LOOKUP_SOURCE_VALUES],
     },
     vault: {
       state: "plain",
@@ -538,7 +538,7 @@ function vaultStep(core: MockCore, target: "encrypted" | "plain"): void {
   if (v.done < v.total) {
     v.done++;
   } else {
-    const next = PHASES[PHASES.indexOf(phase) + 1];
+    const next = VAULT_PHASE_VALUES[VAULT_PHASE_VALUES.indexOf(phase) + 1];
     if (next) {
       v.phase = next;
       v.done = 0;

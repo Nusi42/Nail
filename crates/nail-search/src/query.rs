@@ -683,12 +683,7 @@ fn parse_date(s: &str) -> Option<DateValue> {
 // ---------------------------------------------------------------------------
 // Parser
 
-/// Longest query text accepted, in bytes.
-pub const MAX_QUERY_BYTES: usize = 4096;
-/// Deepest nesting of parentheses and `NOT` / `-` accepted. The parser
-/// recurses once per level, so this bounds its stack use: a pasted
-/// `((((…` must be an error, not a stack overflow that aborts the core.
-pub const MAX_NESTING: usize = 64;
+pub use nail_api::search::{MAX_QUERY_BYTES, MAX_QUERY_NESTING as MAX_NESTING};
 
 struct Parser<'a> {
     tokens: &'a [Token],

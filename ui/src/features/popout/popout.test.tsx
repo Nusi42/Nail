@@ -42,6 +42,7 @@ import {
   probeSaysAvailable,
 } from "./model";
 import { PopOutRouter } from "./PopOutRouter";
+import { must } from "../../test/must";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -71,11 +72,6 @@ function popOuts(env: Env): Promise<readonly PopOut[]> {
   return env.client
     .call({ type: "ListPopOuts" })
     .then((r) => (r.type === "PopOuts" ? r.pop_outs : []));
-}
-
-function must<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error("missing");
-  return value;
 }
 
 const ctxOf = (env: Env) => ({

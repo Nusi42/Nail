@@ -39,10 +39,11 @@ use nail_proto_gmail::{GmailEngine, GmailLabelInfo, PollTimer};
 use nail_store::exchange::RemoteExtras;
 use nail_store::gmail::{GmailLabelOp, GmailLabelOpOutcome, GmailLabelRecord, GmailSyncRecord};
 use nail_store::{Operation, QueuedOp, SyncedMessage};
+use nail_util::time::unix_now;
 use tokio::sync::watch;
 
 use crate::{
-    engine::{Signals, stopped, unix_now},
+    engine::{Signals, stopped},
     error::{CoreError, Result},
     ids,
     ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message},
@@ -725,7 +726,7 @@ async fn store_messages(
                 id: Some(id.clone()),
                 flags: m.flags,
                 keywords: m.tags.clone(),
-                internal_date: crate::ingest::internal_date(m.internal_date),
+                internal_date: nail_util::time::rfc3339_utc_opt(m.internal_date),
                 raw,
                 headers_only: false,
                 size: m.size,

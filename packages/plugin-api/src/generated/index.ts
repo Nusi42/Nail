@@ -14,6 +14,7 @@ export type * from "./EventId";
 export type * from "./Flags";
 export type * from "./FolderId";
 export type * from "./IdentityId";
+export type * from "./InvitationResponse";
 export type * from "./McpScope";
 export type * from "./MessageId";
 export type * from "./PluginActionContext";

@@ -1,6 +1,7 @@
 //! Host names and URLs: the one definition of the DNS-name, loopback and
 //! server-URL rules that accounts, plug-in permissions, remote access and
-//! passkeys share (wave Q2, ADR 0171).
+//! passkeys share, and of the well-known mail providers' domains that
+//! discovery, OAuth2, sending and imports recognize (wave Q2, ADR 0171).
 
 /// The standard HTTPS port.
 pub const HTTPS_PORT: u16 = 443;
@@ -82,9 +83,123 @@ pub fn url_host(url: &str) -> Option<String> {
     (!host.is_empty()).then_some(host)
 }
 
+/// Gmail's consumer mail domains (addresses `@gmail.com`, servers
+/// `imap.gmail.com`, …).
+pub const GMAIL_DOMAINS: [&str; 2] = ["gmail.com", "googlemail.com"];
+
+/// Google's own domain (MX hosts `aspmx.l.google.com`, …).
+pub const GOOGLE_DOMAIN: &str = "google.com";
+
+/// The domains of Exchange Online (`outlook.office365.com`,
+/// `outlook.office.com`, `*.outlook.com`).
+pub const EXCHANGE_ONLINE_DOMAINS: [&str; 3] =
+    ["office365.com", "outlook.office.com", "outlook.com"];
+
+/// Microsoft's consumer mail domains (Outlook.com: `@hotmail.com`,
+/// `@live.com`; their MX hosts are under `outlook.com`).
+pub const OUTLOOK_COM_DOMAINS: [&str; 3] = ["outlook.com", "hotmail.com", "live.com"];
+
+/// Microsoft's own domain (Autodiscover answers may point there).
+pub const MICROSOFT_DOMAIN: &str = "microsoft.com";
+
+/// `host` without a trailing dot, in lower case (how host names compare).
+#[must_use]
+pub fn normalize_host(host: &str) -> String {
+    host.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// Whether `host` is `domain` or a name below it (`imap.gmail.com` under
+/// `gmail.com`; never `notgmail.com`). Both compare without a trailing dot
+/// and case.
+#[must_use]
+pub fn is_under_domain(host: &str, domain: &str) -> bool {
+    let (host, domain) = (normalize_host(host), normalize_host(domain));
+    host == domain
+        || host
+            .strip_suffix(domain.as_str())
+            .is_some_and(|rest| rest.ends_with('.'))
+}
+
+/// Whether `host` is under one of `domains` ([`is_under_domain`]).
+#[must_use]
+pub fn is_under_any(host: &str, domains: &[&str]) -> bool {
+    domains.iter().any(|d| is_under_domain(host, d))
+}
+
+/// Whether `domain` (an address's domain) is one of Gmail's own
+/// ([`GMAIL_DOMAINS`], exactly).
+#[must_use]
+pub fn is_gmail_domain(domain: &str) -> bool {
+    GMAIL_DOMAINS.contains(&normalize_host(domain).as_str())
+}
+
+/// Whether `host` is one of Google's mail hosts (`imap.gmail.com`,
+/// `aspmx.l.google.com`, …): Google's OAuth2 sign-in applies, and its
+/// servers file the Sent copy themselves.
+#[must_use]
+pub fn is_google_mail_host(host: &str) -> bool {
+    is_under_any(host, &GMAIL_DOMAINS) || is_under_domain(host, GOOGLE_DOMAIN)
+}
+
+/// Whether `host` is Exchange Online ([`EXCHANGE_ONLINE_DOMAINS`]).
+#[must_use]
+pub fn is_exchange_online_host(host: &str) -> bool {
+    is_under_any(host, &EXCHANGE_ONLINE_DOMAINS)
+}
+
+/// Whether `host` is one of Microsoft's mail hosts: Exchange Online,
+/// Outlook.com (servers and MX hosts like
+/// `contoso-com.mail.protection.outlook.com`) or Microsoft Graph.
+/// Microsoft's OAuth2 sign-in applies, and its servers file the Sent copy
+/// themselves.
+#[must_use]
+pub fn is_microsoft_mail_host(host: &str) -> bool {
+    is_exchange_online_host(host)
+        || is_under_any(host, &OUTLOOK_COM_DOMAINS)
+        || is_under_domain(host, crate::exchange::GRAPH_HOST)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn domains_need_a_label_boundary() {
+        assert!(is_under_domain("imap.gmail.com", "gmail.com"));
+        assert!(is_under_domain("GMAIL.com.", "gmail.com"));
+        assert!(!is_under_domain("notgmail.com", "gmail.com"));
+        assert!(!is_under_domain("gmail.com.evil.example", "gmail.com"));
+        assert!(!is_under_domain("", "gmail.com"));
+        assert!(is_under_any("smtp.office365.com", &EXCHANGE_ONLINE_DOMAINS));
+    }
+
+    #[test]
+    fn providers() {
+        assert!(is_gmail_domain("GoogleMail.com.") && !is_gmail_domain("mail.gmail.com"));
+        assert!(
+            is_google_mail_host("aspmx.l.google.com.") && is_google_mail_host("imap.gmail.com")
+        );
+        assert!(!is_google_mail_host("notgmail.com") && !is_google_mail_host("example.org"));
+        assert!(is_exchange_online_host("Outlook.Office365.com."));
+        assert!(is_exchange_online_host("outlook.office.com"));
+        assert!(
+            !is_exchange_online_host("notoffice365.com") && !is_exchange_online_host("hotmail.com")
+        );
+        for host in [
+            "outlook.office365.com",
+            "smtp-mail.outlook.com",
+            "graph.microsoft.com",
+            "contoso-com.mail.protection.outlook.com.",
+            "eur.olc.protection.outlook.com",
+            "hotmail.com",
+            "live.com",
+        ] {
+            assert!(is_microsoft_mail_host(host), "{host}");
+        }
+        for host in ["notoutlook.com", "mx.example.org", "microsoft.com"] {
+            assert!(!is_microsoft_mail_host(host), "{host}");
+        }
+    }
 
     #[test]
     fn dns_names() {

@@ -28,6 +28,7 @@ import { must } from "./test/must";
 import { geometry } from "./test/env";
 import { type ReactNode } from "react";
 import { INBOX } from "./test/mockIds";
+import { mailEnv } from "./test/mailEnv";
 
 const PAGE = { width: 1600, height: 1200 };
 
@@ -56,19 +57,13 @@ function ctxOf(env: Env) {
   };
 }
 
-function mailEnv(): Env {
-  const env = createEnv({
-    state: {
-      activeAccountId: "acc-personal",
-      activeFolderId: INBOX,
-      composer: { ...emptyComposer(), identityId: "ada@example.org" },
-    },
-  });
-  const first = env.transport.data.messages.find((m) => m.folder_id === INBOX);
-  if (first) env.store.getState().selectMessage(first.id);
+/** The shared mail start state, with a snooze and a folder-sync target picked. */
+function windowsEnv(): Env {
+  const env = mailEnv();
+  const first = env.store.getState().selectedMessageId;
   triageStoreFor(env.store)
     .getState()
-    .setSnoozing(first ? [first.id] : []);
+    .setSnoozing(first ? [first] : []);
   syncStoreFor(env.store).getState().setFolder(INBOX);
   return env;
 }
@@ -119,7 +114,7 @@ describe("every window opens through the window manager", () => {
   it.each(cases)(
     "%s %s: declared modality, default size, never below its minimum",
     async (what, name) => {
-      const env = mailEnv();
+      const env = windowsEnv();
       const base = env.transport.data.layout;
       // A feature dialog renders only without a layout window of its name.
       const used: ResolvedLayout =

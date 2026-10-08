@@ -164,9 +164,7 @@ impl RetryPolicy {
     pub fn backoff(&self, attempt: u32) -> Duration {
         let factor = 1u32.checked_shl(attempt.min(20)).unwrap_or(u32::MAX);
         let delay = self.base_delay.saturating_mul(factor).min(self.max_delay);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.subsec_nanos());
+        let nanos = u32::try_from(nail_util::time::unix_now_nanos() % 1_000_000_000).unwrap_or(0);
         let jitter = delay / 4 * (nanos % 1000) / 1000;
         (delay + jitter).min(self.max_delay.max(delay))
     }

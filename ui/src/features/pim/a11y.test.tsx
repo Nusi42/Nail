@@ -29,12 +29,7 @@ import { pimStoreFor } from "./store";
 import { VIEW_KINDS } from "./time";
 import { THEME_DENSITY_CASES, builtinTheme } from "../../test/themes";
 import { DENSITY_VALUES } from "../../api/generated";
-
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing test data");
-  return value;
-}
+import { must } from "../../test/must";
 
 /** Names of the test frames around the dialogs. */
 const EVENT_LABEL = "event";

@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { buildOutputDir, nailPerTest } from "../support/nail";
+import { nailPerTest, screenshotFile } from "../support/nail";
 import { rpcOk } from "../support/remote";
 import { expectNoIssuesIn } from "../support/responsive";
 import {
@@ -65,11 +65,7 @@ async function unfold(page: Page) {
   await expect(cards(page)).toHaveCount(LAB_TOTAL);
 }
 
-function screenshotPath(name: string): string {
-  const dir = buildOutputDir(path.join("screens", "p2"));
-  mkdirSync(dir, { recursive: true });
-  return path.join(dir, `${name}.png`);
-}
+const screenshotPath = (name: string): string => screenshotFile("p2", name);
 
 /** The text of a card's header (sender, date). */
 const cardHeader = (card: Locator) => card.locator('[data-part="thread-view.card.header"]');

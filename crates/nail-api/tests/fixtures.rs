@@ -418,12 +418,9 @@ fn icons_fixture_is_current() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("icons.json");
-    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-        let mut text = serde_json::to_string_pretty(&expected).unwrap();
-        text.push('\n');
-        std::fs::write(&path, text).unwrap();
-    }
+    let text = serde_json::to_string_pretty(&expected).unwrap() + "\n";
+    let env = nail_util::snapshot::UPDATE_SNAPSHOTS;
     let actual: serde_json::Value =
-        serde_json::from_str(&read_fixture("icons.json")).expect("icons.json");
-    assert_eq!(actual, expected, "run with NAIL_UPDATE_SNAPSHOTS=1");
+        serde_json::from_str(&nail_util::snapshot::stored(&path, &text, env)).expect("icons.json");
+    assert_eq!(actual, expected, "{}", nail_util::snapshot::hint(env));
 }

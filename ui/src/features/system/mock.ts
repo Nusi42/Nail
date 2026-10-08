@@ -427,7 +427,7 @@ export interface MockMapiMessage {
   program: string | null;
 }
 
-const ADDRESS = /^[^\s@<>]+@[^\s@<>]+$/;
+const MAPI_ADDRESS = /^[^\s@<>]+@[^\s@<>]+$/;
 
 /** `MapiRecipient::email`: the address without `SMTP:` / `<>`, else a name that is one. */
 export function mapiRecipientEmail(recipient: MockMapiRecipient): string | null {
@@ -438,7 +438,7 @@ export function mapiRecipientEmail(recipient: MockMapiRecipient): string | null 
       .replace(/^smtp:/i, "")
       .replace(/^<(.*)>$/, "$1")
       .trim();
-    return ADDRESS.test(value) ? value : null;
+    return MAPI_ADDRESS.test(value) ? value : null;
   };
   return strip(recipient.address) ?? strip(recipient.name);
 }

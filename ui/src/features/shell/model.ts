@@ -4,6 +4,7 @@
  * numbers. The view rules shared with Rust (`step_view`, start view, …) live
  * in `../../layout/views.ts`; these are UI-only.
  */
+import { BADGE_SOURCE_VALUES } from "../../api/generated";
 import type {
   BadgeSource,
   Folder,
@@ -95,7 +96,8 @@ export function actionShortcuts(
  * Keyboard contexts of the PIM views: inside them the context's bindings
  * apply (`d` / `w` / `m` in the calendar) and the mail list's do not.
  */
-const VIEW_KEY_CONTEXTS = new Set(["calendar", "contacts", "tasks"]);
+export const PIM_KEY_CONTEXTS = ["calendar", "contacts", "tasks"] as const;
+const VIEW_KEY_CONTEXTS: ReadonlySet<string> = new Set(PIM_KEY_CONTEXTS);
 
 /**
  * The keyboard context of a view's region (`data-key-context`): the PIM
@@ -154,4 +156,4 @@ export function badgeLabelId(source: BadgeSource): string {
 }
 
 /** Every badge source (for the catalog coverage). */
-export const BADGE_SOURCES: readonly BadgeSource[] = ["unread", "confirmations"];
+export const BADGE_SOURCES: readonly BadgeSource[] = BADGE_SOURCE_VALUES;

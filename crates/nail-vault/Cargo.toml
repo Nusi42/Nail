@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+nail-util.workspace = true
 # The vault state row (schema v5), sealed columns and the blob store.
 nail-store.workspace = true
 chacha20poly1305.workspace = true
@@ -26,7 +27,6 @@ tempfile.workspace = true
 # recovery key, and key derivation (database key, recovery wrapping key).
 serde.workspace = true
 serde_json.workspace = true
-chrono.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]

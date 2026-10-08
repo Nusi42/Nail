@@ -18,7 +18,7 @@
 //! fetches a URL a client chose: it is not an open proxy. Tags are compared
 //! in constant time.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -128,11 +128,7 @@ pub struct Signer {
     render_ttl: Duration,
 }
 
-fn now_unix() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
-}
+use nail_util::time::unix_now_secs as now_unix;
 
 impl Signer {
     /// A signer with the default lifetimes.

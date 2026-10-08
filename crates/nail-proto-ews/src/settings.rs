@@ -450,11 +450,7 @@ pub fn new_guid() -> String {
     for (i, chunk) in bytes.chunks_mut(8).enumerate() {
         let mut hasher = RandomState::new().build_hasher();
         hasher.write_usize(i);
-        hasher.write_u128(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_nanos()),
-        );
+        hasher.write_u128(nail_util::time::unix_now_nanos());
         chunk.copy_from_slice(&hasher.finish().to_le_bytes());
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x40;

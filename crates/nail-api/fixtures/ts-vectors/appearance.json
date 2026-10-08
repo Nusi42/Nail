@@ -2806,6 +2806,152 @@
       ],
       "fn": "accentIgnored",
       "out": false
+    },
+    {
+      "args": [
+        "#000"
+      ],
+      "fn": "parseHex",
+      "out": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "args": [
+        "#ffffff"
+      ],
+      "fn": "parseHex",
+      "out": [
+        255.0,
+        255.0,
+        255.0
+      ]
+    },
+    {
+      "args": [
+        "#767676"
+      ],
+      "fn": "parseHex",
+      "out": [
+        118.0,
+        118.0,
+        118.0
+      ]
+    },
+    {
+      "args": [
+        "#1A2b3C"
+      ],
+      "fn": "parseHex",
+      "out": [
+        26.0,
+        43.0,
+        60.0
+      ]
+    },
+    {
+      "args": [
+        " #fb4c2f "
+      ],
+      "fn": "parseHex",
+      "out": [
+        251.0,
+        76.0,
+        47.0
+      ]
+    },
+    {
+      "args": [
+        "#0a0a0a"
+      ],
+      "fn": "parseHex",
+      "out": [
+        10.0,
+        10.0,
+        10.0
+      ]
+    },
+    {
+      "args": [
+        "#0b0b0b"
+      ],
+      "fn": "parseHex",
+      "out": [
+        11.0,
+        11.0,
+        11.0
+      ]
+    },
+    {
+      "args": [
+        "red"
+      ],
+      "fn": "parseHex",
+      "out": null
+    },
+    {
+      "args": [
+        "#12345"
+      ],
+      "fn": "parseHex",
+      "out": null
+    },
+    {
+      "args": [
+        "var(--x)"
+      ],
+      "fn": "parseHex",
+      "out": null
+    },
+    {
+      "args": [
+        "#000",
+        "#fff"
+      ],
+      "fn": "hexContrastRatio",
+      "out": 21.0
+    },
+    {
+      "args": [
+        "#767676",
+        "#ffffff"
+      ],
+      "fn": "hexContrastRatio",
+      "out": 4.542225
+    },
+    {
+      "args": [
+        "#fb4c2f",
+        "#202124"
+      ],
+      "fn": "hexContrastRatio",
+      "out": 4.735138
+    },
+    {
+      "args": [
+        "#0a0a0a",
+        "#0b0b0b"
+      ],
+      "fn": "hexContrastRatio",
+      "out": 1.005869
+    },
+    {
+      "args": [
+        "#ffffff",
+        "#ffffff"
+      ],
+      "fn": "hexContrastRatio",
+      "out": 1.0
+    },
+    {
+      "args": [
+        "red",
+        "#ffffff"
+      ],
+      "fn": "hexContrastRatio",
+      "out": null
     }
   ]
 }

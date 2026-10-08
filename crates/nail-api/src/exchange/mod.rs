@@ -296,15 +296,7 @@ fn base_url(host: &str, port: u16, tls: bool, path: &str) -> String {
     }
 }
 
-pub use crate::hosts::is_loopback_host;
-
-/// Whether `host` is Exchange Online (`outlook.office365.com`,
-/// `outlook.office.com`, `*.outlook.com`).
-pub fn is_exchange_online_host(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    let under = |domain: &str| host == domain || host.ends_with(&format!(".{domain}"));
-    under("office365.com") || under("outlook.office.com") || under("outlook.com")
-}
+pub use crate::hosts::{is_exchange_online_host, is_loopback_host};
 
 /// A problem with an `exchange` node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]

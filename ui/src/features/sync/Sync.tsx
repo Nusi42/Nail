@@ -21,7 +21,7 @@ import { useAccountsConfig, useClient, useFolders, useMessage } from "../../stat
 import { useUi } from "../../state/uiStore";
 import { flattenFolders } from "../../widgets/FolderTree";
 import { NumberField, SelectField, SaveRow } from "../../widgets/forms";
-import { BODY_MODES } from "./model";
+import { BODY_MODES, TRI_CHOICES, type Tri } from "./model";
 import { useSync } from "./store";
 
 export const syncKeys = {
@@ -31,8 +31,6 @@ export const syncKeys = {
 
 /** Name of the folder sync dialog. */
 export const SYNC_FOLDER_DIALOG = "sync-folder";
-
-type Tri = "default" | "yes" | "no";
 
 function tri(value: boolean | null): Tri {
   return value === null ? "default" : value ? "yes" : "no";
@@ -85,7 +83,7 @@ function PolicyForm({
   const [idle, setIdle] = useState<Tri>(tri(rule?.idle ?? null));
   const [problems, setProblems] = useState<LocalizedMessage[]>([]);
   const triChoices = (id: string) =>
-    (["default", "yes", "no"] as const).map((v) => ({ value: v, label: `sync-${id}-${v}` }));
+    TRI_CHOICES.map((v) => ({ value: v, label: `sync-${id}-${v}` }));
 
   const save = async () => {
     let bodies: BodyPolicy | null = null;

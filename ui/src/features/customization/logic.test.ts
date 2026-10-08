@@ -18,12 +18,7 @@ import {
 import { chooseAll, choiceList, summarize, takeOf } from "./merge";
 import { allConfigErrors, nextConfigErrors } from "./state";
 import { splitPatches, splitRefOf } from "./writeBack";
-
-/** The value, or a test failure when it is missing. */
-function must<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error("missing value");
-  return value;
-}
+import { must } from "../../test/must";
 
 const issue = (line: number) => ({ line, column: 1, message: `problem ${String(line)}` });
 

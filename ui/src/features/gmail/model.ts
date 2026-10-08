@@ -1,10 +1,13 @@
 /**
  * Pure helpers of the Gmail UI: the label tree (`/` nests), which labels
  * the list shows, the search queries behind label views and category
- * filters, and a mirror of `GmailLabelSettings::issues` for immediate
- * feedback in the editor (the core validates for real).
+ * filters, and `GmailLabelSettings::issues` for immediate feedback in the
+ * editor (the core validates for real; pinned by `model.vectors.test.ts`).
  */
 import {
+  GMAIL_CATEGORY_LABELS,
+  GMAIL_CATEGORY_VALUES,
+  GMAIL_SYSTEM_LABELS,
   type GmailCategory,
   type GmailLabel,
   type GmailLabelIssue,
@@ -15,35 +18,14 @@ import { charCount, chars } from "../../text/chars";
 export { MAX_LABEL_NAME } from "../../api/generated";
 
 /** Gmail's system label ids; user labels cannot take these names. */
-export const SYSTEM_LABELS = [
-  "INBOX",
-  "SENT",
-  "DRAFT",
-  "SPAM",
-  "TRASH",
-  "UNREAD",
-  "STARRED",
-  "IMPORTANT",
-  "CHAT",
-  "CATEGORY_PERSONAL",
-  "CATEGORY_SOCIAL",
-  "CATEGORY_PROMOTIONS",
-  "CATEGORY_UPDATES",
-  "CATEGORY_FORUMS",
-] as const;
+export const SYSTEM_LABELS = GMAIL_SYSTEM_LABELS;
 
 /** Inbox categories in Gmail's tab order. */
-export const CATEGORIES: readonly GmailCategory[] = [
-  "primary",
-  "social",
-  "promotions",
-  "updates",
-  "forums",
-];
+export const CATEGORIES: readonly GmailCategory[] = GMAIL_CATEGORY_VALUES;
 
 /** The label id of a category (`GmailCategory::label`). */
 export function categoryLabel(category: GmailCategory): string {
-  return category === "primary" ? "CATEGORY_PERSONAL" : `CATEGORY_${category.toUpperCase()}`;
+  return GMAIL_CATEGORY_LABELS[category];
 }
 
 /** The problems of label settings, like `GmailLabelSettings::issues` plus duplicates. */

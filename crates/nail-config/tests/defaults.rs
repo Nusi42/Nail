@@ -10,24 +10,15 @@ use std::path::Path;
 use nail_api::{LayoutNode, ResolvedLayout, ResolvedTheme};
 use pretty_assertions::assert_eq;
 
-fn fixture<T: serde::de::DeserializeOwned>(name: &str) -> T {
+/// The nail-api fixture `name` as stored, rewritten from `value` first when
+/// `NAIL_UPDATE_SNAPSHOTS=1`.
+fn fixture<T: serde::Serialize + serde::de::DeserializeOwned>(name: &str, value: &T) -> T {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../nail-api/fixtures")
         .join(name);
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    serde_json::from_str(&text).unwrap()
-}
-
-/// Rewrites a fixture when `NAIL_UPDATE_SNAPSHOTS=1`.
-fn update<T: serde::Serialize>(name: &str, value: &T) {
-    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../nail-api/fixtures")
-            .join(name);
-        let mut text = serde_json::to_string_pretty(value).unwrap();
-        text.push('\n');
-        std::fs::write(&path, text).unwrap();
-    }
+    let text = serde_json::to_string_pretty(value).unwrap() + "\n";
+    let stored = nail_util::snapshot::stored(&path, &text, nail_util::snapshot::UPDATE_SNAPSHOTS);
+    serde_json::from_str(&stored).unwrap()
 }
 
 fn strip_theme_sources(mut theme: ResolvedTheme) -> ResolvedTheme {
@@ -63,8 +54,7 @@ fn strip_layout_sources(mut layout: ResolvedLayout) -> ResolvedLayout {
 #[test]
 fn default_theme_matches_the_fixture() {
     let actual = strip_theme_sources(nail_config::default_theme());
-    update("default-theme.json", &actual);
-    let expected: ResolvedTheme = fixture("default-theme.json");
+    let expected: ResolvedTheme = fixture("default-theme.json", &actual);
     // Compare as JSON first for a readable diff, then structurally.
     assert_eq!(
         serde_json::to_value(&actual).unwrap(),
@@ -76,8 +66,7 @@ fn default_theme_matches_the_fixture() {
 #[test]
 fn default_layout_matches_the_fixture() {
     let actual = strip_layout_sources(nail_config::default_layout());
-    update("default-layout.json", &actual);
-    let expected: ResolvedLayout = fixture("default-layout.json");
+    let expected: ResolvedLayout = fixture("default-layout.json", &actual);
     assert_eq!(
         serde_json::to_value(&actual).unwrap(),
         serde_json::to_value(&expected).unwrap()

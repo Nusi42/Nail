@@ -22,6 +22,7 @@ import { chooseIdentity } from "../../api/mockAccounts";
 import { draftSaveRefusal } from "../../api/mockDrafts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { replyAllCc } from "../../state/addresses";
+import { escapeHtml } from "../../text/html";
 
 /** The requests this feature answers. */
 export const COMPOSER_REQUESTS = [
@@ -77,14 +78,6 @@ export function answerComposer(core: MockCore, request: ComposerRequest): Respon
 }
 
 // ---- Text helpers (a tiny stand-in for nail-compose) ----
-
-export function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 function inline(text: string): string {
   return escapeHtml(text)

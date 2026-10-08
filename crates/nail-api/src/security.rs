@@ -1105,6 +1105,9 @@ pub enum VaultPhase {
 }
 
 impl VaultPhase {
+    /// Every phase, in the order a migration runs them.
+    pub const ALL: [Self; 3] = [Self::Database, Self::Blobs, Self::Index];
+
     /// The wire / store name.
     pub fn as_str(self) -> &'static str {
         match self {

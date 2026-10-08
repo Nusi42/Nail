@@ -187,6 +187,10 @@ pub const DEFAULT_AUDIT_RETENTION_DAYS: u32 = 90;
 /// Largest [`RemoteUiSettings::audit_retention_days`] (ten years).
 pub const MAX_AUDIT_RETENTION_DAYS: u32 = 3650;
 
+/// Shortest password of a remote-UI user, in characters (NIST SP 800-63B
+/// asks for at least 8; the remote UI is reachable from the network).
+pub const MIN_PASSWORD_CHARS: usize = 12;
+
 /// Something wrong with [`RemoteUiSettings`]; the core answers
 /// `invalid_request` (or `forbidden` for internet mode) and names it in
 /// the message.

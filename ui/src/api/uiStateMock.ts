@@ -5,7 +5,12 @@
  */
 import type { JsonValue, Request, Response, UiStateIssue } from "./generated";
 import type { MockCore } from "./mockMail";
-import { UI_STATE_ISSUE_MESSAGE_IDS } from "./generated";
+import {
+  MAX_UI_STATE_KEYS,
+  MAX_UI_STATE_KEY_CHARS,
+  MAX_UI_STATE_VALUE_BYTES,
+  UI_STATE_ISSUE_MESSAGE_IDS,
+} from "./generated";
 
 /** The requests answered here. */
 export const UI_STATE_REQUESTS = [
@@ -19,10 +24,7 @@ export function isUiStateRequest(request: Request): request is UiStateRequest {
   return (UI_STATE_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/** `MAX_UI_STATE_KEY_CHARS`, `MAX_UI_STATE_VALUE_BYTES`, `MAX_UI_STATE_KEYS`. */
-export const MAX_UI_STATE_KEY_CHARS = 64;
-export const MAX_UI_STATE_VALUE_BYTES = 16 * 1024;
-export const MAX_UI_STATE_KEYS = 512;
+export { MAX_UI_STATE_KEY_CHARS, MAX_UI_STATE_KEYS, MAX_UI_STATE_VALUE_BYTES } from "./generated";
 
 /** `nail_api::ui_state::is_ui_state_key`. */
 export function isUiStateKey(key: string): boolean {

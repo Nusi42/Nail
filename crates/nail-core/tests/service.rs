@@ -653,13 +653,7 @@ async fn old_mcp_audit_entries_and_rule_runs_are_purged() {
     let service = Service::open(options).unwrap();
     let day = 86_400;
     // Real time: the service purges at start as well.
-    let now = i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    )
-    .unwrap();
+    let now = nail_util::time::unix_now();
     let store = service.store();
     for at in [now - 100 * day, now - day] {
         store
@@ -922,7 +916,7 @@ async fn m2b_remote_requests() {
             1,
         )
         .unwrap();
-    let now = chrono_now();
+    let now = nail_util::time::unix_now();
     let session = store
         .create_remote_session(
             &nail_store::NewRemoteSession {
@@ -1114,13 +1108,4 @@ async fn m2b_remote_requests() {
         ),
         ErrorCode::NotFound
     );
-}
-
-fn chrono_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        .try_into()
-        .unwrap()
 }

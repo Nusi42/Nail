@@ -7,7 +7,6 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use nail_api::customize::ConfigBackup;
 use nail_api::{ConfigBackupId, ConfigFile};
@@ -110,19 +109,13 @@ fn to_backup(file: ConfigFile, entry: &Entry) -> ConfigBackup {
     }
 }
 
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
-}
-
 /// Copies the current version of `file` (in config directory `dir`) into
 /// the backups and prunes old ones.
 pub(crate) fn take(dir: &Path, file: ConfigFile) -> io::Result<ConfigBackup> {
     let current = read_optional(&dir.join(file.file_name()))?;
     let existing = entries(dir, file)?;
     // Ids must be unique and increasing, also within one millisecond.
-    let mut millis = now_millis();
+    let mut millis = nail_util::time::unix_now_millis();
     if let Some(newest) = existing.first()
         && newest.millis >= millis
     {
@@ -190,10 +183,7 @@ pub(crate) fn restore(
 
 /// Milliseconds since the epoch as RFC 3339 UTC, e.g.
 /// `2026-09-29T10:15:00.123Z`.
-pub(crate) fn rfc3339(millis: u64) -> String {
-    let whole = nail_util::time::rfc3339_utc(i64::try_from(millis / 1000).unwrap_or(0));
-    format!("{}.{:03}Z", whole.trim_end_matches('Z'), millis % 1000)
-}
+pub(crate) use nail_util::time::rfc3339_utc_millis as rfc3339;
 
 #[cfg(test)]
 mod tests {

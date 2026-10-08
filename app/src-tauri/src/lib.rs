@@ -113,6 +113,22 @@ pub struct AppArgs {
     pub targets: Vec<String>,
 }
 
+/// The WebView2 profile of the main window: beside the demo / portable
+/// data (`<base>/webview`), and for a seeded run on given directories in its
+/// data directory, so a seeded run never shares the installed app's profile
+/// (WebView2 refuses a profile another process holds with other options).
+/// `None` = WebView2's default profile (a normal installation).
+fn webview_dir(
+    base: Option<&std::path::Path>,
+    seeded: bool,
+    data_dir: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    match base {
+        Some(base) => Some(base.join("webview")),
+        None => seeded.then(|| data_dir.join("webview")),
+    }
+}
+
 impl AppArgs {
     /// The arguments of a run on these directories (`seed`: demo data),
     /// everything else default (tests and harnesses).
@@ -696,8 +712,9 @@ pub fn run() {
                 &config,
             )?)
             .visible(!hidden && !shown_later);
-            if let Some(base) = &base {
-                window = window.data_directory(base.join("webview"));
+            let profile = webview_dir(base.as_deref(), args.seed.is_some(), &data_dir);
+            if let Some(dir) = &profile {
+                window = window.data_directory(dir.clone());
             }
             let window = window.build()?;
             background::conceal(&window);
@@ -706,10 +723,7 @@ pub fn run() {
             }
             // M4c: file dialogs (owned by this window) and hidden print
             // windows (sharing its WebView2 data folder).
-            host.bind_app(
-                app.handle().clone(),
-                base.as_ref().map(|b| b.join("webview")),
-            );
+            host.bind_app(app.handle().clone(), profile);
             if args.autostart
                 && !hidden
                 && let Err(err) = window.minimize()
@@ -914,6 +928,17 @@ mod tests {
             Some(SetupAction::PurgeCredentials)
         );
         assert_eq!(action(&[]), None);
+    }
+
+    #[test]
+    fn seeded_runs_never_use_the_default_webview_profile() {
+        let data = std::path::Path::new("d");
+        assert_eq!(
+            webview_dir(Some(std::path::Path::new("b")), true, data),
+            Some(std::path::PathBuf::from("b").join("webview"))
+        );
+        assert_eq!(webview_dir(None, true, data), Some(data.join("webview")));
+        assert_eq!(webview_dir(None, false, data), None);
     }
 
     #[test]

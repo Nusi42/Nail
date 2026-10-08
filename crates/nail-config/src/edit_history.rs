@@ -16,8 +16,6 @@
 //!   first (ADR 0022 backups). Edits carrying a `base_revision` are refused
 //!   the same way when the file's [`config_revision`] differs.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use nail_api::editing::{
     EditEntry, EditHistory, EditIssue, EditKind, HistoryScope, MAX_EDIT_HISTORY, config_revision,
 };
@@ -94,13 +92,6 @@ pub(crate) fn main_file(scope: HistoryScope) -> ConfigFile {
         HistoryScope::Layout => ConfigFile::Layout,
         HistoryScope::Appearance => ConfigFile::Theme,
     }
-}
-
-fn now_rfc3339() -> String {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
-    backup::rfc3339(millis)
 }
 
 fn api_error(code: ErrorCode, localized: LocalizedMessage) -> ApiError {
@@ -186,7 +177,7 @@ impl ConfigManager {
             id: format!("e{}", histories.next_id),
             kind,
             label,
-            at: now_rfc3339(),
+            at: nail_util::time::rfc3339_now_millis(),
             files: changes.iter().map(|c| c.file.clone()).collect(),
         };
         let stacks = histories.stacks(scope);

@@ -19,7 +19,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use nail_api::mapi::{MapiMessage, MapiResult};
 
@@ -123,9 +123,7 @@ pub fn stage_attachments(
 /// `<pid>-<hex nanoseconds>-<n>` (the staging sweep recognizes it).
 pub(crate) fn unique_suffix() -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
+    let nanos = nail_util::time::unix_now_nanos();
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("{}-{nanos:x}-{n}", std::process::id())
 }

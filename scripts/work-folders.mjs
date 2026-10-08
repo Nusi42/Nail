@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  HOOKS_PATH_ARGS,
   MASTER_RUSTC_WRAPPER,
   REPO_ROOT,
   assertWorkFolder,
@@ -79,7 +80,7 @@ function create(n, install) {
     // pre-push `npm run check`) needs it in a fresh folder.
     execSync("npm run build", { cwd: target, stdio: "inherit" });
   } else {
-    git(target, ["config", "core.hooksPath", ".githooks"]);
+    git(target, HOOKS_PATH_ARGS);
   }
   console.log(`${target}: branch ${branch}${known ? " (from the master)" : " (new, from main)"}`);
 }

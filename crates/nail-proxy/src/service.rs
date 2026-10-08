@@ -139,9 +139,7 @@ impl Proxy {
         let fetched = self.fetcher.fetch(&url).await.inspect_err(|err| {
             tracing::info!(message = %grant.message_id, %err, "remote content not loaded");
         })?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs());
+        let now = nail_util::time::unix_now_secs();
         let max_age = grant.expires.saturating_sub(now).min(MAX_CACHE_SECS);
         Ok(ProxyResponse {
             content_type: fetched.content_type,

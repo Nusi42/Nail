@@ -34,9 +34,9 @@ use nail_rules::{
 };
 use nail_store::{BlobStore, RuleRunAction, RuleRunRecord, RuleState, Store};
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::service::Service;
+use nail_util::time::unix_now;
 
 /// Messages a dry run or a manual run over a folder looks at, newest first.
 const SCAN_LIMIT: u32 = 2000;
@@ -224,12 +224,6 @@ fn issues_error(issues: &[nail_rules::RuleIssue]) -> ApiError {
     }
 }
 
-pub(crate) fn rfc3339(at: i64) -> String {
-    chrono::DateTime::from_timestamp(at, 0)
-        .unwrap_or_default()
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
-
 /// A stored run as the protocol shows it.
 fn to_run(record: RuleRunRecord) -> RuleRun {
     RuleRun {
@@ -238,8 +232,8 @@ fn to_run(record: RuleRunRecord) -> RuleRun {
         rule_name: record.rule_name,
         cause: record.cause,
         state: record.state,
-        started_at: rfc3339(record.started_at),
-        finished_at: record.finished_at.map(rfc3339),
+        started_at: nail_util::time::rfc3339_utc(record.started_at),
+        finished_at: nail_util::time::rfc3339_utc_opt(record.finished_at),
         matched: record.matched,
         op_ids: record.op_ids.into_iter().map(crate::ids::op_id).collect(),
         undoable: record.undoable,

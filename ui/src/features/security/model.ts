@@ -3,6 +3,15 @@
  * key summaries, the composer's send guard, formatting. No React here, so
  * every rule is unit-tested on its own (`model.test.ts`).
  */
+import {
+  ATTACHMENT_RISK_VALUES,
+  AUTH_VERDICT_VALUES,
+  CRYPTO_PREFERENCE_VALUES,
+  CRYPTO_TECHNOLOGY_VALUES,
+  MESSAGE_WARNING_KINDS,
+  TRUST_DECISION_VALUES,
+  TRUST_LEVEL_VALUES,
+} from "../../api/generated";
 import type {
   AttachmentRisk,
   AuthResults,
@@ -27,28 +36,22 @@ import { DATE_ONLY, DATE_TIME, formatDateTime as formatInLocale } from "../../i1
 // Constants (also the source of runtime-built message ids)
 
 /** Trust levels, worst → best (the order of `TrustLevel` in the core). */
-export const TRUST_LEVELS: readonly TrustLevel[] = [
-  "rejected",
-  "unknown",
-  "autocrypt-gossip",
-  "autocrypt",
-  "verified",
-  "own",
-];
+export const TRUST_LEVELS: readonly TrustLevel[] = TRUST_LEVEL_VALUES;
 
-export const TRUST_DECISIONS: readonly TrustDecision[] = ["unset", "verified", "rejected"];
-export const TECHNOLOGIES: readonly CryptoTechnology[] = ["openpgp", "smime"];
-export const PREFERENCES: readonly CryptoPreference[] = ["auto", "openpgp", "smime"];
+export const TRUST_DECISIONS: readonly TrustDecision[] = TRUST_DECISION_VALUES;
+export const TECHNOLOGIES: readonly CryptoTechnology[] = CRYPTO_TECHNOLOGY_VALUES;
+export const PREFERENCES: readonly CryptoPreference[] = CRYPTO_PREFERENCE_VALUES;
 
+/** The badge's signature verdicts, mildest first (the summary of several signatures is the most severe). */
 export const SIGNATURE_VERDICTS = [
   "none",
   "verified",
   "valid",
-  "mismatch",
   "unknown-key",
-  "key-problem",
-  "invalid",
   "error",
+  "key-problem",
+  "mismatch",
+  "invalid",
 ] as const;
 export type SignatureVerdict = (typeof SIGNATURE_VERDICTS)[number];
 
@@ -122,16 +125,7 @@ function signatureVerdict(sig: SignatureInfo): SignatureVerdict {
   }
 }
 
-const SIGNATURE_SEVERITY: readonly SignatureVerdict[] = [
-  "none",
-  "verified",
-  "valid",
-  "unknown-key",
-  "error",
-  "key-problem",
-  "mismatch",
-  "invalid",
-];
+const SIGNATURE_SEVERITY: readonly SignatureVerdict[] = SIGNATURE_VERDICTS;
 
 /** What the badge shows for a message's security status. */
 export interface SecurityVerdict {
@@ -177,19 +171,9 @@ export function securityVerdict(status: SecurityStatus): SecurityVerdict {
 // ---------------------------------------------------------------------------
 // Sender authentication (DKIM / SPF / DMARC)
 
-export const AUTH_VERDICTS: readonly AuthVerdict[] = [
-  "pass",
-  "fail",
-  "softfail",
-  "neutral",
-  "none",
-  "temperror",
-  "permerror",
-  "policy",
-  "unknown",
-];
+export const AUTH_VERDICTS: readonly AuthVerdict[] = AUTH_VERDICT_VALUES;
 
-/** The badge verdict, exactly as `AuthResults::summary` in the core. */
+/** The badge verdict, `AuthResults::summary` (pinned by `model.vectors.test.ts`). */
 export function authSummary(results: AuthResults): AuthVerdict {
   if (results.dmarc) return results.dmarc.verdict;
   if (results.dkim.some((d) => d.verdict === "pass")) return "pass";
@@ -217,21 +201,9 @@ export function authTone(verdict: AuthVerdict): Tone {
 // ---------------------------------------------------------------------------
 // Warnings
 
-export const WARNING_KINDS: readonly MessageWarning["kind"][] = [
-  "link-mismatch",
-  "lookalike-domain",
-  "suspicious-link",
-  "dangerous-attachment",
-];
+export const WARNING_KINDS: readonly MessageWarning["kind"][] = MESSAGE_WARNING_KINDS;
 
-export const ATTACHMENT_RISKS: readonly AttachmentRisk[] = [
-  "executable",
-  "macro",
-  "disguised-name",
-  "container",
-  "shortcut",
-  "type-mismatch",
-];
+export const ATTACHMENT_RISKS: readonly AttachmentRisk[] = ATTACHMENT_RISK_VALUES;
 
 type AttachmentWarning = Extract<MessageWarning, { kind: "dangerous-attachment" }>;
 type LinkWarning = Exclude<MessageWarning, { kind: "dangerous-attachment" }>;

@@ -380,13 +380,10 @@ fn the_build_puts_the_mapi_dlls_where_nail_api_expects_them() {
         );
     }
     // The channel manifests the release scripts write are the ones the app
-    // reads (`UpdateChannel::manifest_path`).
+    // reads (`UpdateChannel::manifest_path`): the script takes the channels
+    // and the file name from the generated contract constants.
     let manifests = read(app_dir().join("../../scripts/lib/update-manifest.mjs"));
     for channel in nail_api::desktop::UpdateChannel::ALL {
-        assert!(
-            manifests.contains(&format!("\"{}\"", channel.as_str())),
-            "{channel:?}"
-        );
         assert_eq!(
             channel.manifest_path(),
             format!(
@@ -396,10 +393,12 @@ fn the_build_puts_the_mapi_dlls_where_nail_api_expects_them() {
             )
         );
     }
-    assert!(manifests.contains(&format!(
-        "export const MANIFEST_FILE = \"{}\";",
-        nail_api::desktop::UPDATE_MANIFEST_FILE
-    )));
+    for generated in [
+        "contract.UPDATE_CHANNEL_VALUES",
+        "contract.UPDATE_MANIFEST_FILE",
+    ] {
+        assert!(manifests.contains(generated), "{generated}");
+    }
 }
 
 #[test]

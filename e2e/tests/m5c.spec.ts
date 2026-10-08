@@ -6,9 +6,10 @@ import {
   composerWindow,
   composerWindows,
   messageRows,
+  openMail,
   runFromPalette,
   selectInTrash,
-  openMail,
+  windowById,
 } from "../support/views";
 import { defined } from "../support/defined";
 
@@ -25,7 +26,7 @@ import { defined } from "../support/defined";
 
 const server = nailOnDemand();
 
-const win = (page: Page, id: string) => page.locator(`[data-part="window"][data-window="${id}"]`);
+const win = windowById;
 /** Opens a new composer (key `c`): its window id and window. */
 async function openComposer(page: Page): Promise<{ id: string; own: Locator }> {
   await page.keyboard.press("c");

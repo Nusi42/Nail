@@ -683,23 +683,9 @@ pub async fn discover(
     Ok(ranked)
 }
 
-/// Domains of Google's own consumer mail.
-const GOOGLE_DOMAINS: [&str; 2] = ["gmail.com", "googlemail.com"];
-
-/// Whether `domain` is Gmail's own.
-pub(crate) fn is_google_domain(domain: &str) -> bool {
-    let domain = domain.trim_end_matches('.').to_ascii_lowercase();
-    GOOGLE_DOMAINS.contains(&domain.as_str())
-}
-
-/// Whether `host` is one of Google's mail hosts (`imap.gmail.com`,
-/// `aspmx.l.google.com`, …).
-pub(crate) fn is_google_host(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    ["gmail.com", "googlemail.com", "google.com"]
-        .iter()
-        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
-}
+pub(crate) use nail_api::hosts::{
+    is_gmail_domain as is_google_domain, is_google_mail_host as is_google_host,
+};
 
 /// The Gmail API proposal for `email` (OAuth2 with the built-in `google`
 /// provider; no SMTP: Gmail sends through the API).

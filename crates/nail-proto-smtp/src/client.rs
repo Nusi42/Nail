@@ -67,14 +67,20 @@ fn hello_name(config: &SmtpConfig) -> ClientId {
 
 fn tls_parameters(config: &SmtpConfig) -> Result<TlsParameters> {
     let tls_err = |e: lettre::transport::smtp::Error| SmtpError::Tls(e.to_string());
-    let mut builder = TlsParametersBuilder::new(config.host.clone());
-    if let TlsTrust::CustomRoots(ders) = &config.trust {
-        builder = builder.certificate_store(CertificateStore::None);
-        for der in ders {
-            builder =
-                builder.add_root_certificate(Certificate::from_der(der.clone()).map_err(tls_err)?);
+    let builder = TlsParametersBuilder::new(config.host.clone());
+    // Every trust of `nail_net::trust::TlsTrust`, like IMAP / POP3 / Sieve.
+    let builder = match &config.trust {
+        TlsTrust::Platform => builder.certificate_store(CertificateStore::Default),
+        TlsTrust::WebPkiRoots => builder.certificate_store(CertificateStore::WebpkiRoots),
+        TlsTrust::CustomRoots(ders) => {
+            let mut builder = builder.certificate_store(CertificateStore::None);
+            for der in ders {
+                builder = builder
+                    .add_root_certificate(Certificate::from_der(der.clone()).map_err(tls_err)?);
+            }
+            builder
         }
-    }
+    };
     builder.build_rustls().map_err(tls_err)
 }
 
@@ -574,6 +580,26 @@ fn choose_oauth_mechanism(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_trust_builds_tls_parameters() {
+        for trust in [
+            TlsTrust::Platform,
+            TlsTrust::WebPkiRoots,
+            TlsTrust::CustomRoots(Vec::new()),
+        ] {
+            let config = SmtpConfig {
+                trust,
+                ..SmtpConfig::new("smtp.example.org")
+            };
+            assert!(tls_parameters(&config).is_ok(), "{:?}", config.trust);
+        }
+        let bad = SmtpConfig {
+            trust: TlsTrust::CustomRoots(vec![b"not a certificate".to_vec()]),
+            ..SmtpConfig::new("smtp.example.org")
+        };
+        assert!(tls_parameters(&bad).is_err());
+    }
 
     #[test]
     fn normalizes_line_endings() {

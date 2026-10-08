@@ -776,7 +776,7 @@ impl Service {
         if addresses.is_empty() {
             return;
         }
-        let at = crate::engine::unix_now();
+        let at = nail_util::time::unix_now();
         // Counted for ranking; unknown ones go to the Collected book (M3a).
         let book = message(
             self.inner.locale.as_deref(),

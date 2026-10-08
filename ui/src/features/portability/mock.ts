@@ -401,12 +401,15 @@ function newReport(id: string, kind: JobKind, source: string | null, target: str
   return report;
 }
 
+/** The phases of a job that copies items (exports, restores; imports scan first). */
+const COPY_PHASES: readonly JobPhase[] = ["reading", "writing", "finishing"];
+
 function startJob(
   core: MockCore,
   kind: JobKind,
   path: string,
   total: number,
-  phases: JobPhase[],
+  phases: readonly JobPhase[],
   report: JobReport,
 ): Response {
   const state = core.data.features.portability;
@@ -426,7 +429,7 @@ function startJob(
     },
     report: null,
   };
-  state.jobs[report.job_id] = { status, phases, step: 0, total, report };
+  state.jobs[report.job_id] = { status, phases: [...phases], step: 0, total, report };
   if (state.autoProgress)
     core.later(() => {
       tick(core, report.job_id);
@@ -550,14 +553,7 @@ function startImport(core: MockCore, source: ImportSource, options: ImportOption
   c.accounts = preview.accounts.length;
   c.rules = preview.rules.length;
   const total = Math.max(1, c.messages + c.contacts + c.events + c.tasks);
-  return startJob(
-    core,
-    "import",
-    source.path,
-    total,
-    ["scanning", "reading", "writing", "finishing"],
-    report,
-  );
+  return startJob(core, "import", source.path, total, ["scanning", ...COPY_PHASES], report);
 }
 
 function exportCount(core: MockCore, source: ExportSource): number {
@@ -637,14 +633,7 @@ function startExport(
   }
   report.counts.files = Math.max(1, report.counts.folders);
   state.existing.push(path);
-  return startJob(
-    core,
-    "export",
-    path,
-    Math.max(1, count),
-    ["reading", "writing", "finishing"],
-    report,
-  );
+  return startJob(core, "export", path, Math.max(1, count), COPY_PHASES, report);
 }
 
 // ---------------------------------------------------------------------------
@@ -859,14 +848,7 @@ function startRestore(core: MockCore, { path, passphrase, contents }: RestoreReq
     accounts_needing_secrets: planned.accountsNeedingSecrets,
     restart_required: planned.restartRequired,
   };
-  return startJob(
-    core,
-    "restore",
-    path,
-    Math.max(1, report.counts.files),
-    ["reading", "writing", "finishing"],
-    report,
-  );
+  return startJob(core, "restore", path, Math.max(1, report.counts.files), COPY_PHASES, report);
 }
 
 // ---------------------------------------------------------------------------

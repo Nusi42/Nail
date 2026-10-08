@@ -15,6 +15,7 @@
  * and record a run). With `host: null` the host-backed requests answer
  * `unsupported`, as the core did at the contract stage.
  */
+import { CPU_QUOTA_MS_PER_HOUR, PLUGIN_HOOK_KIND_VALUES } from "../../api/generated";
 import type {
   AttachmentInfo,
   Draft,
@@ -60,8 +61,7 @@ export function isPluginExtensionRequest(request: Request): request is PluginExt
   return (PLUGIN_EXTENSION_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/** CPU time a plug-in may use per hour (`CPU_QUOTA_MS_PER_HOUR`). */
-export const CPU_QUOTA_MS_PER_HOUR = 120_000;
+export { CPU_QUOTA_MS_PER_HOUR } from "../../api/generated";
 /** How long a send veto can be overridden (ms; the core keeps 10 minutes). */
 export const VETO_TTL_MS = 10 * 60_000;
 
@@ -305,7 +305,7 @@ function jobStatus(core: MockCore, plugin: PluginInfo): PluginJobStatus[] {
 
 function activityResponse(core: MockCore, plugin: PluginInfo): PluginActivity {
   const activity = activityOf(core, plugin.id);
-  const order: PluginHookKind[] = ["arrival", "beforeSend", "open"];
+  const order = PLUGIN_HOOK_KIND_VALUES;
   return {
     plugin_id: plugin.id,
     jobs: jobStatus(core, plugin),

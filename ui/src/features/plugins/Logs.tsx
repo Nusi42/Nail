@@ -3,6 +3,7 @@
  * diagnostics and its API calls (`ListPluginLogs`, live through
  * `PluginLogLine`), filterable by level, clearable.
  */
+import { PLUGIN_LOG_LEVEL_VALUES } from "../../api/generated";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
@@ -13,7 +14,7 @@ import { useClient } from "../../state/queries";
 import { pluginKeys, usePluginLogs } from "./queries";
 import { RefreshButton } from "../../widgets/RefreshButton";
 
-export const LOG_LEVELS: readonly PluginLogLevel[] = ["debug", "info", "warn", "error"];
+export const LOG_LEVELS: readonly PluginLogLevel[] = PLUGIN_LOG_LEVEL_VALUES;
 
 /** Whether a line is shown at the chosen minimum level. */
 export function atLeast(entry: PluginLogEntry, level: PluginLogLevel): boolean {

@@ -7,6 +7,7 @@ import type { SystemAppearance } from "../../api/generated";
 import appearanceVectors from "../../../../crates/nail-api/fixtures/ts-vectors/appearance.json";
 import themeIdVectors from "../../../../crates/nail-api/fixtures/ts-vectors/theme-id.json";
 import { describeVectors } from "../../test/vectors";
+import { hexContrastRatio, parseHex } from "../../theme/contrast";
 import {
   accentIgnored,
   activeTheme,
@@ -18,6 +19,11 @@ import {
 } from "./model";
 
 describeVectors("appearance", appearanceVectors, {
+  parseHex,
+  hexContrastRatio: (a: string, b: string) => {
+    const ratio = hexContrastRatio(a, b);
+    return ratio === null ? null : Math.round(ratio * 1e6) / 1e6;
+  },
   isHexColor,
   isThemeId,
   isThemeName,

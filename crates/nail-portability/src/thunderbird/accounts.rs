@@ -154,13 +154,9 @@ fn tls_of(
 
 /// The OAuth2 provider Nail knows for a host.
 fn oauth_provider(host: &str) -> Option<&'static str> {
-    let host = host.to_ascii_lowercase();
-    if host.ends_with("gmail.com") || host.ends_with("googlemail.com") {
+    if nail_api::hosts::is_google_mail_host(host) {
         Some("google")
-    } else if host.ends_with("office365.com")
-        || host.ends_with("outlook.com")
-        || host.ends_with("hotmail.com")
-    {
+    } else if nail_api::hosts::is_microsoft_mail_host(host) {
         Some("microsoft")
     } else {
         None
@@ -466,6 +462,16 @@ pub fn mark_duplicates(proposals: &mut [AccountProposal], existing: &[AccountCon
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oauth_providers_need_a_domain_boundary() {
+        assert_eq!(oauth_provider("imap.gmail.com"), Some("google"));
+        assert_eq!(oauth_provider("outlook.office365.com"), Some("microsoft"));
+        assert_eq!(oauth_provider("smtp-mail.outlook.com"), Some("microsoft"));
+        // Copies of the rule once matched any suffix.
+        assert_eq!(oauth_provider("notgmail.com"), None);
+        assert_eq!(oauth_provider("mail.myoutlook.com"), None);
+    }
 
     const PREFS: &str = r#"
 user_pref("mail.accountmanager.accounts", "account1,account2,account3,account4");

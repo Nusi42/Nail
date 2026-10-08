@@ -672,10 +672,7 @@ fn enqueue_log(
 /// Host lines for log lines dropped because the writer queue was full.
 fn dropped_lines(dropped: &Mutex<HashMap<PluginId, u64>>) -> Vec<HostLogLine> {
     let taken = std::mem::take(&mut *lock(dropped));
-    let at_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or_default();
+    let at_ms = i64::try_from(nail_util::time::unix_now_millis()).unwrap_or(i64::MAX);
     taken
         .into_iter()
         .map(|(plugin_id, count)| HostLogLine {

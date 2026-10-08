@@ -45,7 +45,7 @@
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use nail_api::engine::SecretStore;
 use nail_api::security::{VaultPhase, VaultState, VaultStatus};
@@ -83,13 +83,7 @@ type Progress<'a> = dyn FnMut(&VaultStatus) -> ControlFlow<()> + 'a;
 /// The outcome of a migration phase: paused (`Break`) or done (`Continue`).
 type PhaseResult = Result<ControlFlow<()>, VaultError>;
 
-const PHASES: [VaultPhase; 3] = [VaultPhase::Database, VaultPhase::Blobs, VaultPhase::Index];
-
-fn now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
+const PHASES: [VaultPhase; 3] = VaultPhase::ALL;
 
 fn encode_error(err: &VaultError) -> String {
     format!("{}|{err}", err.code().as_str())
@@ -331,7 +325,7 @@ impl Vault {
         record.phase = Some(VaultPhase::Database);
         record.done = 0;
         record.total = 0;
-        record.started_at = Some(now());
+        record.started_at = Some(nail_util::time::unix_now());
         record.finished_at = None;
         record.error = None;
         self.store.set_vault_state(&record)?;
@@ -420,7 +414,7 @@ impl Vault {
         record.done = 0;
         record.total = 0;
         record.error = None;
-        record.finished_at = Some(now());
+        record.finished_at = Some(nail_util::time::unix_now());
         if seal {
             record.state = VaultState::Encrypted;
             self.store.set_vault_state(&record)?;
@@ -599,7 +593,7 @@ impl Vault {
             Ok(_) => {
                 let file = self.file.update(|file| {
                     if let Some(entry) = file.recovery.as_mut() {
-                        entry.verified_at = Some(recovery::now_rfc3339());
+                        entry.verified_at = Some(nail_util::time::rfc3339_now());
                     }
                 })?;
                 Ok((true, recovery::status_of(&file)))

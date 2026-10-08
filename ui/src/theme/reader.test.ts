@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HtmlDarkMode, ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { resolveTokenRefs } from "./compile";
+import { hexContrastRatio } from "./contrast";
 import { READER_CSP, isDesignedMail, readerCsp, readerCss, readerDocument } from "./reader";
 
 /** The default theme with another dark-mode handling of HTML mail. */
@@ -142,15 +143,5 @@ describe("designed mail", () => {
   });
 });
 
-/** WCAG contrast ratio of two `#rrggbb` colours. */
-function contrast(a: string, b: string): number {
-  const lum = (hex: string) => {
-    const [r, g, bl] = [1, 3, 5].map((i) => {
-      const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (bl ?? 0);
-  };
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
-}
+/** WCAG contrast ratio of two hex colours. */
+const contrast = (a: string, b: string): number => hexContrastRatio(a, b) ?? 0;

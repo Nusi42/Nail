@@ -9,7 +9,6 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "./test/axe";
 import type { LayoutNode, ResolvedLayout } from "./api/generated";
-import { emptyComposer } from "./state/compose";
 import { appRegistry } from "./features/registry";
 import { ContextMenuHost } from "./features/menus/ContextMenuHost";
 import { RemoteLogin } from "./features/remote/Login";
@@ -33,22 +32,16 @@ import {
 import { must } from "./test/must";
 import { snoozeForADay } from "./test/env";
 import { INBOX } from "./test/mockIds";
+import { mailEnv } from "./test/mailEnv";
 
 beforeAll(() => Promise.all([loadHtmlEditor(), loadMarkdownEditor()]));
 stubElementSizesEachTest();
 
-function mailEnv(): Env {
-  const env = createEnv({
-    state: {
-      activeAccountId: "acc-personal",
-      activeFolderId: INBOX,
-      composer: { ...emptyComposer(), identityId: "ada@example.org" },
-    },
-  });
+/** The shared mail start state, with the work account's Sieve settings filled in. */
+function sweepEnv(): Env {
+  const env = mailEnv();
   const work = env.transport.data.accountsConfig.accounts.find((a) => a.id === "acc-work");
   if (work) work.sieve = { enabled: null, host: null, port: null, tls: null, script_name: null };
-  const first = env.transport.data.messages.find((m) => m.folder_id === INBOX);
-  if (first) env.store.getState().selectMessage(first.id);
   return env;
 }
 
@@ -87,7 +80,7 @@ describe("axe: windows of the default layout", () => {
   it.each(cases)(
     "window %s (tabs %s #%i) has no violations",
     async (name, tabKey, tab) => {
-      const env = mailEnv();
+      const env = sweepEnv();
       if (tabKey !== "") env.store.getState().setActiveTab(tabKey, tab);
       const { container } = renderWithProviders(<WindowView layout={layout} name={name} />, env);
       await settleQueries(env, 20);
@@ -107,7 +100,7 @@ describe("axe: dialogs", () => {
   const dialogs = Object.keys(appRegistry.dialogs).sort();
 
   it.each(dialogs)("dialog %s has no violations", async (name) => {
-    const env = mailEnv();
+    const env = sweepEnv();
     const selected = env.store.getState().selectedMessageId;
     triageStoreFor(env.store)
       .getState()
@@ -147,7 +140,7 @@ describe("axe: M2c widgets", () => {
   it.each(kinds)(
     "%s has no violations",
     async (kind) => {
-      const env = mailEnv();
+      const env = sweepEnv();
       const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
       if (message) {
         message.headers_only = true;
@@ -176,7 +169,7 @@ describe("axe: M2c widgets", () => {
 
 describe("axe: context menu, composer modes and login", () => {
   it("the open context menu has no violations", async () => {
-    const env = mailEnv();
+    const env = sweepEnv();
     const { container } = renderWithProviders(
       <>
         <NodeView node={widget("message-list")} path="t/0" />
@@ -200,7 +193,7 @@ describe("axe: context menu, composer modes and login", () => {
   });
 
   it.each(["html", "markdown"] as const)("the %s composer has no violations", async (mode) => {
-    const env = mailEnv();
+    const env = sweepEnv();
     richStoreFor(env.store).setState({ mode, html: "<p>Hi</p>", markdown: "Hi" });
     const { container } = renderWithProviders(<NodeView node={widget("composer")} path="t" />, env);
     await settleQueries(env, 20);
@@ -222,7 +215,7 @@ describe("axe: context menu, composer modes and login", () => {
 describe("keyboard and motion", () => {
   it("keeps Tab inside the active window and gives focus back on close", async () => {
     const user = userEvent.setup();
-    const env = mailEnv();
+    const env = sweepEnv();
     const layout = env.transport.data.layout;
     const opener = document.createElement("button");
     document.body.append(opener);
@@ -251,7 +244,7 @@ describe("keyboard and motion", () => {
 
   it("moves along a toolbar with the arrow keys", async () => {
     const user = userEvent.setup();
-    const env = mailEnv();
+    const env = sweepEnv();
     renderWithProviders(
       <NodeView node={widget("toolbar", { options: { toolbar: "main" } })} path="t" />,
       env,

@@ -6,7 +6,7 @@
  * script does both).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "@playwright/test";
@@ -48,6 +48,16 @@ export function freePort(): number {
  */
 export function buildOutputDir(name: string): string {
   return path.join(buildBase(process.env, repoRoot), name);
+}
+
+/**
+ * `<build dir>/screens/<folder>/<name>.png` for a test's screenshot (the
+ * directory is created; characters unsafe in file names become `-`).
+ */
+export function screenshotFile(folder: string, name: string): string {
+  const dir = buildOutputDir(path.join("screens", folder));
+  mkdirSync(dir, { recursive: true });
+  return path.join(dir, `${name.replace(/[^\w.-]+/g, "-")}.png`);
 }
 
 /** A fresh temporary directory. */

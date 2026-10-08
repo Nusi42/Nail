@@ -12,11 +12,13 @@ import { tempDir, repoRoot, type NailServer, nailOnDemand } from "../support/nai
 import { rpcOk } from "../support/remote";
 import {
   accountSectionNamed,
+  closeWindow,
+  messageRows,
+  openMail,
   openSettingsTab,
   showView,
   viewRegion,
-  messageRows,
-  openMail,
+  windowById,
 } from "../support/views";
 import { defined } from "../support/defined";
 
@@ -127,12 +129,6 @@ function settingsTab(page: Page, tab: string): Promise<Locator> {
   return openSettingsTab(page, tab);
 }
 
-async function closeWindow(page: Page, name: string) {
-  const window = page.locator(`[data-part="window"][data-window="${name}"]`);
-  await window.locator('[data-part="window.close"]').click();
-  await expect(window).toBeHidden();
-}
-
 /** Runs the import wizard on a typed path; answers the dialog. */
 async function importWith(
   page: Page,
@@ -165,9 +161,9 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   await openApp(page, server);
   const dialog = await importWith(page, "mbox file", "File", writeMbox(files), "Old mail");
   await expect(dialog.getByText("2 messages")).toBeVisible();
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await importWith(page, "Maildir folder", "Folder", writeMaildir(files), "Server copy");
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await showView(page, "Mail");
 
   const folders = await localFolders(server);
@@ -227,7 +223,7 @@ test("a Thunderbird profile offers its accounts and imports folders and address 
   await expect(proposals.getByText("Added. Sign in to start syncing.").first()).toBeVisible();
   const filters = dialog.getByRole("region", { name: "Filters found in Thunderbird" });
   await expect(filters.getByRole("checkbox")).toHaveCount(4);
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await showView(page, "Mail");
 
   const accounts = await rpcOk(server, { type: "GetAccountsConfig" }, "AccountsConfig");
@@ -248,7 +244,7 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
   const files = tempDir("export");
   await openApp(page, server);
   await importWith(page, "mbox file", "File", writeMbox(files), "Source");
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await showView(page, "Mail");
 
   // Export the imported folder (selected in the folder tree).
@@ -265,12 +261,12 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
   await dialog.getByLabel("Save as").fill(first);
   await dialog.getByRole("button", { name: "Export", exact: true }).click();
   await expect(dialog.getByText(/^Export: Done/)).toBeVisible({ timeout: 60_000 });
-  await closeWindow(page, "export-wizard");
+  await closeWindow(windowById(page, "export-wizard"));
   await showView(page, "Mail");
 
   // Import the file again and export the new folder.
   await importWith(page, "mbox file", "File", first, "Again");
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await showView(page, "Mail");
   const again = (await localFolders(server)).find((f) => f.path === "Again/first");
   expect(again).toBeDefined();
@@ -304,7 +300,7 @@ test("a backup restores into a wiped Nail", async ({ page }) => {
   const passphrase = "correct horse battery staple";
   await openApp(page, server);
   await importWith(page, "mbox file", "File", writeMbox(files), "Archive");
-  await closeWindow(page, "import-wizard");
+  await closeWindow(windowById(page, "import-wizard"));
   await showView(page, "Mail");
   let settings = await settingsTab(page, "Backups");
   await settings.getByRole("button", { name: "Back up…" }).click();

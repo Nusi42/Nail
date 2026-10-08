@@ -1,9 +1,11 @@
 /**
- * The recovery-key and smartcard ports over the vectors generated from
- * `nail_api::recovery` / `nail_api::smartcard` (`security.json`).
+ * The recovery-key, smartcard and sender-authentication ports over the
+ * vectors generated from `nail_api::recovery` / `nail_api::smartcard` /
+ * `AuthResults::summary` (`security.json`).
  */
 import securityVectors from "../../../../crates/nail-api/fixtures/ts-vectors/security.json";
 import { describeVectors } from "../../test/vectors";
+import { authSummary } from "./model";
 import { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
 import { pinIsPlausible, smartcardSettingsIssue } from "./smartcardModel";
 
@@ -15,4 +17,5 @@ describeVectors("security", securityVectors, {
   },
   smartcardSettingsIssue,
   pinIsPlausible,
+  authSummary,
 });

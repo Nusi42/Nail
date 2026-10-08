@@ -3,41 +3,81 @@
 import type { ActionAvailability } from "./ActionAvailability";
 import type { ActionKind } from "./ActionKind";
 import type { ActionPolicyMode } from "./ActionPolicyMode";
+import type { ActionTargetKind } from "./ActionTargetKind";
 import type { AddressField } from "./AddressField";
 import type { AgendaLayout } from "./AgendaLayout";
+import type { AlarmAction } from "./AlarmAction";
+import type { AttachmentRisk } from "./AttachmentRisk";
+import type { AttendeeRole } from "./AttendeeRole";
 import type { AuthMethod } from "./AuthMethod";
 import type { AuthResult } from "./AuthResult";
+import type { AuthVerdict } from "./AuthVerdict";
+import type { AutomaticRepliesIssue } from "./AutomaticRepliesIssue";
+import type { AutomaticRepliesStatus } from "./AutomaticRepliesStatus";
 import type { BackupContents } from "./BackupContents";
 import type { BackupIssue } from "./BackupIssue";
 import type { BackupItem } from "./BackupItem";
+import type { BadgeSource } from "./BadgeSource";
+import type { BusyKind } from "./BusyKind";
+import type { CancelScope } from "./CancelScope";
+import type { CategoryColor } from "./CategoryColor";
 import type { ColorScheme } from "./ColorScheme";
+import type { ComposerEditOp } from "./ComposerEditOp";
 import type { ComposerMode } from "./ComposerMode";
+import type { ConfirmationSource } from "./ConfirmationSource";
 import type { ConfirmationState } from "./ConfirmationState";
+import type { ContactKind } from "./ContactKind";
+import type { CryptoPreference } from "./CryptoPreference";
+import type { CryptoTechnology } from "./CryptoTechnology";
 import type { DefaultAppState } from "./DefaultAppState";
 import type { DefaultAppTarget } from "./DefaultAppTarget";
 import type { Density } from "./Density";
 import type { DiagnosticsIssue } from "./DiagnosticsIssue";
 import type { DiagnosticsItem } from "./DiagnosticsItem";
 import type { DiagnosticsOptions } from "./DiagnosticsOptions";
+import type { DockSide } from "./DockSide";
+import type { DuplicateReason } from "./DuplicateReason";
 import type { EditIssue } from "./EditIssue";
 import type { EditKind } from "./EditKind";
+import type { EditScope } from "./EditScope";
+import type { EventStatus } from "./EventStatus";
+import type { ExchangeCategoryIssue } from "./ExchangeCategoryIssue";
+import type { ExchangeEngine } from "./ExchangeEngine";
+import type { ExchangeMailboxIssue } from "./ExchangeMailboxIssue";
+import type { ExchangeMailboxKind } from "./ExchangeMailboxKind";
+import type { ExchangeMailboxState } from "./ExchangeMailboxState";
+import type { ExchangeRulesState } from "./ExchangeRulesState";
+import type { ExchangeWarning } from "./ExchangeWarning";
 import type { ExportFormat } from "./ExportFormat";
+import type { ExternalAudience } from "./ExternalAudience";
 import type { FavoriteFolder } from "./FavoriteFolder";
 import type { FolderPaneSectionKind } from "./FolderPaneSectionKind";
 import type { FolderRole } from "./FolderRole";
+import type { FreeBusyIssue } from "./FreeBusyIssue";
+import type { GmailCategory } from "./GmailCategory";
+import type { GmailLabelIssue } from "./GmailLabelIssue";
+import type { GmailLabelListVisibility } from "./GmailLabelListVisibility";
+import type { GmailMessageListVisibility } from "./GmailMessageListVisibility";
 import type { HeaderDetail } from "./HeaderDetail";
 import type { HistoryScope } from "./HistoryScope";
 import type { ImportCollectionKind } from "./ImportCollectionKind";
 import type { ImportFormat } from "./ImportFormat";
+import type { InferenceClassification } from "./InferenceClassification";
 import type { InstallKind } from "./InstallKind";
 import type { InstallScope } from "./InstallScope";
+import type { InvitationResponse } from "./InvitationResponse";
 import type { IssueSeverity } from "./IssueSeverity";
+import type { ItemDisplay } from "./ItemDisplay";
+import type { ItipIssue } from "./ItipIssue";
+import type { ItipMethod } from "./ItipMethod";
 import type { JobKind } from "./JobKind";
 import type { JobPhase } from "./JobPhase";
 import type { JobState } from "./JobState";
 import type { JunkIssue } from "./JunkIssue";
 import type { JunkSettings } from "./JunkSettings";
 import type { JunkSource } from "./JunkSource";
+import type { KeyLookupPolicy } from "./KeyLookupPolicy";
+import type { KeyLookupSource } from "./KeyLookupSource";
 import type { ListFilter } from "./ListFilter";
 import type { MailActionIssue } from "./MailActionIssue";
 import type { MailActionKind } from "./MailActionKind";
@@ -46,15 +86,29 @@ import type { MapiResult } from "./MapiResult";
 import type { MboxVariant } from "./MboxVariant";
 import type { McpScope } from "./McpScope";
 import type { MessageFlag } from "./MessageFlag";
+import type { MessageWarning } from "./MessageWarning";
 import type { NotificationIssue } from "./NotificationIssue";
 import type { NotificationSettings } from "./NotificationSettings";
+import type { NotifyFolders } from "./NotifyFolders";
 import type { PageOrientation } from "./PageOrientation";
 import type { PageSize } from "./PageSize";
+import type { ParticipationStatus } from "./ParticipationStatus";
+import type { PimIssue } from "./PimIssue";
+import type { PimItemSync } from "./PimItemSync";
+import type { PimSourceKind } from "./PimSourceKind";
+import type { PimSourceState } from "./PimSourceState";
 import type { PinPromptCloseReason } from "./PinPromptCloseReason";
 import type { PinPurpose } from "./PinPurpose";
+import type { PluginCommandSurface } from "./PluginCommandSurface";
 import type { PluginEventName } from "./PluginEventName";
 import type { PluginHookKind } from "./PluginHookKind";
+import type { PluginJobOutcome } from "./PluginJobOutcome";
+import type { PluginLogLevel } from "./PluginLogLevel";
+import type { PluginLogSource } from "./PluginLogSource";
+import type { PluginManifestIssueKind } from "./PluginManifestIssueKind";
 import type { PluginPermission } from "./PluginPermission";
+import type { PluginRunState } from "./PluginRunState";
+import type { PluginStopReason } from "./PluginStopReason";
 import type { PopOutChange } from "./PopOutChange";
 import type { PopOutIssue } from "./PopOutIssue";
 import type { PortabilityIssueCode } from "./PortabilityIssueCode";
@@ -66,12 +120,15 @@ import type { RemoteAccessPreset } from "./RemoteAccessPreset";
 import type { RemoteAuthMethod } from "./RemoteAuthMethod";
 import type { RestoreEffect } from "./RestoreEffect";
 import type { RulePlacement } from "./RulePlacement";
+import type { RuleTrigger } from "./RuleTrigger";
 import type { SessionEndReason } from "./SessionEndReason";
 import type { SieveState } from "./SieveState";
 import type { SmartcardError } from "./SmartcardError";
 import type { SmartcardKeyUsage } from "./SmartcardKeyUsage";
 import type { SmartcardObjectKind } from "./SmartcardObjectKind";
 import type { SmartcardSettingsIssue } from "./SmartcardSettingsIssue";
+import type { SspiPackage } from "./SspiPackage";
+import type { TaskStatus } from "./TaskStatus";
 import type { TextOp } from "./TextOp";
 import type { ThemeKind } from "./ThemeKind";
 import type { ThemeMode } from "./ThemeMode";
@@ -79,12 +136,17 @@ import type { ThemeOverridesIssue } from "./ThemeOverridesIssue";
 import type { ThemeProblem } from "./ThemeProblem";
 import type { ThemeSource } from "./ThemeSource";
 import type { TlsMode } from "./TlsMode";
+import type { Transparency } from "./Transparency";
+import type { TrustDecision } from "./TrustDecision";
+import type { TrustLevel } from "./TrustLevel";
 import type { UiStateIssue } from "./UiStateIssue";
 import type { UpdateChannel } from "./UpdateChannel";
 import type { UpdateDisabledReason } from "./UpdateDisabledReason";
 import type { UpdateFailure } from "./UpdateFailure";
 import type { VacationIssue } from "./VacationIssue";
 import type { VacationSettings } from "./VacationSettings";
+import type { VaultPhase } from "./VaultPhase";
+import type { Visibility } from "./Visibility";
 import type { Weekday } from "./Weekday";
 import type { WindowFrameIssue } from "./WindowFrameIssue";
 import type { WindowInstances } from "./WindowInstances";
@@ -208,6 +270,15 @@ export const IMAGE_TYPES = ["image/png","image/jpeg","image/gif","image/webp"] a
 
 /** Largest attachment a draft may carry (bytes). */
 export const MAX_ATTACHMENT_BYTES = 26214400 as const;
+
+/** Every `PluginHookKind`, in the contract's order. */
+export const PLUGIN_HOOK_KIND_VALUES = ["arrival","beforeSend","open"] as const satisfies readonly PluginHookKind[];
+
+/** Every `PluginCommandSurface`, in the contract's order. */
+export const PLUGIN_COMMAND_SURFACE_VALUES = ["list","reader","composer","global"] as const satisfies readonly PluginCommandSurface[];
+
+/** Every `InvitationResponse`, in the contract's order. */
+export const INVITATION_RESPONSE_VALUES = ["accept","tentative","decline"] as const satisfies readonly InvitationResponse[];
 
 /** The default port of each protocol for each TLS mode (`default_port`). */
 export const DEFAULT_PORTS = {"ews":{"implicit":443,"plaintext":80,"starttls":80},"gmail":{"implicit":443,"plaintext":80,"starttls":80},"graph":{"implicit":443,"plaintext":80,"starttls":80},"imap":{"implicit":993,"plaintext":143,"starttls":143},"pop3":{"implicit":995,"plaintext":110,"starttls":110},"smtp":{"implicit":465,"plaintext":587,"starttls":587}} as const satisfies Readonly<Record<MailProtocol, Readonly<Record<TlsMode, number>>>>;
@@ -515,6 +586,9 @@ export const MAPI_RESULT_VALUES = ["success","user-abort","failure","login-failu
 /** The Fluent id of each `MapiResult`'s label. */
 export const MAPI_RESULT_MESSAGE_IDS = {"access-denied":"mapi-result-access-denied","attachment-not-found":"mapi-result-attachment-not-found","attachment-open-failure":"mapi-result-attachment-open-failure","attachment-too-large":"mapi-result-attachment-too-large","bad-recip-type":"mapi-result-bad-recip-type","failure":"mapi-result-failure","insufficient-memory":"mapi-result-insufficient-memory","invalid-recips":"mapi-result-invalid-recips","login-failure":"mapi-result-login-failure","not-supported":"mapi-result-not-supported","success":"mapi-result-success","text-too-large":"mapi-result-text-too-large","too-many-files":"mapi-result-too-many-files","too-many-recipients":"mapi-result-too-many-recipients","unknown-recipient":"mapi-result-unknown-recipient","user-abort":"mapi-result-user-abort"} as const satisfies Readonly<Record<MapiResult, string>>;
 
+/** File name of an update channel's manifest (`<channel>/latest.json`). */
+export const UPDATE_MANIFEST_FILE = "latest.json" as const;
+
 /** Longest category name Exchange accepts (characters). */
 export const MAX_CATEGORY_NAME = 255 as const;
 
@@ -529,6 +603,12 @@ export const MAX_LABEL_NAME = 225 as const;
 
 /** The colours Gmail accepts for labels (background and text alike, lower case). */
 export const GMAIL_LABEL_PALETTE = ["#000000","#434343","#666666","#999999","#cccccc","#efefef","#f3f3f3","#ffffff","#fb4c2f","#ffad47","#fad165","#16a766","#43d692","#4a86e8","#a479e2","#f691b3","#f6c5be","#ffe6c7","#fef1d1","#b9e4d0","#c6f3de","#c9daf8","#e4d7f5","#fcdee8","#efa093","#ffd6a2","#fce8b3","#89d3b2","#a0eac9","#a4c2f4","#d0bcf1","#fbc8d9","#e66550","#ffbc6b","#fcda83","#44b984","#68dfa9","#6d9eeb","#b694e8","#f7a7c0","#cc3a21","#eaa041","#f2c960","#149e60","#3dc789","#3c78d8","#8e63ce","#e07798","#ac2b16","#cf8933","#d5ae49","#0b804b","#2a9c68","#285bac","#653e9b","#b65775","#822111","#a46a21","#aa8831","#076239","#1a764d","#1c4587","#41236d","#83334c","#464646","#e7e7e7","#0d3472","#b6cff5","#0d3b44","#98d7e4","#3d188e","#e3d7ff","#711a36","#fbd3e0","#8a1c0a","#f2b2a8","#7a2e0b","#ffc8af","#7a4706","#ffdeb5","#594c05","#fbe983","#684e07","#fdedc1","#0b4f30","#b3efd3","#04502e","#a2dcc1","#c2c2c2","#4986e7","#2da2bb","#b99aff","#994a64","#f691b2","#ff7537","#ffad46","#662e37","#ebdbde","#cca6ac","#094228","#42d692","#16a765"] as const;
+
+/** Gmail's system label ids (`gmail::system::ALL`); user labels cannot take these names. */
+export const GMAIL_SYSTEM_LABELS = ["INBOX","SENT","DRAFT","SPAM","TRASH","UNREAD","STARRED","IMPORTANT","CHAT","CATEGORY_PERSONAL","CATEGORY_SOCIAL","CATEGORY_PROMOTIONS","CATEGORY_UPDATES","CATEGORY_FORUMS"] as const;
+
+/** The system label of each inbox category (`GmailCategory::label`). */
+export const GMAIL_CATEGORY_LABELS = {"forums":"CATEGORY_FORUMS","primary":"CATEGORY_PERSONAL","promotions":"CATEGORY_PROMOTIONS","social":"CATEGORY_SOCIAL","updates":"CATEGORY_UPDATES"} as const satisfies Readonly<Record<GmailCategory, string>>;
 
 /** Every `TextOp`, in the contract's order. */
 export const TEXT_OP_VALUES = ["contains","equals","starts-with","ends-with","regex"] as const satisfies readonly TextOp[];
@@ -596,6 +676,15 @@ export const JUNK_SOURCE_VALUES = ["server","classifier","user"] as const satisf
 /** Every `Weekday`, in the contract's order. */
 export const WEEKDAY_VALUES = ["mon","tue","wed","thu","fri","sat","sun"] as const satisfies readonly Weekday[];
 
+/** Every `NotifyFolders`, in the contract's order. */
+export const NOTIFY_FOLDERS_VALUES = ["inbox","all"] as const satisfies readonly NotifyFolders[];
+
+/** IMAP keyword of messages marked or classified as junk. */
+export const JUNK_KEYWORD = "$Junk" as const;
+
+/** IMAP keyword of messages marked as not junk. */
+export const NOT_JUNK_KEYWORD = "$NotJunk" as const;
+
 /** The vacation reply until the user changes it (`VacationSettings::default()`). */
 export const DEFAULT_VACATION = {"enabled":false,"subject":"","body":"","start_date":null,"end_date":null,"days":7,"addresses":[],"from":null,"skip_lists":true} as const satisfies Readonly<VacationSettings>;
 
@@ -613,6 +702,237 @@ export const SIEVE_STATE_VALUES = ["disabled","unavailable","pending","uploading
 
 /** Every `RulePlacement`, in the contract's order. */
 export const RULE_PLACEMENT_VALUES = ["server","client","not-expressible"] as const satisfies readonly RulePlacement[];
+
+/** Most undo entries kept per history scope. */
+export const MAX_EDIT_HISTORY = 50 as const;
+
+/** Longest UI-state key (characters). */
+export const MAX_UI_STATE_KEY_CHARS = 64 as const;
+
+/** Largest UI-state value (bytes of JSON). */
+export const MAX_UI_STATE_VALUE_BYTES = 16384 as const;
+
+/** Most keys in `ui-state.json`. */
+export const MAX_UI_STATE_KEYS = 512 as const;
+
+/** Largest pop-out context (bytes of JSON). */
+export const MAX_POP_OUT_CONTEXT_BYTES = 16384 as const;
+
+/** Longest pop-out window title (characters). */
+export const MAX_POP_OUT_TITLE_CHARS = 256 as const;
+
+/** Most recent actions the palette remembers. */
+export const MAX_RECENT_ACTIONS = 20 as const;
+
+/** Most attendees of one free/busy query. */
+export const MAX_FREE_BUSY_ATTENDEES = 100 as const;
+
+/** Longest range of one free/busy query (days). */
+export const MAX_FREE_BUSY_DAYS = 92 as const;
+
+/** Default undo-send delay (`AccountsConfig::DEFAULT_UNDO_SEND_SECS`, seconds). */
+export const DEFAULT_UNDO_SEND_SECS = 10 as const;
+
+/** CPU time a plug-in's background jobs may use per hour (ms). */
+export const CPU_QUOTA_MS_PER_HOUR = 120000 as const;
+
+/** Longest search query (bytes). */
+export const MAX_QUERY_BYTES = 4096 as const;
+
+/** Deepest nesting of parentheses and `NOT` / `-` in a search query. */
+export const MAX_QUERY_NESTING = 64 as const;
+
+/** Shortest password of a remote-UI user (characters). */
+export const MIN_PASSWORD_CHARS = 12 as const;
+
+/** The virtual account of all accounts (`AccountId::ALL`). */
+export const ALL_ACCOUNTS = "all" as const;
+
+/** Gmail's consumer mail domains. */
+export const GMAIL_DOMAINS = ["gmail.com","googlemail.com"] as const;
+
+/** The domains of Exchange Online (`is_exchange_online_host`). */
+export const EXCHANGE_ONLINE_DOMAINS = ["office365.com","outlook.office.com","outlook.com"] as const;
+
+/** Microsoft's own domain. */
+export const MICROSOFT_DOMAIN = "microsoft.com" as const;
+
+/** Every `MessageWarning` kind, in the contract's order. */
+export const MESSAGE_WARNING_KINDS = ["link-mismatch","lookalike-domain","suspicious-link","dangerous-attachment"] as const satisfies readonly MessageWarning["kind"][];
+
+/** Every `AuthVerdict`, in the contract's order. */
+export const AUTH_VERDICT_VALUES = ["pass","fail","softfail","neutral","none","temperror","permerror","policy","unknown"] as const satisfies readonly AuthVerdict[];
+
+/** Every `AttachmentRisk`, in the contract's order. */
+export const ATTACHMENT_RISK_VALUES = ["executable","macro","disguised-name","container","shortcut","type-mismatch"] as const satisfies readonly AttachmentRisk[];
+
+/** Every `VaultPhase`, in the contract's order. */
+export const VAULT_PHASE_VALUES = ["database","blobs","index"] as const satisfies readonly VaultPhase[];
+
+/** Every `CryptoTechnology`, in the contract's order. */
+export const CRYPTO_TECHNOLOGY_VALUES = ["openpgp","smime"] as const satisfies readonly CryptoTechnology[];
+
+/** Every `KeyLookupSource`, in the contract's order. */
+export const KEY_LOOKUP_SOURCE_VALUES = ["wkd","keys-openpgp-org"] as const satisfies readonly KeyLookupSource[];
+
+/** Every `TrustLevel`, in the contract's order. */
+export const TRUST_LEVEL_VALUES = ["rejected","unknown","autocrypt-gossip","autocrypt","verified","own"] as const satisfies readonly TrustLevel[];
+
+/** Every `TrustDecision`, in the contract's order. */
+export const TRUST_DECISION_VALUES = ["unset","verified","rejected"] as const satisfies readonly TrustDecision[];
+
+/** Every `CryptoPreference`, in the contract's order. */
+export const CRYPTO_PREFERENCE_VALUES = ["auto","openpgp","smime"] as const satisfies readonly CryptoPreference[];
+
+/** Every `KeyLookupPolicy`, in the contract's order. */
+export const KEY_LOOKUP_POLICY_VALUES = ["off","on-demand","automatic"] as const satisfies readonly KeyLookupPolicy[];
+
+/** Every `ExchangeWarning`, in the contract's order. */
+export const EXCHANGE_WARNING_VALUES = ["ews-retired-online","focused-inbox-unavailable","rooms-need-consent","throttled"] as const satisfies readonly ExchangeWarning[];
+
+/** Every `ExchangeEngine`, in the contract's order. */
+export const EXCHANGE_ENGINE_VALUES = ["graph","ews"] as const satisfies readonly ExchangeEngine[];
+
+/** Every `InferenceClassification`, in the contract's order. */
+export const INFERENCE_CLASSIFICATION_VALUES = ["focused","other"] as const satisfies readonly InferenceClassification[];
+
+/** Every `ExchangeMailboxIssue`, in the contract's order. */
+export const EXCHANGE_MAILBOX_ISSUE_VALUES = ["missing-address","invalid-address","own-mailbox","duplicate","empty-name","nothing-shown"] as const satisfies readonly ExchangeMailboxIssue[];
+
+/** Every `ExchangeMailboxState`, in the contract's order. */
+export const EXCHANGE_MAILBOX_STATE_VALUES = ["pending","synced","access-denied","not-found","error"] as const satisfies readonly ExchangeMailboxState[];
+
+/** Every `ExchangeMailboxKind`, in the contract's order. */
+export const EXCHANGE_MAILBOX_KIND_VALUES = ["shared","delegate"] as const satisfies readonly ExchangeMailboxKind[];
+
+/** Every `ExchangeCategoryIssue`, in the contract's order. */
+export const EXCHANGE_CATEGORY_ISSUE_VALUES = ["missing-name","name-too-long","invalid-name","duplicate-name"] as const satisfies readonly ExchangeCategoryIssue[];
+
+/** Every `CategoryColor`, in the contract's order. */
+export const CATEGORY_COLOR_VALUES = ["none","preset0","preset1","preset2","preset3","preset4","preset5","preset6","preset7","preset8","preset9","preset10","preset11","preset12","preset13","preset14","preset15","preset16","preset17","preset18","preset19","preset20","preset21","preset22","preset23","preset24"] as const satisfies readonly CategoryColor[];
+
+/** Every `AutomaticRepliesIssue`, in the contract's order. */
+export const AUTOMATIC_REPLIES_ISSUE_VALUES = ["empty-internal-reply","empty-external-reply","reply-too-long","invalid-time","missing-schedule","end-before-start"] as const satisfies readonly AutomaticRepliesIssue[];
+
+/** Every `AutomaticRepliesStatus`, in the contract's order. */
+export const AUTOMATIC_REPLIES_STATUS_VALUES = ["disabled","always-enabled","scheduled"] as const satisfies readonly AutomaticRepliesStatus[];
+
+/** Every `ExternalAudience`, in the contract's order. */
+export const EXTERNAL_AUDIENCE_VALUES = ["none","contacts-only","all"] as const satisfies readonly ExternalAudience[];
+
+/** Every `ExchangeRulesState`, in the contract's order. */
+export const EXCHANGE_RULES_STATE_VALUES = ["disabled","pending","syncing","in-sync","failed"] as const satisfies readonly ExchangeRulesState[];
+
+/** Every `SspiPackage`, in the contract's order. */
+export const SSPI_PACKAGE_VALUES = ["negotiate","kerberos","ntlm"] as const satisfies readonly SspiPackage[];
+
+/** Every `GmailLabelIssue`, in the contract's order. */
+export const GMAIL_LABEL_ISSUE_VALUES = ["missing-name","name-too-long","invalid-name","invalid-color","duplicate-name"] as const satisfies readonly GmailLabelIssue[];
+
+/** Every `GmailCategory`, in the contract's order. */
+export const GMAIL_CATEGORY_VALUES = ["primary","social","promotions","updates","forums"] as const satisfies readonly GmailCategory[];
+
+/** Every `GmailLabelListVisibility`, in the contract's order. */
+export const GMAIL_LABEL_LIST_VISIBILITY_VALUES = ["show","show-if-unread","hide"] as const satisfies readonly GmailLabelListVisibility[];
+
+/** Every `GmailMessageListVisibility`, in the contract's order. */
+export const GMAIL_MESSAGE_LIST_VISIBILITY_VALUES = ["show","hide"] as const satisfies readonly GmailMessageListVisibility[];
+
+/** Every `DockSide`, in the contract's order. */
+export const DOCK_SIDE_VALUES = ["left","right","top","bottom"] as const satisfies readonly DockSide[];
+
+/** Every `BadgeSource`, in the contract's order. */
+export const BADGE_SOURCE_VALUES = ["unread","confirmations"] as const satisfies readonly BadgeSource[];
+
+/** Every `ItemDisplay`, in the contract's order. */
+export const ITEM_DISPLAY_VALUES = ["icon","label","icon-label"] as const satisfies readonly ItemDisplay[];
+
+/** Every `ActionTargetKind`, in the contract's order. */
+export const ACTION_TARGET_KIND_VALUES = ["message","draft","folder","event","contact","task","rule","recipient"] as const satisfies readonly ActionTargetKind[];
+
+/** Every `ConfirmationSource`, in the contract's order. */
+export const CONFIRMATION_SOURCE_VALUES = ["nail","elicitation","system"] as const satisfies readonly ConfirmationSource[];
+
+/** Every `EventStatus`, in the contract's order. */
+export const EVENT_STATUS_VALUES = ["confirmed","tentative","cancelled"] as const satisfies readonly EventStatus[];
+
+/** Every `Transparency`, in the contract's order. */
+export const TRANSPARENCY_VALUES = ["busy","free"] as const satisfies readonly Transparency[];
+
+/** Every `Visibility`, in the contract's order. */
+export const VISIBILITY_VALUES = ["public","private","confidential"] as const satisfies readonly Visibility[];
+
+/** Every `AttendeeRole`, in the contract's order. */
+export const ATTENDEE_ROLE_VALUES = ["chair","required","optional","non-participant"] as const satisfies readonly AttendeeRole[];
+
+/** Every `AlarmAction`, in the contract's order. */
+export const ALARM_ACTION_VALUES = ["display","audio","email"] as const satisfies readonly AlarmAction[];
+
+/** Every `EditScope`, in the contract's order. */
+export const EDIT_SCOPE_VALUES = ["this","this-and-following","all"] as const satisfies readonly EditScope[];
+
+/** Every `ContactKind`, in the contract's order. */
+export const CONTACT_KIND_VALUES = ["individual","organization","location"] as const satisfies readonly ContactKind[];
+
+/** Every `TaskStatus`, in the contract's order. */
+export const TASK_STATUS_VALUES = ["needs-action","in-process","completed","cancelled"] as const satisfies readonly TaskStatus[];
+
+/** Every `DuplicateReason`, in the contract's order. */
+export const DUPLICATE_REASON_VALUES = ["email","phone","name"] as const satisfies readonly DuplicateReason[];
+
+/** Every `PimIssue`, in the contract's order. */
+export const PIM_ISSUE_VALUES = ["invalid-date","invalid-time","invalid-time-zone","end-before-start","mixed-all-day","invalid-recurrence","invalid-scope","invalid-email","missing-name","invalid-priority","invalid-color","invalid-alarm","invalid-url","task-cycle","too-many"] as const satisfies readonly PimIssue[];
+
+/** Every `PimSourceKind`, in the contract's order. */
+export const PIM_SOURCE_KIND_VALUES = ["local","ics","caldav","carddav","exchange"] as const satisfies readonly PimSourceKind[];
+
+/** Every `PimSourceState`, in the contract's order. */
+export const PIM_SOURCE_STATE_VALUES = ["idle","syncing","offline","auth-error","error","disabled"] as const satisfies readonly PimSourceState[];
+
+/** Every `PimItemSync`, in the contract's order. */
+export const PIM_ITEM_SYNC_VALUES = ["synced","pending","conflict"] as const satisfies readonly PimItemSync[];
+
+/** Every `ItipMethod`, in the contract's order. */
+export const ITIP_METHOD_VALUES = ["publish","request","reply","add","cancel","refresh","counter","decline-counter"] as const satisfies readonly ItipMethod[];
+
+/** Every `ItipIssue`, in the contract's order. */
+export const ITIP_ISSUE_VALUES = ["unparsable","unknown-method","no-event","missing-uid","missing-organizer","attendee-count","sender-not-organizer","sender-not-attendee","not-addressed-to-me","several-events","organizer-changed","sent-on-behalf","uninvited-attendee"] as const satisfies readonly ItipIssue[];
+
+/** Every `FreeBusyIssue`, in the contract's order. */
+export const FREE_BUSY_ISSUE_VALUES = ["attendee-count","invalid-attendee","invalid-range","range-too-long"] as const satisfies readonly FreeBusyIssue[];
+
+/** Every `BusyKind`, in the contract's order. */
+export const BUSY_KIND_VALUES = ["tentative","busy","unavailable"] as const satisfies readonly BusyKind[];
+
+/** Every `CancelScope`, in the contract's order. */
+export const CANCEL_SCOPE_VALUES = ["meeting","occurrence","attendees"] as const satisfies readonly CancelScope[];
+
+/** Every `PluginLogLevel`, in the contract's order. */
+export const PLUGIN_LOG_LEVEL_VALUES = ["debug","info","warn","error"] as const satisfies readonly PluginLogLevel[];
+
+/** Every `PluginLogSource`, in the contract's order. */
+export const PLUGIN_LOG_SOURCE_VALUES = ["plugin","host","api"] as const satisfies readonly PluginLogSource[];
+
+/** Every `PluginRunState`, in the contract's order. */
+export const PLUGIN_RUN_STATE_VALUES = ["disabled","starting","running","stopped","crashed","incompatible"] as const satisfies readonly PluginRunState[];
+
+/** Every `PluginStopReason`, in the contract's order. */
+export const PLUGIN_STOP_REASON_VALUES = ["disabled","uninstalled","reloaded","shutdown","error","cpu-budget","memory-limit"] as const satisfies readonly PluginStopReason[];
+
+/** Every `PluginJobOutcome`, in the contract's order. */
+export const PLUGIN_JOB_OUTCOME_VALUES = ["ok","error","timeout","cpu-quota","overlap"] as const satisfies readonly PluginJobOutcome[];
+
+/** Every `ComposerEditOp`, in the contract's order. */
+export const COMPOSER_EDIT_OP_VALUES = ["insert","replace-selection","replace-all"] as const satisfies readonly ComposerEditOp[];
+
+/** Every `PluginManifestIssueKind`, in the contract's order. */
+export const PLUGIN_MANIFEST_ISSUE_KIND_VALUES = ["too-large","invalid-json","invalid-id","invalid-name","invalid-version","unsupported-api-version","invalid-main","invalid-homepage","unknown-permission","permission-not-in-preview","invalid-network-domain","duplicate-permission","body-without-read","invalid-command","duplicate-command","invalid-placement","unknown-command","unknown-panel","invalid-key","invalid-panel","duplicate-panel","invalid-setting","duplicate-setting","invalid-locale","too-many-contributions","missing-required-permission","contribution-needs-permission","invalid-hook","duplicate-hook","invalid-extension","duplicate-extension","invalid-job","duplicate-job","invalid-mcp-tool","duplicate-mcp-tool"] as const satisfies readonly PluginManifestIssueKind[];
+
+/** Every `ParticipationStatus`, in the contract's order. */
+export const PARTICIPATION_STATUS_VALUES = ["needs-action","accepted","declined","tentative","delegated"] as const satisfies readonly ParticipationStatus[];
+
+/** The rule triggers without parameters (`RuleTrigger::SIMPLE`), by their `type`. */
+export const RULE_SIMPLE_TRIGGERS = ["arrival","on-send","manual"] as const satisfies readonly RuleTrigger["type"][];
 
 /** Every `ThemeKind`, in the contract's order. */
 export const THEME_KIND_VALUES = ["light","dark","high-contrast"] as const satisfies readonly ThemeKind[];

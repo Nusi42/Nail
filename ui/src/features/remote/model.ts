@@ -10,6 +10,7 @@ import {
   LOCAL_NETWORKS,
   MAX_AUDIT_RETENTION_DAYS,
   MCP_SCOPE_VALUES,
+  MIN_PASSWORD_CHARS,
   type McpScope,
   REMOTE_ACCESS_PRESET_VALUES,
   type RemoteAccessPreset,
@@ -380,5 +381,5 @@ export const CONTENT_SCOPES = [
 export const PAIRING_STATES = ["pending", "used", "expired", "cancelled"] as const;
 /** Lifetimes offered for a pairing code, in minutes. */
 export const PAIRING_TTLS: readonly number[] = [5, 10, 30];
-/** Shortest password the forms accept (the core may ask for more). */
-export const MIN_PASSWORD_LENGTH = 12;
+/** Shortest password the forms accept (`nail_api::remote::MIN_PASSWORD_CHARS`). */
+export const MIN_PASSWORD_LENGTH = MIN_PASSWORD_CHARS;

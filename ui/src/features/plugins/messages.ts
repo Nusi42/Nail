@@ -5,18 +5,22 @@
  * the core builds, `locales/en/core-plugins.ftl`); ids built at runtime are
  * listed by `runtimeIds`.
  */
-import type {
-  ComposerEditOp,
-  PluginHookKind,
-  PluginJobOutcome,
-  PluginLogLevel,
-  PluginLogSource,
-  PluginManifestIssueKind,
-  PluginPermission,
-  PluginRunState,
-  PluginStopReason,
+import {
+  COMPOSER_EDIT_OP_VALUES,
+  PLUGIN_HOOK_KIND_VALUES,
+  PLUGIN_JOB_OUTCOME_VALUES,
+  PLUGIN_LOG_LEVEL_VALUES,
+  PLUGIN_LOG_SOURCE_VALUES,
+  PLUGIN_MANIFEST_ISSUE_KIND_VALUES,
+  PLUGIN_PERMISSIONS,
+  PLUGIN_RUN_STATE_VALUES,
+  PLUGIN_STOP_REASON_VALUES,
 } from "../../api/generated";
+import type { PluginPermission } from "../../api/generated";
 import { contributionMessageId, hookMessageId, type ContributionItem } from "./extensions";
+import { SOURCE_KINDS as INSTALL_SOURCE_KINDS } from "./InstallDialog";
+import { MANAGER_SECTIONS } from "./PluginManager";
+import { FIELD_ISSUES } from "./tree/values";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["plugin-"];
@@ -48,28 +52,6 @@ export const notMessages: readonly string[] = [
   "plugin-veto",
 ];
 
-/** The permissions without an argument (`PluginPermission::FIXED`). */
-export const FIXED_PERMISSIONS: readonly PluginPermission[] = [
-  "mail.read",
-  "mail.read.body",
-  "calendar.read",
-  "ui.dialogs",
-  "notifications",
-  "storage",
-  "mail.organize",
-  "mail.send",
-  "calendar.write",
-  "contacts.write",
-  "tasks.write",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "composer",
-  "attachments",
-  "background",
-  "mcp.expose",
-];
-
 /** The Fluent id of a permission's label (`PluginPermission::label`). */
 export function permissionMessageId(permission: PluginPermission): string {
   return permission.startsWith("network:")
@@ -84,70 +66,6 @@ export function permissionArgs(permission: PluginPermission): Record<string, str
   return permission.startsWith("network:") ? { domain: permission.slice("network:".length) } : {};
 }
 
-const STATES: readonly PluginRunState[] = [
-  "disabled",
-  "starting",
-  "running",
-  "stopped",
-  "crashed",
-  "incompatible",
-];
-const LEVELS: readonly PluginLogLevel[] = ["debug", "info", "warn", "error"];
-const SOURCES: readonly PluginLogSource[] = ["plugin", "host", "api"];
-const STOPS: readonly PluginStopReason[] = [
-  "disabled",
-  "uninstalled",
-  "reloaded",
-  "shutdown",
-  "error",
-  "cpu-budget",
-  "memory-limit",
-];
-const ISSUES: readonly PluginManifestIssueKind[] = [
-  "too-large",
-  "invalid-json",
-  "invalid-id",
-  "invalid-name",
-  "invalid-version",
-  "unsupported-api-version",
-  "invalid-main",
-  "invalid-homepage",
-  "unknown-permission",
-  "permission-not-in-preview",
-  "invalid-network-domain",
-  "duplicate-permission",
-  "body-without-read",
-  "invalid-command",
-  "duplicate-command",
-  "invalid-placement",
-  "unknown-command",
-  "unknown-panel",
-  "invalid-key",
-  "invalid-panel",
-  "duplicate-panel",
-  "invalid-setting",
-  "duplicate-setting",
-  "invalid-locale",
-  "too-many-contributions",
-  "missing-required-permission",
-  "contribution-needs-permission",
-  "invalid-hook",
-  "duplicate-hook",
-  "invalid-extension",
-  "duplicate-extension",
-  "invalid-job",
-  "duplicate-job",
-  "invalid-mcp-tool",
-  "duplicate-mcp-tool",
-];
-const HOOKS: readonly PluginHookKind[] = ["arrival", "beforeSend", "open"];
-const JOB_OUTCOMES: readonly PluginJobOutcome[] = [
-  "ok",
-  "error",
-  "timeout",
-  "cpu-quota",
-  "overlap",
-];
 const CONTRIBUTIONS: readonly ContributionItem["kind"][] = [
   "command",
   "panel",
@@ -160,34 +78,29 @@ const CONTRIBUTIONS: readonly ContributionItem["kind"][] = [
   "job",
   "mcpTool",
 ];
-const EDIT_OPS: readonly ComposerEditOp[] = ["insert", "replace-selection", "replace-all"];
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   const network: PluginPermission = "network:example.com";
   return [
-    ...[...FIXED_PERMISSIONS, network].map(permissionMessageId),
+    ...[...PLUGIN_PERMISSIONS, network].map(permissionMessageId),
     "window-plugin-install",
     "window-plugin-manager",
-    ...STATES.map((s) => `plugin-state-${s}`),
-    ...LEVELS.map((l) => `plugin-log-level-${l}`),
-    ...SOURCES.map((s) => `plugin-log-source-${s}`),
-    ...STOPS.map((s) => `plugin-stopped-${s}`),
-    ...ISSUES.map((k) => `plugin-manifest-${k}`),
-    ...["required", "email", "url", "number", "too-long", "date-range"].map(
-      (i) => `plugin-field-${i}`,
-    ),
-    ...["file", "url", "dev"].flatMap((k) => [
+    ...PLUGIN_RUN_STATE_VALUES.map((s) => `plugin-state-${s}`),
+    ...PLUGIN_LOG_LEVEL_VALUES.map((l) => `plugin-log-level-${l}`),
+    ...PLUGIN_LOG_SOURCE_VALUES.map((s) => `plugin-log-source-${s}`),
+    ...PLUGIN_STOP_REASON_VALUES.map((s) => `plugin-stopped-${s}`),
+    ...PLUGIN_MANIFEST_ISSUE_KIND_VALUES.map((k) => `plugin-manifest-${k}`),
+    ...FIELD_ISSUES.map((i) => `plugin-field-${i}`),
+    ...INSTALL_SOURCE_KINDS.flatMap((k) => [
       `plugin-install-source-${k}`,
       `plugin-install-location-${k}`,
     ]),
-    ...["permissions", "confirmations", "activity", "settings", "log", "layout"].map(
-      (s) => `plugin-manager-show-${s}`,
-    ),
-    ...HOOKS.map(hookMessageId),
-    ...JOB_OUTCOMES.map((o) => `plugin-job-outcome-${o}`),
+    ...MANAGER_SECTIONS.map((s) => `plugin-manager-show-${s}`),
+    ...PLUGIN_HOOK_KIND_VALUES.map(hookMessageId),
+    ...PLUGIN_JOB_OUTCOME_VALUES.map((o) => `plugin-job-outcome-${o}`),
     ...CONTRIBUTIONS.map(contributionMessageId),
-    ...EDIT_OPS.map((op) => `plugin-composer-edited-${op}`),
+    ...COMPOSER_EDIT_OP_VALUES.map((op) => `plugin-composer-edited-${op}`),
     // Layout labels for the integrator's default layout (`@plugin.…`).
     "plugin-manager-tab",
     "plugin-action-install",

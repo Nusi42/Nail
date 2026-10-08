@@ -9,13 +9,15 @@ import {
   ACTION_KIND_MESSAGE_IDS,
   ACTION_KIND_RULES,
   ACTION_KIND_VALUES,
-  CONFIRMATION_STATE_MESSAGE_IDS,
+  ACTION_TARGET_KIND_VALUES,
   type ActionActor,
   type ActionAttribution,
   type ActionKind,
   type ActionPolicy,
   type ActionPolicyMode,
   type ActionTargetKind,
+  CONFIRMATION_SOURCE_VALUES,
+  CONFIRMATION_STATE_MESSAGE_IDS,
   type ConfirmationSource,
   type ConfirmationState,
 } from "../../api/generated";
@@ -75,23 +77,10 @@ export function stateMessageId(state: ConfirmationState): string {
 }
 
 /** Every kind of affected item (`ActionTargetKind`). */
-export const ACTION_TARGET_KINDS: readonly ActionTargetKind[] = [
-  "message",
-  "draft",
-  "folder",
-  "event",
-  "contact",
-  "task",
-  "rule",
-  "recipient",
-];
+export const ACTION_TARGET_KINDS: readonly ActionTargetKind[] = ACTION_TARGET_KIND_VALUES;
 
 /** Where a decision can come from (`ConfirmationSource`). */
-export const CONFIRMATION_SOURCES: readonly ConfirmationSource[] = [
-  "nail",
-  "elicitation",
-  "system",
-];
+export const CONFIRMATION_SOURCES: readonly ConfirmationSource[] = CONFIRMATION_SOURCE_VALUES;
 
 /** Fluent id of an affected item's kind (in `agents.ftl`). */
 export function targetMessageId(kind: ActionTargetKind): string {

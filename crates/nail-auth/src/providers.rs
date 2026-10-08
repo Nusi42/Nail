@@ -107,16 +107,9 @@ pub fn builtin(id: &str) -> Option<ProviderSpec> {
 /// The provider whose OAuth2 sign-in a mail host uses, by host name
 /// (`imap.gmail.com` → `google`, `outlook.office365.com` → `microsoft`).
 pub fn provider_for_host(host: &str) -> Option<&'static str> {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    let under = |domain: &str| host == domain || host.ends_with(&format!(".{domain}"));
-    if under("gmail.com") || under("googlemail.com") || under("google.com") {
+    if nail_api::hosts::is_google_mail_host(host) {
         Some(GOOGLE)
-    } else if under("office365.com")
-        || under("graph.microsoft.com")
-        || under("outlook.com")
-        || under("hotmail.com")
-        || under("live.com")
-    {
+    } else if nail_api::hosts::is_microsoft_mail_host(host) {
         Some(MICROSOFT)
     } else {
         None

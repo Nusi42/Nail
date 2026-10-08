@@ -3,6 +3,7 @@
  * (dialogs and notifications raised while handling the call come back only
  * to this UI; ADR 0050, "Which UI") and the UI context.
  */
+import { PLUGIN_COMMAND_SURFACE_VALUES } from "../../api/generated";
 import type { NailClient } from "../../api/client";
 import type { PluginCommandSurface, UiContext } from "../../api/generated";
 import type { UiState } from "../../state/uiStore";
@@ -52,7 +53,7 @@ export function uiContextOf(state: ContextSource): UiContext {
   };
 }
 
-const SURFACES: readonly PluginCommandSurface[] = ["list", "reader", "composer", "global"];
+const SURFACES: readonly PluginCommandSurface[] = PLUGIN_COMMAND_SURFACE_VALUES;
 
 /** The surface of a keyboard context (`list`, `reader`, `composer`; else `global`). */
 export function surfaceOfKeyContext(context: string): PluginCommandSurface {

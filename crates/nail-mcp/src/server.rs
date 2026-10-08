@@ -126,12 +126,7 @@ impl Failure {
 }
 
 /// Current time, Unix seconds.
-pub(crate) fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or_default()
-}
+pub(crate) use nail_util::time::unix_now as now;
 
 /// State shared by every session of one server.
 pub(crate) struct Shared<D> {

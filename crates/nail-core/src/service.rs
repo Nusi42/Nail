@@ -581,7 +581,7 @@ impl Service {
             // At start, then daily (M2b follow-up: the remote security log
             // is kept as long as its setting says).
             loop {
-                if let Err(err) = service.purge_history(crate::engine::unix_now()).await {
+                if let Err(err) = service.purge_history(nail_util::time::unix_now()).await {
                     tracing::warn!(%err, "cannot purge old history");
                 }
                 tokio::time::sleep(HISTORY_PURGE_INTERVAL).await;

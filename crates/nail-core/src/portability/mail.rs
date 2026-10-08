@@ -440,7 +440,7 @@ impl MailImportSink for ImportTarget {
             id: Some(id),
             flags: message.flags,
             keywords: message.keywords,
-            internal_date: message.received_at.map(crate::rules::rfc3339),
+            internal_date: message.received_at.map(nail_util::time::rfc3339_utc),
             size: Some(message.raw.len() as u64),
             raw: message.raw,
             ..IncomingMessage::default()

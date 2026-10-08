@@ -841,7 +841,7 @@ pub(crate) fn account_status(account: &AccountConfig, record: SieveRecord) -> Si
         account_id: account.id.clone(),
         state,
         script_name: config.effective_script_name().to_owned(),
-        uploaded_at: record.uploaded_at.map(crate::rules::rfc3339),
+        uploaded_at: record.uploaded_at.map(nail_util::time::rfc3339_utc),
         extensions: record.extensions,
         other_scripts: record.other_scripts,
         rules: Vec::new(),

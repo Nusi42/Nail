@@ -449,7 +449,7 @@ impl Service {
             conversations: resolved.conversations,
             undo_until: applied
                 .batch
-                .map(|_| crate::rules::rfc3339(now.saturating_add(undo_secs))),
+                .map(|_| nail_util::time::rfc3339_utc(now.saturating_add(undo_secs))),
         })
     }
 

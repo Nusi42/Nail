@@ -93,13 +93,7 @@ pub fn new_message_id(sender: &str, seed: &[u8]) -> String {
         .unwrap_or("nail.invalid");
     let mut hasher = Sha256::new();
     hasher.update(seed);
-    hasher.update(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-            .to_le_bytes(),
-    );
+    hasher.update(nail_util::time::unix_now_nanos().to_le_bytes());
     hasher.update(std::process::id().to_le_bytes());
     hasher.update(
         COUNTER

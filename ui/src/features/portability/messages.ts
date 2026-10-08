@@ -10,7 +10,6 @@ import {
   BACKUP_ISSUE_MESSAGE_IDS,
   DIAGNOSTICS_ISSUE_MESSAGE_IDS,
   IMPORT_COLLECTION_KIND_MESSAGE_IDS,
-  type ExportSource,
 } from "../../api/generated";
 import {
   BACKUP_ITEMS,
@@ -39,6 +38,7 @@ import {
   redactionId,
   restoreEffectId,
   severityId,
+  EXPORT_SOURCE_KINDS,
 } from "./model";
 import { PORTABILITY_DIALOGS, REPORT_DIALOG } from "./names";
 
@@ -53,13 +53,6 @@ export const notMessages: readonly string[] = [
   "system-info",
 ];
 
-const EXPORT_SOURCES: readonly ExportSource["type"][] = [
-  "folders",
-  "messages",
-  "calendars",
-  "address-books",
-];
-
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   return [
@@ -69,7 +62,7 @@ export function runtimeIds(): string[] {
     ...PORTABILITY_DIALOGS.map((d) => `window-${d}`),
     ...IMPORT_FORMATS.flatMap((f) => [importFormatId(f), `portability-import-format-hint-${f}`]),
     ...EXPORT_FORMATS.map(exportFormatId),
-    ...EXPORT_SOURCES.map((s) => `portability-export-source-${s}`),
+    ...EXPORT_SOURCE_KINDS.map((s) => `portability-export-source-${s}`),
     ...MBOX_VARIANTS.map(mboxVariantId),
     ...JOB_KINDS.map(jobKindId),
     ...JOB_PHASES.map(jobPhaseId),

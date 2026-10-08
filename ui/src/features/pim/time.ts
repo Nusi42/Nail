@@ -8,6 +8,7 @@
  * The week starts as the UI locale says (`startOfWeek(date, locale)`), so
  * a German UI starts weeks on Monday even in an English browser.
  */
+import { WEEKDAY_VALUES } from "../../api/generated";
 import {
   CalendarDate,
   CalendarDateTime,
@@ -49,15 +50,7 @@ export function isViewKind(value: unknown): value is ViewKind {
 }
 
 /** Weekdays in RFC 5545 order starting Monday, as the contract names them. */
-export const WEEKDAYS = [
-  "mon",
-  "tue",
-  "wed",
-  "thu",
-  "fri",
-  "sat",
-  "sun",
-] as const satisfies readonly Weekday[];
+export const WEEKDAYS = WEEKDAY_VALUES;
 
 /** `@internationalized/date` names of the weekdays (`firstDayOfWeek`). */
 const DAY_OF_WEEK: Record<Weekday, DayOfWeek> = {

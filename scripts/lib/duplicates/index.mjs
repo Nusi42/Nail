@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { readJson } from "../json.mjs";
+import { parseJson, readJson } from "../json.mjs";
 import { DATA_DIR, DATA_FILES } from "./config.mjs";
 import { clonePlace, runJscpd } from "./jscpd.mjs";
 import { ownerOf } from "./owners.mjs";
@@ -17,6 +17,7 @@ import {
   knownInBaseline,
   cssLengths,
   fluentDuplicates,
+  generatedLists,
   magicNumbers,
   maskedCss,
   mirrorComments,
@@ -26,6 +27,7 @@ import {
   sameConstants,
   SSOT_CHECKS,
   themeLiterals,
+  tsLists,
 } from "./ssot.mjs";
 
 /**
@@ -60,6 +62,20 @@ export const CLONE_CHECKS = {
  */
 export function dataFile(root, name) {
   return path.join(root, DATA_DIR, name);
+}
+
+/** The generated contract constants (gen:api) the UI imports. */
+export const GENERATED_CONSTANTS = "ui/src/api/generated/constants.json";
+
+/**
+ * The generated contract constants, `{}` before the first `gen:api`.
+ *
+ * @param {(file: string) => string | undefined} read
+ * @returns {Record<string, unknown>}
+ */
+export function generatedConstants(read) {
+  const text = read(GENERATED_CONSTANTS);
+  return text === undefined ? {} : /** @type {Record<string, unknown>} */ (parseJson(text));
 }
 
 /**
@@ -248,6 +264,8 @@ function collectIn(root, out, options) {
     ...rustTsLists(code),
     ...rustTsConstants(code),
     ...sameConstants(code),
+    ...tsLists(code),
+    ...generatedLists(code, generatedConstants(read)),
     ...fluentDuplicates(catalogs),
     ...themeLiterals(blocks),
     ...cssLengths(blocks, kdl),

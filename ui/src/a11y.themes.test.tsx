@@ -9,33 +9,18 @@
  * dropped rules.
  */
 import { NodeView, WindowView } from "./layout/LayoutRenderer";
-import { emptyComposer } from "./state/compose";
 import { violations } from "./test/axe";
 import {
-  createEnv,
   renderWithProviders,
   widget,
-  type Env,
   settleQueries,
   stubElementSizesEachTest,
 } from "./test/harness";
 import { compileTheme } from "./theme/compile";
 import { THEME_DENSITY_CASES, builtinTheme } from "./test/themes";
-import { INBOX } from "./test/mockIds";
+import { mailEnv } from "./test/mailEnv";
 
 stubElementSizesEachTest();
-
-function mailEnv(): Env {
-  const env = createEnv({
-    state: {
-      activeAccountId: "acc-personal",
-      activeFolderId: INBOX,
-      composer: { ...emptyComposer(), identityId: "ada@example.org" },
-    },
-  });
-  env.store.getState().selectMessage(`${INBOX}#1`);
-  return env;
-}
 
 describe("axe in every theme and density (M5a)", () => {
   it.each(THEME_DENSITY_CASES)("%s / %s compiles without dropped rules", (id, density) => {

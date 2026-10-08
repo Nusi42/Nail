@@ -33,7 +33,7 @@ import { useBusyAction } from "../../state/busyAction";
 export const MANAGER_DIALOG = "plugin-manager";
 
 type Section = "permissions" | "confirmations" | "activity" | "settings" | "log" | "layout";
-const SECTIONS: readonly Section[] = [
+export const MANAGER_SECTIONS: readonly Section[] = [
   "permissions",
   "confirmations",
   "activity",
@@ -46,7 +46,7 @@ const SECTIONS: readonly Section[] = [
 export function sectionsOf(plugin: PluginInfo): Section[] {
   const hasSettings = (plugin.manifest.contributes?.settings?.length ?? 0) > 0;
   const writes = (plugin.manifest.permissions ?? []).some(isWritePermission);
-  return SECTIONS.filter(
+  return MANAGER_SECTIONS.filter(
     (s) => (s !== "settings" || hasSettings) && (s !== "confirmations" || writes),
   );
 }

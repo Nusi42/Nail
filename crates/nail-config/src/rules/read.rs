@@ -1170,6 +1170,38 @@ fn is_plausible_address(s: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// The KDL names are the contract's wire names (one fact): every table
+    /// matches serde, and the simple triggers are `RuleTrigger::SIMPLE`.
+    #[test]
+    fn name_tables_are_the_wire_names() {
+        fn wire<T: serde::Serialize>(value: &T) -> String {
+            match serde_json::to_value(value).unwrap() {
+                serde_json::Value::String(s) => s,
+                serde_json::Value::Object(o) => o["type"].as_str().unwrap().to_owned(),
+                other => panic!("{other}"),
+            }
+        }
+        fn check<T: serde::Serialize>(table: &[(&str, T)]) {
+            for (name, value) in table {
+                assert_eq!(*name, wire(value));
+            }
+        }
+        check(TEXT_OPS);
+        check(ADDRESS_FIELDS);
+        check(FLAGS);
+        check(AUTH_METHODS);
+        check(AUTH_RESULTS);
+        check(ROLES);
+        check(SIMPLE_TRIGGERS);
+        assert_eq!(
+            SIMPLE_TRIGGERS
+                .iter()
+                .map(|(_, t)| t.clone())
+                .collect::<Vec<_>>(),
+            RuleTrigger::SIMPLE.to_vec()
+        );
+    }
+
     #[test]
     fn dates() {
         assert!(is_valid_date("2026-09-29"));

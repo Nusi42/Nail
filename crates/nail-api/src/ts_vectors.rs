@@ -61,23 +61,10 @@ impl Vectors {
     ///
     /// When the file is stale (a failing test).
     pub fn check(&self, area: &str) {
-        let path = vectors_dir().join(format!("{area}.json"));
-        let text = self.render();
-        if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-            if let Err(e) = std::fs::create_dir_all(vectors_dir()) {
-                panic!("vectors directory: {e}");
-            }
-            if let Err(e) = std::fs::write(&path, &text) {
-                panic!("{}: {e}", path.display());
-            }
-        }
-        let actual = std::fs::read_to_string(&path)
-            .unwrap_or_default()
-            .replace("\r\n", "\n");
-        assert!(
-            actual == text,
-            "{} is stale: run the test with NAIL_UPDATE_SNAPSHOTS=1",
-            path.display()
+        nail_util::snapshot::check_text(
+            &vectors_dir().join(format!("{area}.json")),
+            &self.render(),
+            nail_util::snapshot::UPDATE_SNAPSHOTS,
         );
     }
 }

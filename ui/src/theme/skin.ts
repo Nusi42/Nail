@@ -59,108 +59,20 @@ import {
   READER_NARROW,
   SECTION_LABEL,
   TINY_TEXT,
+  VISUALLY_HIDDEN,
 } from "./declarations";
-
-/** Token shorthands (with derived fallbacks where the schema has none yet). */
-const T = {
-  bg: "var(--nail-color-bg)",
-  subtle: "var(--nail-color-bg-subtle)",
-  raised: "var(--nail-color-bg-raised)",
-  fg: "var(--nail-color-fg)",
-  muted: "var(--nail-color-fg-muted)",
-  border: "var(--nail-color-border)",
-  /** Outlines of controls (inputs, selects, switches): 3:1 against surfaces. */
-  line: "var(--nail-color-border-strong, var(--nail-color-border))",
-  /** The whole outline of input controls (`border "control"`; 2px in High contrast). */
-  controlBorder:
-    "var(--nail-border-control, 1px solid var(--nail-color-border-strong, var(--nail-color-border)))",
-  accent: "var(--nail-color-accent)",
-  accentFg: "var(--nail-color-accent-fg)",
-  accentSoft:
-    "var(--nail-color-accent-soft, color-mix(in srgb, var(--nail-color-accent) 14%, var(--nail-color-bg)))",
-  selection: "var(--nail-color-selection)",
-  selectionFg: "var(--nail-color-selection-fg)",
-  danger: "var(--nail-color-danger)",
-  warning: "var(--nail-color-warning)",
-  success: "var(--nail-color-success)",
-  focus: "var(--nail-color-focus-ring)",
-  scrim: "var(--nail-color-scrim)",
-  fontUi: "var(--nail-font-ui)",
-  fontMono: "var(--nail-font-mono)",
-  fontDisplay: "var(--nail-font-display, var(--nail-font-ui))",
-  label: "var(--nail-font-size-label)",
-  small: "var(--nail-font-size-small)",
-  body: "var(--nail-font-size-body)",
-  heading: "var(--nail-font-size-heading)",
-  title: "var(--nail-font-size-title)",
-  regular: "var(--nail-font-weight-regular)",
-  medium: "var(--nail-font-weight-medium)",
-  semibold: "var(--nail-font-weight-semibold)",
-  tight: "var(--nail-line-height-tight)",
-  normal: "var(--nail-line-height-normal)",
-  relaxed: "var(--nail-line-height-relaxed)",
-  xxs: "var(--nail-space-xxs)",
-  xs: "var(--nail-space-xs)",
-  sm: "var(--nail-space-sm)",
-  md: "var(--nail-space-md)",
-  lg: "var(--nail-space-lg)",
-  xl: "var(--nail-space-xl)",
-  xxl: "var(--nail-space-xxl)",
-  pane: "var(--nail-space-pane)",
-  gap: "var(--nail-space-gap)",
-  section: "var(--nail-space-section)",
-  row: "var(--nail-space-row)",
-  icon: "var(--nail-size-icon)",
-  control: "var(--nail-size-control)",
-  avatar: "var(--nail-size-avatar)",
-  rSm: "var(--nail-radius-sm)",
-  rMd: "var(--nail-radius-md)",
-  rLg: "var(--nail-radius-lg)",
-  pill: "var(--nail-radius-pill)",
-  raisedShadow: "var(--nail-shadow-raised)",
-  overlay: "var(--nail-shadow-overlay)",
-  windowShadow: "var(--nail-shadow-window)",
-  fast: "var(--nail-motion-fast)",
-  ease: "var(--nail-motion-ease)",
-  disabled: "var(--nail-opacity-disabled)",
-} as const;
+import { ACCOUNT_COLOR_SLOTS } from "../api/generated";
+import { FILE_KINDS } from "../widgets/fileKinds";
+import { T } from "./tokens";
 
 /**
- * Avatar / account colours: dark enough for white initials (WCAG AA for
- * 12.5 px semibold text, checked in `skin.test.ts`). A theme can replace any
- * of them with `color "avatar-<n>"`.
+ * File-type badge colours of attachment cards (`data-kind`; `other` is the
+ * badge's own colour): the theme's `file-<kind>` colours (`defaults/theme.kdl`).
  */
-export const AVATAR_COLORS = [
-  "#3b5bdb",
-  "#0b7285",
-  "#2f7d3a",
-  "#a61e4d",
-  "#7048e8",
-  "#c2410c",
-  "#5c5f66",
-  "#1864ab",
-] as const;
-
-/**
- * File-type badge colours of attachment cards (`data-kind`; `other` for the
- * rest), dark enough for white text like {@link AVATAR_COLORS}. A theme can
- * replace any of them with `color "file-<kind>"`.
- */
-export const FILE_COLORS = {
-  other: "#5c5f66",
-  pdf: "#c92a2a",
-  image: "#0b7285",
-  document: "#1864ab",
-  spreadsheet: "#2f7d3a",
-  archive: "#7048e8",
-  calendar: "#c2410c",
-} as const;
-
-const fileColors = Object.entries(FILE_COLORS)
-  .filter(([kind]) => kind !== "other")
+const fileColors = FILE_KINDS.filter((kind) => kind !== "other")
   .map(
-    ([kind, color]) =>
-      `${p("attachment-card.type")}[data-kind="${kind}"] { background-color: var(--nail-color-file-${kind}, ${color}); }`,
+    (kind) =>
+      `${p("attachment-card.type")}[data-kind="${kind}"] { background-color: var(--nail-color-file-${kind}); }`,
   )
   .join("\n");
 
@@ -176,7 +88,20 @@ export function stableHash(text: string): number {
 
 /** The palette slot (0-based) of a sender address or account id. */
 export function colorSlot(key: string): number {
-  return stableHash(key.trim().toLowerCase()) % AVATAR_COLORS.length;
+  return stableHash(key.trim().toLowerCase()) % ACCOUNT_COLOR_SLOTS;
+}
+
+/**
+ * The avatar palette's `background-color` rules for `parts`: slot `i`
+ * (`data-color`) is the theme's `avatar-<i + 1>` colour (`defaults/theme.kdl`;
+ * dark enough for white initials, checked by nail-config's contrast test).
+ */
+export function avatarPaletteRules(parts: readonly string[]): string {
+  return Array.from(
+    { length: ACCOUNT_COLOR_SLOTS },
+    (_, i) =>
+      `${parts.map((part) => `[data-color="${String(i)}"]${p(part)}`).join(", ")} { background-color: var(--nail-color-avatar-${String(i + 1)}); }`,
+  ).join("\n");
 }
 
 /**
@@ -192,10 +117,7 @@ const PALETTE_PARTS = [
   "thread-view.card.avatar",
 ] as const;
 
-const avatarColors = AVATAR_COLORS.map(
-  (color, i) =>
-    `${PALETTE_PARTS.map((part) => `[data-color="${String(i)}"]${p(part)}`).join(", ")} { background-color: var(--nail-color-avatar-${String(i + 1)}, ${color}); }`,
-).join("\n");
+const avatarColors = avatarPaletteRules(PALETTE_PARTS);
 
 /** A folder-pane row (folders, favourites, smart folders): icon, name, count. */
 const FOLDER_ROW = `display: grid; grid-template-columns: ${T.icon} minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
@@ -257,7 +179,7 @@ ${p("window.close")}:hover { ${QUIET_HOVER} }
 ${p("window.close")}:focus-visible { ${focusRing} }
 ${p("window.close.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} { width: ${T.icon}; height: ${T.icon}; }
-${p("composer.format.icon")} + ${p("composer.format.label")} { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }`;
+${p("composer.format.icon")} + ${p("composer.format.label")} { ${VISUALLY_HIDDEN} }`;
 
 /**
  * ADR 0160: the widths of controls that are small on purpose. A control (or
@@ -457,7 +379,7 @@ ${p("message-list.row.tag-line")} { display: flex; flex-wrap: wrap; align-items:
 ${p("message-list.empty")} { padding: ${T.xl} ${T.pane}; text-align: center; color: ${T.muted}; }`;
 
 /** The reader's banners (security, remote content, junk, body status) above the column. */
-const READER_SLOTS = [
+export const READER_SLOTS = [
   "security-message",
   "security-warnings",
   "remote-content",
@@ -506,7 +428,7 @@ ${p("attachment-card")} {
 }
 ${p("attachment-card.type")} {
   display: grid; place-items: center; width: calc(${T.control} + ${T.xs}); height: calc(${T.control} + ${T.xs}); border-radius: ${T.rSm};
-  font-size: ${TINY_TEXT}; font-weight: ${T.semibold}; ${INITIALS_TRACKING} color: ${AVATAR_FG}; background-color: var(--nail-color-file-other, ${FILE_COLORS.other});
+  font-size: ${TINY_TEXT}; font-weight: ${T.semibold}; ${INITIALS_TRACKING} color: ${AVATAR_FG}; background-color: var(--nail-color-file-other);
 }
 ${fileColors}
 ${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }

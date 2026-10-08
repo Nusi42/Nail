@@ -54,6 +54,13 @@ export function smallTag(radius: string, color: string, background: string): str
   font-size: ${LABEL}; color: ${color}; background-color: ${background};`;
 }
 
+/**
+ * Visually hidden, still read by screen readers (the accessible name stays):
+ * a clipped 1px box out of the flow.
+ */
+export const VISUALLY_HIDDEN =
+  "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;";
+
 /** A row of inline items centred on one line. */
 export const INLINE_ROW = "display: inline-flex; align-items: center;";
 

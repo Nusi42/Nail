@@ -35,10 +35,8 @@
  * text leaves among them) inside `scope`. Screenshots go to
  * `<build dir>/screens/p1/<name>-<w>x<h>.png`.
  */
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { buildOutputDir } from "./nail";
+import { screenshotFile } from "./nail";
 import { nextFrames } from "./views";
 
 export interface Size {
@@ -588,10 +586,7 @@ export function formatIssues(issues: readonly ResponsiveIssue[]): string {
 
 /** `<build dir>/screens/p1/<name>-<w>x<h>.png` (the directory is created). */
 export function screenshotPath(name: string, size: Size): string {
-  const dir = buildOutputDir(path.join("screens", "p1"));
-  mkdirSync(dir, { recursive: true });
-  const safe = name.replace(/[^\w.-]+/g, "-");
-  return path.join(dir, `${safe}-${String(size.width)}x${String(size.height)}.png`);
+  return screenshotFile("p1", `${name}-${String(size.width)}x${String(size.height)}`);
 }
 
 export interface SweepOptions extends CheckOptions {

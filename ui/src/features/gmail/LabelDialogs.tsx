@@ -6,6 +6,10 @@
  * (`gmail-apply-labels`; user labels are Nail tags, so applying is a tag
  * change through the operation queue).
  */
+import {
+  GMAIL_LABEL_LIST_VISIBILITY_VALUES,
+  GMAIL_MESSAGE_LIST_VISIBILITY_VALUES,
+} from "../../api/generated";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type SubmitEvent } from "react";
 import type {
@@ -33,8 +37,9 @@ import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { TextField } from "../../widgets/forms";
 import { useBusyAction } from "../../state/busyAction";
 
-const LIST_VISIBILITIES: readonly GmailLabelListVisibility[] = ["show", "show-if-unread", "hide"];
-const MESSAGE_VISIBILITIES: readonly GmailMessageListVisibility[] = ["show", "hide"];
+const LIST_VISIBILITIES: readonly GmailLabelListVisibility[] = GMAIL_LABEL_LIST_VISIBILITY_VALUES;
+const MESSAGE_VISIBILITIES: readonly GmailMessageListVisibility[] =
+  GMAIL_MESSAGE_LIST_VISIBILITY_VALUES;
 
 function Problem({ message }: { message: LocalizedMessage | null }) {
   const t = useT();
