@@ -76,6 +76,8 @@ pub struct OAuthClient {
     client_id: String,
     client_secret: Option<String>,
     http: reqwest::Client,
+    /// The connection log of token requests (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 impl fmt::Debug for OAuthClient {
@@ -127,14 +129,30 @@ impl OAuthClient {
             .client_id
             .clone()
             .ok_or_else(|| AuthError::Config(format!("no client id for provider {:?}", spec.id)))?;
+        let tap = nail_connlog::HttpTap::off();
+        if let Some(secret) = &client_secret {
+            tap.add_secret(secret);
+        }
         let client = Self {
             spec,
             client_id,
             client_secret,
             http,
+            tap,
         };
         client.oauth(None)?;
         Ok(client)
+    }
+
+    /// Logs token requests into `tap` (ADR 0190); the client secret is
+    /// registered as a secret of it.
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        if let Some(secret) = &self.client_secret {
+            tap.add_secret(secret);
+        }
+        self.tap = tap;
+        self
     }
 
     /// The provider.
@@ -204,7 +222,7 @@ impl OAuthClient {
         redirect: &str,
     ) -> Result<TokenSet, AuthError> {
         let client = self.oauth(Some(redirect))?;
-        let fetch = Fetcher(self.http.clone());
+        let fetch = Fetcher(self.http.clone(), self.tap.clone());
         let response = client
             .exchange_code(AuthorizationCode::new(code))
             .set_pkce_verifier(verifier)
@@ -218,7 +236,8 @@ impl OAuthClient {
     /// new refresh token only when the server rotated it.
     pub async fn refresh(&self, refresh_token: &str) -> Result<TokenSet, AuthError> {
         let client = self.oauth(None)?;
-        let fetch = Fetcher(self.http.clone());
+        self.tap.add_secret(refresh_token);
+        let fetch = Fetcher(self.http.clone(), self.tap.clone());
         let token = RefreshToken::new(refresh_token.to_owned());
         let response = client
             .exchange_refresh_token(&token)

@@ -571,6 +571,11 @@ async fn fetch_feed(
         basic,
         allow_loopback: service.inner.pim.loopback_feeds,
         max_bytes: MAX_FEED_BYTES,
+        tap: service
+            .connlog_tap(&nail_api::connlog::ConnectionLogScope::PimSource {
+                source_id: config.id.clone(),
+            })
+            .http(nail_api::connlog::WireProtocol::Feed),
     };
     let tls = nail_auth::tls_config()
         .map_err(|e| ApiError::internal(format!("no TLS configuration: {e}")))?;
@@ -870,7 +875,21 @@ pub(crate) async fn dav_client(
             .into());
         }
     };
-    DavClient::new(dav_auth).map_err(dav_error)
+    // ADR 0190: a source with an account logs into the account's
+    // connection log, one of its own into the source's.
+    let scope = match config.account() {
+        Some(account) => nail_api::connlog::ConnectionLogScope::account(account),
+        None => nail_api::connlog::ConnectionLogScope::PimSource {
+            source_id: config.id.clone(),
+        },
+    };
+    let protocol = match dav_service(config) {
+        DavService::CardDav => nail_api::connlog::WireProtocol::CardDav,
+        DavService::CalDav => nail_api::connlog::WireProtocol::CalDav,
+    };
+    DavClient::new(dav_auth)
+        .map(|client| client.with_tap(service.connlog_tap(&scope).http(protocol)))
+        .map_err(dav_error)
 }
 
 /// A DAV error as a core error (code, retry hint, `dav-*` text).

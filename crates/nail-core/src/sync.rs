@@ -22,11 +22,19 @@
 //!      ([`ImapClient::resync_flags`]: QRESYNC, CONDSTORE or a full flag
 //!      scan) and apply them; the new `HIGHESTMODSEQ` is saved.
 //!
-//! A folder that fails (the server refuses to open it, withholds a message,
-//! and so on) is logged, listed in [`SyncReport::failed_folders`] and
-//! skipped; the other folders are still synced, and the pass ends with one
+//! A message that cannot be downloaded (the server refuses it, withholds
+//! it, sends it unreadable or too large) does not fail its folder (ADR
+//! 0191): [`ImapClient::fetch_batch_resilient`] isolates it, it is recorded
+//! as skipped (`sync_skipped`, with its error details) in the same store
+//! call as the batch's checkpoint, the checkpoint moves past it, and later
+//! passes retry it ([`retry_skipped`]). A folder that fails (the server
+//! refuses to open it, and so on) is logged, listed in
+//! [`SyncReport::failed_folders`] with its [`ErrorDetails`] and skipped; the
+//! other folders are still synced, and the pass ends with one
 //! [`Event::SyncFailed`] naming the failed folders. Connection-level errors
 //! (connection lost, timeout, TLS) and store failures end the pass at once.
+//! The last error of the account and of each folder is stored until a
+//! later pass succeeds (ADR 0190).
 //!
 //! Progress is broadcast as [`Event::SyncProgress`] (one unit for the folder
 //! list plus one per folder), changed folders as [`Event::MailChanged`]
@@ -45,14 +53,17 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use nail_api::accounts::{BodyPolicy, SyncPolicy};
+use nail_api::connlog::{ConnectionLogScope, ErrorDetails, ErrorStep, WireProtocol};
 use nail_api::{AccountId, ApiError, ErrorCode, Event, Folder, FolderId, FolderRole};
+use nail_connlog::ConnectionLogs;
 use nail_proto_imap::{
-    BodyFetch, CredentialProvider, Credentials, FetchedMessage, ImapClient, ImapConfig, ImapError,
-    MessageFlags, RemoteFolder, ResyncState, Secret, SyncState,
+    BodyFetch, CredentialProvider, Credentials, FetchFailure, FetchFailureKind, FetchedMessage,
+    ImapClient, ImapConfig, ImapError, MessageFlags, RemoteFolder, ResyncState, Secret, SyncState,
 };
 use nail_store::{BlobStore, FolderSyncState, Store};
 use tokio::sync::broadcast;
 
+use crate::connlog::{ErrorContext, error_details};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, PreparedBatch, ingest_prepared, prepare};
@@ -62,6 +73,9 @@ use crate::pipeline::{BatchSink, BatchSource, pipeline};
 /// batches are being stored (a large initial sync stores thousands of
 /// batches; clients reload the list on every event).
 pub(crate) const MAIL_CHANGED_INTERVAL: Duration = Duration::from_millis(500);
+
+/// Skipped messages a folder sync retries at most per pass.
+const SKIPPED_RETRIES: usize = 50;
 
 /// How to reach an IMAP account registered with
 /// [`crate::Service::add_imap_account`]. Credentials are held in memory
@@ -132,6 +146,11 @@ pub struct SyncReport {
     pub vanished: u32,
     /// Folders that could not be synced in this pass (the others were).
     pub failed_folders: Vec<FolderSyncFailure>,
+    /// Folders synced without an error in this pass.
+    pub synced_folders: Vec<FolderId>,
+    /// Messages skipped in this pass (could not be downloaded; retried
+    /// later, ADR 0191).
+    pub skipped: u32,
 }
 
 /// A folder that failed during an otherwise completed pass.
@@ -145,6 +164,8 @@ pub struct FolderSyncFailure {
     pub code: ErrorCode,
     /// Diagnostic detail (English).
     pub message: String,
+    /// The precise cause ("Show details", ADR 0190).
+    pub details: ErrorDetails,
 }
 
 /// What syncing one folder did.
@@ -154,6 +175,8 @@ pub(crate) struct FolderOutcome {
     pub reset: bool,
     pub flag_changes: u32,
     pub vanished: u32,
+    /// Messages newly skipped (ADR 0191).
+    pub skipped: u32,
 }
 
 /// Everything a pass writes to.
@@ -163,12 +186,122 @@ pub(crate) struct SyncCtx {
     pub blobs: BlobStore,
     pub events: broadcast::Sender<Event>,
     pub index: Arc<crate::search::SearchSlot>,
+    /// The connection logs (error details name their position, ADR 0190).
+    pub connlog: Arc<ConnectionLogs>,
 }
 
 impl SyncCtx {
     pub(crate) fn emit(&self, event: Event) {
         // An error only means nobody is listening right now.
         drop(self.events.send(event));
+    }
+
+    /// The details of an error of `account` in `context`.
+    pub(crate) fn details(
+        &self,
+        account: &AccountId,
+        err: &CoreError,
+        context: ErrorContext,
+    ) -> ErrorDetails {
+        let scope = ConnectionLogScope::account(account);
+        error_details(
+            &self.connlog.tap(&scope),
+            self.connlog.last_seq(&scope),
+            err.code(),
+            &err.to_string(),
+            context,
+        )
+    }
+
+    /// The context of an error on `client` (IMAP), else of the error alone.
+    fn context(err: &CoreError, client: &ImapClient, folder: Option<&str>) -> ErrorContext {
+        match err {
+            CoreError::Imap(_) => ErrorContext::imap(client, folder),
+            other => ErrorContext {
+                folder: folder.map(str::to_owned),
+                ..ErrorContext::of_error(WireProtocol::Imap, other)
+            },
+        }
+    }
+
+    /// The details of a message a batch skipped.
+    fn skipped_details(
+        &self,
+        account: &AccountId,
+        folder: &str,
+        failure: &FetchFailure,
+    ) -> ErrorDetails {
+        let code = match failure.kind {
+            FetchFailureKind::Refused => ErrorCode::Rejected,
+            FetchFailureKind::Withheld => ErrorCode::Network,
+            FetchFailureKind::TooLarge => ErrorCode::TooLarge,
+        };
+        let scope = ConnectionLogScope::account(account);
+        error_details(
+            &self.connlog.tap(&scope),
+            self.connlog.last_seq(&scope),
+            code,
+            &failure.detail,
+            ErrorContext {
+                protocol: Some(WireProtocol::Imap),
+                step: Some(ErrorStep::Fetch),
+                folder: Some(folder.to_owned()),
+                command: failure.command.clone(),
+                server_text: failure.server_text.clone(),
+            },
+        )
+    }
+
+    /// Stores the outcome of a pass: errors of failed folders, cleared
+    /// errors of synced ones and of the account (ADR 0190). Announces a
+    /// change with [`Event::SyncErrorsChanged`].
+    async fn store_errors(
+        &self,
+        account: &AccountId,
+        result: &Result<SyncReport>,
+        failure: Option<&ErrorDetails>,
+    ) {
+        let id = account.clone();
+        let (failed, synced): (Vec<(FolderId, ErrorDetails)>, Vec<FolderId>) = match result {
+            Ok(report) => (
+                report
+                    .failed_folders
+                    .iter()
+                    .map(|f| (f.folder_id.clone(), f.details.clone()))
+                    .collect(),
+                report.synced_folders.clone(),
+            ),
+            Err(_) => (Vec::new(), Vec::new()),
+        };
+        let account_error = failure.cloned();
+        let changed = self
+            .store
+            .call(move |s| {
+                let mut changed = false;
+                for (folder, details) in &failed {
+                    s.set_sync_error(&id, Some(folder), details)?;
+                    changed = true;
+                }
+                for folder in &synced {
+                    changed |= s.clear_sync_error(&id, Some(folder))?;
+                }
+                match &account_error {
+                    Some(details) => {
+                        s.set_sync_error(&id, None, details)?;
+                        changed = true;
+                    }
+                    None => changed |= s.clear_sync_error(&id, None)?,
+                }
+                Ok(changed)
+            })
+            .await;
+        match changed {
+            Ok(true) => self.emit(Event::SyncErrorsChanged {
+                account_id: account.clone(),
+            }),
+            Ok(false) => {}
+            Err(err) => tracing::warn!(%err, "cannot store the sync errors"),
+        }
     }
 }
 
@@ -249,22 +382,40 @@ pub(crate) async fn sync_with_connection(
     settings: &ImapSettings,
     policy: &SyncPolicy,
 ) -> Result<SyncReport> {
+    let mut context = None;
     let result = async {
-        let mut client = connect(settings).await?;
-        let report = run_pass(ctx, account, &mut client, policy).await?;
+        let mut client = connect(settings).await.inspect_err(|err| {
+            context = Some(ErrorContext::of_imap(err));
+        })?;
+        let report = run_pass(ctx, account, &mut client, policy).await;
+        if let Err(err) = &report {
+            context = Some(SyncCtx::context(err, &client, None));
+        }
+        let report = report?;
         if let Err(err) = client.logout().await {
             tracing::debug!(%err, "logout failed after a successful sync");
         }
         Ok(report)
     }
     .await;
-    report_pass(ctx, account, &result);
+    report_pass(ctx, account, &result, context).await;
     result
 }
 
-/// Logs a pass's outcome and broadcasts [`Event::SyncFailed`] for a failed
-/// pass or failed folders.
-pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<SyncReport>) {
+/// Logs a pass's outcome, stores its errors and broadcasts
+/// [`Event::SyncFailed`] for a failed pass (`context`: where it failed) or
+/// failed folders.
+pub(crate) async fn report_pass(
+    ctx: &SyncCtx,
+    account: &AccountId,
+    result: &Result<SyncReport>,
+    context: Option<ErrorContext>,
+) {
+    let failure = result
+        .as_ref()
+        .err()
+        .map(|err| ctx.details(account, err, context.unwrap_or_default()));
+    ctx.store_errors(account, result, failure.as_ref()).await;
     match result {
         Ok(report) if !report.failed_folders.is_empty() => {
             tracing::warn!(%account, ?report, "sync finished; some folders failed");
@@ -288,6 +439,7 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                         .arg("count", paths.len())
                         .arg("folders", paths.join(", ")),
                 ),
+                details: Some(Box::new(first.details.clone())),
             });
         }
         Ok(report) => tracing::info!(%account, ?report, "sync finished"),
@@ -298,6 +450,7 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                 code: err.code(),
                 message: err.to_string(),
                 localized: err.localized(),
+                details: failure.map(Box::new),
             });
         }
     }
@@ -355,18 +508,26 @@ pub(crate) async fn run_pass(
                 report.new_messages = report.new_messages.saturating_add(outcome.new_messages);
                 report.flag_changes = report.flag_changes.saturating_add(outcome.flag_changes);
                 report.vanished = report.vanished.saturating_add(outcome.vanished);
+                report.skipped = report.skipped.saturating_add(outcome.skipped);
                 if outcome.reset {
                     report.reset_folders += 1;
                 }
+                report.synced_folders.push(folder.id.clone());
             }
             Err(err) if is_fatal_for_pass(&err) => return Err(err),
             Err(err) => {
                 tracing::warn!(%account, folder = %folder.path, %err, "folder sync failed; continuing");
+                let details = ctx.details(
+                    account,
+                    &err,
+                    SyncCtx::context(&err, client, Some(&folder.path)),
+                );
                 report.failed_folders.push(FolderSyncFailure {
                     folder_id: folder.id.clone(),
                     path: folder.path.clone(),
                     code: err.code(),
                     message: err.to_string(),
+                    details,
                 });
                 // The command failed cleanly; make sure the connection
                 // is still usable before going on.
@@ -514,7 +675,13 @@ pub(crate) async fn sync_folder(
     )
     .await?;
     outcome.new_messages = stored.stored;
-    let new_ids = stored.new;
+    outcome.skipped = stored.skipped;
+    let mut new_ids = stored.new;
+    if !reset {
+        let retried = retry_skipped(ctx, client, folder, fetch, uid_validity).await?;
+        outcome.new_messages = outcome.new_messages.saturating_add(retried.stored);
+        new_ids.extend(retried.new);
+    }
     let hidden = {
         let folder = folder.clone();
         store
@@ -587,6 +754,15 @@ struct StoredBatches {
     stored: u32,
     /// Messages that did not exist before.
     new: Vec<nail_api::MessageId>,
+    /// Messages skipped (recorded in `sync_skipped`).
+    skipped: u32,
+}
+
+/// One fetched batch: the messages and the ones the server could not
+/// deliver (ADR 0191).
+struct FetchedBatch {
+    messages: Vec<IncomingMessage>,
+    skipped: Vec<(u32, ErrorDetails)>,
 }
 
 /// Coalesces [`Event::MailChanged`] for one folder while its batches are
@@ -620,27 +796,47 @@ impl MailChangedThrottle {
     }
 }
 
-/// The fetching step of [`store_batches`]: one `UID FETCH` per batch.
+/// The fetching step of [`store_batches`]: one `UID FETCH` per batch, split
+/// around messages the server cannot deliver (ADR 0191).
 struct ImapBatches<'a> {
+    ctx: &'a SyncCtx,
+    folder: &'a Folder,
     client: &'a mut ImapClient,
     batches: &'a [Vec<u32>],
     fetch: BodyFetch,
 }
 
 impl BatchSource for ImapBatches<'_> {
-    type Batch = Vec<IncomingMessage>;
+    type Batch = FetchedBatch;
 
-    async fn fetch(&mut self, index: usize) -> Result<Vec<IncomingMessage>> {
-        Ok(self
+    async fn fetch(&mut self, index: usize) -> Result<FetchedBatch> {
+        let fetched = self
             .client
-            .fetch_batch_with(&self.batches[index], self.fetch)
-            .await?
-            .into_iter()
-            // A message marked \Deleted is on its way out (e.g. a move
-            // without UIDPLUS); do not show it.
-            .filter(|m| !m.deleted)
-            .map(incoming)
-            .collect())
+            .fetch_batch_resilient(&self.batches[index], self.fetch)
+            .await?;
+        let skipped = fetched
+            .failed
+            .iter()
+            .map(|failure| {
+                tracing::warn!(folder = %self.folder.path, uid = failure.uid, detail = %failure.detail, "message skipped");
+                (
+                    failure.uid,
+                    self.ctx
+                        .skipped_details(&self.folder.account_id, &self.folder.path, failure),
+                )
+            })
+            .collect();
+        Ok(FetchedBatch {
+            messages: fetched
+                .messages
+                .into_iter()
+                // A message marked \Deleted is on its way out (e.g. a move
+                // without UIDPLUS); do not show it.
+                .filter(|m| !m.deleted)
+                .map(incoming)
+                .collect(),
+            skipped,
+        })
     }
 }
 
@@ -655,26 +851,42 @@ struct FolderSink<'a, C> {
     events: MailChangedThrottle,
 }
 
-impl<C> BatchSink<PreparedBatch> for FolderSink<'_, C>
+impl<C> BatchSink<(PreparedBatch, Vec<(u32, ErrorDetails)>)> for FolderSink<'_, C>
 where
     C: Fn(usize) -> FolderSyncState + Send + Sync,
 {
-    async fn store(&mut self, index: usize, batch: PreparedBatch) -> Result<()> {
+    async fn store(
+        &mut self,
+        index: usize,
+        (batch, skipped): (PreparedBatch, Vec<(u32, ErrorDetails)>),
+    ) -> Result<()> {
         let next = (self.checkpoint)(index);
         let target = self.folder.clone();
         let blobs = self.ctx.blobs.clone();
         let search = self.ctx.index.get();
         let uid_validity = self.uid_validity;
+        let skipped_count = u32::try_from(skipped.len()).unwrap_or(u32::MAX);
         let stored = self
             .ctx
             .store
             .call(move |s| {
                 let report =
                     ingest_prepared(s, &blobs, Some(&search), &target, uid_validity, &batch)?;
+                // Skipped messages are recorded before the checkpoint moves
+                // past them, so they are retried, never lost.
+                for (uid, details) in &skipped {
+                    s.record_skipped(&target.id, *uid, details)?;
+                }
                 s.set_folder_sync_state(&target.id, &next)?;
                 Ok(report)
             })
             .await?;
+        if skipped_count > 0 {
+            self.out.skipped = self.out.skipped.saturating_add(skipped_count);
+            self.ctx.emit(Event::SyncErrorsChanged {
+                account_id: self.folder.account_id.clone(),
+            });
+        }
         self.out.stored = self
             .out
             .stored
@@ -706,6 +918,8 @@ async fn store_batches(
     uid_validity: u32,
 ) -> Result<StoredBatches> {
     let mut source = ImapBatches {
+        ctx,
+        folder,
         client,
         batches,
         fetch,
@@ -722,7 +936,7 @@ async fn store_batches(
     let result = pipeline(
         batches.len(),
         &mut source,
-        move |messages| Ok(prepare(&blobs, messages)?),
+        move |batch: FetchedBatch| Ok((prepare(&blobs, batch.messages)?, batch.skipped)),
         &mut sink,
     )
     .await;
@@ -733,6 +947,79 @@ async fn store_batches(
         });
     }
     result.map(|()| sink.out)
+}
+
+/// Fetches messages earlier passes skipped (ADR 0191), least tried first:
+/// the ones that come now are stored and forgotten as skipped, the ones that
+/// still fail count another attempt, the ones gone from the server are
+/// forgotten.
+async fn retry_skipped(
+    ctx: &SyncCtx,
+    client: &mut ImapClient,
+    folder: &Folder,
+    fetch: BodyFetch,
+    uid_validity: u32,
+) -> Result<StoredBatches> {
+    let uids = {
+        let id = folder.id.clone();
+        ctx.store
+            .call(move |s| s.skipped_uids(&id, SKIPPED_RETRIES))
+            .await?
+    };
+    if uids.is_empty() {
+        return Ok(StoredBatches::default());
+    }
+    let fetched = client.fetch_batch_resilient(&uids, fetch).await?;
+    let failed: Vec<(u32, ErrorDetails)> = fetched
+        .failed
+        .iter()
+        .map(|f| {
+            (
+                f.uid,
+                ctx.skipped_details(&folder.account_id, &folder.path, f),
+            )
+        })
+        .collect();
+    let done: Vec<u32> = uids
+        .iter()
+        .copied()
+        .filter(|uid| !failed.iter().any(|(f, _)| f == uid))
+        .collect();
+    let messages: Vec<IncomingMessage> = fetched
+        .messages
+        .into_iter()
+        .filter(|m| !m.deleted)
+        .map(incoming)
+        .collect();
+    let target = folder.clone();
+    let blobs = ctx.blobs.clone();
+    let search = ctx.index.get();
+    let report = ctx
+        .store
+        .call(move |s| {
+            let report =
+                crate::ingest::ingest(s, &blobs, Some(&search), &target, uid_validity, &messages)?;
+            s.remove_skipped(&target.id, &done)?;
+            for (uid, details) in &failed {
+                s.record_skipped(&target.id, *uid, details)?;
+            }
+            Ok(report)
+        })
+        .await?;
+    tracing::info!(folder = %folder.path, retried = uids.len(), stored = report.stored.len(), "skipped messages retried");
+    ctx.emit(Event::SyncErrorsChanged {
+        account_id: folder.account_id.clone(),
+    });
+    if !report.stored.is_empty() {
+        ctx.emit(Event::MailChanged {
+            folder_ids: vec![folder.id.clone()],
+        });
+    }
+    Ok(StoredBatches {
+        stored: u32::try_from(report.stored.len()).unwrap_or(u32::MAX),
+        new: report.new,
+        skipped: 0,
+    })
 }
 
 /// Drops the stored bodies of messages that aged out of a "recent N days"
@@ -811,6 +1098,8 @@ async fn reset_folder(ctx: &SyncCtx, folder: &Folder, uid_validity: u32) -> Resu
                 .map(|(_, id)| id)
                 .collect();
             let dropped = s.clear_folder(&target.id)?;
+            // Skipped UIDs of the old UIDVALIDITY name nothing now.
+            s.clear_skipped(&target.id)?;
             // Messages with waiting operations stay (without their UID).
             let gone: Vec<_> = gone
                 .into_iter()

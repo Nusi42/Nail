@@ -36,6 +36,7 @@ import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
 import { answerEditHistory, isEditHistoryRequest } from "./editHistoryMock";
 import { answerThemeEdit, isThemeEditRequest } from "../features/appearance/themeEditMock";
 import { answerPrint, isPrintRequest } from "../features/print/mock";
+import { answerConnlog, isConnlogRequest, recordMockSync } from "../features/connlog/mock";
 import { answerVault, isVaultRequest } from "../features/security/vaultMock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
@@ -159,6 +160,8 @@ export class MockTransport implements Transport, MockCore {
     if (isPortabilityRequest(request)) return answerPortability(this, request);
     if (isPaletteRequest(request)) return answerPalette(this, request);
     if (isPrintRequest(request)) return answerPrint(this, request);
+    // ADR 0190: connection logs, sync errors, the application log.
+    if (isConnlogRequest(request)) return answerConnlog(this, request);
     if (isAppearanceRequest(request)) return answerAppearance(this, request);
     if (isUiStateRequest(request)) return answerUiState(this, request);
     if (isWindowStateRequest(request)) return answerWindowState(this, request);
@@ -211,6 +214,8 @@ export class MockTransport implements Transport, MockCore {
         const account = request.account_id ?? d.accounts[0]?.id ?? "";
         queueMicrotask(() => {
           this.emit({ type: "SyncProgress", account_id: account, done: 0, total: 1 });
+          // The sync's connection log lines; a failure set by a test ends it.
+          if (recordMockSync(this, account)) return;
           this.emit({ type: "SyncProgress", account_id: account, done: 1, total: 1 });
         });
         return { type: "SyncStarted" };

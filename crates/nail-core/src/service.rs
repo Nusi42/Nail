@@ -328,6 +328,8 @@ pub(crate) struct Inner {
     /// M5c (ADR 0116): the open pop-out windows of the desktop app, in
     /// opening order.
     pub(crate) pop_outs: Mutex<Vec<nail_api::windows::PopOut>>,
+    /// The connection logs (ADR 0190).
+    pub(crate) connlog: crate::connlog::ConnLogCtl,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -526,6 +528,9 @@ impl Service {
                 appearance_watch: Mutex::new(None),
                 session_appearance: Mutex::new(std::collections::HashMap::new()),
                 pop_outs: Mutex::new(Vec::new()),
+                connlog: crate::connlog::ConnLogCtl::new(
+                    (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
+                ),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
@@ -556,6 +561,12 @@ impl Service {
         }
         // M4a review: nothing of this run waits for earlier confirmations.
         self.cancel_orphaned_confirmations();
+        // ADR 0190: the connection log's disk mirror and change notices.
+        let connlog = self.clone();
+        background.push(tokio::spawn(async move {
+            connlog.start_connlog().await;
+            crate::connlog::run_notices(connlog).await;
+        }));
         background.push(tokio::spawn(crate::outbox::run_sender(self.clone())));
         background.push(tokio::spawn(crate::search::run_committer(self.clone())));
         background.push(tokio::spawn(crate::search::run_maintenance(self.clone())));
@@ -787,6 +798,7 @@ impl Service {
             blobs: self.inner.blobs.clone(),
             events: self.inner.events.clone(),
             index: Arc::clone(&self.inner.search),
+            connlog: Arc::clone(&self.inner.connlog.logs),
         }
     }
 
@@ -812,7 +824,9 @@ impl Service {
             ApiError::not_found(format!("account {account} has no server to sync"))
         })?;
         let _guard = self.inner.running.claim(account)?;
-        let settings = ImapSettings::from(settings);
+        let mut settings = ImapSettings::from(settings);
+        // ADR 0190: registered accounts log into their scope too.
+        settings.config = settings.config.with_tap(self.account_tap(account));
         let report = sync_with_connection(
             &self.sync_ctx(),
             account,
@@ -1465,6 +1479,14 @@ impl Service {
             | Request::DuplicateTheme { .. }
             | Request::RenameTheme { .. }
             | Request::DeleteTheme { .. }) => crate::editing::handle(self, request).await?,
+            // ADR 0190: the connection log, stored errors, the app log.
+            request @ (Request::GetConnectionLog { .. }
+            | Request::ClearConnectionLog { .. }
+            | Request::ExportConnectionLog { .. }
+            | Request::GetConnectionLogSettings
+            | Request::SetConnectionLogSettings { .. }
+            | Request::ListSyncErrors { .. }
+            | Request::GetAppLog) => crate::connlog::handle(self, request).await?,
         })
     }
 }

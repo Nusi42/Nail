@@ -159,6 +159,8 @@ pub struct DavClient {
     http: reqwest::Client,
     auth: DavAuth,
     route_all_to: Option<SocketAddr>,
+    /// The connection log (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 impl DavClient {
@@ -188,7 +190,15 @@ impl DavClient {
             http,
             auth,
             route_all_to: None,
+            tap: nail_connlog::HttpTap::off(),
         }
+    }
+
+    /// Records every request into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// Sends every request over plain HTTP to `addr`, keeping the original
@@ -210,11 +220,15 @@ impl DavClient {
             DavAuth::None => None,
             DavAuth::Basic { username, password } => {
                 use base64::Engine as _;
+                self.tap.add_secret(password);
                 let encoded = base64::engine::general_purpose::STANDARD
                     .encode(format!("{username}:{password}"));
                 Some(format!("Basic {encoded}"))
             }
-            DavAuth::Bearer(token) => Some(format!("Bearer {token}")),
+            DavAuth::Bearer(token) => {
+                self.tap.add_secret(token);
+                Some(format!("Bearer {token}"))
+            }
             DavAuth::OAuth2 {
                 tokens,
                 provider,
@@ -224,6 +238,7 @@ impl DavClient {
                     .access_token(provider, secret, force_refresh)
                     .await
                     .map_err(|e| DavError::Token(Box::new(e)))?;
+                self.tap.add_secret(&token);
                 Some(format!("Bearer {token}"))
             }
         })
@@ -332,6 +347,7 @@ impl DavClient {
             Some(force_refresh) => self.authorization(force_refresh).await?,
             None => None,
         };
+        let authorized = authorization.is_some();
         if let Some(authorization) = authorization {
             let mut value = HeaderValue::from_str(&authorization)
                 .map_err(|_| DavError::Protocol("credentials are not valid header text".into()))?;
@@ -349,22 +365,39 @@ impl DavClient {
                 .header(reqwest::header::CONTENT_TYPE, *content_type)
                 .body(bytes.clone());
         }
-        let mut response = request.send().await.map_err(transport_error)?;
+        let exchange = self.tap.request(
+            method.as_str(),
+            url.as_str(),
+            authorized,
+            body.map(|(_, bytes)| u64::try_from(bytes.len()).unwrap_or(u64::MAX)),
+        );
+        let mut response = request.send().await.map_err(|e| {
+            let err = transport_error(e);
+            exchange.failed(&err.to_string());
+            err
+        })?;
         let status = response.status().as_u16();
         let headers = response.headers().clone();
         if response
             .content_length()
             .is_some_and(|l| l > MAX_RESPONSE as u64)
         {
+            exchange.failed("answer too large");
             return Err(DavError::TooLarge(format!("answer from {url}")));
         }
         let mut body = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
             if body.len() + chunk.len() > MAX_RESPONSE {
+                exchange.failed("answer too large");
                 return Err(DavError::TooLarge(format!("answer from {url}")));
             }
             body.extend_from_slice(&chunk);
         }
+        exchange.response(
+            status,
+            Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+            Some(&body),
+        );
         Ok(Reply {
             status,
             url: url.clone(),

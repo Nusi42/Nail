@@ -260,6 +260,14 @@ pub(crate) fn exchange_parts(
     }
 }
 
+/// The connection log protocol of an Exchange account's engine (ADR 0190).
+pub(crate) fn wire_protocol(account: &AccountConfig) -> nail_api::connlog::WireProtocol {
+    match exchange_parts(account).map(|(_, options)| options.engine) {
+        Some(nail_api::exchange::ExchangeEngine::Ews) => nail_api::connlog::WireProtocol::Ews,
+        _ => nail_api::connlog::WireProtocol::Graph,
+    }
+}
+
 /// The engine of an account: the running one, else a new one (disabled
 /// accounts, the room finder before the first sync).
 pub(crate) fn engine_of(

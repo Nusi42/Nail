@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use nail_connlog::{ConnTap, Part, WireLevel, WireProtocol};
 use tokio::io::{
     AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
 };
@@ -207,8 +208,22 @@ pub(crate) async fn with_timeout<T>(
 }
 
 /// Connects, negotiates TLS as configured and reads the capabilities.
-/// Returns a stream positioned right before authentication.
-pub(crate) async fn establish(config: &ImapConfig) -> Result<(ImapStream, Capabilities)> {
+/// Returns a stream positioned right before authentication and the
+/// connection's log (ADR 0190).
+pub(crate) async fn establish(config: &ImapConfig) -> Result<(ImapStream, Capabilities, ConnTap)> {
+    let tap = config
+        .tap
+        .connect(WireProtocol::Imap, &config.host, config.port);
+    match establish_on(config, &tap).await {
+        Ok((stream, caps)) => Ok((stream, caps, tap)),
+        Err(err) => {
+            tap.close(Some(&err.to_string()));
+            Err(err)
+        }
+    }
+}
+
+async fn establish_on(config: &ImapConfig, tap: &ConnTap) -> Result<(ImapStream, Capabilities)> {
     let tcp = with_timeout(config.timeout, async {
         TcpStream::connect((config.host.as_str(), config.port))
             .await
@@ -223,30 +238,34 @@ pub(crate) async fn establish(config: &ImapConfig) -> Result<(ImapStream, Capabi
 
     match config.security {
         Security::ImplicitTls => {
-            let tls = with_timeout(config.timeout, tls_handshake(config, tcp)).await?;
+            let tls = with_timeout(config.timeout, tls_handshake(config, tcp, tap)).await?;
             let mut stream = BufReader::new(ImapStream::Tls(Box::new(tls)));
-            let caps = with_timeout(config.timeout, preauth(&mut stream)).await?;
+            let caps = with_timeout(config.timeout, preauth(&mut stream, tap)).await?;
             Ok((unwrap_buffered(stream)?, caps))
         }
         Security::InsecurePlaintext => {
             tracing::warn!(host = %config.host, "IMAP connection without TLS");
+            tap.note(
+                WireLevel::Warning,
+                "no TLS: the connection is not encrypted",
+            );
             let mut stream = BufReader::new(ImapStream::Plain(tcp));
-            let caps = with_timeout(config.timeout, preauth(&mut stream)).await?;
+            let caps = with_timeout(config.timeout, preauth(&mut stream, tap)).await?;
             Ok((unwrap_buffered(stream)?, caps))
         }
         Security::StartTls => {
             let mut stream = BufReader::new(tcp);
             with_timeout(config.timeout, async {
-                read_greeting(&mut stream).await?;
-                starttls(&mut stream).await
+                read_greeting(&mut stream, tap).await?;
+                starttls(&mut stream, tap).await
             })
             .await?;
             // Discard anything the server sent after the tagged OK: it was not
             // protected by TLS (STARTTLS response injection).
             let tcp = stream.into_inner();
-            let tls = with_timeout(config.timeout, tls_handshake(config, tcp)).await?;
+            let tls = with_timeout(config.timeout, tls_handshake(config, tcp, tap)).await?;
             let mut stream = BufReader::new(ImapStream::Tls(Box::new(tls)));
-            let caps = with_timeout(config.timeout, capability(&mut stream)).await?;
+            let caps = with_timeout(config.timeout, capability(&mut stream, tap)).await?;
             Ok((unwrap_buffered(stream)?, caps))
         }
     }
@@ -261,14 +280,20 @@ fn unwrap_buffered(stream: BufReader<ImapStream>) -> Result<ImapStream> {
     Ok(stream.into_inner())
 }
 
-async fn tls_handshake(config: &ImapConfig, tcp: TcpStream) -> Result<TlsStream<TcpStream>> {
+async fn tls_handshake(
+    config: &ImapConfig,
+    tcp: TcpStream,
+    tap: &ConnTap,
+) -> Result<TlsStream<TcpStream>> {
     let server_name = ServerName::try_from(config.host.clone())
         .map_err(|_| ImapError::InvalidServerName(config.host.clone()))?;
     let connector = TlsConnector::from(Arc::new(client_config(&config.tls_trust)?));
-    connector
+    let tls = connector
         .connect(server_name, tcp)
         .await
-        .map_err(|err| ImapError::Tls(err.to_string()))
+        .map_err(|err| ImapError::Tls(err.to_string()))?;
+    tap.tls_session(tls.get_ref().1);
+    Ok(tls)
 }
 
 /// Builds the rustls client configuration (ring provider, TLS 1.2+).
@@ -305,7 +330,10 @@ pub(crate) fn client_config(trust: &TlsTrust) -> Result<ClientConfig> {
     Ok(config)
 }
 
-async fn read_line<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<String> {
+async fn read_line<S: AsyncRead + Unpin>(
+    stream: &mut BufReader<S>,
+    tap: &ConnTap,
+) -> Result<String> {
     let mut line = Vec::new();
     let n = (&mut *stream)
         .take(MAX_LINE)
@@ -318,11 +346,16 @@ async fn read_line<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<St
         return Err(ImapError::Protocol("response line too long".to_owned()));
     }
     let text = String::from_utf8_lossy(&line);
-    Ok(text.trim_end_matches(['\r', '\n']).to_owned())
+    let text = text.trim_end_matches(['\r', '\n']).to_owned();
+    tap.received(&[Part::Text(&text)]);
+    Ok(text)
 }
 
-async fn read_greeting<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<()> {
-    let greeting = read_line(stream).await?;
+async fn read_greeting<S: AsyncRead + Unpin>(
+    stream: &mut BufReader<S>,
+    tap: &ConnTap,
+) -> Result<()> {
+    let greeting = read_line(stream, tap).await?;
     let upper = greeting.to_ascii_uppercase();
     if upper.starts_with("* OK") {
         Ok(())
@@ -341,24 +374,26 @@ async fn read_greeting<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Resul
 
 async fn preauth<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut BufReader<S>,
+    tap: &ConnTap,
 ) -> Result<Capabilities> {
-    read_greeting(stream).await?;
-    capability(stream).await
+    read_greeting(stream, tap).await?;
+    capability(stream, tap).await
 }
 
 /// Sends a tagged command and collects untagged lines until the tagged reply.
 async fn command<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut BufReader<S>,
     command: &str,
+    tap: &ConnTap,
 ) -> Result<(Vec<String>, String)> {
+    let line = format!("{PREAUTH_TAG} {command}");
+    tap.sent(&[Part::Text(&line)]);
     let inner = stream.get_mut();
-    inner
-        .write_all(format!("{PREAUTH_TAG} {command}\r\n").as_bytes())
-        .await?;
+    inner.write_all(format!("{line}\r\n").as_bytes()).await?;
     inner.flush().await?;
     let mut untagged = Vec::new();
     loop {
-        let line = read_line(stream).await?;
+        let line = read_line(stream, tap).await?;
         if let Some(rest) = line
             .strip_prefix(PREAUTH_TAG)
             .and_then(|r| r.strip_prefix(' '))
@@ -371,8 +406,9 @@ async fn command<S: AsyncRead + AsyncWrite + Unpin>(
 
 async fn capability<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut BufReader<S>,
+    tap: &ConnTap,
 ) -> Result<Capabilities> {
-    let (untagged, status) = command(stream, "CAPABILITY").await?;
+    let (untagged, status) = command(stream, "CAPABILITY", tap).await?;
     if !status.to_ascii_uppercase().starts_with("OK") {
         return Err(ImapError::Protocol(format!("CAPABILITY failed: {status}")));
     }
@@ -387,8 +423,11 @@ async fn capability<S: AsyncRead + AsyncWrite + Unpin>(
         .ok_or_else(|| ImapError::Protocol("no CAPABILITY response".to_owned()))
 }
 
-async fn starttls<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut BufReader<S>) -> Result<()> {
-    let (_, status) = command(stream, "STARTTLS").await?;
+async fn starttls<S: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut BufReader<S>,
+    tap: &ConnTap,
+) -> Result<()> {
+    let (_, status) = command(stream, "STARTTLS", tap).await?;
     if status.to_ascii_uppercase().starts_with("OK") {
         Ok(())
     } else {
@@ -459,7 +498,9 @@ mod tests {
                 .unwrap();
         });
         let mut stream = BufReader::new(client);
-        let caps = preauth(&mut stream).await.unwrap();
+        let caps = preauth(&mut stream, &ConnTap::off(WireProtocol::Imap))
+            .await
+            .unwrap();
         assert!(caps.has("imap4rev1"));
         assert!(caps.has_auth("PLAIN"));
         server_task.await.unwrap();
@@ -470,7 +511,10 @@ mod tests {
         let (client, mut server) = tokio::io::duplex(4096);
         server.write_all(b"* BYE go away\r\n").await.unwrap();
         let mut stream = BufReader::new(client);
-        assert!(matches!(preauth(&mut stream).await, Err(ImapError::No(_))));
+        assert!(matches!(
+            preauth(&mut stream, &ConnTap::off(WireProtocol::Imap)).await,
+            Err(ImapError::No(_))
+        ));
     }
 
     #[tokio::test]
@@ -479,7 +523,7 @@ mod tests {
         drop(server);
         let mut stream = BufReader::new(client);
         assert!(matches!(
-            preauth(&mut stream).await,
+            preauth(&mut stream, &ConnTap::off(WireProtocol::Imap)).await,
             Err(ImapError::ConnectionLost)
         ));
     }

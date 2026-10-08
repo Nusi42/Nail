@@ -8,11 +8,12 @@ use std::fmt;
 use std::fmt::Write as _;
 
 use imap_proto::types::{
-    Address as ImapAddress, AttributeValue, Capability, Envelope as ImapEnvelope, MailboxDatum,
-    MessageSection, ResponseCode, SectionPath, UidSetMember,
+    AttributeValue, Capability, MailboxDatum, MessageSection, ResponseCode, SectionPath,
+    UidSetMember,
 };
 use imap_proto::{Response, Status};
-use nail_api::{Address, Flags};
+use nail_api::Flags;
+use nail_connlog::{Part as LogPart, WireLevel};
 
 use crate::capabilities::Capabilities;
 use crate::changes::MailboxChange;
@@ -24,17 +25,19 @@ use crate::folder::RemoteFolder;
 use crate::sasl::{self, Login, Mechanism};
 use crate::transport::{establish, with_timeout};
 
-/// Data items fetched per message.
-const FETCH_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[])";
+/// Data items fetched per message. No `ENVELOPE`: the core reads the
+/// headers from the message itself, and `ENVELOPE` was the part strict
+/// parsers stumbled over (8-bit header values, empty address lists; ADR
+/// 0191).
+const FETCH_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[])";
 /// The same with the mod-sequence, for CONDSTORE servers.
-const FETCH_QUERY_MODSEQ: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE MODSEQ BODY.PEEK[])";
+const FETCH_QUERY_MODSEQ: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE MODSEQ BODY.PEEK[])";
 /// Data items of a headers-only fetch (sync policy "headers only"): the
 /// header block instead of the whole message; `RFC822.SIZE` stays the full
 /// size.
-const HEADERS_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[HEADER])";
+const HEADERS_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER])";
 /// The same with the mod-sequence, for CONDSTORE servers.
-const HEADERS_QUERY_MODSEQ: &str =
-    "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE MODSEQ BODY.PEEK[HEADER])";
+const HEADERS_QUERY_MODSEQ: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE MODSEQ BODY.PEEK[HEADER])";
 /// Maximum number of UIDs per metadata command (`UID FETCH … RFC822.SIZE`),
 /// which keeps command lines short for sparse UID sets.
 const METADATA_CHUNK: usize = 1000;
@@ -112,27 +115,6 @@ impl fmt::Display for UidRange {
     }
 }
 
-/// The subset of the IMAP `ENVELOPE` the client exposes. Strings are the raw
-/// header values (RFC 2047 encoded words are *not* decoded; use `nail-mime`
-/// on the raw message for display).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Envelope {
-    /// Raw `Date` header.
-    pub date: Option<String>,
-    /// Raw `Subject` header.
-    pub subject: Option<String>,
-    /// `From` addresses.
-    pub from: Vec<Address>,
-    /// `To` addresses.
-    pub to: Vec<Address>,
-    /// `Cc` addresses.
-    pub cc: Vec<Address>,
-    /// Raw `In-Reply-To` header.
-    pub in_reply_to: Option<String>,
-    /// Raw `Message-ID` header (with angle brackets).
-    pub message_id: Option<String>,
-}
-
 /// One fetched message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FetchedMessage {
@@ -148,8 +130,6 @@ pub struct FetchedMessage {
     pub internal_date: Option<String>,
     /// `RFC822.SIZE`.
     pub size: Option<u32>,
-    /// Parsed `ENVELOPE`, when the server sent one.
-    pub envelope: Option<Envelope>,
     /// Mod-sequence (RFC 7162) on CONDSTORE servers.
     pub modseq: Option<u64>,
     /// The complete raw message (`BODY[]`), or only its header block
@@ -271,6 +251,17 @@ pub(crate) struct QresyncParams {
     pub(crate) known_uids: Option<String>,
 }
 
+/// What one `UID FETCH` returned ([`ImapClient::fetch_uids_report`]).
+#[derive(Debug, Default)]
+pub(crate) struct FetchedUids {
+    /// The messages, in UID order.
+    pub(crate) messages: Vec<FetchedMessage>,
+    /// UIDs that still exist but came back without a usable answer.
+    pub(crate) withheld: Vec<u32>,
+    /// UIDs whose body was larger than Nail reads.
+    pub(crate) too_large: Vec<u32>,
+}
+
 /// A logged-in IMAP connection.
 ///
 /// After a transient error (connection lost, timeout) the connection is
@@ -286,6 +277,9 @@ pub struct ImapClient {
     /// Unsolicited mailbox changes not yet taken by the caller.
     pub(crate) changes: Vec<MailboxChange>,
     pub(crate) broken: bool,
+    /// The server refused `SELECT` / `EXAMINE` with a `(CONDSTORE)`
+    /// parameter once: open mailboxes without it (ADR 0191).
+    pub(crate) plain_select: bool,
 }
 
 impl fmt::Debug for ImapClient {
@@ -306,10 +300,19 @@ impl ImapClient {
     /// `ID` (when supported and configured) and enables QRESYNC or
     /// CONDSTORE (when offered).
     pub async fn connect(config: &ImapConfig, credentials: &Credentials) -> Result<Self> {
-        let (stream, preauth_caps) = establish(config).await?;
-        let login = sasl::choose_login(config.auth, credentials, &preauth_caps)?;
+        let (stream, preauth_caps, tap) = establish(config).await?;
+        // The password / token never reaches the connection log, also not
+        // inside a server's error text.
+        tap.add_secret(credentials.secret.expose());
+        let login = match sasl::choose_login(config.auth, credentials, &preauth_caps) {
+            Ok(login) => login,
+            Err(err) => {
+                tap.close(Some(&err.to_string()));
+                return Err(err);
+            }
+        };
         let mut client = Self {
-            conn: Connection::new(stream, config.timeout),
+            conn: Connection::new(stream, config.timeout, tap),
             capabilities: preauth_caps,
             config: config.clone(),
             selected: None,
@@ -317,18 +320,46 @@ impl ImapClient {
             server_id: None,
             changes: Vec::new(),
             broken: false,
+            plain_select: false,
         };
-        let timeout = config.timeout;
-        let caps = with_timeout(timeout, client.authenticate(login, credentials)).await?;
-        match caps {
-            Some(caps) => client.capabilities = caps,
-            // Capabilities may change after authentication (RFC 3501 6.2).
-            None => {
-                client.refresh_capabilities().await?;
+        match client.log_in(login, credentials).await {
+            Ok(()) => Ok(client),
+            Err(err) => {
+                client.conn.tap().close(Some(&err.to_string()));
+                Err(err)
             }
         }
-        client.negotiate_extensions().await?;
-        Ok(client)
+    }
+
+    async fn log_in(&mut self, login: Login, credentials: &Credentials) -> Result<()> {
+        let timeout = self.config.timeout;
+        let caps = with_timeout(timeout, self.authenticate(login, credentials)).await?;
+        match caps {
+            Some(caps) => self.capabilities = caps,
+            // Capabilities may change after authentication (RFC 3501 6.2).
+            None => {
+                self.refresh_capabilities().await?;
+            }
+        }
+        self.negotiate_extensions().await
+    }
+
+    /// The last command sent on this connection, as the connection log
+    /// shows it (redacted; `None` when the log is off).
+    pub fn last_command(&self) -> Option<String> {
+        self.conn.tap().last_sent()
+    }
+
+    /// The last response line received, as the connection log shows it
+    /// (redacted; `None` when the log is off) — after a failed command its
+    /// tagged `NO` / `BAD`.
+    pub fn last_response(&self) -> Option<String> {
+        self.conn.tap().last_received()
+    }
+
+    /// This connection's id in the connection log.
+    pub fn connection_id(&self) -> u32 {
+        self.conn.tap().id()
     }
 
     /// The capabilities advertised after login.
@@ -409,11 +440,12 @@ impl ImapClient {
         let tag = self.conn.next_tag();
         let mut initial_sent = self.capabilities.has("SASL-IR");
         let command = if initial_sent {
-            format!("{tag} AUTHENTICATE {} {initial}\r\n", mechanism.name())
+            format!("{tag} AUTHENTICATE {} {initial}", mechanism.name())
         } else {
-            format!("{tag} AUTHENTICATE {}\r\n", mechanism.name())
+            format!("{tag} AUTHENTICATE {}", mechanism.name())
         };
-        self.conn.write(command.as_bytes()).await?;
+        self.conn.tap().sent(&[LogPart::Text(&command)]);
+        self.conn.write(format!("{command}\r\n").as_bytes()).await?;
         let mut server_error = None;
         loop {
             let response = match self.conn.read().await? {
@@ -434,6 +466,7 @@ impl ImapClient {
                         initial_sent = true;
                         initial.clone()
                     };
+                    self.conn.tap().sent(&[LogPart::Text(&reply)]);
                     self.conn.write(format!("{reply}\r\n").as_bytes()).await?;
                 }
                 Response::Done {
@@ -664,48 +697,70 @@ impl ImapClient {
                 }
                 command.push_str("))");
             }
-            _ if self.capabilities.has("CONDSTORE") => command.push_str(" (CONDSTORE)"),
+            _ if self.capabilities.has("CONDSTORE") && !self.plain_select => {
+                command.push_str(" (CONDSTORE)");
+            }
             _ => {}
         }
+        let with_parameter = command.ends_with(')');
         let (mut exists, mut uid_validity, mut uid_next, mut modseq, mut nomodseq) =
             (None, None, None, None, false);
         let mut result = OpenResult::default();
-        self.command(&command, |response| {
-            match response {
-                Response::MailboxData(MailboxDatum::Exists(n)) => exists = Some(*n),
-                Response::Data {
-                    code: Some(ResponseCode::UidValidity(v)),
-                    ..
-                } => uid_validity = Some(*v),
-                Response::Data {
-                    code: Some(ResponseCode::UidNext(n)),
-                    ..
-                } => uid_next = Some(*n),
-                Response::Data {
-                    code: Some(ResponseCode::HighestModSeq(n)),
-                    ..
-                } => modseq = Some(*n),
-                Response::Data {
-                    code: None,
-                    information: Some(text),
-                    ..
-                } if text.to_ascii_uppercase().starts_with("[NOMODSEQ]") => nomodseq = true,
-                Response::Vanished {
-                    earlier: true,
-                    uids,
-                } => {
-                    result.vanished.extend(uids.iter().cloned());
-                }
-                Response::Fetch(_, attributes) => {
-                    if let Some(update) = crate::changes::flag_update(attributes) {
-                        result.fetched.push(update);
+        let opened = self
+            .command(&command, |response| {
+                match response {
+                    Response::MailboxData(MailboxDatum::Exists(n)) => exists = Some(*n),
+                    Response::Data {
+                        code: Some(ResponseCode::UidValidity(v)),
+                        ..
+                    } => uid_validity = Some(*v),
+                    Response::Data {
+                        code: Some(ResponseCode::UidNext(n)),
+                        ..
+                    } => uid_next = Some(*n),
+                    Response::Data {
+                        code: Some(ResponseCode::HighestModSeq(n)),
+                        ..
+                    } => modseq = Some(*n),
+                    Response::Data {
+                        code: None,
+                        information: Some(text),
+                        ..
+                    } if text.to_ascii_uppercase().starts_with("[NOMODSEQ]") => nomodseq = true,
+                    Response::Vanished {
+                        earlier: true,
+                        uids,
+                    } => {
+                        result.vanished.extend(uids.iter().cloned());
                     }
+                    Response::Fetch(_, attributes) => {
+                        if let Some(update) = crate::changes::flag_update(attributes) {
+                            result.fetched.push(update);
+                        }
+                    }
+                    _ => return Ok(false),
                 }
-                _ => return Ok(false),
+                Ok(true)
+            })
+            .await;
+        match opened {
+            // Some servers advertise CONDSTORE but refuse the SELECT
+            // parameter: open without it from now on (ADR 0191).
+            Err(err @ (ImapError::No(_) | ImapError::Protocol(_)))
+                if with_parameter && qresync.is_none() && !self.broken =>
+            {
+                tracing::info!(%err, "SELECT (CONDSTORE) refused; opening without it");
+                self.conn.tap().note(
+                    WireLevel::Warning,
+                    "the server refused (CONDSTORE); opening without it",
+                );
+                self.plain_select = true;
+                return Box::pin(self.open(path, read_only, None)).await;
             }
-            Ok(true)
-        })
-        .await?;
+            other => {
+                other?;
+            }
+        }
         let uid_validity = uid_validity
             .ok_or_else(|| ImapError::Protocol(format!("no UIDVALIDITY for {path}")))?;
         let exists = exists.ok_or_else(|| ImapError::Protocol(format!("no EXISTS for {path}")))?;
@@ -737,7 +792,7 @@ impl ImapClient {
     }
 
     /// Fetches all messages of the examined mailbox whose UID lies in
-    /// `range` (raw bytes, flags, envelope), in UID order, in batches.
+    /// `range` (raw bytes, flags), in UID order, in batches.
     /// Call [`Self::examine`] first.
     ///
     /// Holds every message in memory; to sync a whole mailbox use
@@ -765,12 +820,34 @@ impl ImapClient {
     }
 
     /// [`Self::fetch_batch`] with the header block only (`headers_only`)
-    /// or the whole message.
+    /// or the whole message. A message the server withholds (or that came
+    /// back unreadable or too large) is an error.
     pub(crate) async fn fetch_uids(
         &mut self,
         uids: &[u32],
         headers_only: bool,
     ) -> Result<Vec<FetchedMessage>> {
+        let fetched = self.fetch_uids_report(uids, headers_only).await?;
+        if let Some(uid) = fetched.too_large.first() {
+            return Err(ImapError::TooLarge(format!("message {uid}")));
+        }
+        if !fetched.withheld.is_empty() {
+            return Err(ImapError::Protocol(format!(
+                "server did not return messages {}",
+                uid_set(&fetched.withheld)
+            )));
+        }
+        Ok(fetched.messages)
+    }
+
+    /// One `UID FETCH` of `uids`: the messages that came back, the UIDs the
+    /// server withheld although they still exist (no answer, or one that
+    /// could not be read), and those larger than Nail reads.
+    pub(crate) async fn fetch_uids_report(
+        &mut self,
+        uids: &[u32],
+        headers_only: bool,
+    ) -> Result<FetchedUids> {
         if self.selected.is_none() {
             return Err(ImapError::Protocol("no mailbox examined".to_owned()));
         }
@@ -778,7 +855,7 @@ impl ImapClient {
         wanted.sort_unstable();
         wanted.dedup();
         if wanted.is_empty() {
-            return Ok(Vec::new());
+            return Ok(FetchedUids::default());
         }
         let query = match (headers_only, self.capabilities.has("CONDSTORE")) {
             (false, true) => FETCH_QUERY_MODSEQ,
@@ -804,10 +881,18 @@ impl ImapClient {
         };
         self.run_parts(&[Part::Text(command.into())], &mut on, false)
             .await?;
-        self.check_complete(&wanted, &fetched).await?;
         fetched.sort_by_key(|m| m.uid);
         fetched.dedup_by_key(|m| m.uid);
-        Ok(fetched)
+        // An oversized literal arrives empty (see `conn.rs`).
+        let (too_large, fetched): (Vec<FetchedMessage>, Vec<FetchedMessage>) = fetched
+            .into_iter()
+            .partition(|m| m.raw.is_empty() && m.size.is_some_and(|s| s > 0));
+        let withheld = self.still_present(&wanted, &fetched, &too_large).await?;
+        Ok(FetchedUids {
+            messages: fetched,
+            withheld,
+            too_large: too_large.iter().map(|m| m.uid).collect(),
+        })
     }
 
     /// Examines `path` and plans fetching what is new since `known` (a
@@ -825,7 +910,16 @@ impl ImapClient {
         } else {
             self.search_uids(range).await?
         };
-        let sizes = self.fetch_sizes(&uids).await?;
+        // Sizes only shape the batches: a server that refuses the metadata
+        // fetch (long UID sets, ADR 0191) gets batches by count instead.
+        let sizes = match self.fetch_sizes(&uids).await {
+            Ok(sizes) => sizes,
+            Err(err @ (ImapError::No(_) | ImapError::Protocol(_))) if !self.broken => {
+                tracing::info!(%err, "message sizes refused; batching by count");
+                HashMap::new()
+            }
+            Err(err) => return Err(err),
+        };
         let batches = batch_uids(&uids, &sizes, self.config.fetch_batch);
 
         let planned_next = uids.last().map_or(0, |uid| uid.saturating_add(1));
@@ -871,21 +965,23 @@ impl ImapClient {
         Ok(sizes)
     }
 
-    /// A requested UID without a response is fine only if the message was
-    /// expunged meanwhile; otherwise the server failed us silently.
-    async fn check_complete(
+    /// The requested UIDs without a (usable) response that still exist: a
+    /// UID without a response is fine only if the message was expunged
+    /// meanwhile; otherwise the server failed us silently.
+    async fn still_present(
         &mut self,
         requested: &[u32],
         fetched: &[FetchedMessage],
-    ) -> Result<()> {
-        let got: BTreeSet<u32> = fetched.iter().map(|m| m.uid).collect();
+        too_large: &[FetchedMessage],
+    ) -> Result<Vec<u32>> {
+        let got: BTreeSet<u32> = fetched.iter().chain(too_large).map(|m| m.uid).collect();
         let missing: Vec<u32> = requested
             .iter()
             .copied()
             .filter(|uid| !got.contains(uid))
             .collect();
         if missing.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let mut still_there = Vec::new();
         self.command(
@@ -903,15 +999,9 @@ impl ImapClient {
             },
         )
         .await?;
-        if still_there.is_empty() {
-            Ok(())
-        } else {
-            still_there.sort_unstable();
-            Err(ImapError::Protocol(format!(
-                "server did not return messages {}",
-                uid_set(&still_there)
-            )))
-        }
+        still_there.sort_unstable();
+        still_there.dedup();
+        Ok(still_there)
     }
 
     /// Examines `path` and fetches what is new since `known` (a previous
@@ -1018,10 +1108,15 @@ impl ImapClient {
             }
             other => other,
         });
-        if let Err(err) = &result
-            && err.is_transient()
-        {
-            self.broken = true;
+        if let Err(err) = &result {
+            if err.is_transient() {
+                self.broken = true;
+                self.conn.tap().note(WireLevel::Error, &err.to_string());
+            } else if !matches!(err, ImapError::No(_)) {
+                // `BAD` / unreadable answers: the tagged line is logged
+                // already; this says what Nail made of it.
+                self.conn.tap().note(WireLevel::Warning, &err.to_string());
+            }
         }
         result
     }
@@ -1035,6 +1130,17 @@ impl ImapClient {
     /// truncated result is never mistaken for a complete one.
     async fn execute(&mut self, parts: &[Part<'_>], on: Handler<'_>) -> Result<Completion> {
         let tag = self.conn.next_tag();
+        if self.conn.tap().is_on() {
+            let head = format!("{tag} ");
+            let mut logged = vec![LogPart::Text(&head)];
+            for part in parts {
+                logged.push(match part {
+                    Part::Text(text) => LogPart::Text(text),
+                    Part::Literal(bytes) => LogPart::Bytes(bytes.len()),
+                });
+            }
+            self.conn.tap().sent(&logged);
+        }
         let literal_plus = self.capabilities.has("LITERAL+");
         let literal_minus = self.capabilities.has("LITERAL-");
         let mut line = format!("{tag} ");
@@ -1273,7 +1379,6 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
     let mut flags = MessageFlags::default();
     let mut internal_date = None;
     let mut size = None;
-    let mut envelope = None;
     let mut modseq = None;
     let mut raw = None;
     let mut headers_only = false;
@@ -1285,7 +1390,6 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
             }
             AttributeValue::InternalDate(value) => internal_date = internal_date_to_rfc3339(value),
             AttributeValue::Rfc822Size(value) => size = Some(*value),
-            AttributeValue::Envelope(value) => envelope = Some(convert_envelope(value)),
             AttributeValue::ModSeq(value) => modseq = Some(*value),
             AttributeValue::BodySection {
                 section: None,
@@ -1318,7 +1422,6 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
         keywords: flags.keywords,
         internal_date,
         size,
-        envelope,
         modseq,
         raw,
         headers_only,
@@ -1363,38 +1466,6 @@ fn internal_date_to_rfc3339(value: &str) -> Option<String> {
     Some(format!(
         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}{offset}"
     ))
-}
-
-fn lossy(bytes: Option<&Cow<'_, [u8]>>) -> Option<String> {
-    bytes.map(|b| String::from_utf8_lossy(b).into_owned())
-}
-
-fn convert_envelope(envelope: &ImapEnvelope<'_>) -> Envelope {
-    Envelope {
-        date: lossy(envelope.date.as_ref()),
-        subject: lossy(envelope.subject.as_ref()),
-        from: convert_addresses(envelope.from.as_deref()),
-        to: convert_addresses(envelope.to.as_deref()),
-        cc: convert_addresses(envelope.cc.as_deref()),
-        in_reply_to: lossy(envelope.in_reply_to.as_ref()),
-        message_id: lossy(envelope.message_id.as_ref()),
-    }
-}
-
-fn convert_addresses(addresses: Option<&[ImapAddress<'_>]>) -> Vec<Address> {
-    addresses
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|addr| {
-            // Group syntax markers have no host.
-            let mailbox = lossy(addr.mailbox.as_ref())?;
-            let host = lossy(addr.host.as_ref())?;
-            Some(Address {
-                name: lossy(addr.name.as_ref()).filter(|n| !n.is_empty()),
-                email: format!("{mailbox}@{host}"),
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]

@@ -118,6 +118,7 @@ pub mod scheduling;
 mod schema;
 pub mod seal;
 pub mod store;
+mod sync_errors;
 pub mod thread;
 mod triage;
 

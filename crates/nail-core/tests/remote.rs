@@ -1098,6 +1098,7 @@ async fn remote_sockets_get_only_the_events_their_grant_covers() {
         code: ErrorCode::Network,
         message: "connection refused".into(),
         localized: None,
+        details: None,
     };
     for mail in [new_mail, changed, failed] {
         assert_eq!(service.remote_event(&narrow, mail.clone()).await, None);

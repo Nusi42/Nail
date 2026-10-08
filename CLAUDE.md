@@ -158,6 +158,19 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
                        ThreadSummary.participants, ThreadSummary.latest_from / latest_message, ConversationMessage
                        (MessageSummary flattened + from_me); GetConversation {thread_id, folder_id?} → Conversation
+                       ADR 0190: connlog.rs (WireProtocol / WireDirection / WireLevel, ConnectionLogScope account /
+                       pim-source / setup, ConnectionLogEntry::line = the one line format, ConnectionLog, settings,
+                       ErrorStep, ErrorDetails, SyncErrorRecord, SkippedMessage, AppLog, REDACTED, limits); requests
+                       Get / Clear / ExportConnectionLog, Get / SetConnectionLogSettings, ListSyncErrors, GetAppLog;
+                       events ConnectionLogChanged (no content), SyncErrorsChanged; `details` on SyncFailed,
+                       SendStatus and AccountStatus
+crates/nail-connlog    ADR 0190: the one redactor of the workspace (redact.rs: secrets, registered secrets, masked
+                       addresses, subjects / display names, user paths — the diagnostics bundle uses it too), protocol
+                       rules (imap.rs, lines.rs SMTP / POP3 / ManageSieve, http.rs URLs / request / response lines /
+                       error summaries, tls.rs certificate summary); WireTap / ConnTap / HttpTap (protocol clients log
+                       only through these: text and literal *sizes*, never bytes), ConnectionLogs (rings per scope,
+                       disk mirror, throttled change notices), RotatingFile (also app.log); proptest "no secret
+                       survives"
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -212,7 +225,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        by kind), GetThemeDetails origins, id_from_name = NFKD without marks like the UI's themeIdFromName),
                        kdl_edit detach / put / reindent / replace_with / set_arg; golden files
                        tests/golden/{layout_edit,theme_edit} (NAIL_UPDATE_GOLDEN=1)
-crates/nail-store      SQLite metadata (v17), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v19), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -272,6 +285,8 @@ crates/nail-store      SQLite metadata (v17), blob store, per-account operation 
                        v17 (P3, ADR 0164): thread_activity (per folder + thread order key incl. the Sent join;
                        thread/activity.rs PAGE_SQL / COUNT_SQL; WP-perf maintains it from v18), mail_batches /
                        mail_batch_ops (mail actions with inverses for undo; mail_batches.rs)
+                       v19 (ADRs 0190 / 0191): sync_errors.rs (sync_errors: last error per account / folder,
+                       sync_skipped: messages a folder sync skipped, with attempts and ErrorDetails)
                        v18 (P3 WP-perf, ADR 0166): five triggers keep thread_activity equal to the backfill
                        (activity.rs MAINTENANCE_SQL; a later migration that rebuilds messages / folders must recreate
                        them); ListThreads pages are index ranges on the table, one batched read per page
@@ -294,10 +309,14 @@ crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rul
                        plug-ins; sanitize_mail_html_portable); no `{` / `}` in kept declarations (ADR 0145)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018);
                        bodies.rs (BodyFetch, fetch_batch_with, fetch_body), search.rs (SearchKey,
-                       search_messages) (ADR 0046)
-crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
-crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
-crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
+                       search_messages) (ADR 0046); ADR 0191: no ENVELOPE, salvage.rs (lenient FETCH reader),
+                       resilient.rs fetch_batch_resilient (split refused batches, FetchFailure per message),
+                       (CONDSTORE) / (QRESYNC) refusals fall back, oversized literals dropped in step;
+                       ImapConfig.tap, last_command / last_response (ADR 0190)
+crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017); SmtpConfig.tap (ADR 0190)
+crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017); Pop3Config.tap (ADR 0190)
+crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017); OAuthTaps:
+                       token requests log into the account's connection log, flows into setup's (ADR 0190)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017); system_dns.rs SystemDns
                        (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057);
                        M3b: Gmail API candidate first (DiscoverySource::Provider) for gmail.com / googlemail.com /
@@ -315,7 +334,9 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        to NAIL_FAKE_INSTALLER_RECORD instead of installing; ADR 0092);
                        conversations/ = P2 demo conversations (ADR 0152: demo_corpus_with_conversations,
                        conversation_corpus, MailStore::demo_with_conversations, DEMO_CONVERSATIONS; shown by the seeds of
-                       nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged)
+                       nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged);
+                       ADR 0191: MessageFault refuse / malformed / withhold / garbage per UID, limit_fetch_uids,
+                       refuse_select_parameters (demo-multi controls imap-fault, imap-deny)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers; managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
                        sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
@@ -1259,6 +1280,19 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `z` undo. MCP `update_messages` / `delete_messages` and plug-in `nail.mail.update` / `delete` take
   `conversations` (SDK `PluginMailTargets`). Schema stays v18 (no v19). HTML mail frames are as tall as their mail
   (no 40vh minimum). E2E: `p3-actions.spec.ts`, `p3-card-height.spec.ts`; `thread-page-p95-ms` budget 10.
+- Connection log (ADR 0190): every protocol client logs through a `nail_connlog` tap (IMAP / SMTP / POP3 /
+  ManageSieve at their command layer, the HTTP clients one request + one response line, OAuth token requests,
+  discovery + Autodiscover); the core gives each engine its scope's tap (`Service::account_tap`, `connlog_tap`) and
+  keeps rings of 2,000 entries per scope in memory (`connlog.rs`); "Keep connection log on disk" (off by default)
+  mirrors to `<data-dir>/logs/connections/`, turning it off deletes the folder. Remote sessions need `admin`; MCP and
+  plug-ins never see it. New redaction rules go into `nail-connlog` only (one redactor, also for the diagnostics
+  bundle and app.log). `ErrorDetails` (step from the failing command, its server answer) ride on SyncFailed /
+  AccountStatus / SendStatus; the last error per account and folder is stored (`sync_errors`, schema v19) and cleared
+  by the next success (`Service::engine_failed` / `engine_online`, `report_pass`). The binaries attach
+  `<data-dir>/logs/app.log` (`nail_core::logs::attach_file`, redacted, rotated at 5 MiB).
+- Resilient IMAP sync (ADR 0191): one refused / unreadable / withheld / oversized message is skipped and recorded
+  (`sync_skipped`, schema v19) in the store call that moves the checkpoint past it, and retried by later passes
+  (`retry_skipped`); only mailbox-level refusals or more than five failures fail a batch.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

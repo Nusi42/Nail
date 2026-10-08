@@ -16,7 +16,7 @@ use tokio::sync::watch;
 use super::command::{self, FetchItem, Section, SequenceSet, Token};
 use super::deflate::DeflateIo;
 use super::encode::{number_list, number_set, push_envelope, push_literal, push_string};
-use super::{Control, MockImapConfig, MockTls};
+use super::{Control, MessageFault, MockImapConfig, MockTls};
 use crate::mailstore::{FlagUpdate, MailStore, Mailbox, MailboxError, StoredFlags, StoredMessage};
 use crate::tls::TestTls;
 
@@ -906,6 +906,9 @@ impl Session {
         let caps = self.shared.config.capabilities;
         // Select parameters: (CONDSTORE) or (QRESYNC (uidvalidity modseq [known-uids])).
         let mut qresync_params: Option<(u32, u64, Option<SequenceSet>)> = None;
+        if args.get(1).is_some() && self.shared.control.refuses_select_parameters() {
+            return Ok(bad("Error in IMAP command: Unknown parameter"));
+        }
         match args.get(1) {
             None => {}
             Some(Token::List(params)) => {
@@ -1162,6 +1165,26 @@ impl Session {
             .as_ref()
             .map(|v| v.matching(&set, uid))
             .unwrap_or_default();
+        let control = &self.shared.control;
+        if uid
+            && control
+                .max_fetch_uids()
+                .is_some_and(|max| targets.len() > max)
+        {
+            return Ok(bad("command line too long"));
+        }
+        let wants_content = items
+            .iter()
+            .any(|i| matches!(i, FetchItem::Body { .. } | FetchItem::Rfc822(_)));
+        if wants_content
+            && targets
+                .iter()
+                .any(|t| control.message_fault(t.1) == Some(MessageFault::Refuse))
+        {
+            return Ok(no(
+                "[SERVERBUG] Internal error occurred. Refer to server log for more information.",
+            ));
+        }
         if marks_seen {
             let uids: Vec<u32> = targets.iter().map(|t| t.1).collect();
             self.shared.store.store_flags(
@@ -1201,7 +1224,25 @@ impl Session {
             if changed_since.is_some_and(|since| message.modseq <= since) {
                 continue;
             }
+            let fault = self
+                .shared
+                .control
+                .message_fault(message_uid)
+                .filter(|_| wants_content);
+            if fault == Some(MessageFault::Withhold) {
+                continue;
+            }
+            if fault == Some(MessageFault::Garbage) {
+                out.extend_from_slice(
+                    format!("* {seq} FETCH (UID {message_uid} X-BROKEN ((( \"\r\n").as_bytes(),
+                );
+                continue;
+            }
             out.extend_from_slice(format!("* {seq} FETCH (").as_bytes());
+            if fault == Some(MessageFault::Malformed) {
+                // Raw Latin-1 in a quoted string and an empty list.
+                out.extend_from_slice(b"X-ODD (\"Gr\xfc\xdfe\" ()) ");
+            }
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
                     out.push(b' ');

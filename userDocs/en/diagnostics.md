@@ -34,6 +34,10 @@ at the new list first.
 Passwords, sign-in tokens, keys and keychain names are always removed, in
 every file. Your user name in file paths is replaced.
 
+To see what Nail said to a mail server when something failed, open the
+account's [connection log](connection-log.md) instead; it is protected the
+same way.
+
 ## Including messages
 
 Some problems can only be understood with the message that causes them.

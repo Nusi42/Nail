@@ -11,6 +11,7 @@
  */
 import { useState } from "react";
 import { errorMessageOf } from "../../api/client";
+import { ConnectionLogSettingsCard } from "../connlog";
 import type {
   DiagnosticsBundle,
   DiagnosticsItem,
@@ -331,6 +332,7 @@ export function DiagnosticsWidget() {
       >
         {t("portability-diagnostics-open")}
       </button>
+      <ConnectionLogSettingsCard />
     </section>
   );
 }

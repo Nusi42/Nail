@@ -133,6 +133,7 @@ pub mod appearance;
 pub mod backup;
 pub mod compose;
 pub mod config;
+pub mod connlog;
 pub mod context;
 pub mod customize;
 pub mod desktop;

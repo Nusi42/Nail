@@ -151,7 +151,12 @@ impl Service {
 
     /// `DiscoverAccount`.
     pub(crate) async fn discover(&self, email: &str) -> Result<Vec<DiscoveredAccount>> {
-        let discoverer = self.discoverer()?;
+        // ADR 0190: account setup has a connection log of its own.
+        let discoverer = self.discoverer()?.with_tap(
+            &self
+                .connlog_tap(&nail_api::connlog::ConnectionLogScope::Setup)
+                .http(nail_api::connlog::WireProtocol::Discovery),
+        );
         discoverer
             .discover(email)
             .await
@@ -253,7 +258,7 @@ impl Service {
         let incoming = match &config.incoming {
             IncomingServer::Imap { server, options } => {
                 let settings = crate::sync::ImapSettings {
-                    config: imap_config(server, options),
+                    config: imap_config(server, options).with_tap(self.account_tap(&account)),
                     credentials: Arc::new(incoming_creds),
                 };
                 test_result(
@@ -270,7 +275,7 @@ impl Service {
             IncomingServer::Pop3 { server, .. } => match incoming_creds.login(false).await {
                 Ok(login) => {
                     nail_proto_pop3::test_login(
-                        &pop3_config(server),
+                        &pop3_config(server).with_tap(self.account_tap(&account)),
                         &crate::creds::pop3_credentials(login),
                     )
                     .await
@@ -299,7 +304,8 @@ impl Service {
                     )?,
                 };
                 let smtp = nail_proto_smtp::SmtpConfig::from_endpoint(server)
-                    .with_timeout(crate::creds::NETWORK_TIMEOUT);
+                    .with_timeout(crate::creds::NETWORK_TIMEOUT)
+                    .with_tap(self.account_tap(&account));
                 Some(match creds.login(false).await {
                     Ok(login) => {
                         let auth = nail_proto_smtp::SmtpAuth::Credentials(

@@ -47,6 +47,9 @@ pub struct SmtpConfig {
     /// rather than the machine's host name, which would leak into the
     /// `Received` header of every sent message.
     pub hello_name: Option<String>,
+    /// The connection log every session records into (ADR 0190); off by
+    /// default.
+    pub tap: nail_connlog::WireTap,
 }
 
 impl SmtpConfig {
@@ -63,7 +66,15 @@ impl SmtpConfig {
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
             hello_name: None,
+            tap: nail_connlog::WireTap::off(),
         }
+    }
+
+    /// Records every session into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::WireTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// The connection part of an account's outgoing [`ServerEndpoint`]
@@ -83,6 +94,7 @@ impl SmtpConfig {
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
             hello_name: None,
+            tap: nail_connlog::WireTap::off(),
         }
     }
 

@@ -59,7 +59,7 @@ pub struct HttpError(pub String);
 /// [`oauth2`]'s HTTP client trait on [`reqwest`], with a named `Send`
 /// future (closures trip up `Send` inference across the token request).
 #[derive(Debug, Clone)]
-pub(crate) struct Fetcher(pub(crate) reqwest::Client);
+pub(crate) struct Fetcher(pub(crate) reqwest::Client, pub(crate) nail_connlog::HttpTap);
 
 impl<'c> oauth2::AsyncHttpClient<'c> for Fetcher {
     type Error = HttpError;
@@ -68,34 +68,52 @@ impl<'c> oauth2::AsyncHttpClient<'c> for Fetcher {
     >;
 
     fn call(&'c self, request: oauth2::HttpRequest) -> Self::Future {
-        Box::pin(execute(&self.0, request))
+        Box::pin(execute(&self.0, &self.1, request))
     }
 }
 
 /// Performs an [`oauth2::HttpRequest`] with `client`.
+/// Requests and answers go to the connection log `tap` (ADR 0190): the
+/// request line, the status and, for a refused request, the error code and
+/// description of the body — never a token or the body otherwise.
 pub(crate) async fn execute(
     client: &reqwest::Client,
+    tap: &nail_connlog::HttpTap,
     request: oauth2::HttpRequest,
 ) -> Result<oauth2::HttpResponse, HttpError> {
     let (parts, body) = request.into_parts();
+    let exchange = tap.request(
+        parts.method.as_str(),
+        &parts.uri.to_string(),
+        parts.headers.contains_key(reqwest::header::AUTHORIZATION),
+        Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+    );
     let mut builder = client
         .request(parts.method, parts.uri.to_string())
         .body(body);
     for (name, value) in &parts.headers {
         builder = builder.header(name, value);
     }
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| HttpError(without_url(&e)))?;
-    let mut out = oauth2::http::Response::builder().status(response.status());
+    let response = builder.send().await.map_err(|e| {
+        let err = HttpError(without_url(&e));
+        exchange.failed(&err.0);
+        err
+    })?;
+    let status = response.status();
+    let mut out = oauth2::http::Response::builder().status(status);
     for (name, value) in response.headers() {
         out = out.header(name, value);
     }
-    let body = response
-        .bytes()
-        .await
-        .map_err(|e| HttpError(without_url(&e)))?;
+    let body = response.bytes().await.map_err(|e| {
+        let err = HttpError(without_url(&e));
+        exchange.failed(&err.0);
+        err
+    })?;
+    exchange.response(
+        status.as_u16(),
+        Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+        Some(&body),
+    );
     out.body(body.to_vec())
         .map_err(|e| HttpError(e.to_string()))
 }

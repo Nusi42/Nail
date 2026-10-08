@@ -2,6 +2,7 @@
 import type { AccountId } from "./AccountId";
 import type { AccountState } from "./AccountState";
 import type { ErrorCode } from "./ErrorCode";
+import type { ErrorDetails } from "./ErrorDetails";
 import type { LocalizedMessage } from "./LocalizedMessage";
 
 /**
@@ -32,4 +33,8 @@ message: string | null,
  * The user-facing text (Fluent id + arguments) when the core has a more
  * specific one than the error class; else `null` (ADR 0043).
  */
-localized?: LocalizedMessage, };
+localized?: LocalizedMessage, 
+/**
+ * The precise cause of the error ("Show details", ADR 0190).
+ */
+details?: ErrorDetails, };

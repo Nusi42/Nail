@@ -46,7 +46,7 @@ use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
 
 use super::{RunningEngine, changed, exchange_parts};
-use crate::engine::{Signals, state_for_error, stopped, unix_now};
+use crate::engine::{Signals, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest_with_remote};
@@ -122,11 +122,14 @@ pub(crate) async fn run(
     let (engine, batch) = match super::setup::engines_for(&service, &account) {
         Ok(engines) => engines,
         Err(err) => {
-            service.set_status(
-                &account.id,
-                AccountState::Offline,
-                Some((err.code(), err.to_string(), err.localized())),
-            );
+            service
+                .engine_failed(
+                    &account.id,
+                    &err,
+                    crate::connlog::ErrorContext::of_error(super::wire_protocol(&account), &err),
+                    false,
+                )
+                .await;
             stopped(&mut stop).await;
             return;
         }
@@ -174,25 +177,24 @@ pub(crate) async fn run(
         let delay = match result {
             Ok(()) => {
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 timing
                     .poll_override
                     .unwrap_or_else(|| state.poll.next_delay())
             }
             Err(err) => {
-                let code = err.code();
                 tracing::info!(account = %account.id, %err, "Exchange sync failed");
-                service.set_status(
-                    &account.id,
-                    state_for_error(code),
-                    Some((code, err.to_string(), err.localized())),
-                );
-                service.broadcast(Event::SyncFailed {
-                    account_id: account.id.clone(),
-                    code,
-                    message: err.to_string(),
-                    localized: err.localized(),
-                });
+                service
+                    .engine_failed(
+                        &account.id,
+                        &err,
+                        crate::connlog::ErrorContext::of_error(
+                            super::wire_protocol(&account),
+                            &err,
+                        ),
+                        true,
+                    )
+                    .await;
                 let engine_err: EngineError = err.into();
                 if let Some(secs) = engine_err.retry_after_secs {
                     record_throttle(&service, &account.id, secs).await;

@@ -21,6 +21,7 @@ import { COLUMN_IDS } from "../widgets/MessageList";
 import { errorMessageId } from "../api/client";
 import * as agentsMessages from "../features/agents/messages";
 import * as composerMessages from "../features/composer/messages";
+import * as connlogMessages from "../features/connlog/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as exchangeMessages from "../features/exchange/messages";
 import * as gmailMessages from "../features/gmail/messages";
@@ -75,6 +76,7 @@ const FEATURE_MESSAGES = [
   windowsMessages,
   popoutMessages,
   layoutEditorMessages,
+  connlogMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

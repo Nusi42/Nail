@@ -437,3 +437,50 @@ async fn test_login_reports_results() {
     // Nothing was deleted by the test logins.
     assert_eq!(server.uids().len(), 2);
 }
+
+/// ADR 0190: the connection log of a session: commands and status lines,
+/// message bodies as their size, never the password.
+#[tokio::test]
+async fn the_connection_log_shows_the_session_without_content() {
+    for mechanism in [
+        SaslMechanism::Login,
+        SaslMechanism::Plain,
+        SaslMechanism::Apop,
+    ] {
+        let server = server(MockPop3Config::default()).await;
+        let logs = nail_connlog::ConnectionLogs::new();
+        let scope = nail_api::connlog::ConnectionLogScope::account(&"home".into());
+        let config = plain(&server).with_tap(logs.tap(&scope));
+        let mut client = logged_in(
+            &config,
+            &Pop3Credentials::Password {
+                username: USER.to_owned(),
+                password: PASS.to_owned(),
+                mechanism: Some(mechanism),
+            },
+        )
+        .await
+        .unwrap();
+        client.messages().await.unwrap();
+        client.retr(1).await.unwrap();
+        client.quit().await.unwrap();
+        let text = logs.text(&scope);
+        assert!(text.contains("C: CAPA"), "{text}");
+        assert!(text.contains("C: RETR 1"), "{text}");
+        assert!(text.contains(" bytes}"), "{text}");
+        match mechanism {
+            SaslMechanism::Login => {
+                assert!(text.contains("C: USER s***@nail.example"), "{text}");
+                assert!(text.contains("C: PASS <redacted>"), "{text}");
+            }
+            SaslMechanism::Plain => assert!(text.contains("C: AUTH PLAIN <redacted>"), "{text}"),
+            _ => assert!(
+                text.contains("C: APOP s***@nail.example <redacted>"),
+                "{text}"
+            ),
+        }
+        for secret in [PASS, USER, "first", "dotted line", "Subject: one"] {
+            assert!(!text.contains(secret), "{secret} in {text}");
+        }
+    }
+}

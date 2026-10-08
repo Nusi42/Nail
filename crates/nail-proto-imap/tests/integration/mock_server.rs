@@ -119,14 +119,6 @@ async fn full_fetch_returns_raw_messages_and_flags() {
             Some(u32::try_from(expected.raw.len()).unwrap())
         );
     }
-    let welcome = messages[0].envelope.as_ref().unwrap();
-    assert_eq!(welcome.subject.as_deref(), Some("Welcome to Nail"));
-    assert_eq!(welcome.from[0].email, "ada@lovelace.example");
-    assert_eq!(welcome.from[0].name.as_deref(), Some("Ada Lovelace"));
-    assert_eq!(
-        welcome.message_id.as_deref(),
-        Some("<welcome-0001@lovelace.example>")
-    );
     assert_eq!(
         messages[0].internal_date.as_deref(),
         Some("2026-09-28T08:15:00+02:00")

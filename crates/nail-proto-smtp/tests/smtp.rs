@@ -678,3 +678,55 @@ async fn test_login_reports_results() {
     assert_eq!(down.error, Some(ErrorCode::Network));
     assert!(down.capabilities.is_empty(), "{:?}", down.capabilities);
 }
+
+/// ADR 0190: the connection log of a session holds commands and replies,
+/// never the password, the message or a full address.
+#[tokio::test]
+async fn the_connection_log_shows_the_session_without_content() {
+    for mechanism in [SaslMechanism::Plain, SaslMechanism::Login] {
+        let server = server(MockSmtpConfig::default()).await;
+        let logs = nail_connlog::ConnectionLogs::new();
+        let scope = nail_api::connlog::ConnectionLogScope::account(&"work".into());
+        let config = plain_config(&server).with_tap(logs.tap(&scope));
+        let mut session = session(
+            &config,
+            &SmtpCredentials::Password {
+                username: USER.to_owned(),
+                password: PASS.to_owned(),
+                mechanism: Some(mechanism),
+            },
+        )
+        .await
+        .unwrap();
+        session
+            .send(
+                &envelope(&["bob@example.org"]),
+                MESSAGE,
+                SendOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            session
+                .last_command()
+                .is_some_and(|c| c.contains(" bytes}"))
+        );
+        session.quit().await.unwrap();
+        let text = logs.text(&scope);
+        assert!(text.contains("C: EHLO [127.0.0.1]"), "{text}");
+        assert!(text.contains("S: 250"), "{text}");
+        assert!(text.contains("C: MAIL FROM:<s***@nail.example>"), "{text}");
+        assert!(text.contains("C: RCPT TO:<b***@example.org>"), "{text}");
+        assert!(text.contains("C: <message {"), "{text}");
+        assert!(text.contains("C: QUIT"), "{text}");
+        if mechanism == SaslMechanism::Plain {
+            assert!(text.contains("C: AUTH PLAIN <redacted>"), "{text}");
+        } else {
+            assert!(text.contains("C: AUTH LOGIN"), "{text}");
+            assert!(text.contains("S: 334 <challenge>"), "{text}");
+        }
+        for secret in [PASS, USER, "bob@example.org", "Hello", "Subject: Hi"] {
+            assert!(!text.contains(secret), "{secret} in {text}");
+        }
+    }
+}

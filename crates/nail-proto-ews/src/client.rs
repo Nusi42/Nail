@@ -200,6 +200,8 @@ struct Inner {
     stream: Lane,
     own_address: Option<String>,
     state: Mutex<State>,
+    /// The connection log (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 /// An EWS client for one account (cheap to clone).
@@ -250,6 +252,7 @@ impl EwsClient {
                     version: DEFAULT_SERVER_VERSION,
                     server_version: None,
                 }),
+                tap: nail_connlog::HttpTap::off(),
             }),
         })
     }
@@ -273,6 +276,7 @@ impl EwsClient {
                 stream: Lane::new(shared.stream.http.clone()),
                 own_address: shared.own_address.clone(),
                 state: Mutex::new(state),
+                tap: shared.tap.clone(),
             }
         });
         change(&mut inner);
@@ -285,6 +289,12 @@ impl EwsClient {
     #[must_use]
     pub fn with_retry(self, retry: RetryPolicy) -> Self {
         self.rebuild(|i| i.retry = retry)
+    }
+
+    /// Records every request into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(self, tap: nail_connlog::HttpTap) -> Self {
+        self.rebuild(|i| i.tap = tap)
     }
 
     /// The account's own address: the default `X-AnchorMailbox` and the
@@ -634,7 +644,13 @@ impl EwsClient {
             .header(reqwest::header::CONTENT_TYPE, "text/xml; charset=utf-8")
             .header(reqwest::header::ACCEPT, "text/xml")
             .body(envelope.to_owned());
+        let authorized = authorization.is_some();
         if let Some(value) = authorization {
+            // The credential (token, Basic pair, Negotiate blob) never
+            // reaches the log, also not inside a server's error text.
+            if let Some((_, credential)) = value.split_once(' ') {
+                self.inner.tap.add_secret(credential);
+            }
             let mut value = HeaderValue::from_str(&value).map_err(|_| {
                 EwsError::Protocol("the credentials are not valid header text".into())
             })?;
@@ -646,7 +662,25 @@ impl EwsClient {
         {
             request = request.header("X-AnchorMailbox", value);
         }
-        request.send().await.map_err(transport_error)
+        let exchange = self.inner.tap.request(
+            "POST",
+            self.inner.url.as_str(),
+            authorized,
+            Some(u64::try_from(envelope.len()).unwrap_or(u64::MAX)),
+        );
+        match request.send().await {
+            Ok(response) => {
+                // The body (a SOAP answer, or a notification stream) is
+                // read by the caller; the log gets the status.
+                exchange.response(response.status().as_u16(), response.content_length(), None);
+                Ok(response)
+            }
+            Err(err) => {
+                let err = transport_error(err);
+                exchange.failed(&err.to_string());
+                Err(err)
+            }
+        }
     }
 }
 

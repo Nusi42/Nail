@@ -231,7 +231,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
     CONVERSATION_UNREAD,
   ]);
   await loadMainWindow(page, server.url);
-  await screen.open(page);
+  await screen.open(page, server);
   await settle(page);
   const shot = await captureStable(() =>
     page.screenshot({
@@ -241,7 +241,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
       mask: screen.mask?.(page) ?? [],
     }),
   );
-  await screen.close?.(page);
+  await screen.close?.(page, server);
   return shot;
 }
 

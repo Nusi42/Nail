@@ -16,6 +16,7 @@ import type { WindowTitleFn, WindowTitleRegistry } from "../layout/windowSpecs";
 import * as agents from "./agents";
 import * as appearance from "./appearance";
 import * as composer from "./composer";
+import * as connlog from "./connlog";
 import * as conversationList from "./conversation-list";
 import * as conversationReader from "./conversation-reader";
 import * as customization from "./customization";
@@ -88,6 +89,8 @@ export const features: Readonly<Record<string, Feature>> = {
   conversationReader,
   // P3 (ADR 0164): Gmail-like conversation actions (WP-actions-ui).
   mailActions,
+  // ADR 0190: the connection log, error details, the application log.
+  connlog,
 };
 
 /** The merged registries. */

@@ -122,6 +122,11 @@ pub(crate) async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let (data_dir, config_dir) = (dirs.data.clone(), dirs.config.clone());
     // One process per data directory (a headless `nail mcp` included).
     let lock = DataDirLock::acquire(&data_dir, "serve")?;
+    // ADR 0190: the application log (redacted) next to the data.
+    match nail_core::logs::attach_file(&data_dir) {
+        Ok(path) => tracing::info!(log = %path.display(), "writing the application log"),
+        Err(err) => tracing::warn!(%err, "cannot write the application log"),
+    }
     let ui_dir = resolve_ui_dir(
         args.ui_dir,
         std::env::var_os(UI_DIR_ENV).map(PathBuf::from),

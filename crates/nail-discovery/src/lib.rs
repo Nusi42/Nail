@@ -36,7 +36,7 @@ pub use discover::{
     Discoverer, DiscoveryError, ISPDB_BASE, discover, flag_foreign_hosts, protocols, rank,
 };
 pub use net::{
-    DnsLookup, HickoryDns, HostProbe, HttpFetch, HttpReply, MxRecord, NetError, ReqwestFetch,
-    SrvRecord, TcpProbe,
+    DnsLookup, HickoryDns, HostProbe, HttpFetch, HttpReply, LoggedDns, LoggedFetch, MxRecord,
+    NetError, ReqwestFetch, SrvRecord, TcpProbe,
 };
 pub use system_dns::SystemDns;

@@ -108,7 +108,15 @@ pub(crate) fn engines_for(service: &Service, account: &AccountConfig) -> Result<
     let tokens = Arc::clone(&service.inner.tokens);
     match options.engine {
         EngineKind::Graph => {
-            let engine = Arc::new(GraphEngine::for_account(account, tokens).map_err(engine_error)?);
+            let engine = Arc::new(
+                GraphEngine::for_account(account, tokens)
+                    .map_err(engine_error)?
+                    .with_tap(
+                        service
+                            .account_tap(&account.id)
+                            .http(nail_api::connlog::WireProtocol::Graph),
+                    ),
+            );
             Ok((engine.clone(), Some(super::batch::of_graph(&engine))))
         }
         EngineKind::Ews => {
@@ -126,7 +134,12 @@ pub(crate) fn engines_for(service: &Service, account: &AccountConfig) -> Result<
                     tokens,
                     negotiate,
                 )
-                .map_err(engine_error)?,
+                .map_err(engine_error)?
+                .with_tap(
+                    service
+                        .account_tap(&account.id)
+                        .http(nail_api::connlog::WireProtocol::Ews),
+                ),
             );
             Ok((engine.clone(), Some(super::batch::of_ews(&engine))))
         }
@@ -256,6 +269,12 @@ pub(crate) async fn autodiscover(
             }
         },
     };
+    // ADR 0190: Autodiscover logs into account setup's connection log.
+    let tap = service
+        .connlog_tap(&nail_api::connlog::ConnectionLogScope::Setup)
+        .http(nail_api::connlog::WireProtocol::Discovery);
+    let http: Arc<dyn nail_exchange::http::ExchangeHttp> =
+        Arc::new(nail_exchange::http::LoggedHttp::new(http, tap.clone()));
     // Shorter than a whole run of its own: it runs next to the other lookups.
     let mut discoverer = Autodiscoverer::new(http).with_timeout(AUTODISCOVER_TIMEOUT);
     let dns: Option<Arc<dyn nail_discovery::DnsLookup>> = match &hooks.autodiscover_dns {
@@ -263,7 +282,10 @@ pub(crate) async fn autodiscover(
         None => nail_discovery::SystemDns::new()
             .ok()
             .map(|dns| -> Arc<dyn nail_discovery::DnsLookup> { Arc::new(dns) }),
-    };
+    }
+    .map(|dns| -> Arc<dyn nail_discovery::DnsLookup> {
+        Arc::new(nail_discovery::LoggedDns::new(dns, tap.clone()))
+    });
     // Microsoft's global endpoint learns the address: only for domains
     // whose mail Microsoft hosts already (their MX), never otherwise.
     let microsoft_hosted = match (&dns, email.rsplit_once('@')) {

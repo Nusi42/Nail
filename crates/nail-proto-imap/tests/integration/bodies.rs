@@ -52,7 +52,6 @@ async fn headers_only_fetches_header_blocks_and_bodies_come_on_demand() {
             Some(u32::try_from(full.len()).unwrap()),
             "the size is the full message's"
         );
-        assert!(message.envelope.is_some());
     }
     assert!(headers[0].flags.seen, "flags come with the headers");
 

@@ -101,7 +101,12 @@ describe("MockTransport", () => {
       type: "SyncStarted",
     });
     await Promise.resolve();
-    expect(events.map((e) => e.type)).toEqual(["SyncProgress", "SyncProgress"]);
+    // The sync's connection log lines are announced in between (ADR 0190).
+    expect(events.map((e) => e.type)).toEqual([
+      "SyncProgress",
+      "ConnectionLogChanged",
+      "SyncProgress",
+    ]);
   });
 });
 

@@ -13,6 +13,7 @@ import type {
   DraftContext,
   DraftId,
   ErrorCode,
+  ErrorDetails,
   FolderId,
   ListFilter,
   LocalizedMessage,
@@ -36,6 +37,8 @@ export interface SyncErrorState {
   code: ErrorCode;
   /** The core's text for the failure (Fluent id + arguments), if it sent one. */
   localized?: LocalizedMessage | null;
+  /** The precise cause, for "Show details" (ADR 0190). */
+  details?: ErrorDetails | null;
 }
 
 export interface ConfigErrorState {
@@ -145,6 +148,8 @@ export interface UiState {
   failedOp: OpId | null;
   /** The last message handed to the outbox (undo-send countdown). */
   lastSend: OutboxEntry | null;
+  /** Why `lastSend` failed, for "Show details" (ADR 0190). */
+  lastSendDetails: ErrorDetails | null;
   /** Upload progress of messages being sent, by outbox id (`SendProgress`). */
   sendProgress: Record<string, SendProgressState>;
   /** Results of OAuth sign-ins by flow id (`null` = success). */
@@ -191,6 +196,7 @@ export interface UiState {
   opFinished: (id: OpId, error: ErrorCode | null) => void;
   dismissOpError: () => void;
   setLastSend: (entry: OutboxEntry | null) => void;
+  setLastSendDetails: (details: ErrorDetails | null) => void;
   setSendProgress: (outboxId: string, progress: SendProgressState | null) => void;
   setOAuthResult: (flowId: string, error: ErrorCode | null) => void;
   /** Shows a view (M5b; `view.show`). */
@@ -241,6 +247,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     opError: null,
     failedOp: null,
     lastSend: null,
+    lastSendDetails: null,
     sendProgress: {},
     oauthResults: {},
     activeView: null,
@@ -392,7 +399,13 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       set({ opError: null, failedOp: null });
     },
     setLastSend: (lastSend) => {
-      set({ lastSend });
+      // Details belong to the entry they explain.
+      set((s) =>
+        s.lastSend?.id === lastSend?.id ? { lastSend } : { lastSend, lastSendDetails: null },
+      );
+    },
+    setLastSendDetails: (lastSendDetails) => {
+      set({ lastSendDetails });
     },
     setSendProgress: (outboxId, progress) => {
       set((s) => {

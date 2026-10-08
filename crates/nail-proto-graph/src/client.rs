@@ -188,6 +188,8 @@ pub struct GraphClient {
     base: Url,
     auth: GraphAuth,
     retry: RetryPolicy,
+    /// The connection log (ADR 0190).
+    tap: nail_connlog::HttpTap,
 }
 
 /// Whether the client may talk to `url`: `https:`, or `http:` to a
@@ -236,7 +238,15 @@ impl GraphClient {
             base,
             auth,
             retry: RetryPolicy::default(),
+            tap: nail_connlog::HttpTap::off(),
         })
+    }
+
+    /// Records every request into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::HttpTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// Replaces the retry policy.
@@ -304,7 +314,10 @@ impl GraphClient {
 
     pub(crate) async fn authorization(&self, force_refresh: bool) -> Result<String, GraphError> {
         Ok(match &self.auth {
-            GraphAuth::Bearer(token) => format!("Bearer {token}"),
+            GraphAuth::Bearer(token) => {
+                self.tap.add_secret(token);
+                format!("Bearer {token}")
+            }
             GraphAuth::OAuth2 {
                 tokens,
                 provider,
@@ -314,6 +327,7 @@ impl GraphClient {
                     .access_token(provider, secret, force_refresh)
                     .await
                     .map_err(|e| GraphError::Token(Box::new(e)))?;
+                self.tap.add_secret(&token);
                 format!("Bearer {token}")
             }
         })
@@ -404,22 +418,42 @@ impl GraphClient {
                     .body(bytes.clone());
             }
         }
-        let mut response = request.send().await.map_err(transport_error)?;
+        let sent = match &call.body {
+            Body::None => None,
+            Body::Json(bytes) | Body::Raw { bytes, .. } => {
+                Some(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+            }
+        };
+        let exchange = self
+            .tap
+            .request(call.method.as_str(), call.url.as_str(), true, sent);
+        let mut response = request.send().await.map_err(|e| {
+            let err = transport_error(e);
+            exchange.failed(&err.to_string());
+            err
+        })?;
         let status = response.status().as_u16();
         let headers = response.headers().clone();
         if response
             .content_length()
             .is_some_and(|l| l > MAX_RESPONSE as u64)
         {
+            exchange.failed("answer too large");
             return Err(GraphError::TooLarge(format!("answer to {}", call.what)));
         }
         let mut body = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
             if body.len() + chunk.len() > MAX_RESPONSE {
+                exchange.failed("answer too large");
                 return Err(GraphError::TooLarge(format!("answer to {}", call.what)));
             }
             body.extend_from_slice(&chunk);
         }
+        exchange.response(
+            status,
+            Some(u64::try_from(body.len()).unwrap_or(u64::MAX)),
+            Some(&body),
+        );
         Ok((status, headers, body))
     }
 

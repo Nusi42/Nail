@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+# The connection log (ADR 0190).
+nail-connlog.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -25,6 +27,7 @@ webpki-roots = "1.0.9"
 
 [dev-dependencies]
 nail-testkit.workspace = true
+nail-connlog.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]

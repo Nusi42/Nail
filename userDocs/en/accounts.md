@@ -97,6 +97,12 @@ accounts that need attention:
 | Sign-in required | The server rejected the password or the sign-in expired. Enter a new password in the settings |
 | Disabled | You turned synchronization off for this account |
 
+When an account or a folder fails, **Show details** in the status bar (and
+under **Recent problems** in the account's settings) shows what Nail was
+doing and the server's exact answer; the account's
+[connection log](connection-log.md) shows the whole exchange, without mail
+content or passwords.
+
 ## Account settings
 
 **Settings → Accounts** lists your accounts. Select one to change:

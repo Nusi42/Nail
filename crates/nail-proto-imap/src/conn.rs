@@ -14,6 +14,7 @@ use std::time::Duration;
 use async_compression::tokio::bufread::DeflateDecoder;
 use async_compression::tokio::write::DeflateEncoder;
 use imap_proto::{RequestId, Response, Status};
+use nail_connlog::{ConnTap, Part};
 use tokio::io::{
     AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
 };
@@ -24,8 +25,11 @@ use crate::transport::{IdleTimeout, ImapStream, ReadTimeout};
 /// Longest accepted response line (between literals). `SEARCH` results of
 /// large mailboxes are long lines.
 const MAX_LINE: usize = 16 << 20;
-/// Largest accepted response, literals included (one message body).
-const MAX_RESPONSE: usize = 512 << 20;
+/// Largest accepted response, literals included (one message body). A
+/// literal that would pass it is read and dropped (the connection stays in
+/// step) and arrives empty: the message is reported as too large instead of
+/// failing the whole command (ADR 0191).
+const MAX_RESPONSE: usize = if cfg!(test) { 1 << 20 } else { 512 << 20 };
 
 /// The stream under the connection.
 type Raw = IdleTimeout<ImapStream>;
@@ -222,21 +226,36 @@ pub(crate) struct Connection {
     line_start: usize,
     /// Literal bytes still to read for the current response.
     literal_left: usize,
+    /// Bytes of an oversized literal still to read and drop.
+    discard_left: usize,
+    /// Literals of the current response: where they start in `partial` and
+    /// their announced size (for the connection log, which shows sizes only).
+    literals: Vec<(usize, usize)>,
     next_tag: u32,
     read_timeout: ReadTimeout,
+    /// The connection log (ADR 0190).
+    tap: ConnTap,
 }
 
 impl Connection {
-    pub(crate) fn new(stream: ImapStream, timeout: Duration) -> Self {
+    pub(crate) fn new(stream: ImapStream, timeout: Duration, tap: ConnTap) -> Self {
         let read_timeout = ReadTimeout::new(timeout);
         Self {
             reader: BufReader::new(Link::Plain(IdleTimeout::new(stream, read_timeout.clone()))),
             partial: Vec::new(),
             line_start: 0,
             literal_left: 0,
+            discard_left: 0,
+            literals: Vec::new(),
             next_tag: 1,
             read_timeout,
+            tap,
         }
+    }
+
+    /// The connection log.
+    pub(crate) fn tap(&self) -> &ConnTap {
+        &self.tap
     }
 
     /// The idle timeout of reads (switched off during `IDLE`).
@@ -284,6 +303,19 @@ impl Connection {
     /// Reads the next complete response. Cancel-safe.
     pub(crate) async fn read(&mut self) -> Result<Incoming> {
         loop {
+            if self.discard_left > 0 {
+                let buf = self.reader.fill_buf().await?;
+                if buf.is_empty() {
+                    return Err(ImapError::ConnectionLost);
+                }
+                let n = buf.len().min(self.discard_left);
+                self.reader.consume(n);
+                self.discard_left -= n;
+                if self.discard_left == 0 {
+                    self.line_start = self.partial.len();
+                }
+                continue;
+            }
             if self.literal_left > 0 {
                 let buf = self.reader.fill_buf().await?;
                 if buf.is_empty() {
@@ -315,17 +347,75 @@ impl Connection {
             }
             if let Some(len) = literal_length(&self.partial[self.line_start..]) {
                 if self.partial.len() + len > MAX_RESPONSE {
-                    return Err(ImapError::Protocol("response too large".to_owned()));
+                    // Announce an empty literal instead and drop the bytes.
+                    let keep = self.partial.len() - announcement_len(&self.partial);
+                    self.partial.truncate(keep);
+                    self.partial.extend_from_slice(b"{0}\r\n");
+                    self.literals.push((self.partial.len(), len));
+                    self.discard_left = len;
+                    if len == 0 {
+                        self.line_start = self.partial.len();
+                    }
+                    continue;
                 }
+                self.literals.push((self.partial.len(), len));
                 self.literal_left = len;
                 self.line_start = self.partial.len();
             } else {
                 let bytes = std::mem::take(&mut self.partial);
+                let literals = std::mem::take(&mut self.literals);
                 self.line_start = 0;
+                self.log_response(&bytes, &literals);
                 return Ok(parse(&bytes));
             }
         }
     }
+}
+
+impl Connection {
+    /// Logs a complete response: its text with each literal as its size.
+    fn log_response(&self, bytes: &[u8], literals: &[(usize, usize)]) {
+        if !self.tap.is_on() {
+            return;
+        }
+        let mut texts = Vec::with_capacity(literals.len() + 1);
+        let mut sizes = Vec::with_capacity(literals.len());
+        let mut at = 0;
+        for &(start, announced) in literals {
+            let start = start.min(bytes.len());
+            texts.push(String::from_utf8_lossy(&bytes[at..start]).into_owned());
+            sizes.push(announced);
+            // The bytes kept for a literal (none for a dropped one).
+            let kept = if announced > 0
+                && bytes
+                    .get(start..)
+                    .is_some_and(|rest| rest.len() >= announced)
+                && !bytes[..start].ends_with(b"{0}\r\n")
+            {
+                announced
+            } else {
+                0
+            };
+            at = (start + kept).min(bytes.len());
+        }
+        texts.push(String::from_utf8_lossy(&bytes[at..]).into_owned());
+        let mut parts = Vec::with_capacity(texts.len() * 2);
+        for (index, text) in texts.iter().enumerate() {
+            parts.push(Part::Text(text));
+            if let Some(size) = sizes.get(index) {
+                parts.push(Part::Bytes(*size));
+            }
+        }
+        self.tap.received(&parts);
+    }
+}
+
+/// The length of the `{123}\r\n` announcement at the end of `bytes`.
+fn announcement_len(bytes: &[u8]) -> usize {
+    bytes
+        .iter()
+        .rposition(|&b| b == b'{')
+        .map_or(0, |open| bytes.len() - open)
 }
 
 /// The length of the literal a line announces (`... {123}\r\n`).
@@ -343,12 +433,25 @@ fn literal_length(line: &[u8]) -> Option<usize> {
 }
 
 /// Parses one complete response; tagged and continuation lines that
-/// `imap-proto` rejects are still recognized, other unknown responses are
-/// returned as [`Incoming::Unparsed`].
+/// `imap-proto` rejects are still recognized, `FETCH` responses are read
+/// leniently ([`crate::salvage`]), other unknown responses are returned as
+/// [`Incoming::Unparsed`].
 fn parse(bytes: &[u8]) -> Incoming {
-    match Response::from_bytes(bytes) {
-        Ok(([], response)) => Incoming::Response(response.into_owned()),
-        _ => fallback(bytes),
+    // `imap-proto` panics on some malformed input (`INTERNALDATE NIL`); a
+    // server's bytes must never take the sync down.
+    let strict = std::panic::catch_unwind(|| match Response::from_bytes(bytes) {
+        Ok(([], response)) => Some(response.into_owned()),
+        _ => None,
+    });
+    match strict {
+        Ok(Some(response)) => Incoming::Response(response),
+        _ => match crate::salvage::fetch(bytes) {
+            Some(response) => {
+                tracing::debug!("FETCH response read leniently");
+                Incoming::Response(response)
+            }
+            None => fallback(bytes),
+        },
     }
 }
 
@@ -397,7 +500,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let (client, server) = tokio::join!(TcpStream::connect(addr), listener.accept());
-        let conn = Connection::new(ImapStream::Plain(client.unwrap()), Duration::from_secs(5));
+        let conn = Connection::new(
+            ImapStream::Plain(client.unwrap()),
+            Duration::from_secs(5),
+            ConnTap::off(nail_connlog::WireProtocol::Imap),
+        );
         (conn, server.unwrap().0)
     }
 
@@ -490,6 +597,59 @@ mod tests {
         let mut buf = [0u8; 12];
         server.read_exact(&mut buf).await.unwrap();
         assert_eq!(&buf, b"A0001 NOOP\r\n");
+    }
+
+    #[tokio::test]
+    async fn oversized_literals_arrive_empty_and_keep_the_stream_in_step() {
+        let (mut conn, mut server) = pair().await;
+        let size = MAX_RESPONSE + 10;
+        let writer = tokio::spawn(async move {
+            server
+                .write_all(
+                    format!("* 1 FETCH (UID 7 RFC822.SIZE {size} BODY[] {{{size}}}\r\n").as_bytes(),
+                )
+                .await
+                .unwrap();
+            let chunk = vec![b'x'; 1 << 20];
+            let mut left = size;
+            while left > 0 {
+                let n = left.min(chunk.len());
+                server.write_all(&chunk[..n]).await.unwrap();
+                left -= n;
+            }
+            server.write_all(b")\r\n* 2 EXISTS\r\n").await.unwrap();
+            server
+        });
+        match conn.read().await.unwrap() {
+            Incoming::Response(Response::Fetch(1, attributes)) => {
+                assert!(attributes.iter().any(|a| matches!(
+                    a,
+                    imap_proto::types::AttributeValue::BodySection { data: Some(d), .. } if d.is_empty()
+                )));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(
+            conn.read().await.unwrap(),
+            Incoming::Response(Response::MailboxData(MailboxDatum::Exists(2)))
+        ));
+        drop(writer.await.unwrap());
+    }
+
+    #[test]
+    fn malformed_fetch_responses_are_read_leniently() {
+        // imap-proto panics on INTERNALDATE NIL and refuses 8-bit strings.
+        for line in [
+            &b"* 1 FETCH (UID 5 INTERNALDATE NIL BODY[] {2}\r\nhi)\r\n"[..],
+            b"* 1 FETCH (UID 5 ENVELOPE (NIL \"\xe4\" () NIL NIL NIL NIL NIL NIL NIL) BODY[] {2}\r\nhi)\r\n",
+        ] {
+            match parse(line) {
+                Incoming::Response(Response::Fetch(1, attributes)) => {
+                    assert!(attributes.contains(&imap_proto::types::AttributeValue::Uid(5)));
+                }
+                other => panic!("{other:?}"),
+            }
+        }
     }
 
     #[tokio::test]

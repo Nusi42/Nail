@@ -706,3 +706,31 @@ async fn rejected_upload_changes_nothing() {
     .unwrap();
     assert_eq!(server.active().as_deref(), Some("nail"));
 }
+
+/// ADR 0190: the connection log of a session holds the commands and
+/// answers, never the password or a script.
+#[tokio::test]
+async fn the_connection_log_shows_commands_without_scripts() {
+    let server = MockSieveServer::start(MockSieveConfig::default())
+        .await
+        .unwrap();
+    let logs = nail_connlog::ConnectionLogs::new();
+    let scope = nail_api::connlog::ConnectionLogScope::account(&"work".into());
+    let config = config(&server, TlsMode::Plaintext).with_tap(logs.tap(&scope));
+    let mut session = SieveSession::login(&config, &password()).await.unwrap();
+    let script = "require \"fileinto\";\nif header :contains \"subject\" \"Salary\" {\n  fileinto \"Private\";\n}\n";
+    session.put_script("nail", script).await.unwrap();
+    session.get_script("nail").await.unwrap();
+    session.logout().await.unwrap();
+    let text = logs.text(&scope);
+    assert!(
+        text.contains("C: AUTHENTICATE \"PLAIN\" <redacted>"),
+        "{text}"
+    );
+    assert!(text.contains("C: PUTSCRIPT \"nail\" {"), "{text}");
+    assert!(text.contains("C: GETSCRIPT \"nail\""), "{text}");
+    assert!(text.contains(" bytes}"), "{text}");
+    for secret in [PASSWORD, "Salary", "Private", "fileinto \""] {
+        assert!(!text.contains(secret), "{secret} in {text}");
+    }
+}

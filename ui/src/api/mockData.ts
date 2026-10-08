@@ -52,6 +52,7 @@ import { createPimMockState, type PimMockState } from "../features/pim/mock";
 import { createPluginsMockState, type PluginsMockState } from "../features/plugins/mock";
 import { createRemoteMockState, type RemoteMockState } from "../features/remote/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
+import { createConnlogMockState, type ConnlogMockState } from "../features/connlog/mock";
 import { createSchedulingMockState, type SchedulingMockState } from "../features/scheduling/mock";
 import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
 import { createSieveMockState, type SieveMockState } from "../features/sieve/mock";
@@ -117,6 +118,8 @@ export interface MockFeatures {
   print: PrintMockState;
   /** Recovery key and smartcards (`features/security/vaultMock.ts`). */
   vault: VaultMockState;
+  /** Connection logs, sync errors, the application log (ADR 0190). */
+  connlog: ConnlogMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -503,6 +506,7 @@ export function createMockData(inboxSize = 250): MockData {
       attachments: createAttachmentsMockState(),
       print: createPrintMockState(),
       vault: createVaultMockState(),
+      connlog: createConnlogMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

@@ -408,8 +408,14 @@ async fn server_flag_changes_arrive_through_idle() {
     })
     .await;
     let mut announced = false;
-    while let Ok(event) = events.try_recv() {
-        announced |= matches!(event, Event::NewMail { .. });
+    loop {
+        match events.try_recv() {
+            Ok(event) => announced |= matches!(event, Event::NewMail { .. }),
+            // Busy runs: older events (connection log notices, ADR 0190)
+            // may be skipped; keep reading the newer ones.
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {}
+            Err(_) => break,
+        }
     }
     assert!(announced, "NewMail was broadcast");
     // A dropped IDLE connection comes back.

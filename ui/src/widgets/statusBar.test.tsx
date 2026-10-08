@@ -1,4 +1,6 @@
-import { act, screen } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
+import type { ErrorDetails } from "../api/generated";
+import { must } from "../test/must";
 import { createEnv, renderNode, widget } from "../test/harness";
 import { sendPercent } from "../state/uiStore";
 
@@ -80,5 +82,62 @@ describe("sendPercent", () => {
     expect(sendPercent({ sentBytes: 0, totalBytes: 0 })).toBe(0);
     expect(sendPercent({ sentBytes: 999, totalBytes: 1000 })).toBe(99);
     expect(sendPercent({ sentBytes: 12, totalBytes: 10 })).toBe(100);
+  });
+});
+
+describe("Show details (ADR 0190)", () => {
+  const details: ErrorDetails = {
+    code: "auth_failed",
+    protocol: "smtp",
+    step: "login",
+    command: "AUTH PLAIN <redacted>",
+    server_text: "535 5.7.8 Authentication credentials invalid",
+    detail: "authentication failed",
+    at: "2026-10-08T09:12:01Z",
+  };
+
+  it("offers the details of an account that needs attention", async () => {
+    const env = createEnv();
+    env.transport.data.statuses[1] = {
+      ...must(env.transport.data.statuses[1]),
+      state: "auth-error",
+      error: "auth_failed",
+      details,
+    };
+    renderNode(widget("status-bar", { options: { items: "account-status" } }), env);
+    const status = screen.getByRole("status", { name: "Status" });
+    await within(status).findByText("Work: Sign-in required");
+    act(() => {
+      within(status).getByRole("button", { name: "Show details" }).click();
+    });
+    expect(env.store.getState().windows).toEqual(["error-details:w1"]);
+  });
+
+  it("offers the details of a failed send", () => {
+    const env = createEnv();
+    renderNode(widget("status-bar", { options: { items: "send-status" } }), env);
+    act(() => {
+      env.store.getState().setLastSend({
+        id: "out-2",
+        draft_id: "d",
+        account_id: "acc-personal",
+        identity_id: "ada@example.org",
+        subject: "Hi",
+        recipients: [],
+        send_at: new Date().toISOString(),
+        state: "failed",
+        attempts: 1,
+        error: "auth_failed",
+        message: null,
+      });
+      env.store.getState().setLastSendDetails(details);
+    });
+    const status = screen.getByRole("status", { name: "Status" });
+    expect(within(status).getByRole("button", { name: "Show details" })).toBeVisible();
+    // Another message's state forgets the details.
+    act(() => {
+      env.store.getState().setLastSend(null);
+    });
+    expect(env.store.getState().lastSendDetails).toBeNull();
   });
 });

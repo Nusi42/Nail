@@ -9,6 +9,7 @@ import type { ActionActor } from "./ActionActor";
 import type { ActionPolicy } from "./ActionPolicy";
 import type { Address } from "./Address";
 import type { AddressBook } from "./AddressBook";
+import type { AppLog } from "./AppLog";
 import type { Appearance } from "./Appearance";
 import type { AutomaticReplies } from "./AutomaticReplies";
 import type { BackupManifest } from "./BackupManifest";
@@ -18,6 +19,8 @@ import type { ConfigBackup } from "./ConfigBackup";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ConfigMergePreview } from "./ConfigMergePreview";
 import type { Confirmation } from "./Confirmation";
+import type { ConnectionLog } from "./ConnectionLog";
+import type { ConnectionLogSettings } from "./ConnectionLogSettings";
 import type { Contact } from "./Contact";
 import type { ContactGroup } from "./ContactGroup";
 import type { ContactId } from "./ContactId";
@@ -127,10 +130,12 @@ import type { SecuritySettings } from "./SecuritySettings";
 import type { SendVetoId } from "./SendVetoId";
 import type { ServerSearch } from "./ServerSearch";
 import type { SieveAccountStatus } from "./SieveAccountStatus";
+import type { SkippedMessage } from "./SkippedMessage";
 import type { SmartcardModuleProblem } from "./SmartcardModuleProblem";
 import type { SmartcardSettings } from "./SmartcardSettings";
 import type { SmartcardToken } from "./SmartcardToken";
 import type { SnoozedMessage } from "./SnoozedMessage";
+import type { SyncErrorRecord } from "./SyncErrorRecord";
 import type { Task } from "./Task";
 import type { TaskFields } from "./TaskFields";
 import type { ThemeDetails } from "./ThemeDetails";
@@ -1207,7 +1212,40 @@ theme_id: string,
 /**
  * Themes, selection, active theme, OS state.
  */
-appearance: Appearance, } | { "type": "Error", 
+appearance: Appearance, } | { "type": "ConnectionLog", 
+/**
+ * The entries.
+ */
+log: ConnectionLog, } | { "type": "ConnectionLogExport", 
+/**
+ * The file name to save it under
+ * (`nail-connection-log-account-work.txt`).
+ */
+file_name: string, 
+/**
+ * The text, when no path was given.
+ */
+text?: string, 
+/**
+ * The file written, when a path was given.
+ */
+path?: string, } | { "type": "ConnectionLogSettings", 
+/**
+ * The settings.
+ */
+settings: ConnectionLogSettings, } | { "type": "SyncErrors", 
+/**
+ * The last error per account and folder.
+ */
+errors: Array<SyncErrorRecord>, 
+/**
+ * Messages the folders skipped.
+ */
+skipped: Array<SkippedMessage>, } | { "type": "AppLog", 
+/**
+ * The log.
+ */
+log: AppLog, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

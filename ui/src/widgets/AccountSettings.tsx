@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { AccountConnection } from "../features/connlog";
 import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { AccountConfig, Identity, SecretInput } from "../api/generated";
@@ -636,6 +637,7 @@ export function AccountSettings({ node }: WidgetProps) {
           setMessage={setNotice}
         />
       )}
+      {current && <AccountConnection key={`connection-${current.id}`} accountId={current.id} />}
       <NoticeView part="account-settings.message" notice={notice} />
     </section>
   );

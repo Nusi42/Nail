@@ -1,6 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  allowAllFolders,
+  openWorkLog,
+  otherMailbox,
+  showRefusedFolderDetails,
+} from "../support/connlog";
 import { buildOutputDir, control, repoRoot, startNail, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
 import {
@@ -666,6 +672,24 @@ const GROUPS: Record<string, Group> = {
       await settings.getByRole("button", { name: "Install a plug-in…" }).click();
       await sweep.checkWindow("plugin-install");
       await sweep.close("plugin-install");
+    },
+  },
+  // ADR 0190: the connection log, an error's details, the application log.
+  connlog: {
+    windows: ["connection-log", "error-details", "application-log"],
+    run: async (sweep, server) => {
+      const page = sweep.page;
+      await openWorkLog(page);
+      await sweep.checkWindow("connection-log");
+      await sweep.close("connection-log");
+      await showRefusedFolderDetails(page, server, await otherMailbox(server));
+      await sweep.checkWindow("error-details");
+      await sweep.close("error-details");
+      await allowAllFolders(page, server);
+      const settings = await openSettings(page, "Data & backup");
+      await settings.getByRole("button", { name: "Show recent lines" }).click();
+      await sweep.checkWindow("application-log");
+      await sweep.close("application-log");
     },
   },
   scheduling: {

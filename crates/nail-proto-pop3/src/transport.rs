@@ -1,5 +1,6 @@
 //! TCP / TLS stream and line I/O.
 
+use nail_connlog::{ConnTap, Part};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -105,8 +106,12 @@ pub(crate) fn client_config(trust: &TlsTrust) -> Result<ClientConfig> {
     })
 }
 
-/// TLS handshake over `tcp`.
-pub(crate) async fn handshake(config: &Pop3Config, tcp: TcpStream) -> Result<Pop3Stream> {
+/// TLS handshake over `tcp`; logs the TLS parameters to `tap`.
+pub(crate) async fn handshake(
+    config: &Pop3Config,
+    tcp: TcpStream,
+    tap: &ConnTap,
+) -> Result<Pop3Stream> {
     let server_name = ServerName::try_from(config.host.clone())
         .map_err(|_| Pop3Error::InvalidServerName(config.host.clone()))?;
     let connector = TlsConnector::from(Arc::new(client_config(&config.trust)?));
@@ -117,6 +122,7 @@ pub(crate) async fn handshake(config: &Pop3Config, tcp: TcpStream) -> Result<Pop
             .map_err(|err| Pop3Error::Tls(err.to_string()))
     })
     .await?;
+    tap.tls_session(tls.get_ref().1);
     Ok(Pop3Stream::Tls(Box::new(tls)))
 }
 
@@ -135,18 +141,30 @@ pub(crate) async fn with_timeout<T>(
 pub(crate) struct Lines {
     pub(crate) reader: BufReader<Pop3Stream>,
     timeout: Duration,
+    /// The connection log (ADR 0190), kept across `STLS`.
+    pub(crate) tap: Arc<ConnTap>,
 }
 
 impl Lines {
-    pub(crate) fn new(stream: Pop3Stream, timeout: Duration) -> Self {
+    pub(crate) fn new(stream: Pop3Stream, timeout: Duration, tap: Arc<ConnTap>) -> Self {
         Self {
             reader: BufReader::new(stream),
             timeout,
+            tap,
         }
     }
 
-    /// Reads one line without CRLF (bytes, not necessarily UTF-8).
+    /// Reads one status line without CRLF and logs it.
     pub(crate) async fn read_line(&mut self) -> Result<Vec<u8>> {
+        let line = self.read_raw_line().await?;
+        self.tap
+            .received(&[Part::Text(&String::from_utf8_lossy(&line))]);
+        Ok(line)
+    }
+
+    /// Reads one line without CRLF (bytes, not necessarily UTF-8), not
+    /// logged (message content).
+    async fn read_raw_line(&mut self) -> Result<Vec<u8>> {
         let timeout = self.timeout;
         let reader = &mut self.reader;
         with_timeout(timeout, async move {
@@ -169,6 +187,7 @@ impl Lines {
 
     /// Sends one command line.
     pub(crate) async fn send(&mut self, line: &str) -> Result<()> {
+        self.tap.sent(&[Part::Text(line)]);
         let timeout = self.timeout;
         let stream = self.reader.get_mut();
         with_timeout(timeout, async move {
@@ -180,12 +199,20 @@ impl Lines {
     }
 
     /// Reads a multi-line body up to the terminating `.`, undoing
-    /// dot-stuffing. Lines end in CRLF in the result.
-    pub(crate) async fn read_multiline(&mut self, limit: usize) -> Result<Vec<u8>> {
+    /// dot-stuffing. Lines end in CRLF in the result. The log gets its size
+    /// only (`as_text`: its lines, for capability lists).
+    pub(crate) async fn read_multiline(&mut self, limit: usize, as_text: bool) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         loop {
-            let line = self.read_line().await?;
+            let line = self.read_raw_line().await?;
             if line == b"." {
+                if as_text {
+                    for line in String::from_utf8_lossy(&out).lines() {
+                        self.tap.received(&[Part::Text(line)]);
+                    }
+                } else {
+                    self.tap.received(&[Part::Bytes(out.len())]);
+                }
                 return Ok(out);
             }
             let line = line.strip_prefix(b".").unwrap_or(&line);

@@ -35,6 +35,7 @@ Guides and references for people using Nail.
 | [Importing and exporting](import-export.md) | Bringing in mail from mbox, EML folders, Maildir and Thunderbird (accounts, folders, address books, filters), calendars and contacts; exporting folders, calendars and address books; reports and what was skipped |
 | [Backups and restoring](backup-restore.md) | What a backup contains, the passphrase and encryption, checking a backup, the dry run before restoring, what a restore replaces or merges |
 | [Diagnostics bundle](diagnostics.md) | Creating a bundle for support: choosing what goes in, the exact preview, what is always removed or hidden, opting in to messages |
+| [Connection log and error details](connection-log.md) | Show details of a sync, sign-in or send error (the command and the server's answer), the connection log of an account (what is and is not recorded, filters, copy and export, keeping it on disk), the application log, sending a problem to support |
 | [Command palette](command-palette.md) | Ctrl+K: every action in one searchable list, fuzzy search, shortcuts, recent actions, actions that cannot run right now |
 | [Printing](printing.md) | Printing messages, conversations, events and agendas, the print options, saving as PDF on the desktop and in a browser |
 | [Customizing](customization.md) | The inspector (Edit style), dividers written to `layout.kdl`, editing toolbars, shortcuts and list columns, right-click menus, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |

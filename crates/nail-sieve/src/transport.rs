@@ -2,6 +2,7 @@
 //! (RFC 5804 section 4: atoms, quoted strings, literals `{n}` / `{n+}`,
 //! parenthesised response codes).
 
+use nail_connlog::{ConnTap, Part, WireProtocol};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -113,8 +114,8 @@ pub(crate) async fn with_timeout<T>(
         .map_err(|_| SieveError::Timeout(timeout))?
 }
 
-/// TLS handshake over `tcp`.
-async fn handshake(config: &SieveConfig, tcp: TcpStream) -> Result<SieveStream> {
+/// TLS handshake over `tcp`; the parameters go to the connection log.
+async fn handshake(config: &SieveConfig, tcp: TcpStream, tap: &ConnTap) -> Result<SieveStream> {
     let server_name = ServerName::try_from(config.host.clone())
         .map_err(|_| SieveError::InvalidServerName(config.host.clone()))?;
     let connector = TlsConnector::from(Arc::new(client_config(&config.trust, &config.host)?));
@@ -128,7 +129,64 @@ async fn handshake(config: &SieveConfig, tcp: TcpStream) -> Result<SieveStream> 
             })
     })
     .await?;
+    tap.tls_session(tls.get_ref().1);
     Ok(SieveStream::Tls(Box::new(tls)))
+}
+
+/// Splits bytes written into text and literals (`{n+}` + data) for the
+/// connection log, which never sees a literal's bytes (scripts).
+fn written_parts(bytes: &[u8]) -> Vec<(String, Option<usize>)> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' {
+            let digits_end = bytes[i + 1..]
+                .iter()
+                .position(|b| !b.is_ascii_digit())
+                .map_or(bytes.len(), |p| i + 1 + p);
+            let rest = &bytes[digits_end.min(bytes.len())..];
+            let closing = if rest.starts_with(b"+}\r\n") {
+                Some(4)
+            } else if rest.starts_with(b"}\r\n") {
+                Some(3)
+            } else {
+                None
+            };
+            if let (Some(skip), Ok(n)) = (
+                closing.filter(|_| digits_end > i + 1),
+                std::str::from_utf8(&bytes[i + 1..digits_end])
+                    .unwrap_or_default()
+                    .parse::<usize>(),
+            ) {
+                parts.push((
+                    String::from_utf8_lossy(&bytes[start..i]).into_owned(),
+                    Some(n),
+                ));
+                i = (digits_end + skip + n).min(bytes.len());
+                start = i;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    parts.push((String::from_utf8_lossy(&bytes[start..]).into_owned(), None));
+    parts
+}
+
+fn log_written(tap: &ConnTap, bytes: &[u8]) {
+    if !tap.is_on() {
+        return;
+    }
+    let parts = written_parts(bytes);
+    let mut logged = Vec::with_capacity(parts.len() * 2);
+    for (text, literal) in &parts {
+        logged.push(Part::Text(text));
+        if let Some(n) = literal {
+            logged.push(Part::Bytes(*n));
+        }
+    }
+    tap.sent(&logged);
 }
 
 /// A token of a server response.
@@ -149,6 +207,8 @@ pub(crate) enum Token {
 pub(crate) struct Conn {
     reader: BufReader<SieveStream>,
     timeout: Duration,
+    /// The connection log (ADR 0190), kept across `STARTTLS`.
+    pub(crate) tap: Arc<ConnTap>,
 }
 
 impl Conn {
@@ -168,14 +228,20 @@ impl Conn {
         if let Err(err) = tcp.set_nodelay(true) {
             tracing::debug!(%err, "TCP_NODELAY not set");
         }
+        let tap = Arc::new(config.tap.connect(
+            WireProtocol::ManageSieve,
+            &config.host,
+            config.port,
+        ));
         let stream = if implicit_tls {
-            handshake(config, tcp).await?
+            handshake(config, tcp, &tap).await?
         } else {
             SieveStream::Plain(tcp)
         };
         Ok(Self {
             reader: BufReader::new(stream),
             timeout: config.timeout,
+            tap,
         })
     }
 
@@ -192,10 +258,12 @@ impl Conn {
                 "data received after the STARTTLS answer".to_owned(),
             ));
         }
+        let tap = self.tap;
         match self.reader.into_inner() {
             SieveStream::Plain(tcp) => Ok(Self {
-                reader: BufReader::new(handshake(config, tcp).await?),
+                reader: BufReader::new(handshake(config, tcp, &tap).await?),
                 timeout: config.timeout,
+                tap,
             }),
             SieveStream::Tls(_) => Err(SieveError::Protocol("already encrypted".to_owned())),
         }
@@ -234,13 +302,25 @@ impl Conn {
     /// Reads one response line with its literals, as tokens.
     pub(crate) async fn read_tokens(&mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
+        // The response for the connection log: its lines, literals as sizes.
+        let mut logged: Vec<(String, Option<usize>)> = Vec::new();
         loop {
             let line = self.read_line().await?;
             let line = String::from_utf8(line)
                 .map_err(|_| SieveError::Protocol("response is not UTF-8".to_owned()))?;
-            match tokenize(&line)? {
+            let parsed = tokenize(&line)?;
+            logged.push((line, parsed.1));
+            match parsed {
                 (mut toks, None) => {
                     tokens.append(&mut toks);
+                    let mut parts = Vec::with_capacity(logged.len() * 2);
+                    for (text, literal) in &logged {
+                        parts.push(Part::Text(text));
+                        if let Some(n) = literal {
+                            parts.push(Part::Bytes(*n));
+                        }
+                    }
+                    self.tap.received(&parts);
                     return Ok(tokens);
                 }
                 (mut toks, Some(n)) => {
@@ -257,8 +337,9 @@ impl Conn {
         }
     }
 
-    /// Writes bytes and flushes.
+    /// Writes bytes and flushes (logged with literals as sizes).
     pub(crate) async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        log_written(&self.tap, bytes);
         let stream = self.reader.get_mut();
         with_timeout(self.timeout, async move {
             stream.write_all(bytes).await?;
@@ -399,6 +480,22 @@ mod tests {
         for bad in ["\"open", "{3} x", "{x}", "{3"] {
             assert!(tokenize(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn written_literals_are_split_off() {
+        let parts = written_parts(b"PUTSCRIPT \"nail\" {5+}\r\nkeep;\r\n");
+        assert_eq!(
+            parts,
+            vec![
+                ("PUTSCRIPT \"nail\" ".to_owned(), Some(5)),
+                ("\r\n".to_owned(), None)
+            ]
+        );
+        assert_eq!(
+            written_parts(b"LOGOUT\r\n"),
+            vec![("LOGOUT\r\n".to_owned(), None)]
+        );
     }
 
     #[test]

@@ -26,7 +26,8 @@ use nail_api::{AccountConfig, AccountState, IncomingServer};
 use nail_proto_imap::{ImapClient, MailboxWatcher, WatchConfig, WatchEvent};
 use tokio::sync::{mpsc, watch};
 
-use crate::engine::{Signals, pause, state_for_error, stopped};
+use crate::connlog::ErrorContext;
+use crate::engine::{Signals, pause, stopped};
 use crate::error::{CoreError, Result};
 use crate::replay::{ImapExecutor, replay_account};
 use crate::service::Service;
@@ -34,7 +35,8 @@ use crate::sync::{ImapSettings, connect, report_pass, run_pass, sync_folder};
 
 enum SessionEnd {
     Stopped,
-    Failed(CoreError),
+    /// The error and where it happened on the main connection.
+    Failed(CoreError, ErrorContext),
 }
 
 /// Runs the engine until `stop` is set.
@@ -48,7 +50,9 @@ pub(crate) async fn run(
         return;
     };
     let settings = ImapSettings {
-        config: crate::creds::imap_config(server, options),
+        // ADR 0190: every connection of the account logs into its scope.
+        config: crate::creds::imap_config(server, options)
+            .with_tap(service.account_tap(&account.id)),
         credentials: Arc::new(service.endpoint_credentials(&account.id, &server.auth)),
     };
     let timing = service.inner.timing;
@@ -69,9 +73,9 @@ pub(crate) async fn run(
             result = connect(&settings) => result,
             () = stopped(&mut stop) => break,
         };
-        let err = match connected {
+        let (err, context) = match connected {
             Ok(client) => {
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 let since = tokio::time::Instant::now();
                 match session(
                     &service, &account, &settings, client, &signals, &mut stop, poll,
@@ -79,31 +83,25 @@ pub(crate) async fn run(
                 .await
                 {
                     SessionEnd::Stopped => break,
-                    SessionEnd::Failed(err) => {
+                    SessionEnd::Failed(err, context) => {
                         // A session that failed right after connecting does
                         // not reset the backoff (no reconnect storm).
                         if since.elapsed() >= timing.healthy_after {
                             backoff = timing.reconnect_min;
                         }
-                        err
+                        (err, context)
                     }
                 }
             }
-            Err(err) => CoreError::from(err),
+            Err(err) => {
+                let context = ErrorContext::of_imap(&err);
+                (CoreError::from(err), context)
+            }
         };
-        let code = err.code();
         tracing::info!(account = %account.id, %err, retry_in = ?backoff, "IMAP connection failed");
-        service.set_status(
-            &account.id,
-            state_for_error(code),
-            Some((code, err.to_string(), err.localized())),
-        );
-        service.broadcast(nail_api::Event::SyncFailed {
-            account_id: account.id.clone(),
-            code,
-            message: err.to_string(),
-            localized: err.localized(),
-        });
+        service
+            .engine_failed(&account.id, &err, context, true)
+            .await;
         if !pause(backoff, &signals, &mut stop).await {
             break;
         }
@@ -150,11 +148,13 @@ impl Conns<'_> {
 async fn full_cycle(service: &Service, account: &AccountConfig, conns: &Conns<'_>) -> Result<()> {
     replay(service, account, conns).await?;
     let client = &conns.main;
-    let result = {
+    let (result, context) = {
         let mut guard = client.lock().await;
-        run_pass(&service.sync_ctx(), &account.id, &mut guard, &account.sync).await
+        let result = run_pass(&service.sync_ctx(), &account.id, &mut guard, &account.sync).await;
+        let context = result.is_err().then(|| ErrorContext::imap(&guard, None));
+        (result, context)
     };
-    report_pass(&service.sync_ctx(), &account.id, &result);
+    report_pass(&service.sync_ctx(), &account.id, &result, context).await;
     // The folders are known now: the Sieve script can name them (uploaded
     // only when its inputs changed).
     if result.is_ok() {
@@ -276,12 +276,13 @@ async fn session_loop(
 ) -> SessionEnd {
     let client = &conns.main;
     if let Err(err) = full_cycle(service, account, conns).await {
-        return SessionEnd::Failed(err);
+        let context = ErrorContext::imap(&*client.lock().await, None);
+        return SessionEnd::Failed(err, context);
     }
     let (events_tx, mut events) = mpsc::channel(64);
     let watchers = match WatcherSet::start(service, account, settings, &events_tx).await {
         Ok(watchers) => watchers,
-        Err(err) => return SessionEnd::Failed(err),
+        Err(err) => return SessionEnd::Failed(err, ErrorContext::default()),
     };
     let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + poll, poll);
     let end = loop {
@@ -303,12 +304,15 @@ async fn session_loop(
             _ = timer.tick() => full_cycle(service, account, conns).await,
         };
         if let Err(err) = next_step {
-            let broken = client.lock().await.is_broken();
+            let (broken, context) = {
+                let guard = client.lock().await;
+                (guard.is_broken(), ErrorContext::imap(&guard, None))
+            };
             if broken
                 || err.is_transient()
                 || !matches!(err, CoreError::Api(_) | CoreError::Imap(_))
             {
-                break SessionEnd::Failed(err);
+                break SessionEnd::Failed(err, context);
             }
             tracing::warn!(account = %account.id, %err, "sync step failed; continuing");
         }

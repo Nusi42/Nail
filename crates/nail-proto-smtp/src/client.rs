@@ -25,6 +25,7 @@ use lettre::transport::smtp::extension::{
 use lettre::transport::smtp::response::Response;
 use nail_api::accounts::{SaslMechanism, TlsMode};
 use nail_api::engine::{Envelope, SendReceipt};
+use nail_connlog::{ConnTap, Part, WireLevel, WireProtocol};
 
 use crate::capabilities::Capabilities;
 use crate::config::{SendOptions, SmtpConfig, SmtpCredentials, TlsTrust};
@@ -45,6 +46,36 @@ pub struct SmtpSession {
     caps: Capabilities,
     config: SmtpConfig,
     authenticated: Option<String>,
+    /// The connection log (ADR 0190).
+    tap: ConnTap,
+}
+
+/// Logs a reply: one entry per line, `250-…` for all but the last.
+fn log_reply(tap: &ConnTap, reply: &Response) {
+    if !tap.is_on() {
+        return;
+    }
+    let code = reply.code().to_string();
+    let lines: Vec<&str> = reply.message().collect();
+    if lines.is_empty() {
+        tap.received(&[Part::Text(&code)]);
+    }
+    for (index, line) in lines.iter().enumerate() {
+        let separator = if index + 1 == lines.len() { ' ' } else { '-' };
+        tap.received(&[Part::Text(&format!("{code}{separator}{line}"))]);
+    }
+}
+
+/// Logs the outcome of a command: its reply, or the error that ended it
+/// (lettre turns negative replies into errors carrying their text).
+fn log_outcome(tap: &ConnTap, result: &Result<Response>) {
+    match result {
+        Ok(reply) => log_reply(tap, reply),
+        Err(SmtpError::Rejected { code, message } | SmtpError::Transient { code, message }) => {
+            tap.received(&[Part::Text(&format!("{code} {message}"))]);
+        }
+        Err(err) => tap.note(WireLevel::Error, &err.to_string()),
+    }
 }
 
 impl fmt::Debug for SmtpSession {
@@ -156,6 +187,29 @@ impl SmtpSession {
     /// capabilities. With [`TlsMode::Starttls`] a server without `STARTTLS`
     /// is an error, never a silent downgrade.
     pub async fn connect(config: &SmtpConfig) -> Result<Self> {
+        let tap = config
+            .tap
+            .connect(WireProtocol::Smtp, &config.host, config.port);
+        match Self::open(config, &tap).await {
+            Ok((conn, caps)) => Ok(Self {
+                conn,
+                caps,
+                config: config.clone(),
+                authenticated: None,
+                tap,
+            }),
+            Err(err) => {
+                tap.close(Some(&err.to_string()));
+                Err(err)
+            }
+        }
+    }
+
+    /// The connection, TLS and the `EHLO` capabilities, logged to `tap`.
+    async fn open(
+        config: &SmtpConfig,
+        tap: &ConnTap,
+    ) -> Result<(AsyncSmtpConnection, Capabilities)> {
         let hello = hello_name(config);
         let params = match config.tls {
             TlsMode::Plaintext => None,
@@ -179,12 +233,18 @@ impl SmtpSession {
             ),
         )
         .await?;
+        // lettre read the greeting and sent its own EHLO.
+        tap.note(
+            WireLevel::Info,
+            &format!("greeting from {}; EHLO {hello}", conn.server_info().name()),
+        );
         match (config.tls, params) {
             (TlsMode::Starttls, Some(params)) => {
                 if !conn.can_starttls() {
                     conn.abort().await;
                     return Err(SmtpError::StartTlsUnavailable);
                 }
+                tap.sent(&[Part::Text("STARTTLS")]);
                 timed(
                     config,
                     config.timeout,
@@ -195,27 +255,38 @@ impl SmtpSession {
             }
             (TlsMode::Plaintext, _) => {
                 tracing::warn!(host = %config.host, "SMTP connection without TLS");
+                tap.note(
+                    WireLevel::Warning,
+                    "no TLS: the connection is not encrypted",
+                );
             }
             _ => {}
+        }
+        if conn.is_encrypted() {
+            let certificate = conn.peer_certificate().ok();
+            tap.tls("", "", certificate.as_deref());
         }
         // lettre keeps only a few known extensions from its own EHLO; ask
         // again for the full list (SIZE, DSN, …). RFC 5321 allows a repeated
         // EHLO at any time outside a transaction.
-        let reply = timed(
-            config,
-            config.timeout,
-            Phase::Connect,
-            conn.command(Ehlo::new(hello)),
-        )
-        .await?;
+        let ehlo = Ehlo::new(hello);
+        tap.sent(&[Part::Text(ehlo.to_string().trim_end())]);
+        let reply = timed(config, config.timeout, Phase::Connect, conn.command(ehlo)).await;
+        log_outcome(tap, &reply);
+        let reply = reply?;
         let caps = Capabilities::from_lines(reply.message());
         tracing::debug!(host = %config.host, server = %caps.server_name, "SMTP connected");
-        Ok(Self {
-            conn,
-            caps,
-            config: config.clone(),
-            authenticated: None,
-        })
+        Ok((conn, caps))
+    }
+
+    /// The last command sent, as the connection log shows it (redacted).
+    pub fn last_command(&self) -> Option<String> {
+        self.tap.last_sent()
+    }
+
+    /// The last reply line, as the connection log shows it (redacted).
+    pub fn last_reply(&self) -> Option<String> {
+        self.tap.last_received()
     }
 
     /// The server's `EHLO` capabilities.
@@ -235,11 +306,32 @@ impl SmtpSession {
 
     async fn cmd(&mut self, phase: Phase, line: String) -> Result<Response> {
         let timeout = self.config.timeout;
-        timed(&self.config, timeout, phase, self.conn.command(Raw(line))).await
+        self.tap.sent(&[Part::Text(&line)]);
+        let result = timed(&self.config, timeout, phase, self.conn.command(Raw(line))).await;
+        log_outcome(&self.tap, &result);
+        result
+    }
+
+    /// A lettre command with the connection log.
+    async fn logged<C: fmt::Display>(
+        &mut self,
+        phase: Phase,
+        timeout: Duration,
+        command: C,
+    ) -> Result<Response> {
+        self.tap.sent(&[Part::Text(command.to_string().trim_end())]);
+        let result = timed(&self.config, timeout, phase, self.conn.command(command)).await;
+        log_outcome(&self.tap, &result);
+        result
     }
 
     /// Authenticates. [`SmtpCredentials::None`] does nothing.
     pub async fn authenticate(&mut self, credentials: &SmtpCredentials) -> Result<()> {
+        match credentials {
+            SmtpCredentials::Password { password, .. } => self.tap.add_secret(password),
+            SmtpCredentials::OAuth2 { access_token, .. } => self.tap.add_secret(access_token),
+            SmtpCredentials::None => {}
+        }
         let username = match credentials {
             SmtpCredentials::None => return Ok(()),
             SmtpCredentials::Password {
@@ -406,13 +498,8 @@ impl SmtpSession {
 
         let timeout = self.config.timeout;
         let result = async {
-            timed(
-                &self.config,
-                timeout,
-                Phase::Envelope,
-                self.conn.command(Mail::new(from, mail_params)),
-            )
-            .await?;
+            self.logged(Phase::Envelope, timeout, Mail::new(from, mail_params))
+                .await?;
             for recipient in &recipients {
                 let mut params = Vec::new();
                 if dsn {
@@ -425,11 +512,10 @@ impl SmtpSession {
                         value: Some(format!("rfc822;{recipient}")),
                     });
                 }
-                timed(
-                    &self.config,
-                    timeout,
+                self.logged(
                     Phase::Envelope,
-                    self.conn.command(Rcpt::new(recipient.clone(), params)),
+                    timeout,
+                    Rcpt::new(recipient.clone(), params),
                 )
                 .await
                 .map_err(|err| match err {
@@ -444,7 +530,7 @@ impl SmtpSession {
                     other => other,
                 })?;
             }
-            let reply = timed(&self.config, timeout, Phase::Data, self.conn.command(Data)).await?;
+            let reply = self.logged(Phase::Data, timeout, Data).await?;
             if !reply.has_code(354) {
                 return Err(SmtpError::Protocol(format!(
                     "unexpected reply {} to DATA",
@@ -453,13 +539,16 @@ impl SmtpSession {
             }
             // Slow uplinks: allow one extra second per 16 KiB.
             let transfer = timeout + Duration::from_secs((body.len() / (16 * 1024)) as u64);
-            timed(
+            self.tap.sent(&[Part::Bytes(body.len())]);
+            let result = timed(
                 &self.config,
                 transfer,
                 Phase::Data,
                 self.conn.message(&body),
             )
-            .await
+            .await;
+            log_outcome(&self.tap, &result);
+            result
         }
         .await;
         match result {
@@ -472,6 +561,7 @@ impl SmtpSession {
             Err(err) => {
                 // Leave the connection usable for another attempt.
                 if !matches!(err, SmtpError::Timeout(_) | SmtpError::ConnectionLost(_)) {
+                    self.tap.sent(&[Part::Text("RSET")]);
                     drop(tokio::time::timeout(timeout, self.conn.command(Rset)).await);
                 }
                 Err(err)
@@ -487,7 +577,9 @@ impl SmtpSession {
     /// Ends the session politely with `QUIT`.
     pub async fn quit(mut self) -> Result<()> {
         let timeout = self.config.timeout;
+        self.tap.sent(&[Part::Text("QUIT")]);
         let result = timed(&self.config, timeout, Phase::Other, self.conn.quit()).await;
+        log_outcome(&self.tap, &result);
         self.conn.abort().await;
         result.map(|_| ())
     }

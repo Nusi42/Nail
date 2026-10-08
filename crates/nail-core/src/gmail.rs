@@ -40,7 +40,7 @@ use nail_store::gmail::{GmailLabelOp, GmailLabelOpOutcome, GmailLabelRecord, Gma
 use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
 
-use crate::engine::{Signals, state_for_error, stopped, unix_now};
+use crate::engine::{Signals, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest_with_remote};
@@ -219,6 +219,13 @@ async fn label(
 /// core's token manager).
 pub(crate) fn engine_for(service: &Service, account: &AccountConfig) -> Result<GmailEngine> {
     GmailEngine::for_account(account, service.inner.tokens.clone())
+        .map(|engine| {
+            engine.with_tap(
+                service
+                    .account_tap(&account.id)
+                    .http(nail_api::connlog::WireProtocol::Gmail),
+            )
+        })
         .map_err(|e| CoreError::from(EngineError::from(e)))
 }
 
@@ -263,11 +270,17 @@ pub(crate) async fn run(
     let engine = match engine_for(&service, &account) {
         Ok(engine) => Arc::new(engine),
         Err(err) => {
-            service.set_status(
-                &account.id,
-                AccountState::Offline,
-                Some((err.code(), err.to_string(), err.localized())),
-            );
+            service
+                .engine_failed(
+                    &account.id,
+                    &err,
+                    crate::connlog::ErrorContext::of_error(
+                        nail_api::connlog::WireProtocol::Gmail,
+                        &err,
+                    ),
+                    false,
+                )
+                .await;
             stopped(&mut stop).await;
             return;
         }
@@ -286,24 +299,23 @@ pub(crate) async fn run(
         let delay = match result {
             Ok(outcome) => {
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 poll.observe(&Ok(outcome));
                 timing.poll_override.unwrap_or_else(|| poll.next_delay())
             }
             Err(err) => {
-                let code = err.code();
                 tracing::info!(account = %account.id, %err, "Gmail sync failed");
-                service.set_status(
-                    &account.id,
-                    state_for_error(code),
-                    Some((code, err.to_string(), err.localized())),
-                );
-                service.broadcast(Event::SyncFailed {
-                    account_id: account.id.clone(),
-                    code,
-                    message: err.to_string(),
-                    localized: err.localized(),
-                });
+                service
+                    .engine_failed(
+                        &account.id,
+                        &err,
+                        crate::connlog::ErrorContext::of_error(
+                            nail_api::connlog::WireProtocol::Gmail,
+                            &err,
+                        ),
+                        true,
+                    )
+                    .await;
                 let engine_err: EngineError = err.into();
                 poll.observe(&Err(engine_err));
                 let delay = poll.next_delay().max(backoff);

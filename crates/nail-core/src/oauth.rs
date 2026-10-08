@@ -30,6 +30,8 @@ pub(crate) struct Tokens {
     providers: Mutex<Vec<OAuthProviderConfig>>,
     secrets: Arc<dyn SecretStore>,
     http: reqwest::Client,
+    /// Where token requests are logged (ADR 0190), kept across rebuilds.
+    pub(crate) taps: Arc<nail_auth::OAuthTaps>,
 }
 
 impl std::fmt::Debug for Tokens {
@@ -47,12 +49,14 @@ impl Tokens {
         secrets: Arc<dyn SecretStore>,
         http: reqwest::Client,
     ) -> Self {
-        let manager = Self::build(providers, &secrets, &http);
+        let taps = Arc::new(nail_auth::OAuthTaps::default());
+        let manager = Self::build(providers, &secrets, &http, &taps);
         Self {
             current: RwLock::new(Arc::new(manager)),
             providers: Mutex::new(providers.to_vec()),
             secrets,
             http,
+            taps,
         }
     }
 
@@ -60,12 +64,14 @@ impl Tokens {
         providers: &[OAuthProviderConfig],
         secrets: &Arc<dyn SecretStore>,
         http: &reqwest::Client,
+        taps: &Arc<nail_auth::OAuthTaps>,
     ) -> TokenManager {
         let registry = ProviderRegistry::from_config(providers).unwrap_or_else(|err| {
             tracing::warn!(%err, "invalid OAuth2 providers; using the built-in ones only");
             ProviderRegistry::default()
         });
         TokenManager::new(Arc::new(registry), Arc::clone(secrets), http.clone())
+            .with_taps(Arc::clone(taps))
     }
 
     /// The current manager.
@@ -83,7 +89,12 @@ impl Tokens {
             }
             *current = providers.to_vec();
         }
-        let manager = Arc::new(Self::build(providers, &self.secrets, &self.http));
+        let manager = Arc::new(Self::build(
+            providers,
+            &self.secrets,
+            &self.http,
+            &self.taps,
+        ));
         *self.current.write().unwrap_or_else(PoisonError::into_inner) = manager;
     }
 }

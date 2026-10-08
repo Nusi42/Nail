@@ -41,6 +41,9 @@ pub struct Pop3Config {
     /// Timeout for connecting, the TLS handshake and each response line
     /// (so a slow but steady download never times out).
     pub timeout: Duration,
+    /// The connection log every session records into (ADR 0190); off by
+    /// default.
+    pub tap: nail_connlog::WireTap,
 }
 
 impl Pop3Config {
@@ -55,7 +58,15 @@ impl Pop3Config {
             tls: TlsMode::Implicit,
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
+            tap: nail_connlog::WireTap::off(),
         }
+    }
+
+    /// Records every session into `tap` (ADR 0190).
+    #[must_use]
+    pub fn with_tap(mut self, tap: nail_connlog::WireTap) -> Self {
+        self.tap = tap;
+        self
     }
 
     /// The connection part of an account's incoming POP3 [`ServerEndpoint`].
@@ -72,6 +83,7 @@ impl Pop3Config {
             tls: endpoint.tls,
             trust: TlsTrust::Platform,
             timeout: Self::DEFAULT_TIMEOUT,
+            tap: nail_connlog::WireTap::off(),
         }
     }
 

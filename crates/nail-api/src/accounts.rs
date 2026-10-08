@@ -1196,6 +1196,10 @@ pub struct AccountStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub localized: Option<LocalizedMessage>,
+    /// The precise cause of the error ("Show details", ADR 0190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub details: Option<Box<crate::connlog::ErrorDetails>>,
 }
 
 /// The states of [`AccountStatus`].

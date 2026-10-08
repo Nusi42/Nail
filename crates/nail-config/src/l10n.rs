@@ -45,12 +45,20 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/composer.ftl"),
     ),
     (
+        "connlog.ftl",
+        include_str!("../../../locales/en/connlog.ftl"),
+    ),
+    (
         "core-agents.ftl",
         include_str!("../../../locales/en/core-agents.ftl"),
     ),
     (
         "core-appearance.ftl",
         include_str!("../../../locales/en/core-appearance.ftl"),
+    ),
+    (
+        "core-connlog.ftl",
+        include_str!("../../../locales/en/core-connlog.ftl"),
     ),
     (
         "core-crypto.ftl",
@@ -230,12 +238,20 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/composer.ftl"),
     ),
     (
+        "connlog.ftl",
+        include_str!("../../../locales/de/connlog.ftl"),
+    ),
+    (
         "core-agents.ftl",
         include_str!("../../../locales/de/core-agents.ftl"),
     ),
     (
         "core-appearance.ftl",
         include_str!("../../../locales/de/core-appearance.ftl"),
+    ),
+    (
+        "core-connlog.ftl",
+        include_str!("../../../locales/de/core-connlog.ftl"),
     ),
     (
         "core-crypto.ftl",

@@ -2,6 +2,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  allowAllFolders,
+  openWorkLog,
+  otherMailbox,
+  showRefusedFolderDetails,
+} from "../support/connlog";
 import { control, repoRoot, startNail, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
 import {
@@ -104,6 +110,10 @@ const FEATURE_DIALOGS = [
   "theme-new",
   "theme-rename",
   "theme-delete",
+  // ADR 0190: the connection log, an error's details and the application log.
+  "connection-log",
+  "error-details",
+  "application-log",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -414,6 +424,18 @@ for (const mode of MODES) {
         await sweep.scanWindow(name);
         await sweep.close(name);
       }
+      // ADR 0190: the application log, the connection log and an error's
+      // details (a folder the mock server refuses to open).
+      await settings.getByRole("button", { name: "Show recent lines" }).click();
+      await sweep.scanWindow("application-log");
+      await sweep.close("application-log");
+      await openWorkLog(page);
+      await sweep.scanWindow("connection-log");
+      await sweep.close("connection-log");
+      await showRefusedFolderDetails(page, server, await otherMailbox(server));
+      await sweep.scanWindow("error-details");
+      await sweep.close("error-details");
+      await allowAllFolders(page, server);
       // The plug-in install dialog (M2d).
       await openSettings(page, "Plug-ins");
       await settings.getByRole("button", { name: "Install a plug-in…" }).click();

@@ -1161,6 +1161,12 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
     /// * `imap-messages {account?, mailbox?}` → `[{uid, subject, flags}]`
     /// * `imap-mailboxes {account?}` → `[{name, count}]`
     /// * `imap-offline {account?, offline}`
+    /// * `imap-deny {account?, mailboxes}`: `SELECT` / `EXAMINE` of these
+    ///   mailboxes is refused with `NO [NOPERM]` (`[]` allows all again;
+    ///   ADR 0190 error details)
+    /// * `imap-fault {account?, uid, kind?}`: body fetches of the message
+    ///   with this UID misbehave (`refuse`, `malformed`, `withhold`,
+    ///   `garbage`; no `kind` = behave again; ADR 0191)
     /// * `pop3-deliver {raw, uid?}` → `{uid}`
     /// * `pop3-state` → `{uids, deleted}`
     /// * `smtp-messages` → `[{from, to, data}]`
@@ -1263,6 +1269,34 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                     .ok_or("offline is required")?;
                 self.imap(account)?.set_offline(offline);
                 Ok(json!({ "offline": offline }))
+            }
+            "imap-deny" => {
+                let mailboxes: Vec<&str> = args
+                    .get("mailboxes")
+                    .and_then(Value::as_array)
+                    .ok_or("mailboxes is required")?
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect();
+                self.imap(account)?.deny_mailboxes(&mailboxes);
+                Ok(json!({ "mailboxes": mailboxes }))
+            }
+            "imap-fault" => {
+                let uid = args
+                    .get("uid")
+                    .and_then(Value::as_u64)
+                    .and_then(|u| u32::try_from(u).ok())
+                    .ok_or("uid is required")?;
+                let fault = match text("kind") {
+                    None => None,
+                    Some("refuse") => Some(nail_testkit::MessageFault::Refuse),
+                    Some("malformed") => Some(nail_testkit::MessageFault::Malformed),
+                    Some("withhold") => Some(nail_testkit::MessageFault::Withhold),
+                    Some("garbage") => Some(nail_testkit::MessageFault::Garbage),
+                    Some(other) => return Err(format!("unknown fault {other:?}")),
+                };
+                self.imap(account)?.fault_message(uid, fault);
+                Ok(json!({ "uid": uid }))
             }
             "pop3-deliver" => {
                 let raw = text("raw").ok_or("raw is required")?;

@@ -260,6 +260,7 @@ impl Service {
             | Request::ListIdentities { account_id: None }
             | Request::ListVirtualAccounts
             | Request::ListAccountStatuses
+            | Request::ListSyncErrors { account_id: None }
             | Request::GetThread { .. }
             | Request::CheckQuery { .. }
             | Request::ListDrafts
@@ -437,6 +438,14 @@ impl Service {
             | Request::SavePrintPdf { .. }
             | Request::PreviewDiagnostics { .. }
             | Request::CreateDiagnosticsBundle { .. }
+            // ADR 0190: the connection log and the app log (admin; an
+            // export to a path is desktop-only).
+            | Request::GetConnectionLog { .. }
+            | Request::ClearConnectionLog { .. }
+            | Request::ExportConnectionLog { .. }
+            | Request::GetConnectionLogSettings
+            | Request::SetConnectionLogSettings { .. }
+            | Request::GetAppLog
             | Request::PickPath { .. }
             | Request::SaveAttachment { .. }
             | Request::SyncSieve { .. }
@@ -459,6 +468,9 @@ impl Service {
 
             // Accounts and folders.
             Request::ListFolders { account_id }
+            | Request::ListSyncErrors {
+                account_id: Some(account_id),
+            }
             | Request::ListIdentities {
                 account_id: Some(account_id),
             }
@@ -1375,6 +1387,15 @@ impl Service {
                 statuses.retain(|s| access.allows_account(&s.account_id));
                 Response::AccountStatuses { statuses }
             }
+            // ADR 0190: stored errors of the granted accounts only.
+            Response::SyncErrors {
+                mut errors,
+                mut skipped,
+            } => {
+                errors.retain(|e| access.allows_account(&e.account_id));
+                skipped.retain(|m| access.allows_account(&m.account_id));
+                Response::SyncErrors { errors, skipped }
+            }
             Response::Identities { mut identities } => {
                 identities.retain(|i| access.allows_account(&i.account_id));
                 Response::Identities { identities }
@@ -1563,9 +1584,11 @@ impl Service {
                         .await
                         .unwrap_or(false)
             }
-            Event::SyncProgress { account_id, .. } | Event::SyncFailed { account_id, .. } => {
-                access.allows_account(account_id)
-            }
+            Event::SyncProgress { account_id, .. }
+            | Event::SyncFailed { account_id, .. }
+            | Event::SyncErrorsChanged { account_id } => access.allows_account(account_id),
+            // ADR 0190: the connection log is for administrators.
+            Event::ConnectionLogChanged { .. } => admin,
             Event::AccountStatus { status } => access.allows_account(&status.account_id),
             Event::OpStatus { status } => access.allows_account(&status.account_id),
             Event::SendStatus { outbox_id, .. } | Event::SendProgress { outbox_id, .. } => {

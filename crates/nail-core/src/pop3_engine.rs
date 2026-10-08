@@ -23,7 +23,7 @@ use nail_proto_pop3::{LeavePolicy, Pop3Client, plan_deletions, plan_downloads, v
 use tokio::sync::watch;
 
 use crate::creds::{EndpointCredentials, pop3_config, pop3_credentials};
-use crate::engine::{Signals, state_for_error, stopped, unix_now};
+use crate::engine::{Signals, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest};
@@ -71,7 +71,8 @@ pub(crate) async fn fetch(
     credentials: &EndpointCredentials,
 ) -> Result<FetchReport> {
     let login = credentials.login(false).await?;
-    let mut client = Pop3Client::connect(&pop3_config(server)).await?;
+    let mut client =
+        Pop3Client::connect(&pop3_config(server).with_tap(service.account_tap(account))).await?;
     client.login(&pop3_credentials(login)).await?;
     let listing = client.messages().await?;
     let state = {
@@ -221,24 +222,23 @@ pub(crate) async fn run(
             Ok(report) => {
                 tracing::info!(account = %account.id, ?report, "POP3 fetch finished");
                 backoff = timing.reconnect_min;
-                service.set_status(&account.id, AccountState::Online, None);
+                service.engine_online(&account.id).await;
                 poll
             }
             Err(err) => {
                 let err: CoreError = err;
-                let code = err.code();
                 tracing::info!(account = %account.id, %err, "POP3 fetch failed");
-                service.set_status(
-                    &account.id,
-                    state_for_error(code),
-                    Some((code, err.to_string(), err.localized())),
-                );
-                service.broadcast(Event::SyncFailed {
-                    account_id: account.id.clone(),
-                    code,
-                    message: err.to_string(),
-                    localized: err.localized(),
-                });
+                service
+                    .engine_failed(
+                        &account.id,
+                        &err,
+                        crate::connlog::ErrorContext::of_error(
+                            nail_api::connlog::WireProtocol::Pop3,
+                            &err,
+                        ),
+                        true,
+                    )
+                    .await;
                 let delay = backoff;
                 backoff = (backoff * 2).min(timing.reconnect_max);
                 delay

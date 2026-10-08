@@ -4361,6 +4361,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "keyring",
  "nail-api",
+ "nail-connlog",
  "nail-testkit-net",
  "oauth2",
  "reqwest",
@@ -4459,6 +4460,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-connlog"
+version = "1.0.0-rc.1"
+dependencies = [
+ "chrono",
+ "der",
+ "hex",
+ "nail-api",
+ "pretty_assertions",
+ "proptest",
+ "rustls",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "x509-cert",
+]
+
+[[package]]
 name = "nail-core"
 version = "1.0.0-rc.1"
 dependencies = [
@@ -4472,6 +4490,7 @@ dependencies = [
  "nail-auth",
  "nail-compose",
  "nail-config",
+ "nail-connlog",
  "nail-dav",
  "nail-discovery",
  "nail-exchange",
@@ -4528,6 +4547,7 @@ dependencies = [
  "base64 0.23.1",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-discovery",
  "nail-testkit-net",
  "pretty_assertions",
@@ -4546,6 +4566,7 @@ dependencies = [
  "hickory-resolver",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-testkit-net",
  "quick-xml",
  "reqwest",
@@ -4566,6 +4587,7 @@ dependencies = [
  "chrono-tz",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-discovery",
  "nail-exchange",
  "nail-ical",
@@ -4760,6 +4782,7 @@ dependencies = [
  "hex",
  "mail-parser",
  "nail-api",
+ "nail-connlog",
  "nail-ical",
  "pretty_assertions",
  "rand 0.8.8",
@@ -4784,6 +4807,7 @@ dependencies = [
  "futures-util",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-proto-ews",
  "pretty_assertions",
  "quick-xml",
@@ -4804,6 +4828,7 @@ dependencies = [
  "mail-parser",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-proto-gmail",
  "pretty_assertions",
  "reqwest",
@@ -4825,6 +4850,7 @@ dependencies = [
  "mail-parser",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-proto-graph",
  "pretty_assertions",
  "reqwest",
@@ -4845,6 +4871,7 @@ dependencies = [
  "futures",
  "imap-proto",
  "nail-api",
+ "nail-connlog",
  "nail-testkit",
  "rustls-platform-verifier",
  "thiserror 2.0.21",
@@ -4861,6 +4888,7 @@ dependencies = [
  "base64 0.23.1",
  "md-5 0.11.0",
  "nail-api",
+ "nail-connlog",
  "nail-testkit-net",
  "rustls-platform-verifier",
  "thiserror 2.0.21",
@@ -4877,6 +4905,7 @@ dependencies = [
  "lettre",
  "nail-api",
  "nail-auth",
+ "nail-connlog",
  "nail-testkit-net",
  "thiserror 2.0.21",
  "tokio",
@@ -5006,6 +5035,7 @@ dependencies = [
  "base64 0.23.1",
  "hex",
  "nail-api",
+ "nail-connlog",
  "nail-testkit",
  "nail-testkit-net",
  "pretty_assertions",
