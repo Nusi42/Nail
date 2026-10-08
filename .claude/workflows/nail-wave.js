@@ -45,7 +45,8 @@ Mandatory rules:
 - Licences: Nail is closed source for now — do not add GPL/LGPL/AGPL dependencies (MPL-2.0, MIT, Apache-2.0, BSD, ISC, Zlib, Unicode are fine). Check licences before adding a crate/package. Avoid an OpenSSL build dependency unless an ADR justifies it.
 - The machine is shared with other development work (other Vite / tauri dev projects may be running and holding ports and memory): run cargo with -j 4 (os error 1455 = out of page file -> rerun with -j 2), never bind fixed development ports (take free ports), and never kill processes you did not start.
 - No network except localhost mocks and package registries. A Vite dev server / 'tauri dev' may be running from the user's session: never kill it; if npm ci hits a locked file use npm install and say so.
-- Prefer well-maintained crates/packages; verify real APIs in ~/.cargo/registry or node_modules rather than guessing.`
+- Prefer well-maintained crates/packages; verify real APIs in ~/.cargo/registry or node_modules rather than guessing.
+- SSOT / ODR / DRY (mandatory, CLAUDE.md): every fact (type, constant, id, limit, size, string, rule, mapping, schema) has exactly one source of truth and one definition; other places derive it (generated code, imports, shared tokens, shared helpers) instead of mirroring or copying it by hand. No copy-pasted logic: extract a shared function / component / test helper when the second copy appears. Rust <-> TS facts are generated (ts-rs / gen:api) or checked by a test, never hand-mirrored. The duplicate check in npm run check must stay at 0 findings.`
 
 const RESULT = {
   type: 'object',
@@ -136,7 +137,8 @@ const reviews = await parallel(A.reviews.map(r => () =>
 
 YOUR TASK: review ${A.wave} in ${REPO} (read-only: do not modify tracked files, do not commit). Lens: ${r.lens}
 Integration report: ${integ ? integ.summary + '\nTests: ' + integ.testReport : 'integration agent failed'}
-Use CARGO_TARGET_DIR=${posix(REPO)}/.nail-build/target-review-${r.key}. Report only real, verified problems with concrete evidence; no nits. Rank by severity.`, { ...OPTS, label: `review:${r.key}`, phase: 'Review', schema: FINDINGS })
+Use CARGO_TARGET_DIR=${posix(REPO)}/.nail-build/target-review-${r.key}. Report only real, verified problems with concrete evidence; no nits. Rank by severity.
+Always also check the wave's changes (git diff ${A.since}..HEAD) for SSOT / ODR / DRY violations: a fact defined or hand-mirrored in more than one place, copy-pasted logic, a second definition of an existing type / constant / helper. Report each as severity "medium" or higher (must-fix), naming both places and the single source it should come from.`, { ...OPTS, label: `review:${r.key}`, phase: 'Review', schema: FINDINGS })
 ))
 const all = reviews.filter(Boolean).flatMap(r => r.findings)
 const must = all.filter(f => f.severity !== 'low')

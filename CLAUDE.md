@@ -39,6 +39,11 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   mock modules: the mock core must stay out of the app bundle (`npm run build` fails on any Vite / Rolldown
   warning, `ui/build/strictBuild.ts`). Non-Windows `cfg` branches are linted by CI's `quality-linux` job (ADR 0130);
   clap help text has no backticks.
+- **SSOT / ODR / DRY (maintainer rule, mandatory, existing and new code).** Every fact (type, constant, id, limit, size, string,
+  rule, mapping, schema) has one source of truth and one definition; everything else derives it (generated code,
+  imports, shared tokens, shared helpers). Rust ↔ TypeScript facts are generated (ts-rs, `npm run gen:api`) or pinned by
+  a test, never mirrored by hand. No copy-pasted logic: the second copy is the moment to extract a shared function,
+  component or test helper. Reviews report every violation as must-fix; the duplicate check in `npm run check` stays at 0.
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
