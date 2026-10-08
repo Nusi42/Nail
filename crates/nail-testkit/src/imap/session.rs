@@ -9,6 +9,7 @@ use std::sync::atomic::Ordering;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use nail_api::FolderRole;
+use nail_net::io::{LineRead, read_line_limited};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -263,24 +264,20 @@ impl Session {
 
     /// Reads one line (without CRLF); `None` at EOF.
     async fn read_line(&mut self, limit: usize) -> io::Result<Option<Vec<u8>>> {
-        let mut line = Vec::new();
-        let n = (&mut self.stream)
-            .take(limit as u64)
-            .read_until(b'\n', &mut line)
-            .await?;
-        if n == 0 {
-            return Ok(None);
-        }
-        if !line.ends_with(b"\n") {
-            return Err(io::Error::new(
+        let limit = u64::try_from(limit).unwrap_or(u64::MAX);
+        match read_line_limited(&mut self.stream, limit).await? {
+            LineRead::Eof => Ok(None),
+            LineRead::TooLong => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "command too long",
-            ));
+            )),
+            LineRead::Line(mut line) => {
+                while matches!(line.last(), Some(b'\n' | b'\r')) {
+                    line.pop();
+                }
+                Ok(Some(line))
+            }
         }
-        while matches!(line.last(), Some(b'\n' | b'\r')) {
-            line.pop();
-        }
-        Ok(Some(line))
     }
 
     /// Reads one command including any literals; `None` at EOF.
@@ -499,12 +496,16 @@ impl Session {
             _ if self.view.is_none() => bad("no mailbox selected"),
             "FETCH" => self.fetch(&args, uid).await?,
             "SEARCH" => self.search(&args, uid).await?,
-            "STORE" => self.store(&args, uid).await?,
+            "STORE" => match self.writable() {
+                Ok(mailbox) => self.store(mailbox, &args, uid).await?,
+                Err(refused) => refused,
+            },
             "COPY" => self.copy(&args, uid, false).await?,
             "MOVE" if self.shared.config.capabilities.move_ => self.copy(&args, uid, true).await?,
-            "EXPUNGE" if !uid || self.shared.config.capabilities.uidplus => {
-                self.expunge(&args, uid).await?
-            }
+            "EXPUNGE" if !uid || self.shared.config.capabilities.uidplus => match self.writable() {
+                Ok(mailbox) => self.expunge(mailbox, &args, uid).await?,
+                Err(refused) => refused,
+            },
             _ => bad("unsupported command"),
         };
         if syncs && self.view.is_some() {
@@ -1081,6 +1082,15 @@ impl Session {
         }
     }
 
+    /// The selected mailbox when it may be changed, else the refusal.
+    fn writable(&self) -> Result<String, Reply> {
+        match self.selected() {
+            None => Err(bad("no mailbox selected")),
+            Some((_, true)) => Err(no("[READ-ONLY] mailbox is read-only")),
+            Some((name, false)) => Ok(name),
+        }
+    }
+
     fn selected(&self) -> Option<(String, bool)> {
         self.view.as_ref().map(|v| (v.mailbox.clone(), v.read_only))
     }
@@ -1258,13 +1268,13 @@ impl Session {
         Ok(ok(format!("{verb} completed")))
     }
 
-    async fn store(&mut self, args: &[Token], uid: bool) -> io::Result<Reply> {
-        let Some((mailbox_name, read_only)) = self.selected() else {
-            return Ok(bad("no mailbox selected"));
-        };
-        if read_only {
-            return Ok(no("[READ-ONLY] mailbox is read-only"));
-        }
+    /// `STORE` in the writable selected mailbox `mailbox_name`.
+    async fn store(
+        &mut self,
+        mailbox_name: String,
+        args: &[Token],
+        uid: bool,
+    ) -> io::Result<Reply> {
         let (set, unchanged_since, item, flags) = match args {
             [set, item, flags] => (set, None, item, flags),
             [set, Token::List(modifier), item, flags] => {
@@ -1416,13 +1426,14 @@ impl Session {
         Ok(ok("MOVE completed"))
     }
 
-    async fn expunge(&mut self, args: &[Token], uid: bool) -> io::Result<Reply> {
-        let Some((mailbox_name, read_only)) = self.selected() else {
-            return Ok(bad("no mailbox selected"));
-        };
-        if read_only {
-            return Ok(no("[READ-ONLY] mailbox is read-only"));
-        }
+    /// `EXPUNGE` / `UID EXPUNGE` in the writable selected mailbox
+    /// `mailbox_name`.
+    async fn expunge(
+        &mut self,
+        mailbox_name: String,
+        args: &[Token],
+        uid: bool,
+    ) -> io::Result<Reply> {
         let set = if uid {
             match args
                 .first()

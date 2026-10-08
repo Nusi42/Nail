@@ -23,20 +23,7 @@ pub(crate) fn render(locale: Option<&str>, message: &nail_api::LocalizedMessage)
 }
 
 /// Escapes text for HTML element content.
-pub(crate) fn html_escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            c => out.push(c),
-        }
-    }
-    out
-}
+pub(crate) use nail_util::markup::escape_html as html_escape;
 
 /// The browser pages shown after an OAuth2 redirect, localized.
 pub(crate) fn oauth_callback_pages(locale: Option<&str>) -> nail_auth::CallbackPages {

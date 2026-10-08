@@ -80,17 +80,9 @@ fn nth_weekday(year: i32, month: u32, weekday: Weekday, n: u8) -> NaiveDate {
 }
 
 fn last_sunday(year: i32, month: u32) -> NaiveDate {
-    let next = if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1)
-    } else {
-        NaiveDate::from_ymd_opt(year, month + 1, 1)
-    }
-    .unwrap_or_default();
-    let mut day = next - Duration::days(1);
-    while day.weekday() != Weekday::Sun {
-        day -= Duration::days(1);
-    }
-    day
+    nail_util::time::last_weekday_of_month(i64::from(year), month, 6)
+        .and_then(|day| NaiveDate::from_ymd_opt(year, month, day))
+        .unwrap_or_default()
 }
 
 impl Zone {

@@ -493,6 +493,25 @@ impl SmtpSession {
     }
 }
 
+/// The first mechanism the server `offered` of the `forced` one (it must
+/// have a `name`, else it is `wrong_kind`), or of the `defaults` in order.
+fn first_offered(
+    offered: &[String],
+    forced: Option<SaslMechanism>,
+    defaults: [SaslMechanism; 2],
+    name: impl Fn(SaslMechanism) -> Option<&'static str>,
+    wrong_kind: &str,
+) -> Result<Option<SaslMechanism>> {
+    let candidates = match forced {
+        Some(m) if name(m).is_some() => vec![m],
+        Some(m) => return Err(SmtpError::AuthUnsupported(format!("{m:?} {wrong_kind}"))),
+        None => defaults.to_vec(),
+    };
+    Ok(candidates
+        .into_iter()
+        .find(|m| name(*m).is_some_and(|n| offered.iter().any(|o| o == n))))
+}
+
 /// `PLAIN` if offered, else `LOGIN`; an explicit choice must be offered.
 fn choose_password_mechanism(
     caps: &Capabilities,
@@ -509,21 +528,15 @@ fn choose_password_mechanism(
         SaslMechanism::Login => Some("LOGIN"),
         _ => None,
     };
-    let candidates: Vec<SaslMechanism> = match forced {
-        Some(m) if name(m).is_some() => vec![m],
-        Some(m) => {
-            return Err(SmtpError::AuthUnsupported(format!(
-                "{m:?} is not available for SMTP password logins"
-            )));
-        }
-        None => vec![SaslMechanism::Plain, SaslMechanism::Login],
-    };
-    candidates
-        .into_iter()
-        .find(|m| name(*m).is_some_and(|n| offered.iter().any(|o| o == n)))
-        .ok_or_else(|| {
-            SmtpError::AuthUnsupported(format!("the server offers {}", offered.join(" ")))
-        })
+    let defaults = [SaslMechanism::Plain, SaslMechanism::Login];
+    first_offered(
+        &offered,
+        forced,
+        defaults,
+        name,
+        "is not available for SMTP password logins",
+    )?
+    .ok_or_else(|| SmtpError::AuthUnsupported(format!("the server offers {}", offered.join(" "))))
 }
 
 /// `XOAUTH2` if offered, else `OAUTHBEARER`; an explicit choice must be
@@ -538,28 +551,24 @@ fn choose_oauth_mechanism(
         SaslMechanism::Oauthbearer => Some("OAUTHBEARER"),
         _ => None,
     };
-    let candidates = match forced {
-        Some(m) if name(m).is_some() => vec![m],
-        Some(m) => {
-            return Err(SmtpError::AuthUnsupported(format!(
-                "{m:?} is not an OAuth2 mechanism"
-            )));
-        }
-        None => vec![SaslMechanism::Xoauth2, SaslMechanism::Oauthbearer],
-    };
-    candidates
-        .into_iter()
-        .find(|m| name(*m).is_some_and(|n| offered.iter().any(|o| o == n)))
-        .ok_or_else(|| {
-            SmtpError::AuthUnsupported(format!(
-                "no OAuth2 mechanism offered (the server offers {})",
-                if offered.is_empty() {
-                    "none".to_owned()
-                } else {
-                    offered.join(" ")
-                }
-            ))
-        })
+    let defaults = [SaslMechanism::Xoauth2, SaslMechanism::Oauthbearer];
+    first_offered(
+        &offered,
+        forced,
+        defaults,
+        name,
+        "is not an OAuth2 mechanism",
+    )?
+    .ok_or_else(|| {
+        SmtpError::AuthUnsupported(format!(
+            "no OAuth2 mechanism offered (the server offers {})",
+            if offered.is_empty() {
+                "none".to_owned()
+            } else {
+                offered.join(" ")
+            }
+        ))
+    })
 }
 
 #[cfg(test)]

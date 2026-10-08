@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use reqwest::Method;
 
-use crate::client::{Body, Call, GmailClient, parse_json, parse_retry_after};
+use nail_net::http::{Body, parse_retry_after};
+
+use crate::client::{Call, GmailClient, parse_json};
 use crate::error::GmailError;
 use crate::messages::{Format, boundary_for};
 use crate::wire::{ErrorBody, Message};
@@ -76,12 +78,7 @@ fn split_head(text: &str) -> (&str, &str) {
     }
 }
 
-fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
-    head.lines().find_map(|line| {
-        let (n, v) = line.split_once(':')?;
-        n.trim().eq_ignore_ascii_case(name).then(|| v.trim())
-    })
-}
+use nail_util::named::in_lines as header;
 
 /// Parses a batch answer into its parts.
 pub(crate) fn parse_batch(content_type: &str, body: &[u8]) -> Result<Vec<PartReply>, GmailError> {
@@ -240,6 +237,7 @@ impl GmailClient {
                 content_type: format!("multipart/mixed; boundary={boundary}"),
                 bytes: build_batch(&boundary, paths),
             },
+            headers: Vec::new(),
             idempotent: true,
             what: "batch".to_owned(),
         };

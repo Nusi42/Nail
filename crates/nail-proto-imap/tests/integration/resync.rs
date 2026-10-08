@@ -103,6 +103,18 @@ async fn condstore_without_qresync_gives_the_same_answer() {
     .await;
 }
 
+/// A server for each resync method: QRESYNC, CONDSTORE only, neither.
+fn every_resync_mode() -> [MockCapabilities; 3] {
+    [
+        MockCapabilities::default(),
+        MockCapabilities {
+            qresync: false,
+            ..MockCapabilities::default()
+        },
+        MockCapabilities::imap4rev1(),
+    ]
+}
+
 #[tokio::test]
 async fn servers_without_modseq_get_a_full_flag_diff() {
     run_scenario(MockCapabilities::imap4rev1(), ResyncMethod::FullScan).await;
@@ -110,26 +122,23 @@ async fn servers_without_modseq_get_a_full_flag_diff() {
 
 #[tokio::test]
 async fn qresync_uses_the_right_commands() {
-    let server = modern_server().await;
-    let mut client = login(&server).await;
-    let (local, state) = snapshot(&mut client).await;
-    change_on_server(&server);
-    server.clear_commands();
-    client.resync_flags("INBOX", state, &local).await.unwrap();
+    /// The commands a resync after server-side changes sends.
+    async fn resync_commands(capabilities: MockCapabilities) -> Vec<String> {
+        let server = server_with(capabilities).await;
+        let mut client = login(&server).await;
+        let (local, state) = snapshot(&mut client).await;
+        change_on_server(&server);
+        server.clear_commands();
+        client.resync_flags("INBOX", state, &local).await.unwrap();
+        server.commands()
+    }
+    let [qresync, condstore, _] = every_resync_mode();
     // One EXAMINE with QRESYNC parameters answers everything.
-    assert_eq!(server.commands(), ["EXAMINE"]);
-
-    let server = server_with(MockCapabilities {
-        qresync: false,
-        ..MockCapabilities::default()
-    })
-    .await;
-    let mut client = login(&server).await;
-    let (local, state) = snapshot(&mut client).await;
-    change_on_server(&server);
-    server.clear_commands();
-    client.resync_flags("INBOX", state, &local).await.unwrap();
-    assert_eq!(server.commands(), ["EXAMINE", "UID FETCH", "UID SEARCH"]);
+    assert_eq!(resync_commands(qresync).await, ["EXAMINE"]);
+    assert_eq!(
+        resync_commands(condstore).await,
+        ["EXAMINE", "UID FETCH", "UID SEARCH"]
+    );
 }
 
 #[tokio::test]
@@ -153,14 +162,7 @@ async fn an_unknown_modseq_forces_a_full_scan_that_returns_a_modseq() {
 
 #[tokio::test]
 async fn a_changed_uidvalidity_is_reported_in_every_mode() {
-    for capabilities in [
-        MockCapabilities::default(),
-        MockCapabilities {
-            qresync: false,
-            ..MockCapabilities::default()
-        },
-        MockCapabilities::imap4rev1(),
-    ] {
+    for capabilities in every_resync_mode() {
         let server = server_with(capabilities).await;
         let mut client = login(&server).await;
         let (local, state) = snapshot(&mut client).await;
@@ -174,14 +176,7 @@ async fn a_changed_uidvalidity_is_reported_in_every_mode() {
 
 #[tokio::test]
 async fn an_emptied_mailbox_vanishes_everything() {
-    for capabilities in [
-        MockCapabilities::default(),
-        MockCapabilities {
-            qresync: false,
-            ..MockCapabilities::default()
-        },
-        MockCapabilities::imap4rev1(),
-    ] {
+    for capabilities in every_resync_mode() {
         let server = server_with(capabilities).await;
         let mut client = login(&server).await;
         let (local, state) = snapshot(&mut client).await;

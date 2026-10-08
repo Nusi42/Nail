@@ -12,7 +12,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::launch::LaunchRequest;
 use nail_api::mapi::{
     MapiAttachment, MapiMessage, MapiRecipient, MapiRecipientClass, MapiResult, MapiUi,
 };
@@ -41,12 +40,7 @@ fn service(with_identity: bool) -> Fixture {
     if with_identity {
         std::fs::write(config.path().join("accounts.kdl"), ACCOUNTS).unwrap();
     }
-    let args = AppArgs {
-        data_dir: Some(data.path().into()),
-        config_dir: Some(config.path().into()),
-        seed: Some("demo".into()),
-        ..AppArgs::default()
-    };
+    let args = AppArgs::in_dirs(data.path(), config.path(), Some("demo"));
     Fixture {
         service: open_service(&args).unwrap(),
         _data: data,
@@ -140,22 +134,8 @@ async fn a_programs_mail_becomes_a_draft_with_its_files_and_opens_the_composer()
     assert!(file.exists());
     assert_eq!(std::fs::read_dir(staging.path()).unwrap().count(), 0);
 
-    let Response::LaunchRequests { requests } = service.handle(Request::TakeLaunchRequests).await
-    else {
-        panic!("expected launch requests");
-    };
-    let [LaunchRequest::ComposeDraft { draft_id, program }] = requests.as_slice() else {
-        panic!("expected one ComposeDraft: {requests:?}");
-    };
+    let (draft, program) = nail_core::demo::take_program_draft(service).await.unwrap();
     assert_eq!(program.as_deref(), Some("EXCEL.EXE"));
-    let Response::Draft { draft } = service
-        .handle(Request::GetDraft {
-            draft_id: draft_id.clone(),
-        })
-        .await
-    else {
-        panic!("expected the draft");
-    };
     assert_eq!(draft.subject, "Quarterly report");
     assert_eq!(draft.to[0].email, "grace@navy.example");
     assert_eq!(draft.cc[0].email, "alan@example.org");

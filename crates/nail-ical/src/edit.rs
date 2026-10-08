@@ -105,19 +105,29 @@ pub fn check_scope(
     }
 }
 
+/// Checks a `this` edit of the occurrence `recurrence_id` and drops its
+/// override: the series start and the occurrence's time in its frame.
+fn drop_override(
+    event: &mut CalendarEvent,
+    recurrence_id: &PimTime,
+) -> Result<(PimTime, NaiveDateTime), EditError> {
+    check_scope(event, EditScope::This, Some(recurrence_id))?;
+    let start = event.fields.start.clone();
+    let target = frame(recurrence_id, &start)?;
+    event
+        .overrides
+        .retain(|o| time::to_frame(&o.recurrence_id, &start) != Some(target));
+    Ok((start, target))
+}
+
 /// `this`: sets the fields of one occurrence (replacing an override).
 pub fn override_occurrence(
     event: &mut CalendarEvent,
     recurrence_id: &PimTime,
     fields: EventFields,
 ) -> Result<(), EditError> {
-    check_scope(event, EditScope::This, Some(recurrence_id))?;
-    let start = event.fields.start.clone();
-    let target = frame(recurrence_id, &start)?;
+    let (start, target) = drop_override(event, recurrence_id)?;
     let recurrence_id = time::like(target, &start);
-    event
-        .overrides
-        .retain(|o| time::to_frame(&o.recurrence_id, &start) != Some(target));
     event.overrides.push(EventOverride {
         recurrence_id,
         fields,
@@ -135,12 +145,7 @@ pub fn delete_occurrence(
     event: &mut CalendarEvent,
     recurrence_id: &PimTime,
 ) -> Result<(), EditError> {
-    check_scope(event, EditScope::This, Some(recurrence_id))?;
-    let start = event.fields.start.clone();
-    let target = frame(recurrence_id, &start)?;
-    event
-        .overrides
-        .retain(|o| time::to_frame(&o.recurrence_id, &start) != Some(target));
+    let (start, target) = drop_override(event, recurrence_id)?;
     if let Some(recurrence) = event.recurrence.as_mut() {
         let exception = time::like(target, &start);
         if !recurrence.exceptions.contains(&exception) {

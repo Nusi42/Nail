@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use base64::Engine as _;
 use nail_api::ErrorCode;
 use nail_api::domain::Flags;
-use nail_api::engine::{DeltaOutcome, Envelope, OutgoingTransport, RemoteWrite, WriteOutcome};
+use nail_api::engine::{Envelope, OutgoingTransport, RemoteWrite, WriteOutcome};
 use nail_api::exchange::engine::ExchangeMailEngine;
 use nail_proto_graph::testing::{InjectedError, MockGraphServer};
 use nail_proto_graph::upload::{DraftParts, UPLOAD_UNIT};
@@ -18,7 +18,7 @@ use nail_proto_graph::{EngineOptions, GraphAuth, GraphClient, GraphEngine, Retry
 use pretty_assertions::assert_eq;
 
 const ME: &str = "ada@contoso.example";
-const SHARED: &str = "support@contoso.example";
+use nail_proto_graph::testing::fixtures::DEMO_SHARED_MAILBOX as SHARED;
 
 fn engine_for(server: &MockGraphServer) -> GraphEngine {
     let client = GraphClient::with_http(
@@ -64,11 +64,7 @@ fn bytes(len: usize, seed: u8) -> Vec<u8> {
 
 fn b64_lines(data: &[u8]) -> String {
     let encoded = base64::engine::general_purpose::STANDARD.encode(data);
-    encoded
-        .as_bytes()
-        .chunks(76)
-        .map(|c| std::str::from_utf8(c).unwrap().to_owned() + "\r\n")
-        .collect()
+    nail_util::mime_text::wrap_ascii(&encoded, 76) + "\r\n"
 }
 
 /// A message with a large and a small attachment (`big` bytes and 100 kB).
@@ -520,22 +516,10 @@ async fn moves_between_mailboxes() {
 #[tokio::test]
 async fn conversation_ids_are_thread_ids() {
     let (_server, engine) = demo().await;
-    let DeltaOutcome::Delta(delta) = engine
-        .folder_items(None, "inbox", None, None)
-        .await
-        .unwrap()
-    else {
-        panic!("delta");
-    };
-    assert!(!delta.added.is_empty(), "{:?}", delta.added);
-    for m in &delta.added {
-        let conversation = m.exchange.as_ref().and_then(|e| e.conversation_id.clone());
-        assert!(conversation.is_some());
-        assert_eq!(
-            m.thread_id, conversation,
-            "the conversation id is the thread id"
-        );
-    }
+    nail_testkit::exchange::assert_conversation_threads(
+        engine.folder_items(None, "inbox", None, None).await,
+        true,
+    );
 }
 
 #[test]

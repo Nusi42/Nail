@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Shared helpers (HTML escaping; ADR 0171).
+nail-util.workspace = true
 nail-api.workspace = true
 mail-builder.workspace = true
 comrak.workspace = true

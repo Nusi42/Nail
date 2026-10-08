@@ -131,76 +131,14 @@ pub(super) fn address(uri: &str) -> String {
     bare.trim().to_ascii_lowercase()
 }
 
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
-}
-
 /// `YYYYMMDD[THHMMSS[Z]]` (any zone counts as UTC) → Unix seconds.
-pub(super) fn seconds(value: &str) -> Option<i64> {
-    let v = value.trim().trim_end_matches(['Z', 'z']);
-    let num = |r: std::ops::Range<usize>| v.get(r)?.parse::<i64>().ok();
-    let days = days_from_civil(num(0..4)?, num(4..6)?, num(6..8)?);
-    match v.len() {
-        8 => Some(days * 86_400),
-        15 if v.as_bytes()[8].eq_ignore_ascii_case(&b'T') => {
-            Some(days * 86_400 + num(9..11)? * 3600 + num(11..13)? * 60 + num(13..15)?)
-        }
-        _ => None,
-    }
-}
+pub(super) use nail_util::ical_text::parse_utc_stamp as seconds;
 
 /// Unix seconds → `YYYYMMDDTHHMMSSZ`.
-pub(super) fn stamp(secs: i64) -> String {
-    let days = secs.div_euclid(86_400);
-    let rem = secs.rem_euclid(86_400);
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    format!(
-        "{y:04}{m:02}{d:02}T{:02}{:02}{:02}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60
-    )
-}
+pub(super) use nail_util::ical_text::utc_stamp as stamp;
 
-/// A positive RFC 5545 duration in seconds (`P1W`, `P1DT2H`, `PT30M`).
-pub(super) fn duration(value: &str) -> Option<i64> {
-    let rest = value.trim().trim_start_matches('+').strip_prefix('P')?;
-    let mut total = 0i64;
-    let mut number = String::new();
-    let mut time = false;
-    for c in rest.chars() {
-        match c {
-            '0'..='9' => number.push(c),
-            'T' => time = true,
-            unit => {
-                let n: i64 = std::mem::take(&mut number).parse().ok()?;
-                total += n * match (unit, time) {
-                    ('W', false) => 604_800,
-                    ('D', false) => 86_400,
-                    ('H', true) => 3600,
-                    ('M', true) => 60,
-                    ('S', true) => 1,
-                    _ => return None,
-                };
-            }
-        }
-    }
-    number.is_empty().then_some(total)
-}
+/// An RFC 5545 duration in seconds (`P1W`, `P1DT2H`, `PT30M`).
+pub(super) use nail_util::ical_text::parse_duration as duration;
 
 /// An attendee of an event.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -33,6 +33,7 @@ test-overrides = []
 tauri-build.workspace = true
 
 [dependencies]
+nail-util.workspace = true
 nail-api.workspace = true
 nail-core = { workspace = true, features = ["demo"] }
 # The remote UI (TLS + login) and the remote-content proxy (ADR 0041).

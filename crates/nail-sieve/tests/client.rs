@@ -2,16 +2,13 @@
 //! server (`nail_testkit_net::MockSieveServer`).
 #![cfg(test)]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 
 use nail_api::ErrorCode;
-use nail_api::accounts::{AuthConfig, SaslMechanism, SecretRef, TlsMode};
+use nail_api::accounts::{AuthConfig, SaslMechanism, TlsMode};
 use nail_api::domain::FolderRole;
-use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, EngineError, MemorySecretStore, SecretStore,
-};
+use nail_api::engine::{EngineError, MemorySecretStore, SecretStore};
 use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextMatch, TextOp};
 use nail_api::sieve::{RulePlacement, VacationSettings};
 use nail_sieve::{
@@ -20,6 +17,7 @@ use nail_sieve::{
     upload,
 };
 use nail_testkit::MockTls;
+use nail_testkit::tokens::FakeTokens as Tokens;
 use nail_testkit_net::{MockPop3Config, MockPop3Server, MockSieveConfig, MockSieveServer};
 
 const USER: &str = "sam@nail.example";
@@ -294,33 +292,6 @@ async fn unavailable_servers() {
     assert!(matches!(err, SieveError::Timeout(_)), "{err:?}");
 }
 
-/// A token provider that hands out a stale token until asked to refresh.
-#[derive(Debug, Default)]
-struct Tokens {
-    calls: AtomicUsize,
-    refreshed: Mutex<bool>,
-}
-
-impl AccessTokenProvider for Tokens {
-    fn access_token<'a>(
-        &'a self,
-        provider: &'a str,
-        _secret: &'a SecretRef,
-        force_refresh: bool,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            assert_eq!(provider, "google");
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            let mut refreshed = self
-                .refreshed
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
-            *refreshed |= force_refresh;
-            Ok(if *refreshed { "tok" } else { "stale" }.to_owned())
-        })
-    }
-}
-
 #[tokio::test]
 async fn sieve_auth_resolves_the_imap_login() {
     let server = MockSieveServer::start(MockSieveConfig {
@@ -331,7 +302,7 @@ async fn sieve_auth_resolves_the_imap_login() {
     .unwrap();
     let plain = config(&server, TlsMode::Plaintext);
     let store: Arc<dyn SecretStore> = Arc::new(MemorySecretStore::new());
-    let tokens = Arc::new(Tokens::default());
+    let tokens = Arc::new(Tokens::refreshing_to("google", "tok"));
     let account = "work".into();
 
     let password_auth = AuthConfig::Password {
@@ -362,7 +333,7 @@ async fn sieve_auth_resolves_the_imap_login() {
     let auth =
         SieveAuth::from_config(&account, &oauth, Arc::clone(&store), tokens.clone()).unwrap();
     auth.login(&plain).await.unwrap();
-    assert_eq!(tokens.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(tokens.calls(), 2);
 
     // Wrong credentials surface as an engine error with the Fluent text.
     let fixed = SieveAuth::Credentials(SieveCredentials::password(USER, "nope"));

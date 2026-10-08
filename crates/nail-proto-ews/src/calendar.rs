@@ -681,14 +681,12 @@ impl EwsClient {
             max_entries.max(1),
             folder.xml()
         );
-        let response = self
-            .call(&Operation::read("FindItem", body).anchored(mailbox))
-            .await?;
-        let message = soap::single_message(&response.body)?;
-        Ok(message
-            .path(&["RootFolder", "Items"])
-            .map(|items| items.children.iter().filter_map(parse_event).collect())
-            .unwrap_or_default())
+        self.find_items(mailbox, body, |items| {
+            items
+                .map(|items| items.children.iter().filter_map(parse_event).collect())
+                .unwrap_or_default()
+        })
+        .await
     }
 
     /// The occurrence of the series `uid` whose original start falls on

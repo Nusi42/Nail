@@ -44,10 +44,7 @@ impl ContentLine {
 
     /// The first value of parameter `name` (case-insensitive).
     pub fn param(&self, name: &str) -> Option<&str> {
-        self.params
-            .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        nail_util::named::first(&self.params, name)
     }
 
     /// Sets (replaces) parameter `name`.

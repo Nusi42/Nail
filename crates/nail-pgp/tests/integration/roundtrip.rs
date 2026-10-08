@@ -2,7 +2,7 @@
 //! encrypt, header protection, and the failure cases (tampering, wrong
 //! key, expired and revoked signers, header mismatch).
 
-use crate::common::{Env, NOW, fixture, subject_and_text};
+use crate::common::{Env, NOW, fixture, signed_part_with, subject_and_text};
 use nail_api::KeyId;
 use nail_api::security::{
     DecryptionState, HeaderProtection, KeyAlgorithm, KeyEncoding, SecretProtection, SignatureState,
@@ -214,14 +214,11 @@ fn signed_and_encrypted_with_header_protection() {
 
     let outcome = p.bob.read(&sent);
     let status = outcome.status.unwrap();
+    crate::common::assert_signed_by_sender(&status);
     let encryption = status.encryption.unwrap();
     assert_eq!(encryption.state, DecryptionState::Decrypted);
     assert_eq!(encryption.key_id.as_ref(), Some(&p.bob_key));
     assert_eq!(encryption.recipients.len(), 2);
-    assert_eq!(status.signatures.len(), 1);
-    assert_eq!(status.signatures[0].state, SignatureState::Valid);
-    assert!(status.signatures[0].signer_matches_from);
-    assert_eq!(status.header_protection, HeaderProtection::Protected);
     assert_eq!(
         outcome.gossip,
         vec!["addr=carol@example.com; keydata=AAAA".to_owned()]
@@ -237,21 +234,26 @@ fn signed_and_encrypted_with_header_protection() {
     assert_eq!(status.encryption.unwrap().key_id.as_ref(), Some(&p.ada_key));
 }
 
-#[test]
-fn encrypted_only_and_wrong_key() {
-    let p = pair();
+/// `PLAIN` from Ada encrypted (not signed) to Bob only.
+fn encrypted_to_bob(p: &Pair, protect_headers: bool) -> Vec<u8> {
     let recipients = vec![peer_public(&p.ada, &p.bob, &p.bob_key)];
-    let sent = protect_message(
+    protect_message(
         PLAIN,
         &Protection {
             signer: None,
             recipients: &recipients,
-            protect_headers: false,
+            protect_headers,
             gossip: &[],
             now: now(),
         },
     )
-    .unwrap();
+    .unwrap()
+}
+
+#[test]
+fn encrypted_only_and_wrong_key() {
+    let p = pair();
+    let sent = encrypted_to_bob(&p, false);
     // Without header protection the subject stays on the wire.
     assert_eq!(subject_and_text(&sent).0, "Engine notes");
     let status = p.bob.status(&sent);
@@ -272,18 +274,7 @@ fn encrypted_only_and_wrong_key() {
 #[test]
 fn tampered_ciphertext_fails() {
     let p = pair();
-    let recipients = vec![peer_public(&p.ada, &p.bob, &p.bob_key)];
-    let sent = protect_message(
-        PLAIN,
-        &Protection {
-            signer: None,
-            recipients: &recipients,
-            protect_headers: true,
-            gossip: &[],
-            now: now(),
-        },
-    )
-    .unwrap();
+    let sent = encrypted_to_bob(&p, true);
     let text = String::from_utf8(sent).unwrap();
     // Change one base64 character in the middle of the armored message.
     let start = text.find("-----BEGIN PGP MESSAGE-----").unwrap();
@@ -319,28 +310,6 @@ Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-si
     out.extend_from_slice(signature.replace('\n', "\r\n").as_bytes());
     out.extend_from_slice(b"\r\n--b--\r\n");
     out
-}
-
-/// A `multipart/signed` message with the outer header `outer` whose
-/// signed part is `inner` (header fields + body), signed by `secret`.
-fn signed_part_with(secret: &pgp::composed::SignedSecretKey, outer: &str, inner: &str) -> Vec<u8> {
-    let signature = DetachedSignature::sign_binary_data(
-        rand::thread_rng(),
-        &secret.primary_key,
-        &Password::empty(),
-        HashAlgorithm::Sha256,
-        inner.as_bytes(),
-    )
-    .unwrap()
-    .to_armored_string(ArmorOptions::default())
-    .unwrap();
-    format!(
-        "{outer}Subject: x\r\nMIME-Version: 1.0\r\n\
-Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-signature\"; boundary=\"b\"\r\n\r\n\
---b\r\n{inner}\r\n--b\r\nContent-Type: application/pgp-signature\r\n\r\n{}\r\n--b--\r\n",
-        signature.replace('\n', "\r\n")
-    )
-    .into_bytes()
 }
 
 #[test]

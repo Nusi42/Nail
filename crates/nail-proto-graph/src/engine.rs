@@ -13,19 +13,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, FreeBusyProvider,
-    OutgoingTransport, RemoteWrite, SendProgress, SendReceipt, WriteOutcome,
+    AccessTokenProvider, BoxFuture, EngineError, Envelope, FreeBusyProvider, OutgoingTransport,
+    SendProgress, SendReceipt,
 };
 use nail_api::exchange::engine::{
-    ExchangeDirectoryEngine, ExchangeEngine, ExchangeMailEngine, ExchangePimEngine,
-    ExchangePimWrite, ExchangePimWriteOutcome, ExchangeServerInfo, ExchangeSettingsEngine,
-    HierarchyOutcome, PimDeltaOutcome, RemoteCategory,
+    ExchangeDirectoryEngine, ExchangeEngine, ExchangeServerInfo, ExchangeSettingsEngine,
+    RemoteCategory,
 };
-use nail_api::exchange::pim::ExchangePimFolder;
 use nail_api::exchange::rules::ExchangeInboxRule;
 use nail_api::exchange::{
     AutomaticRepliesSettings, ExchangeCategorySettings, ExchangeEngine as EngineKind,
-    ExchangeWellKnownFolder, InferenceClassification, Room, RoomList,
+    ExchangeWellKnownFolder, Room, RoomList,
 };
 use nail_api::scheduling::{AttendeeFreeBusy, FreeBusyQuery, InvitationResponse};
 use tokio::sync::Mutex;
@@ -51,11 +49,13 @@ pub struct EngineOptions {
 
 impl Default for EngineOptions {
     fn default() -> Self {
+        // A year back and two ahead.
+        let year = u32::from(nail_util::time::DAYS_PER_YEAR);
         Self {
             page_size: 100,
             pages_per_call: 5,
-            calendar_past_days: 365,
-            calendar_future_days: 730,
+            calendar_past_days: year,
+            calendar_future_days: 2 * year,
             upload_chunk: crate::upload::DEFAULT_UPLOAD_CHUNK,
         }
     }
@@ -218,58 +218,19 @@ fn engine<T>(result: Result<T, GraphError>) -> Result<T, EngineError> {
     result.map_err(EngineError::from)
 }
 
-impl ExchangeMailEngine for GraphEngine {
+nail_exchange::exchange_mail_engine!(
+    GraphEngine {
+        folder_hierarchy: hierarchy,
+        folder_items: messages_delta,
+        fetch_mime: mime,
+        write: replay,
+        classify: classify_messages,
+        fetch_headers: fetch_headers,
+        move_to_mailbox: move_to_mailbox,
+    }
+
     fn server_info(&self) -> BoxFuture<'_, Result<ExchangeServerInfo, EngineError>> {
         Box::pin(async move { engine(self.server_info_graph().await) })
-    }
-
-    fn folder_hierarchy<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        cursor: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<HierarchyOutcome, EngineError>> {
-        Box::pin(async move { engine(self.hierarchy(mailbox, cursor).await) })
-    }
-
-    fn folder_items<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        folder: &'a str,
-        cursor: Option<&'a str>,
-        since: Option<i64>,
-    ) -> BoxFuture<'a, Result<DeltaOutcome, EngineError>> {
-        Box::pin(async move { engine(self.messages_delta(mailbox, folder, cursor, since).await) })
-    }
-
-    fn fetch_mime<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_id: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
-        Box::pin(async move { engine(self.mime(mailbox, remote_id).await) })
-    }
-
-    fn write<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        write: &'a RemoteWrite,
-    ) -> BoxFuture<'a, Result<WriteOutcome, EngineError>> {
-        Box::pin(async move { engine(self.replay(mailbox, write).await) })
-    }
-
-    fn classify<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_ids: &'a [String],
-        classification: InferenceClassification,
-        always: bool,
-    ) -> BoxFuture<'a, Result<(), EngineError>> {
-        Box::pin(async move {
-            engine(
-                self.classify_messages(mailbox, remote_ids, classification, always)
-                    .await,
-            )
-        })
     }
 
     fn wait_for_changes<'a>(
@@ -281,38 +242,7 @@ impl ExchangeMailEngine for GraphEngine {
         // Graph pushes only to webhooks: the core polls (PollTimer).
         Box::pin(async { Ok(None) })
     }
-
-    fn fetch_headers<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_id: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
-        Box::pin(async move { engine(GraphEngine::fetch_headers(self, mailbox, remote_id).await) })
-    }
-
-    fn move_to_mailbox<'a>(
-        &'a self,
-        from_mailbox: Option<&'a str>,
-        remote_id: &'a str,
-        to_mailbox: Option<&'a str>,
-        to_folder: &'a str,
-        flags: nail_api::domain::Flags,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            engine(
-                GraphEngine::move_to_mailbox(
-                    self,
-                    from_mailbox,
-                    remote_id,
-                    to_mailbox,
-                    to_folder,
-                    flags,
-                )
-                .await,
-            )
-        })
-    }
-}
+);
 
 impl ExchangeSettingsEngine for GraphEngine {
     fn categories(&self) -> BoxFuture<'_, Result<Vec<RemoteCategory>, EngineError>> {
@@ -392,45 +322,25 @@ impl ExchangeDirectoryEngine for GraphEngine {
     }
 }
 
-impl ExchangePimEngine for GraphEngine {
-    fn pim_folders<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<Vec<ExchangePimFolder>, EngineError>> {
-        Box::pin(async move { engine(self.list_pim_folders(mailbox).await) })
-    }
+nail_exchange::exchange_pim_engine!(GraphEngine {
+    pim_folders: list_pim_folders,
+    pim_changes: pim_delta,
+    write_pim: replay_pim,
+    respond_to_meeting: answer_meeting,
+});
 
-    fn pim_changes<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        folder: &'a ExchangePimFolder,
-        cursor: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<PimDeltaOutcome, EngineError>> {
-        Box::pin(async move { engine(self.pim_delta(mailbox, folder, cursor).await) })
-    }
-
-    fn write_pim<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        write: &'a ExchangePimWrite,
-    ) -> BoxFuture<'a, Result<ExchangePimWriteOutcome, EngineError>> {
-        Box::pin(async move { engine(self.replay_pim(mailbox, write).await) })
-    }
-
-    fn respond_to_meeting<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        event_remote_id: &'a str,
+impl GraphEngine {
+    /// Answers a meeting through the meeting API (no iMIP).
+    async fn answer_meeting(
+        &self,
+        mailbox: Option<&str>,
+        event_remote_id: &str,
         response: InvitationResponse,
-        comment: Option<&'a str>,
+        comment: Option<&str>,
         send: bool,
-    ) -> BoxFuture<'a, Result<(), EngineError>> {
-        Box::pin(async move {
-            engine(
-                self.respond(mailbox, event_remote_id, response, comment, send, None)
-                    .await,
-            )
-        })
+    ) -> Result<(), GraphError> {
+        self.respond(mailbox, event_remote_id, response, comment, send, None)
+            .await
     }
 }
 

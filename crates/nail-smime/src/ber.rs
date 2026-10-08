@@ -16,7 +16,7 @@
 
 use crate::error::{Error, Result};
 
-const MAX_DEPTH: usize = 64;
+const MAX_BER_DEPTH: usize = 64;
 
 enum Node<'a> {
     Primitive {
@@ -42,7 +42,7 @@ pub fn normalize(input: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn parse(input: &[u8], depth: usize) -> Result<(Node<'_>, &[u8])> {
-    if depth > MAX_DEPTH {
+    if depth > MAX_BER_DEPTH {
         return Err(Error::malformed("ASN.1 nesting too deep"));
     }
     let short = || Error::malformed("truncated ASN.1 data");

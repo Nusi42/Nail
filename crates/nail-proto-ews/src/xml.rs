@@ -1,4 +1,4 @@
-//! A small XML tree on [`quick_xml`] for EWS SOAP bodies, escaping for the
+//! A small XML tree (parsed by `nail_net::xml`) for EWS SOAP bodies, escaping for the
 //! bodies Nail writes, and serialization back to XML (inbox rules that
 //! Nail cannot fully express are written back as the server sent them; the
 //! category list is an XML document stored in a user configuration).
@@ -7,19 +7,20 @@
 //! (types) namespaces never use the same local name for different things
 //! inside one answer, and servers differ in the prefixes they use. The
 //! namespace is kept for serialization. Limits guard against hostile
-//! servers: at most [`MAX_DEPTH`] levels and [`MAX_ELEMENTS`] elements.
+//! servers: at most [`MAX_DEPTH`] levels and [`MAX_ELEMENTS`] elements
+//! (the parser is `nail_net::xml`'s, shared with WebDAV).
 
 use std::borrow::Cow;
 use std::fmt::Write as _;
 
-use quick_xml::events::{BytesRef, Event};
-use quick_xml::name::ResolveResult;
-use quick_xml::reader::NsReader;
+/// Most elements accepted in one document; a document that is not
+/// well-formed XML (or breaks the limits).
+pub use nail_net::xml::{MAX_ELEMENTS, XmlError};
+use nail_net::xml::{XmlNode, attr_value};
 
-/// Deepest element nesting accepted.
+/// Deepest element nesting accepted (SOAP envelopes nest deeper than
+/// WebDAV answers).
 pub const MAX_DEPTH: usize = 96;
-/// Most elements accepted in one document.
-pub const MAX_ELEMENTS: usize = 2_000_000;
 
 /// An element: namespace, local name, attributes, child elements and its
 /// own text (character data and CDATA, entities resolved).
@@ -38,10 +39,25 @@ pub struct Element {
     pub text: String,
 }
 
-/// A document that is not well-formed XML (or breaks the limits).
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("malformed XML: {0}")]
-pub struct XmlError(pub String);
+impl XmlNode for Element {
+    fn open(ns: String, name: String, attrs: Vec<(String, String)>) -> Self {
+        Self {
+            ns,
+            name,
+            attrs,
+            children: Vec::new(),
+            text: String::new(),
+        }
+    }
+
+    fn text_mut(&mut self) -> &mut String {
+        &mut self.text
+    }
+
+    fn push_child(&mut self, child: Self) {
+        self.children.push(child);
+    }
+}
 
 impl Element {
     /// An element without namespace.
@@ -54,10 +70,7 @@ impl Element {
 
     /// The value of attribute `name` (local name, any prefix).
     pub fn attr(&self, name: &str) -> Option<&str> {
-        self.attrs
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, v)| v.as_str())
+        attr_value(&self.attrs, name)
     }
 
     /// Sets (or adds) an attribute.
@@ -188,114 +201,11 @@ impl Element {
     }
 }
 
-fn resolve_reference(reference: &BytesRef<'_>) -> Result<String, XmlError> {
-    if let Some(c) = reference
-        .resolve_char_ref()
-        .map_err(|e| XmlError(e.to_string()))?
-    {
-        return Ok(c.to_string());
-    }
-    let name = reference.xml10_content();
-    let text = match name.as_ref() {
-        "amp" => "&",
-        "lt" => "<",
-        "gt" => ">",
-        "quot" => "\"",
-        "apos" => "'",
-        other => return Err(XmlError(format!("unknown entity &{other};"))),
-    };
-    Ok(text.to_owned())
-}
-
-fn namespace(resolved: &ResolveResult<'_>) -> String {
-    match resolved {
-        ResolveResult::Bound(ns) => ns.into_inner().to_owned(),
-        _ => String::new(),
-    }
-}
-
-/// Parses a document into its root element.
+/// Parses a document (a leading byte order mark is skipped) into its root
+/// element.
 pub fn parse(document: &str) -> Result<Element, XmlError> {
     let document = document.strip_prefix('\u{feff}').unwrap_or(document);
-    let mut reader = NsReader::from_str(document);
-    reader.config_mut().expand_empty_elements = true;
-    let mut stack: Vec<Element> = Vec::new();
-    let mut root: Option<Element> = None;
-    let mut count = 0usize;
-    loop {
-        let (resolved, event) = reader
-            .read_resolved_event()
-            .map_err(|e| XmlError(e.to_string()))?;
-        match event {
-            Event::Start(start) => {
-                count += 1;
-                if stack.len() >= MAX_DEPTH || count > MAX_ELEMENTS {
-                    return Err(XmlError("document too deep or too large".to_owned()));
-                }
-                if root.is_some() {
-                    return Err(XmlError("content after the root element".to_owned()));
-                }
-                let name = AsRef::<str>::as_ref(&start.local_name()).to_owned();
-                let mut attrs = Vec::new();
-                for attr in start.attributes() {
-                    let attr = attr.map_err(|e| XmlError(e.to_string()))?;
-                    let key = AsRef::<str>::as_ref(&attr.key);
-                    if key == "xmlns" || key.starts_with("xmlns:") {
-                        continue;
-                    }
-                    let local = AsRef::<str>::as_ref(&attr.key.local_name()).to_owned();
-                    let value = attr
-                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                        .map_err(|e| XmlError(e.to_string()))?
-                        .into_owned();
-                    attrs.push((local, value));
-                }
-                stack.push(Element {
-                    ns: namespace(&resolved),
-                    name,
-                    attrs,
-                    children: Vec::new(),
-                    text: String::new(),
-                });
-            }
-            Event::End(_) => {
-                let done = stack
-                    .pop()
-                    .ok_or_else(|| XmlError("unbalanced end tag".to_owned()))?;
-                match stack.last_mut() {
-                    Some(parent) => parent.children.push(done),
-                    None => root = Some(done),
-                }
-            }
-            Event::Text(text) => {
-                if let Some(top) = stack.last_mut() {
-                    top.text.push_str(&text.xml10_content());
-                } else if !text.xml10_content().trim().is_empty() {
-                    return Err(XmlError("text outside the root element".to_owned()));
-                }
-            }
-            Event::CData(data) => {
-                if let Some(top) = stack.last_mut() {
-                    top.text.push_str(&data.xml10_content());
-                }
-            }
-            Event::GeneralRef(reference) => {
-                let text = resolve_reference(&reference)?;
-                if let Some(top) = stack.last_mut() {
-                    top.text.push_str(&text);
-                }
-            }
-            Event::DocType(_) => {
-                return Err(XmlError("DOCTYPE is not allowed".to_owned()));
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-    }
-    if !stack.is_empty() {
-        return Err(XmlError("unexpected end of document".to_owned()));
-    }
-    root.ok_or_else(|| XmlError("empty document".to_owned()))
+    nail_net::xml::parse_tree(document, MAX_DEPTH)
 }
 
 /// Escapes text for element content or attribute values. Characters XML
@@ -313,9 +223,9 @@ pub fn escape(text: &str) -> Cow<'_, str> {
                     && *c != '\u{ffff}'
             })
             .collect();
-        return Cow::Owned(quick_xml::escape::escape(clean.as_str()).into_owned());
+        return Cow::Owned(nail_net::xml::escape(clean.as_str()).into_owned());
     }
-    quick_xml::escape::escape(text)
+    nail_net::xml::escape(text)
 }
 
 /// `<name>text</name>` with the text escaped.
@@ -361,17 +271,7 @@ mod tests {
 
     #[test]
     fn rejects_malformed_documents() {
-        for bad in [
-            "",
-            "<a>",
-            "<a></b>",
-            "<a/><b/>",
-            "<!DOCTYPE a [<!ENTITY x \"y\">]><a>&x;</a>",
-            "<a>&unknown;</a>",
-            "text<a/>",
-        ] {
-            assert!(parse(bad).is_err(), "{bad:?}");
-        }
+        assert!(parse("<a></b>").is_err());
         let deep = "<a>".repeat(MAX_DEPTH + 1) + &"</a>".repeat(MAX_DEPTH + 1);
         assert!(parse(&deep).is_err());
         assert!(parse("\u{feff}<a/>").is_ok());

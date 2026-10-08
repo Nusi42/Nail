@@ -22,7 +22,7 @@ use std::collections::BTreeSet;
 
 use chrono::{DateTime, Datelike, Utc};
 use nail_api::pim::PimTime;
-use nail_api::pim::calendar::{Attendee, AttendeeKind, AttendeeRole};
+use nail_api::pim::calendar::Attendee;
 use nail_api::scheduling::{CounterProposal, ItipMethod};
 use nail_ical::content::{Component, Property};
 use nail_ical::time;
@@ -83,6 +83,15 @@ impl Source {
 
     /// The component an answer is about: the occurrence's override, else
     /// the master, else the first component.
+    /// [`Self::about`], which must name its organizer.
+    fn organized(&self, rid: Option<&PimTime>) -> Result<&ItipComponent, BuildError> {
+        let base = self.about(rid);
+        if base.organizer.is_none() {
+            return Err(BuildError::NoOrganizer);
+        }
+        Ok(base)
+    }
+
     fn about(&self, rid: Option<&PimTime>) -> &ItipComponent {
         rid.and_then(|r| self.occurrence(r))
             .or_else(|| self.master())
@@ -155,35 +164,7 @@ pub fn time_property(name: &str, t: &PimTime) -> Property {
 
 /// An `ATTENDEE` property for an attendee.
 pub fn attendee_property(a: &Attendee) -> Property {
-    let mut p = Property::new("ATTENDEE", mailto(&a.email));
-    if let Some(name) = &a.name {
-        p = p.with_param("CN", name.clone());
-    }
-    let role = match a.role {
-        AttendeeRole::Chair => "CHAIR",
-        AttendeeRole::Required => "REQ-PARTICIPANT",
-        AttendeeRole::Optional => "OPT-PARTICIPANT",
-        AttendeeRole::NonParticipant => "NON-PARTICIPANT",
-    };
-    p = p
-        .with_param("ROLE", role)
-        .with_param("PARTSTAT", partstat(a.status));
-    let kind = match a.kind {
-        AttendeeKind::Individual => None,
-        AttendeeKind::Group => Some("GROUP"),
-        AttendeeKind::Resource => Some("RESOURCE"),
-        AttendeeKind::Room => Some("ROOM"),
-        AttendeeKind::Unknown => Some("UNKNOWN"),
-    };
-    if let Some(kind) = kind {
-        p = p.with_param("CUTYPE", kind);
-    }
-    if a.rsvp {
-        p = p.with_param("RSVP", "TRUE");
-    }
-    let uris = |v: &[String]| v.iter().map(|e| mailto(e)).collect::<Vec<_>>();
-    p.with_param_values("DELEGATED-TO", uris(&a.delegated_to))
-        .with_param_values("DELEGATED-FROM", uris(&a.delegated_from))
+    nail_ical::attendee::property(a, mailto)
 }
 
 /// A copy of an `ORGANIZER` / `ATTENDEE` property without RFC 6638
@@ -355,13 +336,7 @@ pub fn build_request(
         if c.organizer.is_none() && options.method != ItipMethod::Publish {
             return Err(BuildError::NoOrganizer);
         }
-        let mut comp = c.component.clone();
-        comp.components.retain(|sub| !sub.is("VALARM"));
-        for p in &mut comp.properties {
-            if p.is("ORGANIZER") || p.is("ATTENDEE") {
-                *p = clean(p);
-            }
-        }
+        let mut comp = for_scheduling(&c.component);
         if let Some(sequence) = options.sequence {
             replace(
                 &mut comp,
@@ -373,6 +348,49 @@ pub fn build_request(
         out.push(comp);
     }
     Ok(calendar(options.method, &source.zones(), out))
+}
+
+/// The time properties of an event or occurrence.
+const TIMES: &[&str] = &["DTSTART", "DTEND", "DURATION"];
+
+/// A component as the organizer sends it: without alarms, `ORGANIZER` and
+/// `ATTENDEE` without RFC 6638 parameters.
+fn for_scheduling(component: &Component) -> Component {
+    let mut comp = component.clone();
+    comp.components.retain(|sub| !sub.is("VALARM"));
+    for p in &mut comp.properties {
+        if p.is("ORGANIZER") || p.is("ATTENDEE") {
+            *p = clean(p);
+        }
+    }
+    comp
+}
+
+/// A new `VEVENT` about `base`: its `UID` and a `DTSTAMP` of `now`.
+fn answer_of(base: &ItipComponent, now: DateTime<Utc>) -> Component {
+    let mut comp = Component::new("VEVENT");
+    copy(&base.component, &mut comp, &["UID"]);
+    comp.properties.push(stamp(now));
+    comp
+}
+
+/// The (first) `ORGANIZER` of `base`, cleaned.
+fn organizer_line(base: &ItipComponent) -> impl Iterator<Item = Property> + '_ {
+    base.component
+        .properties_named("ORGANIZER")
+        .take(1)
+        .map(clean)
+}
+
+/// The `ATTENDEE` of `address` in `base` (cleaned), or a new one.
+fn attendee_line(base: &ItipComponent, address: &str) -> Property {
+    base.component
+        .properties_named("ATTENDEE")
+        .find(|p| same(&p.value, address))
+        .map_or_else(
+            || attendee_property(&Attendee::new(normalize(address))),
+            clean,
+        )
 }
 
 /// What a `CANCEL` cancels.
@@ -404,54 +422,28 @@ pub struct CancelOptions<'a> {
 /// `CANCEL` from the organizer's copy.
 pub fn build_cancel(source_text: &str, options: &CancelOptions<'_>) -> Result<String, BuildError> {
     let source = Source::read(source_text, options.uid)?;
-    let base = match options.what {
-        CancelWhat::Occurrence(rid) => source.about(Some(rid)),
-        _ => source.about(None),
-    };
-    if base.organizer.is_none() {
-        return Err(BuildError::NoOrganizer);
-    }
-    let mut comp = Component::new("VEVENT");
-    copy(&base.component, &mut comp, &["UID"]);
-    comp.properties.push(stamp(options.now));
+    let base = source.organized(match options.what {
+        CancelWhat::Occurrence(rid) => Some(rid),
+        _ => None,
+    })?;
+    let mut comp = answer_of(base, options.now);
     comp.properties
         .push(Property::new("SEQUENCE", options.sequence.to_string()));
     if let CancelWhat::Occurrence(rid) = options.what {
         comp.properties.push(source.recurrence_id_property(rid));
         if source.occurrence(rid).is_some() {
-            copy(
-                &base.component,
-                &mut comp,
-                &["DTSTART", "DTEND", "DURATION"],
-            );
+            copy(&base.component, &mut comp, TIMES);
         }
     } else {
-        copy(
-            &base.component,
-            &mut comp,
-            &["DTSTART", "DTEND", "DURATION"],
-        );
+        copy(&base.component, &mut comp, TIMES);
     }
     copy(&base.component, &mut comp, &["SUMMARY", "LOCATION"]);
-    comp.properties.extend(
-        base.component
-            .properties_named("ORGANIZER")
-            .take(1)
-            .map(clean),
-    );
+    comp.properties.extend(organizer_line(base));
     let attendees = base.component.properties_named("ATTENDEE");
     match options.what {
         CancelWhat::Attendees(removed) => {
             for address in removed {
-                let p = base
-                    .component
-                    .properties_named("ATTENDEE")
-                    .find(|p| same(&p.value, address))
-                    .map_or_else(
-                        || attendee_property(&Attendee::new(normalize(address))),
-                        clean,
-                    );
-                comp.properties.push(p);
+                comp.properties.push(attendee_line(base, address));
             }
         }
         _ => comp.properties.extend(attendees.map(clean)),
@@ -483,13 +475,8 @@ pub struct ReplyOptions<'a> {
 /// delegates), the source's `SEQUENCE`, the occurrence's `RECURRENCE-ID`.
 pub fn build_reply(source_text: &str, options: &ReplyOptions<'_>) -> Result<String, BuildError> {
     let source = Source::read(source_text, options.uid)?;
-    let base = source.about(options.recurrence_id);
-    if base.organizer.is_none() {
-        return Err(BuildError::NoOrganizer);
-    }
-    let mut comp = Component::new("VEVENT");
-    copy(&base.component, &mut comp, &["UID"]);
-    comp.properties.push(stamp(options.now));
+    let base = source.organized(options.recurrence_id)?;
+    let mut comp = answer_of(base, options.now);
     comp.properties
         .push(Property::new("SEQUENCE", base.sequence.to_string()));
     if let Some(rid) = options.recurrence_id {
@@ -499,19 +486,10 @@ pub fn build_reply(source_text: &str, options: &ReplyOptions<'_>) -> Result<Stri
         .recurrence_id
         .is_none_or(|rid| source.occurrence(rid).is_some())
     {
-        copy(
-            &base.component,
-            &mut comp,
-            &["DTSTART", "DTEND", "DURATION"],
-        );
+        copy(&base.component, &mut comp, TIMES);
     }
     copy(&base.component, &mut comp, &["SUMMARY"]);
-    comp.properties.extend(
-        base.component
-            .properties_named("ORGANIZER")
-            .take(1)
-            .map(clean),
-    );
+    comp.properties.extend(organizer_line(base));
     comp.properties
         .push(answering_attendee(base, options.attendee));
     for d in options.delegates {
@@ -547,17 +525,8 @@ pub fn build_counter(
     options: &CounterOptions<'_>,
 ) -> Result<String, BuildError> {
     let source = Source::read(source_text, options.uid)?;
-    let base = source.about(options.recurrence_id);
-    if base.organizer.is_none() {
-        return Err(BuildError::NoOrganizer);
-    }
-    let mut comp = base.component.clone();
-    comp.components.retain(|sub| !sub.is("VALARM"));
-    for p in &mut comp.properties {
-        if p.is("ORGANIZER") || p.is("ATTENDEE") {
-            *p = clean(p);
-        }
-    }
+    let base = source.organized(options.recurrence_id)?;
+    let mut comp = for_scheduling(&base.component);
     if let Some(rid) = options.recurrence_id {
         comp.properties
             .retain(|p| !(p.is("RRULE") || p.is("RDATE") || p.is("EXDATE")));
@@ -630,13 +599,8 @@ fn build_minimal(
     options: &MinimalOptions<'_>,
 ) -> Result<String, BuildError> {
     let source = Source::read(source_text, options.uid)?;
-    let base = source.about(options.recurrence_id);
-    if base.organizer.is_none() {
-        return Err(BuildError::NoOrganizer);
-    }
-    let mut comp = Component::new("VEVENT");
-    copy(&base.component, &mut comp, &["UID"]);
-    comp.properties.push(stamp(options.now));
+    let base = source.organized(options.recurrence_id)?;
+    let mut comp = answer_of(base, options.now);
     if method == ItipMethod::DeclineCounter {
         let sequence = options.sequence.unwrap_or(base.sequence);
         comp.properties
@@ -645,21 +609,8 @@ fn build_minimal(
     if let Some(rid) = options.recurrence_id {
         comp.properties.push(source.recurrence_id_property(rid));
     }
-    comp.properties.extend(
-        base.component
-            .properties_named("ORGANIZER")
-            .take(1)
-            .map(clean),
-    );
-    let attendee = base
-        .component
-        .properties_named("ATTENDEE")
-        .find(|p| same(&p.value, options.attendee))
-        .map_or_else(
-            || attendee_property(&Attendee::new(normalize(options.attendee))),
-            clean,
-        );
-    comp.properties.push(attendee);
+    comp.properties.extend(organizer_line(base));
+    comp.properties.push(attendee_line(base, options.attendee));
     comp.properties.extend(comment(options.comment));
     Ok(calendar(method, &source.zones(), vec![comp]))
 }

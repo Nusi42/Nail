@@ -566,24 +566,14 @@ impl GmailEngine {
                 }
                 Err(err) if err.retryable() => {
                     let err: EngineError = err.into();
-                    for &i in members {
-                        out[i] = Some(Err(err.clone()));
-                    }
+                    nail_util::batch::fail_all(&mut out, members.iter().copied(), &err);
                 }
                 Err(err) => {
                     tracing::debug!(error = %err, "batchModify failed; replaying one by one");
                 }
             }
         }
-        let mut results = Vec::with_capacity(writes.len());
-        for (index, write) in writes.iter().enumerate() {
-            let result = match out[index].take() {
-                Some(result) => result,
-                None => self.replay(write).await,
-            };
-            results.push(result);
-        }
-        results
+        nail_util::batch::finish(writes, out, |write| self.replay(write)).await
     }
 
     async fn replay(&self, write: &RemoteWrite) -> Result<WriteOutcome, EngineError> {

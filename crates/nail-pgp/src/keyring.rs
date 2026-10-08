@@ -15,8 +15,6 @@
 //!
 //! The store never sees a plain secret key.
 
-use std::collections::HashMap;
-use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
@@ -30,6 +28,7 @@ use nail_api::security::{
 use nail_api::smartcard::SmartcardKeyRef;
 use nail_api::{ErrorCode, KeyId, LocalizedMessage};
 use nail_store::{KeyData, SecretKeyData, Store, StoredKey};
+use nail_util::expiring::ExpiringMap;
 use pgp::composed::{
     EncryptionCaps, KeyType, SecretKeyParamsBuilder, SignedPublicKey, SignedSecretKey,
     SubkeyParamsBuilder,
@@ -47,11 +46,7 @@ use crate::error::{Error, Problem, Result};
 use crate::key::{self, KeyInfo, ParsedKey};
 
 /// Unix seconds now.
-pub(crate) fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
+pub(crate) use nail_util::time::unix_now;
 
 /// RFC 3339 (UTC, seconds) of Unix seconds.
 pub(crate) fn rfc3339(secs: i64) -> String {
@@ -64,20 +59,9 @@ pub(crate) fn rfc3339(secs: i64) -> String {
 /// owns one). Entries expire after the time given to
 /// [`Keyring::unlock`]; without a time they stay until [`Self::clear`] or
 /// the process ends.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct UnlockCache {
-    entries: Mutex<HashMap<String, CachedPassphrase>>,
-}
-
-/// A passphrase and when it expires (`None` = at exit).
-type CachedPassphrase = (Zeroizing<String>, Option<Instant>);
-
-impl std::fmt::Debug for UnlockCache {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UnlockCache")
-            .field("unlocked", &self.lock().len())
-            .finish()
-    }
+    entries: ExpiringMap<Zeroizing<String>, Instant>,
 }
 
 impl UnlockCache {
@@ -86,39 +70,25 @@ impl UnlockCache {
         Self::default()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, CachedPassphrase>> {
-        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
     fn get(&self, fingerprint: &str) -> Option<Zeroizing<String>> {
-        let mut entries = self.lock();
-        match entries.get(fingerprint) {
-            Some((_, Some(until))) if *until <= Instant::now() => {
-                entries.remove(fingerprint);
-                None
-            }
-            Some((pass, _)) => Some(pass.clone()),
-            None => None,
-        }
+        self.entries.get(fingerprint, &Instant::now())
     }
 
     fn put(&self, fingerprint: &str, passphrase: &str, remember_minutes: Option<u32>) {
         let until =
             remember_minutes.map(|m| Instant::now() + Duration::from_secs(u64::from(m) * 60));
-        self.lock().insert(
-            fingerprint.to_owned(),
-            (Zeroizing::new(passphrase.to_owned()), until),
-        );
+        self.entries
+            .insert(fingerprint, Zeroizing::new(passphrase.to_owned()), until);
     }
 
     /// Forgets the passphrase of one key.
     pub fn forget(&self, fingerprint: &str) {
-        self.lock().remove(fingerprint);
+        self.entries.remove(fingerprint);
     }
 
     /// Forgets every passphrase (e.g. when the user locks Nail).
     pub fn clear(&self) {
-        self.lock().clear();
+        self.entries.clear();
     }
 
     /// Whether the key's passphrase is cached.
@@ -479,22 +449,15 @@ pub(crate) fn generate_secret(
 }
 
 /// The OpenPGP keyring over the store, the OS keychain and the unlock
-/// cache.
+/// cache (`Debug` shows no secrets: the cache and the keychain print no
+/// values).
+#[derive(Debug)]
 pub struct Keyring<'a> {
     store: &'a Store,
     secrets: &'a dyn SecretStore,
     unlocked: &'a UnlockCache,
     now: Option<i64>,
     cards: Option<&'a dyn nail_pkcs11::KeyResolver>,
-}
-
-impl std::fmt::Debug for Keyring<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Keyring")
-            .field("now", &self.now)
-            .field("smartcards", &self.cards.is_some())
-            .finish_non_exhaustive()
-    }
 }
 
 impl<'a> Keyring<'a> {

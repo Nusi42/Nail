@@ -28,8 +28,8 @@ use url::{Host, Url};
 
 use crate::plugin_http::{RefuseResolver, canonical};
 
-/// Redirects followed per fetch.
-pub(crate) const MAX_REDIRECTS: u8 = 5;
+/// Redirects followed per fetch (the same limit as every HTTP client).
+pub(crate) use nail_net::http::MAX_REDIRECTS;
 
 /// The longest a fetch may take, redirects included.
 pub(crate) const FEED_TIMEOUT: Duration = Duration::from_mins(1);
@@ -129,7 +129,7 @@ async fn fetch_inner(
 ) -> Result<FeedResponse, ApiError> {
     let mut url = request.url.clone();
     url.set_fragment(None);
-    let mut redirects = 0_u8;
+    let mut redirects = 0_usize;
     loop {
         check_hop(&url, request.allow_loopback)?;
         let login = same_origin(&url, &request.url)

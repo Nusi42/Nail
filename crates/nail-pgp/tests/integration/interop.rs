@@ -140,10 +140,7 @@ fn signed_and_encrypted_with_protected_subject() {
         status.encryption.as_ref().unwrap().state,
         DecryptionState::Decrypted
     );
-    assert_eq!(status.signatures.len(), 1);
-    assert_eq!(status.signatures[0].state, SignatureState::Valid);
-    assert!(status.signatures[0].signer_matches_from);
-    assert_eq!(status.header_protection, HeaderProtection::Protected);
+    crate::common::assert_signed_by_sender(&status);
     let (subject, text) = subject_and_text(&outcome.display.unwrap());
     assert_eq!(subject, "Secret plans");
     assert!(text.contains("The meeting is at noon."), "{text}");

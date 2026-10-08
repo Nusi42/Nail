@@ -178,6 +178,12 @@ impl Issue {
     }
 }
 
+/// The kind and the skipped flag of each issue (what tests compare).
+#[cfg(test)]
+pub(crate) fn kinds(issues: &[Issue]) -> Vec<(&IssueKind, bool)> {
+    issues.iter().map(|i| (&i.kind, i.skipped)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

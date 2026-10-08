@@ -74,26 +74,14 @@ pub enum SmtpError {
     Protocol(String),
 }
 
-impl SmtpError {
-    /// The API error code for this error.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::AuthFailed(_) => ErrorCode::AuthFailed,
-            Self::AuthUnsupported(_) | Self::StartTlsUnavailable | Self::Unsupported(_) => {
-                ErrorCode::Unsupported
-            }
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::Rejected { .. } => ErrorCode::Rejected,
-            Self::InvalidAddress(_) => ErrorCode::InvalidRequest,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::Connect { .. }
-            | Self::Transient { .. }
-            | Self::Timeout(_)
-            | Self::ConnectionLost(_)
-            | Self::Protocol(_) => ErrorCode::Network,
-        }
-    }
+nail_net::line_client_codes!(SmtpError {
+    Self::TooLarge(_) => ErrorCode::TooLarge,
+    Self::Rejected { .. } => ErrorCode::Rejected,
+    Self::InvalidAddress(_) => ErrorCode::InvalidRequest,
+    Self::Transient { .. } | Self::ConnectionLost(_) => ErrorCode::Network,
+});
 
+impl SmtpError {
     /// Whether trying again later may succeed (the outbox keeps the message
     /// queued) — network trouble, TLS trouble and 4xx replies.
     pub fn is_retryable(&self) -> bool {

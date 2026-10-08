@@ -10,9 +10,7 @@
 //! ([`crate::keyring::Keyring::use_smartcard_key`]).
 
 use nail_api::smartcard::SmartcardKeyRef;
-use nail_pkcs11::{
-    CardError, CardKey, DecryptMechanism, HashKind, PublicKeyMaterial, SignMechanism,
-};
+use nail_pkcs11::{CardError, CardKey, DecryptMechanism, HashKind, SignMechanism};
 use zeroize::Zeroizing;
 
 use crate::cert::Cert;
@@ -89,21 +87,7 @@ pub fn certificate_matches(cert: &Cert, card: &CardKey) -> bool {
     };
     let in_cert =
         nail_pkcs11::public_key_of_spki(&cert.inner().tbs_certificate.subject_public_key_info);
-    match (on_card, in_cert) {
-        (
-            PublicKeyMaterial::Rsa { modulus: a, .. },
-            Some(PublicKeyMaterial::Rsa { modulus: b, .. }),
-        ) => trim(a) == trim(&b),
-        (PublicKeyMaterial::Ec { point: a, .. }, Some(PublicKeyMaterial::Ec { point: b, .. })) => {
-            *a == b
-        }
-        _ => false,
-    }
-}
-
-fn trim(bytes: &[u8]) -> &[u8] {
-    let skip = bytes.iter().take_while(|b| **b == 0).count();
-    &bytes[skip..]
+    in_cert.is_some_and(|c| on_card.same_public_key(&c))
 }
 
 /// The secret reference stored for a smartcard key.

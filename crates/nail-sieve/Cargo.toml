@@ -9,6 +9,10 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+# The shared stream / TLS / trust plumbing of the protocol clients.
+nail-net = { workspace = true, features = ["io", "tls"] }
+# The Sieve lexer (shared with the mock ManageSieve server).
+nail-util.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 # ManageSieve client: tokio + rustls (ring provider chosen by the caller,
@@ -16,9 +20,6 @@ tracing.workspace = true
 # XOAUTH2 need base64. No OpenSSL, no aws-lc.
 tokio.workspace = true
 tokio-rustls.workspace = true
-rustls.workspace = true
-# Server certificates checked against the OS trust store (like IMAP / POP3).
-rustls-platform-verifier.workspace = true
 base64.workspace = true
 # `:regex` validation of rule patterns before compiling.
 regex.workspace = true

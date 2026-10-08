@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+nail-util.workspace = true
+nail-net = { workspace = true, features = ["http", "xml"] }
 nail-api.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -18,16 +20,14 @@ tokio.workspace = true
 # MKCALENDAR) through reqwest::Method.
 reqwest.workspace = true
 nail-auth.workspace = true
-# WebDAV XML (multistatus, namespaces DAV: / caldav / carddav / cs).
-quick-xml.workspace = true
+# URLs; WebDAV XML and the HTTP plumbing come from nail-net.
 url.workspace = true
-# Basic authentication over TLS.
-base64.workspace = true
 # RFC 6764 discovery: SRV through the OS resolver (DnsLookup / SystemDns;
 # no DNS sockets of Nail's own, ADR 0057), then /.well-known/ URIs.
 nail-discovery.workspace = true
 
 [dev-dependencies]
+nail-testkit.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 nail-testkit-net.workspace = true

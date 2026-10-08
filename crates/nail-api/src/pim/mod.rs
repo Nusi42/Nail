@@ -281,6 +281,16 @@ pub fn is_plausible_email(text: &str) -> bool {
         && !text.chars().any(|c| c.is_whitespace() || c.is_control())
 }
 
+/// The host of the part of a URL after `scheme://`: its authority without
+/// path, query, fragment and port (`[::1]` keeps its brackets).
+pub fn authority_host(rest: &str) -> &str {
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    match authority.rsplit_once(':') {
+        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => authority,
+    }
+}
+
 /// Whether `text` is an `https:` URL, or an `http:` URL of a loopback
 /// host (`localhost`, `127.0.0.1`, `[::1]`; local test servers) — the rule
 /// for server URLs in `accounts.kdl`.
@@ -291,12 +301,7 @@ pub fn is_https_or_loopback_url(text: &str) -> bool {
     if !has_url_scheme(text, &["http"]) {
         return false;
     }
-    let rest = &text["http://".len()..];
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = match authority.rsplit_once(':') {
-        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
-        _ => authority,
-    };
+    let host = authority_host(&text["http://".len()..]);
     matches!(
         host.to_ascii_lowercase().as_str(),
         "localhost" | "127.0.0.1" | "[::1]"
@@ -516,6 +521,14 @@ pub struct PimSearchHit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn authority_hosts_drop_port_and_path() {
+        assert_eq!(authority_host("example.org:8443/a?b"), "example.org");
+        assert_eq!(authority_host("[::1]:80/x"), "[::1]");
+        assert_eq!(authority_host("host#frag"), "host");
+        assert_eq!(authority_host("host:abc"), "host:abc");
+    }
     use serde_json::json;
 
     #[test]

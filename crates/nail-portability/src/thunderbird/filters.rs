@@ -11,6 +11,7 @@ use nail_api::rules::{
     AddressField, Comparison, Condition, DateComparison, FolderRef, MessageFlag, Rule, RuleAction,
     RuleScope, RuleTrigger, TextMatch, TextOp,
 };
+use nail_util::percent::decode as percent_decode;
 
 /// One filter as written in the file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,18 +81,7 @@ fn unquote(value: &str) -> String {
         .strip_prefix('"')
         .and_then(|v| v.strip_suffix('"'))
         .unwrap_or(value);
-    let mut out = String::new();
-    let mut chars = inner.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(next) = chars.next() {
-                out.push(next);
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
+    nail_util::mime_text::unescape_backslashes(inner)
 }
 
 /// One `(attribute,operator,value)` term with its connector.
@@ -203,27 +193,6 @@ pub fn parse_folder_uri(uri: &str) -> Option<(String, String)> {
     let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
     let host = authority.rsplit('@').next().unwrap_or(authority);
     Some((percent_decode(host), percent_decode(path)))
-}
-
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let Some(byte) = std::str::from_utf8(&bytes[i + 1..i + 3])
-                .ok()
-                .and_then(|h| u8::from_str_radix(h, 16).ok())
-        {
-            out.push(byte);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// What the converter knows about the filter's account.

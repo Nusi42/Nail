@@ -7,26 +7,10 @@ use nail_api::accounts::{
     MailProtocol, SaslMechanism, ServerEndpoint, SmtpOptions, TlsMode, default_port,
 };
 
-/// Which certificates are trusted for TLS.
-#[derive(Clone, PartialEq, Eq, Default)]
-pub enum TlsTrust {
-    /// The operating system's trust store (`rustls-platform-verifier`). The
-    /// default.
-    #[default]
-    Platform,
-    /// Only the given DER-encoded root certificates (tests, pinned
-    /// self-signed servers).
-    CustomRoots(Vec<Vec<u8>>),
-}
-
-impl fmt::Debug for TlsTrust {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Platform => f.write_str("Platform"),
-            Self::CustomRoots(roots) => write!(f, "CustomRoots({} certificates)", roots.len()),
-        }
-    }
-}
+/// Which certificates are trusted for TLS (shared with the other protocol
+/// clients).
+pub use nail_net::trust::TlsTrust;
+use nail_net::trust::debug_login;
 
 /// How to reach an SMTP submission server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,18 +34,15 @@ pub struct SmtpConfig {
 }
 
 impl SmtpConfig {
-    /// Default per-operation timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
-
     /// Implicit TLS on port 465 with platform trust: the recommended setup
     /// (RFC 8314).
     pub fn new(host: impl Into<String>) -> Self {
         Self {
             host: host.into(),
-            port: 465,
+            port: nail_net::ports::SUBMISSIONS,
             tls: TlsMode::Implicit,
             trust: TlsTrust::Platform,
-            timeout: Self::DEFAULT_TIMEOUT,
+            timeout: nail_net::DEFAULT_TIMEOUT,
             hello_name: None,
         }
     }
@@ -81,37 +62,9 @@ impl SmtpConfig {
             port,
             tls: endpoint.tls,
             trust: TlsTrust::Platform,
-            timeout: Self::DEFAULT_TIMEOUT,
+            timeout: nail_net::DEFAULT_TIMEOUT,
             hello_name: None,
         }
-    }
-
-    /// Sets the port.
-    #[must_use]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
-    /// Sets the transport security.
-    #[must_use]
-    pub fn with_tls(mut self, tls: TlsMode) -> Self {
-        self.tls = tls;
-        self
-    }
-
-    /// Sets the trusted certificates.
-    #[must_use]
-    pub fn with_trust(mut self, trust: TlsTrust) -> Self {
-        self.trust = trust;
-        self
-    }
-
-    /// Sets the per-operation timeout.
-    #[must_use]
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
     }
 
     /// Sets the `EHLO` name.
@@ -121,6 +74,8 @@ impl SmtpConfig {
         self
     }
 }
+
+nail_net::endpoint_builders!(SmtpConfig, TlsMode);
 
 /// Credentials for one login. `Debug` never prints secrets.
 #[derive(Clone, PartialEq, Eq, Default)]
@@ -148,25 +103,7 @@ pub enum SmtpCredentials {
     },
 }
 
-impl SmtpCredentials {
-    /// Password credentials with automatic mechanism choice.
-    pub fn password(username: impl Into<String>, password: impl Into<String>) -> Self {
-        Self::Password {
-            username: username.into(),
-            password: password.into(),
-            mechanism: None,
-        }
-    }
-
-    /// OAuth2 credentials with automatic mechanism choice.
-    pub fn oauth2(username: impl Into<String>, access_token: impl Into<String>) -> Self {
-        Self::OAuth2 {
-            username: username.into(),
-            access_token: access_token.into(),
-            mechanism: None,
-        }
-    }
-}
+nail_net::sasl_constructors!(SmtpCredentials);
 
 impl fmt::Debug for SmtpCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -176,22 +113,12 @@ impl fmt::Debug for SmtpCredentials {
                 username,
                 mechanism,
                 ..
-            } => f
-                .debug_struct("Password")
-                .field("username", username)
-                .field("password", &"<redacted>")
-                .field("mechanism", mechanism)
-                .finish(),
+            } => debug_login(f, "Password", username, "password", Some(mechanism)),
             Self::OAuth2 {
                 username,
                 mechanism,
                 ..
-            } => f
-                .debug_struct("OAuth2")
-                .field("username", username)
-                .field("access_token", &"<redacted>")
-                .field("mechanism", mechanism)
-                .finish(),
+            } => debug_login(f, "OAuth2", username, "access_token", Some(mechanism)),
         }
     }
 }

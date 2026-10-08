@@ -9,6 +9,7 @@
 //! message holds decrypted content and must not be persisted unless the
 //! account opted into indexing decrypted mail (ADR 0029).
 
+use nail_util::mime_text::find;
 use std::io::BufReader;
 
 use nail_api::KeyId;
@@ -233,10 +234,6 @@ fn parse_message(data: &[u8]) -> Option<Message<'_>> {
             .map(|(m, _)| m),
         None => Message::from_bytes(BufReader::new(data)).ok(),
     }
-}
-
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 struct Reader<'k, 'a> {

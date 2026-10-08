@@ -67,27 +67,15 @@ pub enum ImapError {
     Io(#[source] io::Error),
 }
 
-impl ImapError {
-    /// The API error code for this error.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::AuthFailed(_) => ErrorCode::AuthFailed,
-            Self::AuthUnsupported(_) | Self::StartTlsUnavailable | Self::Unsupported(_) => {
-                ErrorCode::Unsupported
-            }
-            Self::InvalidServerName(_) => ErrorCode::Config,
-            Self::InvalidArgument(_) => ErrorCode::InvalidRequest,
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::No(text) => no_code(text),
-            Self::Connect { .. }
-            | Self::ConnectionLost
-            | Self::Timeout(_)
-            | Self::Protocol(_)
-            | Self::Io(_) => ErrorCode::Network,
-        }
-    }
+nail_net::line_client_codes!(ImapError {
+    Self::InvalidServerName(_) => ErrorCode::Config,
+    Self::InvalidArgument(_) => ErrorCode::InvalidRequest,
+    Self::TooLarge(_) => ErrorCode::TooLarge,
+    Self::No(text) => no_code(text),
+    Self::ConnectionLost | Self::Io(_) => ErrorCode::Network,
+});
 
+impl ImapError {
     /// The response code of a `NO` (RFC 5530), e.g. `"ALREADYEXISTS"`.
     pub fn response_code(&self) -> Option<&str> {
         match self {
@@ -105,14 +93,14 @@ impl ImapError {
     }
 }
 
+nail_net::tls_errors!(ImapError);
+
 impl From<io::Error> for ImapError {
     fn from(err: io::Error) -> Self {
-        match err.kind() {
-            io::ErrorKind::UnexpectedEof
-            | io::ErrorKind::ConnectionReset
-            | io::ErrorKind::ConnectionAborted
-            | io::ErrorKind::BrokenPipe => Self::ConnectionLost,
-            _ => Self::Io(err),
+        if nail_net::io::is_disconnect(&err) {
+            Self::ConnectionLost
+        } else {
+            Self::Io(err)
         }
     }
 }

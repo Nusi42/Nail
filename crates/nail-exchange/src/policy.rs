@@ -62,22 +62,14 @@ pub fn body_window_start(policy: BodyPolicy, now: i64) -> Option<i64> {
 
 /// The header section of a raw message (up to and including the empty
 /// line), for engines without a headers-only call and for trimming bodies.
-pub fn header_section(raw: &[u8]) -> &[u8] {
-    if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
-        return &raw[..i + 4];
-    }
-    if let Some(i) = raw.windows(2).position(|w| w == b"\n\n") {
-        return &raw[..i + 2];
-    }
-    raw
-}
+pub use nail_util::mime_text::header_section;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use nail_api::accounts::{FolderMatch, FolderPolicy};
 
-    const NOW: i64 = 1_790_000_000;
+    use nail_util::time::FIXTURE_NOW as NOW;
 
     #[test]
     fn bodies_by_policy_and_age() {

@@ -25,10 +25,11 @@ use nail_api::pim::contact::{
 };
 use nail_api::pim::{Contact, ContactFields, LabeledValue, PostalAddress};
 
-use crate::content::{self, Component, Param, Property, escape_text};
+use crate::content::{self, Component, Property, escape_text};
 use crate::ical::sha256_hex;
 use crate::issues::{Issue, IssueKind};
 use crate::time;
+use crate::write::{merged, replace};
 
 /// Decoded photo data, for the blob store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -587,12 +588,7 @@ fn read_rev(c: &Component) -> Option<String> {
     if let Some(instant) = time::parse_instant(&value) {
         return Some(time::format_instant(instant));
     }
-    match time::parse_ical_value(&value)? {
-        time::IcalValue::DateTime { local, .. } => Some(time::format_instant(local.and_utc())),
-        time::IcalValue::Date(d) => Some(time::format_instant(
-            d.and_time(chrono::NaiveTime::MIN).and_utc(),
-        )),
-    }
+    time::value_instant(&value)
 }
 
 /// Reads vCard text (any number of cards).
@@ -605,17 +601,8 @@ pub fn parse_cards(text: &str) -> ParsedCards {
             .push(Issue::new(IssueKind::NotVCard, None).skipped());
         return out;
     }
-    for issue in &doc.issues {
-        out.issues.push(match issue.kind {
-            content::ContentIssueKind::Unclosed => Issue::new(
-                IssueKind::Unclosed {
-                    component: "VCARD".into(),
-                },
-                Some(issue.line),
-            ),
-            _ => Issue::new(IssueKind::MalformedLine, Some(issue.line)),
-        });
-    }
+    out.issues
+        .extend(doc.issues.iter().map(|i| i.to_issue("VCARD")));
     let single = doc.components.len() == 1;
     // Where each UID was read; a later copy replaces an earlier one
     // (indexes instead of scanning everything read so far).
@@ -750,35 +737,6 @@ impl CardWriteOptions<'_> {
     pub fn at(now: DateTime<Utc>) -> Self {
         CardWriteOptions { now, blobs: None }
     }
-}
-
-fn replace(c: &mut Component, names: &[&str], new: Vec<Property>) {
-    let position = c
-        .properties
-        .iter()
-        .position(|p| names.iter().any(|n| p.is(n)));
-    c.properties.retain(|p| !names.iter().any(|n| p.is(n)));
-    let at = position
-        .unwrap_or(c.properties.len())
-        .min(c.properties.len());
-    c.properties.splice(at..at, new);
-}
-
-fn merged(original: Option<&Property>, mut new: Property, managed: &[&str]) -> Property {
-    if let Some(original) = original {
-        let mut params: Vec<Param> = original
-            .params
-            .iter()
-            .filter(|p| !managed.iter().any(|m| p.is(m)))
-            .filter(|p| !new.params.iter().any(|n| n.is(&p.name)))
-            .cloned()
-            .collect();
-        params.append(&mut new.params);
-        new.params = params;
-        new.group.clone_from(&original.group);
-        new.touch();
-    }
-    new
 }
 
 fn patch<T: PartialEq>(
@@ -936,25 +894,18 @@ fn patch_list<T: PartialEq + Clone>(
         .properties
         .iter()
         .position(|p| names.iter().any(|n| p.is(n)));
-    let before_position = position.map_or(0, |pos| {
-        c.properties[..pos]
-            .iter()
-            .filter(|p| {
-                !(names.iter().any(|n| p.is(n))
-                    || p.is("X-ABLABEL")
-                        && p.group
-                            .as_deref()
-                            .is_some_and(|g| old_groups.contains(&g.to_ascii_lowercase())))
-            })
-            .count()
-    });
-    c.properties.retain(|p| {
-        !(names.iter().any(|n| p.is(n))
+    // An old entry or the label of one.
+    let old = |p: &Property| {
+        names.iter().any(|n| p.is(n))
             || p.is("X-ABLABEL")
                 && p.group
                     .as_deref()
-                    .is_some_and(|g| old_groups.contains(&g.to_ascii_lowercase())))
+                    .is_some_and(|g| old_groups.contains(&g.to_ascii_lowercase()))
+    };
+    let before_position = position.map_or(0, |pos| {
+        c.properties[..pos].iter().filter(|p| !old(p)).count()
     });
+    c.properties.retain(|p| !old(p));
     let at = if position.is_some() {
         before_position
     } else {
@@ -1876,9 +1827,8 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Suppliers\r\nMEMBER:urn:uuid:ACME
         let parsed = parse_cards(
             "BEGIN:VCARD\r\nVERSION:3.0\r\nNOTE:nameless\r\nEND:VCARD\r\nBEGIN:VCARD\r\nVERSION:3.0\r\nFN:Pic\r\nUID:p\r\nPHOTO;ENCODING=b;TYPE=JPEG:!!!notbase64\r\nEND:VCARD\r\n",
         );
-        let kinds: Vec<_> = parsed.issues.iter().map(|i| (&i.kind, i.skipped)).collect();
         assert_eq!(
-            kinds,
+            crate::issues::kinds(&parsed.issues),
             [
                 (&IssueKind::MissingUid, false),
                 (&IssueKind::MissingName, true),

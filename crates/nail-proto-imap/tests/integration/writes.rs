@@ -331,52 +331,51 @@ async fn append_without_uidplus_or_literal_plus() {
 
 #[tokio::test]
 async fn append_limits_are_enforced_before_and_by_the_server() {
+    /// A server with a 64-byte `APPENDLIMIT` and a client that appends a
+    /// larger message, which fails with `TooLarge`.
+    async fn too_big(
+        capabilities: MockCapabilities,
+    ) -> (
+        nail_testkit::MockImapServer,
+        nail_proto_imap::ImapClient,
+        ImapError,
+    ) {
+        let server = server_with(MockCapabilities {
+            append_limit: Some(64),
+            ..capabilities
+        })
+        .await;
+        let mut client = login(&server).await;
+        let err = client
+            .append("INBOX", &message("too big"), &[], None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ImapError::TooLarge(_)), "{err:?}");
+        (server, client, err)
+    }
+
     // Advertised APPENDLIMIT: checked locally, nothing is uploaded.
-    let server = server_with(MockCapabilities {
-        append_limit: Some(64),
-        ..MockCapabilities::default()
-    })
-    .await;
-    let mut client = login(&server).await;
+    let (server, client, err) = too_big(MockCapabilities::default()).await;
     assert_eq!(client.append_limit(), Some(64));
-    let err = client
-        .append("INBOX", &message("too big"), &[], None)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, ImapError::TooLarge(_)), "{err:?}");
     assert_eq!(err.code(), ErrorCode::TooLarge);
     assert!(!server.commands().iter().any(|c| c == "APPEND"));
 
     // Hidden limit, synchronizing literal: the server refuses instead of
     // sending a continuation, and the connection stays usable.
-    let server = server_with(MockCapabilities {
-        append_limit: Some(64),
+    let (_server, mut client, _) = too_big(MockCapabilities {
         advertise_append_limit: false,
         ..MockCapabilities::imap4rev1()
     })
     .await;
-    let mut client = login(&server).await;
     assert_eq!(client.append_limit(), None);
-    let err = client
-        .append("INBOX", &message("too big"), &[], None)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, ImapError::TooLarge(_)), "{err:?}");
     client.noop().await.unwrap();
 
     // Hidden limit with LITERAL+: the upload happens, then TOOBIG.
-    let server = server_with(MockCapabilities {
-        append_limit: Some(64),
+    let (_server, mut client, _) = too_big(MockCapabilities {
         advertise_append_limit: false,
         ..MockCapabilities::default()
     })
     .await;
-    let mut client = login(&server).await;
-    let err = client
-        .append("INBOX", &message("too big"), &[], None)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, ImapError::TooLarge(_)), "{err:?}");
     client.noop().await.unwrap();
 }
 

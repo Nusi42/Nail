@@ -141,7 +141,7 @@ pub async fn candidates(dns: &dyn DnsLookup, input: &DiscoveryInput) -> Result<V
                 records.sort_by(|a, b| a.priority.cmp(&b.priority).then(b.weight.cmp(&a.weight)));
                 for record in records {
                     let host = record.target.trim_end_matches('.');
-                    let base = if record.port == 443 {
+                    let base = if record.port == nail_net::ports::HTTPS {
                         format!("https://{host}")
                     } else {
                         format!("https://{host}:{}", record.port)

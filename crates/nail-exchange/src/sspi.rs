@@ -776,7 +776,7 @@ mod tests {
 
         use super::super::imp::server::ServerContext;
         use super::*;
-        use crate::http::{ExchangeHttp, HttpError, HttpRequest, HttpResponse};
+        use crate::http::{ExchangeHttp, HttpError, HttpRequest, HttpResponse, WithHeaders as _};
         use crate::negotiate::{HttpLogin, SignInError, send_signed_in};
 
         struct SspiServer {

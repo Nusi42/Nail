@@ -2,26 +2,18 @@
 //! (RFC 5804 section 4: atoms, quoted strings, literals `{n}` / `{n+}`,
 //! parenthesised response codes).
 
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
-};
+use nail_net::io::read_response_line;
+use nail_net::tls::TlsError;
+use nail_util::sieve_lex::{WireTok, wire_tokens};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
-use tokio_rustls::rustls::crypto::ring;
-use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName};
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
-use crate::client::{SieveConfig, TlsTrust};
+use crate::client::SieveConfig;
 use crate::error::{Result, SieveError};
 
-/// Longest response line accepted.
-const MAX_LINE: u64 = 64 * 1024;
 /// Largest literal accepted from the server (a script).
 pub(crate) const MAX_LITERAL: usize = 16 * 1024 * 1024;
 
@@ -32,99 +24,27 @@ pub(crate) enum SieveStream {
     Tls(Box<TlsStream<TcpStream>>),
 }
 
-impl AsyncRead for SieveStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_read(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for SieveStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_write(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_flush(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_shutdown(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
-        }
-    }
-}
-
-/// The rustls client configuration (ring provider, TLS 1.2+).
-pub(crate) fn client_config(trust: &TlsTrust, host: &str) -> Result<ClientConfig> {
-    let tls_err = |message: String| SieveError::Tls {
-        host: host.to_owned(),
-        message,
-    };
-    let provider = Arc::new(ring::default_provider());
-    let builder = ClientConfig::builder_with_provider(Arc::clone(&provider))
-        .with_safe_default_protocol_versions()
-        .map_err(|e| tls_err(e.to_string()))?;
-    Ok(match trust {
-        TlsTrust::Platform => {
-            let verifier = rustls_platform_verifier::Verifier::new(provider)
-                .map_err(|e| tls_err(e.to_string()))?;
-            builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(verifier))
-                .with_no_client_auth()
-        }
-        TlsTrust::CustomRoots(ders) => {
-            let mut roots = RootCertStore::empty();
-            for der in ders {
-                roots
-                    .add(CertificateDer::from(der.clone()))
-                    .map_err(|e| tls_err(e.to_string()))?;
-            }
-            builder.with_root_certificates(roots).with_no_client_auth()
-        }
-    })
-}
+nail_net::delegate_stream_enum!(SieveStream { Plain, Tls });
 
 /// Runs `fut` with a timeout.
 pub(crate) async fn with_timeout<T>(
     timeout: Duration,
     fut: impl Future<Output = Result<T>>,
 ) -> Result<T> {
-    tokio::time::timeout(timeout, fut)
-        .await
-        .map_err(|_| SieveError::Timeout(timeout))?
+    nail_net::io::with_timeout(timeout, fut, SieveError::Timeout).await
 }
 
 /// TLS handshake over `tcp`.
 async fn handshake(config: &SieveConfig, tcp: TcpStream) -> Result<SieveStream> {
-    let server_name = ServerName::try_from(config.host.clone())
-        .map_err(|_| SieveError::InvalidServerName(config.host.clone()))?;
-    let connector = TlsConnector::from(Arc::new(client_config(&config.trust, &config.host)?));
     let tls = with_timeout(config.timeout, async {
-        connector
-            .connect(server_name, tcp)
+        nail_net::tls::connect(&config.trust, &config.host, tcp)
             .await
-            .map_err(|e| SieveError::Tls {
-                host: config.host.clone(),
-                message: e.to_string(),
+            .map_err(|err| match err {
+                TlsError::InvalidServerName(host) => SieveError::InvalidServerName(host),
+                TlsError::Tls(message) => SieveError::Tls {
+                    host: config.host.clone(),
+                    message,
+                },
             })
     })
     .await?;
@@ -204,19 +124,12 @@ impl Conn {
     async fn read_line(&mut self) -> Result<Vec<u8>> {
         let reader = &mut self.reader;
         with_timeout(self.timeout, async move {
-            let mut line = Vec::new();
-            let n = reader.take(MAX_LINE).read_until(b'\n', &mut line).await?;
-            if n == 0 {
-                return Err(SieveError::ConnectionLost(String::new()));
-            }
-            if !line.ends_with(b"\n") {
-                return Err(SieveError::Protocol("response line too long".to_owned()));
-            }
-            line.pop();
-            if line.ends_with(b"\r") {
-                line.pop();
-            }
-            Ok(line)
+            read_response_line(
+                reader,
+                || SieveError::ConnectionLost(String::new()),
+                SieveError::Protocol,
+            )
+            .await
         })
         .await
     }
@@ -279,70 +192,22 @@ impl Conn {
 /// Tokenizes one line; a trailing literal marker `{n}` / `{n+}` is returned
 /// separately (its data follows on the wire).
 pub(crate) fn tokenize(line: &str) -> Result<(Vec<Token>, Option<usize>)> {
-    let bytes = line.as_bytes();
-    let mut out = Vec::new();
-    let mut i = 0;
     let bad = |what: &str| SieveError::Protocol(format!("{what} in {line:?}"));
-    while i < bytes.len() {
-        match bytes[i] {
-            b' ' | b'\t' => i += 1,
-            b'(' => {
-                out.push(Token::Open);
-                i += 1;
-            }
-            b')' => {
-                out.push(Token::Close);
-                i += 1;
-            }
-            b'"' => {
-                i += 1;
-                let mut s = Vec::new();
-                loop {
-                    match bytes.get(i) {
-                        None => return Err(bad("unterminated string")),
-                        Some(b'"') => {
-                            i += 1;
-                            break;
-                        }
-                        Some(b'\\') => {
-                            let c = bytes.get(i + 1).ok_or_else(|| bad("unterminated string"))?;
-                            s.push(*c);
-                            i += 2;
-                        }
-                        Some(c) => {
-                            s.push(*c);
-                            i += 1;
-                        }
-                    }
+    let (tokens, literal) = wire_tokens(line).map_err(bad)?;
+    let tokens = tokens
+        .into_iter()
+        .map(|t| {
+            Ok(match t {
+                WireTok::Atom(a) => Token::Atom(a),
+                WireTok::Str(s) => {
+                    Token::Str(String::from_utf8(s).map_err(|_| bad("invalid UTF-8"))?)
                 }
-                out.push(Token::Str(
-                    String::from_utf8(s).map_err(|_| bad("invalid UTF-8"))?,
-                ));
-            }
-            b'{' => {
-                let end = line[i..]
-                    .find('}')
-                    .ok_or_else(|| bad("unterminated literal"))?
-                    + i;
-                if end + 1 != bytes.len() {
-                    return Err(bad("literal marker not at the end"));
-                }
-                let n = line[i + 1..end].trim_end_matches('+');
-                let n: usize = n.parse().map_err(|_| bad("invalid literal length"))?;
-                return Ok((out, Some(n)));
-            }
-            _ => {
-                let start = i;
-                while i < bytes.len()
-                    && !matches!(bytes[i], b' ' | b'\t' | b'(' | b')' | b'"' | b'{')
-                {
-                    i += 1;
-                }
-                out.push(Token::Atom(line[start..i].to_owned()));
-            }
-        }
-    }
-    Ok((out, None))
+                WireTok::Open => Token::Open,
+                WireTok::Close => Token::Close,
+            })
+        })
+        .collect::<Result<_>>()?;
+    Ok((tokens, literal))
 }
 
 /// A client string argument: quoted when it is short and single-line,

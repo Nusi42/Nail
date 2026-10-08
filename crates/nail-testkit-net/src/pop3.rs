@@ -10,22 +10,16 @@
 //! [`MockPop3Server::disconnect_on`].
 
 use std::fmt::Write as _;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use md5::{Digest as _, Md5};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::watch;
-use tokio::task::JoinHandle;
-use tokio_rustls::TlsAcceptor;
 
 use nail_testkit::MockTls;
-use nail_testkit::tls::TestTls;
 
 use crate::MockNetError;
 use crate::sasl;
-use crate::stream::{Connection, MockStream, args, verb};
+use crate::server::{Journal, MockListener, Session, journal_controls, lock, login_controls};
+use crate::stream::{Connection, args};
 
 /// Configuration of a [`MockPop3Server`].
 #[derive(Debug, Clone)]
@@ -61,8 +55,8 @@ impl Default for MockPop3Config {
     fn default() -> Self {
         Self {
             tls: MockTls::None,
-            username: "sam@nail.example".to_owned(),
-            password: "secret".to_owned(),
+            username: crate::MOCK_USER.to_owned(),
+            password: crate::MOCK_PASSWORD.to_owned(),
             apop: true,
             user_pass: true,
             sasl: vec!["PLAIN".to_owned(), "XOAUTH2".to_owned()],
@@ -93,37 +87,23 @@ enum Fault {
 struct Shared {
     maildrop: Mutex<Vec<Pop3Message>>,
     deleted: Mutex<Vec<String>>,
-    faults: Mutex<Vec<(String, Fault, usize)>>,
-    commands: Mutex<Vec<String>>,
-    connections: AtomicUsize,
-    logins: AtomicUsize,
-}
-
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-impl Shared {
-    fn take_fault(&self, command: &str) -> Option<Fault> {
-        let mut faults = lock(&self.faults);
-        let index = faults.iter().position(|(c, _, _)| c == command)?;
-        let fault = faults[index].1.clone();
-        faults[index].2 -= 1;
-        if faults[index].2 == 0 {
-            faults.remove(index);
-        }
-        Some(fault)
-    }
+    journal: Journal<Fault>,
 }
 
 /// A running mock POP3 server on `127.0.0.1`. Stops when dropped.
 #[derive(Debug)]
 pub struct MockPop3Server {
-    addr: SocketAddr,
-    ca_der: Option<Vec<u8>>,
+    listener: MockListener,
     shared: Arc<Shared>,
-    shutdown: watch::Sender<bool>,
-    task: JoinHandle<()>,
+}
+
+/// The address, port, CA and connection count of the listener.
+impl std::ops::Deref for MockPop3Server {
+    type Target = MockListener;
+
+    fn deref(&self) -> &MockListener {
+        &self.listener
+    }
 }
 
 impl MockPop3Server {
@@ -132,60 +112,10 @@ impl MockPop3Server {
         config: MockPop3Config,
         messages: Vec<Pop3Message>,
     ) -> Result<Self, MockNetError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let addr = listener.local_addr()?;
-        let tls = match config.tls {
-            MockTls::None => None,
-            MockTls::Implicit | MockTls::StartTls => Some(TestTls::generate()?),
-        };
-        let ca_der = tls.as_ref().map(|t| t.ca_der.clone());
-        let acceptor = tls.map(|t| t.acceptor);
         let shared = Arc::new(Shared::default());
         *lock(&shared.maildrop) = messages;
-        let (shutdown, mut stop) = watch::channel(false);
-        let config = Arc::new(config);
-        let task_shared = Arc::clone(&shared);
-        let task = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = stop.changed() => break,
-                    accepted = listener.accept() => {
-                        let Ok((tcp, _)) = accepted else { continue };
-                        let n = task_shared.connections.fetch_add(1, Ordering::SeqCst);
-                        let shared = Arc::clone(&task_shared);
-                        let config = Arc::clone(&config);
-                        let acceptor = acceptor.clone();
-                        tokio::spawn(async move {
-                            if let Err(err) = session(tcp, &shared, &config, acceptor.as_ref(), n).await {
-                                tracing::debug!(%err, "mock POP3 session ended");
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        Ok(Self {
-            addr,
-            ca_der,
-            shared,
-            shutdown,
-            task,
-        })
-    }
-
-    /// The listening address.
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    /// The listening port.
-    pub fn port(&self) -> u16 {
-        self.addr.port()
-    }
-
-    /// DER of the CA that signed the server certificate (TLS modes only).
-    pub fn ca_der(&self) -> Option<&[u8]> {
-        self.ca_der.as_deref()
+        let listener = MockListener::serve(config.tls, "POP3", &shared, config, session).await?;
+        Ok(Self { listener, shared })
     }
 
     /// Adds a message to the maildrop (visible to the next session).
@@ -208,43 +138,10 @@ impl MockPop3Server {
     pub fn deleted(&self) -> Vec<String> {
         lock(&self.shared.deleted).clone()
     }
-
-    /// Every command line received, in order (secrets removed).
-    pub fn commands(&self) -> Vec<String> {
-        lock(&self.shared.commands).clone()
-    }
-
-    /// Number of accepted TCP connections.
-    pub fn connections(&self) -> usize {
-        self.shared.connections.load(Ordering::SeqCst)
-    }
-
-    /// Number of successful logins.
-    pub fn logins(&self) -> usize {
-        self.shared.logins.load(Ordering::SeqCst)
-    }
-
-    /// Answers the next `times` occurrences of `command` with `-ERR text`.
-    pub fn fail(&self, command: &str, text: &str, times: usize) {
-        lock(&self.shared.faults).push((
-            command.to_ascii_uppercase(),
-            Fault::Err(text.to_owned()),
-            times,
-        ));
-    }
-
-    /// Drops the connection without answering the next `command`.
-    pub fn disconnect_on(&self, command: &str) {
-        lock(&self.shared.faults).push((command.to_ascii_uppercase(), Fault::Disconnect, 1));
-    }
 }
 
-impl Drop for MockPop3Server {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        self.task.abort();
-    }
-}
+journal_controls!(MockPop3Server);
+login_controls!(MockPop3Server, Fault::Err, "`-ERR text`");
 
 /// The APOP digest: hex MD5 of the greeting timestamp and the password.
 pub fn apop_digest(timestamp: &str, password: &str) -> String {
@@ -314,18 +211,15 @@ impl Mailbox {
 }
 
 async fn session(
-    tcp: TcpStream,
-    shared: &Shared,
-    config: &MockPop3Config,
-    acceptor: Option<&TlsAcceptor>,
-    connection: usize,
+    mut conn: Connection,
+    session: Session<Shared, MockPop3Config>,
 ) -> std::io::Result<()> {
-    drop(tcp.set_nodelay(true));
-    let mut conn = match (config.tls, acceptor) {
-        (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
-        _ => Connection::new(MockStream::Plain(tcp)),
-    };
-    let timestamp = format!("<{}.{connection}@mock.nail.example>", std::process::id());
+    let (shared, config, acceptor) = session.parts();
+    let timestamp = format!(
+        "<{}.{}@mock.nail.example>",
+        std::process::id(),
+        session.number
+    );
     if config.apop {
         conn.line(&format!("+OK Nail mock POP3 ready {timestamp}"))
             .await?;
@@ -335,11 +229,9 @@ async fn session(
     let mut user: Option<String> = None;
     let mut mailbox: Option<Mailbox> = None;
     loop {
-        let Some(raw) = conn.read_line().await? else {
+        let Some((line, verb)) = conn.next_command().await? else {
             return Ok(());
         };
-        let line = String::from_utf8_lossy(&raw).into_owned();
-        let verb = verb(&line);
         let logged = match verb.as_str() {
             "PASS" => "PASS".to_owned(),
             "APOP" => format!(
@@ -352,8 +244,8 @@ async fn session(
             ),
             _ => line.clone(),
         };
-        lock(&shared.commands).push(logged);
-        match shared.take_fault(&verb) {
+        shared.journal.command(logged);
+        match shared.journal.faults.take(&verb) {
             Some(Fault::Disconnect) => return Ok(()),
             Some(Fault::Err(text)) => {
                 conn.line(&format!("-ERR {text}")).await?;
@@ -544,7 +436,7 @@ async fn session(
 }
 
 fn open(shared: &Shared) -> Mailbox {
-    shared.logins.fetch_add(1, Ordering::SeqCst);
+    shared.journal.login();
     let messages = lock(&shared.maildrop).clone();
     let deleted = vec![false; messages.len()];
     Mailbox { messages, deleted }
@@ -572,36 +464,23 @@ async fn sasl_auth(
             String::from_utf8_lossy(&line).into_owned()
         }
     };
-    if payload.trim() == "*" {
-        conn.line("-ERR authentication cancelled").await?;
-        return Ok(false);
-    }
-    let Some(decoded) = sasl::b64_decode(&payload) else {
-        conn.line("-ERR invalid base64").await?;
-        return Ok(false);
-    };
-    let ok = if mechanism.as_str() == "PLAIN" {
-        sasl::parse_plain(&decoded)
-            .is_some_and(|(u, p)| u == config.username && p == config.password)
-    } else {
-        let parsed = if mechanism == "XOAUTH2" {
-            sasl::parse_xoauth2(&decoded)
-        } else {
-            sasl::parse_oauthbearer(&decoded)
-        };
-        let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
-        if !ok {
-            conn.line(&format!("+ {}", sasl::oauth_error_challenge()))
-                .await?;
-            drop(conn.read_line().await?);
-        }
-        ok
-    };
-    if !ok {
-        conn.line("-ERR [AUTH] Authentication failed").await?;
-    }
-    Ok(ok)
+    sasl::finish(
+        conn,
+        &mechanism,
+        &payload,
+        sasl::login_of!(config),
+        &ANSWERS,
+    )
+    .await
 }
+
+/// POP3's answers to a failed `AUTH`.
+const ANSWERS: sasl::Answers = sasl::Answers {
+    cancelled: "-ERR authentication cancelled",
+    bad_base64: "-ERR invalid base64",
+    failed: "-ERR [AUTH] Authentication failed",
+    challenge: |text| format!("+ {text}"),
+};
 
 #[cfg(test)]
 mod tests {

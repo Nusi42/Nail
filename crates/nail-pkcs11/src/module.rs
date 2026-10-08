@@ -57,6 +57,20 @@ pub enum PublicKeyMaterial {
 }
 
 impl PublicKeyMaterial {
+    /// Whether both are the same public key: RSA moduli equal up to
+    /// leading zero bytes, EC points equal.
+    pub fn same_public_key(&self, other: &Self) -> bool {
+        fn trim(bytes: &[u8]) -> &[u8] {
+            let skip = bytes.iter().take_while(|b| **b == 0).count();
+            &bytes[skip..]
+        }
+        match (self, other) {
+            (Self::Rsa { modulus: a, .. }, Self::Rsa { modulus: b, .. }) => trim(a) == trim(b),
+            (Self::Ec { point: a, .. }, Self::Ec { point: b, .. }) => a == b,
+            _ => false,
+        }
+    }
+
     /// A short algorithm name (`RSA 2048`, `ECC P-256`).
     pub fn algorithm_name(&self) -> String {
         match self {
@@ -144,6 +158,32 @@ pub enum DecryptMechanism {
     RsaOaep(HashKind),
 }
 
+/// An operation with a private key on a card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyOp<'a> {
+    /// Sign `data` (a digest, or a `DigestInfo` for
+    /// [`SignMechanism::RsaPkcs1`]).
+    Sign {
+        /// How.
+        mechanism: SignMechanism,
+        /// What.
+        data: &'a [u8],
+    },
+    /// Decrypt a key-transport ciphertext.
+    Decrypt {
+        /// How.
+        mechanism: DecryptMechanism,
+        /// The ciphertext.
+        data: &'a [u8],
+    },
+    /// ECDH (`CKM_ECDH1_DERIVE`, no KDF) with a peer's SEC1 point: the raw
+    /// shared secret.
+    Ecdh {
+        /// The peer's SEC1 point.
+        peer_point: &'a [u8],
+    },
+}
+
 /// What Nail needs from a loaded PKCS#11 module. Implementations keep one
 /// session per slot; `login` logs that session in (the PIN is used once
 /// and dropped by the caller).
@@ -162,30 +202,35 @@ pub trait Module: Send + Sync + fmt::Debug {
     fn login(&self, slot_id: u64, pin: &str) -> Result<(), CardError>;
     /// Logs out (and forgets the session's login state).
     fn logout(&self, slot_id: u64);
-    /// Signs `data` with the private key `id`; [`CardError`] with
-    /// [`nail_api::smartcard::SmartcardError::PinCancelled`] is never
-    /// returned here — a missing login is `Ok(None)`.
-    fn sign(
+    /// Runs `op` with the private key `id`: the signature, the plaintext or
+    /// the shared secret. A missing login is `Ok(None)` (never a
+    /// [`CardError`] with [`nail_api::smartcard::SmartcardError::PinCancelled`]).
+    fn private_op(
         &self,
         slot_id: u64,
         id: &[u8],
-        mechanism: SignMechanism,
-        data: &[u8],
-    ) -> Result<Option<Vec<u8>>, CardError>;
-    /// Decrypts with the private key `id`; `Ok(None)` when not logged in.
-    fn decrypt(
-        &self,
-        slot_id: u64,
-        id: &[u8],
-        mechanism: DecryptMechanism,
-        data: &[u8],
+        op: KeyOp<'_>,
     ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError>;
-    /// ECDH (`CKM_ECDH1_DERIVE`, no KDF) with a peer's SEC1 point: the raw
-    /// shared secret; `Ok(None)` when not logged in.
-    fn ecdh(
-        &self,
-        slot_id: u64,
-        id: &[u8],
-        peer_point: &[u8],
-    ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_public_key_ignores_leading_zeros_of_moduli() {
+        let rsa = |modulus: Vec<u8>| PublicKeyMaterial::Rsa {
+            modulus,
+            exponent: vec![1, 0, 1],
+        };
+        let ec = |point: Vec<u8>| PublicKeyMaterial::Ec {
+            params: vec![6],
+            point,
+        };
+        assert!(rsa(vec![0, 0, 7, 8]).same_public_key(&rsa(vec![7, 8])));
+        assert!(!rsa(vec![7, 8]).same_public_key(&rsa(vec![7, 9])));
+        assert!(ec(vec![4, 1]).same_public_key(&ec(vec![4, 1])));
+        assert!(!ec(vec![0, 4, 1]).same_public_key(&ec(vec![4, 1])));
+        assert!(!rsa(vec![4, 1]).same_public_key(&ec(vec![4, 1])));
+    }
 }

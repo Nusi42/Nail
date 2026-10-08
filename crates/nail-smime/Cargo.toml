@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Shared raw-message helpers (ADR 0171).
+nail-util.workspace = true
 # M4c WP122 (ADR 0094): keys on PKCS#11 smartcards.
 nail-pkcs11.workspace = true
 nail-api.workspace = true

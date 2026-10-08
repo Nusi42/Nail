@@ -1,7 +1,5 @@
 //! Encoding of server response data: strings and the `ENVELOPE` structure.
 
-use std::fmt::Write as _;
-
 use mail_parser::{Address, HeaderName, Message, MessageParser};
 
 /// Appends an IMAP `nstring`: `NIL`, a quoted string, or a literal for
@@ -37,25 +35,7 @@ pub(crate) fn push_literal(out: &mut Vec<u8>, bytes: &[u8]) {
 }
 
 /// Formats ascending numbers as an IMAP sequence set: `1:3,7,9:10`.
-pub(crate) fn number_set(numbers: &[u32]) -> String {
-    let mut out = String::new();
-    let mut iter = numbers.iter().copied().peekable();
-    while let Some(start) = iter.next() {
-        let mut end = start;
-        while iter.peek() == Some(&end.wrapping_add(1)) {
-            end = iter.next().unwrap_or(end);
-        }
-        if !out.is_empty() {
-            out.push(',');
-        }
-        if start == end {
-            out.push_str(&start.to_string());
-        } else {
-            let _ = write!(out, "{start}:{end}");
-        }
-    }
-    out
-}
+pub(crate) use nail_net::wire::sequence_set as number_set;
 
 /// Formats numbers in the given order as a comma list (for `COPYUID`,
 /// where source and destination sets must correspond position by position).

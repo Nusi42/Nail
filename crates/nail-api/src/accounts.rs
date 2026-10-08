@@ -135,6 +135,30 @@ fn default_true() -> bool {
 }
 
 impl AccountConfig {
+    /// An enabled account receiving through `incoming`, with everything
+    /// else at its default (no outgoing server, no identities, the default
+    /// sync policy, no Sieve).
+    pub fn new(
+        id: impl Into<AccountId>,
+        name: impl Into<String>,
+        email: impl Into<String>,
+        incoming: IncomingServer,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            email: email.into(),
+            enabled: true,
+            incoming,
+            outgoing: None,
+            identities: Vec::new(),
+            sync: SyncPolicy::default(),
+            save_sent_copy: None,
+            authserv_ids: Vec::new(),
+            sieve: None,
+        }
+    }
+
     /// The protocol family of the account.
     pub fn kind(&self) -> crate::domain::AccountKind {
         match self.incoming {
@@ -1246,6 +1270,24 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use serde_json::json;
+
+    #[test]
+    fn new_accounts_take_the_defaults() {
+        let incoming = IncomingServer::Imap {
+            server: ServerEndpoint {
+                host: "imap.example.org".into(),
+                port: 993,
+                tls: TlsMode::Implicit,
+                auth: AuthConfig::None,
+            },
+            options: ImapOptions::default(),
+        };
+        let account = AccountConfig::new("a", "A", "a@example.org", incoming);
+        assert_eq!(account.id.as_str(), "a");
+        assert!(account.enabled && account.outgoing.is_none() && account.sieve.is_none());
+        assert!(account.identities.is_empty() && account.authserv_ids.is_empty());
+        assert_eq!(account.sync, SyncPolicy::default());
+    }
 
     #[test]
     fn sending_mailbox_from_headers() {

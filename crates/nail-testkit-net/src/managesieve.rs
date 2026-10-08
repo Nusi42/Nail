@@ -19,21 +19,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::watch;
-use tokio::task::JoinHandle;
-use tokio_rustls::TlsAcceptor;
+use std::sync::{Arc, Mutex};
 
 use nail_testkit::MockTls;
-use nail_testkit::tls::TestTls;
+use nail_util::sieve_lex::WireTok;
 
 use crate::MockNetError;
 use crate::sasl;
-use crate::stream::{Connection, MockStream};
+use crate::server::{Journal, MockListener, Session, journal_controls, lock, login_controls};
+use crate::stream::Connection;
 
 /// The extensions a [`MockSieveServer`] advertises by default (roughly
 /// Dovecot Pigeonhole's default set).
@@ -91,8 +85,8 @@ impl Default for MockSieveConfig {
     fn default() -> Self {
         Self {
             tls: MockTls::None,
-            username: "sam@nail.example".to_owned(),
-            password: "secret".to_owned(),
+            username: crate::MOCK_USER.to_owned(),
+            password: crate::MOCK_PASSWORD.to_owned(),
             sasl: vec![
                 "PLAIN".to_owned(),
                 "XOAUTH2".to_owned(),
@@ -147,95 +141,35 @@ struct State {
 #[derive(Debug, Default)]
 struct Shared {
     state: Mutex<State>,
-    faults: Mutex<Vec<(String, Fault, usize)>>,
-    commands: Mutex<Vec<String>>,
-    connections: AtomicUsize,
-    logins: AtomicUsize,
+    journal: Journal<Fault>,
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-impl Shared {
-    fn take_fault(&self, command: &str) -> Option<Fault> {
-        let mut faults = lock(&self.faults);
-        let index = faults.iter().position(|(c, _, _)| c == command)?;
-        let fault = faults[index].1.clone();
-        faults[index].2 -= 1;
-        if faults[index].2 == 0 {
-            faults.remove(index);
-        }
-        Some(fault)
-    }
-}
+journal_controls!(MockSieveServer);
+login_controls!(MockSieveServer, Fault::No, "`NO \"text\"`");
 
 /// A running mock ManageSieve server on `127.0.0.1`. Stops when dropped.
 #[derive(Debug)]
 pub struct MockSieveServer {
-    addr: SocketAddr,
-    ca_der: Option<Vec<u8>>,
+    listener: MockListener,
     shared: Arc<Shared>,
-    shutdown: watch::Sender<bool>,
-    task: JoinHandle<()>,
+}
+
+/// The address, port, CA and connection count of the listener.
+impl std::ops::Deref for MockSieveServer {
+    type Target = MockListener;
+
+    fn deref(&self) -> &MockListener {
+        &self.listener
+    }
 }
 
 impl MockSieveServer {
     /// Starts a server without scripts on a free loopback port.
     pub async fn start(config: MockSieveConfig) -> Result<Self, MockNetError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let addr = listener.local_addr()?;
-        let tls = match config.tls {
-            MockTls::None => None,
-            MockTls::Implicit | MockTls::StartTls => Some(TestTls::generate()?),
-        };
-        let ca_der = tls.as_ref().map(|t| t.ca_der.clone());
-        let acceptor = tls.map(|t| t.acceptor);
         let shared = Arc::new(Shared::default());
-        let (shutdown, mut stop) = watch::channel(false);
-        let config = Arc::new(config);
-        let task_shared = Arc::clone(&shared);
-        let task = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = stop.changed() => break,
-                    accepted = listener.accept() => {
-                        let Ok((tcp, _)) = accepted else { continue };
-                        task_shared.connections.fetch_add(1, Ordering::SeqCst);
-                        let shared = Arc::clone(&task_shared);
-                        let config = Arc::clone(&config);
-                        let acceptor = acceptor.clone();
-                        tokio::spawn(async move {
-                            if let Err(err) = session(tcp, &shared, &config, acceptor.as_ref()).await {
-                                tracing::debug!(%err, "mock ManageSieve session ended");
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        Ok(Self {
-            addr,
-            ca_der,
-            shared,
-            shutdown,
-            task,
-        })
-    }
-
-    /// The listening address.
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    /// The listening port.
-    pub fn port(&self) -> u16 {
-        self.addr.port()
-    }
-
-    /// DER of the CA that signed the server certificate (TLS modes only).
-    pub fn ca_der(&self) -> Option<&[u8]> {
-        self.ca_der.as_deref()
+        let listener =
+            MockListener::serve(config.tls, "ManageSieve", &shared, config, session).await?;
+        Ok(Self { listener, shared })
     }
 
     /// Stores a script directly (e.g. a script the user wrote elsewhere),
@@ -283,50 +217,12 @@ impl MockSieveServer {
         lock(&self.shared.state).checks.clone()
     }
 
-    /// Every command received, in order: the command word and its quoted
-    /// arguments; literals are shown as `{n}` and SASL payloads are
-    /// removed.
-    pub fn commands(&self) -> Vec<String> {
-        lock(&self.shared.commands).clone()
-    }
-
-    /// Number of accepted TCP connections.
-    pub fn connections(&self) -> usize {
-        self.shared.connections.load(Ordering::SeqCst)
-    }
-
-    /// Number of successful logins.
-    pub fn logins(&self) -> usize {
-        self.shared.logins.load(Ordering::SeqCst)
-    }
-
-    /// Answers the next `times` occurrences of `command` with `NO "text"`.
-    pub fn fail(&self, command: &str, text: &str, times: usize) {
-        lock(&self.shared.faults).push((
-            command.to_ascii_uppercase(),
-            Fault::No(text.to_owned()),
-            times,
-        ));
-    }
-
-    /// Drops the connection without answering the next `command`.
-    pub fn disconnect_on(&self, command: &str) {
-        lock(&self.shared.faults).push((command.to_ascii_uppercase(), Fault::Disconnect, 1));
-    }
-
     /// Refuses `PUTSCRIPT` / `CHECKSCRIPT` of every script containing
     /// `needle`, answering `NO "message"`.
     pub fn reject_scripts_containing(&self, needle: &str, message: &str) {
         lock(&self.shared.state)
             .rejections
             .push((needle.to_owned(), message.to_owned()));
-    }
-}
-
-impl Drop for MockSieveServer {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        self.task.abort();
     }
 }
 
@@ -352,56 +248,17 @@ impl Tok {
 /// Splits one line into tokens; a trailing `{n}` / `{n+}` literal marker is
 /// returned separately.
 fn tokenize(line: &str) -> Result<(Vec<Tok>, Option<usize>), &'static str> {
-    let bytes = line.as_bytes();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b' ' | b'\t' => i += 1,
-            b'"' => {
-                i += 1;
-                let mut s = Vec::new();
-                loop {
-                    match bytes.get(i) {
-                        None => return Err("unterminated string"),
-                        Some(b'"') => {
-                            i += 1;
-                            break;
-                        }
-                        Some(b'\\') => {
-                            let Some(c) = bytes.get(i + 1) else {
-                                return Err("unterminated string");
-                            };
-                            s.push(*c);
-                            i += 2;
-                        }
-                        Some(c) => {
-                            s.push(*c);
-                            i += 1;
-                        }
-                    }
-                }
-                out.push(Tok::Str(s));
-            }
-            b'{' => {
-                let end = line[i..].find('}').ok_or("unterminated literal")? + i;
-                if end + 1 != bytes.len() {
-                    return Err("literal marker must end the line");
-                }
-                let n = line[i + 1..end].trim_end_matches('+');
-                let n: usize = n.parse().map_err(|_| "invalid literal length")?;
-                return Ok((out, Some(n)));
-            }
-            _ => {
-                let start = i;
-                while i < bytes.len() && !matches!(bytes[i], b' ' | b'\t' | b'"' | b'{') {
-                    i += 1;
-                }
-                out.push(Tok::Atom(line[start..i].to_owned()));
-            }
-        }
-    }
-    Ok((out, None))
+    let (tokens, literal) = nail_util::sieve_lex::wire_tokens(line)?;
+    let tokens = tokens
+        .into_iter()
+        .map(|t| match t {
+            WireTok::Atom(a) => Tok::Atom(a),
+            WireTok::Str(s) => Tok::Str(s),
+            WireTok::Open => Tok::Atom("(".into()),
+            WireTok::Close => Tok::Atom(")".into()),
+        })
+        .collect();
+    Ok((tokens, literal))
 }
 
 /// Reads one command: a line plus any literals it announces.
@@ -492,16 +349,10 @@ fn log_line(tokens: &[Tok]) -> String {
 }
 
 async fn session(
-    tcp: TcpStream,
-    shared: &Shared,
-    config: &MockSieveConfig,
-    acceptor: Option<&TlsAcceptor>,
+    mut conn: Connection,
+    session: Session<Shared, MockSieveConfig>,
 ) -> std::io::Result<()> {
-    drop(tcp.set_nodelay(true));
-    let mut conn = match (config.tls, acceptor) {
-        (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
-        _ => Connection::new(MockStream::Plain(tcp)),
-    };
+    let (shared, config, acceptor) = session.parts();
     conn.write(capabilities(config, conn.is_tls()).as_bytes())
         .await?;
     let mut authenticated = false;
@@ -515,10 +366,10 @@ async fn session(
             Some(Ok(t)) if t.is_empty() => continue,
             Some(Ok(t)) => t,
         };
-        lock(&shared.commands).push(log_line(&tokens));
+        shared.journal.command(log_line(&tokens));
         let verb = tokens[0].text().to_ascii_uppercase();
         let args: Vec<String> = tokens[1..].iter().map(Tok::text).collect();
-        match shared.take_fault(&verb) {
+        match shared.journal.faults.take(&verb) {
             Some(Fault::Disconnect) => return Ok(()),
             Some(Fault::No(text)) => {
                 conn.line(&format!("NO {}", string(&text))).await?;
@@ -555,7 +406,7 @@ async fn session(
                     conn.line("NO (ENCRYPT-NEEDED) \"STARTTLS first\"").await?;
                 } else if sasl_auth(&mut conn, config, &args).await? {
                     authenticated = true;
-                    shared.logins.fetch_add(1, Ordering::SeqCst);
+                    shared.journal.login();
                     conn.line("OK \"Logged in\"").await?;
                 }
             }
@@ -595,36 +446,23 @@ async fn sasl_auth(
             _ => String::new(),
         }
     };
-    if payload.trim() == "*" {
-        conn.line("NO \"Authentication cancelled\"").await?;
-        return Ok(false);
-    }
-    let Some(decoded) = sasl::b64_decode(&payload) else {
-        conn.line("NO \"Invalid base64\"").await?;
-        return Ok(false);
-    };
-    let ok = if mechanism.as_str() == "PLAIN" {
-        sasl::parse_plain(&decoded)
-            .is_some_and(|(u, p)| u == config.username && p == config.password)
-    } else {
-        let parsed = if mechanism == "XOAUTH2" {
-            sasl::parse_xoauth2(&decoded)
-        } else {
-            sasl::parse_oauthbearer(&decoded)
-        };
-        let ok = parsed.is_some_and(|pair| config.oauth_tokens.contains(&pair));
-        if !ok {
-            conn.line(&format!("\"{}\"", sasl::oauth_error_challenge()))
-                .await?;
-            drop(read_command(conn).await?);
-        }
-        ok
-    };
-    if !ok {
-        conn.line("NO \"Authentication failed\"").await?;
-    }
-    Ok(ok)
+    sasl::finish(
+        conn,
+        &mechanism,
+        &payload,
+        sasl::login_of!(config),
+        &ANSWERS,
+    )
+    .await
 }
+
+/// ManageSieve's answers to a failed `AUTHENTICATE`.
+const ANSWERS: sasl::Answers = sasl::Answers {
+    cancelled: "NO \"Authentication cancelled\"",
+    bad_base64: "NO \"Invalid base64\"",
+    failed: "NO \"Authentication failed\"",
+    challenge: |text| format!("\"{text}\""),
+};
 
 /// Answers a script command of an authenticated session (full reply text,
 /// CRLF-terminated).
@@ -795,139 +633,26 @@ enum Lex {
     Punct(char),
 }
 
+/// The script's tokens (the shared Sieve lexer; comments dropped, numbers
+/// not needed here).
 fn lex(script: &str) -> Result<Vec<(usize, Lex)>, String> {
-    let chars: Vec<char> = script.chars().collect();
-    let mut out = Vec::new();
-    let mut line = 1usize;
-    let mut i = 0usize;
-    let err = |line: usize, text: &str| Err(format!("line {line}: {text}"));
-    while i < chars.len() {
-        let c = chars[i];
-        match c {
-            '\n' => {
-                line += 1;
-                i += 1;
-            }
-            c if c.is_whitespace() => i += 1,
-            '#' => {
-                while i < chars.len() && chars[i] != '\n' {
-                    i += 1;
-                }
-            }
-            '/' if chars.get(i + 1) == Some(&'*') => {
-                i += 2;
-                loop {
-                    if i + 1 >= chars.len() {
-                        return err(line, "unterminated comment");
-                    }
-                    if chars[i] == '*' && chars[i + 1] == '/' {
-                        i += 2;
-                        break;
-                    }
-                    if chars[i] == '\n' {
-                        line += 1;
-                    }
-                    i += 1;
-                }
-            }
-            '"' => {
-                let start = line;
-                i += 1;
-                let mut s = String::new();
-                loop {
-                    match chars.get(i) {
-                        None => return err(start, "unterminated string"),
-                        Some('"') => {
-                            i += 1;
-                            break;
-                        }
-                        Some('\\') => {
-                            if let Some(n) = chars.get(i + 1) {
-                                s.push(*n);
-                            }
-                            i += 2;
-                        }
-                        Some(ch) => {
-                            if *ch == '\n' {
-                                line += 1;
-                            }
-                            s.push(*ch);
-                            i += 1;
-                        }
-                    }
-                }
-                out.push((start, Lex::Str(s)));
-            }
-            '[' | ']' | '(' | ')' | '{' | '}' | ',' | ';' => {
-                out.push((line, Lex::Punct(c)));
-                i += 1;
-            }
-            ':' => {
-                let start = i;
-                i += 1;
-                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                    i += 1;
-                }
-                if i == start + 1 {
-                    return err(line, "empty tag");
-                }
-                let tag: String = chars[start..i].iter().collect();
-                out.push((line, Lex::Tag(tag.to_ascii_lowercase())));
-            }
-            c if c.is_ascii_digit() => {
-                while i < chars.len() && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                if i < chars.len() && matches!(chars[i], 'K' | 'M' | 'G' | 'k' | 'm' | 'g') {
-                    i += 1;
-                }
-                out.push((line, Lex::Number));
-            }
-            c if c.is_ascii_alphabetic() || c == '_' => {
-                let start = i;
-                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                    i += 1;
-                }
-                let word: String = chars[start..i]
-                    .iter()
-                    .collect::<String>()
-                    .to_ascii_lowercase();
-                if word == "text" && chars.get(i) == Some(&':') {
-                    // Multi-line string: rest of the line, then lines up to ".".
-                    let start_line = line;
-                    i += 1;
-                    while i < chars.len() && chars[i] != '\n' {
-                        i += 1;
-                    }
-                    let mut s = String::new();
-                    loop {
-                        if i >= chars.len() {
-                            return err(start_line, "unterminated multi-line string");
-                        }
-                        // chars[i] == '\n': start of a new line.
-                        i += 1;
-                        line += 1;
-                        let begin = i;
-                        while i < chars.len() && chars[i] != '\n' {
-                            i += 1;
-                        }
-                        let text: String = chars[begin..i].iter().collect();
-                        let text = text.strip_suffix('\r').unwrap_or(&text);
-                        if text == "." {
-                            break;
-                        }
-                        s.push_str(text.strip_prefix('.').unwrap_or(text));
-                        s.push('\n');
-                    }
-                    out.push((start_line, Lex::Str(s)));
-                } else {
-                    out.push((line, Lex::Ident(word)));
-                }
-            }
-            other => return err(line, &format!("unexpected character {other:?}")),
-        }
-    }
-    Ok(out)
+    use nail_util::sieve_lex::{LexError, Tok};
+    let tokens = nail_util::sieve_lex::lex(script)
+        .map_err(|LexError { line, message }| format!("line {line}: {message}"))?;
+    Ok(tokens
+        .into_iter()
+        .filter_map(|(line, token)| {
+            let lex = match token {
+                Tok::Ident(word) => Lex::Ident(word),
+                Tok::Tag(tag) => Lex::Tag(tag),
+                Tok::Number(_) => Lex::Number,
+                Tok::Str(text) => Lex::Str(text),
+                Tok::Punct(c) => Lex::Punct(c),
+                Tok::Comment(_) => return None,
+            };
+            Some((line, lex))
+        })
+        .collect())
 }
 
 /// Checks a script the way the mock server does before storing it:
@@ -1039,6 +764,7 @@ mod tests {
     use super::*;
     use crate::sasl::b64_encode;
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpStream;
 
     fn exts() -> Vec<String> {
         DEFAULT_EXTENSIONS.iter().map(|e| (*e).to_owned()).collect()

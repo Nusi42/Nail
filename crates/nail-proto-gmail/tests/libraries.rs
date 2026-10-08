@@ -7,26 +7,16 @@
 use base64::Engine as _;
 use nail_api::gmail::{GmailCategory, GmailFolder};
 use nail_proto_gmail::testing::MockGmailServer;
+use nail_proto_gmail::{GmailAuth, GmailClient};
 
 #[tokio::test]
 async fn mock_server_answers_the_profile_over_loopback() {
     let server = MockGmailServer::start("ada@gmail.example").await.unwrap();
     assert!(server.addr().ip().is_loopback());
-    let tls = nail_auth::tls_config().expect("ring TLS configuration");
-    let client = nail_auth::http_client_builder(tls).build().unwrap();
-    let profile: serde_json::Value = client
-        .get(format!("{}/profile", server.api_base()))
-        .bearer_auth("token")
-        .send()
-        .await
-        .unwrap()
-        .error_for_status()
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(profile["emailAddress"], "ada@gmail.example");
-    assert_eq!(profile["historyId"], "1000");
+    let client = GmailClient::new(&server.api_base(), GmailAuth::Bearer("token".into())).unwrap();
+    let profile = client.profile().await.unwrap();
+    assert_eq!(profile.email_address, "ada@gmail.example");
+    assert_eq!(profile.history_id, "1000");
 }
 
 #[test]

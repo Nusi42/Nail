@@ -191,26 +191,8 @@ pub(crate) fn restore(
 /// Milliseconds since the epoch as RFC 3339 UTC, e.g.
 /// `2026-09-29T10:15:00.123Z`.
 pub(crate) fn rfc3339(millis: u64) -> String {
-    let secs = millis / 1000;
-    let days = i64::try_from(secs / 86_400).unwrap_or(0);
-    let rem = secs % 86_400;
-    // Howard Hinnant's civil-from-days.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60,
-        millis % 1000
-    )
+    let whole = nail_util::time::rfc3339_utc(i64::try_from(millis / 1000).unwrap_or(0));
+    format!("{}.{:03}Z", whole.trim_end_matches('Z'), millis % 1000)
 }
 
 #[cfg(test)]

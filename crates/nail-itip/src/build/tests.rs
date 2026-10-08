@@ -1,7 +1,7 @@
 use super::*;
 use crate::object::ScheduleAgent;
 use chrono::TimeZone;
-use nail_api::pim::calendar::ParticipationStatus;
+use nail_api::pim::calendar::{AttendeeKind, AttendeeRole, ParticipationStatus};
 use pretty_assertions::assert_eq;
 
 const STORED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail//Nail PIM//EN\r\n\

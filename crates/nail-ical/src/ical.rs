@@ -21,10 +21,7 @@ use base64::Engine as _;
 use chrono::{Datelike, Duration, NaiveTime};
 use chrono_tz::Tz;
 use nail_api::ids::{CalendarId, EventId, TaskId};
-use nail_api::pim::calendar::{
-    AlarmRelated, AlarmRepeat, AttendeeKind, AttendeeRole, EventStatus, ParticipationStatus,
-    Transparency, Visibility,
-};
+use nail_api::pim::calendar::{AlarmRelated, AlarmRepeat, EventStatus, Transparency, Visibility};
 use nail_api::pim::source::PimItemSync;
 use nail_api::pim::task::TaskStatus;
 use nail_api::pim::{
@@ -34,6 +31,7 @@ use nail_api::pim::{
 };
 use sha2::{Digest, Sha256};
 
+use crate::attendee;
 use crate::content::{self, Component, Property};
 use crate::issues::{Issue, IssueKind};
 use crate::recur;
@@ -387,34 +385,13 @@ pub(crate) fn read_organizer(c: &Component) -> Option<Organizer> {
 }
 
 pub(crate) fn read_attendee(p: &Property) -> Attendee {
-    let upper = |name: &str| p.param(name).map(str::to_ascii_uppercase);
-    Attendee {
-        email: strip_mailto(&content::unescape_text(&p.value)),
-        name: p.param("CN").map(str::to_owned).and_then(non_empty),
-        role: match upper("ROLE").as_deref() {
-            Some("CHAIR") => AttendeeRole::Chair,
-            Some("OPT-PARTICIPANT") => AttendeeRole::Optional,
-            Some("NON-PARTICIPANT") => AttendeeRole::NonParticipant,
-            _ => AttendeeRole::Required,
-        },
-        status: match upper("PARTSTAT").as_deref() {
-            Some("ACCEPTED") => ParticipationStatus::Accepted,
-            Some("DECLINED") => ParticipationStatus::Declined,
-            Some("TENTATIVE") => ParticipationStatus::Tentative,
-            Some("DELEGATED") => ParticipationStatus::Delegated,
-            _ => ParticipationStatus::NeedsAction,
-        },
-        kind: match upper("CUTYPE").as_deref() {
-            Some("GROUP") => AttendeeKind::Group,
-            Some("RESOURCE") => AttendeeKind::Resource,
-            Some("ROOM") => AttendeeKind::Room,
-            Some("UNKNOWN") => AttendeeKind::Unknown,
-            _ => AttendeeKind::Individual,
-        },
-        rsvp: upper("RSVP").as_deref() == Some("TRUE"),
-        delegated_to: p.param_values("DELEGATED-TO").map(strip_mailto).collect(),
-        delegated_from: p.param_values("DELEGATED-FROM").map(strip_mailto).collect(),
-    }
+    attendee::read(
+        p,
+        strip_mailto(&content::unescape_text(&p.value)),
+        p.param("CN").map(str::to_owned).and_then(non_empty),
+        |name| p.param(name).map(str::to_ascii_uppercase),
+        |v| Some(strip_mailto(v)),
+    )
 }
 
 pub(crate) fn read_attendees(c: &Component) -> Vec<Attendee> {
@@ -425,13 +402,7 @@ pub(crate) fn read_attendees(c: &Component) -> Vec<Attendee> {
 }
 
 fn read_utc_instant(c: &Component, name: &str) -> Option<String> {
-    let p = c.property(name)?;
-    match time::parse_ical_value(&p.value)? {
-        IcalValue::DateTime { local, .. } => Some(time::format_instant(local.and_utc())),
-        IcalValue::Date(date) => Some(time::format_instant(
-            date.and_time(NaiveTime::MIN).and_utc(),
-        )),
-    }
+    time::value_instant(&c.property(name)?.value)
 }
 
 /// Reads one `VALARM`; `None` for `ACTION:NONE` (RFC 9074) and alarms
@@ -609,24 +580,7 @@ pub(crate) fn read_conferences(c: &Component) -> Vec<ConferenceLink> {
 }
 
 /// Percent-decodes a `mid:` URL's message id (RFC 2392).
-pub(crate) fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && let Some(hex) = text.get(i + 1..i + 3)
-            && let Ok(byte) = u8::from_str_radix(hex, 16)
-        {
-            out.push(byte);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
+pub(crate) use nail_util::percent::decode as percent_decode;
 
 /// Percent-encodes a message id for a `mid:` URL.
 pub(crate) fn percent_encode(text: &str) -> String {
@@ -1007,17 +961,8 @@ pub fn parse_calendar(text: &str, options: ParseOptions) -> ParsedCalendar {
             .push(Issue::new(IssueKind::NotICalendar, None).skipped());
         return out;
     }
-    for issue in &doc.issues {
-        out.issues.push(match issue.kind {
-            content::ContentIssueKind::Unclosed => Issue::new(
-                IssueKind::Unclosed {
-                    component: "VCALENDAR".into(),
-                },
-                Some(issue.line),
-            ),
-            _ => Issue::new(IssueKind::MalformedLine, Some(issue.line)),
-        });
-    }
+    out.issues
+        .extend(doc.issues.iter().map(|i| i.to_issue("VCALENDAR")));
     // A whole document that is exactly one item keeps its text verbatim.
     let single = doc.components.len() == 1;
     let mut index = ItemIndex::default();
@@ -1203,17 +1148,7 @@ fn read_event_group(
     ctx: &Ctx<'_>,
     issues: &mut Vec<Issue>,
 ) -> Option<ParsedEvent> {
-    let masters: Vec<&&Component> = components
-        .iter()
-        .filter(|c| c.property("RECURRENCE-ID").is_none())
-        .collect();
-    if masters.len() > 1 {
-        issues.push(
-            Issue::new(IssueKind::DuplicateUid, Some(masters[1].line))
-                .item(masters[1].text("SUMMARY")),
-        );
-    }
-    let master = masters.last().copied().copied();
+    let master = last_master(components, issues);
     let Some(master) = master else {
         // Only overrides: the first becomes a single event.
         let first = components.first()?;
@@ -1327,21 +1262,7 @@ fn read_task_group(
     ctx: &Ctx<'_>,
     issues: &mut Vec<Issue>,
 ) -> Option<ParsedTask> {
-    let masters: Vec<&&Component> = components
-        .iter()
-        .filter(|c| c.property("RECURRENCE-ID").is_none())
-        .collect();
-    if masters.len() > 1 {
-        issues.push(
-            Issue::new(IssueKind::DuplicateUid, Some(masters[1].line))
-                .item(masters[1].text("SUMMARY")),
-        );
-    }
-    let master = masters
-        .last()
-        .copied()
-        .copied()
-        .or_else(|| components.first().copied())?;
+    let master = last_master(components, issues).or_else(|| components.first().copied())?;
     let fields = read_task_fields(master, ctx);
     let anchor = fields.start.clone().or_else(|| fields.due.clone());
     let recurrence = anchor
@@ -1360,9 +1281,27 @@ fn read_task_group(
     })
 }
 
+/// The last component of a UID without `RECURRENCE-ID` (a second one is
+/// reported as a duplicate UID).
+fn last_master<'a>(components: &[&'a Component], issues: &mut Vec<Issue>) -> Option<&'a Component> {
+    let masters: Vec<&'a Component> = components
+        .iter()
+        .copied()
+        .filter(|c| c.property("RECURRENCE-ID").is_none())
+        .collect();
+    if masters.len() > 1 {
+        issues.push(
+            Issue::new(IssueKind::DuplicateUid, Some(masters[1].line))
+                .item(masters[1].text("SUMMARY")),
+        );
+    }
+    masters.last().copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nail_api::pim::calendar::{AttendeeKind, AttendeeRole, ParticipationStatus};
     use pretty_assertions::assert_eq;
 
     fn cal(body: &str) -> String {
@@ -1550,9 +1489,8 @@ BEGIN:VEVENT\r\nUID:nostart\r\nSUMMARY:No start\r\nEND:VEVENT\r\n",
             ParseOptions::default(),
         );
         assert_eq!(parsed.events.len(), 2);
-        let kinds: Vec<_> = parsed.issues.iter().map(|i| (&i.kind, i.skipped)).collect();
         assert_eq!(
-            kinds,
+            crate::issues::kinds(&parsed.issues),
             [
                 (&IssueKind::MissingUid, false),
                 (&IssueKind::OrphanOverride, false),

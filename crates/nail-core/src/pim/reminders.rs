@@ -159,13 +159,7 @@ pub(crate) fn plan_event(
     if repeats_sub_hourly(event) {
         return Vec::new();
     }
-    let alarms: Vec<Alarm> = event
-        .fields
-        .alarms
-        .iter()
-        .chain(event.overrides.iter().flat_map(|o| o.fields.alarms.iter()))
-        .cloned()
-        .collect();
+    let alarms = nail_ical::alarm::all_alarms(event);
     if alarms.is_empty() {
         return Vec::new();
     }

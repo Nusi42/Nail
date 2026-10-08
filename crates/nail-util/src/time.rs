@@ -5,6 +5,14 @@
 /// Seconds per day.
 pub const SECS_PER_DAY: i64 = 86_400;
 
+/// A fixed instant for tests and fixtures, after every fixture key's
+/// creation: 2026-09-21T14:13:20Z (Unix seconds).
+pub const FIXTURE_NOW: i64 = 1_790_000_000;
+
+/// A second fixed instant for tests, months after [`FIXTURE_NOW`]:
+/// 2027-01-15T08:00:00Z.
+pub const FIXTURE_LATER: i64 = 1_800_000_000;
+
 /// Days since 1970-01-01 of a civil date (`month` 1–12, `day` 1–31; not
 /// validated, out-of-range values roll over like the algorithm does).
 #[must_use]
@@ -40,6 +48,15 @@ pub fn civil_from_days(days: i64) -> (i64, u32, u32) {
     )
 }
 
+/// Days of a common (non-leap) year: a year's span in day-based windows.
+pub const DAYS_PER_YEAR: u16 = 365;
+
+/// The number of days of `year`.
+#[must_use]
+pub fn days_in_year(year: i64) -> i64 {
+    i64::from(DAYS_PER_YEAR) + i64::from(is_leap_year(year))
+}
+
 /// Whether `year` is a leap year.
 #[must_use]
 pub fn is_leap_year(year: i64) -> bool {
@@ -56,6 +73,24 @@ pub fn days_in_month(year: i64, month: u32) -> Option<u32> {
         2 => Some(28),
         _ => None,
     }
+}
+
+/// The weekday of a day number (days since 1970-01-01), counted from
+/// Monday (0 = Monday … 6 = Sunday).
+#[must_use]
+pub fn weekday_from_monday(days: i64) -> u32 {
+    // 1970-01-01 was a Thursday; `rem_euclid` is 0..=6.
+    u32::try_from((days + 3).rem_euclid(7)).unwrap_or_default()
+}
+
+/// The day of the month of the last `weekday` (0 = Monday … 6 = Sunday) of
+/// `month` in `year` (the last Sunday of March: DST rules); `None` for an
+/// invalid month.
+#[must_use]
+pub fn last_weekday_of_month(year: i64, month: u32, weekday: u32) -> Option<u32> {
+    let last = days_in_month(year, month)?;
+    let last_weekday = weekday_from_monday(days_from_civil(year, month, last));
+    Some(last - (last_weekday + 7 - weekday % 7) % 7)
 }
 
 /// The current Unix time in seconds (0 when the clock is before 1970).
@@ -108,10 +143,31 @@ mod tests {
     #[test]
     fn months_and_leap_years() {
         assert!(is_leap_year(2000) && is_leap_year(2028) && !is_leap_year(1900));
+        assert_eq!(days_in_year(2028) - days_in_year(2027), 1);
+        assert_eq!(days_in_year(1900), i64::from(DAYS_PER_YEAR));
         assert_eq!(days_in_month(2026, 2), Some(28));
         assert_eq!(days_in_month(2028, 2), Some(29));
         assert_eq!(days_in_month(2026, 4), Some(30));
         assert_eq!(days_in_month(2026, 13), None);
+    }
+
+    #[test]
+    fn weekdays_and_last_weekdays() {
+        assert_eq!(weekday_from_monday(0), 3, "1970-01-01 was a Thursday");
+        assert_eq!(weekday_from_monday(-1), 2);
+        assert_eq!(weekday_from_monday(days_from_civil(2026, 10, 5)), 0);
+        // EU DST 2026: 29 March and 25 October.
+        assert_eq!(last_weekday_of_month(2026, 3, 6), Some(29));
+        assert_eq!(last_weekday_of_month(2026, 10, 6), Some(25));
+        // The month's last day itself.
+        assert_eq!(last_weekday_of_month(2026, 1, 5), Some(31));
+        assert_eq!(last_weekday_of_month(2026, 13, 6), None);
+    }
+
+    #[test]
+    fn fixture_instants() {
+        assert_eq!(rfc3339_utc(FIXTURE_NOW), "2026-09-21T14:13:20Z");
+        assert_eq!(rfc3339_utc(FIXTURE_LATER), "2027-01-15T08:00:00Z");
     }
 
     #[test]

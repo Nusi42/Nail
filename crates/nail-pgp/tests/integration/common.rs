@@ -10,7 +10,7 @@ use nail_store::Store;
 use nail_testkit::{CryptoFixtures, crypto_fixture};
 
 /// 2026-09-29: after every fixture key's creation, dave's key expired.
-pub(crate) const NOW: i64 = 1_790_000_000;
+pub(crate) use nail_util::time::FIXTURE_NOW as NOW;
 
 pub(crate) fn fixture(name: &str) -> Vec<u8> {
     crypto_fixture(CryptoFixtures::Pgp, name)
@@ -76,4 +76,45 @@ pub(crate) fn subject_and_text(raw: &[u8]) -> (String, String) {
         message.subject().unwrap_or_default().to_owned(),
         message.body_text(0).unwrap_or_default().into_owned(),
     )
+}
+
+/// A `multipart/signed` message with the outer header `outer` whose
+/// signed part is `inner` (header fields + body), signed by `secret`.
+pub(crate) fn signed_part_with(
+    secret: &pgp::composed::SignedSecretKey,
+    outer: &str,
+    inner: &str,
+) -> Vec<u8> {
+    use pgp::composed::{ArmorOptions, DetachedSignature};
+    let signature = DetachedSignature::sign_binary_data(
+        rand::thread_rng(),
+        &secret.primary_key,
+        &pgp::types::Password::empty(),
+        pgp::crypto::hash::HashAlgorithm::Sha256,
+        inner.as_bytes(),
+    )
+    .unwrap()
+    .to_armored_string(ArmorOptions::default())
+    .unwrap();
+    format!(
+        "{outer}Subject: x\r\nMIME-Version: 1.0\r\n\
+Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-signature\"; boundary=\"b\"\r\n\r\n\
+--b\r\n{inner}\r\n--b\r\nContent-Type: application/pgp-signature\r\n\r\n{}\r\n--b--\r\n",
+        signature.replace('\n', "\r\n")
+    )
+    .into_bytes()
+}
+
+/// One valid signature by the displayed sender, headers protected.
+pub(crate) fn assert_signed_by_sender(status: &SecurityStatus) {
+    assert_eq!(status.signatures.len(), 1);
+    assert_eq!(
+        status.signatures[0].state,
+        nail_api::security::SignatureState::Valid
+    );
+    assert!(status.signatures[0].signer_matches_from);
+    assert_eq!(
+        status.header_protection,
+        nail_api::security::HeaderProtection::Protected
+    );
 }

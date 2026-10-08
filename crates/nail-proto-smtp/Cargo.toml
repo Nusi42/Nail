@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+nail-net.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true

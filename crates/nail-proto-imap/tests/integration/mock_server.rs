@@ -9,7 +9,7 @@ use nail_proto_imap::{
 };
 use nail_testkit::{MailStore, MockImapConfig, MockImapServer, MockTls, NO_FLAGS, demo_corpus};
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+use crate::common::TIMEOUT;
 
 async fn demo_server() -> MockImapServer {
     MockImapServer::start(MockImapConfig::default(), MailStore::demo())

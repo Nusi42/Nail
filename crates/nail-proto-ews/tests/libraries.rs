@@ -1,6 +1,6 @@
 //! Smoke tests of what WP92 builds on (WP90, ADR 0072): the workspace
 //! reqwest with the ring TLS configuration from nail-auth posts a SOAP
-//! envelope to the loopback mock server, quick-xml reads the answer,
+//! envelope to the loopback mock server, the crate's XML tree reads the answer,
 //! `MimeContent` is base64, and the contract maps EWS colour indexes and
 //! distinguished folders.
 #![cfg(test)]
@@ -8,32 +8,23 @@
 use base64::Engine as _;
 use nail_api::exchange::{CategoryColor, ExchangeWellKnownFolder};
 use nail_proto_ews::testing::MockEwsServer;
-use quick_xml::Reader;
-use quick_xml::events::Event;
-
-/// The text of the first element named `local` (any namespace).
+/// The text of the first element named `local` (any namespace), the
+/// element itself included.
 fn first_text(xml: &str, local: &str) -> Option<String> {
-    let mut reader = Reader::from_str(xml);
-    let mut inside = false;
-    loop {
-        match reader.read_event().ok()? {
-            Event::Start(start) => {
-                inside = AsRef::<str>::as_ref(&start.local_name()) == local;
-            }
-            Event::Text(text) if inside => return Some(text.xml10_content().into_owned()),
-            Event::End(_) => inside = false,
-            Event::Eof => return None,
-            _ => {}
-        }
-    }
+    let root = nail_proto_ews::xml::parse(xml).ok()?;
+    let found = if root.name == local {
+        Some(&root)
+    } else {
+        root.find(local)
+    };
+    found.map(|e| e.text.clone())
 }
 
 #[tokio::test]
 async fn mock_server_answers_soap_over_loopback() {
     let server = MockEwsServer::start().await.unwrap();
     assert!(server.addr().ip().is_loopback());
-    let tls = nail_auth::tls_config().expect("ring TLS configuration");
-    let client = nail_auth::http_client_builder(tls).build().unwrap();
+    let client = nail_auth::http_client().unwrap();
     let body = nail_proto_ews::envelope(
         nail_proto_ews::DEFAULT_SERVER_VERSION,
         r#"<m:GetFolder><m:FolderShape><t:BaseShape>Default</t:BaseShape></m:FolderShape><m:FolderIds><t:DistinguishedFolderId Id="inbox"/></m:FolderIds></m:GetFolder>"#,

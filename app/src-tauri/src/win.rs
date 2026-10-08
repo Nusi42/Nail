@@ -82,15 +82,14 @@ pub fn server_pipe_sddl(user_sid: &str) -> String {
     pipe_sddl_at(user_sid, integrity_label(rid))
 }
 
-/// The current process's integrity level RID (`0x2000` medium, `0x3000`
-/// high, …).
+/// One class of information about the current process's token, in a
+/// buffer of `u64`s (aligned for the structure the class returns).
 #[cfg(windows)]
-pub fn current_integrity_rid() -> Result<u32, String> {
+fn process_token_information(
+    class: windows::Win32::Security::TOKEN_INFORMATION_CLASS,
+) -> Result<Vec<u64>, String> {
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
-    use windows::Win32::Security::{
-        GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation, TOKEN_MANDATORY_LABEL,
-        TOKEN_QUERY, TokenIntegrityLevel,
-    };
+    use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY};
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
     let mut token = HANDLE::default();
@@ -100,8 +99,9 @@ pub fn current_integrity_rid() -> Result<u32, String> {
         .map_err(|e| format!("OpenProcessToken: {e}"))?;
     let result = (|| {
         let mut len = 0u32;
-        // SAFETY: a size query (no buffer).
-        drop(unsafe { GetTokenInformation(token, TokenIntegrityLevel, None, 0, &raw mut len) });
+        // SAFETY: a size query (no buffer); it fails with
+        // ERROR_INSUFFICIENT_BUFFER and sets `len`.
+        drop(unsafe { GetTokenInformation(token, class, None, 0, &raw mut len) });
         if len == 0 {
             return Err("GetTokenInformation returned no size".to_owned());
         }
@@ -110,28 +110,40 @@ pub fn current_integrity_rid() -> Result<u32, String> {
         unsafe {
             GetTokenInformation(
                 token,
-                TokenIntegrityLevel,
+                class,
                 Some(buffer.as_mut_ptr().cast()),
                 len,
                 &raw mut len,
             )
         }
         .map_err(|e| format!("GetTokenInformation: {e}"))?;
-        // SAFETY: the call filled the buffer with a TOKEN_MANDATORY_LABEL
-        // whose SID points into it; the last sub-authority is the level.
-        unsafe {
-            let label = &*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>();
-            let sid = label.Label.Sid;
-            let count = *GetSidSubAuthorityCount(sid);
-            if count == 0 {
-                return Err("integrity SID without sub-authority".to_owned());
-            }
-            Ok(*GetSidSubAuthority(sid, u32::from(count) - 1))
-        }
+        Ok(buffer)
     })();
     // SAFETY: the token handle opened above.
     drop(unsafe { CloseHandle(token) });
     result
+}
+
+/// The current process's integrity level RID (`0x2000` medium, `0x3000`
+/// high, …).
+#[cfg(windows)]
+pub fn current_integrity_rid() -> Result<u32, String> {
+    use windows::Win32::Security::{
+        GetSidSubAuthority, GetSidSubAuthorityCount, TOKEN_MANDATORY_LABEL, TokenIntegrityLevel,
+    };
+
+    let buffer = process_token_information(TokenIntegrityLevel)?;
+    // SAFETY: the call filled the buffer with a TOKEN_MANDATORY_LABEL whose
+    // SID points into it; the last sub-authority is the level.
+    unsafe {
+        let label = &*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>();
+        let sid = label.Label.Sid;
+        let count = *GetSidSubAuthorityCount(sid);
+        if count == 0 {
+            return Err("integrity SID without sub-authority".to_owned());
+        }
+        Ok(*GetSidSubAuthority(sid, u32::from(count) - 1))
+    }
 }
 
 /// Not on this system.
@@ -143,54 +155,24 @@ pub fn current_integrity_rid() -> Result<u32, String> {
 /// The current process's user SID as a string (`S-1-5-21-…`).
 #[cfg(windows)]
 pub fn current_user_sid() -> Result<String, String> {
-    use windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, LocalFree};
+    use windows::Win32::Foundation::{HLOCAL, LocalFree};
     use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
-    use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
-    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows::Win32::Security::{TOKEN_USER, TokenUser};
     use windows::core::PWSTR;
 
-    let mut token = HANDLE::default();
-    // SAFETY: the pseudo handle of the current process; `token` receives a
-    // handle closed below.
-    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) }
-        .map_err(|e| format!("OpenProcessToken: {e}"))?;
-    let result = (|| {
-        let mut len = 0u32;
-        // SAFETY: a size query (no buffer); it fails with
-        // ERROR_INSUFFICIENT_BUFFER and sets `len`.
-        drop(unsafe { GetTokenInformation(token, TokenUser, None, 0, &raw mut len) });
-        if len == 0 {
-            return Err("GetTokenInformation returned no size".to_owned());
-        }
-        // u64 elements keep the TOKEN_USER suitably aligned.
-        let mut buffer = vec![0u64; (len as usize).div_ceil(8)];
-        // SAFETY: the buffer holds at least `len` bytes.
-        unsafe {
-            GetTokenInformation(
-                token,
-                TokenUser,
-                Some(buffer.as_mut_ptr().cast()),
-                len,
-                &raw mut len,
-            )
-        }
-        .map_err(|e| format!("GetTokenInformation: {e}"))?;
-        // SAFETY: the call filled the buffer with a TOKEN_USER.
-        let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-        let mut text = PWSTR::null();
-        // SAFETY: the SID points into `buffer`, alive here; `text` is
-        // freed with LocalFree.
-        unsafe { ConvertSidToStringSidW(user.User.Sid, &raw mut text) }
-            .map_err(|e| format!("ConvertSidToStringSidW: {e}"))?;
-        // SAFETY: a NUL-terminated string from the call above.
-        let sid = unsafe { text.to_string() }.map_err(|e| e.to_string());
-        // SAFETY: allocated by ConvertSidToStringSidW.
-        unsafe { LocalFree(Some(HLOCAL(text.0.cast()))) };
-        sid
-    })();
-    // SAFETY: the token handle opened above.
-    drop(unsafe { CloseHandle(token) });
-    result
+    let buffer = process_token_information(TokenUser)?;
+    // SAFETY: the call filled the buffer with a TOKEN_USER.
+    let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+    let mut text = PWSTR::null();
+    // SAFETY: the SID points into `buffer`, alive here; `text` is freed
+    // with LocalFree.
+    unsafe { ConvertSidToStringSidW(user.User.Sid, &raw mut text) }
+        .map_err(|e| format!("ConvertSidToStringSidW: {e}"))?;
+    // SAFETY: a NUL-terminated string from the call above.
+    let sid = unsafe { text.to_string() }.map_err(|e| e.to_string());
+    // SAFETY: allocated by ConvertSidToStringSidW.
+    unsafe { LocalFree(Some(HLOCAL(text.0.cast()))) };
+    sid
 }
 
 /// Not on this system.

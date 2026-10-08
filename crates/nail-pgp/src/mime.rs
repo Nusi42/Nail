@@ -193,10 +193,7 @@ impl ContentType {
 
     /// A parameter (case-insensitive name).
     pub(crate) fn param(&self, name: &str) -> Option<&str> {
-        self.params
-            .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        nail_util::named::first(&self.params, name)
     }
 
     /// Whether this is `mime` (lowercase).
@@ -223,12 +220,7 @@ pub(crate) fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Option<Mult
     // (start of the delimiter line, start of the line break before it,
     // end of the delimiter line incl. its break, is close delimiter)
     let mut marks: Vec<(usize, usize, bool)> = Vec::new();
-    let mut line_start = 0;
-    while line_start <= body.len() {
-        let line_end = body[line_start..]
-            .iter()
-            .position(|b| *b == b'\n')
-            .map_or(body.len(), |p| line_start + p);
+    for (line_start, line_end) in nail_util::mime_text::lines(body) {
         let line = &body[line_start..line_end];
         let line = line.strip_suffix(b"\r").unwrap_or(line);
         if let Some(rest) = line.strip_prefix(delimiter) {
@@ -252,10 +244,6 @@ pub(crate) fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Option<Mult
                 }
             }
         }
-        if line_end >= body.len() {
-            break;
-        }
-        line_start = line_end + 1;
     }
     let (first_before, _, _) = *marks.first()?;
     let mut parts = Vec::new();

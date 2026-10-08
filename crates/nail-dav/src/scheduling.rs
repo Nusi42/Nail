@@ -653,37 +653,7 @@ pub async fn process_inbox(
 
 /// `SCHEDULE-AGENT` (RFC 6638 §7.1): who delivers iTIP messages for a
 /// calendar user.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ScheduleAgent {
-    /// The server (the default).
-    #[default]
-    Server,
-    /// The client (Nail sends iMIP itself).
-    Client,
-    /// Nobody (handled out of band).
-    None,
-}
-
-impl ScheduleAgent {
-    /// Parses the parameter value; unknown values are `SERVER` (RFC 6638
-    /// §7.1: unknown values are treated as the default).
-    pub fn parse(value: Option<&str>) -> Self {
-        match value.map(|v| v.trim().to_ascii_uppercase()).as_deref() {
-            Some("CLIENT") => Self::Client,
-            Some("NONE") => Self::None,
-            _ => Self::Server,
-        }
-    }
-
-    /// The parameter value.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Server => "SERVER",
-            Self::Client => "CLIENT",
-            Self::None => "NONE",
-        }
-    }
-}
+pub use nail_api::scheduling::ScheduleAgent;
 
 /// Delivery state of one `SCHEDULE-STATUS` code (RFC 6638 §3.2.9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

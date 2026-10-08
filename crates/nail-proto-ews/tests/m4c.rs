@@ -5,30 +5,18 @@
 //! conversation ids as thread ids.
 #![cfg(test)]
 
-use std::time::Duration;
-
 use nail_api::ErrorCode;
 use nail_api::accounts::SendingMailbox;
 use nail_api::domain::Flags;
-use nail_api::engine::{DeltaOutcome, Envelope, OutgoingTransport};
+use nail_api::engine::{Envelope, OutgoingTransport};
 use nail_api::exchange::engine::ExchangeMailEngine;
-use nail_proto_ews::client::{CALL_TIMEOUT, lane_http};
+use nail_proto_ews::EwsEngine;
 use nail_proto_ews::mail::header_block;
 use nail_proto_ews::testing::{MockEwsServer, OWN_ADDRESS, PRIVATE_ADDRESS, SHARED_ADDRESS};
-use nail_proto_ews::{EwsAuth, EwsClient, EwsEngine, RetryPolicy};
 use pretty_assertions::assert_eq;
 
 fn engine(server: &MockEwsServer) -> EwsEngine {
-    let client = EwsClient::with_http(
-        lane_http(CALL_TIMEOUT).unwrap(),
-        lane_http(Duration::from_mins(2)).unwrap(),
-        &server.url(),
-        EwsAuth::None,
-    )
-    .unwrap()
-    .with_own_address(OWN_ADDRESS)
-    .with_retry(RetryPolicy::fast());
-    EwsEngine::new(client, "corp".into())
+    server.engine("corp").unwrap()
 }
 
 fn message(from: &str, sender: Option<&str>, subject: &str) -> Vec<u8> {
@@ -247,17 +235,8 @@ async fn moves_between_mailboxes() {
 async fn conversation_ids_are_thread_ids() {
     let server = MockEwsServer::start().await.unwrap();
     let engine = engine(&server);
-    let DeltaOutcome::Delta(delta) = engine
-        .folder_items(None, "inbox", None, None)
-        .await
-        .unwrap()
-    else {
-        panic!("delta");
-    };
-    assert!(!delta.added.is_empty(), "{:?}", delta.added);
-    for m in &delta.added {
-        let conversation = m.exchange.as_ref().and_then(|e| e.conversation_id.clone());
-        assert_eq!(m.thread_id, conversation);
-    }
-    assert!(delta.added.iter().any(|m| m.thread_id.is_some()));
+    nail_testkit::exchange::assert_conversation_threads(
+        engine.folder_items(None, "inbox", None, None).await,
+        false,
+    );
 }

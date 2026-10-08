@@ -22,7 +22,31 @@
 
 #![warn(missing_docs)]
 
+/// The `STANDARD` / `DAYLIGHT` rules of Central European Time as Windows
+/// calendars write them (a test fixture shared by several modules; a
+/// macro so `concat!` can splice it into a fixture literal).
+#[cfg(test)]
+macro_rules! cet_rules {
+    () => {
+        "BEGIN:STANDARD\r\n\
+DTSTART:16011028T030000\r\n\
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n\
+TZOFFSETFROM:+0200\r\n\
+TZOFFSETTO:+0100\r\n\
+END:STANDARD\r\n\
+BEGIN:DAYLIGHT\r\n\
+DTSTART:16010325T020000\r\n\
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n\
+TZOFFSETFROM:+0100\r\n\
+TZOFFSETTO:+0200\r\n\
+END:DAYLIGHT\r\n"
+    };
+}
+#[cfg(test)]
+pub(crate) use cet_rules;
+
 pub mod alarm;
+pub mod attendee;
 pub mod content;
 pub mod edit;
 pub mod expand;

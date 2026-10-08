@@ -292,7 +292,7 @@ mod tests {
     use super::*;
     use nail_api::plugins::{PluginManifest, PluginPackageSource};
 
-    const NOW: i64 = 1_790_000_000;
+    use nail_util::time::FIXTURE_NOW as NOW;
 
     fn store_with_plugin() -> (Store, PluginId) {
         let store = Store::open_in_memory().unwrap();

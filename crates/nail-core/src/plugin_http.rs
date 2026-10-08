@@ -30,8 +30,8 @@ use nail_proxy::{Resolver, SystemResolver, is_public_ip};
 use reqwest::header::{HeaderName, HeaderValue};
 use url::{Host, Url};
 
-/// Redirects followed per request.
-pub(crate) const MAX_REDIRECTS: u8 = 5;
+/// Redirects followed per request (the same limit as every HTTP client).
+pub(crate) use nail_net::http::MAX_REDIRECTS;
 
 /// `User-Agent` of plug-in requests.
 pub(crate) const USER_AGENT: &str = "Nail-Plugin";
@@ -147,7 +147,7 @@ impl PluginHttp {
         url.set_fragment(None);
         let mut method = request.method.clone();
         let mut body = request.body.clone();
-        let mut redirects = 0_u8;
+        let mut redirects = 0_usize;
         loop {
             check_hop(&url, &request.allowed_hosts)?;
             let response = self.hop(&url, &method, &request, body.clone()).await?;
@@ -266,16 +266,7 @@ async fn read(mut response: reqwest::Response, max: u64) -> Result<HttpResponse,
         return Err(too_large());
     }
     let status = response.status().as_u16();
-    let headers = response
-        .headers()
-        .iter()
-        .filter_map(|(name, value)| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| (name.as_str().to_ascii_lowercase(), v.to_owned()))
-        })
-        .collect();
+    let headers = nail_net::http::header_pairs(response.headers());
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| network(e.to_string()))? {
         if body.len() as u64 + chunk.len() as u64 > max {

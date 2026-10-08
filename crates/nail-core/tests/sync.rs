@@ -2,8 +2,6 @@
 
 #![cfg(test)]
 
-use std::time::Duration;
-
 use nail_api::{Account, AccountId, AccountKind, ErrorCode, Event, FolderRole, Request, Response};
 use nail_core::{ImapAccount, Service, ServiceOptions};
 use nail_proto_imap::{Credentials, FetchBatchLimits, ImapConfig, Security};
@@ -12,7 +10,7 @@ use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+use nail_testkit::TEST_TIMEOUT as TIMEOUT;
 
 struct Fixture {
     service: Service,

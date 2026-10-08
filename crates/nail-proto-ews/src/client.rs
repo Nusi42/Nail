@@ -19,7 +19,8 @@ use std::time::Duration;
 use base64::Engine as _;
 use nail_api::ErrorCode;
 use nail_api::exchange::engine::{NegotiateStep, http_spn};
-use reqwest::header::{HeaderMap, HeaderValue};
+use nail_net::http::{self, Retries, TransportFailure as _, status};
+use reqwest::header::HeaderValue;
 use tokio::sync::OwnedMutexGuard;
 use url::Url;
 
@@ -32,85 +33,20 @@ use crate::soap::{
 
 /// Largest answer read (a 100 MB message as base64 `MimeContent` stays
 /// below).
-pub const MAX_RESPONSE: usize = 160 * 1024 * 1024;
+pub use nail_net::http::MAX_EXCHANGE_ANSWER as MAX_RESPONSE;
 
 /// How long an ordinary call may take.
 pub const CALL_TIMEOUT: Duration = Duration::from_mins(2);
 
-/// Inline retries of throttling and server errors: exponential backoff
-/// from `base_delay` up to `max_delay`, or the server's
-/// `BackOffMilliseconds` / `Retry-After`. A wait longer than
-/// `max_inline_wait` is not slept here: the error goes to the caller with
-/// [`EwsError::retry_after_secs`] (the core's loop waits instead).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RetryPolicy {
-    /// Retries after the first attempt.
-    pub max_retries: u32,
-    /// The first backoff.
-    pub base_delay: Duration,
-    /// The longest backoff.
-    pub max_delay: Duration,
-    /// The longest wait slept inline.
-    pub max_inline_wait: Duration,
-}
-
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        Self {
-            max_retries: 4,
-            base_delay: Duration::from_millis(500),
-            max_delay: Duration::from_secs(16),
-            max_inline_wait: Duration::from_secs(30),
-        }
-    }
-}
-
-impl RetryPolicy {
-    /// Millisecond backoffs, for tests.
-    pub fn fast() -> Self {
-        Self {
-            max_retries: 3,
-            base_delay: Duration::from_millis(2),
-            max_delay: Duration::from_millis(10),
-            max_inline_wait: Duration::from_secs(2),
-        }
-    }
-
-    /// No inline retries at all.
-    pub fn none() -> Self {
-        Self {
-            max_retries: 0,
-            ..Self::fast()
-        }
-    }
-
-    /// The backoff before retry number `attempt` (0-based): doubling from
-    /// the base, capped, plus up to a quarter of jitter.
-    pub fn backoff(&self, attempt: u32) -> Duration {
-        let factor = 1u32.checked_shl(attempt.min(20)).unwrap_or(u32::MAX);
-        let delay = self.base_delay.saturating_mul(factor).min(self.max_delay);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.subsec_nanos());
-        let jitter = delay / 4 * (nanos % 1000) / 1000;
-        (delay + jitter).min(self.max_delay.max(delay))
-    }
-}
+/// Inline retries of throttling and server errors: exponential backoff, or
+/// the server's `BackOffMilliseconds` / `Retry-After`. A longer wait goes
+/// to the caller with [`EwsError::retry_after_secs`] (the core's loop
+/// waits instead).
+pub use nail_net::http::RetryPolicy;
 
 /// Whether the client may talk to `url`: `https:`, or `http:` to a
 /// loopback host (the mock server; ADR 0057 / 0072).
-pub fn is_allowed_url(url: &Url) -> bool {
-    match url.scheme() {
-        "https" => true,
-        "http" => match url.host() {
-            Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
-            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-            None => false,
-        },
-        _ => false,
-    }
-}
+pub use nail_net::http::is_allowed_url;
 
 /// One EWS operation as the client sends it.
 #[derive(Debug, Clone)]
@@ -337,50 +273,34 @@ impl EwsClient {
     /// faults and HTTP errors as [`EwsError`]s. Response messages are
     /// left to the caller (except `ErrorServerBusy`, which is retried).
     pub async fn call(&self, op: &Operation<'_>) -> Result<SoapResponse, EwsError> {
-        let retry = self.inner.retry;
-        let mut attempt = 0u32;
+        let mut tries = Retries::new(self.inner.retry);
         let mut downgraded = false;
         loop {
             let envelope = soap::envelope_with(self.request_version(), op.time_zone, &op.body);
-            let sent = self
+            let read = match self
                 .send(&self.inner.main, &envelope, op, CALL_TIMEOUT)
-                .await;
-            let (status, headers, text) = match sent {
+                .await
+            {
                 Ok((response, guard)) => {
                     let status = response.status().as_u16();
-                    let headers = response.headers().clone();
+                    let retry_after = http::retry_after_secs(response.headers());
                     let body = read_body(response, op.what).await;
                     drop(guard);
-                    match body {
-                        Ok(text) => (status, headers, text),
-                        Err(e) => {
-                            if is_transport(&e) && op.idempotent && attempt < retry.max_retries {
-                                tokio::time::sleep(retry.backoff(attempt)).await;
-                                attempt += 1;
-                                continue;
-                            }
-                            return Err(e);
-                        }
-                    }
+                    body.map(|text| (status, retry_after, text))
                 }
-                Err(e) => {
-                    if is_transport(&e) && op.idempotent && attempt < retry.max_retries {
-                        tokio::time::sleep(retry.backoff(attempt)).await;
-                        attempt += 1;
-                        continue;
-                    }
-                    return Err(e);
-                }
+                Err(e) => Err(e),
             };
-            let retry_after = retry_after_secs(&headers);
+            let (status, retry_after, text) = match read {
+                Ok(answer) => answer,
+                Err(e) if e.is_transport() && op.idempotent && tries.backoff().await => continue,
+                Err(e) => return Err(e),
+            };
             match status {
                 200..=299 | 500 => {
                     let answer = match soap::parse_answer(&text) {
                         Ok(answer) => answer,
                         Err(_) if status == 500 => {
-                            if op.idempotent && attempt < retry.max_retries {
-                                tokio::time::sleep(retry.backoff(attempt)).await;
-                                attempt += 1;
+                            if op.idempotent && tries.backoff().await {
                                 continue;
                             }
                             return Err(EwsError::Unavailable(
@@ -395,10 +315,9 @@ impl EwsClient {
                             self.note_version(response.server_version.as_ref());
                             if let Some(ms) = busy_back_off(&response.body) {
                                 let wait = Duration::from_millis(ms);
-                                if wait <= retry.max_inline_wait && attempt < retry.max_retries {
+                                if tries.allows(wait) {
                                     tracing::debug!(what = op.what, ?wait, "EWS server busy");
-                                    tokio::time::sleep(wait).await;
-                                    attempt += 1;
+                                    tries.sleep(wait).await;
                                     continue;
                                 }
                                 return Err(EwsError::RateLimited(Some(
@@ -430,18 +349,15 @@ impl EwsClient {
                                     || Duration::from_secs(u64::from(secs.unwrap_or(1))),
                                     Duration::from_millis,
                                 );
-                                if wait <= retry.max_inline_wait && attempt < retry.max_retries {
+                                if tries.allows(wait) {
                                     tracing::debug!(what = op.what, ?wait, "EWS server busy");
-                                    tokio::time::sleep(wait).await;
-                                    attempt += 1;
+                                    tries.sleep(wait).await;
                                     continue;
                                 }
                             } else if matches!(error, EwsError::Unavailable(..))
                                 && op.idempotent
-                                && attempt < retry.max_retries
+                                && tries.backoff().await
                             {
-                                tokio::time::sleep(retry.backoff(attempt)).await;
-                                attempt += 1;
                                 continue;
                             }
                             return Err(error);
@@ -456,19 +372,16 @@ impl EwsClient {
                         message: format!("no EWS endpoint at {}", self.inner.url),
                     });
                 }
-                413 => return Err(EwsError::TooLarge(format!("request of {}", op.what))),
-                429 | 502..=504 => {
-                    let wait = retry_after.map_or_else(
-                        || retry.backoff(attempt),
-                        |s| Duration::from_secs(u64::from(s)),
-                    );
-                    let may_retry = status == 429 || op.idempotent;
-                    if may_retry && wait <= retry.max_inline_wait && attempt < retry.max_retries {
-                        tokio::time::sleep(wait).await;
-                        attempt += 1;
+                status::CONTENT_TOO_LARGE => {
+                    return Err(EwsError::TooLarge(format!("request of {}", op.what)));
+                }
+                status::TOO_MANY_REQUESTS | 502..=status::GATEWAY_TIMEOUT => {
+                    let may_retry = status == status::TOO_MANY_REQUESTS || op.idempotent;
+                    if may_retry && let Some(wait) = tries.wait(retry_after) {
+                        tries.sleep(wait).await;
                         continue;
                     }
-                    return Err(if status == 429 {
+                    return Err(if status == status::TOO_MANY_REQUESTS {
                         EwsError::RateLimited(retry_after)
                     } else {
                         EwsError::Unavailable(format!("HTTP {status} to {}", op.what), retry_after)
@@ -497,13 +410,13 @@ impl EwsClient {
             .await?;
         let status = response.status().as_u16();
         if !(200..300).contains(&status) && status != 500 {
-            let retry_after = retry_after_secs(response.headers());
+            let retry_after = http::retry_after_secs(response.headers());
             drop(read_body(response, op.what).await);
             return Err(match status {
                 401 => EwsError::AuthFailed,
                 403 => EwsError::Forbidden(format!("HTTP 403 to {}", op.what)),
-                429 => EwsError::RateLimited(retry_after),
-                502..=504 => {
+                status::TOO_MANY_REQUESTS => EwsError::RateLimited(retry_after),
+                502..=status::GATEWAY_TIMEOUT => {
                     EwsError::Unavailable(format!("HTTP {status} to {}", op.what), retry_after)
                 }
                 _ => EwsError::Status {
@@ -635,18 +548,19 @@ impl EwsClient {
             .header(reqwest::header::ACCEPT, "text/xml")
             .body(envelope.to_owned());
         if let Some(value) = authorization {
-            let mut value = HeaderValue::from_str(&value).map_err(|_| {
+            request = http::with_authorization(request, &value).ok_or_else(|| {
                 EwsError::Protocol("the credentials are not valid header text".into())
             })?;
-            value.set_sensitive(true);
-            request = request.header(reqwest::header::AUTHORIZATION, value);
         }
         if let Some(anchor) = anchor
             && let Ok(value) = HeaderValue::from_str(anchor)
         {
             request = request.header("X-AnchorMailbox", value);
         }
-        request.send().await.map_err(transport_error)
+        request
+            .send()
+            .await
+            .map_err(|e| EwsError::from(http::transport_error(e)))
     }
 }
 
@@ -684,10 +598,6 @@ fn negotiate_error(error: nail_api::engine::EngineError) -> EwsError {
     }
 }
 
-fn is_transport(error: &EwsError) -> bool {
-    matches!(error, EwsError::Network(_) | EwsError::Timeout)
-}
-
 /// `BackOffMilliseconds` when the answer's response messages say
 /// `ErrorServerBusy`.
 fn busy_back_off(body: &crate::xml::Element) -> Option<u64> {
@@ -703,19 +613,9 @@ fn busy_back_off(body: &crate::xml::Element) -> Option<u64> {
 }
 
 async fn read_body(mut response: reqwest::Response, what: &str) -> Result<String, EwsError> {
-    if response
-        .content_length()
-        .is_some_and(|l| l > MAX_RESPONSE as u64)
-    {
-        return Err(EwsError::TooLarge(format!("answer to {what}")));
-    }
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err(EwsError::TooLarge(format!("answer to {what}")));
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = http::read_limited(&mut response, MAX_RESPONSE)
+        .await
+        .map_err(|e| EwsError::from_body(e, &format!("answer to {what}")))?;
     Ok(match String::from_utf8(body) {
         Ok(text) => text,
         Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
@@ -750,7 +650,11 @@ impl EnvelopeStream {
             let Some(response) = self.response.as_mut() else {
                 return Ok(None);
             };
-            if let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+            if let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| EwsError::from(http::transport_error(e)))?
+            {
                 self.read += chunk.len();
                 if self.read > MAX_RESPONSE {
                     return Err(EwsError::TooLarge("streaming answer".to_owned()));
@@ -776,55 +680,9 @@ impl EnvelopeStream {
     }
 }
 
-/// The `Retry-After` header in seconds (delta seconds or an HTTP date).
-pub(crate) fn retry_after_secs(headers: &HeaderMap) -> Option<u32> {
-    let value = headers
-        .get(reqwest::header::RETRY_AFTER)?
-        .to_str()
-        .ok()?
-        .trim();
-    parse_retry_after(value, chrono::Utc::now())
-}
-
-/// Parses a `Retry-After` value relative to `now`.
-pub(crate) fn parse_retry_after(value: &str, now: chrono::DateTime<chrono::Utc>) -> Option<u32> {
-    if let Ok(secs) = value.parse::<u64>() {
-        return Some(u32::try_from(secs).unwrap_or(u32::MAX));
-    }
-    let date = chrono::DateTime::parse_from_rfc2822(value).ok()?;
-    let secs = (date.with_timezone(&chrono::Utc) - now)
-        .num_seconds()
-        .max(0);
-    Some(u32::try_from(secs).unwrap_or(u32::MAX))
-}
-
-/// Maps a reqwest error to an [`EwsError`] (TLS problems are told apart by
-/// their source chain).
-fn transport_error(error: reqwest::Error) -> EwsError {
-    let error = error.without_url();
-    if error.is_timeout() {
-        return EwsError::Timeout;
-    }
-    let mut chain = String::new();
-    let mut source: Option<&dyn std::error::Error> = Some(&error);
-    while let Some(e) = source {
-        chain.push_str(&e.to_string());
-        chain.push_str(": ");
-        source = e.source();
-    }
-    let chain = chain.trim_end_matches(": ").to_owned();
-    let lower = chain.to_ascii_lowercase();
-    if lower.contains("certificate") || lower.contains("tls") || lower.contains("handshake") {
-        EwsError::Tls(chain)
-    } else {
-        EwsError::Network(chain)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone as _;
 
     fn client(url: &str) -> Result<EwsClient, EwsError> {
         EwsClient::with_http(
@@ -837,25 +695,11 @@ mod tests {
 
     #[test]
     fn url_policy() {
-        for ok in [
-            "https://mail.corp.example/EWS/Exchange.asmx",
-            "http://127.0.0.1:8080/EWS/Exchange.asmx",
-            "http://localhost/EWS/Exchange.asmx",
-            "http://[::1]:9/EWS/Exchange.asmx",
-        ] {
-            assert!(client(ok).is_ok(), "{ok}");
-        }
-        for bad in [
-            "http://mail.corp.example/EWS/Exchange.asmx",
-            "http://10.0.0.1/EWS/Exchange.asmx",
-            "ftp://mail.corp.example/",
-            "not a url",
-        ] {
-            assert!(
-                matches!(client(bad), Err(EwsError::InsecureUrl(_))),
-                "{bad}"
-            );
-        }
+        assert!(client("https://mail.corp.example/EWS/Exchange.asmx").is_ok());
+        assert!(client("http://[::1]:9/EWS/Exchange.asmx").is_ok());
+        let insecure = client("http://mail.corp.example/EWS/Exchange.asmx");
+        assert!(matches!(insecure, Err(EwsError::InsecureUrl(_))));
+        assert!(matches!(client("not a url"), Err(EwsError::InsecureUrl(_))));
         let c = client("https://Mail.Corp.Example/EWS/Exchange.asmx#x").unwrap();
         assert_eq!(c.inner.spn, "HTTP/mail.corp.example");
         assert_eq!(c.url().fragment(), None);
@@ -877,31 +721,6 @@ mod tests {
         assert_eq!(changed.retry_policy(), RetryPolicy::fast());
         assert_eq!(c.retry_policy().max_retries, 0);
         assert_eq!(changed.own_address(), Some("ada@corp.example"));
-    }
-
-    #[test]
-    fn retry_after_values() {
-        let now = chrono::Utc.with_ymd_and_hms(2026, 10, 1, 12, 0, 0).unwrap();
-        assert_eq!(parse_retry_after("120", now), Some(120));
-        assert_eq!(
-            parse_retry_after("Thu, 01 Oct 2026 12:01:30 GMT", now),
-            Some(90)
-        );
-        assert_eq!(parse_retry_after("soon", now), None);
-    }
-
-    #[test]
-    fn backoff_doubles_up_to_the_cap() {
-        let policy = RetryPolicy {
-            max_retries: 5,
-            base_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(1),
-            max_inline_wait: Duration::from_secs(5),
-        };
-        let first = policy.backoff(0);
-        assert!(first >= Duration::from_millis(100) && first <= Duration::from_millis(125));
-        assert_eq!(policy.backoff(10), Duration::from_secs(1));
-        assert_eq!(policy.backoff(u32::MAX), Duration::from_secs(1));
     }
 
     #[test]

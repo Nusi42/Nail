@@ -8,15 +8,12 @@
 
 use std::borrow::Cow;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Poll;
 use std::time::Duration;
 
-use async_compression::tokio::bufread::DeflateDecoder;
-use async_compression::tokio::write::DeflateEncoder;
 use imap_proto::{RequestId, Response, Status};
-use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
-};
+use nail_net::deflate::DeflateIo;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 use crate::error::{ImapError, Result};
 use crate::transport::{IdleTimeout, ImapStream, ReadTimeout};
@@ -25,7 +22,7 @@ use crate::transport::{IdleTimeout, ImapStream, ReadTimeout};
 /// large mailboxes are long lines.
 const MAX_LINE: usize = 16 << 20;
 /// Largest accepted response, literals included (one message body).
-const MAX_RESPONSE: usize = 512 << 20;
+const MAX_RESPONSE: usize = nail_net::io::MAX_MESSAGE;
 
 /// The stream under the connection.
 type Raw = IdleTimeout<ImapStream>;
@@ -62,49 +59,7 @@ fn switching_error() -> std::io::Error {
     std::io::Error::other("connection is switching to compression")
 }
 
-impl AsyncRead for Link {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_read(cx, buf),
-            Self::Deflate(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
-            Self::Switching => Poll::Ready(Err(switching_error())),
-        }
-    }
-}
-
-impl AsyncWrite for Link {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_write(cx, buf),
-            Self::Deflate(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
-            Self::Switching => Poll::Ready(Err(switching_error())),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_flush(cx),
-            Self::Deflate(s) => Pin::new(s.as_mut()).poll_flush(cx),
-            Self::Switching => Poll::Ready(Err(switching_error())),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_shutdown(cx),
-            Self::Deflate(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
-            Self::Switching => Poll::Ready(Err(switching_error())),
-        }
-    }
-}
+nail_net::delegate_stream_enum!(Link { Plain, Deflate }; Switching => switching_error(), Err(switching_error()));
 
 /// `T` compressed with raw DEFLATE in both directions. A flush emits a
 /// sync-flush block, so the server can decode each command at once.
@@ -114,7 +69,7 @@ impl AsyncWrite for Link {
 /// a plain end of stream instead, so it surfaces as
 /// [`ImapError::ConnectionLost`] like on an uncompressed connection.
 pub(crate) struct DeflateStream<T: AsyncRead + AsyncWrite + Unpin> {
-    inner: DeflateDecoder<BufReader<DeflateEncoder<EofProbe<T>>>>,
+    inner: DeflateIo<EofProbe<T>>,
 }
 
 impl<T: AsyncRead + AsyncWrite + Unpin> DeflateStream<T> {
@@ -124,22 +79,17 @@ impl<T: AsyncRead + AsyncWrite + Unpin> DeflateStream<T> {
             eof: false,
         };
         Self {
-            inner: DeflateDecoder::new(BufReader::new(DeflateEncoder::new(probe))),
+            inner: DeflateIo::new(probe),
         }
     }
 
     fn peer_closed(&self) -> bool {
-        self.inner.get_ref().get_ref().get_ref().eof
+        self.inner.get_ref().eof
     }
 }
 
 impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for DeflateStream<T> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        let this = self.get_mut();
+    nail_net::poll_read_with!(|this, cx, buf| {
         match Pin::new(&mut this.inner).poll_read(cx, buf) {
             Poll::Ready(Err(err))
                 if this.peer_closed() && err.kind() != std::io::ErrorKind::TimedOut =>
@@ -148,25 +98,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for DeflateStream<T> {
             }
             other => other,
         }
-    }
+    });
 }
 
 impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for DeflateStream<T> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
-    }
+    nail_net::forward_async_write!(inner);
 }
 
 /// Remembers whether the peer closed the stream (a read returned no data
@@ -177,12 +113,7 @@ struct EofProbe<T> {
 }
 
 impl<T: AsyncRead + Unpin> AsyncRead for EofProbe<T> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        let this = self.get_mut();
+    nail_net::poll_read_with!(|this, cx, buf| {
         let before = buf.filled().len();
         let result = Pin::new(&mut this.inner).poll_read(cx, buf);
         match &result {
@@ -191,25 +122,11 @@ impl<T: AsyncRead + Unpin> AsyncRead for EofProbe<T> {
             _ => {}
         }
         result
-    }
+    });
 }
 
 impl<T: AsyncWrite + Unpin> AsyncWrite for EofProbe<T> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
-    }
+    nail_net::forward_async_write!(inner);
 }
 
 /// A connection after the pre-authentication exchange.

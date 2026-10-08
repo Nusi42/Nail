@@ -4,14 +4,13 @@
 #![cfg(test)]
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use nail_api::ErrorCode;
 use nail_api::accounts::SecretRef;
 use nail_api::domain::{Flags, FolderRole};
 use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, MailApiEngine,
-    OutgoingTransport, RemoteMessage, RemoteWrite, SyncDelta, WriteOutcome,
+    DeltaOutcome, EngineError, Envelope, MailApiEngine, OutgoingTransport, RemoteMessage,
+    RemoteWrite, SyncDelta, WriteOutcome,
 };
 use nail_api::gmail::{GmailCategory, GmailLabelColor, GmailLabelKind, GmailLabelSettings};
 use nail_api::ops::FlagChange;
@@ -21,6 +20,7 @@ use nail_proto_gmail::testing::{InjectedError, MockGmailServer};
 use nail_proto_gmail::{
     EngineOptions, GmailAuth, GmailClient, GmailEngine, GmailError, PollTimer, RetryPolicy,
 };
+use nail_testkit::tokens::FakeTokens as Tokens;
 use pretty_assertions::assert_eq;
 
 fn client(server: &MockGmailServer, auth: GmailAuth) -> GmailClient {
@@ -703,36 +703,6 @@ async fn threads_list_and_get() {
     assert_eq!(one.tags, ["Receipts"]);
 }
 
-#[derive(Debug, Default)]
-struct Tokens {
-    calls: AtomicU32,
-    forced: AtomicU32,
-    revoked: bool,
-}
-
-impl AccessTokenProvider for Tokens {
-    fn access_token<'a>(
-        &'a self,
-        provider: &'a str,
-        _secret: &'a SecretRef,
-        force_refresh: bool,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            assert_eq!(provider, "google");
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            if self.revoked {
-                return Err(EngineError::permanent(ErrorCode::AuthFailed, "revoked"));
-            }
-            if force_refresh {
-                self.forced.fetch_add(1, Ordering::SeqCst);
-                Ok("fresh".to_owned())
-            } else {
-                Ok("stale".to_owned())
-            }
-        })
-    }
-}
-
 fn oauth(tokens: Arc<Tokens>) -> GmailAuth {
     GmailAuth::OAuth2 {
         tokens,
@@ -745,26 +715,23 @@ fn oauth(tokens: Arc<Tokens>) -> GmailAuth {
 async fn a_refused_token_is_refreshed_once() {
     let server = MockGmailServer::start_demo().await.unwrap();
     server.set_token(Some("fresh"));
-    let tokens = Arc::new(Tokens::default());
+    let tokens = Arc::new(Tokens::new("google"));
     let engine = GmailEngine::new(client(&server, oauth(tokens.clone())));
     let profile = engine.profile().await.unwrap();
     assert_eq!(profile.email_address, "ada@gmail.example");
-    assert_eq!(tokens.forced.load(Ordering::SeqCst), 1);
+    assert_eq!(tokens.forced(), 1);
 
     // A token the server never accepts: AuthFailed after one refresh.
     server.set_token(Some("other"));
     let err = engine.profile().await.unwrap_err();
     assert_eq!(err, GmailError::AuthFailed);
-    assert_eq!(tokens.forced.load(Ordering::SeqCst), 2);
+    assert_eq!(tokens.forced(), 2);
     let engine_err: EngineError = err.into();
     assert_eq!(engine_err.code, ErrorCode::AuthFailed);
     assert!(!engine_err.retryable);
 
     // A revoked refresh token is the provider's error, unchanged.
-    let revoked = Arc::new(Tokens {
-        revoked: true,
-        ..Tokens::default()
-    });
+    let revoked = Arc::new(Tokens::revoked("google", ErrorCode::AuthFailed));
     let engine = GmailEngine::new(client(&server, oauth(revoked)));
     let err = engine.folders().await.map(drop);
     assert!(err.is_ok(), "folders need no request");
@@ -914,7 +881,7 @@ async fn engine_for_a_configured_account() {
         "incoming": serde_json::to_value(&incoming).unwrap(),
     }))
     .unwrap();
-    let tokens = Arc::new(Tokens::default());
+    let tokens = Arc::new(Tokens::new("google"));
     let engine = GmailEngine::for_account(&account, tokens).unwrap();
     assert_eq!(engine.profile().await.unwrap().history_id, "4200");
 
@@ -925,7 +892,7 @@ async fn engine_for_a_configured_account() {
         endpoint.auth = AuthConfig::None;
     }
     assert!(matches!(
-        GmailEngine::for_account(&account, Arc::new(Tokens::default())),
+        GmailEngine::for_account(&account, Arc::new(Tokens::new("google"))),
         Err(GmailError::Config(_))
     ));
     // Plain http to a non-loopback host is refused.
@@ -942,7 +909,7 @@ async fn engine_for_a_configured_account() {
         };
     }
     assert!(matches!(
-        GmailEngine::for_account(&account, Arc::new(Tokens::default())),
+        GmailEngine::for_account(&account, Arc::new(Tokens::new("google"))),
         Err(GmailError::InsecureUrl(_))
     ));
 }

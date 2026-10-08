@@ -33,7 +33,8 @@ pub use cards::{CardKey, KeyResolver, Smartcards};
 pub use cryptoki_module::CryptokiModule;
 pub use error::CardError;
 pub use module::{
-    DecryptMechanism, HashKind, Module, ObjectInfo, PublicKeyMaterial, SignMechanism, TokenInfo,
+    DecryptMechanism, HashKind, KeyOp, Module, ObjectInfo, PublicKeyMaterial, SignMechanism,
+    TokenInfo,
 };
 pub use pin::{BlockingPinSource, FixedPin, PinPrompter, block_on};
 

@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Shared civil-date helpers (ADR 0171).
+nail-util.workspace = true
 nail-api.workspace = true
 # Planned operations and their inverses are the store's queue operations.
 nail-store.workspace = true

@@ -11,10 +11,14 @@ publish.workspace = true
 # The mock EWS SOAP server (`nail_proto_ews::testing`): loopback only
 # (ADR 0057), recorded-response fixtures. Used by this crate's tests, the
 # core's tests and the demo-multi seed (WP95).
-testing = ["dep:axum", "dep:futures-util"]
+testing = ["dep:axum", "dep:futures-util", "dep:nail-testkit-net"]
 
 [dependencies]
+nail-testkit-net = { workspace = true, optional = true }
+nail-net = { workspace = true, features = ["http", "xml"] }
 nail-api.workspace = true
+nail-util.workspace = true
+nail-exchange.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -26,8 +30,6 @@ tokio.workspace = true
 reqwest.workspace = true
 nail-auth.workspace = true
 url.workspace = true
-# SOAP bodies (the same XML library as Autodiscover and DAV; MIT).
-quick-xml.workspace = true
 # Fixtures and the JSON parts of Autodiscover answers in tests.
 # MimeContent is base64; Negotiate tokens are base64 in headers.
 base64.workspace = true
@@ -40,6 +42,7 @@ axum = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 
 [dev-dependencies]
+nail-testkit.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 nail-proto-ews = { path = ".", features = ["testing"] }

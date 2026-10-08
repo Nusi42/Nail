@@ -15,7 +15,7 @@ use crate::error::{Pop3Error, Result, login_error};
 use crate::transport::{Lines, Pop3Stream, handshake, with_timeout};
 
 /// Largest message the client downloads (a guard against runaway servers).
-pub const MAX_MESSAGE_BYTES: usize = 512 * 1024 * 1024;
+pub const MAX_MESSAGE_BYTES: usize = nail_net::io::MAX_MESSAGE;
 
 /// RFC 5034: an initial response longer than this is sent after a `+`
 /// continuation instead of on the `AUTH` line.

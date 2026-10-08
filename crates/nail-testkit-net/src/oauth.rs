@@ -17,9 +17,8 @@
 //! [`MockOAuthServer::approve`] which does both.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -29,11 +28,10 @@ use axum::{Form, Json, Router};
 use base64::Engine as _;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use sha2::{Digest as _, Sha256};
-use tokio::net::TcpListener;
-use tokio::sync::watch;
-use tokio::task::JoinHandle;
 
 use crate::MockNetError;
+use crate::api_mock::Served;
+use crate::server::lock;
 
 /// Configuration of a [`MockOAuthServer`].
 #[derive(Debug, Clone)]
@@ -58,7 +56,7 @@ impl Default for MockOAuthConfig {
         Self {
             client_id: "nail-test-client".to_owned(),
             client_secret: None,
-            user: "sam@nail.example".to_owned(),
+            user: crate::MOCK_USER.to_owned(),
             access_token_lifetime: 3600,
             rotate_refresh_tokens: false,
             deny: false,
@@ -109,10 +107,6 @@ struct Inner {
     counter: AtomicUsize,
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 impl Inner {
     fn next(&self, prefix: &str) -> String {
         format!(
@@ -125,17 +119,22 @@ impl Inner {
 /// A running mock OAuth2 server on `127.0.0.1`. Stops when dropped.
 #[derive(Debug)]
 pub struct MockOAuthServer {
-    addr: SocketAddr,
+    served: Served,
     inner: Arc<Inner>,
-    shutdown: watch::Sender<bool>,
-    task: JoinHandle<()>,
+}
+
+/// The address and base URL of the server.
+impl std::ops::Deref for MockOAuthServer {
+    type Target = Served;
+
+    fn deref(&self) -> &Served {
+        &self.served
+    }
 }
 
 impl MockOAuthServer {
     /// Starts a server on a free loopback port.
     pub async fn start(config: MockOAuthConfig) -> Result<Self, MockNetError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let addr = listener.local_addr()?;
         let inner = Arc::new(Inner {
             config: Mutex::new(config),
             codes: Mutex::default(),
@@ -149,32 +148,10 @@ impl MockOAuthServer {
             .route("/authorize", get(authorize))
             .route("/token", post(token))
             .with_state(Arc::clone(&inner));
-        let (shutdown, mut stop) = watch::channel(false);
-        let task = tokio::spawn(async move {
-            drop(
-                axum::serve(listener, app)
-                    .with_graceful_shutdown(async move {
-                        let _ = stop.changed().await;
-                    })
-                    .await,
-            );
-        });
         Ok(Self {
-            addr,
+            served: Served::start(app).await?,
             inner,
-            shutdown,
-            task,
         })
-    }
-
-    /// The listening address.
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    /// `http://127.0.0.1:<port>`.
-    pub fn base_url(&self) -> String {
-        format!("http://{}", self.addr)
     }
 
     /// The authorization endpoint URL.
@@ -239,13 +216,6 @@ impl MockOAuthServer {
     /// Every token endpoint request.
     pub fn token_requests(&self) -> Vec<TokenRequest> {
         lock(&self.inner.token_requests).clone()
-    }
-}
-
-impl Drop for MockOAuthServer {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        self.task.abort();
     }
 }
 
@@ -511,6 +481,7 @@ async fn token(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::net::TcpListener;
 
     #[test]
     fn loopback_redirects_only() {
@@ -571,21 +542,7 @@ mod tests {
                 ("code_verifier", verifier.to_owned()),
             ]
         };
-        let post = |body: String| {
-            let addr = server.addr();
-            async move {
-                use tokio::io::{AsyncReadExt, AsyncWriteExt};
-                let mut tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
-                let req = format!(
-                    "POST /token HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-                tcp.write_all(req.as_bytes()).await.unwrap();
-                let mut out = String::new();
-                tcp.read_to_string(&mut out).await.unwrap();
-                out
-            }
-        };
+        let post = |body: String| post_token(server.addr(), body);
         let encode = |pairs: &[(&str, String)]| {
             url::form_urlencoded::Serializer::new(String::new())
                 .extend_pairs(pairs.iter().map(|(k, v)| (*k, v.as_str())))
@@ -600,29 +557,33 @@ mod tests {
         assert_eq!(server.token_requests().len(), 2);
     }
 
+    /// `POST /token` with a form `body` over plain TCP; the raw answer.
+    async fn post_token(addr: std::net::SocketAddr, body: String) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let req = format!(
+            "POST /token HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        tcp.write_all(req.as_bytes()).await.unwrap();
+        let mut out = String::new();
+        tcp.read_to_string(&mut out).await.unwrap();
+        out
+    }
+
     #[tokio::test]
     async fn seeded_refresh_tokens_are_accepted() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let server = MockOAuthServer::start(MockOAuthConfig::default())
             .await
             .unwrap();
         server.add_refresh_token("seeded-1", "ada@gmail.example", "mail");
         let refresh = |token: &str| {
-            let addr = server.addr();
-            let body = format!(
-                "grant_type=refresh_token&refresh_token={token}&client_id=nail-test-client"
-            );
-            async move {
-                let mut tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
-                let req = format!(
-                    "POST /token HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-                tcp.write_all(req.as_bytes()).await.unwrap();
-                let mut out = String::new();
-                tcp.read_to_string(&mut out).await.unwrap();
-                out
-            }
+            post_token(
+                server.addr(),
+                format!(
+                    "grant_type=refresh_token&refresh_token={token}&client_id=nail-test-client"
+                ),
+            )
         };
         let ok = refresh("seeded-1").await;
         assert!(ok.contains("access_token"), "{ok}");

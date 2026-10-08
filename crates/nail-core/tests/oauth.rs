@@ -100,12 +100,11 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
     let token = oauth.issued().last().unwrap().access_token.clone();
     imap.set_oauth_token(Some(&token));
 
-    let account = AccountConfig {
-        id: AccountId::new("gmailish"),
-        name: "OAuth".into(),
-        email: "sam@nail.example".into(),
-        enabled: true,
-        incoming: IncomingServer::Imap {
+    let account = AccountConfig::new(
+        AccountId::new("gmailish"),
+        "OAuth",
+        "sam@nail.example",
+        IncomingServer::Imap {
             server: ServerEndpoint {
                 host: imap.host().into(),
                 port: imap.port(),
@@ -119,13 +118,7 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
             },
             options: ImapOptions::default(),
         },
-        outgoing: None,
-        identities: vec![],
-        sync: nail_api::accounts::SyncPolicy::default(),
-        save_sent_copy: None,
-        authserv_ids: Vec::new(),
-        sieve: None,
-    };
+    );
     let sign_in = vec![SecretInput {
         endpoint: EndpointSlot::Incoming,
         value: SecretValue::OAuth2 {

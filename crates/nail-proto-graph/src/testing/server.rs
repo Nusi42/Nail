@@ -4,6 +4,8 @@
 use std::collections::BTreeSet;
 
 use base64::Engine as _;
+use nail_testkit_net::api_mock::MockReply;
+use nail_util::percent::decode as percent_decode;
 use serde_json::{Value, json};
 
 use super::tenant::{Mailbox, MeetingAction, MockError, MockResult, SentMail, Tenant, merge};
@@ -116,43 +118,32 @@ impl Req {
 }
 
 /// An answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Reply {
-    pub status: u16,
-    pub headers: Vec<(String, String)>,
-    pub body: Vec<u8>,
+pub(crate) type Reply = MockReply;
+
+/// Graph's answers.
+pub(crate) trait Replies {
+    fn json(status: u16, value: &Value) -> Self;
+    fn ok(value: &Value) -> Self;
+    fn empty(status: u16) -> Self;
+    fn bytes(content_type: &str, body: Vec<u8>) -> Self;
+    fn error(error: &MockError) -> Self;
 }
 
-impl Reply {
-    pub(super) fn json(status: u16, value: &Value) -> Self {
-        Self {
-            status,
-            headers: vec![(
-                "content-type".into(),
-                "application/json; odata.metadata=minimal".into(),
-            )],
-            body: value.to_string().into_bytes(),
-        }
+impl Replies for Reply {
+    fn json(status: u16, value: &Value) -> Self {
+        Self::json_as(status, value, "application/json; odata.metadata=minimal")
     }
 
     fn ok(value: &Value) -> Self {
         Self::json(200, value)
     }
 
-    pub(crate) fn empty(status: u16) -> Self {
-        Self {
-            status,
-            headers: Vec::new(),
-            body: Vec::new(),
-        }
+    fn empty(status: u16) -> Self {
+        Self::with_body(status, None, Vec::new())
     }
 
     fn bytes(content_type: &str, body: Vec<u8>) -> Self {
-        Self {
-            status: 200,
-            headers: vec![("content-type".into(), content_type.into())],
-            body,
-        }
+        Self::with_body(200, Some(content_type), body)
     }
 
     fn error(error: &MockError) -> Self {
@@ -160,25 +151,9 @@ impl Reply {
     }
 }
 
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 3 <= bytes.len()
-            && let Some(b) = std::str::from_utf8(&bytes[i + 1..i + 3])
-                .ok()
-                .and_then(|h| u8::from_str_radix(h, 16).ok())
-        {
-            out.push(b);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
+/// The recorded error body of `status` (or a generic one).
+pub(crate) fn recorded_status(status: u16) -> Value {
+    recorded_error(&status.to_string())
 }
 
 /// Recorded error bodies (`fixtures/responses/errors.json`).
@@ -270,15 +245,7 @@ fn injected(state: &mut State, req: &Req) -> Option<Reply> {
     } else {
         format!("{}?{}", req.path, req.raw_query)
     };
-    let i = state
-        .errors
-        .iter()
-        .position(|e| e.matches(&req.method, &target))?;
-    let error = state.errors[i].clone();
-    state.errors[i].times -= 1;
-    if state.errors[i].times == 0 {
-        state.errors.remove(i);
-    }
+    let error = InjectedError::take_due(&mut state.errors, &req.method, &target)?;
     let mut reply = Reply::json(error.status, &error.body);
     if let Some(retry) = error.retry_after {
         reply.headers.push(("retry-after".into(), retry));

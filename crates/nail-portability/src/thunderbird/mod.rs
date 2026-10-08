@@ -31,8 +31,8 @@ use crate::sink::SourceCollection;
 use accounts::{ServerType, TbAccount};
 use prefs::Prefs;
 
-/// Deepest `.sbd` tree read.
-pub const MAX_DEPTH: usize = 32;
+/// Deepest folder tree read.
+pub use crate::folder::MAX_FOLDER_DEPTH as MAX_DEPTH;
 
 /// What a profile holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

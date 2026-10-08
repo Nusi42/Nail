@@ -432,54 +432,49 @@ mod tests {
             decode_message::<Ansi>(0x40 as *const RawMessage, 0, None),
             Err(MapiResult::Failure)
         );
+        // An empty message changed by `change` is refused with `expected`.
+        let refused = |change: &dyn Fn(&mut RawMessageW), expected: MapiResult| {
+            let mut msg = wide_message(None, None, &mut [], &mut []);
+            change(&mut msg);
+            assert_eq!(
+                decode_message::<Wide>(&raw const msg, 0, None),
+                Err(expected)
+            );
+        };
         // Counts beyond the limits are refused before the arrays are read.
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nRecipCount = u32::MAX;
-        msg.lpRecips = 0x50 as *mut MapiRecipDescW;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::TooManyRecipients)
+        refused(
+            &|msg| {
+                msg.nRecipCount = u32::MAX;
+                msg.lpRecips = 0x50 as *mut MapiRecipDescW;
+            },
+            MapiResult::TooManyRecipients,
         );
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nFileCount = u32::try_from(MAX_MAPI_ATTACHMENTS + 1).unwrap();
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::TooManyFiles)
+        refused(
+            &|msg| msg.nFileCount = u32::try_from(MAX_MAPI_ATTACHMENTS + 1).unwrap(),
+            MapiResult::TooManyFiles,
         );
         // Counts without arrays.
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nRecipCount = 2;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::InvalidRecips)
-        );
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nFileCount = 1;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::AttachmentNotFound)
-        );
+        refused(&|msg| msg.nRecipCount = 2, MapiResult::InvalidRecips);
+        refused(&|msg| msg.nFileCount = 1, MapiResult::AttachmentNotFound);
         // Arrays at garbage addresses.
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nRecipCount = 1;
-        msg.lpRecips = 0x60 as *mut MapiRecipDescW;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::InvalidRecips)
+        refused(
+            &|msg| {
+                msg.nRecipCount = 1;
+                msg.lpRecips = 0x60 as *mut MapiRecipDescW;
+            },
+            MapiResult::InvalidRecips,
         );
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.nFileCount = 1;
-        msg.lpFiles = 0x70 as *mut MapiFileDescW;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::AttachmentNotFound)
+        refused(
+            &|msg| {
+                msg.nFileCount = 1;
+                msg.lpFiles = 0x70 as *mut MapiFileDescW;
+            },
+            MapiResult::AttachmentNotFound,
         );
         // Garbage strings.
-        let mut msg = wide_message(None, None, &mut [], &mut []);
-        msg.lpszSubject = 0x80 as *mut u16;
-        assert_eq!(
-            decode_message::<Wide>(&raw const msg, 0, None),
-            Err(MapiResult::Failure)
+        refused(
+            &|msg| msg.lpszSubject = 0x80 as *mut u16,
+            MapiResult::Failure,
         );
         let mut recips = [wide_recip(MAPI_TO, None, None)];
         recips[0].lpszAddress = 0x90 as *mut u16;

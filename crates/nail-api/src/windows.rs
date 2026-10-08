@@ -40,6 +40,9 @@ use ts_rs::TS;
 
 /// The file in the config directory.
 pub const WINDOW_STATE_FILE: &str = "window-state.json";
+/// The id of the main window (the layout's `window "main"`, the desktop
+/// shell's first webview).
+pub const MAIN_WINDOW: &str = "main";
 /// The file format version written by this build ([`WindowStateFile`]).
 pub const WINDOW_STATE_VERSION: u32 = 1;
 /// Most window kinds remembered; a new kind beyond it is refused.

@@ -4,6 +4,8 @@
 use nail_api::ErrorCode;
 use nail_api::engine::EngineError;
 use nail_api::localized::LocalizedMessage;
+use nail_net::api::RetryClass;
+use nail_net::status::{CONFLICT, CONTENT_TOO_LARGE, GATEWAY_TIMEOUT, GONE, TOO_MANY_REQUESTS};
 
 use crate::wire::ErrorBody;
 
@@ -87,41 +89,30 @@ pub enum GraphError {
     Unsupported(String),
 }
 
+nail_net::client_error_classes!(GraphError, "graph", Token, retry by class,
+    codes {
+        Self::MailboxUnavailable(_) => ErrorCode::NotFound,
+        Self::SyncStateExpired(_) | Self::Conflict(_) => ErrorCode::Conflict,
+        Self::Throttled(_) => ErrorCode::RateLimited,
+        Self::Unavailable { .. } => ErrorCode::Unavailable,
+        Self::Rejected(_) => ErrorCode::Rejected,
+        Self::Config(_) => ErrorCode::Config,
+        Self::Unsupported(_) => ErrorCode::Unsupported,
+    }
+    texts {
+        Self::MailboxUnavailable(_) => LocalizedMessage::new("graph-mailbox-unavailable"),
+        Self::SyncStateExpired(_) => LocalizedMessage::new("graph-sync-expired"),
+        Self::Throttled(_) => LocalizedMessage::new("graph-throttled"),
+        Self::Unavailable { .. } => LocalizedMessage::new("graph-unavailable"),
+        Self::Rejected(_) => LocalizedMessage::new("graph-rejected"),
+        Self::Conflict(_) => LocalizedMessage::new("graph-conflict"),
+        Self::Config(_) => LocalizedMessage::new("graph-config"),
+        Self::Token(e) => nail_net::http::token_text(e, "graph-token"),
+        Self::Unsupported(_) => LocalizedMessage::new("graph-unsupported"),
+    }
+);
+
 impl GraphError {
-    /// The error class for the UI.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::Network(_) | Self::Timeout | Self::Protocol(_) => ErrorCode::Network,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::AuthFailed => ErrorCode::AuthFailed,
-            Self::Forbidden(_) => ErrorCode::Forbidden,
-            Self::NotFound(_) | Self::MailboxUnavailable(_) => ErrorCode::NotFound,
-            Self::SyncStateExpired(_) | Self::Conflict(_) => ErrorCode::Conflict,
-            Self::Throttled(_) => ErrorCode::RateLimited,
-            Self::Unavailable { .. } => ErrorCode::Unavailable,
-            Self::Status { status, .. } if *status >= 500 => ErrorCode::Unavailable,
-            Self::Rejected(_) | Self::Status { .. } => ErrorCode::Rejected,
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::InsecureUrl(_) | Self::Config(_) => ErrorCode::Config,
-            Self::Token(e) => e.code,
-            Self::Unsupported(_) => ErrorCode::Unsupported,
-        }
-    }
-
-    /// Whether trying again later may succeed.
-    pub fn retryable(&self) -> bool {
-        match self {
-            Self::Network(_)
-            | Self::Timeout
-            | Self::Throttled(_)
-            | Self::Unavailable { .. }
-            | Self::Protocol(_) => true,
-            Self::Status { status, .. } => *status >= 500,
-            Self::Token(e) => e.retryable,
-            _ => false,
-        }
-    }
-
     /// How long the server asked to wait, in seconds.
     pub fn retry_after_secs(&self) -> Option<u32> {
         match self {
@@ -129,37 +120,6 @@ impl GraphError {
             Self::Unavailable { retry_after, .. } => *retry_after,
             Self::Token(e) => e.retry_after_secs,
             _ => None,
-        }
-    }
-
-    /// The user-facing text.
-    pub fn localized(&self) -> LocalizedMessage {
-        match self {
-            Self::Network(_) => LocalizedMessage::new("graph-network"),
-            Self::Timeout => LocalizedMessage::new("graph-timeout"),
-            Self::Tls(_) => LocalizedMessage::new("graph-tls"),
-            Self::AuthFailed => LocalizedMessage::new("graph-auth-failed"),
-            Self::Forbidden(_) => LocalizedMessage::new("graph-forbidden"),
-            Self::NotFound(_) => LocalizedMessage::new("graph-missing"),
-            Self::MailboxUnavailable(_) => LocalizedMessage::new("graph-mailbox-unavailable"),
-            Self::SyncStateExpired(_) => LocalizedMessage::new("graph-sync-expired"),
-            Self::Throttled(_) => LocalizedMessage::new("graph-throttled"),
-            Self::Unavailable { .. } => LocalizedMessage::new("graph-unavailable"),
-            Self::Rejected(_) => LocalizedMessage::new("graph-rejected"),
-            Self::Conflict(_) => LocalizedMessage::new("graph-conflict"),
-            Self::TooLarge(_) => LocalizedMessage::new("graph-too-large"),
-            Self::Status { status, .. } => {
-                LocalizedMessage::new("graph-http-status").arg("status", i64::from(*status))
-            }
-            Self::Protocol(_) => LocalizedMessage::new("graph-bad-response"),
-            Self::InsecureUrl(_) => LocalizedMessage::new("graph-insecure-url"),
-            Self::Config(_) => LocalizedMessage::new("graph-config"),
-            Self::Token(e) => e
-                .localized
-                .as_deref()
-                .cloned()
-                .unwrap_or_else(|| LocalizedMessage::new("graph-token")),
-            Self::Unsupported(_) => LocalizedMessage::new("graph-unsupported"),
         }
     }
 
@@ -190,13 +150,16 @@ impl GraphError {
     /// Whether a failed answer is worth retrying inline (throttling and
     /// server errors).
     pub(crate) fn is_transient(status: u16) -> bool {
-        matches!(status, 429 | 500 | 502 | 503 | 504)
+        matches!(
+            status,
+            TOO_MANY_REQUESTS | 500 | 502 | 503 | GATEWAY_TIMEOUT
+        )
     }
 
     /// Whether a status means "throttled, not processed" (safe to repeat
     /// even for non-idempotent calls).
     pub(crate) fn is_throttle(status: u16) -> bool {
-        status == 429
+        status == TOO_MANY_REQUESTS
     }
 
     /// The error for a failed answer of `what` (`body` = Graph's JSON
@@ -208,10 +171,7 @@ impl GraphError {
         what: &str,
     ) -> Self {
         let code = body.map(|b| b.error.code.as_str()).unwrap_or_default();
-        let message = body
-            .map(|b| b.error.message.clone())
-            .filter(|m| !m.is_empty())
-            .map_or_else(|| what.to_owned(), |m| format!("{what}: {m}"));
+        let message = nail_net::http::answer_text(what, body.map(|b| b.error.message.as_str()));
         if is_sync_state_code(code) {
             return Self::SyncStateExpired(message);
         }
@@ -224,10 +184,10 @@ impl GraphError {
             401 => Self::AuthFailed,
             403 => Self::Forbidden(message),
             404 => Self::NotFound(message),
-            410 => Self::SyncStateExpired(message),
-            409 | 412 => Self::Conflict(message),
-            413 => Self::TooLarge(message),
-            429 | 503 | 504 => Self::Throttled(retry_after),
+            GONE => Self::SyncStateExpired(message),
+            CONFLICT | 412 => Self::Conflict(message),
+            CONTENT_TOO_LARGE => Self::TooLarge(message),
+            TOO_MANY_REQUESTS | 503 | GATEWAY_TIMEOUT => Self::Throttled(retry_after),
             400 if code.eq_ignore_ascii_case("ErrorMessageSizeExceeded") => Self::TooLarge(message),
             400 => Self::Rejected(message),
             500..=599 => Self::Unavailable {
@@ -253,26 +213,31 @@ fn is_sync_state_code(code: &str) -> bool {
     .any(|c| c.eq_ignore_ascii_case(code))
 }
 
-impl From<GraphError> for EngineError {
-    fn from(err: GraphError) -> Self {
-        if let GraphError::Token(inner) = err {
-            return *inner;
-        }
-        let localized = err.localized();
-        let retry_after = err.retry_after_secs();
-        let mut out = if err.retryable() {
-            EngineError::temporary(err.code(), err.to_string())
+nail_net::transport_errors!(GraphError);
+
+nail_net::api_failure!(GraphError, "Graph", GraphError::retry_class, ErrorBody);
+
+nail_net::engine_error_from!(GraphError, Token, GraphError::retry_after_secs);
+
+impl GraphError {
+    /// Throttling is retried for any call (not processed); server errors
+    /// only for idempotent ones.
+    fn retry_class(status: u16, _body: &[u8]) -> RetryClass {
+        if !Self::is_transient(status) {
+            RetryClass::Never
+        } else if Self::is_throttle(status) {
+            RetryClass::Always
         } else {
-            EngineError::permanent(err.code(), err.to_string())
-        };
-        out.retry_after_secs = retry_after;
-        out.with_localized(localized)
+            RetryClass::IfIdempotent
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    nail_testkit::error_texts_test!(GraphError, "core-graph.ftl");
 
     fn all() -> Vec<GraphError> {
         vec![
@@ -395,33 +360,5 @@ mod tests {
         let token = EngineError::permanent(ErrorCode::ReauthRequired, "sign in again");
         let passed: EngineError = GraphError::Token(Box::new(token.clone())).into();
         assert_eq!(passed, token);
-    }
-
-    #[test]
-    fn every_error_has_a_listed_message() {
-        for error in all() {
-            let id = error.localized().id;
-            assert!(GraphError::MESSAGE_IDS.contains(&id.as_str()), "{id}");
-            assert_ne!(error.to_string().len(), 0);
-            let _ = (error.code(), error.retryable(), error.retry_after_secs());
-        }
-    }
-
-    #[test]
-    fn catalog_has_every_message() {
-        let catalog = include_str!("../../../locales/en/core-graph.ftl");
-        for id in GraphError::MESSAGE_IDS {
-            assert!(
-                catalog.lines().any(|l| l.starts_with(&format!("{id} ="))),
-                "{id} missing in locales/en/core-graph.ftl"
-            );
-        }
-        let german = include_str!("../../../locales/de/core-graph.ftl");
-        assert!(
-            german
-                .lines()
-                .all(|l| l.trim().is_empty() || l.starts_with('#')),
-            "the German catalog stays empty"
-        );
     }
 }

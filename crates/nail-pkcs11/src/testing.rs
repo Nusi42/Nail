@@ -16,11 +16,15 @@ use zeroize::Zeroizing;
 
 use crate::error::CardError;
 use crate::module::{
-    DecryptMechanism, HashKind, Module, ObjectInfo, PublicKeyMaterial, SignMechanism, TokenInfo,
+    DecryptMechanism, HashKind, KeyOp, Module, ObjectInfo, PublicKeyMaterial, SignMechanism,
+    TokenInfo,
 };
 
 /// Wrong PINs before the PIN locks.
 pub const PIN_TRIES: u32 = 3;
+
+/// The user PIN the tests give their soft tokens.
+pub const TEST_PIN: &str = "123456";
 
 /// A private key of the soft token.
 #[derive(Clone)]
@@ -201,7 +205,7 @@ impl SoftToken {
         f(slot)
     }
 
-    fn private_op<T>(
+    fn with_key<T>(
         &self,
         slot_id: u64,
         id: &[u8],
@@ -350,77 +354,73 @@ impl Module for SoftToken {
         }
     }
 
-    fn sign(
+    fn private_op(
         &self,
         slot_id: u64,
         id: &[u8],
-        mechanism: SignMechanism,
-        data: &[u8],
-    ) -> Result<Option<Vec<u8>>, CardError> {
-        self.private_op(slot_id, id, |key| match (key, mechanism) {
-            (SoftKey::Rsa(key), SignMechanism::RsaPkcs1) => key
-                .sign(rsa::Pkcs1v15Sign::new_unprefixed(), data)
-                .map_err(failed),
-            (SoftKey::Rsa(key), SignMechanism::RsaPss(hash)) => {
-                let mut rng = rand::rngs::OsRng;
-                let salt = hash.len();
-                let scheme = match hash {
-                    HashKind::Sha1 => rsa::Pss::new_with_salt::<sha1::Sha1>(salt),
-                    HashKind::Sha256 => rsa::Pss::new_with_salt::<sha2_legacy::Sha256>(salt),
-                    HashKind::Sha384 => rsa::Pss::new_with_salt::<sha2_legacy::Sha384>(salt),
-                    HashKind::Sha512 => rsa::Pss::new_with_salt::<sha2_legacy::Sha512>(salt),
-                };
-                key.sign_with_rng(&mut rng, scheme, data).map_err(failed)
-            }
-            (SoftKey::P256(key), SignMechanism::Ecdsa) => {
-                use p256::ecdsa::signature::hazmat::PrehashSigner;
-                let signer = p256::ecdsa::SigningKey::from(key);
-                let sig: p256::ecdsa::Signature = signer.sign_prehash(data).map_err(failed)?;
-                Ok(sig.to_bytes().to_vec())
-            }
-            _ => Err(unsupported()),
-        })
-    }
-
-    fn decrypt(
-        &self,
-        slot_id: u64,
-        id: &[u8],
-        mechanism: DecryptMechanism,
-        data: &[u8],
+        op: KeyOp<'_>,
     ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError> {
-        self.private_op(slot_id, id, |key| {
-            let SoftKey::Rsa(key) = key else {
-                return Err(unsupported());
-            };
-            let plain = match mechanism {
-                DecryptMechanism::RsaPkcs1 => key.decrypt(rsa::Pkcs1v15Encrypt, data),
-                DecryptMechanism::RsaOaep(hash) => key.decrypt(oaep(hash), data),
-            }
-            .map_err(|_| {
-                CardError::new(SmartcardError::DeviceError, "CKR_ENCRYPTED_DATA_INVALID")
-            })?;
-            Ok(Zeroizing::new(plain))
+        self.with_key(slot_id, id, |key| match op {
+            KeyOp::Sign { mechanism, data } => sign(key, mechanism, data).map(Zeroizing::new),
+            KeyOp::Decrypt { mechanism, data } => decrypt(key, mechanism, data),
+            KeyOp::Ecdh { peer_point } => ecdh(key, peer_point),
         })
     }
+}
 
-    fn ecdh(
-        &self,
-        slot_id: u64,
-        id: &[u8],
-        peer_point: &[u8],
-    ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError> {
-        self.private_op(slot_id, id, |key| {
-            let SoftKey::P256(key) = key else {
-                return Err(unsupported());
+/// Signs with a soft key.
+fn sign(key: &SoftKey, mechanism: SignMechanism, data: &[u8]) -> Result<Vec<u8>, CardError> {
+    match (key, mechanism) {
+        (SoftKey::Rsa(key), SignMechanism::RsaPkcs1) => key
+            .sign(rsa::Pkcs1v15Sign::new_unprefixed(), data)
+            .map_err(failed),
+        (SoftKey::Rsa(key), SignMechanism::RsaPss(hash)) => {
+            let mut rng = rand::rngs::OsRng;
+            let salt = hash.len();
+            let scheme = match hash {
+                HashKind::Sha1 => rsa::Pss::new_with_salt::<sha1::Sha1>(salt),
+                HashKind::Sha256 => rsa::Pss::new_with_salt::<sha2_legacy::Sha256>(salt),
+                HashKind::Sha384 => rsa::Pss::new_with_salt::<sha2_legacy::Sha384>(salt),
+                HashKind::Sha512 => rsa::Pss::new_with_salt::<sha2_legacy::Sha512>(salt),
             };
-            let peer = p256::PublicKey::from_sec1_bytes(peer_point).map_err(|_| {
-                CardError::new(SmartcardError::DeviceError, "CKR_DOMAIN_PARAMS_INVALID")
-            })?;
-            let shared = p256::ecdh::diffie_hellman(key.to_nonzero_scalar(), peer.as_affine());
-            Ok(Zeroizing::new(shared.raw_secret_bytes().to_vec()))
-        })
+            key.sign_with_rng(&mut rng, scheme, data).map_err(failed)
+        }
+        (SoftKey::P256(key), SignMechanism::Ecdsa) => {
+            use p256::ecdsa::signature::hazmat::PrehashSigner;
+            let signer = p256::ecdsa::SigningKey::from(key);
+            let sig: p256::ecdsa::Signature = signer.sign_prehash(data).map_err(failed)?;
+            Ok(sig.to_bytes().to_vec())
+        }
+        _ => Err(unsupported()),
     }
+}
+
+/// Decrypts with a soft key.
+fn decrypt(
+    key: &SoftKey,
+    mechanism: DecryptMechanism,
+    data: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CardError> {
+    let SoftKey::Rsa(key) = key else {
+        return Err(unsupported());
+    };
+    let plain = match mechanism {
+        DecryptMechanism::RsaPkcs1 => key.decrypt(rsa::Pkcs1v15Encrypt, data),
+        DecryptMechanism::RsaOaep(hash) => key.decrypt(oaep(hash), data),
+    }
+    .map_err(|_| CardError::new(SmartcardError::DeviceError, "CKR_ENCRYPTED_DATA_INVALID"))?;
+    Ok(Zeroizing::new(plain))
+}
+
+/// ECDH with a soft P-256 key.
+fn ecdh(key: &SoftKey, peer_point: &[u8]) -> Result<Zeroizing<Vec<u8>>, CardError> {
+    let SoftKey::P256(key) = key else {
+        return Err(unsupported());
+    };
+    let peer = p256::PublicKey::from_sec1_bytes(peer_point)
+        .map_err(|_| CardError::new(SmartcardError::DeviceError, "CKR_DOMAIN_PARAMS_INVALID"))?;
+    let shared = p256::ecdh::diffie_hellman(key.to_nonzero_scalar(), peer.as_affine());
+    Ok(Zeroizing::new(shared.raw_secret_bytes().to_vec()))
 }
 
 /// A small RSA key for tests (2048 bits: what the crypto crates accept; never

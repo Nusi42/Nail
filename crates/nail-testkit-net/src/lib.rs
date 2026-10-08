@@ -29,6 +29,7 @@
 
 #![warn(missing_docs)]
 
+pub mod api_mock;
 pub mod dav;
 pub mod dns;
 pub mod http;
@@ -36,6 +37,7 @@ pub mod managesieve;
 pub mod oauth;
 pub mod pop3;
 mod sasl;
+pub mod server;
 pub mod smtp;
 mod stream;
 
@@ -51,7 +53,14 @@ pub use managesieve::{
 pub use nail_testkit::MockTls;
 pub use oauth::{IssuedToken, MockOAuthConfig, MockOAuthServer, TokenRequest};
 pub use pop3::{MockPop3Config, MockPop3Server, Pop3Message, apop_digest};
+pub use server::MockListener;
 pub use smtp::{MockSmtpConfig, MockSmtpServer, ReceivedMail, Recipient};
+
+/// The login the mock servers accept by default (the defaults of their
+/// configurations; tests log in with these).
+pub const MOCK_USER: &str = "sam@nail.example";
+/// The password of [`MOCK_USER`] (and of the mock DAV users).
+pub const MOCK_PASSWORD: &str = "secret";
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

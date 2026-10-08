@@ -47,13 +47,18 @@ async fn mocks(zone: DnsZone) -> Mocks {
     }
 }
 
-fn discoverer(m: &Mocks, probes: HashMap<(String, u16), std::net::SocketAddr>) -> Discoverer {
+/// HTTP to the mock server (every host name routed to it).
+fn mock_fetch(m: &Mocks) -> ReqwestFetch {
     let client = nail_auth::http_client_builder(nail_auth::tls_config_with_roots(&[]).unwrap())
         .no_proxy()
         .build()
         .unwrap();
+    ReqwestFetch::new(client).route_all_to(m.http.addr())
+}
+
+fn discoverer(m: &Mocks, probes: HashMap<(String, u16), std::net::SocketAddr>) -> Discoverer {
     Discoverer::new(
-        Arc::new(ReqwestFetch::new(client).route_all_to(m.http.addr())),
+        Arc::new(mock_fetch(m)),
         Arc::new(HickoryDns::with_name_server(m.dns.addr(), Duration::from_secs(2)).unwrap()),
         Arc::new(TcpProbe::with_overrides(Duration::from_secs(2), probes)),
     )
@@ -448,14 +453,8 @@ impl nail_discovery::HttpFetch for HttpOnly {
 }
 
 fn http_only_discoverer(m: &Mocks) -> Discoverer {
-    let client = nail_auth::http_client_builder(nail_auth::tls_config_with_roots(&[]).unwrap())
-        .no_proxy()
-        .build()
-        .unwrap();
     Discoverer::new(
-        Arc::new(HttpOnly(
-            ReqwestFetch::new(client).route_all_to(m.http.addr()),
-        )),
+        Arc::new(HttpOnly(mock_fetch(m))),
         Arc::new(HickoryDns::with_name_server(m.dns.addr(), Duration::from_secs(2)).unwrap()),
         Arc::new(TcpProbe::with_overrides(
             Duration::from_secs(2),

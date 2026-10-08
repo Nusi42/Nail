@@ -144,6 +144,21 @@ impl DnsZone {
         self.answer(name, &self.a)
     }
 
+    /// The response code and records of a zone answer (records that cannot be
+    /// written are left out).
+    fn wire_answer<T>(
+        answer: ZoneAnswer<T>,
+        record: impl Fn(&T) -> Option<RData>,
+    ) -> (ResponseCode, Vec<RData>) {
+        match answer {
+            ZoneAnswer::Records(r) => {
+                (ResponseCode::NoError, r.iter().filter_map(record).collect())
+            }
+            ZoneAnswer::NxDomain => (ResponseCode::NXDomain, Vec::new()),
+            ZoneAnswer::ServFail => (ResponseCode::ServFail, Vec::new()),
+        }
+    }
+
     /// Answers a DNS query message (wire format) from this zone.
     pub fn respond(&self, request: &[u8]) -> Option<Vec<u8>> {
         let request = Message::from_vec(request).ok()?;
@@ -156,43 +171,18 @@ impl DnsZone {
             let name = query.name.to_string();
             let fqdn = |host: &str| Name::from_ascii(format!("{}.", key(host))).ok();
             let (code, records): (ResponseCode, Vec<RData>) = match query.query_type {
-                RecordType::SRV => match self.srv(&name) {
-                    ZoneAnswer::Records(r) => (
-                        ResponseCode::NoError,
-                        r.iter()
-                            .filter_map(|s| {
-                                let target = if s.target.is_empty() {
-                                    Some(Name::root())
-                                } else {
-                                    fqdn(&s.target)
-                                }?;
-                                Some(RData::SRV(SRV::new(s.priority, s.weight, s.port, target)))
-                            })
-                            .collect(),
-                    ),
-                    ZoneAnswer::NxDomain => (ResponseCode::NXDomain, Vec::new()),
-                    ZoneAnswer::ServFail => (ResponseCode::ServFail, Vec::new()),
-                },
-                RecordType::MX => match self.mx(&name) {
-                    ZoneAnswer::Records(r) => (
-                        ResponseCode::NoError,
-                        r.iter()
-                            .filter_map(|m| {
-                                Some(RData::MX(MX::new(m.preference, fqdn(&m.exchange)?)))
-                            })
-                            .collect(),
-                    ),
-                    ZoneAnswer::NxDomain => (ResponseCode::NXDomain, Vec::new()),
-                    ZoneAnswer::ServFail => (ResponseCode::ServFail, Vec::new()),
-                },
-                RecordType::A => match self.a(&name) {
-                    ZoneAnswer::Records(r) => (
-                        ResponseCode::NoError,
-                        r.iter().map(|ip| RData::A(A(*ip))).collect(),
-                    ),
-                    ZoneAnswer::NxDomain => (ResponseCode::NXDomain, Vec::new()),
-                    ZoneAnswer::ServFail => (ResponseCode::ServFail, Vec::new()),
-                },
+                RecordType::SRV => Self::wire_answer(self.srv(&name), |s| {
+                    let target = if s.target.is_empty() {
+                        Some(Name::root())
+                    } else {
+                        fqdn(&s.target)
+                    }?;
+                    Some(RData::SRV(SRV::new(s.priority, s.weight, s.port, target)))
+                }),
+                RecordType::MX => Self::wire_answer(self.mx(&name), |m| {
+                    Some(RData::MX(MX::new(m.preference, fqdn(&m.exchange)?)))
+                }),
+                RecordType::A => Self::wire_answer(self.a(&name), |ip| Some(RData::A(A(*ip)))),
                 _ if self.exists(&key(&name)) => (ResponseCode::NoError, Vec::new()),
                 _ => (ResponseCode::NXDomain, Vec::new()),
             };

@@ -14,6 +14,7 @@ use nail_api::engine::{BoxFuture, EngineError};
 use nail_api::security::{
     CryptoKey, CryptoTechnology, KeyLookupCandidate, KeyLookupFailure, KeyLookupSource, KeySource,
 };
+use nail_net::status as http_status;
 use sha1::Digest;
 
 use crate::error::{Problem, Result};
@@ -151,7 +152,9 @@ async fn fetch(http: &dyn HttpClient, url: &str) -> Fetch {
                 Fetch::Found(response.body)
             }
         }
-        Ok(response) if response.status == 404 || response.status == 410 => Fetch::NotFound,
+        Ok(response) if response.status == 404 || response.status == http_status::GONE => {
+            Fetch::NotFound
+        }
         Ok(response) => Fetch::Failed(
             ErrorCode::Network,
             format!("{url}: HTTP {}", response.status),
@@ -339,7 +342,7 @@ mod tests {
         }
     }
 
-    const NOW: i64 = 1_790_000_000;
+    use nail_util::time::FIXTURE_NOW as NOW;
     const BOTH: [KeyLookupSource; 2] = [KeyLookupSource::Wkd, KeyLookupSource::KeysOpenpgpOrg];
 
     /// M2d review: these used to reach the UI as English `detail` text of

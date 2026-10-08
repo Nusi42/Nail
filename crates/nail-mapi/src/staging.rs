@@ -119,15 +119,20 @@ pub fn stage_attachments(
     Ok(staged)
 }
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-fn create_unique_dir(root: &Path) -> io::Result<PathBuf> {
+/// A name no other call of this process and no other process uses:
+/// `<pid>-<hex nanoseconds>-<n>` (the staging sweep recognizes it).
+pub(crate) fn unique_suffix() -> String {
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{}-{nanos:x}-{n}", std::process::id())
+}
+
+fn create_unique_dir(root: &Path) -> io::Result<PathBuf> {
     for _ in 0..64 {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = root.join(format!("{}-{nanos:x}-{n}", std::process::id()));
+        let dir = root.join(unique_suffix());
         match fs::create_dir(&dir) {
             Ok(()) => return Ok(dir),
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {}

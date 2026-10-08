@@ -3,6 +3,8 @@
 
 use std::fmt::Write as _;
 
+use nail_testkit_net::api_mock::MockReply;
+use nail_util::percent::decode as percent_decode;
 use serde_json::{Value, json};
 
 use super::mailbox::{Mailbox, MockError, MockResult};
@@ -29,31 +31,22 @@ pub(crate) struct State {
 }
 
 /// An answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Reply {
-    pub status: u16,
-    pub headers: Vec<(String, String)>,
-    pub body: Vec<u8>,
+pub(crate) type Reply = MockReply;
+
+/// Gmail's answers.
+trait Replies {
+    fn json(status: u16, value: &Value) -> Self;
+    fn empty() -> Self;
+    fn error(error: &MockError) -> Self;
 }
 
-impl Reply {
+impl Replies for Reply {
     fn json(status: u16, value: &Value) -> Self {
-        Self {
-            status,
-            headers: vec![(
-                "content-type".to_owned(),
-                "application/json; charset=UTF-8".to_owned(),
-            )],
-            body: value.to_string().into_bytes(),
-        }
+        Self::json_as(status, value, "application/json; charset=UTF-8")
     }
 
     fn empty() -> Self {
-        Self {
-            status: 204,
-            headers: Vec::new(),
-            body: Vec::new(),
-        }
+        Self::with_body(204, None, Vec::new())
     }
 
     fn error(error: &MockError) -> Self {
@@ -78,27 +71,6 @@ fn status_text(status: u16) -> &'static str {
         503 => "Service Unavailable",
         _ => "Status",
     }
-}
-
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let Some(b) = std::str::from_utf8(&bytes[i + 1..i + 3])
-                .ok()
-                .and_then(|h| u8::from_str_radix(h, 16).ok())
-        {
-            out.push(b);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 struct Query(Vec<(String, String)>);
@@ -149,11 +121,19 @@ impl Query {
     }
 }
 
-fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    headers
+use nail_util::named::first as header;
+
+/// The ids of a thread's messages (`404` for an unknown thread).
+fn thread_ids(mb: &Mailbox, thread: &str) -> Result<Vec<String>, MockError> {
+    let ids: Vec<String> = mb
+        .thread_messages(thread)
         .iter()
-        .find(|(n, _)| n.eq_ignore_ascii_case(name))
-        .map(|(_, v)| v.as_str())
+        .map(|m| m.id.clone())
+        .collect();
+    if ids.is_empty() {
+        return Err(MockError::not_found());
+    }
+    Ok(ids)
 }
 
 /// Gmail's quota units of a call.
@@ -209,16 +189,8 @@ fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Vec<(String, &'a [u8])
     out
 }
 
-fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    hay.windows(needle.len()).position(|w| w == needle)
-}
-
-fn part_header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
-    head.lines().find_map(|line| {
-        let (n, v) = line.split_once(':')?;
-        n.trim().eq_ignore_ascii_case(name).then(|| v.trim())
-    })
-}
+use nail_util::mime_text::find;
+use nail_util::named::in_lines as part_header;
 
 /// The message resource of an insert / send: JSON `raw` or a media upload.
 fn upload_message(
@@ -321,15 +293,10 @@ pub(crate) fn dispatch(
         return reply;
     }
     let target = format!("{path}?{query_text}");
-    if let Some(at) = state.errors.iter().position(|e| e.matches(method, &target)) {
-        let error = &mut state.errors[at];
+    if let Some(error) = InjectedError::take_due(&mut state.errors, method, &target) {
         let mut reply = Reply::json(error.status, &error.body);
-        if let Some(r) = &error.retry_after {
-            reply.headers.push(("retry-after".to_owned(), r.clone()));
-        }
-        error.times = error.times.saturating_sub(1);
-        if error.times == 0 {
-            state.errors.remove(at);
+        if let Some(r) = error.retry_after {
+            reply.headers.push(("retry-after".to_owned(), r));
         }
         return reply;
     }
@@ -595,14 +562,7 @@ fn route(
             ok(json!({ "id": id, "historyId": history.to_string(), "messages": list }))
         }
         ("POST", ["threads", id, action @ ("modify" | "trash" | "untrash")]) => {
-            let ids: Vec<String> = mb
-                .thread_messages(id)
-                .iter()
-                .map(|m| m.id.clone())
-                .collect();
-            if ids.is_empty() {
-                return Err(MockError::not_found());
-            }
+            let ids = thread_ids(mb, id)?;
             let v = body_json(body)?;
             for m in &ids {
                 match *action {
@@ -624,14 +584,7 @@ fn route(
             ok(json!({ "id": id }))
         }
         ("DELETE", ["threads", id]) => {
-            let ids: Vec<String> = mb
-                .thread_messages(id)
-                .iter()
-                .map(|m| m.id.clone())
-                .collect();
-            if ids.is_empty() {
-                return Err(MockError::not_found());
-            }
+            let ids = thread_ids(mb, id)?;
             for m in ids {
                 mb.delete(&m)?;
             }

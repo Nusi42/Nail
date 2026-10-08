@@ -771,8 +771,6 @@ async fn trim_bodies(ctx: &SyncCtx, folder: &Folder, cutoff: i64) -> Result<()> 
     Ok(())
 }
 
-/// The header block of a raw message (up to and including the empty
-/// line), or everything when there is no body.
 /// Whether new mail in a folder with `role` is "arriving" mail: queued
 /// for arrival rules and iTIP processing. Only the inbox and the user's
 /// own folders; never Sent (the user's own mail, also what Nail sent),
@@ -781,15 +779,9 @@ pub(crate) fn runs_arrival_rules(role: FolderRole) -> bool {
     matches!(role, FolderRole::Inbox | FolderRole::Other)
 }
 
-pub(crate) fn header_block(raw: &[u8]) -> &[u8] {
-    if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
-        return &raw[..i + 4];
-    }
-    if let Some(i) = raw.windows(2).position(|w| w == b"\n\n") {
-        return &raw[..i + 2];
-    }
-    raw
-}
+/// The header block of a raw message (up to and including the empty
+/// line), or everything when there is no body.
+pub(crate) use nail_util::mime_text::header_section as header_block;
 
 /// Drops a folder's messages and restarts its checkpoint under a new
 /// `UIDVALIDITY` (0 = unknown: fetch everything next time).

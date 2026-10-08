@@ -4,9 +4,12 @@
 
 use nail_api::gmail::LabelChange;
 use reqwest::Method;
+use serde::de::IgnoredAny;
 use serde_json::json;
 
-use crate::client::{Body, Call, GmailClient, parse_json};
+use nail_net::http::Body;
+
+use crate::client::{Call, GmailClient, parse_json};
 use crate::error::GmailError;
 use crate::wire::{
     BatchModifyRequest, Draft, ListMessagesResponse, Message, MessagePartBody, MessageRef,
@@ -196,7 +199,7 @@ impl GmailClient {
                 add_label_ids: change.add.clone(),
                 remove_label_ids: change.remove.clone(),
             };
-            self.call(
+            self.json::<IgnoredAny>(
                 Method::POST,
                 &["messages", "batchModify"],
                 &[],
@@ -237,7 +240,7 @@ impl GmailClient {
 
     /// `messages.delete` (permanent).
     pub async fn delete_message(&self, id: &str) -> Result<(), GmailError> {
-        self.call(
+        self.json::<IgnoredAny>(
             Method::DELETE,
             &["messages", id],
             &[],
@@ -370,7 +373,7 @@ impl GmailClient {
                 .await;
         }
         let boundary = boundary_for("nail_upload", raw);
-        let mut body = Vec::with_capacity(raw.len() + 512);
+        let mut body = Vec::with_capacity(raw.len());
         body.extend_from_slice(
             format!("--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n")
                 .as_bytes(),
@@ -392,6 +395,7 @@ impl GmailClient {
                 content_type: format!("multipart/related; boundary={boundary}"),
                 bytes: body,
             },
+            headers: Vec::new(),
             idempotent: false,
             what: what.to_owned(),
         };

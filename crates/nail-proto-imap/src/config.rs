@@ -18,29 +18,9 @@ pub enum Security {
     InsecurePlaintext,
 }
 
-/// Which certificates are trusted for TLS.
-#[derive(Clone, PartialEq, Eq, Default)]
-pub enum TlsTrust {
-    /// The operating system's trust store and revocation checks
-    /// (`rustls-platform-verifier`). The default.
-    #[default]
-    Platform,
-    /// Mozilla's root store compiled into the binary (`webpki-roots`).
-    WebPkiRoots,
-    /// Only the given DER-encoded root certificates (tests, pinned
-    /// self-signed servers).
-    CustomRoots(Vec<Vec<u8>>),
-}
-
-impl fmt::Debug for TlsTrust {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Platform => f.write_str("Platform"),
-            Self::WebPkiRoots => f.write_str("WebPkiRoots"),
-            Self::CustomRoots(roots) => write!(f, "CustomRoots({} certificates)", roots.len()),
-        }
-    }
-}
+/// Which certificates are trusted for TLS (shared with the other protocol
+/// clients).
+pub use nail_net::tls::TlsTrust;
 
 /// SASL mechanism / command used to authenticate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -198,18 +178,15 @@ impl Default for FetchBatchLimits {
 }
 
 impl ImapConfig {
-    /// Default per-operation timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
-
     /// Implicit TLS on port 993 with platform trust: the recommended setup.
     pub fn new(host: impl Into<String>) -> Self {
         Self {
             host: host.into(),
-            port: 993,
+            port: nail_net::ports::IMAPS,
             security: Security::ImplicitTls,
             tls_trust: TlsTrust::Platform,
             auth: AuthMechanism::Auto,
-            timeout: Self::DEFAULT_TIMEOUT,
+            timeout: nail_net::DEFAULT_TIMEOUT,
             fetch_batch: FetchBatchLimits::default(),
             compress: true,
             client_id: Some(default_client_id()),

@@ -118,14 +118,8 @@ impl FakeAppPipe {
 
 /// A pipe name no other test uses.
 pub fn unique_pipe_name(tag: &str) -> String {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
     format!(
-        r"\\.\pipe\nail-mapi-test-{tag}-{}-{nanos:x}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
+        r"\\.\pipe\nail-mapi-test-{tag}-{}",
+        crate::staging::unique_suffix()
     )
 }

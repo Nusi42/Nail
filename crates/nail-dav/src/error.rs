@@ -4,6 +4,7 @@
 use nail_api::ErrorCode;
 use nail_api::engine::EngineError;
 use nail_api::localized::LocalizedMessage;
+use nail_net::status as http_status;
 
 /// A failed DAV operation.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -74,26 +75,28 @@ pub enum DavError {
     NoScheduling,
 }
 
-impl DavError {
-    /// The error class for the UI.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::Network(_) | Self::Timeout | Self::Protocol(_) => ErrorCode::Network,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::AuthFailed => ErrorCode::AuthFailed,
-            Self::Forbidden(_) => ErrorCode::Forbidden,
-            Self::NotFound(_) | Self::NoService(_) => ErrorCode::NotFound,
-            Self::PreconditionFailed | Self::InvalidSyncToken => ErrorCode::Conflict,
-            Self::RateLimited(_) => ErrorCode::RateLimited,
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::Status { status, .. } if *status >= 500 => ErrorCode::Unavailable,
-            Self::Status { .. } => ErrorCode::Rejected,
-            Self::InsecureUrl(_) | Self::RedirectNeedsLogin(_) => ErrorCode::Config,
-            Self::Token(e) => e.code,
-            Self::NoScheduling => ErrorCode::Unsupported,
-        }
+nail_net::client_error_classes!(DavError, "dav", Token,
+    codes {
+        Self::NoService(_) => ErrorCode::NotFound,
+        Self::PreconditionFailed | Self::InvalidSyncToken => ErrorCode::Conflict,
+        Self::RateLimited(_) => ErrorCode::RateLimited,
+        Self::RedirectNeedsLogin(_) => ErrorCode::Config,
+        Self::NoScheduling => ErrorCode::Unsupported,
     }
+    texts {
+        Self::NoService(_) => LocalizedMessage::new("dav-not-found"),
+        Self::PreconditionFailed => LocalizedMessage::new("dav-conflict"),
+        Self::InvalidSyncToken => LocalizedMessage::new("dav-sync-token-invalid"),
+        Self::RateLimited(_) => LocalizedMessage::new("dav-rate-limited"),
+        Self::RedirectNeedsLogin(host) => {
+            LocalizedMessage::new("dav-redirect-login").arg("host", host.as_str())
+        },
+        Self::NoScheduling => LocalizedMessage::new("dav-no-scheduling"),
+        Self::Token(e) => nail_net::http::token_text(e, "dav-token"),
+    }
+);
 
+impl DavError {
     /// Whether trying again later may succeed.
     pub fn retryable(&self) -> bool {
         match self {
@@ -101,37 +104,6 @@ impl DavError {
             Self::Status { status, .. } => *status >= 500,
             Self::Token(e) => e.retryable,
             _ => false,
-        }
-    }
-
-    /// The user-facing text.
-    pub fn localized(&self) -> LocalizedMessage {
-        match self {
-            Self::Network(_) => LocalizedMessage::new("dav-network"),
-            Self::Timeout => LocalizedMessage::new("dav-timeout"),
-            Self::Tls(_) => LocalizedMessage::new("dav-tls"),
-            Self::AuthFailed => LocalizedMessage::new("dav-auth-failed"),
-            Self::Forbidden(_) => LocalizedMessage::new("dav-forbidden"),
-            Self::NotFound(_) => LocalizedMessage::new("dav-missing"),
-            Self::NoService(_) => LocalizedMessage::new("dav-not-found"),
-            Self::PreconditionFailed => LocalizedMessage::new("dav-conflict"),
-            Self::InvalidSyncToken => LocalizedMessage::new("dav-sync-token-invalid"),
-            Self::RateLimited(_) => LocalizedMessage::new("dav-rate-limited"),
-            Self::TooLarge(_) => LocalizedMessage::new("dav-too-large"),
-            Self::Status { status, .. } => {
-                LocalizedMessage::new("dav-http-status").arg("status", i64::from(*status))
-            }
-            Self::Protocol(_) => LocalizedMessage::new("dav-bad-response"),
-            Self::InsecureUrl(_) => LocalizedMessage::new("dav-insecure-url"),
-            Self::RedirectNeedsLogin(host) => {
-                LocalizedMessage::new("dav-redirect-login").arg("host", host.as_str())
-            }
-            Self::NoScheduling => LocalizedMessage::new("dav-no-scheduling"),
-            Self::Token(e) => e
-                .localized
-                .as_deref()
-                .cloned()
-                .unwrap_or_else(|| LocalizedMessage::new("dav-token")),
         }
     }
 
@@ -162,10 +134,10 @@ impl DavError {
         match status {
             401 => Self::AuthFailed,
             403 => Self::Forbidden(what.to_owned()),
-            404 | 410 => Self::NotFound(what.to_owned()),
+            404 | http_status::GONE => Self::NotFound(what.to_owned()),
             412 => Self::PreconditionFailed,
-            413 | 507 => Self::TooLarge(what.to_owned()),
-            429 | 503 => Self::RateLimited(retry_after),
+            http_status::CONTENT_TOO_LARGE | 507 => Self::TooLarge(what.to_owned()),
+            http_status::TOO_MANY_REQUESTS | 503 => Self::RateLimited(retry_after),
             _ => Self::Status {
                 status,
                 message: what.to_owned(),
@@ -174,24 +146,15 @@ impl DavError {
     }
 }
 
-impl From<DavError> for EngineError {
-    fn from(err: DavError) -> Self {
-        if let DavError::Token(inner) = err {
-            return *inner;
-        }
-        let localized = err.localized();
-        let out = if err.retryable() {
-            EngineError::temporary(err.code(), err.to_string())
-        } else {
-            EngineError::permanent(err.code(), err.to_string())
-        };
-        out.with_localized(localized)
-    }
-}
+nail_net::transport_errors!(DavError);
+
+nail_net::engine_error_from!(DavError, Token, |_: &DavError| None);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    nail_testkit::error_texts_test!(DavError, "core-dav.ftl", crate::scheduling::MESSAGE_IDS);
 
     fn all() -> Vec<DavError> {
         vec![
@@ -264,35 +227,5 @@ mod tests {
         let token = EngineError::temporary(ErrorCode::Network, "token endpoint down");
         let passed: EngineError = DavError::Token(Box::new(token.clone())).into();
         assert_eq!(passed, token);
-    }
-
-    #[test]
-    fn every_error_has_a_listed_message() {
-        for error in all() {
-            let id = error.localized().id;
-            assert!(DavError::MESSAGE_IDS.contains(&id.as_str()), "{id}");
-            assert_ne!(error.to_string().len(), 0);
-        }
-    }
-
-    #[test]
-    fn catalog_has_every_message() {
-        let catalog = include_str!("../../../locales/en/core-dav.ftl");
-        for id in DavError::MESSAGE_IDS
-            .into_iter()
-            .chain(crate::scheduling::MESSAGE_IDS)
-        {
-            assert!(
-                catalog.lines().any(|l| l.starts_with(&format!("{id} ="))),
-                "{id} missing in locales/en/core-dav.ftl"
-            );
-        }
-        let german = include_str!("../../../locales/de/core-dav.ftl");
-        assert!(
-            german
-                .lines()
-                .all(|l| l.trim().is_empty() || l.starts_with('#')),
-            "the German catalog stays empty"
-        );
     }
 }

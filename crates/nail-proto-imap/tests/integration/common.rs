@@ -1,12 +1,10 @@
 //! Shared helpers of the IMAP client integration tests.
 
-use std::time::Duration;
-
 use nail_api::FolderRole;
 use nail_proto_imap::{Credentials, ImapClient, ImapConfig, Security, TlsTrust};
 use nail_testkit::{MailStore, MockCapabilities, MockImapConfig, MockImapServer, NO_FLAGS};
 
-pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) use nail_testkit::TEST_TIMEOUT as TIMEOUT;
 pub(crate) const TOKEN: &str = "ya29.mock-access-token";
 
 /// A small message with a subject.

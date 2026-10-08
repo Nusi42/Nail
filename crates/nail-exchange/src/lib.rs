@@ -42,6 +42,7 @@
 #![warn(missing_docs)]
 
 pub mod autodiscover;
+pub mod engine_glue;
 pub mod http;
 pub mod mapping;
 pub mod negotiate;
@@ -51,7 +52,6 @@ pub mod sspi;
 pub mod testing;
 pub mod texts;
 pub mod transfer;
-mod xml;
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

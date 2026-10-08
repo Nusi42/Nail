@@ -6,8 +6,10 @@
 
 use chrono::{TimeZone, Utc};
 use chrono_tz::Tz;
-use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
-use nail_api::localized::{LocalizedMessage, MessageArg};
+mod common;
+
+use common::english::English;
+use nail_api::localized::LocalizedMessage;
 use nail_api::pim::PimTime;
 use nail_api::pim::calendar::{
     Attendee, AttendeeKind, CalendarEvent, EventInstance, EventStatus, ParticipationStatus,
@@ -36,37 +38,9 @@ const SPOOFED: &[u8] = include_bytes!("fixtures/spoofed-request.eml");
 
 const GOOGLE_UID: &str = "5k1d9m3q7v0hb2c8e4f6g1j3l5@google.com";
 
-struct English(FluentBundle<FluentResource>);
-
-impl English {
-    fn new() -> Self {
-        let mut bundle = FluentBundle::new(vec!["en".parse().unwrap()]);
-        bundle.set_use_isolating(false);
-        let text = include_str!("../../../locales/en/itip.ftl").to_owned();
-        bundle
-            .add_resource(FluentResource::try_new(text).unwrap())
-            .unwrap();
-        Self(bundle)
-    }
-}
-
 impl Localizer for English {
     fn render(&self, message: &LocalizedMessage) -> String {
-        let pattern = self.0.get_message(&message.id).unwrap().value().unwrap();
-        let mut args = FluentArgs::new();
-        for (name, value) in &message.args {
-            match value {
-                MessageArg::Number(n) => args.set(name.as_str(), FluentValue::from(*n)),
-                MessageArg::Text(t) => args.set(name.as_str(), FluentValue::from(t.as_str())),
-            }
-        }
-        let mut errors = Vec::new();
-        let out = self
-            .0
-            .format_pattern(pattern, Some(&args), &mut errors)
-            .into_owned();
-        assert!(errors.is_empty(), "{errors:?}");
-        out
+        self.text(message)
     }
 }
 
@@ -101,6 +75,21 @@ fn copy(event: &CalendarEvent) -> StoredCopy<'_> {
     }
 }
 
+/// A reply to Ada's stored copy, read without issues, and its card (an
+/// update of the stored event).
+fn update_card(
+    received: &nail_itip::imip::ReceivedImip,
+    ada_copy: &CalendarEvent,
+) -> (ItipObject, nail_api::scheduling::Invitation) {
+    let reply = received.parse();
+    assert!(reply.issues.is_empty(), "{:?}", reply.issues);
+    let ada = me("ada@example.org");
+    let senders = received.senders();
+    let inv = card(&reply, &senders, &ada, Some(copy(ada_copy)));
+    assert_eq!(inv.state, InvitationState::Update);
+    (reply, inv)
+}
+
 fn card<'a>(
     object: &'a ItipObject,
     senders: &'a [String],
@@ -121,8 +110,15 @@ fn card<'a>(
 }
 
 fn status(event: &CalendarEvent, email: &str) -> Option<ParticipationStatus> {
-    event
-        .fields
+    status_in(&event.fields, email)
+}
+
+/// The status of attendee `email` (any case) in an event's fields.
+fn status_in(
+    fields: &nail_api::pim::calendar::EventFields,
+    email: &str,
+) -> Option<ParticipationStatus> {
+    fields
         .attendees
         .iter()
         .find(|a| a.email.eq_ignore_ascii_case(email))
@@ -491,12 +487,7 @@ fn apple_declines_one_occurrence() {
     // Apple attaches the calendar part (text/calendar with a file name).
     assert!(received.attachment);
     assert_eq!(received.method_param.as_deref(), Some("REPLY"));
-    let reply = received.parse();
-    assert!(reply.issues.is_empty(), "{:?}", reply.issues);
-    let ada = me("ada@example.org");
-    let senders = received.senders();
-    let inv = card(&reply, &senders, &ada, Some(copy(&ada_copy)));
-    assert_eq!(inv.state, InvitationState::Update);
+    let (reply, inv) = update_card(&received, &ada_copy);
     assert_eq!(inv.recurrence_id, Some(berlin("2026-10-19T10:00:00")));
     assert_eq!(
         inv.from_attendee.as_ref().map(|a| a.status),
@@ -510,11 +501,7 @@ fn apple_declines_one_occurrence() {
     );
     let o = apply::override_for(&recorded, &berlin("2026-10-19T10:00:00")).unwrap();
     assert_eq!(
-        o.fields
-            .attendees
-            .iter()
-            .find(|a| a.email == "bob@example.org")
-            .map(|a| a.status),
+        status_in(&o.fields, "bob@example.org"),
         Some(ParticipationStatus::Declined)
     );
     assert_eq!(o.fields.end, berlin("2026-10-19T10:30:00"));
@@ -526,12 +513,7 @@ fn thunderbird_accepts_the_series() {
     let (ada_copy, _) = store(&request, "ada-ev");
     let received = find_itip(THUNDERBIRD_REPLY).unwrap();
     assert!(!received.attachment);
-    let reply = received.parse();
-    assert!(reply.issues.is_empty(), "{:?}", reply.issues);
-    let ada = me("ada@example.org");
-    let senders = received.senders();
-    let inv = card(&reply, &senders, &ada, Some(copy(&ada_copy)));
-    assert_eq!(inv.state, InvitationState::Update);
+    let (reply, inv) = update_card(&received, &ada_copy);
     assert_eq!(inv.comment.as_deref(), Some("See you Monday."));
     let recorded = apply::apply_reply(&ada_copy, &reply).unwrap();
     assert_eq!(

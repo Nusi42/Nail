@@ -2,19 +2,12 @@
 //! can be upgraded to TLS in the middle of a session (STARTTLS / STLS).
 
 use std::io;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
-use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
-};
+use nail_net::io::{LineRead, MAX_LINE, read_line_limited};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::server::TlsStream;
-
-/// Longest command line a mock server accepts (SMTP allows 512 octets plus
-/// extensions; SASL responses can be longer).
-pub(crate) const MAX_LINE: u64 = 64 * 1024;
 
 /// Plain TCP or server-side TLS over TCP.
 #[derive(Debug)]
@@ -29,45 +22,7 @@ impl MockStream {
     }
 }
 
-impl AsyncRead for MockStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_read(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for MockStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_write(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_flush(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_shutdown(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
-        }
-    }
-}
+nail_net::delegate_stream_enum!(MockStream { Plain, Tls });
 
 /// A buffered connection of a line-based mock server.
 #[derive(Debug)]
@@ -113,22 +68,27 @@ impl Connection {
 
     /// Reads one line without the trailing CRLF / LF. `None` at EOF.
     pub(crate) async fn read_line(&mut self) -> io::Result<Option<Vec<u8>>> {
-        let mut line = Vec::new();
-        let n = (&mut self.reader)
-            .take(MAX_LINE)
-            .read_until(b'\n', &mut line)
-            .await?;
-        if n == 0 {
+        match read_line_limited(&mut self.reader, MAX_LINE).await? {
+            LineRead::Eof => Ok(None),
+            LineRead::TooLong => Err(io::Error::new(io::ErrorKind::InvalidData, "line too long")),
+            LineRead::Line(mut line) => {
+                if line.ends_with(b"\r") {
+                    line.pop();
+                }
+                Ok(Some(line))
+            }
+        }
+    }
+
+    /// Reads the next command line as text with its upper-case verb;
+    /// `None` at EOF.
+    pub(crate) async fn next_command(&mut self) -> io::Result<Option<(String, String)>> {
+        let Some(raw) = self.read_line().await? else {
             return Ok(None);
-        }
-        if !line.ends_with(b"\n") {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "line too long"));
-        }
-        line.pop();
-        if line.ends_with(b"\r") {
-            line.pop();
-        }
-        Ok(Some(line))
+        };
+        let line = String::from_utf8_lossy(&raw).into_owned();
+        let verb = verb(&line);
+        Ok(Some((line, verb)))
     }
 
     /// Reads exactly `n` bytes (a ManageSieve `{n+}` literal).

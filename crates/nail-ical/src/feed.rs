@@ -61,11 +61,7 @@ pub fn fetch_url(url: &str) -> Option<String> {
     if rest.is_empty() || rest.starts_with('/') || url.chars().any(char::is_whitespace) {
         return None;
     }
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = match authority.rsplit_once(':') {
-        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
-        _ => authority,
-    };
+    let host = nail_api::pim::authority_host(rest);
     match scheme.to_ascii_lowercase().as_str() {
         "webcal" | "http" if is_loopback(host) => Some(format!("http://{rest}")),
         "https" | "webcals" | "webcal" => Some(format!("https://{rest}")),
@@ -85,13 +81,13 @@ pub fn first_start(feed: &ParsedCalendar) -> Option<PimTime> {
 mod tests {
     use super::*;
 
-    const FEED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example CMS//EN\r\nX-WR-CALNAME:Town events\r\nX-WR-TIMEZONE:America/Chicago\r\nREFRESH-INTERVAL;VALUE=DURATION:P1D\r\n\
+    const TOWN_FEED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example CMS//EN\r\nX-WR-CALNAME:Town events\r\nX-WR-TIMEZONE:America/Chicago\r\nREFRESH-INTERVAL;VALUE=DURATION:P1D\r\n\
 BEGIN:VEVENT\r\nUID:1@cms\r\nDTSTART:20261031T180000\r\nDTEND:20261031T210000\r\nSUMMARY:Halloween parade\r\nEND:VEVENT\r\n\
 BEGIN:VEVENT\r\nUID:2@cms\r\nDTSTART;VALUE=DATE:20261126\r\nSUMMARY:Thanksgiving\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
     #[test]
     fn feeds_use_their_zone_and_interval() {
-        let feed = parse_feed(FEED);
+        let feed = parse_feed(TOWN_FEED);
         assert_eq!(feed.name.as_deref(), Some("Town events"));
         assert_eq!(feed.refresh_minutes, Some(1440));
         assert_eq!(
@@ -111,7 +107,7 @@ BEGIN:VEVENT\r\nUID:2@cms\r\nDTSTART;VALUE=DATE:20261126\r\nSUMMARY:Thanksgiving
         );
         let utf16: Vec<u8> = [0xff, 0xfe]
             .into_iter()
-            .chain(FEED.encode_utf16().flat_map(u16::to_le_bytes))
+            .chain(TOWN_FEED.encode_utf16().flat_map(u16::to_le_bytes))
             .collect();
         assert_eq!(parse_feed_bytes(&utf16).events.len(), 2);
     }

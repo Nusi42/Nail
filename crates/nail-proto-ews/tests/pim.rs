@@ -4,8 +4,6 @@
 //! tasks.
 #![cfg(test)]
 
-use std::time::Duration;
-
 use nail_api::ErrorCode;
 use nail_api::engine::FreeBusyProvider;
 use nail_api::exchange::engine::{
@@ -21,26 +19,27 @@ use nail_api::exchange::pim::{
 use nail_api::exchange::rules::{ExchangeInboxRule, ExchangeRuleActions, ExchangeRuleConditions};
 use nail_api::exchange::{CategoryColor, ExchangeCategorySettings, ExchangeCollectionRole};
 use nail_api::scheduling::{BusyKind, FreeBusyQuery, FreeBusySource, InvitationResponse};
-use nail_proto_ews::client::{CALL_TIMEOUT, lane_http};
+use nail_proto_ews::EwsEngine;
 use nail_proto_ews::testing::{
     DELEGATE_ADDRESS, MockEwsServer, OWN_ADDRESS, PRIVATE_ADDRESS, ROOM_LIST, ROOMS,
     SHARED_ADDRESS, fixtures,
 };
 use nail_proto_ews::types::FolderRef;
-use nail_proto_ews::{EwsAuth, EwsClient, EwsEngine, RetryPolicy};
 use pretty_assertions::assert_eq;
 
 fn engine(server: &MockEwsServer) -> EwsEngine {
-    let client = EwsClient::with_http(
-        lane_http(CALL_TIMEOUT).unwrap(),
-        lane_http(Duration::from_mins(2)).unwrap(),
-        &server.url(),
-        EwsAuth::None,
-    )
-    .unwrap()
-    .with_own_address(OWN_ADDRESS)
-    .with_retry(RetryPolicy::fast());
-    EwsEngine::new(client, "work".into())
+    server.engine("work").unwrap()
+}
+
+/// The demo server, an engine and the own calendar's id.
+async fn with_calendar() -> (MockEwsServer, EwsEngine, ExchangePimFolder) {
+    let server = MockEwsServer::start().await.unwrap();
+    let engine = engine(&server);
+    let calendar = find_folder(
+        &engine.pim_folders(None).await.unwrap(),
+        PimFolderKind::Calendar,
+    );
+    (server, engine, calendar)
 }
 
 fn delta(outcome: PimDeltaOutcome) -> PimDelta {
@@ -205,13 +204,9 @@ fn nail_rule() -> ExchangeInboxRule {
 async fn inbox_rules_are_listed_created_and_changed() {
     let server = MockEwsServer::start().await.unwrap();
     let engine = engine(&server);
-    let rules = engine.inbox_rules().await.unwrap();
-    assert_eq!(rules.len(), 2);
-    assert_eq!(rules[0].name, "Newsletters");
-    assert!(!rules[0].has_unsupported);
+    let rules = nail_testkit::exchange::demo_inbox_rules(&engine).await;
     assert_eq!(rules[0].actions.assign_categories, ["Personal"]);
     let voicemail = rules[1].clone();
-    assert!(voicemail.has_unsupported);
 
     let id = engine.create_inbox_rule(&nail_rule()).await.unwrap();
     let rules = engine.inbox_rules().await.unwrap();
@@ -239,9 +234,7 @@ async fn inbox_rules_are_listed_created_and_changed() {
     assert_eq!(raw.child_text("IsEnabled"), Some("false"));
     assert!(raw.path(&["Conditions", "IsVoicemail"]).is_some());
 
-    engine.delete_inbox_rule(&id).await.unwrap();
-    engine.delete_inbox_rule(&id).await.unwrap();
-    assert_eq!(engine.inbox_rules().await.unwrap().len(), 2);
+    nail_testkit::exchange::delete_inbox_rule_twice(&engine, &id).await;
     let mut missing = nail_rule();
     missing.id = "AQAAAJ5Rnope".into();
     assert_eq!(
@@ -452,12 +445,7 @@ async fn pim_folders_of_own_and_delegated_mailboxes() {
 
 #[tokio::test]
 async fn calendar_sync_reads_series_and_singles() {
-    let server = MockEwsServer::start().await.unwrap();
-    let engine = engine(&server);
-    let calendar = find_folder(
-        &engine.pim_folders(None).await.unwrap(),
-        PimFolderKind::Calendar,
-    );
+    let (server, engine, calendar) = with_calendar().await;
     let first = delta(engine.pim_changes(None, &calendar, None).await.unwrap());
     let list = events(&first);
     assert_eq!(list.len(), 2);
@@ -595,12 +583,7 @@ fn meeting() -> ExchangeEvent {
 
 #[tokio::test]
 async fn meetings_are_created_updated_and_cancelled() {
-    let server = MockEwsServer::start().await.unwrap();
-    let engine = engine(&server);
-    let calendar = find_folder(
-        &engine.pim_folders(None).await.unwrap(),
-        PimFolderKind::Calendar,
-    );
+    let (server, engine, calendar) = with_calendar().await;
     let start = delta(engine.pim_changes(None, &calendar, None).await.unwrap());
     let ExchangePimWriteOutcome::Done {
         remote_id,
@@ -776,12 +759,7 @@ async fn meetings_are_created_updated_and_cancelled() {
 
 #[tokio::test]
 async fn series_exceptions_and_cancelled_occurrences() {
-    let server = MockEwsServer::start().await.unwrap();
-    let engine = engine(&server);
-    let calendar = find_folder(
-        &engine.pim_folders(None).await.unwrap(),
-        PimFolderKind::Calendar,
-    );
+    let (server, engine, calendar) = with_calendar().await;
     let first = delta(engine.pim_changes(None, &calendar, None).await.unwrap());
     let mut series = events(&first)
         .into_iter()

@@ -18,6 +18,7 @@ use nail_api::security::{
     CryptoTechnology, DecryptionState, EncryptionInfo, HeaderProtection, SecurityStatus,
     SignatureInfo, SignatureState, TrustLevel,
 };
+use nail_util::mime_text::{find, unescape_backslashes};
 use rand::RngCore;
 use rand::rngs::OsRng;
 
@@ -106,32 +107,8 @@ pub(crate) fn split_entity(entity: &[u8]) -> (&[u8], &[u8]) {
     }
 }
 
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
-}
-
 /// Unfolded headers as (lowercase name, value).
-pub(crate) fn headers(block: &[u8]) -> Vec<(String, String)> {
-    let text = String::from_utf8_lossy(block);
-    let mut out: Vec<(String, String)> = Vec::new();
-    for line in text.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with([' ', '\t']) {
-            if let Some((_, value)) = out.last_mut() {
-                value.push(' ');
-                value.push_str(line.trim());
-            }
-            continue;
-        }
-        if let Some((name, value)) = line.split_once(':') {
-            out.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
-        }
-    }
-    out
-}
+pub(crate) use nail_util::mime_text::unfold_headers as headers;
 
 fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
     headers
@@ -150,7 +127,7 @@ pub(crate) fn parse_content_type(value: &str) -> ContentType {
             let (k, v) = p.split_once('=')?;
             let v = v.trim();
             let v = if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
-                unescape(&v[1..v.len() - 1])
+                unescape_backslashes(&v[1..v.len() - 1])
             } else {
                 v.to_owned()
             };
@@ -185,21 +162,6 @@ fn split_params(value: &str) -> Vec<String> {
         }
     }
     out.push(current);
-    out
-}
-
-fn unescape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(next) = chars.next() {
-                out.push(next);
-            }
-        } else {
-            out.push(c);
-        }
-    }
     out
 }
 
@@ -310,13 +272,8 @@ pub(crate) fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Result<Vec<
     let delimiter = delimiter.as_bytes();
     let mut parts = Vec::new();
     let mut part_start: Option<usize> = None;
-    let mut line_start = 0usize;
     let mut closed = false;
-    while line_start <= body.len() {
-        let line_end = body[line_start..]
-            .iter()
-            .position(|b| *b == b'\n')
-            .map_or(body.len(), |p| line_start + p);
+    for (line_start, line_end) in nail_util::mime_text::lines(body) {
         let line = &body[line_start..line_end];
         if line.starts_with(delimiter) {
             let rest = &line[delimiter.len()..];
@@ -340,7 +297,6 @@ pub(crate) fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Result<Vec<
                 part_start = Some((line_end + 1).min(body.len()));
             }
         }
-        line_start = line_end + 1;
     }
     if !closed && part_start.is_some() {
         // Tolerate a missing close delimiter: the last part runs to the end.
@@ -718,6 +674,17 @@ mod tests {
         read(entity, &ctx).unwrap()
     }
 
+    /// The entity was decrypted, carries one valid signature and reads as
+    /// `content`.
+    fn assert_decrypted_and_signed(outcome: &ReadOutcome, content: &[u8]) {
+        assert_eq!(
+            outcome.status.encryption.as_ref().unwrap().state,
+            DecryptionState::Decrypted
+        );
+        assert_eq!(signature(outcome).state, SignatureState::Valid);
+        assert_eq!(outcome.content, content);
+    }
+
     fn signature(outcome: &ReadOutcome) -> &SignatureInfo {
         let [signature] = outcome.status.signatures.as_slice() else {
             panic!("one signature expected: {:?}", outcome.status)
@@ -909,12 +876,7 @@ mod tests {
             "alice@example.org",
         )
         .unwrap();
-        assert_eq!(
-            outcome.status.encryption.as_ref().unwrap().state,
-            DecryptionState::Decrypted
-        );
-        assert_eq!(signature(&outcome).state, SignatureState::Valid);
-        assert_eq!(outcome.content, fixture("content.eml"));
+        assert_decrypted_and_signed(&outcome, &fixture("content.eml"));
         assert!(outcome.status.all_signatures_valid());
     }
 
@@ -976,12 +938,7 @@ mod tests {
             assert_eq!(classify(&encrypted), SmimeKind::AuthEnvelopedData);
             for reader in ["alice", "bob"] {
                 let outcome = read_as(&w, reader, &encrypted, "alice@example.org").unwrap();
-                assert_eq!(
-                    outcome.status.encryption.as_ref().unwrap().state,
-                    DecryptionState::Decrypted
-                );
-                assert_eq!(signature(&outcome).state, SignatureState::Valid);
-                assert_eq!(outcome.content, ENTITY);
+                assert_decrypted_and_signed(&outcome, ENTITY);
             }
         }
         let cbc = encrypt_entity(

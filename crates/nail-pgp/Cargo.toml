@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 # M4c WP122 (ADR 0094): keys on PKCS#11 smartcards.
 nail-pkcs11.workspace = true
+nail-net.workspace = true
+nail-util.workspace = true
 nail-api.workspace = true
 # The keyring and Autocrypt peer state live in the store (schema v5).
 nail-store.workspace = true

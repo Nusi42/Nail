@@ -14,8 +14,8 @@ use nail_api::scheduling::{BusyKind, BusyPeriod, FreeBusyQuery, utc_seconds};
 use crate::icalendar::{ContentLine, address_of};
 use crate::ops::utc_stamp;
 
-/// The `PRODID` Nail writes.
-pub const PRODID: &str = "-//Nail//Nail Scheduling//EN";
+/// The `PRODID` of the free/busy requests Nail writes.
+pub const FREEBUSY_PRODID: &str = "-//Nail//Nail Scheduling//EN";
 
 /// Most periods read from one `VFREEBUSY` (a hostile server cannot make
 /// Nail allocate without bound).
@@ -25,78 +25,17 @@ pub const MAX_PERIODS: usize = 20_000;
 // Time helpers
 
 /// Unix seconds → `YYYY-MM-DDTHH:MM:SSZ`.
-pub fn rfc3339(secs: i64) -> String {
-    let s = utc_stamp(secs);
-    format!(
-        "{}-{}-{}T{}:{}:{}Z",
-        &s[0..4],
-        &s[4..6],
-        &s[6..8],
-        &s[9..11],
-        &s[11..13],
-        &s[13..15]
-    )
-}
+pub use nail_util::time::rfc3339_utc as rfc3339;
 
 /// An iCalendar `DATE-TIME` (`YYYYMMDDTHHMMSS`, `Z` optional: free/busy
 /// times are UTC by definition) or `DATE` (`YYYYMMDD`, midnight UTC) →
 /// Unix seconds.
-pub fn ical_seconds(value: &str) -> Option<i64> {
-    let v = value.trim();
-    let v = v.strip_suffix(['Z', 'z']).unwrap_or(v);
-    let b = v.as_bytes();
-    let digits =
-        |r: std::ops::Range<usize>| b.get(r).is_some_and(|s| s.iter().all(u8::is_ascii_digit));
-    let text = match b.len() {
-        8 if digits(0..8) => format!("{}-{}-{}T00:00:00Z", &v[0..4], &v[4..6], &v[6..8]),
-        15 if digits(0..8) && b[8].eq_ignore_ascii_case(&b'T') && digits(9..15) => format!(
-            "{}-{}-{}T{}:{}:{}Z",
-            &v[0..4],
-            &v[4..6],
-            &v[6..8],
-            &v[9..11],
-            &v[11..13],
-            &v[13..15]
-        ),
-        _ => return None,
-    };
-    utc_seconds(&text)
-}
+pub use nail_util::ical_text::parse_utc_stamp as ical_seconds;
 
 /// An RFC 5545 `DURATION` (`P1W`, `P1DT2H`, `PT30M`, `+PT1H`) in seconds;
 /// negative durations are `None` (free/busy periods run forward).
 pub fn duration_seconds(value: &str) -> Option<i64> {
-    let v = value.trim();
-    let v = v.strip_prefix('+').unwrap_or(v);
-    let rest = v.strip_prefix(['P', 'p'])?;
-    if rest.is_empty() {
-        return None;
-    }
-    let mut total: i64 = 0;
-    let mut number = String::new();
-    let mut in_time = false;
-    let mut any = false;
-    for c in rest.chars() {
-        match c.to_ascii_uppercase() {
-            '0'..='9' => number.push(c),
-            'T' if number.is_empty() && !in_time => in_time = true,
-            unit => {
-                let n: i64 = number.parse().ok()?;
-                number.clear();
-                let factor = match (unit, in_time) {
-                    ('W', false) => 7 * 86_400,
-                    ('D', false) => 86_400,
-                    ('H', true) => 3600,
-                    ('M', true) => 60,
-                    ('S', true) => 1,
-                    _ => return None,
-                };
-                total = total.checked_add(n.checked_mul(factor)?)?;
-                any = true;
-            }
-        }
-    }
-    (number.is_empty() && any).then_some(total)
+    nail_util::ical_text::parse_duration(value).filter(|_| !value.trim_start().starts_with('-'))
 }
 
 /// `YYYY-MM-DDTHH:MM:SS[.f]Z` → iCalendar `YYYYMMDDTHHMMSSZ`.
@@ -140,27 +79,18 @@ pub fn build_request(query: &FreeBusyQuery, uid: &str, dtstamp_unix: i64) -> Opt
     if end <= start {
         return None;
     }
-    let mut out = String::new();
-    for line in [
-        ContentLine::new("BEGIN", "VCALENDAR"),
-        ContentLine::new("VERSION", "2.0"),
-        ContentLine::new("PRODID", PRODID),
-        ContentLine::new("METHOD", "REQUEST"),
-        ContentLine::new("BEGIN", "VFREEBUSY"),
-        ContentLine::new("UID", uid),
-        ContentLine::new("DTSTAMP", utc_stamp(dtstamp_unix)),
-        ContentLine::new("DTSTART", utc_stamp(start)),
-        ContentLine::new("DTEND", utc_stamp(end)),
-        ContentLine::new("ORGANIZER", mailto(&query.organizer)),
-    ] {
-        out.push_str(&line.to_text());
-    }
-    for attendee in &query.attendees {
-        out.push_str(&ContentLine::new("ATTENDEE", mailto(attendee)).to_text());
-    }
-    out.push_str(&ContentLine::new("END", "VFREEBUSY").to_text());
-    out.push_str(&ContentLine::new("END", "VCALENDAR").to_text());
-    Some(out)
+    let attendees = query
+        .attendees
+        .iter()
+        .map(|attendee| ContentLine::new("ATTENDEE", mailto(attendee)));
+    let head = Head {
+        method: "REQUEST",
+        uid,
+        dtstamp_unix,
+        range: (start, end),
+        organizer: &query.organizer,
+    };
+    Some(head.write(attendees))
 }
 
 /// What a free/busy reply says.
@@ -186,35 +116,64 @@ pub struct FreeBusyReply<'a> {
 pub fn build_reply(reply: &FreeBusyReply<'_>, dtstamp_unix: i64) -> Option<String> {
     let start = utc_seconds(reply.from)?;
     let end = utc_seconds(reply.to)?;
-    let mut out = String::new();
-    for line in [
-        ContentLine::new("BEGIN", "VCALENDAR"),
-        ContentLine::new("VERSION", "2.0"),
-        ContentLine::new("PRODID", PRODID),
-        ContentLine::new("METHOD", "REPLY"),
-        ContentLine::new("BEGIN", "VFREEBUSY"),
-        ContentLine::new("UID", reply.uid),
-        ContentLine::new("DTSTAMP", utc_stamp(dtstamp_unix)),
-        ContentLine::new("DTSTART", utc_stamp(start)),
-        ContentLine::new("DTEND", utc_stamp(end)),
-        ContentLine::new("ORGANIZER", mailto(reply.organizer)),
-        ContentLine::new("ATTENDEE", mailto(reply.attendee)),
-    ] {
-        out.push_str(&line.to_text());
+    let periods = BusyPeriod::merge(reply.periods.to_vec())
+        .into_iter()
+        .filter_map(|period| {
+            let (s, e) = (ical_stamp(&period.start)?, ical_stamp(&period.end)?);
+            let mut line = ContentLine::new("FREEBUSY", format!("{s}/{e}"));
+            if period.kind != BusyKind::Busy {
+                line.set_param("FBTYPE", fbtype(period.kind));
+            }
+            Some(line)
+        });
+    let head = Head {
+        method: "REPLY",
+        uid: reply.uid,
+        dtstamp_unix,
+        range: (start, end),
+        organizer: reply.organizer,
+    };
+    Some(head.write(
+        std::iter::once(ContentLine::new("ATTENDEE", mailto(reply.attendee))).chain(periods),
+    ))
+}
+
+/// The fixed part of a `VFREEBUSY` object Nail writes.
+struct Head<'a> {
+    method: &'a str,
+    uid: &'a str,
+    dtstamp_unix: i64,
+    /// Start and end (Unix seconds).
+    range: (i64, i64),
+    organizer: &'a str,
+}
+
+impl Head<'_> {
+    /// The calendar object: the head, then `lines` inside the
+    /// `VFREEBUSY`.
+    fn write(&self, lines: impl Iterator<Item = ContentLine>) -> String {
+        let head = [
+            ContentLine::new("BEGIN", "VCALENDAR"),
+            ContentLine::new("VERSION", "2.0"),
+            ContentLine::new("PRODID", FREEBUSY_PRODID),
+            ContentLine::new("METHOD", self.method),
+            ContentLine::new("BEGIN", "VFREEBUSY"),
+            ContentLine::new("UID", self.uid),
+            ContentLine::new("DTSTAMP", utc_stamp(self.dtstamp_unix)),
+            ContentLine::new("DTSTART", utc_stamp(self.range.0)),
+            ContentLine::new("DTEND", utc_stamp(self.range.1)),
+            ContentLine::new("ORGANIZER", mailto(self.organizer)),
+        ];
+        let tail = [
+            ContentLine::new("END", "VFREEBUSY"),
+            ContentLine::new("END", "VCALENDAR"),
+        ];
+        head.into_iter()
+            .chain(lines)
+            .chain(tail)
+            .map(|line| line.to_text())
+            .collect()
     }
-    for period in BusyPeriod::merge(reply.periods.to_vec()) {
-        let (Some(s), Some(e)) = (ical_stamp(&period.start), ical_stamp(&period.end)) else {
-            continue;
-        };
-        let mut line = ContentLine::new("FREEBUSY", format!("{s}/{e}"));
-        if period.kind != BusyKind::Busy {
-            line.set_param("FBTYPE", fbtype(period.kind));
-        }
-        out.push_str(&line.to_text());
-    }
-    out.push_str(&ContentLine::new("END", "VFREEBUSY").to_text());
-    out.push_str(&ContentLine::new("END", "VCALENDAR").to_text());
-    Some(out)
 }
 
 // ---------------------------------------------------------------------------

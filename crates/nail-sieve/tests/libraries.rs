@@ -11,12 +11,9 @@ use sha2::{Digest, Sha256};
 
 #[test]
 fn rustls_client_config_uses_ring() {
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let config = rustls::ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_root_certificates(rustls::RootCertStore::empty())
-        .with_no_client_auth();
+    // The shared configuration of the protocol clients (nail-net).
+    let config =
+        nail_net::tls::client_config(&nail_sieve::TlsTrust::CustomRoots(Vec::new())).unwrap();
     let _connector = tokio_rustls::TlsConnector::from(Arc::new(config));
 }
 

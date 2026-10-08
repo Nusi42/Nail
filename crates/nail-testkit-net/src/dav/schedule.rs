@@ -306,12 +306,7 @@ pub(super) fn after_put(
     if organizer == my_email {
         let mut statuses: Vec<(String, String)> = Vec::new();
         let request_text = ical::as_itip(&stored, "REQUEST");
-        let mut seen: Vec<String> = Vec::new();
-        for attendee in events.iter().flat_map(|e| e.attendees.iter()) {
-            if attendee.email == my_email || !attendee.server || seen.contains(&attendee.email) {
-                continue;
-            }
-            seen.push(attendee.email.clone());
+        for attendee in server_attendees(&events, &my_email) {
             let status = deliver(
                 data,
                 &my_email,
@@ -324,6 +319,7 @@ pub(super) fn after_put(
             place_invitation(data, &attendee.email, &uid, &stored);
         }
         // Attendees taken off the meeting get a CANCEL.
+        let mut seen: Vec<String> = Vec::new();
         if let Some(previous) = previous {
             let cancel = cancel_text(previous);
             for event in ical::events(previous) {
@@ -502,12 +498,7 @@ pub(super) fn after_delete(data: &mut Data, me: &str, previous: &str, request: &
     let organizer = master.organizer.clone().unwrap_or_default();
     if organizer == my_email {
         let cancel = cancel_text(previous);
-        let mut seen: Vec<String> = Vec::new();
-        for attendee in events.iter().flat_map(|e| e.attendees.iter()) {
-            if attendee.email == my_email || !attendee.server || seen.contains(&attendee.email) {
-                continue;
-            }
-            seen.push(attendee.email.clone());
+        for attendee in server_attendees(&events, &my_email) {
             deliver(data, &my_email, &attendee.email, "CANCEL", &uid, &cancel);
             cancel_copy(data, &attendee.email, &uid);
         }
@@ -531,6 +522,19 @@ pub(super) fn after_delete(data: &mut Data, me: &str, previous: &str, request: &
         &[(my_email.clone(), "DECLINED".to_owned())],
     );
     send_reply(data, &my_email, &organizer, &uid, &reply, "DECLINED");
+}
+
+/// The attendees the server schedules for `me` (the organizer): those
+/// with `SCHEDULE-AGENT=SERVER`, once each, without `me`.
+fn server_attendees<'a>(events: &'a [ical::Event], me: &str) -> Vec<&'a ical::Attendee> {
+    let mut out: Vec<&ical::Attendee> = Vec::new();
+    for attendee in events.iter().flat_map(|e| e.attendees.iter()) {
+        if attendee.email != me && attendee.server && !out.iter().any(|a| a.email == attendee.email)
+        {
+            out.push(attendee);
+        }
+    }
+    out
 }
 
 #[cfg(test)]

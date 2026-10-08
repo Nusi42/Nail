@@ -4,22 +4,20 @@
 #![cfg(test)]
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use nail_api::ErrorCode;
 use nail_api::accounts::SecretRef;
 use nail_api::domain::Flags;
 use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, MemorySecretStore,
-    OutgoingTransport, RemoteWrite, SecretStore, SyncDelta, WriteOutcome,
+    DeltaOutcome, EngineError, Envelope, MemorySecretStore, OutgoingTransport, RemoteWrite,
+    SecretStore, SyncDelta, WriteOutcome,
 };
 use nail_api::exchange::engine::{
     ExchangeFolderClass, ExchangeMailEngine, HierarchyDelta, HierarchyOutcome,
 };
 use nail_api::exchange::{ExchangeWellKnownFolder, InferenceClassification};
 use nail_api::ops::FlagChange;
-use nail_proto_ews::client::{CALL_TIMEOUT, lane_http};
 use nail_proto_ews::testing::{
     FaultKind, InjectedFault, MockAuth, MockEwsServer, OWN_ADDRESS, SHARED_ADDRESS,
     ScriptedNegotiate, fixtures,
@@ -27,20 +25,12 @@ use nail_proto_ews::testing::{
 use nail_proto_ews::types::ItemRef;
 use nail_proto_ews::{
     EwsAuth, EwsClient, EwsEngine, EwsError, EwsOptions, FALLBACK_SERVER_VERSION, Password,
-    RetryPolicy,
 };
+use nail_testkit::tokens::FakeTokens as Tokens;
 use pretty_assertions::assert_eq;
 
 fn client(server: &MockEwsServer, auth: EwsAuth) -> EwsClient {
-    EwsClient::with_http(
-        lane_http(CALL_TIMEOUT).unwrap(),
-        lane_http(Duration::from_mins(2)).unwrap(),
-        &server.url(),
-        auth,
-    )
-    .unwrap()
-    .with_own_address(OWN_ADDRESS)
-    .with_retry(RetryPolicy::fast())
+    server.client(auth).unwrap()
 }
 
 fn engine(server: &MockEwsServer) -> EwsEngine {
@@ -747,32 +737,6 @@ async fn focused_inbox_is_read_when_enabled() {
 // ---------------------------------------------------------------------------
 // Logins
 
-#[derive(Debug, Default)]
-struct Tokens {
-    calls: AtomicU32,
-    refreshes: AtomicU32,
-}
-
-impl AccessTokenProvider for Tokens {
-    fn access_token<'a>(
-        &'a self,
-        provider: &'a str,
-        _secret: &'a SecretRef,
-        force_refresh: bool,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            assert_eq!(provider, "microsoft");
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            if force_refresh {
-                self.refreshes.fetch_add(1, Ordering::SeqCst);
-                Ok("fresh".to_owned())
-            } else {
-                Ok("stale".to_owned())
-            }
-        })
-    }
-}
-
 #[tokio::test]
 async fn basic_and_oauth_logins() {
     let server = MockEwsServer::start_with(MockAuth::Basic {
@@ -820,7 +784,7 @@ async fn basic_and_oauth_logins() {
     let oauth_server = MockEwsServer::start_with(MockAuth::Bearer(vec!["fresh".into()]))
         .await
         .unwrap();
-    let tokens = Arc::new(Tokens::default());
+    let tokens = Arc::new(Tokens::new("microsoft"));
     let oauth = engine_with(
         &oauth_server,
         EwsAuth::OAuth2 {
@@ -830,7 +794,7 @@ async fn basic_and_oauth_logins() {
         },
     );
     oauth.server_info().await.unwrap();
-    assert!(tokens.refreshes.load(Ordering::SeqCst) >= 1);
+    assert!(tokens.forced() >= 1);
     oauth_server.set_auth(MockAuth::Bearer(vec!["other".into()]));
     assert_eq!(
         oauth.server_info().await.unwrap_err().code,
@@ -843,6 +807,26 @@ fn basic(password: &str) -> EwsAuth {
         username: "CORP\\ada".into(),
         password: Password::Fixed(password.into()),
     }
+}
+
+/// A streaming wait for changes in `folders` (20 seconds) on its own task.
+fn wait_in_background(
+    engine: &Arc<EwsEngine>,
+    folders: Vec<String>,
+) -> tokio::task::JoinHandle<Result<Option<Vec<String>>, EngineError>> {
+    let engine = Arc::clone(engine);
+    tokio::spawn(async move { engine.wait_for_changes(None, &folders, 20).await })
+}
+
+/// What a [`wait_in_background`] reported (within ten seconds).
+async fn changes_of(
+    waiting: tokio::task::JoinHandle<Result<Option<Vec<String>>, EngineError>>,
+) -> Option<Vec<String>> {
+    tokio::time::timeout(Duration::from_secs(10), waiting)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
 }
 
 fn engine_with(server: &MockEwsServer, auth: EwsAuth) -> EwsEngine {
@@ -885,19 +869,11 @@ async fn negotiate_binds_to_the_connection() {
 
     // Streaming signs in on its own connection and does not block calls.
     let engine = Arc::new(engine);
-    let waiting = {
-        let engine = engine.clone();
-        let folders = vec![inbox.clone()];
-        tokio::spawn(async move { engine.wait_for_changes(None, &folders, 20).await })
-    };
+    let waiting = wait_in_background(&engine, vec![inbox.clone()]);
     tokio::time::sleep(Duration::from_millis(300)).await;
     delta(engine.folder_items(None, &inbox, None, None).await.unwrap());
     server.deliver(&inbox, fixtures::RECEIPT.as_bytes(), false);
-    let changed = tokio::time::timeout(Duration::from_secs(10), waiting)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let changed = changes_of(waiting).await;
     assert_eq!(changed, Some(vec![inbox.clone()]));
     let peers: std::collections::HashSet<_> = server.requests().iter().map(|r| r.peer).collect();
     assert!(peers.len() >= 2, "a second connection for the stream");
@@ -1010,18 +986,10 @@ async fn streaming_notifications_wake_the_wait() {
     assert_eq!(server.subscriptions().len(), 1);
 
     // New mail wakes the wait.
-    let waiting = {
-        let engine = engine.clone();
-        let folders = folders.clone();
-        tokio::spawn(async move { engine.wait_for_changes(None, &folders, 20).await })
-    };
+    let waiting = wait_in_background(&engine, folders.clone());
     tokio::time::sleep(Duration::from_millis(300)).await;
     server.deliver(&receipts, fixtures::RECEIPT.as_bytes(), false);
-    let changed = tokio::time::timeout(Duration::from_secs(10), waiting)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let changed = changes_of(waiting).await;
     assert_eq!(changed, Some(vec![receipts.clone()]));
     // The subscription is kept.
     assert_eq!(
@@ -1030,11 +998,7 @@ async fn streaming_notifications_wake_the_wait() {
     );
 
     // The server closes the stream and cuts it: the client reconnects.
-    let waiting = {
-        let engine = engine.clone();
-        let folders = folders.clone();
-        tokio::spawn(async move { engine.wait_for_changes(None, &folders, 20).await })
-    };
+    let waiting = wait_in_background(&engine, folders.clone());
     tokio::time::sleep(Duration::from_millis(300)).await;
     server.close_streams();
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -1042,11 +1006,7 @@ async fn streaming_notifications_wake_the_wait() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     let id = server.items_in(&inbox)[0].id.clone();
     server.set_read(&id, true);
-    let changed = tokio::time::timeout(Duration::from_secs(10), waiting)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let changed = changes_of(waiting).await;
     assert_eq!(changed, Some(vec![inbox.clone()]));
     let streams = server
         .operations()
@@ -1077,17 +1037,10 @@ async fn streaming_notifications_wake_the_wait() {
 
     // Distinguished names work as folder names.
     let named = vec!["inbox".to_owned()];
-    let waiting = {
-        let engine = engine.clone();
-        tokio::spawn(async move { engine.wait_for_changes(None, &named, 20).await })
-    };
+    let waiting = wait_in_background(&engine, named);
     tokio::time::sleep(Duration::from_millis(400)).await;
     server.deliver(&inbox, fixtures::RECEIPT.as_bytes(), false);
-    let changed = tokio::time::timeout(Duration::from_secs(10), waiting)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let changed = changes_of(waiting).await;
     assert_eq!(changed, Some(vec!["inbox".to_owned()]));
     let unsubscribed = server
         .operations()

@@ -1,12 +1,12 @@
 //! The HTTP side: authentication, URL policy, redirects, size limits,
 //! error mapping.
 
-use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use nail_api::accounts::SecretRef;
 use nail_api::engine::AccessTokenProvider;
+use nail_net::http::{self, TransportFailure as _};
 use reqwest::Method;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use url::Url;
@@ -15,9 +15,12 @@ use crate::error::DavError;
 
 /// Largest response body accepted (a big address book with photos in one
 /// multiget batch stays well below).
-pub const MAX_RESPONSE: usize = 64 * 1024 * 1024;
+pub use nail_net::http::MAX_ANSWER as MAX_RESPONSE;
 /// Most redirects followed for one request.
-pub const MAX_REDIRECTS: usize = 5;
+pub use nail_net::http::MAX_REDIRECTS;
+/// The URL policy (`https:`, or `http:` to a loopback host) and the origin
+/// a login belongs to.
+pub use nail_net::http::{is_allowed_url, same_origin};
 
 /// How the client signs in.
 #[derive(Clone, Default)]
@@ -46,22 +49,7 @@ pub enum DavAuth {
     },
 }
 
-impl fmt::Debug for DavAuth {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::None => f.write_str("None"),
-            Self::Basic { username, .. } => f
-                .debug_struct("Basic")
-                .field("username", username)
-                .finish_non_exhaustive(),
-            Self::Bearer(_) => f.write_str("Bearer(..)"),
-            Self::OAuth2 { provider, .. } => f
-                .debug_struct("OAuth2")
-                .field("provider", provider)
-                .finish_non_exhaustive(),
-        }
-    }
-}
+nail_net::login_debug!(DavAuth);
 
 /// `Depth` of a PROPFIND / REPORT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,28 +108,6 @@ impl Reply {
     pub fn error(&self, what: &str) -> DavError {
         DavError::from_status(self.status, self.retry_after(), what)
     }
-}
-
-/// Whether `url` may be used: `https:`, or `http:` to a loopback host.
-pub fn is_allowed_url(url: &Url) -> bool {
-    match url.scheme() {
-        "https" => true,
-        "http" => match url.host() {
-            Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
-            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-            None => false,
-        },
-        _ => false,
-    }
-}
-
-/// Whether two URLs share scheme, host and port (the origin the login
-/// belongs to).
-pub fn same_origin(a: &Url, b: &Url) -> bool {
-    a.scheme().eq_ignore_ascii_case(b.scheme())
-        && a.host_str().map(str::to_ascii_lowercase) == b.host_str().map(str::to_ascii_lowercase)
-        && a.port_or_known_default() == b.port_or_known_default()
 }
 
 /// Parses and checks a server URL ([`is_allowed_url`]).
@@ -208,42 +174,22 @@ impl DavClient {
     async fn authorization(&self, force_refresh: bool) -> Result<Option<String>, DavError> {
         Ok(match &self.auth {
             DavAuth::None => None,
-            DavAuth::Basic { username, password } => {
-                use base64::Engine as _;
-                let encoded = base64::engine::general_purpose::STANDARD
-                    .encode(format!("{username}:{password}"));
-                Some(format!("Basic {encoded}"))
-            }
-            DavAuth::Bearer(token) => Some(format!("Bearer {token}")),
+            DavAuth::Basic { username, password } => Some(http::basic(username, password)),
+            DavAuth::Bearer(token) => Some(http::bearer(token)),
             DavAuth::OAuth2 {
                 tokens,
                 provider,
                 secret,
-            } => {
-                let token = tokens
-                    .access_token(provider, secret, force_refresh)
+            } => Some(
+                http::oauth2_bearer(tokens.as_ref(), provider, secret, force_refresh)
                     .await
-                    .map_err(|e| DavError::Token(Box::new(e)))?;
-                Some(format!("Bearer {token}"))
-            }
+                    .map_err(|e| DavError::Token(Box::new(e)))?,
+            ),
         })
     }
 
     fn target(&self, url: &Url) -> (Url, Option<String>) {
-        match self.route_all_to {
-            None => (url.clone(), None),
-            Some(addr) => {
-                let mut routed = url.clone();
-                let host = match url.port() {
-                    Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()),
-                    None => url.host_str().unwrap_or_default().to_owned(),
-                };
-                let _ = routed.set_scheme("http");
-                let _ = routed.set_ip_host(addr.ip());
-                let _ = routed.set_port(Some(addr.port()));
-                (routed, Some(host))
-            }
-        }
+        http::route(url, self.route_all_to, true)
     }
 
     /// Sends one request; follows redirects for safe methods (`GET`,
@@ -291,7 +237,7 @@ impl DavClient {
                 refreshed = true;
                 continue;
             }
-            if follow && matches!(reply.status, 301 | 302 | 303 | 307 | 308) {
+            if follow && http::is_redirect(reply.status) {
                 let Some(location) = reply.header("location") else {
                     return Ok(reply);
                 };
@@ -349,50 +295,21 @@ impl DavClient {
                 .header(reqwest::header::CONTENT_TYPE, *content_type)
                 .body(bytes.clone());
         }
-        let mut response = request.send().await.map_err(transport_error)?;
+        let mut response = request
+            .send()
+            .await
+            .map_err(|e| DavError::from(http::transport_error(e)))?;
         let status = response.status().as_u16();
         let headers = response.headers().clone();
-        if response
-            .content_length()
-            .is_some_and(|l| l > MAX_RESPONSE as u64)
-        {
-            return Err(DavError::TooLarge(format!("answer from {url}")));
-        }
-        let mut body = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
-            if body.len() + chunk.len() > MAX_RESPONSE {
-                return Err(DavError::TooLarge(format!("answer from {url}")));
-            }
-            body.extend_from_slice(&chunk);
-        }
+        let body = http::read_limited(&mut response, MAX_RESPONSE)
+            .await
+            .map_err(|e| DavError::from_body(e, &format!("answer from {url}")))?;
         Ok(Reply {
             status,
             url: url.clone(),
             headers,
             body,
         })
-    }
-}
-
-/// Maps a reqwest error to a [`DavError`] (TLS problems are told apart by
-/// their source chain).
-fn transport_error(error: reqwest::Error) -> DavError {
-    let error = error.without_url();
-    if error.is_timeout() {
-        return DavError::Timeout;
-    }
-    let mut chain = String::new();
-    let mut source: Option<&dyn std::error::Error> = Some(&error);
-    while let Some(e) = source {
-        chain.push_str(&e.to_string());
-        chain.push_str(": ");
-        source = e.source();
-    }
-    let lower = chain.to_ascii_lowercase();
-    if lower.contains("certificate") || lower.contains("tls") || lower.contains("handshake") {
-        DavError::Tls(chain.trim_end_matches(": ").to_owned())
-    } else {
-        DavError::Network(chain.trim_end_matches(": ").to_owned())
     }
 }
 

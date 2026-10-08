@@ -23,24 +23,10 @@ use crate::error::{Result, SieveError};
 use crate::transport::{Conn, Token, encode_string};
 use crate::writer::to_crlf;
 
-/// Which certificates are trusted for TLS.
-#[derive(Clone, PartialEq, Eq, Default)]
-pub enum TlsTrust {
-    /// The operating system's trust store (the default).
-    #[default]
-    Platform,
-    /// Only these DER root certificates (tests, pinned servers).
-    CustomRoots(Vec<Vec<u8>>),
-}
-
-impl fmt::Debug for TlsTrust {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Platform => f.write_str("Platform"),
-            Self::CustomRoots(roots) => write!(f, "CustomRoots({} certificates)", roots.len()),
-        }
-    }
-}
+/// Which certificates are trusted for TLS (shared by every protocol
+/// client).
+pub use nail_net::trust::TlsTrust;
+use nail_net::trust::debug_login;
 
 /// How to reach a ManageSieve server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,35 +75,9 @@ impl SieveConfig {
             timeout: Self::DEFAULT_TIMEOUT,
         }
     }
-
-    /// Sets the port.
-    #[must_use]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
-    /// Sets the transport security.
-    #[must_use]
-    pub fn with_tls(mut self, tls: TlsMode) -> Self {
-        self.tls = tls;
-        self
-    }
-
-    /// Sets the trusted certificates.
-    #[must_use]
-    pub fn with_trust(mut self, trust: TlsTrust) -> Self {
-        self.trust = trust;
-        self
-    }
-
-    /// Sets the per-operation timeout.
-    #[must_use]
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
-    }
 }
+
+nail_net::endpoint_builders!(SieveConfig, TlsMode);
 
 /// Credentials for one login (the account's IMAP login). `Debug` never
 /// prints secrets.
@@ -141,43 +101,19 @@ pub enum SieveCredentials {
     },
 }
 
-impl SieveCredentials {
-    /// Password credentials.
-    pub fn password(username: impl Into<String>, password: impl Into<String>) -> Self {
-        Self::Password {
-            username: username.into(),
-            password: password.into(),
-        }
-    }
-
-    /// OAuth2 credentials with automatic mechanism choice.
-    pub fn oauth2(username: impl Into<String>, access_token: impl Into<String>) -> Self {
-        Self::OAuth2 {
-            username: username.into(),
-            access_token: access_token.into(),
-            mechanism: None,
-        }
-    }
-}
+nail_net::sasl_constructors!(SieveCredentials, password_mechanism: none);
 
 impl fmt::Debug for SieveCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Password { username, .. } => f
-                .debug_struct("Password")
-                .field("username", username)
-                .field("password", &"<redacted>")
-                .finish(),
+            Self::Password { username, .. } => {
+                debug_login(f, "Password", username, "password", None)
+            }
             Self::OAuth2 {
                 username,
                 mechanism,
                 ..
-            } => f
-                .debug_struct("OAuth2")
-                .field("username", username)
-                .field("access_token", &"<redacted>")
-                .field("mechanism", mechanism)
-                .finish(),
+            } => debug_login(f, "OAuth2", username, "access_token", Some(mechanism)),
         }
     }
 }

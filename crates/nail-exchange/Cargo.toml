@@ -11,9 +11,12 @@ publish.workspace = true
 # The mock Autodiscover server (`nail_exchange::testing`): loopback only
 # (ADR 0057). Used by this crate's tests, the core's tests and the
 # demo-multi seed (WP95).
-testing = ["dep:axum"]
+testing = ["dep:nail-testkit-net"]
 
 [dependencies]
+nail-testkit-net = { workspace = true, optional = true }
+nail-net = { workspace = true, features = ["http"] }
+nail-util.workspace = true
 nail-api.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -25,8 +28,6 @@ reqwest.workspace = true
 nail-auth.workspace = true
 nail-discovery.workspace = true
 url.workspace = true
-# Autodiscover POX XML (MIT; the workspace's XML library).
-quick-xml.workspace = true
 # Autodiscover v2 JSON, Graph-shaped fixtures.
 serde.workspace = true
 serde_json.workspace = true
@@ -36,7 +37,6 @@ chrono.workspace = true
 chrono-tz.workspace = true
 base64.workspace = true
 # The mock server (feature `testing`); MIT, already in the workspace.
-axum = { workspace = true, optional = true }
 
 # Windows sign-in: SSPI (secur32) through the `windows` crate (MIT /
 # Apache-2.0, already in the workspace for the certificate store); no NTLM

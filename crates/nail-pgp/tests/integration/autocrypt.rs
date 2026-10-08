@@ -15,7 +15,7 @@ use nail_pgp::compose::{Protection, protect_message, with_header};
 use nail_pgp::{Error, Problem};
 use pretty_assertions::assert_eq;
 
-const DAY: i64 = 86_400;
+use nail_util::time::SECS_PER_DAY as DAY;
 /// 2026-01-01 12:00 UTC, the Date of the fixtures.
 const JAN_1: i64 = 1_767_268_800;
 
@@ -567,25 +567,8 @@ fn header_for(addr: &str, key: &pgp::composed::SignedSecretKey) -> String {
 
 /// A PGP/MIME message from `from`, signed with `key`'s primary key.
 fn signed_by(key: &pgp::composed::SignedSecretKey, from: &str) -> Vec<u8> {
-    use pgp::composed::{ArmorOptions, DetachedSignature};
     let inner = "Content-Type: text/plain; charset=us-ascii\r\n\r\nPay the invoice.";
-    let signature = DetachedSignature::sign_binary_data(
-        rand::thread_rng(),
-        &key.primary_key,
-        &pgp::types::Password::empty(),
-        pgp::crypto::hash::HashAlgorithm::Sha256,
-        inner.as_bytes(),
-    )
-    .unwrap()
-    .to_armored_string(ArmorOptions::default())
-    .unwrap();
-    format!(
-        "From: {from}\r\nSubject: x\r\nMIME-Version: 1.0\r\n\
-Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-signature\"; boundary=\"b\"\r\n\r\n\
---b\r\n{inner}\r\n--b\r\nContent-Type: application/pgp-signature\r\n\r\n{}\r\n--b--\r\n",
-        signature.replace('\n', "\r\n")
-    )
-    .into_bytes()
+    crate::common::signed_part_with(key, &format!("From: {from}\r\n"), inner)
 }
 
 fn today() -> String {

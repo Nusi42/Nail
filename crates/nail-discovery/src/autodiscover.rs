@@ -1,34 +1,28 @@
 //! Microsoft Autodiscover, plain-old-XML variant (the Outlook 2006a response
 //! schema): IMAP / POP3 / SMTP settings, `redirectAddr` and `redirectUrl`.
 //!
-//! Exchange-only answers (`EXCH`, `EXPR`, `WEB`) are ignored until the
-//! Exchange engines (M3).
+//! Exchange-only answers (`EXCH`, `EXPR`, `WEB`) are read by
+//! `nail-exchange`, which shares the request, the answer's frame
+//! ([`read_account`]) and the server entries ([`endpoint`]) from here.
 
 use nail_api::accounts::{
     AuthConfig, DiscoveredAccount, DiscoverySource, ImapOptions, IncomingServer, MailProtocol,
     OutgoingServer, Pop3Options, ServerEndpoint, SmtpOptions, TlsMode, default_port,
 };
+use nail_net::ports;
 
 use crate::email::Email;
-use crate::xml::{Element, parse};
+use crate::xml::{Element, escape, parse};
 
 /// The request schema namespace.
 const REQUEST_NS: &str =
     "http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006";
 /// The response schema Nail understands.
-const RESPONSE_SCHEMA: &str =
+pub const RESPONSE_SCHEMA: &str =
     "http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a";
 
-/// Escapes text for an XML element.
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 /// The POST body asking for `address`'s settings.
-pub(crate) fn request_body(address: &str) -> String {
+pub fn request_body(address: &str) -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\
          <Autodiscover xmlns=\"{REQUEST_NS}\">\r\n\
@@ -56,13 +50,66 @@ fn on(value: Option<String>) -> Option<bool> {
     value.map(|v| v.eq_ignore_ascii_case("on"))
 }
 
-fn endpoint(protocol: &Element, kind: MailProtocol, email: &Email) -> Option<ServerEndpoint> {
+/// The account element of a POX answer, or where the answer redirects.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PoxAccount<'a> {
+    /// The settings: the `Response` and its `Account` element.
+    Account {
+        /// `Autodiscover/Response`.
+        response: &'a Element,
+        /// `Autodiscover/Response/Account`.
+        account: &'a Element,
+    },
+    /// Ask again for another address.
+    RedirectAddr(String),
+    /// Ask again at another URL.
+    RedirectUrl(String),
+}
+
+/// Reads the frame of a POX answer: the root, an `Error`, the redirect
+/// actions, else the account element.
+pub fn read_account(root: &Element) -> Result<PoxAccount<'_>, String> {
+    if !root.name.eq_ignore_ascii_case("Autodiscover") {
+        return Err(format!("unexpected root element <{}>", root.name));
+    }
+    let response = root.child("Response").ok_or("no Response element")?;
+    if let Some(error) = response.child("Error") {
+        return Err(format!(
+            "Autodiscover error {}",
+            error.text_of("ErrorCode").unwrap_or_default()
+        ));
+    }
+    let account = response.child("Account").ok_or("no Account element")?;
+    match account
+        .text_of("Action")
+        .map(|a| a.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("redirectaddr") => account
+            .text_of("RedirectAddr")
+            .map(PoxAccount::RedirectAddr)
+            .ok_or_else(|| "redirectAddr without address".to_owned()),
+        Some("redirecturl") => account
+            .text_of("RedirectUrl")
+            .map(PoxAccount::RedirectUrl)
+            .ok_or_else(|| "redirectUrl without URL".to_owned()),
+        _ => Ok(PoxAccount::Account { response, account }),
+    }
+}
+
+/// The server of a `Protocol` element (`IMAP`, `POP3`, `SMTP`); the login
+/// is `LoginName` or `default_login`.
+pub fn endpoint(
+    protocol: &Element,
+    kind: MailProtocol,
+    default_login: &str,
+) -> Option<ServerEndpoint> {
     let host = protocol.text_of("Server")?.to_ascii_lowercase();
     let port = protocol
         .text_of("Port")
         .and_then(|p| p.parse::<u16>().ok())
         .filter(|p| *p != 0);
-    let implicit_port = |p: u16| matches!(p, 993 | 995 | 465);
+    let implicit_port = |p: u16| matches!(p, ports::IMAPS | ports::POP3S | ports::SUBMISSIONS);
     let tls = match protocol
         .text_of("Encryption")
         .map(|e| e.to_ascii_lowercase())
@@ -80,7 +127,7 @@ fn endpoint(protocol: &Element, kind: MailProtocol, email: &Email) -> Option<Ser
     let port = port.unwrap_or_else(|| default_port(kind, tls));
     let username = protocol
         .text_of("LoginName")
-        .unwrap_or_else(|| email.address.clone());
+        .unwrap_or_else(|| default_login.to_owned());
     let auth = if kind == MailProtocol::Smtp && on(protocol.text_of("AuthRequired")) == Some(false)
     {
         AuthConfig::None
@@ -102,36 +149,11 @@ fn endpoint(protocol: &Element, kind: MailProtocol, email: &Email) -> Option<Ser
 /// Parses an Autodiscover response.
 pub(crate) fn parse_response(xml: &[u8], email: &Email) -> Result<Answer, String> {
     let root = parse(xml)?;
-    if !root.name.eq_ignore_ascii_case("Autodiscover") {
-        return Err(format!("unexpected root element <{}>", root.name));
-    }
-    let response = root.child("Response").ok_or("no Response element")?;
-    if let Some(error) = response.child("Error") {
-        return Err(format!(
-            "Autodiscover error {}",
-            error.text_of("ErrorCode").unwrap_or_default()
-        ));
-    }
-    let account = response.child("Account").ok_or("no Account element")?;
-    match account
-        .text_of("Action")
-        .map(|a| a.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("redirectaddr") => {
-            return account
-                .text_of("RedirectAddr")
-                .map(Answer::RedirectAddr)
-                .ok_or_else(|| "redirectAddr without address".to_owned());
-        }
-        Some("redirecturl") => {
-            return account
-                .text_of("RedirectUrl")
-                .map(Answer::RedirectUrl)
-                .ok_or_else(|| "redirectUrl without URL".to_owned());
-        }
-        _ => {}
-    }
+    let (response, account) = match read_account(&root)? {
+        PoxAccount::Account { response, account } => (response, account),
+        PoxAccount::RedirectAddr(address) => return Ok(Answer::RedirectAddr(address)),
+        PoxAccount::RedirectUrl(url) => return Ok(Answer::RedirectUrl(url)),
+    };
     let provider_name = response
         .child("User")
         .and_then(|u| u.text_of("DisplayName"));
@@ -145,14 +167,14 @@ pub(crate) fn parse_response(xml: &[u8], email: &Email) -> Result<Answer, String
     };
     let outgoing = of_type("SMTP")
         .into_iter()
-        .find_map(|p| endpoint(p, MailProtocol::Smtp, email))
+        .find_map(|p| endpoint(p, MailProtocol::Smtp, &email.address))
         .map(|server| OutgoingServer::Smtp {
             server,
             options: SmtpOptions::default(),
         });
     let mut accounts = Vec::new();
     for p in of_type("IMAP") {
-        if let Some(server) = endpoint(p, MailProtocol::Imap, email) {
+        if let Some(server) = endpoint(p, MailProtocol::Imap, &email.address) {
             accounts.push(IncomingServer::Imap {
                 server,
                 options: ImapOptions::default(),
@@ -160,7 +182,7 @@ pub(crate) fn parse_response(xml: &[u8], email: &Email) -> Result<Answer, String
         }
     }
     for p in of_type("POP3") {
-        if let Some(server) = endpoint(p, MailProtocol::Pop3, email) {
+        if let Some(server) = endpoint(p, MailProtocol::Pop3, &email.address) {
             accounts.push(IncomingServer::Pop3 {
                 server,
                 options: Pop3Options::default(),

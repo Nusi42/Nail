@@ -505,7 +505,7 @@ async fn smartcard_keys_are_listed_and_used_for_smime() {
     use nail_pkcs11::testing::{SoftKey, SoftToken};
     use rsa::pkcs8::DecodePrivateKey as _;
     let token = Arc::new(SoftToken::new(SOFT_MODULE));
-    token.add_token(3, "PIV card", "PIV-0042", "123456");
+    token.add_token(3, "PIV card", "PIV-0042", nail_pkcs11::testing::TEST_PIN);
     let alice = rsa::RsaPrivateKey::from_pkcs8_pem(&corpus("alice.key")).unwrap();
     token.add_key(
         3,

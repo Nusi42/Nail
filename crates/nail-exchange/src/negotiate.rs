@@ -88,10 +88,7 @@ pub struct Challenge {
 impl Challenge {
     /// A parameter's value (`realm`).
     pub fn param(&self, name: &str) -> Option<&str> {
-        self.params
-            .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        nail_util::named::first(&self.params, name)
     }
 }
 
@@ -486,6 +483,7 @@ async fn windows_handshake(
 
 #[cfg(test)]
 mod tests {
+    use crate::http::WithHeaders as _;
     use std::sync::Mutex;
 
     use nail_api::engine::BoxFuture;

@@ -8,6 +8,10 @@ use nail_api::domain::FolderRole;
 
 use crate::sink::SourceFolder;
 
+/// The deepest folder tree an importer reads (EML folders, Maildir,
+/// Thunderbird `.sbd` trees).
+pub const MAX_FOLDER_DEPTH: usize = 32;
+
 /// A folder name Nail can create: no `/` (the path separator), no control
 /// characters, trimmed, not empty. Returns the name and whether it was
 /// changed.

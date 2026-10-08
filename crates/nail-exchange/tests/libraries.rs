@@ -1,13 +1,11 @@
 //! Smoke tests of what WP93 builds on (WP90, ADR 0072): Autodiscover v2
 //! against the loopback mock server through the nail-auth HTTP client, a
-//! POX answer read with quick-xml, Windows zone names through nail-ical,
+//! POX answer read with nail-discovery's XML tree, Windows zone names through nail-ical,
 //! and the contract's mailbox / category mapping helpers.
 #![cfg(test)]
 
 use nail_api::exchange::{CategoryColor, ExchangeMailboxSettings, split_mailbox_folder_path};
 use nail_exchange::testing::MockAutodiscoverServer;
-use quick_xml::Reader;
-use quick_xml::events::Event;
 
 #[tokio::test]
 async fn autodiscover_v2_over_loopback() {
@@ -15,8 +13,7 @@ async fn autodiscover_v2_over_loopback() {
         .await
         .unwrap();
     assert!(server.addr().ip().is_loopback());
-    let tls = nail_auth::tls_config().expect("ring TLS configuration");
-    let client = nail_auth::http_client_builder(tls).build().unwrap();
+    let client = nail_auth::http_client().unwrap();
     let url = nail_exchange::autodiscover_v2_url(&server.host(), "ada@corp.example", "EWS", false);
     let answer: serde_json::Value = client
         .get(url)
@@ -33,7 +30,7 @@ async fn autodiscover_v2_over_loopback() {
 }
 
 #[test]
-fn pox_answers_are_read_with_quick_xml() {
+fn pox_answers_are_read_as_a_tree() {
     let pox = r#"<?xml version="1.0" encoding="utf-8"?>
 <Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">
   <Response xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a">
@@ -43,28 +40,13 @@ fn pox_answers_are_read_with_quick_xml() {
     </Account>
   </Response>
 </Autodiscover>"#;
-    let mut reader = Reader::from_str(pox);
-    let mut current = String::new();
-    let mut ews_url = None;
-    let mut alternative = None;
-    loop {
-        match reader.read_event().unwrap() {
-            Event::Start(start) => {
-                current = AsRef::<str>::as_ref(&start.local_name()).to_owned();
-            }
-            Event::Text(text) => {
-                let text = text.xml10_content().into_owned();
-                match current.as_str() {
-                    "EwsUrl" => ews_url = Some(text),
-                    "SmtpAddress" => alternative = Some(text),
-                    _ => {}
-                }
-            }
-            Event::End(_) => current.clear(),
-            Event::Eof => break,
-            _ => {}
-        }
-    }
+    let root = nail_discovery::xml::parse(pox.as_bytes()).unwrap();
+    let account = root.child("Response").unwrap().child("Account").unwrap();
+    let ews_url = account.child("Protocol").unwrap().text_of("EwsUrl");
+    let alternative = account
+        .child("AlternativeMailbox")
+        .unwrap()
+        .text_of("SmtpAddress");
     assert_eq!(
         ews_url.as_deref(),
         Some("https://mail.corp.example/EWS/Exchange.asmx")

@@ -6,28 +6,23 @@
 //! authentication mechanism and so that nothing buffered before `STARTTLS`
 //! can leak into the TLS session.
 
-use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf,
-};
+use nail_net::io::{LineRead, read_line_limited};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
-use tokio_rustls::rustls::crypto::ring;
-use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName};
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
 use crate::capabilities::Capabilities;
-use crate::config::{ImapConfig, Security, TlsTrust};
+use crate::config::{ImapConfig, Security};
 use crate::error::{ImapError, Result};
 
+/// The idle timeout of reads (fires only while the server is silent) and
+/// the stream it guards (shared with the other protocol clients).
+pub(crate) use nail_net::io::{IdleTimeout, ReadTimeout};
+
 /// Maximum length of a pre-auth response line.
-const MAX_LINE: u64 = 64 * 1024;
+use nail_net::io::MAX_LINE;
 /// Tag used for the pre-auth commands (async-imap uses `A0001`, ... later).
 const PREAUTH_TAG: &str = "N0";
 
@@ -47,163 +42,14 @@ impl ImapStream {
     }
 }
 
-impl AsyncRead for ImapStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_read(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for ImapStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_write(cx, buf),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_flush(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(s) => Pin::new(s).poll_shutdown(cx),
-            Self::Tls(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
-        }
-    }
-}
-
-/// The idle timeout of an [`IdleTimeout`] stream, shared with the code that
-/// drives it so it can be switched off while waiting in `IDLE`.
-#[derive(Debug, Clone)]
-pub(crate) struct ReadTimeout(Arc<AtomicU64>);
-
-impl ReadTimeout {
-    pub(crate) fn new(timeout: Duration) -> Self {
-        let this = Self(Arc::new(AtomicU64::new(0)));
-        this.set(Some(timeout));
-        this
-    }
-
-    /// `None` switches the timeout off.
-    pub(crate) fn set(&self, timeout: Option<Duration>) {
-        let millis = timeout.map_or(0, |t| {
-            u64::try_from(t.as_millis()).unwrap_or(u64::MAX).max(1)
-        });
-        self.0.store(millis, Ordering::Relaxed);
-    }
-
-    pub(crate) fn get(&self) -> Option<Duration> {
-        match self.0.load(Ordering::Relaxed) {
-            0 => None,
-            millis => Some(Duration::from_millis(millis)),
-        }
-    }
-}
-
-/// A stream whose reads fail with [`std::io::ErrorKind::TimedOut`] when the
-/// peer sends nothing for the [`ReadTimeout`] while a read is waiting.
-///
-/// Unlike a timeout around a whole command, this never fires while data is
-/// flowing, so a `FETCH` of large bodies over a slow link can take as long as
-/// it needs, while a silent server is still detected.
-#[derive(Debug)]
-pub(crate) struct IdleTimeout<S> {
-    inner: S,
-    timeout: ReadTimeout,
-    sleep: Pin<Box<tokio::time::Sleep>>,
-    /// Whether `sleep` is set for the current wait.
-    armed: bool,
-}
-
-impl<S> IdleTimeout<S> {
-    pub(crate) fn new(inner: S, timeout: ReadTimeout) -> Self {
-        Self {
-            inner,
-            timeout,
-            sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
-            armed: false,
-        }
-    }
-}
-
-impl<S: AsyncRead + Unpin> AsyncRead for IdleTimeout<S> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        let this = self.get_mut();
-        match Pin::new(&mut this.inner).poll_read(cx, buf) {
-            Poll::Ready(result) => {
-                this.armed = false;
-                Poll::Ready(result)
-            }
-            Poll::Pending => {
-                let Some(idle) = this.timeout.get() else {
-                    this.armed = false;
-                    return Poll::Pending;
-                };
-                if !this.armed {
-                    let deadline = tokio::time::Instant::now() + idle;
-                    this.sleep.as_mut().reset(deadline);
-                    this.armed = true;
-                }
-                match this.sleep.as_mut().poll(cx) {
-                    Poll::Ready(()) => {
-                        this.armed = false;
-                        Poll::Ready(Err(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            format!("no data from the server for {idle:?}"),
-                        )))
-                    }
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-        }
-    }
-}
-
-impl<S: AsyncWrite + Unpin> AsyncWrite for IdleTimeout<S> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
-    }
-}
+nail_net::delegate_stream_enum!(ImapStream { Plain, Tls });
 
 /// Runs `fut` with the configured timeout.
 pub(crate) async fn with_timeout<T>(
     timeout: Duration,
     fut: impl Future<Output = Result<T>>,
 ) -> Result<T> {
-    tokio::time::timeout(timeout, fut)
-        .await
-        .map_err(|_| ImapError::Timeout(timeout))?
+    nail_net::io::with_timeout(timeout, fut, ImapError::Timeout).await
 }
 
 /// Connects, negotiates TLS as configured and reads the capabilities.
@@ -262,63 +108,20 @@ fn unwrap_buffered(stream: BufReader<ImapStream>) -> Result<ImapStream> {
 }
 
 async fn tls_handshake(config: &ImapConfig, tcp: TcpStream) -> Result<TlsStream<TcpStream>> {
-    let server_name = ServerName::try_from(config.host.clone())
-        .map_err(|_| ImapError::InvalidServerName(config.host.clone()))?;
-    let connector = TlsConnector::from(Arc::new(client_config(&config.tls_trust)?));
-    connector
-        .connect(server_name, tcp)
+    nail_net::tls::connect(&config.tls_trust, &config.host, tcp)
         .await
-        .map_err(|err| ImapError::Tls(err.to_string()))
-}
-
-/// Builds the rustls client configuration (ring provider, TLS 1.2+).
-pub(crate) fn client_config(trust: &TlsTrust) -> Result<ClientConfig> {
-    let provider = Arc::new(ring::default_provider());
-    let builder = ClientConfig::builder_with_provider(Arc::clone(&provider))
-        .with_safe_default_protocol_versions()
-        .map_err(|err| ImapError::Tls(err.to_string()))?;
-    let config = match trust {
-        TlsTrust::Platform => {
-            let verifier = rustls_platform_verifier::Verifier::new(provider)
-                .map_err(|err| ImapError::Tls(err.to_string()))?;
-            builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(verifier))
-                .with_no_client_auth()
-        }
-        TlsTrust::WebPkiRoots => {
-            let roots = RootCertStore {
-                roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-            };
-            builder.with_root_certificates(roots).with_no_client_auth()
-        }
-        TlsTrust::CustomRoots(ders) => {
-            let mut roots = RootCertStore::empty();
-            for der in ders {
-                roots
-                    .add(CertificateDer::from(der.clone()))
-                    .map_err(|err| ImapError::Tls(err.to_string()))?;
-            }
-            builder.with_root_certificates(roots).with_no_client_auth()
-        }
-    };
-    Ok(config)
+        .map_err(ImapError::from)
 }
 
 async fn read_line<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<String> {
-    let mut line = Vec::new();
-    let n = (&mut *stream)
-        .take(MAX_LINE)
-        .read_until(b'\n', &mut line)
-        .await?;
-    if n == 0 {
-        return Err(ImapError::ConnectionLost);
+    match read_line_limited(stream, MAX_LINE).await? {
+        LineRead::Eof => Err(ImapError::ConnectionLost),
+        LineRead::TooLong => Err(ImapError::Protocol(nail_net::io::LINE_TOO_LONG.to_owned())),
+        LineRead::Line(line) => {
+            let text = String::from_utf8_lossy(&line);
+            Ok(text.trim_end_matches(['\r', '\n']).to_owned())
+        }
     }
-    if !line.ends_with(b"\n") {
-        return Err(ImapError::Protocol("response line too long".to_owned()));
-    }
-    let text = String::from_utf8_lossy(&line);
-    Ok(text.trim_end_matches(['\r', '\n']).to_owned())
 }
 
 async fn read_greeting<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<()> {
@@ -398,52 +201,9 @@ async fn starttls<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut BufReader<S>) 
 
 #[cfg(test)]
 mod tests {
+    use tokio::io::AsyncReadExt;
+
     use super::*;
-
-    #[tokio::test]
-    async fn idle_timeout_fires_only_when_the_peer_is_silent() {
-        let idle = Duration::from_millis(150);
-        let (client, mut server) = tokio::io::duplex(64);
-        let timeout = ReadTimeout::new(idle);
-        let mut stream = IdleTimeout::new(client, timeout.clone());
-
-        // A slow but steady sender: 12 bytes over ~600 ms, far longer than
-        // `idle` in total, but never silent for that long.
-        let sender = tokio::spawn(async move {
-            for _ in 0..12 {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                server.write_all(b"x").await.unwrap();
-            }
-            server
-        });
-        let mut buf = [0u8; 12];
-        stream.read_exact(&mut buf).await.unwrap();
-        assert_eq!(&buf, b"xxxxxxxxxxxx");
-
-        // Now the peer stays connected but silent.
-        let _server = sender.await.unwrap();
-        let started = std::time::Instant::now();
-        let err = stream.read_u8().await.unwrap_err();
-        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
-        assert!(started.elapsed() >= idle);
-
-        // Switched off (as while waiting in IDLE), a silent peer is fine.
-        timeout.set(None);
-        assert_eq!(timeout.get(), None);
-        let silent = tokio::time::timeout(idle * 3, stream.read_u8()).await;
-        assert!(silent.is_err(), "the read must still be pending");
-    }
-
-    #[test]
-    fn builds_all_trust_configs() {
-        client_config(&TlsTrust::Platform).unwrap();
-        client_config(&TlsTrust::WebPkiRoots).unwrap();
-        client_config(&TlsTrust::CustomRoots(Vec::new())).unwrap();
-        assert!(matches!(
-            client_config(&TlsTrust::CustomRoots(vec![vec![1, 2, 3]])),
-            Err(ImapError::Tls(_))
-        ));
-    }
 
     #[tokio::test]
     async fn preauth_parses_capabilities() {

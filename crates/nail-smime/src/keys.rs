@@ -273,16 +273,19 @@ impl PublicKey {
                     .parameters
                     .as_ref()
                     .and_then(|p| p.decode_as::<ObjectIdentifier>().ok());
-                match curve {
-                    Some(oids::SECP256R1) => Ok(Self::P256(
-                        p256::PublicKey::from_public_key_der(&der).map_err(Error::malformed)?,
-                    )),
-                    Some(oids::SECP384R1) => Ok(Self::P384(
-                        p384::PublicKey::from_public_key_der(&der).map_err(Error::malformed)?,
-                    )),
-                    Some(other) => Err(Error::Unsupported(format!("curve {other}"))),
-                    None => Err(Error::malformed("EC key without a named curve")),
-                }
+                by_curve(
+                    curve,
+                    || {
+                        p256::PublicKey::from_public_key_der(&der)
+                            .map(Self::P256)
+                            .map_err(Error::malformed)
+                    },
+                    || {
+                        p384::PublicKey::from_public_key_der(&der)
+                            .map(Self::P384)
+                            .map_err(Error::malformed)
+                    },
+                )
             }
             oids::ED25519 => Err(Error::Unsupported("Ed25519 certificates".into())),
             other => Err(Error::Unsupported(format!("public key algorithm {other}"))),
@@ -412,16 +415,19 @@ impl SoftwareKey {
                     .algorithm
                     .parameters
                     .and_then(|p| p.decode_as::<ObjectIdentifier>().ok());
-                match curve {
-                    Some(oids::SECP256R1) => Ok(Self::P256(
-                        p256::SecretKey::from_pkcs8_der(der).map_err(Error::malformed)?,
-                    )),
-                    Some(oids::SECP384R1) => Ok(Self::P384(
-                        p384::SecretKey::from_pkcs8_der(der).map_err(Error::malformed)?,
-                    )),
-                    Some(other) => Err(Error::Unsupported(format!("curve {other}"))),
-                    None => Err(Error::malformed("EC key without a named curve")),
-                }
+                by_curve(
+                    curve,
+                    || {
+                        p256::SecretKey::from_pkcs8_der(der)
+                            .map(Self::P256)
+                            .map_err(Error::malformed)
+                    },
+                    || {
+                        p384::SecretKey::from_pkcs8_der(der)
+                            .map(Self::P384)
+                            .map_err(Error::malformed)
+                    },
+                )
             }
             other => Err(Error::Unsupported(format!("private key algorithm {other}"))),
         }
@@ -501,6 +507,21 @@ impl PrivateKeyOps for SoftwareKey {
             }
             Self::Rsa(_) => Err(Error::Crypto("not an EC key".into())),
         }
+    }
+}
+
+/// The key of a named EC curve: `p256()` for P-256, `p384()` for P-384;
+/// other curves are unsupported, a missing curve is malformed.
+fn by_curve<T>(
+    curve: Option<ObjectIdentifier>,
+    p256: impl FnOnce() -> Result<T>,
+    p384: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    match curve {
+        Some(oids::SECP256R1) => p256(),
+        Some(oids::SECP384R1) => p384(),
+        Some(other) => Err(Error::Unsupported(format!("curve {other}"))),
+        None => Err(Error::malformed("EC key without a named curve")),
     }
 }
 
