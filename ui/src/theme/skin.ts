@@ -32,7 +32,8 @@
  * M5b (WP162, ADR 0111): toolbars that never wrap (`data-overflow=
  * "more"`) with icon-only / label-only buttons, the rank-1 button as the
  * primary one and the "More" button (`toolbar.more`); the grouped folder
- * pane (`folder-tree.compose`, `.section*`, `.favorite`, `.smart-folder`,
+ * pane (`folder-tree.compose` and `.check-mail` (ADR 0183) in
+ * `folder-tree.header`, `.section*`, `.favorite`, `.smart-folder`,
  * account dots); the list header (`list-header.*`, filter chips); the focus
  * ring on the active list row.
  *
@@ -474,6 +475,19 @@ ${p("folder-tree.compose")}:hover { background-color: color-mix(in srgb, ${T.acc
 ${p("folder-tree.compose")}:focus-visible { ${focusRing} }
 ${p("folder-tree.compose")}:disabled { opacity: ${T.disabled}; }
 ${p("folder-tree.compose.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("folder-tree.header")} { display: flex; align-items: center; gap: ${T.xs}; margin: 0 ${T.xs}; }
+${p("folder-tree.header")} > ${p("folder-tree.compose")} { flex: 1 1 auto; min-width: 0; margin: 0; }
+${p("folder-tree.check-mail")} {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: calc(${T.control} + ${T.sm}); height: calc(${T.control} + ${T.sm}); padding: 0;
+  border: none; border-radius: ${T.rMd}; color: ${T.fg}; background-color: transparent;
+}
+${p("folder-tree.check-mail")}:hover { background-color: ${T.raised}; }
+${p("folder-tree.check-mail")}:focus-visible { ${focusRing} }
+${p("folder-tree.check-mail")}:disabled { opacity: ${T.disabled}; }
+${p("folder-tree.check-mail.icon")} { width: ${T.icon}; height: ${T.icon}; }
+${p("folder-tree.check-mail")}[data-state="busy"] ${p("folder-tree.check-mail.icon")} { animation: nail-spin 1s linear infinite; }
+@keyframes nail-spin { to { transform: rotate(360deg); } }
 ${p("folder-tree")}[data-mode="sections"] > ${p("folder-tree.list")} { display: grid; gap: ${T.lg}; align-content: start; }
 ${p("folder-tree.section")} { display: grid; gap: ${T.xxs}; outline: none; }
 ${p("folder-tree.group")} { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
@@ -540,7 +554,7 @@ ${p("form.error")} { margin: 0; font-size: ${T.small}; color: ${T.danger}; }`;
 const HIGH_CONTRAST = `${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon")}, ${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")}, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: inherit; }
 ${HC} ${p("folder-tree.favorite")}:hover, ${HC} ${p("folder-tree.smart-folder")}:hover, ${HC} ${p("toolbar.more")}:hover { background-color: ${T.accentSoft}; }
 ${HC} ${p("folder-tree.favorite")}[data-state~="selected"]:hover, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"]:hover { background-color: ${T.selection}; }
-${HC} ${p("folder-tree.favorite")}:focus-visible, ${HC} ${p("folder-tree.smart-folder")}:focus-visible, ${HC} ${p("toolbar.more")}:focus-visible, ${HC} ${p("folder-tree.compose")}:focus-visible, ${HC} ${p("list-header.chips")} ${p("chip")}:focus-visible { outline: ${HC_RING} solid ${T.focus}; }
+${HC} ${p("folder-tree.favorite")}:focus-visible, ${HC} ${p("folder-tree.smart-folder")}:focus-visible, ${HC} ${p("toolbar.more")}:focus-visible, ${HC} ${p("folder-tree.compose")}:focus-visible, ${HC} ${p("folder-tree.check-mail")}:focus-visible, ${HC} ${p("list-header.chips")} ${p("chip")}:focus-visible { outline: ${HC_RING} solid ${T.focus}; }
 ${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: ${HC_RING} solid ${T.focus}; }
 ${HC} ${p("toolbar.more")} { border: var(--nail-border-thin, 2px solid ${T.border}); }
 ${HC} ${p("message-list")}:focus-visible ${p("message-list.row")}[aria-selected="true"] { outline: ${HC_RING} solid ${T.focus}; }

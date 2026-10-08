@@ -213,10 +213,23 @@ pub enum TestControl {
     /// Reports every OS window: shown, cloaked, activatable, foreground
     /// (test runs keep them away from the user, ADR 0146).
     Windows,
+    /// Reports WebView2's default context menus per window label after
+    /// Nail turned them off (ADR 0184): `{label: enabled}`.
+    DefaultContextMenus,
+    /// Resizes the main window (`resize-main:<w>x<h>`) or every pop-out OS
+    /// window (`resize-pop-outs:<w>x<h>`) to an inner size in logical
+    /// pixels, as the user dragging its border does (ADR 0181).
+    Resize {
+        /// The pop-outs, else the main window.
+        pop_outs: bool,
+        width: u32,
+        height: u32,
+    },
 }
 
 impl TestControl {
-    /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"` or
+    /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"`,
+    /// `"default-context-menus"` or
     /// a tray menu item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
@@ -225,8 +238,26 @@ impl TestControl {
             "pop-outs" => Some(Self::PopOuts),
             "close-pop-outs" => Some(Self::ClosePopOuts),
             "windows" => Some(Self::Windows),
-            other => TrayAction::from_id(other).map(Self::Tray),
+            "default-context-menus" => Some(Self::DefaultContextMenus),
+            other => {
+                Self::parse_resize(other).or_else(|| TrayAction::from_id(other).map(Self::Tray))
+            }
         }
+    }
+
+    /// `resize-main:<w>x<h>` / `resize-pop-outs:<w>x<h>`.
+    fn parse_resize(op: &str) -> Option<Self> {
+        let (pop_outs, size) = if let Some(size) = op.strip_prefix("resize-main:") {
+            (false, size)
+        } else {
+            (true, op.strip_prefix("resize-pop-outs:")?)
+        };
+        let (width, height) = size.split_once('x')?;
+        Some(Self::Resize {
+            pop_outs,
+            width: width.parse().ok().filter(|w| *w > 0)?,
+            height: height.parse().ok().filter(|h| *h > 0)?,
+        })
     }
 }
 
@@ -272,6 +303,23 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
             Ok(serde_json::Value::Null)
         }
         TestControl::Windows => Ok(crate::background::report(app)),
+        TestControl::DefaultContextMenus => Ok(serde_json::json!(crate::webview_menus::reported())),
+        TestControl::Resize {
+            pop_outs,
+            width,
+            height,
+        } => {
+            for (label, window) in app.webview_windows() {
+                if crate::popout::is_pop_out_label(&label) == pop_outs
+                    && (pop_outs || label == MAIN_WINDOW)
+                {
+                    window
+                        .set_size(tauri::LogicalSize::new(width, height))
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            Ok(serde_json::Value::Null)
+        }
     }
 }
 
@@ -437,6 +485,28 @@ mod tests {
             Some(TestControl::ClosePopOuts)
         );
         assert_eq!(TestControl::parse("windows"), Some(TestControl::Windows));
+        assert_eq!(
+            TestControl::parse("default-context-menus"),
+            Some(TestControl::DefaultContextMenus)
+        );
+        assert_eq!(
+            TestControl::parse("resize-main:900x640"),
+            Some(TestControl::Resize {
+                pop_outs: false,
+                width: 900,
+                height: 640
+            })
+        );
+        assert_eq!(
+            TestControl::parse("resize-pop-outs:700x500"),
+            Some(TestControl::Resize {
+                pop_outs: true,
+                width: 700,
+                height: 500
+            })
+        );
+        assert_eq!(TestControl::parse("resize-main:0x500"), None);
+        assert_eq!(TestControl::parse("resize-main:wide"), None);
         assert_eq!(TestControl::parse("tray-format-disk"), None);
     }
 

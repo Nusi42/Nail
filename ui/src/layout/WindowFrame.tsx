@@ -83,6 +83,8 @@ interface Drag {
   pointerId: number;
   grab: { x: number; y: number };
   start: WindowGeometry;
+  /** The geometry the user had given the window when the drag started (`null`: placed by the manager). */
+  startPlaced: WindowGeometry | null;
   /** The rectangle shown when the drag started. */
   shown: ReturnType<typeof shownRect>;
   /** The pointer moved far enough to count as a drag. */
@@ -156,30 +158,35 @@ export function WindowFrame({
   const ref = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const min = spec.min_size;
-  const [geometry, setGeometry] = useState<WindowGeometry>(() =>
-    anchor !== null
-      ? normal(centredOn(anchor, spec.size, min, viewport))
-      : initialGeometry(loaded ? remembered : null, spec.size, min, viewport, cascade),
+  // The remembered geometry the window opened with: taken once, when the
+  // remembered states have loaded (they may load after the window opened);
+  // a change by the user settles it too. A window over its owner opens
+  // there, whatever is remembered.
+  const [openedWith, setOpenedWith] = useState<WindowGeometry | null>(
+    loaded && anchor === null ? remembered : null,
   );
-  // The remembered state was taken into account (it may load after the window
-  // opened); a change by the user settles it too. A window over its owner
-  // opens there, whatever is remembered.
   const [settled, setSettled] = useState(loaded || anchor !== null);
+  // The geometry the user gave the window (moved, resized, maximized,
+  // snapped). Until then the window manager places it for the current page
+  // (ADR 0181): at its default or remembered place, fitted to the page and
+  // back to its full size when the page grows again.
+  const [placed, setPlaced] = useState<WindowGeometry | null>(null);
   if (!settled && loaded) {
     setSettled(true);
-    if (remembered !== null) {
-      setGeometry(initialGeometry(remembered, spec.size, min, viewport, cascade));
-    }
+    setOpenedWith(remembered);
   }
   // The owner may be known only after the first render: the window moves
   // over it then, unless the user placed it already.
   const [anchoredTo, setAnchoredTo] = useState<WindowRect | null>(anchor);
-  const [touched, setTouched] = useState(false);
-  if (anchor !== null && anchoredTo === null && !touched) {
+  if (anchor !== null && anchoredTo === null && placed === null) {
     setAnchoredTo(anchor);
     setSettled(true);
-    setGeometry(normal(centredOn(anchor, spec.size, min, viewport)));
   }
+  const geometry =
+    placed ??
+    (anchoredTo !== null
+      ? normal(centredOn(anchoredTo, spec.size, min, viewport))
+      : initialGeometry(openedWith, spec.size, min, viewport, cascade));
   const [preview, setPreview] = useState<WindowSnap | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const modeStart = useRef<WindowGeometry | null>(null);
@@ -208,8 +215,7 @@ export function WindowFrame({
   const commit = useCallback(
     (next: WindowGeometry) => {
       setSettled(true);
-      setTouched(true);
-      setGeometry(next);
+      setPlaced(next);
       pending.current = next;
       if (timer.current !== null) clearTimeout(timer.current);
       timer.current = setTimeout(flush, SAVE_DELAY_MS);
@@ -217,11 +223,12 @@ export function WindowFrame({
     [flush],
   );
 
-  // The page the geometry was placed on (P1): a window placed wholly on the
-  // page stays wholly on it when the page shrinks (`shownRect`).
-  const [placement, setPlacement] = useState({ geometry, viewport });
-  if (placement.geometry !== geometry) setPlacement({ geometry, viewport });
-  const placedOnPage = fitsPage(geometry.rect, placement.viewport);
+  // The page the user placed the window on (P1): a window placed wholly on
+  // the page stays wholly on it when the page shrinks (`shownRect`). One the
+  // window manager places is always wholly on the page.
+  const [placement, setPlacement] = useState({ placed, viewport });
+  if (placement.placed !== placed) setPlacement({ placed, viewport });
+  const placedOnPage = placed === null || fitsPage(placed.rect, placement.viewport);
   const shown = shownRect(geometry, min, viewport, placedOnPage);
   const shownRef = useRef(shown);
   useLayoutEffect(() => {
@@ -267,12 +274,13 @@ export function WindowFrame({
         pending.current = null;
         if (timer.current !== null) clearTimeout(timer.current);
         timer.current = null;
-        setGeometry(initialGeometry(null, spec.size, min, viewport, cascade));
+        setOpenedWith(null);
+        setPlaced(null);
       },
       focus: focusWindow,
       rect: () => shownRef.current,
     }),
-    [toggleMaximize, focusWindow, spec.size, min, viewport, cascade],
+    [toggleMaximize, focusWindow],
   );
 
   // Focus the first field when the window opens on top (of several opening
@@ -307,6 +315,7 @@ export function WindowFrame({
       pointerId: event.pointerId,
       grab: { x: event.clientX, y: event.clientY },
       start: geometry,
+      startPlaced: placed,
       shown,
       moved: false,
       last: geometry,
@@ -333,7 +342,7 @@ export function WindowFrame({
     }
     if (state.kind === "resize" && state.edge !== null) {
       state.last = normal(resizeRect(state.shown, state.edge, dx, dy, min, viewport));
-      setGeometry(state.last);
+      setPlaced(state.last);
       return;
     }
     const pointer = { x: event.clientX, y: event.clientY };
@@ -342,7 +351,7 @@ export function WindowFrame({
       ? looseRect(state.shown, state.start.rect, state.grab, pointer, min, viewport)
       : moveRect(state.shown, dx, dy, viewport);
     state.last = normal(rect);
-    setGeometry(state.last);
+    setPlaced(state.last);
     setPreview(spec.resizable ? snapTarget(event.clientX, viewport) : null);
   };
 
@@ -357,7 +366,7 @@ export function WindowFrame({
     setPreview(null);
     if (!state.moved) return;
     if (cancelled) {
-      setGeometry(state.start);
+      setPlaced(state.startPlaced);
       return;
     }
     if (snap !== null) {

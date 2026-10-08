@@ -10,6 +10,9 @@
  *   layout binds it to Shift+F10 and the menu key.
  * - Actions run with the menu's target as context (`contextTarget`): a
  *   message row is selected first, a folder's menu names the folder.
+ * - ADR 0184: a right-click never shows the browser's menu — Nail's menu
+ *   of the place, or nothing; text fields, editors, selectable text and
+ *   mail documents get the text menu (`./editing.ts`).
  *
  * Only WP54 edits the files in this directory (plus
  * `locales/{en,de}/menus.ftl`). The central registry (`../registry.ts`)
@@ -17,6 +20,7 @@
  */
 import type { Feature } from "../types";
 import { ContextMenuHost } from "./ContextMenuHost";
+import { editActions } from "./editing";
 import { openContextMenu } from "./store";
 
 /** Layout widget kinds → components. */
@@ -31,6 +35,8 @@ export const actions: Feature["actions"] = {
       openContextMenu(ctx.store, ctx.layout, focused, { point: null });
     },
   },
+  // ADR 0184: Cut / Copy / Paste / Select all of the text menu.
+  ...editActions,
 };
 
 /** Background components. */

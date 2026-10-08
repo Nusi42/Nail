@@ -49,6 +49,7 @@ import {
   useOutbox,
 } from "../state/queries";
 import { UI_STATE_COLLAPSED_SECTIONS, stringList, useUiStateValue } from "../state/uiState";
+import { useOnline } from "../state/online";
 import { useUi } from "../state/uiStore";
 import { useAccountName } from "./AccountSwitcher";
 import { Icon } from "./Icon";
@@ -595,16 +596,19 @@ function SmartFoldersSection({
   );
 }
 
-/** The New message button on top of the pane. */
-function ComposeButton() {
+/** An action's text (the layout's label, else `fallback`) and icon. */
+function useActionLook(id: string, fallback: string, icon: string) {
   const t = useT();
   const label = useLabel();
   const layout = useLayoutConfig();
+  const def = Object.hasOwn(layout.actions, id) ? layout.actions[id] : undefined;
+  return { text: def?.label ? label(def.label) : t(fallback), icon: def?.icon ?? icon };
+}
+
+/** The New message button on top of the pane. */
+function ComposeButton() {
   const { dispatch, isEnabled } = useActions();
-  const def = Object.hasOwn(layout.actions, "mail.compose")
-    ? layout.actions["mail.compose"]
-    : undefined;
-  const text = def?.label ? label(def.label) : t("mail-action-compose");
+  const { text, icon } = useActionLook("mail.compose", "mail-action-compose", "pen-line");
   return (
     <button
       type="button"
@@ -613,8 +617,44 @@ function ComposeButton() {
       disabled={!isEnabled("mail.compose")}
       onClick={() => void dispatch("mail.compose")}
     >
-      <Icon name={def?.icon ?? "pen-line"} part="folder-tree.compose.icon" />
+      <Icon name={icon} part="folder-tree.compose.icon" />
       <span data-part="folder-tree.compose.label">{text}</span>
+    </button>
+  );
+}
+
+/**
+ * Check for new mail beside New message (ADR 0183): every account; the
+ * icon turns while an account synchronizes; off while the device is
+ * offline. A failure shows in the status bar.
+ */
+function CheckMailButton() {
+  const { dispatch, isEnabled } = useActions();
+  const { text, icon } = useActionLook("sync.now", "sync-action-now", "refresh-cw");
+  const online = useOnline();
+  const syncing = useUi(
+    (s) => s.sync !== null && (s.sync.total === 0 || s.sync.done < s.sync.total),
+  );
+  const [asking, setAsking] = useState(false);
+  const busy = asking || syncing;
+  return (
+    <button
+      type="button"
+      data-part="folder-tree.check-mail"
+      data-action="sync.now"
+      data-state={busy ? "busy" : undefined}
+      aria-label={text}
+      title={text}
+      aria-busy={busy}
+      disabled={!online || !isEnabled("sync.now")}
+      onClick={() => {
+        setAsking(true);
+        void dispatch("sync.now").finally(() => {
+          setAsking(false);
+        });
+      }}
+    >
+      <Icon name={icon} part="folder-tree.check-mail.icon" />
     </button>
   );
 }
@@ -643,6 +683,7 @@ function FolderPane({ node }: WidgetProps) {
   const accountColors = optionBool(node, "account-colors", true);
   const showUnread = optionBool(node, "show-unread", true);
   const compose = optionBool(node, "compose", true);
+  const checkMail = optionBool(node, "check-mail", true);
   const accounts = (accountsQuery.data ?? []).filter((a) => a.id !== ALL_ACCOUNTS);
   const sections = folderPaneSections(
     kinds,
@@ -743,7 +784,12 @@ function FolderPane({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       aria-label={node.label ? label(node.label) : t("common-folders")}
     >
-      {compose && <ComposeButton />}
+      {(compose || checkMail) && (
+        <div data-part="folder-tree.header">
+          {compose && <ComposeButton />}
+          {checkMail && <CheckMailButton />}
+        </div>
+      )}
       {accountsQuery.isError && (
         <div data-part="folder-tree.error">{t(errorMessageIdOf(accountsQuery.error))}</div>
       )}

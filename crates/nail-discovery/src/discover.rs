@@ -605,12 +605,19 @@ fn plaintext(candidate: &DiscoveredAccount) -> bool {
             .is_some_and(|o| o.server().tls == TlsMode::Plaintext)
 }
 
+/// Whether a candidate offers POP3: IMAP (and the API protocols) come
+/// first wherever both are offered (ADR 0180), whatever order the
+/// provider's file lists them in.
+fn pop3(candidate: &DiscoveredAccount) -> bool {
+    candidate.incoming.protocol() == MailProtocol::Pop3
+}
+
 /// Orders candidates: anything fetched over plain HTTP last (and dropped
 /// entirely when an authenticated HTTPS source answered, since it could
 /// have been forged on the network), then encrypted before unencrypted,
-/// then by source (most trusted first), keeping each source's own order;
-/// drops duplicates (same servers from several sources), keeping the
-/// best-ranked one.
+/// then IMAP before POP3, then by source (most trusted first), keeping each
+/// source's own order; drops duplicates (same servers from several
+/// sources), keeping the best-ranked one.
 pub fn rank(candidates: Vec<DiscoveredAccount>) -> Vec<DiscoveredAccount> {
     let trusted_answer = candidates.iter().any(authenticated);
     let mut indexed: Vec<(usize, DiscoveredAccount)> = candidates
@@ -618,7 +625,15 @@ pub fn rank(candidates: Vec<DiscoveredAccount>) -> Vec<DiscoveredAccount> {
         .filter(|c| !(trusted_answer && insecure(c)))
         .enumerate()
         .collect();
-    indexed.sort_by_key(|(i, c)| (insecure(c), plaintext(c), source_rank(c.source), *i));
+    indexed.sort_by_key(|(i, c)| {
+        (
+            insecure(c),
+            plaintext(c),
+            pop3(c),
+            source_rank(c.source),
+            *i,
+        )
+    });
     let mut out: Vec<DiscoveredAccount> = Vec::new();
     for (_, candidate) in indexed {
         let duplicate = out
@@ -770,6 +785,62 @@ mod tests {
             ]
         );
         assert_eq!(protocols(&ranked[0]), (MailProtocol::Imap, None));
+    }
+
+    /// A POP3 proposal of `source` at `host` (implicit TLS).
+    fn pop3_candidate(source: DiscoverySource, host: &str) -> DiscoveredAccount {
+        DiscoveredAccount {
+            incoming: pop3_server(ServerEndpoint {
+                host: host.into(),
+                port: 995,
+                tls: TlsMode::Implicit,
+                auth: AuthConfig::None,
+            }),
+            ..candidate(source, host, TlsMode::Implicit)
+        }
+    }
+
+    #[test]
+    fn imap_ranks_before_pop3() {
+        // A provider file listing POP3 first, and POP3 from a more trusted
+        // source than IMAP: IMAP still comes first.
+        let ranked = rank(vec![
+            pop3_candidate(DiscoverySource::Autoconfig, "pop.example.org"),
+            candidate(
+                DiscoverySource::Autoconfig,
+                "imap.example.org",
+                TlsMode::Implicit,
+            ),
+            pop3_candidate(DiscoverySource::Autoconfig, "pop3.example.org"),
+            candidate(
+                DiscoverySource::Ispdb,
+                "mail.example.org",
+                TlsMode::Implicit,
+            ),
+        ]);
+        let order: Vec<(&str, MailProtocol)> = ranked
+            .iter()
+            .map(|c| (c.incoming.server().host.as_str(), c.incoming.protocol()))
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("imap.example.org", MailProtocol::Imap),
+                ("mail.example.org", MailProtocol::Imap),
+                ("pop.example.org", MailProtocol::Pop3),
+                ("pop3.example.org", MailProtocol::Pop3),
+            ]
+        );
+        // Encryption still outranks the protocol.
+        let ranked = rank(vec![
+            candidate(
+                DiscoverySource::Autoconfig,
+                "imap.example.org",
+                TlsMode::Plaintext,
+            ),
+            pop3_candidate(DiscoverySource::Autoconfig, "pop.example.org"),
+        ]);
+        assert_eq!(ranked[0].incoming.protocol(), MailProtocol::Pop3);
     }
 
     #[test]

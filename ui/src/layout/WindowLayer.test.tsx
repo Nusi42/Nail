@@ -110,8 +110,11 @@ function Wrap({ children }: { children: ReactNode }) {
   );
 }
 
-async function setup(open: string[], options: { theme?: ReturnType<typeof defaultTheme> } = {}) {
-  const env = createEnv();
+async function setup(
+  open: string[],
+  options: { theme?: ReturnType<typeof defaultTheme>; env?: Env } = {},
+) {
+  const env = options.env ?? createEnv();
   for (const id of open) env.store.getState().openWindow(id);
   const view = renderWithProviders(
     <Wrap>
@@ -468,7 +471,10 @@ describe("window manager (M5c WP171)", () => {
 
   it("keeps a window that lay wholly on the page wholly on it when the page shrinks (P1)", async () => {
     await setup(["plugin-manager"]);
-    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 340, y: 200, width: 600, height: 400 });
+    // Placed by the user (one keyboard step to the right).
+    fireEvent.keyDown(header("plugin-manager"), { key: "ArrowRight" });
+    const x = 340 + WINDOW_KEYBOARD_STEP;
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x, y: 200, width: 600, height: 400 });
     // Narrower and lower: moved in from the right and bottom edges, the title bar
     // and its buttons stay on the page.
     setPage(800, 500);
@@ -476,7 +482,53 @@ describe("window manager (M5c WP171)", () => {
     setPage(500, 350);
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 0, y: 0, width: 500, height: 350 });
     setPage(PAGE.width, PAGE.height);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x, y: 200, width: 600, height: 400 });
+  });
+
+  it("re-places a window the user has not placed for the page's new size (ADR 0181)", async () => {
+    // Opened on a small page: fitted to it, centred.
+    setPage(500, 350);
+    const { env } = await setup(["plugin-manager"]);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 0, y: 0, width: 500, height: 350 });
+    // The page grows: the window gets its full size, centred again.
+    setPage(PAGE.width, PAGE.height);
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 340, y: 200, width: 600, height: 400 });
+    setPage(800, 500);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 100, y: 50, width: 600, height: 400 });
+    // Maximized windows fill whatever page there is.
+    fireEvent.doubleClick(header("plugin-manager"));
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 0, y: 0, width: 800, height: 500 });
+    setPage(1600, 1000);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 0, y: 0, width: 1600, height: 1000 });
+    await settleQueries(env);
+  });
+
+  it("opens remembered geometry fitted to a smaller page and grows back to it (ADR 0181)", async () => {
+    const env = createEnv();
+    await env.client.request(
+      {
+        type: "SetWindowState",
+        window: "plugin-manager",
+        state: {
+          page: { rect: { x: 600, y: 300, width: 640, height: 450 }, maximized: false, snap: null },
+          pop_out: null,
+          popped_out: false,
+        },
+      },
+      "WindowStates",
+    );
+    setPage(700, 400);
+    await setup(["plugin-manager"], { env });
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 60, y: 0, width: 640, height: 400 });
+    setPage(PAGE.width, PAGE.height);
+    expect(rectOf(frame("plugin-manager"))).toEqual({ x: 600, y: 300, width: 640, height: 450 });
+    // Nothing of this was the user's doing: nothing new is remembered.
+    expect((await remembered(env))["plugin-manager"]?.page?.rect).toEqual({
+      x: 600,
+      y: 300,
+      width: 640,
+      height: 450,
+    });
   });
 
   it("remembers geometry per kind (debounced) and restores it when the window opens again", async () => {
@@ -532,15 +584,7 @@ describe("window manager (M5c WP171)", () => {
       },
       "WindowStates",
     );
-    env.store.getState().openWindow("plugin-manager");
-    env.store.getState().openWindow("plugin-manager:w2");
-    renderWithProviders(
-      <Wrap>
-        <WindowLayer layout={env.transport.data.layout} />
-      </Wrap>,
-      env,
-    );
-    await settleQueries(env);
+    await setup(["plugin-manager", "plugin-manager:w2"], { env });
     expect(rectOf(frame("plugin-manager"))).toEqual({ x: 100, y: 120, width: 500, height: 350 });
     expect(rectOf(frame("plugin-manager:w2"))).toEqual({
       x: 100 + WINDOW_CASCADE_OFFSET,
@@ -712,15 +756,7 @@ describe("window manager (M5c WP171)", () => {
       ["popOuts"],
       [{ window: "config-errors", title: null, context: null, geometry: null }],
     );
-    env.store.getState().openWindow("plugin-manager");
-    env.store.getState().openWindow("config-errors");
-    renderWithProviders(
-      <Wrap>
-        <WindowLayer layout={env.transport.data.layout} />
-      </Wrap>,
-      env,
-    );
-    await settleQueries(env);
+    await setup(["plugin-manager", "config-errors"], { env });
     expect(screen.getAllByRole("dialog").map((d) => d.getAttribute("data-window"))).toEqual([
       "plugin-manager",
     ]);

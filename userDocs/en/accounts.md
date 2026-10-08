@@ -15,9 +15,11 @@ Open **Settings → Accounts** and choose **Add account** (or run **Add account*
    configuration, from Mozilla's provider database, from DNS records of the
    domain, from Microsoft Autodiscover, or — as a last resort — by trying
    common server names such as `imap.<your domain>`.
-2. **Servers.** Nail shows what it found. If there are several proposals,
-   pick one. **Edit server settings** lets you change the protocol (IMAP or
-   POP3), server name, port, security (TLS, STARTTLS or none) and user name.
+2. **Servers.** Nail shows what it found, each proposal with its protocol.
+   If there are several, pick one; IMAP comes first and is selected when the
+   provider offers both IMAP and POP3. **Edit server settings** lets you
+   change the protocol (IMAP or POP3), server name, port, security (TLS,
+   STARTTLS or none) and user name.
    If nothing was found, you enter them yourself.
 
    Some answers cannot be verified: they arrived without encryption (anyone
@@ -70,7 +72,7 @@ account deletes its entries.
 POP3 servers only offer an inbox, so a POP3 account gets local folders in
 Nail: Inbox, Sent, Archive and Trash. Moving mail between them never
 touches the server. Nail checks for new mail every 10 minutes (or as set
-in the account settings) and when you press `F5`.
+in the account settings) and when you click **Check for new mail** or press `F5`.
 
 What happens on the server after a message was downloaded is up to you
 (**Settings → Accounts → POP3 download**):

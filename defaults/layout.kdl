@@ -256,6 +256,11 @@ layout "default" {
         action "window.close"     label="@window.action.close"     icon="x"
         action "view.toggle"      label="@view.action.toggle" icon="layout-panel-left"
         action "sync.now"         label="@sync.action.now"         icon="refresh-cw"
+        // ADR 0184: the text menu (fields, editors, selectable text).
+        action "edit.cut"         label="@edit.action.cut"         icon="scissors"
+        action "edit.copy"        label="@edit.action.copy"        icon="copy"
+        action "edit.paste"       label="@edit.action.paste"       icon="clipboard-paste"
+        action "edit.select-all"  label="@edit.action.select-all"  icon="text-select"
         action "rules.open"       label="@rules.action.open"       icon="funnel"
         action "rules.create-from-message" label="@rules.action.create-from-message" icon="funnel"
         action "mcp.indicator.dismiss" label="@mcp.indicator.dismiss" icon="x"
@@ -557,6 +562,8 @@ layout "default" {
         bind "s" "mail.toggle-flag"
         bind "/" "search.focus"
         bind "f5" "sync.now"
+        // ADR 0183: Ctrl+R checks for new mail too (never reloads the app).
+        bind "ctrl+r" "sync.now"
         bind "ctrl+b" "view.toggle \"sidebar\""
         bind "g r" "view.toggle \"reader\""
         // Views (M5b; the rail's tooltips name the first key of a view).
@@ -762,6 +769,23 @@ layout "default" {
         item "theme.reset"
         separator
         item "palette.open"
+    }
+    // ADR 0184: right-click in the folder pane around its folders and
+    // accounts.
+    menu "context:folder-tree" {
+        item "sync.now"
+        item "mail.compose"
+        separator
+        item "account.add"
+    }
+    // ADR 0184: right-click on a text field, an editor or selectable text
+    // (mail, addresses, details) instead of the browser's menu.
+    menu "context:text" {
+        item "edit.cut"
+        item "edit.copy"
+        item "edit.paste"
+        separator
+        item "edit.select-all"
     }
     // Right-click on any toolbar (M5d): customize that toolbar.
     menu "context:toolbar" {

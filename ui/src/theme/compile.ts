@@ -26,6 +26,7 @@ import { PORTABILITY_BASE_CSS } from "../features/portability/parts";
 import { PALETTE_BASE_CSS } from "../features/palette/parts";
 import { PRINT_BASE_CSS } from "../features/print/parts";
 import { SKIN_CSS } from "./skin";
+import { SELECTION_CSS } from "./selection";
 import { aliasedRule } from "./partAliases";
 import { MESSAGE_LIST_SKIN_CSS } from "../widgets/messageListSkin";
 import { THREAD_VIEW_SKIN_CSS } from "../widgets/threadViewSkin";
@@ -343,6 +344,8 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   // follow the shared skin directly.
   const sections: string[] = [
     BASE_CSS,
+    // ADR 0182: only the user's data is selectable, never the chrome.
+    SELECTION_CSS,
     SKIN_CSS,
     ...[
       MESSAGE_LIST_SKIN_CSS,

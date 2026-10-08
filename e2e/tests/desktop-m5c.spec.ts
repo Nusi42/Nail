@@ -84,6 +84,12 @@ async function clickClosing(button: Locator, popOut: Page): Promise<void> {
   }
 }
 
+/** {@link clickClosing}, then waits until no pop-out is left. */
+async function clickClosingLast(button: Locator, popOut: Page, main: Page): Promise<void> {
+  await clickClosing(button, popOut);
+  await expect.poll(async () => (await popOuts(main)).length, { timeout: 30_000 }).toBe(0);
+}
+
 async function newComposer(page: Page, subject: string): Promise<string> {
   const before = await composerWindows(page).count();
   await newMessageButton(page).click();
@@ -144,10 +150,8 @@ test("a popped-out composer returns to the main window with what was typed", asy
   const host = popped.locator(`[data-part="pop-out"][data-window="${id}"]`);
   await expect(host.getByRole("textbox", { name: "Subject" })).toHaveValue("Round trip");
   await host.getByRole("textbox", { name: "Message" }).fill("Written outside.");
-  await clickClosing(host.getByRole("button", { name: "Return to main window" }), popped);
-
   // The OS window closes and the composer is back in the page, with the text.
-  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+  await clickClosingLast(host.getByRole("button", { name: "Return to main window" }), popped, page);
   await expect(inPage).toBeVisible({ timeout: 30_000 });
   await expect(inPage.getByRole("textbox", { name: "Subject" })).toHaveValue("Round trip");
   await expect(inPage.getByRole("textbox", { name: "Message" })).toHaveValue("Written outside.");
@@ -168,8 +172,11 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await thrownHost.getByRole("button", { name: "Discard", exact: true }).click();
   const discard = thrown.locator(windowSelector(`composer-discard:${first.split(":")[1] ?? ""}`));
   await expect(discard).toBeVisible();
-  await clickClosing(discard.getByRole("button", { name: "Discard", exact: true }), thrown);
-  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+  await clickClosingLast(
+    discard.getByRole("button", { name: "Discard", exact: true }),
+    thrown,
+    page,
+  );
 
   // The OS close button (Alt+F4) with unsaved typing: the page asks first,
   // and "Save draft" keeps the text and closes the OS window.
@@ -186,8 +193,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await expect(question).toBeVisible();
   // Still open while it asks.
   expect((await popOuts(page)).map((p) => p.label)).toEqual([`popout-${second}`]);
-  await clickClosing(question.getByRole("button", { name: "Save draft" }), kept);
-  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+  await clickClosingLast(question.getByRole("button", { name: "Save draft" }), kept, page);
 
   // The draft has the last words: continued from the outbox's drafts (it
   // opens in the page or, as the kind was last popped out, in a pop-out).
@@ -214,4 +220,80 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
       { timeout: 60_000 },
     )
     .toBe(true);
+});
+
+/** The page's size (the window's inner size in CSS pixels). */
+async function pageSize(page: Page) {
+  return page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+}
+
+test("windows follow the OS window's size; WebView2 shows no menu or reload of its own", async () => {
+  const page = await launch();
+  // ADR 0184: WebView2's own context menus are off in every window.
+  const menus = () =>
+    shellControl(page, "default-context-menus") as Promise<Record<string, boolean>>;
+  await expect.poll(async () => (await menus()).main).toBe(false);
+
+  // ADR 0181: the composer follows the main window, smaller and larger.
+  const id = await newComposer(page, "Resized");
+  const inPage = page.locator(`[data-part="window"][data-window="${id}"]`);
+  const rect = async () => defined(await inPage.boundingBox(), "the composer's box");
+  for (const [width, height] of [
+    [900, 560],
+    [1400, 1000],
+  ] as const) {
+    await shellControl(page, `resize-main:${String(width)}x${String(height)}`);
+    // DPI scaling may round the inner size by a pixel.
+    await expect
+      .poll(async () => Math.abs((await pageSize(page)).width - width))
+      .toBeLessThanOrEqual(2);
+    const size = await pageSize(page);
+    await expect
+      .poll(async () => {
+        const box = await rect();
+        return (
+          box.x >= 0 &&
+          box.y >= 0 &&
+          box.x + box.width <= size.width + 1 &&
+          box.y + box.height <= size.height + 1
+        );
+      })
+      .toBe(true);
+    const box = await rect();
+    expect(Math.round(box.width)).toBe(Math.min(820, size.width));
+    expect(Math.round(box.height)).toBe(Math.min(720, size.height));
+  }
+
+  // ADR 0183: F5 / Ctrl+R in a field check for mail; the page is not reloaded.
+  await page.evaluate(() => Reflect.set(window, "nailStillHere", true));
+  await inPage.getByRole("textbox", { name: "Subject" }).focus();
+  await page.keyboard.press("F5");
+  await page.keyboard.press("Control+R");
+  await expect(inPage.getByRole("textbox", { name: "Subject" })).toHaveValue("Resized");
+  expect(await page.evaluate(() => Reflect.get(window, "nailStillHere") === true)).toBe(true);
+
+  // The popped-out composer fills its OS window at every size.
+  await inPage.getByRole("button", { name: "Open in new window" }).click();
+  const popped = await popOutPage(id);
+  const host = popped.locator(`[data-part="pop-out"][data-window="${id}"]`);
+  await expect(host).toBeVisible();
+  for (const [width, height] of [
+    [640, 480],
+    [1000, 760],
+  ] as const) {
+    await shellControl(page, `resize-pop-outs:${String(width)}x${String(height)}`);
+    await expect
+      .poll(async () => Math.abs((await pageSize(popped)).width - width))
+      .toBeLessThanOrEqual(2);
+    const size = await pageSize(popped);
+    await expect
+      .poll(async () => {
+        const box = defined(await host.boundingBox(), "the pop-out page");
+        return [Math.round(box.width), Math.round(box.height)];
+      })
+      .toEqual([size.width, size.height]);
+    await expect(host.getByRole("button", { name: "Send", exact: true })).toBeInViewport();
+  }
+  await expect.poll(async () => (await menus())[`popout-${id}`]).toBe(false);
+  await clickClosingLast(host.getByRole("button", { name: "Return to main window" }), popped, page);
 });

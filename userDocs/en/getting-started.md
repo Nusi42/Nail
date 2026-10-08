@@ -85,7 +85,7 @@ is narrow, the panes become tabs. Actions without a button of their own
 | `g` then `o` | Show the outbox |
 | `Ctrl+,` | Settings |
 | `F1` | About Nail (version, installation, updates; desktop app) |
-| `F5` | Check for new mail |
+| `F5`, `Ctrl+R` | Check for new mail |
 | `Ctrl+B` | Show or hide the folder pane |
 | `g` then `r` | Show or hide the message pane |
 | `Ctrl+K` | The command palette: find and run any action by typing |

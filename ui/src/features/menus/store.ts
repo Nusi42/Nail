@@ -10,7 +10,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ResolvedLayout, ResolvedMenu } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
-import { findContextTarget, type ContextTarget } from "./targets";
+import { findContextTarget, textTarget, type ContextTarget } from "./targets";
 
 export interface OpenMenu {
   menu: ResolvedMenu;
@@ -97,16 +97,38 @@ export interface OpenOptions {
 
 /**
  * Opens the context menu for `element` when the layout has one for its
- * part. Returns whether a menu opened (else the browser's menu may show).
+ * part. Returns whether a menu opened (ADR 0184: else nothing opens).
  */
 export function openContextMenu(
   ui: UiStore,
   layout: ResolvedLayout,
   element: Element | null,
-  { point, keyboard }: OpenOptions,
+  options: OpenOptions,
 ): boolean {
   const target = findContextTarget(element);
-  if (!target) return false;
+  return target !== null && showMenu(ui, layout, target, element, options);
+}
+
+/**
+ * Opens the text menu on `root` (ADR 0184): a mail document's body, whose
+ * events the page's handler does not see.
+ */
+export function openTextMenu(
+  ui: UiStore,
+  layout: ResolvedLayout,
+  root: HTMLElement,
+  options: OpenOptions,
+): boolean {
+  return showMenu(ui, layout, textTarget(root), root, options);
+}
+
+function showMenu(
+  ui: UiStore,
+  layout: ResolvedLayout,
+  target: ContextTarget,
+  element: Element | null,
+  { point, keyboard }: OpenOptions,
+): boolean {
   const menu = resolveMenu(layout, contextMenuName(target.part), keyContextOf(target.part));
   if (!menu) return false;
   select(ui, target);

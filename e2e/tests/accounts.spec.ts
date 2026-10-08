@@ -71,11 +71,22 @@ test("an account is added through discovery against the mock servers", async ({ 
   await dialog.getByRole("textbox", { name: "Email address" }).fill("bob@new.example");
   await dialog.getByRole("button", { name: "Continue" }).click();
 
-  // Autoconfig found the mock servers.
-  await expect(dialog.getByText("New Example Mail")).toBeVisible();
+  // Autoconfig found the mock servers. Its file lists POP3 first; IMAP is
+  // proposed first and preselected (ADR 0180).
+  const found = dialog.getByRole("radio", { name: /New Example Mail/ });
+  await expect(found).toHaveCount(2);
+  const imap = dialog.getByRole("radio", {
+    name: /Incoming \(IMAP\) 127\.0\.0\.1:\d+, outgoing 127\.0\.0\.1:\d+/,
+  });
+  await expect(found.first()).toBeChecked();
+  await expect(imap).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: /Incoming \(POP3\)/ })).not.toBeChecked();
+  await dialog.getByRole("button", { name: "Edit server settings" }).click();
   await expect(
-    dialog.getByText(/Incoming 127\.0\.0\.1:\d+, outgoing 127\.0\.0\.1:\d+/),
-  ).toBeVisible();
+    dialog
+      .getByRole("group", { name: "Incoming mail" })
+      .getByRole("combobox", { name: "Protocol" }),
+  ).toHaveValue("imap");
   await dialog.getByLabel("Password").fill("new-secret");
   await dialog.getByRole("button", { name: "Test connection" }).click();
   await expect(dialog.getByText("Nail can connect to your servers.")).toBeVisible();

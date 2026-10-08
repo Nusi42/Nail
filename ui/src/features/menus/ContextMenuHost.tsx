@@ -4,6 +4,12 @@
  * the open menu without the actions that do not apply to its target (M5b)
  * and runs its actions with the menu's target as context.
  *
+ * ADR 0184: the one `contextmenu` handler of the app. It cancels every
+ * right-click — the browser's (WebView2's) menu never shows — and opens
+ * Nail's menu for the place, or nothing. Mail documents in their frames
+ * (`srcdoc`, same origin) get the text menu from a handler on their own
+ * document, attached when the frame loads.
+ *
  * Shift+F10 and the menu key are ordinary key bindings of the action
  * `menu.context` (default layout), so they can be rebound.
  */
@@ -14,8 +20,17 @@ import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useUiStoreApi } from "../../state/uiStore";
 import { ContextMenu } from "./ContextMenu";
+import { withEditShortcuts } from "./editing";
 import { withoutConversationShortcuts, withoutDisabled } from "./resolve";
-import { menuStoreFor, openContextMenu, useMenu } from "./store";
+import { menuStoreFor, openContextMenu, openTextMenu, useMenu } from "./store";
+import { TEXT_PART } from "./targets";
+
+/** The frames whose documents are mail (text menu inside them). */
+const MAIL_FRAME = 'iframe[data-part="message-view.body"]';
+
+/** Whether a `contextmenu` event came from the keyboard (no pointer position). */
+const fromKeyboard = (event: MouseEvent) =>
+  event.clientX === 0 && event.clientY === 0 && event.button !== 2;
 
 export function ContextMenuHost() {
   const t = useT();
@@ -26,16 +41,52 @@ export function ContextMenuHost() {
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
+      // A menu of a part's own (a toolbar's) opened already.
       if (event.defaultPrevented) return;
+      event.preventDefault();
       const element = event.target instanceof Element ? event.target : null;
-      // A keyboard-invoked event has no pointer position.
-      const keyboard = event.clientX === 0 && event.clientY === 0 && event.button !== 2;
-      const point = keyboard ? null : { x: event.clientX, y: event.clientY };
-      if (openContextMenu(ui, layout, element, { point })) event.preventDefault();
+      const point = fromKeyboard(event) ? null : { x: event.clientX, y: event.clientY };
+      openContextMenu(ui, layout, element, { point });
     };
-    document.addEventListener("contextmenu", onContextMenu);
+    // Mail documents: the text menu, placed in the page's coordinates.
+    // A document's listener stays with it (an `AbortSignal` of this page
+    // does not reach another document's realm) but does nothing once this
+    // effect is gone; the next run attaches its own.
+    let live = true;
+    const attached = new WeakSet<Document>();
+    const attach = (frame: HTMLIFrameElement) => {
+      const doc = frame.contentDocument;
+      if (doc === null || attached.has(doc)) return;
+      attached.add(doc);
+      doc.addEventListener("contextmenu", (event) => {
+        if (!live) return;
+        event.preventDefault();
+        const body = doc.body as HTMLElement | null;
+        if (body === null) return;
+        const rect = frame.getBoundingClientRect();
+        const inside = fromKeyboard(event)
+          ? { x: 0, y: 0 }
+          : { x: event.clientX, y: event.clientY };
+        openTextMenu(ui, layout, body, {
+          point: { x: rect.left + inside.x, y: rect.top + inside.y },
+          keyboard: fromKeyboard(event),
+        });
+      });
+    };
+    const listening = new AbortController();
+    const { signal } = listening;
+    const onLoad = (event: Event) => {
+      if (event.target instanceof HTMLIFrameElement && event.target.matches(MAIL_FRAME)) {
+        attach(event.target);
+      }
+    };
+    document.querySelectorAll<HTMLIFrameElement>(MAIL_FRAME).forEach(attach);
+    document.addEventListener("contextmenu", onContextMenu, { signal });
+    // `load` does not bubble; a capturing listener sees every frame's.
+    document.addEventListener("load", onLoad, { capture: true, signal });
     return () => {
-      document.removeEventListener("contextmenu", onContextMenu);
+      live = false;
+      listening.abort();
     };
   }, [ui, layout]);
 
@@ -58,8 +109,14 @@ export function ContextMenuHost() {
 
   // Actions that do not apply to the target are hidden, not greyed out.
   const enabled = open ? withoutDisabled(open.menu.items, isEnabled) : [];
-  // A card's actions act on its message, not on the conversation the keys reach.
-  const items = open?.target.card ? withoutConversationShortcuts(enabled) : enabled;
+  // The text menu shows the editing keys; a card's actions act on its
+  // message, not on the conversation the keys reach.
+  const items =
+    open?.target.part === TEXT_PART
+      ? withEditShortcuts(enabled)
+      : open?.target.card
+        ? withoutConversationShortcuts(enabled)
+        : enabled;
   useEffect(() => {
     if (open && items.length === 0) close(true);
   }, [open, items.length, close]);

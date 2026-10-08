@@ -19,6 +19,15 @@ context-menu-label-folder-tree-account = Account actions
 context-menu-label-composer = Composer actions
 context-menu-label-calendar-list-calendar = { common-calendar-actions }
 context-menu-label-nav-rail = { common-view }
+context-menu-label-folder-tree = { common-mail }
+context-menu-label-text = { common-edit }
+
+## The text menu (fields, editors, selectable text)
+
+edit-action-cut = Cut
+edit-action-copy = { common-copy }
+edit-action-paste = Paste
+edit-action-select-all = Select all
 
 ## Key names in shortcuts (menus, key binding editor)
 

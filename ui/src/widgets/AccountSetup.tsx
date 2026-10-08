@@ -496,6 +496,7 @@ export function AccountSetup({ node }: WidgetProps) {
                   </span>
                   <span data-part="account-setup.candidate.servers">
                     {t("setup-candidate-servers", {
+                      protocol: t(`server-protocol-${c.incoming.protocol}`),
                       incoming: `${c.incoming.server.host}:${String(c.incoming.server.port)}`,
                       outgoing: c.outgoing
                         ? `${c.outgoing.server.host}:${String(c.outgoing.server.port)}`

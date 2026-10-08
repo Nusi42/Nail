@@ -46,6 +46,7 @@ common-contact = Contact
 common-task = Task
 common-rule = Rule
 common-field = Field
+common-copy = Copy
 common-deny = Deny
 common-review = Review
 common-saved = Saved.

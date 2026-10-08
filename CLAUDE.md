@@ -1323,6 +1323,12 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `z` undo. MCP `update_messages` / `delete_messages` and plug-in `nail.mail.update` / `delete` take
   `conversations` (SDK `PluginMailTargets`). Schema stays v18 (no v19). HTML mail frames are as tall as their mail
   (no 40vh minimum). E2E: `p3-actions.spec.ts`, `p3-card-height.spec.ts`; `thread-page-p95-ms` budget 10.
+- Fixes from the maintainer's review (ADRs 0180–0184): discovery ranks IMAP before POP3; a window the user has not placed is
+  re-placed for every page size (`WindowFrame` `placed` vs opening inputs); only `SELECTABLE_PARTS`
+  (`ui/src/theme/selection.ts`) and fields are selectable; `folder-tree` `check-mail` button, `sync.now` = every
+  account, `RELOAD_KEYS` never reload; one `contextmenu` handler (Nail's menu or none; `context:text` /
+  `context:folder-tree`), WebView2 default menus off (`app/src-tauri/src/webview_menus.rs`); shell test controls
+  `default-context-menus`, `resize-main:<w>x<h>`, `resize-pop-outs:<w>x<h>`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

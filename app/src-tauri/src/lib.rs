@@ -57,6 +57,7 @@ pub mod startup;
 pub mod tray;
 pub mod updater;
 pub mod updater_tauri;
+pub mod webview_menus;
 pub mod win;
 
 use std::sync::Arc;
@@ -627,6 +628,8 @@ pub fn run() {
     // content gets no updater permission).
     builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     let builder = builder
+        // ADR 0184: no WebView2 context menus in any window (Nail's own or none).
+        .on_page_load(|webview, _payload| webview_menus::disable(webview))
         .register_asynchronous_uri_scheme_protocol(PROXY_PROTOCOL, |ctx, request, responder| {
             let proxy = ctx
                 .app_handle()
@@ -711,7 +714,9 @@ pub fn run() {
                 app.handle(),
                 &config,
             )?)
-            .visible(!hidden && !shown_later);
+            .visible(!hidden && !shown_later)
+            // ADR 0184: Nail's own Paste reads the clipboard without a prompt.
+            .enable_clipboard_access();
             let profile = webview_dir(base.as_deref(), args.seed.is_some(), &data_dir);
             if let Some(dir) = &profile {
                 window = window.data_directory(dir.clone());

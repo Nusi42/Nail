@@ -981,6 +981,30 @@
       "alias_of": null,
       "args": []
     },
+    "edit.cut": {
+      "label": "@edit.action.cut",
+      "icon": "scissors",
+      "alias_of": null,
+      "args": []
+    },
+    "edit.copy": {
+      "label": "@edit.action.copy",
+      "icon": "copy",
+      "alias_of": null,
+      "args": []
+    },
+    "edit.paste": {
+      "label": "@edit.action.paste",
+      "icon": "clipboard-paste",
+      "alias_of": null,
+      "args": []
+    },
+    "edit.select-all": {
+      "label": "@edit.action.select-all",
+      "icon": "text-select",
+      "alias_of": null,
+      "args": []
+    },
     "rules.open": {
       "label": "@rules.action.open",
       "icon": "funnel",
@@ -1870,6 +1894,12 @@
     {
       "context": "global",
       "key": "f5",
+      "action": "sync.now",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+r",
       "action": "sync.now",
       "args": []
     },
@@ -2876,6 +2906,65 @@
       {
         "type": "action",
         "action": "palette.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "context:folder-tree": [
+      {
+        "type": "action",
+        "action": "sync.now",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.compose",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "account.add",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "context:text": [
+      {
+        "type": "action",
+        "action": "edit.cut",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "edit.copy",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "edit.paste",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "edit.select-all",
         "args": [],
         "label": null,
         "icon": null

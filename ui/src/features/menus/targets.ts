@@ -4,6 +4,7 @@
  * names to the contract's context-menu parts (`CONTEXT_MENU_PARTS`,
  * ADR 0043), with the message / folder / attachment it refers to.
  */
+import { selectableRoot } from "../../theme/selection";
 import { CONTEXT_MENU_PARTS } from "./resolve";
 
 /** DOM part → context-menu part (`context:<part>` in `layout.kdl`). */
@@ -20,7 +21,23 @@ export const DOM_PARTS: Readonly<Record<string, string>> = {
   "folder-tree.account": "folder-tree.account",
   composer: "composer",
   "nav-rail": "nav-rail",
+  // ADR 0184: the folder pane around its folders and accounts.
+  "folder-tree": "folder-tree",
 };
+
+/** The context-menu part of text: fields, editors, selectable text (ADR 0184). */
+export const TEXT_PART = "text";
+
+/**
+ * The selection when a text menu opened (the menu takes the focus; its
+ * actions put the selection back first).
+ */
+export interface SavedSelection {
+  /** The document's selection range (selectable text, editors). */
+  range: Range | null;
+  /** The selected characters of a text field (`[start, end]`). */
+  field: readonly [number, number] | null;
+}
 
 /** The thing a context menu acts on. */
 export interface ContextTarget {
@@ -41,9 +58,11 @@ export interface ContextTarget {
    * card's own actions act on its message).
    */
   card: boolean;
+  /** The selection of a text target (`part` = {@link TEXT_PART}). */
+  selection?: SavedSelection | null;
 }
 
-/** Whether an element takes text input (it keeps the browser's own menu). */
+/** Whether an element takes text input (it gets the text menu). */
 export function isTextInput(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) return false;
   if (element.isContentEditable) return true;
@@ -84,12 +103,52 @@ function targetOf(element: HTMLElement, part: string): ContextTarget {
   };
 }
 
+/** The text field or editor `element` is in (`null` for a select or a checkbox). */
+function editableAround(element: Element): HTMLElement | null {
+  const root = selectableRoot(element);
+  return root instanceof HTMLElement && isTextInput(root) ? root : null;
+}
+
+/** The selection now, within `root`. */
+export function saveSelection(root: Element): SavedSelection {
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement) {
+    const { selectionStart: start, selectionEnd: end } = root;
+    return { range: null, field: start === null || end === null ? null : [start, end] };
+  }
+  const selection = root.ownerDocument.getSelection();
+  const range =
+    selection !== null && selection.rangeCount > 0 && !selection.isCollapsed
+      ? selection.getRangeAt(0)
+      : null;
+  return { range: range?.intersectsNode(root) ? range.cloneRange() : null, field: null };
+}
+
+/** Whether a saved selection holds any text. */
+export function selectsText({ range, field }: SavedSelection): boolean {
+  return field !== null ? field[0] !== field[1] : range !== null && !range.collapsed;
+}
+
+/** A text target on `root` with the selection of now. */
+export function textTarget(root: HTMLElement): ContextTarget {
+  return { ...targetOf(root, TEXT_PART), selection: saveSelection(root) };
+}
+
 /**
- * The innermost context-menu target around `element`, or `null` (then the
- * browser's own menu stays). Text fields never get a Nail menu.
+ * The context-menu target around `element`, or `null` (then nothing opens:
+ * never the browser's menu, ADR 0184):
+ *
+ * - a text field or editor: the text menu;
+ * - selected text under the pointer: the text menu (Copy);
+ * - else the innermost part with a menu (a row, a folder, the reader);
+ * - else selectable text: the text menu (Select all).
  */
 export function findContextTarget(element: Element | null): ContextTarget | null {
-  if (element === null || isTextInput(element)) return null;
+  if (element === null) return null;
+  const editable = editableAround(element);
+  if (editable !== null) return textTarget(editable);
+  const selectable = selectableRoot(element);
+  const text = selectable instanceof HTMLElement ? textTarget(selectable) : null;
+  if (text?.selection && selectsText(text.selection)) return text;
   const descendant = activeDescendant(element);
   let current: Element | null = descendant ?? element;
   while (current) {
@@ -100,5 +159,5 @@ export function findContextTarget(element: Element | null): ContextTarget | null
     }
     current = current.parentElement;
   }
-  return null;
+  return text;
 }
