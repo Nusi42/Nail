@@ -15,10 +15,9 @@ use nail_proto_smtp::{
     SendOptions, SmtpAuth, SmtpConfig, SmtpCredentials, SmtpError, SmtpSession, SmtpTransport,
     TlsTrust, test_login,
 };
-use nail_testkit_net::{MockSmtpConfig, MockSmtpServer, MockTls};
-
-const USER: &str = "sam@nail.example";
-const PASS: &str = "secret";
+use nail_testkit_net::{
+    MOCK_PASSWORD as PASS, MOCK_USER as USER, MockSmtpConfig, MockSmtpServer, MockTls,
+};
 const WAIT: Duration = Duration::from_secs(5);
 
 fn plain_config(server: &MockSmtpServer) -> SmtpConfig {
@@ -60,15 +59,25 @@ async fn session(
     Ok(session)
 }
 
-#[tokio::test]
-async fn sends_over_plaintext_with_plain_auth() {
-    let server = server(MockSmtpConfig::default()).await;
-    let mut session = session(
-        &plain_config(&server),
+/// A session logged in with the test password over plaintext.
+async fn logged_in(server: &MockSmtpServer) -> SmtpSession {
+    session(
+        &plain_config(server),
         &SmtpCredentials::password(USER, PASS),
     )
     .await
-    .unwrap();
+    .unwrap()
+}
+
+/// The envelope of a message to Bob.
+fn to_bob() -> Envelope {
+    envelope(&["bob@example.org"])
+}
+
+#[tokio::test]
+async fn sends_over_plaintext_with_plain_auth() {
+    let server = server(MockSmtpConfig::default()).await;
+    let mut session = logged_in(&server).await;
     assert!(!session.is_encrypted());
     assert_eq!(session.authenticated_as(), Some(USER));
     assert_eq!(session.capabilities().size_limit(), Some(10 * 1024 * 1024));
@@ -112,13 +121,9 @@ async fn implicit_tls_and_starttls() {
     .await
     .unwrap();
     assert!(s.is_encrypted());
-    s.send(
-        &envelope(&["bob@example.org"]),
-        MESSAGE,
-        SendOptions::default(),
-    )
-    .await
-    .unwrap();
+    s.send(&to_bob(), MESSAGE, SendOptions::default())
+        .await
+        .unwrap();
     assert!(implicit.wait_for_messages(1, WAIT).await.unwrap()[0].tls);
 
     let starttls = server(MockSmtpConfig {
@@ -136,13 +141,9 @@ async fn implicit_tls_and_starttls() {
     // AUTH is only announced after STARTTLS; we saw it.
     assert!(s.capabilities().has_auth("PLAIN"));
     assert!(!s.capabilities().has("STARTTLS"));
-    s.send(
-        &envelope(&["bob@example.org"]),
-        MESSAGE,
-        SendOptions::default(),
-    )
-    .await
-    .unwrap();
+    s.send(&to_bob(), MESSAGE, SendOptions::default())
+        .await
+        .unwrap();
     let mail = starttls.wait_for_messages(1, WAIT).await.unwrap().remove(0);
     assert!(mail.tls);
     let commands = starttls.commands();
@@ -249,11 +250,7 @@ async fn server_without_auth_or_mechanism() {
     // Sending without credentials to a server that requires them.
     let mut s = SmtpSession::connect(&plain_config(&server)).await.unwrap();
     let err = s
-        .send(
-            &envelope(&["bob@example.org"]),
-            MESSAGE,
-            SendOptions::default(),
-        )
+        .send(&to_bob(), MESSAGE, SendOptions::default())
         .await
         .unwrap_err();
     assert_eq!(err.code(), ErrorCode::AuthFailed);
@@ -266,12 +263,7 @@ async fn size_limit_is_checked_before_sending() {
         ..MockSmtpConfig::default()
     })
     .await;
-    let mut s = session(
-        &plain_config(&server),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&server).await;
     let big = vec![b'x'; 200];
     let err = s
         .send(
@@ -293,18 +285,9 @@ async fn size_limit_is_checked_before_sending() {
     })
     .await;
     unlimited.fail("MESSAGE", 552, "5.3.4 Message too big", Some(1));
-    let mut s = session(
-        &plain_config(&unlimited),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&unlimited).await;
     let err = s
-        .send(
-            &envelope(&["bob@example.org"]),
-            MESSAGE,
-            SendOptions::default(),
-        )
+        .send(&to_bob(), MESSAGE, SendOptions::default())
         .await
         .unwrap_err();
     assert!(matches!(err, SmtpError::TooLarge(_)), "{err:?}");
@@ -314,12 +297,7 @@ async fn size_limit_is_checked_before_sending() {
 async fn permanent_and_transient_refusals() {
     let server = server(MockSmtpConfig::default()).await;
     server.reject_recipient("nobody@example.org", 550, "5.1.1 No such user");
-    let mut s = session(
-        &plain_config(&server),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&server).await;
     let err = s
         .send(
             &envelope(&["bob@example.org", "nobody@example.org"]),
@@ -345,11 +323,7 @@ async fn permanent_and_transient_refusals() {
     // The same session can go on after RSET.
     server.fail("MAIL", 451, "4.3.0 Try again later", Some(1));
     let err = s
-        .send(
-            &envelope(&["bob@example.org"]),
-            MESSAGE,
-            SendOptions::default(),
-        )
+        .send(&to_bob(), MESSAGE, SendOptions::default())
         .await
         .unwrap_err();
     assert!(
@@ -357,25 +331,16 @@ async fn permanent_and_transient_refusals() {
         "{err:?}"
     );
     assert!(err.is_retryable());
-    s.send(
-        &envelope(&["bob@example.org"]),
-        MESSAGE,
-        SendOptions::default(),
-    )
-    .await
-    .unwrap();
+    s.send(&to_bob(), MESSAGE, SendOptions::default())
+        .await
+        .unwrap();
     assert_eq!(server.messages().len(), 1);
 }
 
 #[tokio::test]
 async fn dsn_and_8bit_parameters() {
     let server = server(MockSmtpConfig::default()).await;
-    let mut s = session(
-        &plain_config(&server),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&server).await;
     let eight_bit = "Subject: Grüße\r\n\r\nÄpfel\r\n".as_bytes();
     s.send(
         &envelope(&["bob@example.org"]),
@@ -403,12 +368,7 @@ async fn dsn_and_8bit_parameters() {
         ..MockSmtpConfig::default()
     })
     .await;
-    let mut s = session(
-        &plain_config(&seven_bit_only),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&seven_bit_only).await;
     let err = s
         .send(
             &envelope(&["bob@example.org"]),
@@ -441,12 +401,7 @@ async fn dsn_and_8bit_parameters() {
 #[tokio::test]
 async fn invalid_envelopes() {
     let server = server(MockSmtpConfig::default()).await;
-    let mut s = session(
-        &plain_config(&server),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&server).await;
     let err = s
         .send(&envelope(&[]), MESSAGE, SendOptions::default())
         .await
@@ -506,18 +461,9 @@ async fn network_failures_are_retryable() {
     // The connection drops during DATA.
     let server = server(MockSmtpConfig::default()).await;
     server.disconnect_on("DATA");
-    let mut s = session(
-        &plain_config(&server),
-        &SmtpCredentials::password(USER, PASS),
-    )
-    .await
-    .unwrap();
+    let mut s = logged_in(&server).await;
     let err = s
-        .send(
-            &envelope(&["bob@example.org"]),
-            MESSAGE,
-            SendOptions::default(),
-        )
+        .send(&to_bob(), MESSAGE, SendOptions::default())
         .await
         .unwrap_err();
     assert!(err.is_retryable(), "{err:?}");

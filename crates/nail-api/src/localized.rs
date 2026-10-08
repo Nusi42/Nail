@@ -192,6 +192,35 @@ pub fn is_message_id(id: &str) -> bool {
         && !id.contains("--")
 }
 
+/// The message ids a Fluent catalog defines (its `id = …` lines).
+pub fn catalog_ids(ftl: &str) -> Vec<&str> {
+    ftl.lines()
+        .filter_map(|l| l.split_once(" =").map(|(id, _)| id))
+        .filter(|id| is_message_id(id))
+        .collect()
+}
+
+/// The ids of `ids` that the catalog `ftl` does not define.
+pub fn missing_ids<'a>(ftl: &str, ids: &[&'a str]) -> Vec<&'a str> {
+    let defined = catalog_ids(ftl);
+    ids.iter()
+        .copied()
+        .filter(|id| !defined.contains(id))
+        .collect()
+}
+
+/// The ids of a producer's id list that are not message ids, do not start
+/// with one of its `prefixes`, or repeat an earlier one.
+pub fn bad_ids<'a>(ids: &[&'a str], prefixes: &[&str]) -> Vec<&'a str> {
+    let mut seen = std::collections::BTreeSet::new();
+    ids.iter()
+        .copied()
+        .filter(|id| {
+            !is_message_id(id) || !prefixes.iter().any(|p| id.starts_with(p)) || !seen.insert(*id)
+        })
+        .collect()
+}
+
 /// Whether `name` is a Fluent variable name as Nail writes them.
 pub fn is_arg_name(name: &str) -> bool {
     let mut chars = name.chars();
@@ -204,6 +233,22 @@ pub fn is_arg_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_ids_and_missing_ones() {
+        let ftl = "# comment\nx-one = One\nx-two =\n    Two\n.attr = no\nBad = no\n";
+        assert_eq!(catalog_ids(ftl), ["x-one", "x-two"]);
+        assert_eq!(missing_ids(ftl, &["x-one", "x-three"]), ["x-three"]);
+    }
+
+    #[test]
+    fn bad_ids_are_invalid_foreign_or_repeated() {
+        assert_eq!(
+            bad_ids(&["x-a", "Bad", "y-b", "x-a", "x-c"], &["x-"]),
+            ["Bad", "y-b", "x-a"]
+        );
+        assert_eq!(bad_ids(&["x-a", "z-b"], &["x-", "z-"]), Vec::<&str>::new());
+    }
     use serde_json::json;
 
     #[test]

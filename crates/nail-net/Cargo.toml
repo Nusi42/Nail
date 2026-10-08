@@ -1,13 +1,63 @@
 [package]
 name = "nail-net"
-description = "Shared network plumbing of the protocol clients and mock servers (transports, line framing, HTTP retry policy)"
+description = "Shared network plumbing of the protocol clients and mock servers (streams, line framing, TLS, HTTP retry policy, wire XML)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+# Each module is a feature, so a crate pulls only the dependencies of the
+# plumbing it uses (a mock server needs no reqwest, an HTTP client no
+# DEFLATE). Every dependency is already in the workspace (ADR 0171).
+[features]
+# HTTP clients: retry policy, Retry-After, URL policy, bounded bodies,
+# transport error classes, bearer sign-in, redirect / status constants.
+http = [
+    "dep:reqwest",
+    "dep:url",
+    "dep:chrono",
+    "dep:base64",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:tracing",
+    "dep:nail-api",
+]
+# Stream plumbing: delegating streams, idle timeout, bounded line reading.
+io = ["dep:tokio"]
+# DEFLATE-compressed streams (IMAP COMPRESS=DEFLATE, RFC 4978).
+deflate = ["io", "dep:async-compression"]
+# The rustls client configuration with Nail's trust choices (ring).
+tls = ["io", "dep:tokio-rustls", "dep:rustls-platform-verifier", "dep:webpki-roots"]
+# A small namespace-aware XML tree for protocol bodies (WebDAV, EWS SOAP).
+xml = ["dep:quick-xml", "dep:thiserror"]
+
 [dependencies]
+# Shared facts without dependencies (the secret stand-in).
+nail-util.workspace = true
+nail-api = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+async-compression = { version = "0.4.48", default-features = false, features = [
+    "tokio",
+    "deflate",
+], optional = true }
+tokio-rustls = { workspace = true, optional = true }
+rustls-platform-verifier = { workspace = true, optional = true }
+webpki-roots = { version = "1.0.9", optional = true }
+quick-xml = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+nail-net = { path = ".", features = ["http", "io", "deflate", "tls", "xml"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true

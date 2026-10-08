@@ -15,6 +15,7 @@ use oauth2::{
 use crate::error::AuthError;
 use crate::http::{Fetcher, HttpError};
 use crate::providers::ProviderSpec;
+use nail_util::redact::REDACTED;
 
 type ConfiguredClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
@@ -36,10 +37,10 @@ pub struct TokenSet {
 impl fmt::Debug for TokenSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TokenSet")
-            .field("access_token", &"<redacted>")
+            .field("access_token", &REDACTED)
             .field(
                 "refresh_token",
-                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+                &self.refresh_token.as_ref().map(|_| REDACTED),
             )
             .field("expires_at", &self.expires_at)
             .field("scopes", &self.scopes)
@@ -85,7 +86,7 @@ impl fmt::Debug for OAuthClient {
             .field("client_id", &self.client_id)
             .field(
                 "client_secret",
-                &self.client_secret.as_ref().map(|_| "<redacted>"),
+                &self.client_secret.as_ref().map(|_| REDACTED),
             )
             .finish_non_exhaustive()
     }

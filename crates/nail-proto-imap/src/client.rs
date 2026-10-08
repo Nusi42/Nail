@@ -1067,54 +1067,40 @@ impl ImapClient {
     /// Waits for `+` after a synchronizing literal; the server may refuse
     /// the command instead (e.g. `NO [TOOBIG]`).
     async fn wait_for_continuation(&mut self, tag: &str, on: Handler<'_>) -> Result<()> {
-        loop {
-            match self.conn.read().await? {
-                Incoming::Response(Response::Continue { .. }) => return Ok(()),
-                Incoming::Response(Response::Done {
-                    tag: done,
-                    status,
-                    code,
-                    information,
-                }) if done.0 == tag => {
-                    let text = response_text(code.as_ref(), information.as_deref());
-                    return Err(match status {
-                        Status::No => ImapError::No(text),
-                        Status::Ok => ImapError::Protocol(format!(
-                            "command completed before its literal: {text}"
-                        )),
-                        other => ImapError::Protocol(format!("{other:?} {text}")),
-                    });
-                }
-                Incoming::Response(response) => self.dispatch(&response, on)?,
-                Incoming::Unparsed => {}
-            }
+        match self.next_tagged(tag, on).await? {
+            Tagged::Continue(_) => Ok(()),
+            Tagged::Done(Status::Ok, _, text) => Err(ImapError::Protocol(format!(
+                "command completed before its literal: {text}"
+            ))),
+            Tagged::Done(status, _, text) => Err(refusal(status, text)),
         }
     }
 
     /// Reads until the tagged completion of `tag`.
     pub(crate) async fn finish(&mut self, tag: &str, on: Handler<'_>) -> Result<Completion> {
+        match self.next_tagged(tag, on).await? {
+            Tagged::Continue(information) => Err(ImapError::Protocol(format!(
+                "unexpected continuation request: {information}"
+            ))),
+            Tagged::Done(Status::Ok, code, text) => Ok(Completion { code, text }),
+            Tagged::Done(status, _, text) => Err(refusal(status, text)),
+        }
+    }
+
+    /// Reads up to the next continuation request or the tagged completion
+    /// of `tag`, dispatching the untagged responses before it.
+    async fn next_tagged(&mut self, tag: &str, on: Handler<'_>) -> Result<Tagged> {
         loop {
             match self.conn.read().await? {
-                Incoming::Response(Response::Done {
-                    tag: done,
-                    status,
-                    code,
-                    information,
-                }) if done.0 == tag => {
-                    let text = response_text(code.as_ref(), information.as_deref());
-                    return match status {
-                        Status::Ok => Ok(Completion { code, text }),
-                        Status::No => Err(ImapError::No(text)),
-                        other => Err(ImapError::Protocol(format!("{other:?} {text}"))),
-                    };
-                }
                 Incoming::Response(Response::Continue { information, .. }) => {
-                    return Err(ImapError::Protocol(format!(
-                        "unexpected continuation request: {}",
-                        information.as_deref().unwrap_or_default()
-                    )));
+                    return Ok(Tagged::Continue(
+                        information.as_deref().unwrap_or_default().to_owned(),
+                    ));
                 }
-                Incoming::Response(response) => self.dispatch(&response, on)?,
+                Incoming::Response(response) => match completion(response, tag) {
+                    Ok((status, code, text)) => return Ok(Tagged::Done(status, code, text)),
+                    Err(response) => self.dispatch(&response, on)?,
+                },
                 Incoming::Unparsed => {}
             }
         }
@@ -1162,6 +1148,41 @@ fn batch_uids(
 /// The text of a tagged or untagged status response, with the response
 /// codes `imap-proto` parsed put back in front (`[TRYCREATE] ...`), so
 /// error mapping can see them.
+/// What ends a command's wait for the server: a continuation request (`+`,
+/// with its text) or the tagged completion (status, code, text).
+enum Tagged {
+    Continue(String),
+    Done(Status, Option<ResponseCode<'static>>, String),
+}
+
+/// The status, response code and text of the tagged completion of `tag`;
+/// any other response comes back as it is.
+pub(crate) fn completion(
+    response: Response<'static>,
+    tag: &str,
+) -> std::result::Result<(Status, Option<ResponseCode<'static>>, String), Response<'static>> {
+    match response {
+        Response::Done {
+            tag: done,
+            status,
+            code,
+            information,
+        } if done.0 == tag => {
+            let text = response_text(code.as_ref(), information.as_deref());
+            Ok((status, code, text))
+        }
+        other => Err(other),
+    }
+}
+
+/// The error of a tagged completion that is not `OK`.
+pub(crate) fn refusal(status: Status, text: String) -> ImapError {
+    match status {
+        Status::No => ImapError::No(text),
+        other => ImapError::Protocol(format!("{other:?} {text}")),
+    }
+}
+
 pub(crate) fn response_text(code: Option<&ResponseCode<'_>>, information: Option<&str>) -> String {
     let prefix = match code {
         Some(ResponseCode::TryCreate) => "[TRYCREATE] ",
@@ -1215,25 +1236,7 @@ fn astring(value: &str) -> Result<Part<'_>> {
 }
 
 /// Compresses sorted UIDs into an IMAP set: `1:3,7,9:10`.
-pub(crate) fn uid_set(uids: &[u32]) -> String {
-    let mut out = String::new();
-    let mut iter = uids.iter().copied().peekable();
-    while let Some(start) = iter.next() {
-        let mut end = start;
-        while iter.peek() == Some(&end.wrapping_add(1)) {
-            end = iter.next().unwrap_or(end);
-        }
-        if !out.is_empty() {
-            out.push(',');
-        }
-        if start == end {
-            out.push_str(&start.to_string());
-        } else {
-            let _ = write!(out, "{start}:{end}");
-        }
-    }
-    out
-}
+pub(crate) use nail_net::wire::sequence_set as uid_set;
 
 /// Sorted, deduplicated copy of `uids`; fails when empty or containing 0.
 pub(crate) fn sorted_uids(uids: &[u32]) -> Result<Vec<u32>> {

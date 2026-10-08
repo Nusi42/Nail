@@ -72,19 +72,7 @@ pub const CRATE: &str = env!("CARGO_PKG_NAME");
 /// when `tls` is false: loopback test servers only), e.g.
 /// `https://gmail.googleapis.com/gmail/v1/users/me`.
 pub fn api_base(host: &str, port: u16, tls: bool) -> String {
-    let scheme = if tls { "https" } else { "http" };
-    let default_port = if tls { 443 } else { 80 };
-    let base = nail_api::gmail::GMAIL_API_BASE_PATH;
-    let host = if host.contains(':') && !host.starts_with('[') {
-        format!("[{host}]")
-    } else {
-        host.to_owned()
-    };
-    if port == default_port {
-        format!("{scheme}://{host}{base}")
-    } else {
-        format!("{scheme}://{host}:{port}{base}")
-    }
+    nail_net::http::origin_url(host, port, tls, nail_api::gmail::GMAIL_API_BASE_PATH)
 }
 
 /// The API base URL of a `gmail` account's server settings

@@ -571,12 +571,7 @@ pub fn create_setup_message(
 
 fn base64_lines(data: &[u8]) -> String {
     let encoded = base64::engine::general_purpose::STANDARD.encode(data);
-    encoded
-        .as_bytes()
-        .chunks(76)
-        .map(|c| std::str::from_utf8(c).unwrap_or_default())
-        .collect::<Vec<_>>()
-        .join("\r\n")
+    nail_util::mime_text::wrap_ascii(&encoded, 76)
 }
 
 /// Whether a raw message is an Autocrypt setup message.

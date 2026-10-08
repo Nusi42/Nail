@@ -6,14 +6,13 @@
 #![cfg(test)]
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use nail_api::ErrorCode;
 use nail_api::accounts::{AuthConfig, IncomingServer, SecretRef, ServerEndpoint, TlsMode};
 use nail_api::domain::Flags;
 use nail_api::engine::{
-    AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, FreeBusyProvider,
-    OutgoingTransport, RemoteWrite, SyncDelta, WriteOutcome,
+    DeltaOutcome, EngineError, Envelope, FreeBusyProvider, OutgoingTransport, RemoteWrite,
+    SyncDelta, WriteOutcome,
 };
 use nail_api::exchange::engine::{
     ExchangeDirectoryEngine, ExchangeEngine, ExchangeMailEngine, ExchangePimEngine,
@@ -43,7 +42,8 @@ use nail_proto_graph::{
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
-const SHARED: &str = "support@contoso.example";
+use nail_proto_graph::testing::fixtures::DEMO_SHARED_MAILBOX as SHARED;
+use nail_testkit::tokens::FakeTokens as Tokens;
 
 fn engine_for(server: &MockGraphServer, auth: GraphAuth) -> GraphEngine {
     let client =
@@ -769,36 +769,6 @@ async fn throttling_and_server_errors() {
     assert_eq!(err.localized.unwrap().id, "graph-forbidden");
 }
 
-#[derive(Debug, Default)]
-struct Tokens {
-    calls: AtomicU32,
-    forced: AtomicU32,
-    revoked: bool,
-}
-
-impl AccessTokenProvider for Tokens {
-    fn access_token<'a>(
-        &'a self,
-        provider: &'a str,
-        _secret: &'a SecretRef,
-        force_refresh: bool,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            assert_eq!(provider, "microsoft");
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            if self.revoked {
-                return Err(EngineError::permanent(ErrorCode::ReauthRequired, "revoked"));
-            }
-            if force_refresh {
-                self.forced.fetch_add(1, Ordering::SeqCst);
-                Ok("fresh".to_owned())
-            } else {
-                Ok("stale".to_owned())
-            }
-        })
-    }
-}
-
 fn oauth(tokens: Arc<Tokens>) -> GraphAuth {
     GraphAuth::OAuth2 {
         tokens,
@@ -811,10 +781,10 @@ fn oauth(tokens: Arc<Tokens>) -> GraphAuth {
 async fn bearer_tokens_refresh_once() {
     let server = MockGraphServer::start_demo().await.unwrap();
     server.set_token(Some("fresh"));
-    let tokens = Arc::new(Tokens::default());
+    let tokens = Arc::new(Tokens::new("microsoft"));
     let engine = engine_for(&server, oauth(tokens.clone()));
     engine.server_info().await.unwrap();
-    assert_eq!(tokens.forced.load(Ordering::SeqCst), 1);
+    assert_eq!(tokens.forced(), 1);
     assert!(
         server
             .requests()
@@ -827,10 +797,7 @@ async fn bearer_tokens_refresh_once() {
     assert_eq!(err.code, ErrorCode::AuthFailed);
     assert_eq!(err.localized.unwrap().id, "graph-auth-failed");
 
-    let revoked = Arc::new(Tokens {
-        revoked: true,
-        ..Tokens::default()
-    });
+    let revoked = Arc::new(Tokens::revoked("microsoft", ErrorCode::ReauthRequired));
     let engine = engine_for(&server, oauth(revoked));
     let err = engine.server_info().await.unwrap_err();
     assert_eq!(
@@ -1102,11 +1069,8 @@ async fn automatic_replies() {
 #[tokio::test]
 async fn inbox_rules() {
     let (server, engine) = demo().await;
-    let rules = engine.inbox_rules().await.unwrap();
-    assert_eq!(rules.len(), 2);
-    assert_eq!(rules[0].name, "Newsletters");
-    assert!(!rules[0].has_unsupported);
-    assert!(rules[1].has_unsupported, "isAutomaticReply is not modelled");
+    // The second rule's isAutomaticReply is not modelled.
+    let rules = nail_testkit::exchange::demo_inbox_rules(&engine).await;
     let archive = server.folder_id(None, "archive");
     let rule = ExchangeInboxRule {
         id: String::new(),
@@ -1166,9 +1130,7 @@ async fn inbox_rules() {
         serde_json::from_str::<serde_json::Value>(&patch.body).unwrap(),
         json!({"isEnabled": true})
     );
-    engine.delete_inbox_rule(&id).await.unwrap();
-    engine.delete_inbox_rule(&id).await.unwrap();
-    assert_eq!(engine.inbox_rules().await.unwrap().len(), 2);
+    nail_testkit::exchange::delete_inbox_rule_twice(&engine, &id).await;
     // A rule moving to a missing folder is refused.
     let mut broken = rule.clone();
     broken.actions.move_to_folder = Some("AAMk-missing=".into());
@@ -1281,15 +1243,41 @@ fn folder(
         .unwrap_or_else(|| panic!("no {kind:?} {role:?}"))
 }
 
+/// `update` again (its change key is stale now: a conflict), then the
+/// delete of `remote_id`.
+async fn conflict_then_delete(engine: &GraphEngine, update: &ExchangePimWrite, remote_id: &str) {
+    assert_eq!(
+        engine.write_pim(None, update).await.unwrap(),
+        ExchangePimWriteOutcome::Conflict
+    );
+    engine
+        .write_pim(None, &delete_without_mail(remote_id.to_owned()))
+        .await
+        .unwrap();
+}
+
+/// The PIM delete of `remote_id` without meeting mail.
+fn delete_without_mail(remote_id: String) -> ExchangePimWrite {
+    ExchangePimWrite::Delete {
+        remote_id,
+        send: MeetingSend::None,
+    }
+}
+
+/// The default calendar among `all` folders.
+fn default_calendar(all: &[ExchangePimFolder]) -> ExchangePimFolder {
+    folder(
+        all,
+        PimFolderKind::Calendar,
+        Some(ExchangeCollectionRole::DefaultCalendar),
+    )
+}
+
 #[tokio::test]
 async fn pim_folders() {
     let (server, engine) = demo().await;
     let all = folders(&engine, None).await;
-    let calendar = folder(
-        &all,
-        PimFolderKind::Calendar,
-        Some(ExchangeCollectionRole::DefaultCalendar),
-    );
+    let calendar = default_calendar(&all);
     assert_eq!(calendar.name, "Calendar");
     let holidays = all.iter().find(|f| f.name == "Holidays").unwrap();
     assert!(holidays.read_only);
@@ -1360,11 +1348,7 @@ fn events(delta: &PimDelta) -> Vec<ExchangeEvent> {
 async fn calendar_deltas() {
     let (server, engine) = demo().await;
     let all = folders(&engine, None).await;
-    let calendar = folder(
-        &all,
-        PimFolderKind::Calendar,
-        Some(ExchangeCollectionRole::DefaultCalendar),
-    );
+    let calendar = default_calendar(&all);
     let first = pim(engine.pim_changes(None, &calendar, None).await.unwrap());
     assert!(!first.more);
     let list = events(&first);
@@ -1478,11 +1462,7 @@ fn single_event(subject: &str) -> ExchangeEvent {
 async fn event_writes() {
     let (server, engine) = demo().await;
     let all = folders(&engine, None).await;
-    let calendar = folder(
-        &all,
-        PimFolderKind::Calendar,
-        Some(ExchangeCollectionRole::DefaultCalendar),
-    );
+    let calendar = default_calendar(&all);
     let create = ExchangePimWrite::Create {
         folder: calendar.remote_id.clone(),
         item: ExchangePimItem::Event(Box::new(single_event("Planning"))),
@@ -1544,13 +1524,7 @@ async fn event_writes() {
     assert_eq!(server.meeting_actions().last().unwrap().action, "cancel");
     assert_eq!(
         engine
-            .write_pim(
-                None,
-                &ExchangePimWrite::Delete {
-                    remote_id: remote_id.clone(),
-                    send: MeetingSend::None
-                }
-            )
+            .write_pim(None, &delete_without_mail(remote_id.clone()))
             .await
             .unwrap(),
         ExchangePimWriteOutcome::Gone
@@ -1751,20 +1725,7 @@ async fn contacts() {
         ExchangePimWriteOutcome::Done { .. }
     ));
     assert_eq!(server.contact(&remote_id).unwrap()["jobTitle"], "CTO");
-    assert_eq!(
-        engine.write_pim(None, &update).await.unwrap(),
-        ExchangePimWriteOutcome::Conflict
-    );
-    engine
-        .write_pim(
-            None,
-            &ExchangePimWrite::Delete {
-                remote_id: remote_id.clone(),
-                send: MeetingSend::None,
-            },
-        )
-        .await
-        .unwrap();
+    conflict_then_delete(&engine, &update, &remote_id).await;
     assert!(server.contact(&remote_id).is_none());
     let gone = pim(engine
         .pim_changes(None, &partners, Some(&changes.cursor))
@@ -1773,13 +1734,7 @@ async fn contacts() {
     assert_eq!(gone.removed, [remote_id.as_str()]);
     assert_eq!(
         engine
-            .write_pim(
-                None,
-                &ExchangePimWrite::Delete {
-                    remote_id,
-                    send: MeetingSend::None
-                }
-            )
+            .write_pim(None, &delete_without_mail(remote_id))
             .await
             .unwrap(),
         ExchangePimWriteOutcome::Gone
@@ -1935,20 +1890,7 @@ async fn todo_tasks() {
         [("Flights".to_owned(), true), ("Car".to_owned(), false)]
     );
     assert_ne!(change_key, None);
-    assert_eq!(
-        engine.write_pim(None, &update).await.unwrap(),
-        ExchangePimWriteOutcome::Conflict
-    );
-    engine
-        .write_pim(
-            None,
-            &ExchangePimWrite::Delete {
-                remote_id: remote_id.clone(),
-                send: MeetingSend::None,
-            },
-        )
-        .await
-        .unwrap();
+    conflict_then_delete(&engine, &update, &remote_id).await;
     assert!(server.task(task_id).is_none());
     let gone = pim(engine
         .pim_changes(None, &tasks, Some(&changes.cursor))
@@ -1996,7 +1938,10 @@ async fn engine_for_configured_accounts() {
         "incoming": serde_json::to_value(&incoming).unwrap(),
     }))
     .unwrap();
-    let engine = GraphEngine::for_account(&account, Arc::new(Tokens::default())).unwrap();
+    let for_account = |account: &nail_api::accounts::AccountConfig| {
+        GraphEngine::for_account(account, Arc::new(Tokens::new("microsoft")))
+    };
+    let engine = for_account(&account).unwrap();
     assert_eq!(engine.account_id().as_str(), "work");
     assert_eq!(
         engine.server_info().await.unwrap().address,
@@ -2006,10 +1951,7 @@ async fn engine_for_configured_accounts() {
     if let IncomingServer::Exchange { options, .. } = &mut account.incoming {
         options.engine = EngineKind::Ews;
     }
-    assert!(matches!(
-        GraphEngine::for_account(&account, Arc::new(Tokens::default())),
-        Err(GraphError::Config(_))
-    ));
+    assert!(matches!(for_account(&account), Err(GraphError::Config(_))));
     if let IncomingServer::Exchange {
         options,
         server: endpoint,
@@ -2018,10 +1960,7 @@ async fn engine_for_configured_accounts() {
         options.engine = EngineKind::Graph;
         endpoint.auth = AuthConfig::None;
     }
-    assert!(matches!(
-        GraphEngine::for_account(&account, Arc::new(Tokens::default())),
-        Err(GraphError::Config(_))
-    ));
+    assert!(matches!(for_account(&account), Err(GraphError::Config(_))));
     if let IncomingServer::Exchange {
         server: endpoint, ..
     } = &mut account.incoming
@@ -2035,7 +1974,7 @@ async fn engine_for_configured_accounts() {
         };
     }
     assert!(matches!(
-        GraphEngine::for_account(&account, Arc::new(Tokens::default())),
+        for_account(&account),
         Err(GraphError::InsecureUrl(_))
     ));
 }

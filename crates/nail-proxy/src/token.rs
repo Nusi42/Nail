@@ -354,7 +354,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    const NOW: u64 = 1_790_000_000;
+    const NOW: u64 = nail_util::time::FIXTURE_NOW.unsigned_abs();
 
     fn signer() -> Signer {
         Signer::new(ProxyKey::from_bytes([7; 32]))

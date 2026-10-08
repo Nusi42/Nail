@@ -5,26 +5,9 @@ use std::time::Duration;
 
 use nail_api::accounts::{MailProtocol, SaslMechanism, ServerEndpoint, TlsMode, default_port};
 
-/// Which certificates are trusted for TLS.
-#[derive(Clone, PartialEq, Eq, Default)]
-pub enum TlsTrust {
-    /// The operating system's trust store (`rustls-platform-verifier`). The
-    /// default.
-    #[default]
-    Platform,
-    /// Only the given DER-encoded root certificates (tests, pinned
-    /// self-signed servers).
-    CustomRoots(Vec<Vec<u8>>),
-}
-
-impl fmt::Debug for TlsTrust {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Platform => f.write_str("Platform"),
-            Self::CustomRoots(roots) => write!(f, "CustomRoots({} certificates)", roots.len()),
-        }
-    }
-}
+/// Which certificates are trusted for TLS (shared with the other protocol
+/// clients).
+pub use nail_net::trust::TlsTrust;
 
 /// How to reach a POP3 server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,17 +27,14 @@ pub struct Pop3Config {
 }
 
 impl Pop3Config {
-    /// Default timeout.
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
-
     /// Implicit TLS on port 995 with platform trust: the recommended setup.
     pub fn new(host: impl Into<String>) -> Self {
         Self {
             host: host.into(),
-            port: 995,
+            port: nail_net::ports::POP3S,
             tls: TlsMode::Implicit,
             trust: TlsTrust::Platform,
-            timeout: Self::DEFAULT_TIMEOUT,
+            timeout: nail_net::DEFAULT_TIMEOUT,
         }
     }
 
@@ -71,38 +51,12 @@ impl Pop3Config {
             port,
             tls: endpoint.tls,
             trust: TlsTrust::Platform,
-            timeout: Self::DEFAULT_TIMEOUT,
+            timeout: nail_net::DEFAULT_TIMEOUT,
         }
     }
-
-    /// Sets the port.
-    #[must_use]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
-    /// Sets the transport security.
-    #[must_use]
-    pub fn with_tls(mut self, tls: TlsMode) -> Self {
-        self.tls = tls;
-        self
-    }
-
-    /// Sets the trusted certificates.
-    #[must_use]
-    pub fn with_trust(mut self, trust: TlsTrust) -> Self {
-        self.trust = trust;
-        self
-    }
-
-    /// Sets the timeout.
-    #[must_use]
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
-    }
 }
+
+nail_net::endpoint_builders!(Pop3Config, TlsMode);
 
 /// Credentials for one login. `Debug` never prints secrets.
 #[derive(Clone, PartialEq, Eq)]
@@ -130,25 +84,9 @@ pub enum Pop3Credentials {
     },
 }
 
+nail_net::sasl_constructors!(Pop3Credentials);
+
 impl Pop3Credentials {
-    /// Password credentials with automatic method choice.
-    pub fn password(username: impl Into<String>, password: impl Into<String>) -> Self {
-        Self::Password {
-            username: username.into(),
-            password: password.into(),
-            mechanism: None,
-        }
-    }
-
-    /// OAuth2 credentials with automatic mechanism choice.
-    pub fn oauth2(username: impl Into<String>, access_token: impl Into<String>) -> Self {
-        Self::OAuth2 {
-            username: username.into(),
-            access_token: access_token.into(),
-            mechanism: None,
-        }
-    }
-
     /// The login name.
     pub fn username(&self) -> &str {
         match self {
@@ -163,11 +101,7 @@ impl fmt::Debug for Pop3Credentials {
             Self::Password { mechanism, .. } => ("Password", mechanism),
             Self::OAuth2 { mechanism, .. } => ("OAuth2", mechanism),
         };
-        f.debug_struct(kind)
-            .field("username", &self.username())
-            .field("secret", &"<redacted>")
-            .field("mechanism", mechanism)
-            .finish()
+        nail_net::trust::debug_login(f, kind, &self.username(), "secret", Some(mechanism))
     }
 }
 

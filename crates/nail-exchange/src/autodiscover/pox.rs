@@ -4,40 +4,12 @@
 //! mailboxes (`AlternativeMailbox`), IMAP / SMTP for the fallback, and
 //! `redirectAddr` / `redirectUrl`.
 
-use nail_api::accounts::{
-    AuthConfig, ImapOptions, IncomingServer, MailProtocol, OutgoingServer, ServerEndpoint,
-    SmtpOptions, TlsMode, default_port,
-};
-
-use crate::xml::{Element, parse};
-
-/// The request schema namespace.
-const REQUEST_NS: &str =
-    "http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006";
-/// The response schema asked for.
-pub const RESPONSE_SCHEMA: &str =
-    "http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a";
-
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-/// The POST body asking for `address`'s settings.
-pub fn request_body(address: &str) -> String {
-    format!(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\
-         <Autodiscover xmlns=\"{REQUEST_NS}\">\r\n\
-         <Request>\r\n\
-         <EMailAddress>{}</EMailAddress>\r\n\
-         <AcceptableResponseSchema>{RESPONSE_SCHEMA}</AcceptableResponseSchema>\r\n\
-         </Request>\r\n\
-         </Autodiscover>\r\n",
-        escape(address)
-    )
-}
+use nail_api::accounts::{ImapOptions, IncomingServer, MailProtocol, OutgoingServer, SmtpOptions};
+use nail_discovery::autodiscover::{PoxAccount, endpoint, read_account};
+/// The response schema asked for and the POST body asking for an
+/// address's settings (shared with `nail-discovery`).
+pub use nail_discovery::autodiscover::{RESPONSE_SCHEMA, request_body};
+use nail_discovery::xml::{Element, parse};
 
 /// A mailbox the server opens for the user automatically.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,10 +60,7 @@ pub enum PoxAnswer {
     RedirectUrl(String),
 }
 
-fn on(value: Option<String>) -> Option<bool> {
-    value.map(|v| v.eq_ignore_ascii_case("on"))
-}
-
+/// A `Protocol` element's type (element or attribute), upper case.
 fn protocol_type(protocol: &Element) -> Option<String> {
     protocol
         .text_of("Type")
@@ -99,82 +68,14 @@ fn protocol_type(protocol: &Element) -> Option<String> {
         .map(|t| t.to_ascii_uppercase())
 }
 
-fn endpoint(protocol: &Element, kind: MailProtocol, address: &str) -> Option<ServerEndpoint> {
-    let host = protocol.text_of("Server")?.to_ascii_lowercase();
-    let port = protocol
-        .text_of("Port")
-        .and_then(|p| p.parse::<u16>().ok())
-        .filter(|p| *p != 0);
-    let implicit_port = |p: u16| matches!(p, 993 | 995 | 465);
-    let tls = match protocol
-        .text_of("Encryption")
-        .map(|e| e.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("ssl") => TlsMode::Implicit,
-        Some("tls") => TlsMode::Starttls,
-        Some("none") => TlsMode::Plaintext,
-        _ if on(protocol.text_of("SSL")) == Some(false) => TlsMode::Plaintext,
-        _ => match port {
-            Some(p) if !implicit_port(p) => TlsMode::Starttls,
-            _ => TlsMode::Implicit,
-        },
-    };
-    let port = port.unwrap_or_else(|| default_port(kind, tls));
-    let username = protocol
-        .text_of("LoginName")
-        .unwrap_or_else(|| address.to_owned());
-    let auth = if kind == MailProtocol::Smtp && on(protocol.text_of("AuthRequired")) == Some(false)
-    {
-        AuthConfig::None
-    } else {
-        AuthConfig::Password {
-            username,
-            secret: None,
-            mechanism: None,
-        }
-    };
-    Some(ServerEndpoint {
-        host,
-        port,
-        tls,
-        auth,
-    })
-}
-
 /// Parses a POX answer for `address`.
 pub fn parse_response(xml: &[u8], address: &str) -> Result<PoxAnswer, String> {
     let root = parse(xml)?;
-    if !root.name.eq_ignore_ascii_case("Autodiscover") {
-        return Err(format!("unexpected root element <{}>", root.name));
-    }
-    let response = root.child("Response").ok_or("no Response element")?;
-    if let Some(error) = response.child("Error") {
-        return Err(format!(
-            "Autodiscover error {}",
-            error.text_of("ErrorCode").unwrap_or_default()
-        ));
-    }
-    let account = response.child("Account").ok_or("no Account element")?;
-    match account
-        .text_of("Action")
-        .map(|a| a.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("redirectaddr") => {
-            return account
-                .text_of("RedirectAddr")
-                .map(PoxAnswer::RedirectAddr)
-                .ok_or_else(|| "redirectAddr without address".to_owned());
-        }
-        Some("redirecturl") => {
-            return account
-                .text_of("RedirectUrl")
-                .map(PoxAnswer::RedirectUrl)
-                .ok_or_else(|| "redirectUrl without URL".to_owned());
-        }
-        _ => {}
-    }
+    let (response, account) = match read_account(&root)? {
+        PoxAccount::Account { response, account } => (response, account),
+        PoxAccount::RedirectAddr(to) => return Ok(PoxAnswer::RedirectAddr(to)),
+        PoxAccount::RedirectUrl(to) => return Ok(PoxAnswer::RedirectUrl(to)),
+    };
     let mut settings = PoxSettings {
         display_name: response
             .child("User")
@@ -232,6 +133,8 @@ pub fn parse_response(xml: &[u8], address: &str) -> Result<PoxAnswer, String> {
 
 #[cfg(test)]
 mod tests {
+    use nail_api::accounts::{AuthConfig, TlsMode};
+
     use super::*;
 
     const ON_PREMISES: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -252,14 +155,6 @@ mod tests {
     </Account>
   </Response>
 </Autodiscover>"#;
-
-    #[test]
-    fn request_escapes_the_address() {
-        let body = request_body("a<b>&c@corp.example");
-        assert!(body.contains("<EMailAddress>a&lt;b&gt;&amp;c@corp.example</EMailAddress>"));
-        assert!(body.contains(RESPONSE_SCHEMA));
-        parse(body.as_bytes()).unwrap();
-    }
 
     #[test]
     fn reads_exchange_settings() {

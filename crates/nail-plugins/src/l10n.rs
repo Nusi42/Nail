@@ -334,7 +334,6 @@ fn make_bundle(tag: &str, text: String) -> Option<Bundle> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::localized::is_message_id;
 
     #[test]
     fn manifest_texts_resolve_with_fallback() {
@@ -526,17 +525,12 @@ mod tests {
     fn catalog_has_every_id() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales");
         let en = std::fs::read_to_string(root.join("en/core-plugins.ftl")).unwrap();
-        let defined: Vec<&str> = en
-            .lines()
-            .filter_map(|l| l.split_once(" =").map(|(id, _)| id))
-            .filter(|id| is_message_id(id))
-            .collect();
-        for id in ALL {
-            assert!(
-                defined.contains(id),
-                "{id} missing in locales/en/core-plugins.ftl"
-            );
-        }
+        assert_eq!(
+            nail_api::localized::missing_ids(&en, ALL),
+            Vec::<&str>::new(),
+            "missing in locales/en/core-plugins.ftl"
+        );
+        let defined = nail_api::localized::catalog_ids(&en);
         for id in &defined {
             if id.starts_with("plugin-host-") || id.starts_with("plugin-package-") {
                 assert!(ALL.contains(id), "{id} in core-plugins.ftl is not used");

@@ -11,10 +11,13 @@ publish.workspace = true
 # The mock Gmail REST server (`nail_proto_gmail::testing`): loopback only
 # (ADR 0057), recorded-response fixtures. Used by this crate's tests, the
 # core's tests and the demo-multi seed (WP85).
-testing = ["dep:axum"]
+testing = ["dep:nail-testkit-net"]
 
 [dependencies]
+nail-net = { workspace = true, features = ["http"] }
 nail-api.workspace = true
+nail-util.workspace = true
+nail-testkit-net = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -36,10 +39,9 @@ base64.workspace = true
 mail-parser.workspace = true
 # internalDate, Retry-After dates.
 chrono.workspace = true
-# The mock server (feature `testing`); MIT, already in the workspace.
-axum = { workspace = true, optional = true }
 
 [dev-dependencies]
+nail-testkit.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 nail-proto-gmail = { path = ".", features = ["testing"] }

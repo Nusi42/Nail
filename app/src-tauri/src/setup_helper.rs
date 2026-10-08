@@ -287,25 +287,27 @@ mod tests {
         let key = CURRENT_USER.create(&key_path).unwrap();
         key.set_expand_string("Path", r"%USERPROFILE%\bin").unwrap();
 
-        os::update_user_path(&key_path, |p| path_with(p, BIN)).unwrap();
-        assert_eq!(key.get_type("Path").unwrap(), Type::ExpandString);
+        let add = || os::update_user_path(&key_path, |p| path_with(p, BIN)).unwrap();
+        let kind = || key.get_type("Path").unwrap();
+        add();
+        assert_eq!(kind(), Type::ExpandString);
         assert_eq!(
             key.get_string("Path").unwrap(),
             format!(r"%USERPROFILE%\bin;{BIN}")
         );
-        os::update_user_path(&key_path, |p| path_with(p, BIN)).unwrap();
+        add();
         os::update_user_path(&key_path, |p| path_without(p, BIN)).unwrap();
         assert_eq!(key.get_string("Path").unwrap(), r"%USERPROFILE%\bin");
 
         // A plain REG_SZ stays REG_SZ.
         key.set_string("Path", r"C:\a").unwrap();
-        os::update_user_path(&key_path, |p| path_with(p, BIN)).unwrap();
-        assert_eq!(key.get_type("Path").unwrap(), Type::String);
+        add();
+        assert_eq!(kind(), Type::String);
 
         // No value yet: created as REG_EXPAND_SZ.
         key.remove_value("Path").unwrap();
-        os::update_user_path(&key_path, |p| path_with(p, BIN)).unwrap();
-        assert_eq!(key.get_type("Path").unwrap(), Type::ExpandString);
+        add();
+        assert_eq!(kind(), Type::ExpandString);
         assert_eq!(key.get_string("Path").unwrap(), BIN);
 
         drop(key);

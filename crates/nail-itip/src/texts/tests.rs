@@ -1,6 +1,4 @@
 use super::*;
-use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
-use nail_api::localized::MessageArg;
 use nail_api::pim::calendar::ConferenceLink;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeSet;
@@ -8,39 +6,14 @@ use std::collections::BTreeSet;
 const EN: &str = include_str!("../../../../locales/en/itip.ftl");
 const DE: &str = include_str!("../../../../locales/de/itip.ftl");
 
-/// Renders `itip.ftl` like nail-config's catalog (no isolation marks).
-struct English(FluentBundle<FluentResource>);
+#[path = "../../tests/common/english.rs"]
+mod english;
 
-impl English {
-    fn new() -> Self {
-        let lang: unic_langid::LanguageIdentifier = "en".parse().unwrap();
-        let mut bundle = FluentBundle::new(vec![lang]);
-        bundle.set_use_isolating(false);
-        bundle
-            .add_resource(FluentResource::try_new(EN.to_owned()).expect("itip.ftl parses"))
-            .unwrap();
-        Self(bundle)
-    }
-}
+use english::English;
 
 impl Localizer for English {
     fn render(&self, message: &LocalizedMessage) -> String {
-        let pattern = self
-            .0
-            .get_message(&message.id)
-            .and_then(|m| m.value())
-            .unwrap_or_else(|| panic!("missing {}", message.id));
-        let mut args = FluentArgs::new();
-        for (name, value) in &message.args {
-            match value {
-                MessageArg::Number(n) => args.set(name.as_str(), FluentValue::from(*n)),
-                MessageArg::Text(t) => args.set(name.as_str(), FluentValue::from(t.as_str())),
-            }
-        }
-        let mut errors = Vec::new();
-        let text = self.0.format_pattern(pattern, Some(&args), &mut errors);
-        assert!(errors.is_empty(), "{}: {errors:?}", message.id);
-        text.into_owned()
+        self.text(message)
     }
 }
 

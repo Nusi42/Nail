@@ -333,32 +333,25 @@ impl KeyInfo {
     /// (newest) or the primary key. `None` = the primary key; `Some(i)` =
     /// subkey `i`. Errors when the key cannot sign now.
     pub fn signing_component(&self, now: i64) -> Result<Option<usize>> {
-        if !self.valid_at(now) {
-            return Err(Error::NoKey(format!(
-                "key {} is expired or revoked",
-                self.fingerprint
-            )));
-        }
-        if let Some(sub) = self
-            .subkeys
-            .iter()
-            .filter(|s| s.sign && s.usable_at(now))
-            .max_by_key(|s| s.created_at)
-        {
-            return Ok(Some(sub.index));
-        }
-        if self.primary_sign {
-            return Ok(None);
-        }
-        Err(Error::NoKey(format!(
-            "key {} cannot sign",
-            self.fingerprint
-        )))
+        self.component(now, |s| s.sign, self.primary_sign, "sign")
     }
 
     /// The component to encrypt to at `now` (the newest usable encryption
     /// subkey, else the primary key when it may encrypt).
     pub fn encryption_component(&self, now: i64) -> Result<Option<usize>> {
+        self.component(now, |s| s.encrypt, self.primary_encrypt, "encrypt")
+    }
+
+    /// The newest subkey usable at `now` with the capability `capable`,
+    /// else the primary key when `primary` has it; `what` names the
+    /// capability in the error.
+    fn component(
+        &self,
+        now: i64,
+        capable: impl Fn(&SubkeyInfo) -> bool,
+        primary: bool,
+        what: &str,
+    ) -> Result<Option<usize>> {
         if !self.valid_at(now) {
             return Err(Error::NoKey(format!(
                 "key {} is expired or revoked",
@@ -368,16 +361,16 @@ impl KeyInfo {
         if let Some(sub) = self
             .subkeys
             .iter()
-            .filter(|s| s.encrypt && s.usable_at(now))
+            .filter(|s| capable(s) && s.usable_at(now))
             .max_by_key(|s| s.created_at)
         {
             return Ok(Some(sub.index));
         }
-        if self.primary_encrypt {
+        if primary {
             return Ok(None);
         }
         Err(Error::NoKey(format!(
-            "key {} cannot encrypt",
+            "key {} cannot {what}",
             self.fingerprint
         )))
     }
@@ -717,9 +710,7 @@ mod tests {
     use super::*;
     use crate::testutil::{fixture, fixture_text};
 
-    const DAY: i64 = 86_400;
-    // 2026-09-29, after every fixture key's creation.
-    const NOW: i64 = 1_790_000_000;
+    use nail_util::time::{FIXTURE_NOW as NOW, SECS_PER_DAY as DAY};
 
     fn public(name: &str) -> SignedPublicKey {
         let (keys, issues) = parse_keys(&fixture(name));

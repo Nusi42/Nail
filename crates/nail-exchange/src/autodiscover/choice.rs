@@ -73,7 +73,7 @@ pub fn graph_candidate(address: &str, provider_name: Option<String>) -> Discover
         incoming: IncomingServer::Exchange {
             server: ServerEndpoint {
                 host: GRAPH_HOST.to_owned(),
-                port: 443,
+                port: nail_net::ports::HTTPS,
                 tls: TlsMode::Implicit,
                 auth: AuthConfig::OAuth2 {
                     username: address.to_owned(),

@@ -67,6 +67,115 @@ pub(crate) fn parse_oauthbearer(payload: &[u8]) -> Option<(String, String)> {
     Some((user, token))
 }
 
+/// What a SASL response proves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Proof {
+    /// The client cancelled (`*`).
+    Cancelled,
+    /// The response is not base64.
+    BadBase64,
+    /// The login is accepted.
+    Accepted,
+    /// A wrong user name or password (`PLAIN`).
+    Rejected,
+    /// An unknown OAuth2 token: the server sends the error challenge
+    /// ([`oauth_error_challenge`]) and reads the client's empty answer.
+    TokenRejected,
+}
+
+/// Checks a SASL response (`PLAIN`, `XOAUTH2`, `OAUTHBEARER`) against the
+/// accepted password login and OAuth2 tokens.
+pub(crate) fn verify(
+    mechanism: &str,
+    payload: &str,
+    username: &str,
+    password: &str,
+    tokens: &[(String, String)],
+) -> Proof {
+    if payload.trim() == "*" {
+        return Proof::Cancelled;
+    }
+    let Some(decoded) = b64_decode(payload) else {
+        return Proof::BadBase64;
+    };
+    if mechanism == "PLAIN" {
+        let ok = parse_plain(&decoded).is_some_and(|(u, p)| u == username && p == password);
+        return if ok { Proof::Accepted } else { Proof::Rejected };
+    }
+    let parsed = if mechanism == "XOAUTH2" {
+        parse_xoauth2(&decoded)
+    } else {
+        parse_oauthbearer(&decoded)
+    };
+    if parsed.is_some_and(|pair| tokens.contains(&pair)) {
+        Proof::Accepted
+    } else {
+        Proof::TokenRejected
+    }
+}
+
+/// A protocol's answers to a failed SASL exchange.
+#[derive(Debug)]
+pub(crate) struct Answers {
+    /// The client cancelled (`*`).
+    pub cancelled: &'static str,
+    /// The response is not base64.
+    pub bad_base64: &'static str,
+    /// The login is refused.
+    pub failed: &'static str,
+    /// The error challenge line for a rejected OAuth2 token.
+    pub challenge: fn(&str) -> String,
+}
+
+/// The login a mock server's `config` accepts (its `username`, `password`
+/// and `oauth_tokens` fields), as [`finish`] takes it.
+macro_rules! login_of {
+    ($config:expr) => {
+        (
+            $config.username.as_str(),
+            $config.password.as_str(),
+            $config.oauth_tokens.as_slice(),
+        )
+    };
+}
+pub(crate) use login_of;
+
+/// Checks a SASL response ([`verify`]) and sends the protocol's error
+/// answers (for a rejected token: the error challenge, then the client's
+/// dummy line is read); `Ok(true)` when the client is logged in (the
+/// caller sends the success answer).
+pub(crate) async fn finish(
+    conn: &mut crate::stream::Connection,
+    mechanism: &str,
+    payload: &str,
+    login: (&str, &str, &[(String, String)]),
+    answers: &Answers,
+) -> std::io::Result<bool> {
+    let (username, password, tokens) = login;
+    let ok = match verify(mechanism, payload, username, password, tokens) {
+        Proof::Cancelled => {
+            conn.line(answers.cancelled).await?;
+            return Ok(false);
+        }
+        Proof::BadBase64 => {
+            conn.line(answers.bad_base64).await?;
+            return Ok(false);
+        }
+        Proof::TokenRejected => {
+            conn.line(&(answers.challenge)(&oauth_error_challenge()))
+                .await?;
+            drop(conn.read_line().await?);
+            false
+        }
+        Proof::Rejected => false,
+        Proof::Accepted => true,
+    };
+    if !ok {
+        conn.line(answers.failed).await?;
+    }
+    Ok(ok)
+}
+
 /// The JSON error challenge Google and Microsoft send for a rejected token.
 pub(crate) fn oauth_error_challenge() -> String {
     b64_encode(br#"{"status":"401","schemes":"bearer","scope":"https://mail.google.com/"}"#)
@@ -75,6 +184,45 @@ pub(crate) fn oauth_error_challenge() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifies_responses() {
+        let tokens = vec![("ada".to_owned(), "t1".to_owned())];
+        let login = ("ada", "pw");
+        let plain = b64_encode(b"\0ada\0pw");
+        assert_eq!(
+            verify("PLAIN", &plain, login.0, login.1, &tokens),
+            Proof::Accepted
+        );
+        let wrong = b64_encode(b"\0ada\0no");
+        assert_eq!(
+            verify("PLAIN", &wrong, login.0, login.1, &tokens),
+            Proof::Rejected
+        );
+        assert_eq!(
+            verify("PLAIN", " * ", login.0, login.1, &tokens),
+            Proof::Cancelled
+        );
+        assert_eq!(
+            verify("PLAIN", "%%%", login.0, login.1, &tokens),
+            Proof::BadBase64
+        );
+        let xoauth = b64_encode(b"user=ada\x01auth=Bearer t1\x01\x01");
+        assert_eq!(
+            verify("XOAUTH2", &xoauth, login.0, login.1, &tokens),
+            Proof::Accepted
+        );
+        let stale = b64_encode(b"user=ada\x01auth=Bearer t2\x01\x01");
+        assert_eq!(
+            verify("XOAUTH2", &stale, login.0, login.1, &tokens),
+            Proof::TokenRejected
+        );
+        let bearer = b64_encode(b"n,a=ada,\x01auth=Bearer t1\x01\x01");
+        assert_eq!(
+            verify("OAUTHBEARER", &bearer, login.0, login.1, &tokens),
+            Proof::Accepted
+        );
+    }
 
     #[test]
     fn decodes_mechanisms() {

@@ -6,7 +6,7 @@ use std::time::Duration;
 use imap_proto::{Response, Status};
 
 use crate::changes::MailboxChange;
-use crate::client::{ImapClient, response_text};
+use crate::client::{ImapClient, completion, refusal, response_text};
 use crate::conn::Incoming;
 use crate::error::{ImapError, Result};
 use crate::transport::with_timeout;
@@ -144,20 +144,11 @@ impl ImapClient {
         loop {
             match self.conn.read().await? {
                 Incoming::Response(Response::Continue { .. }) => return Ok(true),
-                Incoming::Response(Response::Done {
-                    tag: done,
-                    status,
-                    code,
-                    information,
-                }) if done.0 == tag => {
-                    let text = response_text(code.as_ref(), information.as_deref());
-                    return match status {
-                        Status::Ok => Ok(false),
-                        Status::No => Err(ImapError::No(text)),
-                        other => Err(ImapError::Protocol(format!("{other:?} {text}"))),
-                    };
-                }
-                Incoming::Response(response) => self.observe(&response),
+                Incoming::Response(response) => match completion(response, tag) {
+                    Ok((Status::Ok, _, _)) => return Ok(false),
+                    Ok((status, _, text)) => return Err(refusal(status, text)),
+                    Err(response) => self.observe(&response),
+                },
                 Incoming::Unparsed => {}
             }
         }

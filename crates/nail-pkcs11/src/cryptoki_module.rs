@@ -23,7 +23,8 @@ use zeroize::Zeroizing;
 
 use crate::error::{CardError, from_cryptoki, needs_login};
 use crate::module::{
-    DecryptMechanism, HashKind, Module, ObjectInfo, PublicKeyMaterial, SignMechanism, TokenInfo,
+    DecryptMechanism, HashKind, KeyOp, Module, ObjectInfo, PublicKeyMaterial, SignMechanism,
+    TokenInfo,
 };
 
 /// A loaded PKCS#11 module.
@@ -291,80 +292,72 @@ impl Module for CryptokiModule {
         }
     }
 
-    fn sign(
+    fn private_op(
         &self,
         slot_id: u64,
         id: &[u8],
-        mechanism: SignMechanism,
-        data: &[u8],
-    ) -> Result<Option<Vec<u8>>, CardError> {
-        self.run(slot_id, |session| {
-            let key = Self::key(session, id)?;
-            match mechanism {
-                SignMechanism::RsaPkcs1 => session.sign(&Mechanism::RsaPkcs, key, data),
-                SignMechanism::Ecdsa => session.sign(&Mechanism::Ecdsa, key, data),
-                SignMechanism::RsaPss(hash) => {
-                    let (hash_alg, mgf) = hash_mechanism(hash);
-                    let params = PkcsPssParams {
-                        hash_alg,
-                        mgf,
-                        s_len: cryptoki::types::Ulong::try_from(hash.len())?,
-                    };
-                    session.sign(&Mechanism::RsaPkcsPss(params), key, data)
-                }
-            }
-        })
-    }
-
-    fn decrypt(
-        &self,
-        slot_id: u64,
-        id: &[u8],
-        mechanism: DecryptMechanism,
-        data: &[u8],
+        op: KeyOp<'_>,
     ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError> {
         self.run(slot_id, |session| {
             let key = Self::key(session, id)?;
-            let plain = match mechanism {
-                DecryptMechanism::RsaPkcs1 => session.decrypt(&Mechanism::RsaPkcs, key, data)?,
-                DecryptMechanism::RsaOaep(hash) => {
-                    let (hash_alg, mgf) = hash_mechanism(hash);
-                    let params = PkcsOaepParams::new(hash_alg, mgf, PkcsOaepSource::empty());
-                    session.decrypt(&Mechanism::RsaPkcsOaep(params), key, data)?
-                }
+            let out = match op {
+                KeyOp::Sign { mechanism, data } => match mechanism {
+                    SignMechanism::RsaPkcs1 => session.sign(&Mechanism::RsaPkcs, key, data)?,
+                    SignMechanism::Ecdsa => session.sign(&Mechanism::Ecdsa, key, data)?,
+                    SignMechanism::RsaPss(hash) => {
+                        let (hash_alg, mgf) = hash_mechanism(hash);
+                        let params = PkcsPssParams {
+                            hash_alg,
+                            mgf,
+                            s_len: cryptoki::types::Ulong::try_from(hash.len())?,
+                        };
+                        session.sign(&Mechanism::RsaPkcsPss(params), key, data)?
+                    }
+                },
+                KeyOp::Decrypt { mechanism, data } => match mechanism {
+                    DecryptMechanism::RsaPkcs1 => {
+                        session.decrypt(&Mechanism::RsaPkcs, key, data)?
+                    }
+                    DecryptMechanism::RsaOaep(hash) => {
+                        let (hash_alg, mgf) = hash_mechanism(hash);
+                        let params = PkcsOaepParams::new(hash_alg, mgf, PkcsOaepSource::empty());
+                        session.decrypt(&Mechanism::RsaPkcsOaep(params), key, data)?
+                    }
+                },
+                KeyOp::Ecdh { peer_point } => return Self::ecdh(session, key, peer_point),
             };
-            Ok(Zeroizing::new(plain))
+            Ok(Zeroizing::new(out))
         })
     }
+}
 
+impl CryptokiModule {
+    /// ECDH (`CKM_ECDH1_DERIVE`, no KDF) with `key`: the derived secret's
+    /// value, read from a session object that is destroyed again.
     fn ecdh(
-        &self,
-        slot_id: u64,
-        id: &[u8],
+        session: &Session,
+        key: ObjectHandle,
         peer_point: &[u8],
-    ) -> Result<Option<Zeroizing<Vec<u8>>>, CardError> {
-        self.run(slot_id, |session| {
-            let key = Self::key(session, id)?;
-            let params = Ecdh1DeriveParams::new(EcKdf::null(), peer_point);
-            let template = [
-                Attribute::Class(ObjectClass::SECRET_KEY),
-                Attribute::KeyType(KeyType::GENERIC_SECRET),
-                Attribute::Token(false),
-                Attribute::Sensitive(false),
-                Attribute::Extractable(true),
-            ];
-            let secret = session.derive_key(&Mechanism::Ecdh1Derive(params), key, &template)?;
-            let value = session.get_attributes(secret, &[AttributeType::Value]);
-            drop(session.destroy_object(secret));
-            let value = value?.into_iter().find_map(|a| match a {
-                Attribute::Value(v) => Some(v),
-                _ => None,
-            });
-            value.map(Zeroizing::new).ok_or(CkError::Pkcs11(
-                RvError::AttributeSensitive,
-                cryptoki::context::Function::GetAttributeValue,
-            ))
-        })
+    ) -> Result<Zeroizing<Vec<u8>>, CkError> {
+        let params = Ecdh1DeriveParams::new(EcKdf::null(), peer_point);
+        let template = [
+            Attribute::Class(ObjectClass::SECRET_KEY),
+            Attribute::KeyType(KeyType::GENERIC_SECRET),
+            Attribute::Token(false),
+            Attribute::Sensitive(false),
+            Attribute::Extractable(true),
+        ];
+        let secret = session.derive_key(&Mechanism::Ecdh1Derive(params), key, &template)?;
+        let value = session.get_attributes(secret, &[AttributeType::Value]);
+        drop(session.destroy_object(secret));
+        let value = value?.into_iter().find_map(|a| match a {
+            Attribute::Value(v) => Some(v),
+            _ => None,
+        });
+        value.map(Zeroizing::new).ok_or(CkError::Pkcs11(
+            RvError::AttributeSensitive,
+            cryptoki::context::Function::GetAttributeValue,
+        ))
     }
 }
 

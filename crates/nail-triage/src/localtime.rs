@@ -47,15 +47,7 @@ pub fn days_later_at<Tz: TimeZone>(
 
 /// The contract's weekday of a chrono weekday.
 pub fn weekday(day: chrono::Weekday) -> Weekday {
-    match day {
-        chrono::Weekday::Mon => Weekday::Mon,
-        chrono::Weekday::Tue => Weekday::Tue,
-        chrono::Weekday::Wed => Weekday::Wed,
-        chrono::Weekday::Thu => Weekday::Thu,
-        chrono::Weekday::Fri => Weekday::Fri,
-        chrono::Weekday::Sat => Weekday::Sat,
-        chrono::Weekday::Sun => Weekday::Sun,
-    }
+    Weekday::from_monday(day.num_days_from_monday())
 }
 
 /// The weekday of a local date.
@@ -71,7 +63,7 @@ pub(crate) mod testzone {
 
     use chrono::{
         Datelike, Duration, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime,
-        Offset, TimeZone, Weekday,
+        Offset, TimeZone,
     };
 
     /// DST rules.
@@ -132,17 +124,8 @@ pub(crate) mod testzone {
     }
 
     fn last_sunday(year: i32, month: u32) -> NaiveDate {
-        let next = if month == 12 {
-            NaiveDate::from_ymd_opt(year + 1, 1, 1)
-        } else {
-            NaiveDate::from_ymd_opt(year, month + 1, 1)
-        }
-        .unwrap();
-        let mut d = next - Duration::days(1);
-        while d.weekday() != Weekday::Sun {
-            d -= Duration::days(1);
-        }
-        d
+        let day = nail_util::time::last_weekday_of_month(i64::from(year), month, 6).unwrap();
+        NaiveDate::from_ymd_opt(year, month, day).unwrap()
     }
 
     impl Zone {

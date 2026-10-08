@@ -35,9 +35,12 @@ pub const MESSAGE_SELECT: &str = "id,changeKey,conversationId,parentFolderId,isR
 pub const FOLDER_SELECT: &str =
     "displayName,parentFolderId,childFolderCount,totalItemCount,unreadItemCount,isHidden";
 
+/// Graph's request size limit (4 MB).
+pub const MAX_REQUEST: usize = 4 * 1024 * 1024;
+
 /// The largest MIME message uploaded in one request (`sendMail` and
-/// message creation take at most 4 MB per request; base64 adds a third).
-pub const MAX_MIME_UPLOAD: usize = 4 * 1024 * 1024;
+/// message creation take at most [`MAX_REQUEST`]; base64 adds a third).
+pub const MAX_MIME_UPLOAD: usize = MAX_REQUEST;
 
 /// `PidTagLastVerbExecuted` (`0x1081`): 102 = replied, the closest Graph
 /// has to IMAP's `\Answered`.
@@ -568,13 +571,8 @@ impl GraphEngine {
         if message.id.is_empty() {
             return Err(GraphError::Protocol("append answered no id".into()));
         }
-        let change = FlagChange {
-            seen: Some(flags.seen),
-            flagged: flags.flagged.then_some(true),
-            answered: flags.answered.then_some(true),
-            ..FlagChange::default()
-        };
-        self.set_flags(mailbox, &message.id, &change).await?;
+        self.set_flags(mailbox, &message.id, &stored_flags(flags))
+            .await?;
         Ok(message.id)
     }
 
@@ -771,10 +769,7 @@ impl GraphEngine {
         envelope: &Envelope,
         raw: &[u8],
     ) -> Result<SendReceipt, GraphError> {
-        if envelope.to.is_empty() && mime::header_recipients(raw).is_empty() {
-            return Err(GraphError::Rejected("no recipients".into()));
-        }
-        let raw = mime::with_envelope_bcc(raw, &envelope.to)?;
+        let raw = mime::for_sending(raw, envelope)?;
         let encoded = encode_mime(&raw)?;
         self.client
             .post_text(
@@ -801,21 +796,9 @@ pub fn encode_mime(raw: &[u8]) -> Result<Vec<u8>, GraphError> {
     Ok(encoded.into_bytes())
 }
 
-/// `current` categories with `add` added and `remove` removed (names
-/// compare case-insensitively, like Outlook; the first spelling stays).
-pub fn merge_categories(current: &[String], add: &[String], remove: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = current
-        .iter()
-        .filter(|c| !remove.iter().any(|r| r.eq_ignore_ascii_case(c)))
-        .cloned()
-        .collect();
-    for tag in add {
-        if !out.iter().any(|c| c.eq_ignore_ascii_case(tag)) && !tag.trim().is_empty() {
-            out.push(tag.clone());
-        }
-    }
-    out
-}
+/// The categories after adding and removing tags (shared with the other
+/// Exchange engine).
+pub use nail_exchange::mapping::categories::merge as merge_categories;
 
 /// The `PATCH` body of a flag change without its tags.
 fn flag_body(change: &FlagChange) -> serde_json::Map<String, Value> {
@@ -879,21 +862,11 @@ impl GraphEngine {
                     }
                 }
                 Err(err) => {
-                    for (index, _, _) in &parts {
-                        out[*index] = Some(Err(err.clone()));
-                    }
+                    nail_util::batch::fail_all(&mut out, parts.iter().map(|(i, _, _)| *i), &err);
                 }
             }
         }
-        let mut results = Vec::with_capacity(writes.len());
-        for (index, write) in writes.iter().enumerate() {
-            let result = match out[index].take() {
-                Some(result) => result,
-                None => self.replay(mailbox, write).await,
-            };
-            results.push(result);
-        }
-        results
+        nail_util::batch::finish(writes, out, |write| self.replay(mailbox, write)).await
     }
 }
 
@@ -960,6 +933,17 @@ fn part_outcome(
     match answer.error("batched write") {
         Some(err) => Err(err),
         None => Ok(WriteOutcome::Done { remote_id: None }),
+    }
+}
+
+/// The flag change that gives a message stored with `flags` (appended or
+/// uploaded) its read, flagged and answered state.
+pub(crate) fn stored_flags(flags: Flags) -> FlagChange {
+    FlagChange {
+        seen: Some(flags.seen),
+        flagged: flags.flagged.then_some(true),
+        answered: flags.answered.then_some(true),
+        ..FlagChange::default()
     }
 }
 

@@ -8,68 +8,13 @@ use std::time::Duration;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use nail_api::FolderRole;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
+mod common;
+
+use common::Conn;
 use nail_testkit::{MailStore, MockCapabilities, MockImapConfig, MockImapServer, NO_FLAGS};
-
-struct Conn {
-    reader: BufReader<OwnedReadHalf>,
-    writer: OwnedWriteHalf,
-}
-
-impl Conn {
-    async fn open(server: &MockImapServer) -> Self {
-        let stream = TcpStream::connect(server.addr()).await.unwrap();
-        let (read, writer) = stream.into_split();
-        let mut conn = Self {
-            reader: BufReader::new(read),
-            writer,
-        };
-        let greeting = conn.line().await;
-        assert!(greeting.starts_with("* OK"), "{greeting}");
-        conn
-    }
-
-    async fn login(server: &MockImapServer) -> Self {
-        let mut conn = Self::open(server).await;
-        let lines = conn.cmd("l1", "LOGIN sam@nail.example secret").await;
-        assert!(lines.last().unwrap().starts_with("l1 OK"), "{lines:?}");
-        conn
-    }
-
-    async fn line(&mut self) -> String {
-        let mut line = String::new();
-        tokio::time::timeout(Duration::from_secs(5), self.reader.read_line(&mut line))
-            .await
-            .expect("server answered in time")
-            .unwrap();
-        line
-    }
-
-    async fn send(&mut self, text: &str) {
-        self.writer.write_all(text.as_bytes()).await.unwrap();
-    }
-
-    async fn cmd(&mut self, tag: &str, command: &str) -> Vec<String> {
-        self.send(&format!("{tag} {command}\r\n")).await;
-        self.until_tagged(tag).await
-    }
-
-    async fn until_tagged(&mut self, tag: &str) -> Vec<String> {
-        let mut lines = Vec::new();
-        loop {
-            let line = self.line().await;
-            assert!(!line.is_empty(), "connection closed");
-            let done = line.starts_with(&format!("{tag} "));
-            lines.push(line);
-            if done {
-                return lines;
-            }
-        }
-    }
-}
 
 fn store() -> MailStore {
     let store = MailStore::new();

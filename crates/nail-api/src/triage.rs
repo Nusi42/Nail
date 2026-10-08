@@ -210,6 +210,13 @@ impl Weekday {
         Self::Sat,
         Self::Sun,
     ];
+
+    /// The day `days` days after a Monday (0 = Monday; taken modulo 7),
+    /// e.g. for chrono's `num_days_from_monday`.
+    pub fn from_monday(days: u32) -> Self {
+        let index = usize::try_from(days % 7).unwrap_or_default();
+        Self::ALL[index]
+    }
 }
 
 /// Times without notifications (local time). A range whose end is before
@@ -406,6 +413,13 @@ pub struct MailNotification {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weekdays_count_from_monday() {
+        assert_eq!(Weekday::from_monday(0), Weekday::Mon);
+        assert_eq!(Weekday::from_monday(6), Weekday::Sun);
+        assert_eq!(Weekday::from_monday(9), Weekday::Wed);
+    }
     use serde_json::json;
 
     #[test]

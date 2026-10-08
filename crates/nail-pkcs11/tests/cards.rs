@@ -19,7 +19,7 @@ use pretty_assertions::assert_eq;
 use rsa::pkcs8::DecodePrivateKey;
 
 const MODULE: &str = r"C:\Program Files\Test\soft-pkcs11.dll";
-const PIN: &str = "123456";
+use nail_pkcs11::testing::TEST_PIN as PIN;
 
 fn fixture(name: &str) -> Vec<u8> {
     crypto_fixture(CryptoFixtures::Smime, name).unwrap()

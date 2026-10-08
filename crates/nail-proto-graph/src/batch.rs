@@ -4,12 +4,15 @@
 
 use std::collections::BTreeMap;
 
+use nail_net::status as http_status;
 use reqwest::Method;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use crate::client::{Body, Call, GraphClient, parse_json, parse_retry_after};
+use nail_net::http::{Body, parse_retry_after};
+
+use crate::client::{Call, GraphClient, parse_json};
 use crate::error::GraphError;
 use crate::wire::ErrorBody;
 
@@ -53,7 +56,7 @@ impl BatchRequest {
     /// Adds a header.
     #[must_use]
     pub fn header(mut self, name: &str, value: impl Into<String>) -> Self {
-        self.headers.push((name.to_owned(), value.into()));
+        nail_net::http::push_header(&mut self.headers, name, value);
         self
     }
 
@@ -147,8 +150,8 @@ struct WireResponse {
 /// Whether a part may be repeated after it failed with `status`.
 fn retry_part(request: &BatchRequest, status: u16) -> bool {
     match status {
-        429 => true,
-        500 | 502 | 503 | 504 => request.method != Method::POST,
+        http_status::TOO_MANY_REQUESTS => true,
+        500 | 502 | 503 | http_status::GATEWAY_TIMEOUT => request.method != Method::POST,
         _ => false,
     }
 }

@@ -7,6 +7,7 @@ use nail_api::accounts::{
     AuthConfig, DiscoveredAccount, DiscoverySource, DiscoveryWarning, ImapOptions, IncomingServer,
     MailProtocol, OutgoingServer, Pop3Options, ServerEndpoint, SmtpOptions, TlsMode,
 };
+use nail_net::ports;
 use url::Url;
 
 use crate::autoconfig::parse_client_config;
@@ -138,7 +139,7 @@ impl Discoverer {
             let reply = self.http.get(&url).await?;
             match reply.status {
                 200 => return Ok(reply.body),
-                301 | 302 | 303 | 307 | 308 => {
+                status if nail_net::http::is_redirect(status) => {
                     let location = reply
                         .location
                         .ok_or_else(|| NetError("redirect without Location".into()))?;
@@ -428,22 +429,22 @@ impl Discoverer {
     async fn guess(&self, email: &Email) -> Vec<DiscoveredAccount> {
         let d = &email.domain;
         let imap = [
-            (format!("imap.{d}"), 993, TlsMode::Implicit),
-            (format!("mail.{d}"), 993, TlsMode::Implicit),
-            (format!("imap.{d}"), 143, TlsMode::Starttls),
-            (format!("mail.{d}"), 143, TlsMode::Starttls),
+            (format!("imap.{d}"), ports::IMAPS, TlsMode::Implicit),
+            (format!("mail.{d}"), ports::IMAPS, TlsMode::Implicit),
+            (format!("imap.{d}"), ports::IMAP, TlsMode::Starttls),
+            (format!("mail.{d}"), ports::IMAP, TlsMode::Starttls),
         ];
         let pop3 = [
-            (format!("pop.{d}"), 995, TlsMode::Implicit),
-            (format!("pop3.{d}"), 995, TlsMode::Implicit),
-            (format!("mail.{d}"), 995, TlsMode::Implicit),
-            (format!("pop.{d}"), 110, TlsMode::Starttls),
+            (format!("pop.{d}"), ports::POP3S, TlsMode::Implicit),
+            (format!("pop3.{d}"), ports::POP3S, TlsMode::Implicit),
+            (format!("mail.{d}"), ports::POP3S, TlsMode::Implicit),
+            (format!("pop.{d}"), ports::POP3, TlsMode::Starttls),
         ];
         let smtp = [
-            (format!("smtp.{d}"), 465, TlsMode::Implicit),
-            (format!("mail.{d}"), 465, TlsMode::Implicit),
-            (format!("smtp.{d}"), 587, TlsMode::Starttls),
-            (format!("mail.{d}"), 587, TlsMode::Starttls),
+            (format!("smtp.{d}"), ports::SUBMISSIONS, TlsMode::Implicit),
+            (format!("mail.{d}"), ports::SUBMISSIONS, TlsMode::Implicit),
+            (format!("smtp.{d}"), ports::SUBMISSION, TlsMode::Starttls),
+            (format!("mail.{d}"), ports::SUBMISSION, TlsMode::Starttls),
         ];
         let (imap, pop3, smtp) = tokio::join!(
             self.first_reachable(&imap),
@@ -708,7 +709,7 @@ pub(crate) fn gmail_candidate(email: &str) -> DiscoveredAccount {
         incoming: IncomingServer::Gmail {
             server: ServerEndpoint {
                 host: nail_api::gmail::GMAIL_API_HOST.to_owned(),
-                port: 443,
+                port: ports::HTTPS,
                 tls: TlsMode::Implicit,
                 auth: AuthConfig::OAuth2 {
                     provider: "google".to_owned(),

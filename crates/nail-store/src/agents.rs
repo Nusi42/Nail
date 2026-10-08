@@ -645,7 +645,7 @@ mod tests {
         }
     }
 
-    const NOW: i64 = 1_790_000_000;
+    use nail_util::time::FIXTURE_NOW as NOW;
 
     #[test]
     fn insert_list_decide() {

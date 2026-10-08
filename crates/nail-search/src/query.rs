@@ -248,7 +248,7 @@ impl AgeUnit {
             Self::Days => 86_400,
             Self::Weeks => 7 * 86_400,
             Self::Months => 30 * 86_400,
-            Self::Years => 365 * 86_400,
+            Self::Years => i64::from(nail_util::time::DAYS_PER_YEAR) * 86_400,
         }
     }
 

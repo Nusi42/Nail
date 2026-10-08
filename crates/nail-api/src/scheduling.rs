@@ -224,6 +224,42 @@ pub enum InvitationAction {
     OpenEvent,
 }
 
+/// `SCHEDULE-AGENT` of an `ORGANIZER` / `ATTENDEE` (RFC 6638 §7.1): who
+/// delivers scheduling messages for that calendar user. One definition for
+/// the CalDAV client and the iTIP reader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ScheduleAgent {
+    /// `SERVER` (the default; unknown values count as `SERVER`, RFC 6638
+    /// §7.1): a scheduling server delivers.
+    #[default]
+    Server,
+    /// `CLIENT`: the calendar client delivers (iMIP from Nail).
+    Client,
+    /// `NONE`: nobody delivers (handled out of band).
+    None,
+}
+
+impl ScheduleAgent {
+    /// The agent of a parameter value (case-insensitive; missing or
+    /// unknown values are `SERVER`).
+    pub fn parse(value: Option<&str>) -> Self {
+        match value.map(|v| v.trim().to_ascii_uppercase()).as_deref() {
+            Some("CLIENT") => Self::Client,
+            Some("NONE") => Self::None,
+            _ => Self::Server,
+        }
+    }
+
+    /// The parameter value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Server => "SERVER",
+            Self::Client => "CLIENT",
+            Self::None => "NONE",
+        }
+    }
+}
+
 /// How iTIP messages for an event travel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
@@ -774,14 +810,7 @@ pub fn utc_seconds(text: &str) -> Option<i64> {
     let num = |range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
     let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (hh, mm, ss) = (num(11..13)?, num(14..16)?, num(17..19)?);
-    // Days from the civil date (H. Hinnant's algorithm).
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
+    let days = nail_util::time::days_from_civil(y, u32::try_from(m).ok()?, u32::try_from(d).ok()?);
     Some(days * 86_400 + hh * 3600 + mm * 60 + ss)
 }
 
@@ -793,6 +822,24 @@ pub fn are_valid_recipients(to: &[Address]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schedule_agents_parse_with_the_server_default() {
+        assert_eq!(
+            ScheduleAgent::parse(Some(" client ")),
+            ScheduleAgent::Client
+        );
+        assert_eq!(ScheduleAgent::parse(Some("none")), ScheduleAgent::None);
+        assert_eq!(ScheduleAgent::parse(Some("x-other")), ScheduleAgent::Server);
+        assert_eq!(ScheduleAgent::parse(None), ScheduleAgent::default());
+        for agent in [
+            ScheduleAgent::Server,
+            ScheduleAgent::Client,
+            ScheduleAgent::None,
+        ] {
+            assert_eq!(ScheduleAgent::parse(Some(agent.as_str())), agent);
+        }
+    }
     use serde_json::json;
 
     #[test]

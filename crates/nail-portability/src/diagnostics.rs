@@ -67,7 +67,7 @@ const SECRET_KEYS: [&str; 12] = [
 ];
 
 /// The placeholder of a removed value.
-pub const REDACTED: &str = "<redacted>";
+pub use nail_util::redact::REDACTED;
 
 impl Redactor {
     /// A redactor for `options`; `user_name` is the account name in the

@@ -7,7 +7,7 @@ use nail_rules::{AccountInfo, Attachment, Env, FolderInfo, MessageData, StaticMa
 
 /// 2026-09-29T12:00:00Z.
 pub(crate) const NOW: i64 = 1_790_683_200;
-pub(crate) const DAY: i64 = 86_400;
+pub(crate) use nail_util::time::SECS_PER_DAY as DAY;
 
 pub(crate) fn mailbox() -> StaticMailbox {
     let folder = |id: &str, account: &str, path: &str, role| FolderInfo {

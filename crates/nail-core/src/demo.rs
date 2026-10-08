@@ -1583,6 +1583,31 @@ fn find_by_subject(
         .ok_or_else(|| format!("no message with subject {subject:?} in {mailbox}"))
 }
 
+/// The one `ComposeDraft` launch request a program's Simple MAPI call
+/// left (M4b): the saved draft and the program's name; an error text when
+/// there is not exactly one (tests of the MAPI path).
+pub async fn take_program_draft(
+    service: &crate::Service,
+) -> std::result::Result<(nail_api::Draft, Option<String>), String> {
+    use nail_api::{LaunchRequest, Request, Response};
+    let Response::LaunchRequests { requests } = service.handle(Request::TakeLaunchRequests).await
+    else {
+        return Err("no launch requests".to_owned());
+    };
+    let [LaunchRequest::ComposeDraft { draft_id, program }] = requests.as_slice() else {
+        return Err(format!("not one ComposeDraft: {requests:?}"));
+    };
+    let response = service
+        .handle(Request::GetDraft {
+            draft_id: draft_id.clone(),
+        })
+        .await;
+    let Response::Draft { draft } = response else {
+        return Err(format!("no draft: {response:?}"));
+    };
+    Ok((*draft, program.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

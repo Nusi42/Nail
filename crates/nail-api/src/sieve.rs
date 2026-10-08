@@ -161,6 +161,28 @@ pub enum RulePlacement {
     NotExpressible,
 }
 
+/// A placement reason about the rule condition at `position` (child
+/// indexes from the root; argument `position`, e.g. `1.2`). Shared by the
+/// Sieve compiler and the Exchange inbox-rule mapping.
+pub fn reason_at_condition(id: &str, position: &[u32]) -> LocalizedMessage {
+    LocalizedMessage::new(id).arg("position", condition_position(position))
+}
+
+/// A placement reason about the rule action at 0-based `index` (argument
+/// `action`, counted from 1).
+pub fn reason_at_action(id: &str, index: usize) -> LocalizedMessage {
+    LocalizedMessage::new(id).arg("action", index + 1)
+}
+
+/// `[]` → `"1"`, `[0, 2]` → `"1.1.3"`: the root is 1, children count
+/// from 1.
+pub fn condition_position(path: &[u32]) -> String {
+    std::iter::once("1".to_owned())
+        .chain(path.iter().map(|i| (i + 1).to_string()))
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
 /// Where one rule runs for one account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RuleSieveStatus {
@@ -281,8 +303,8 @@ impl Default for VacationSettings {
 impl VacationSettings {
     /// Default of [`Self::days`].
     pub const DEFAULT_DAYS: u32 = 7;
-    /// Largest [`Self::days`].
-    pub const MAX_DAYS: u32 = 365;
+    /// Largest [`Self::days`] (a year).
+    pub const MAX_DAYS: u32 = nail_util::time::DAYS_PER_YEAR as u32;
 
     /// Problems with the settings (empty = valid). Disabled settings are
     /// still checked, except for the empty body.
@@ -380,6 +402,21 @@ impl VacationIssue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reason_positions_count_from_one() {
+        use crate::localized::MessageArg;
+        assert_eq!(condition_position(&[]), "1");
+        assert_eq!(condition_position(&[0, 2]), "1.1.3");
+        assert_eq!(
+            reason_at_action("x-reason", 0).args["action"],
+            MessageArg::Number(1)
+        );
+        assert_eq!(
+            reason_at_condition("x-reason", &[1]).args["position"],
+            MessageArg::Text("1.2".into())
+        );
+    }
     use crate::accounts::{AuthConfig, SecretRef};
     use serde_json::json;
 

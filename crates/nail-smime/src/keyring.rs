@@ -16,8 +16,7 @@
 //! | ciphertext+tag`, with `NSM1 | mode | fingerprint` as associated data,
 //! so a blob cannot be moved to another certificate.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use base64::Engine as _;
@@ -29,6 +28,7 @@ use nail_api::security::{
 use nail_api::smartcard::SmartcardKeyRef;
 use nail_api::{KeyId, SecretRef};
 use nail_store::{KeyData, SecretKeyData, Store, StoredKey};
+use nail_util::expiring::ExpiringMap;
 use rand::RngCore;
 use rand::rngs::OsRng;
 use zeroize::Zeroizing;
@@ -49,23 +49,13 @@ const MODE_PASSPHRASE: u8 = 2;
 /// (OWASP 2023 recommendation).
 pub const PBKDF2_ITERATIONS: u32 = 600_000;
 
-/// Unlocked keys by fingerprint, with their expiry (Unix seconds).
-type UnlockedKeys = HashMap<String, (Arc<SoftwareKey>, Option<i64>)>;
-
 /// Private keys unlocked with a passphrase (and keychain-protected keys
 /// once opened), kept in memory until they expire or Nail quits. Shared by
 /// all [`Keyring`] handles of a process.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct UnlockCache {
-    entries: Mutex<UnlockedKeys>,
-}
-
-impl std::fmt::Debug for UnlockCache {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UnlockCache")
-            .field("keys", &self.lock().len())
-            .finish()
-    }
+    /// Unlocked keys by fingerprint, with their expiry (Unix seconds).
+    entries: ExpiringMap<Arc<SoftwareKey>, i64>,
 }
 
 impl UnlockCache {
@@ -74,33 +64,21 @@ impl UnlockCache {
         Self::default()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, UnlockedKeys> {
-        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
     fn get(&self, fingerprint: &str, now: i64) -> Option<Arc<SoftwareKey>> {
-        let mut entries = self.lock();
-        match entries.get(fingerprint) {
-            Some((_, Some(until))) if *until <= now => {
-                entries.remove(fingerprint);
-                None
-            }
-            Some((key, _)) => Some(key.clone()),
-            None => None,
-        }
+        self.entries.get(fingerprint, &now)
     }
 
     fn put(&self, fingerprint: &str, key: Arc<SoftwareKey>, until: Option<i64>) {
-        self.lock().insert(fingerprint.to_owned(), (key, until));
+        self.entries.insert(fingerprint, key, until);
     }
 
     fn forget(&self, fingerprint: &str) {
-        self.lock().remove(fingerprint);
+        self.entries.remove(fingerprint);
     }
 
     /// Forgets every unlocked key.
     pub fn lock_all(&self) {
-        self.lock().clear();
+        self.entries.clear();
     }
 }
 
@@ -244,9 +222,12 @@ impl<'a> Keyring<'a> {
             data: None,
             reference: Some(crate::smartcard::reference_of(key)),
         };
-        let (stored, created) =
-            self.store
-                .upsert_key(&key_data(&cert, KeySource::Smartcard, Some(secret)))?;
+        self.import_one(&key_data(&cert, KeySource::Smartcard, Some(secret)))
+    }
+
+    /// Stores one key and reports it as created or updated.
+    fn import_one(&self, data: &KeyData) -> Result<KeyImportResult> {
+        let (stored, created) = self.store.upsert_key(data)?;
         Ok(KeyImportResult {
             keys: vec![self.to_crypto_key(&stored)?],
             created: u32::from(created),
@@ -348,15 +329,7 @@ impl<'a> Keyring<'a> {
             data: None,
             reference: Some(found.cert.thumbprint()),
         });
-        let (stored, created) =
-            self.store
-                .upsert_key(&key_data(&found.cert, KeySource::WindowsStore, secret))?;
-        Ok(KeyImportResult {
-            keys: vec![self.to_crypto_key(&stored)?],
-            created: u32::from(created),
-            updated: u32::from(!created),
-            issues: Vec::new(),
-        })
+        self.import_one(&key_data(&found.cert, KeySource::WindowsStore, secret))
     }
 
     /// Not available off Windows.
@@ -781,10 +754,7 @@ impl<'a> Keyring<'a> {
             .store
             .list_keys(Some(CryptoTechnology::Smime), true)?
             .into_iter()
-            .filter(|k| match fingerprint {
-                Some(fp) => k.data.fingerprint.eq_ignore_ascii_case(fp),
-                None => k.data.emails.iter().any(|e| e.eq_ignore_ascii_case(email)),
-            })
+            .filter(|k| is_identity_key(k, email, fingerprint))
             .filter(|k| k.data.can_sign && k.data.expires_at.is_none_or(|t| t >= now))
             .collect();
         let stored = candidates
@@ -1064,6 +1034,19 @@ fn windows_key(_secret: &SecretKeyData) -> Result<Arc<dyn PrivateKeyOps>> {
     Err(Error::Unsupported("the Windows certificate store".into()))
 }
 
+/// Whether `key` is an identity's certificate: the configured one when
+/// `fingerprint` is given, else one for the address `email`.
+pub fn is_identity_key(key: &StoredKey, email: &str, fingerprint: Option<&str>) -> bool {
+    match fingerprint {
+        Some(fp) => key.data.fingerprint.eq_ignore_ascii_case(fp),
+        None => key
+            .data
+            .emails
+            .iter()
+            .any(|e| e.eq_ignore_ascii_case(email)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1162,11 +1145,9 @@ mod tests {
         assert_eq!(sig.trust, TrustLevel::Own);
     }
 
-    #[test]
-    fn keychain_entry_loss_and_tampering() {
-        let env = Env::new();
-        let keyring = env.keyring();
-        let alice = keyring
+    /// Alice's PKCS#12 key, protected by the keychain.
+    fn import_alice(keyring: &Keyring<'_>) -> CryptoKey {
+        keyring
             .import_pkcs12(
                 &fixture("alice.p12"),
                 P12_PASSWORD,
@@ -1174,7 +1155,14 @@ mod tests {
             )
             .unwrap()
             .keys
-            .remove(0);
+            .remove(0)
+    }
+
+    #[test]
+    fn keychain_entry_loss_and_tampering() {
+        let env = Env::new();
+        let keyring = env.keyring();
+        let alice = import_alice(&keyring);
         let stored = env.store.get_key(&alice.id).unwrap();
         // Another certificate's fingerprint (the AAD) does not open it.
         let secret = stored.data.secret.clone().unwrap();
@@ -1517,15 +1505,7 @@ mod tests {
     fn deleting_an_own_key_removes_its_keychain_entry() {
         let env = Env::new();
         let keyring = env.keyring();
-        let alice = keyring
-            .import_pkcs12(
-                &fixture("alice.p12"),
-                P12_PASSWORD,
-                &SecretProtection::Keychain,
-            )
-            .unwrap()
-            .keys
-            .remove(0);
+        let alice = import_alice(&keyring);
         assert_eq!(env.secrets.len(), 1);
         assert_eq!(
             keyring.delete(&alice.id, false).unwrap_err().code(),
@@ -1544,15 +1524,7 @@ mod tests {
     fn unlocking_keys_that_need_no_passphrase() {
         let env = Env::new();
         let keyring = env.keyring();
-        let alice = keyring
-            .import_pkcs12(
-                &fixture("alice.p12"),
-                P12_PASSWORD,
-                &SecretProtection::Keychain,
-            )
-            .unwrap()
-            .keys
-            .remove(0);
+        let alice = import_alice(&keyring);
         keyring.unlock(&alice.id, "anything", None).unwrap();
         let intermediate = keyring.list(&KeyFilter::default()).unwrap()[1].id.clone();
         assert!(matches!(

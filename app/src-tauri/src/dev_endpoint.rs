@@ -214,12 +214,7 @@ mod tests {
     use tungstenite::client::IntoClientRequest;
 
     fn open(data: &Path, config: &Path) -> Service {
-        let args = crate::AppArgs {
-            data_dir: Some(data.into()),
-            config_dir: Some(config.into()),
-            seed: Some("demo".into()),
-            ..crate::AppArgs::default()
-        };
+        let args = crate::AppArgs::in_dirs(data, config, Some("demo"));
         crate::open_service(&args).unwrap()
     }
 

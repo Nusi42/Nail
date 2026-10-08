@@ -13,6 +13,7 @@ use nail_api::ErrorCode;
 use nail_api::accounts::SecretRef;
 use nail_api::engine::{AccessTokenProvider, EngineError, SecretStore};
 use nail_api::exchange::engine::NegotiateAuth;
+use nail_net::http;
 
 use crate::error::EwsError;
 
@@ -82,23 +83,10 @@ impl EwsAuth {
     }
 }
 
-impl fmt::Debug for EwsAuth {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::None => f.write_str("None"),
-            Self::Basic { username, .. } => f
-                .debug_struct("Basic")
-                .field("username", username)
-                .finish_non_exhaustive(),
-            Self::Bearer(_) => f.write_str("Bearer(..)"),
-            Self::OAuth2 { provider, .. } => f
-                .debug_struct("OAuth2")
-                .field("provider", provider)
-                .finish_non_exhaustive(),
-            Self::Negotiate(auth) => f.debug_tuple("Negotiate").field(auth).finish(),
-        }
-    }
-}
+nail_net::login_debug!(
+    EwsAuth,
+    Self::Negotiate(auth) => |f: &mut fmt::Formatter<'_>| f.debug_tuple("Negotiate").field(auth).finish(),
+);
 
 /// Produces `Authorization` header values for the non-Negotiate logins,
 /// caching the password read from the keychain.
@@ -118,18 +106,16 @@ impl HeaderSource {
     ) -> Result<Option<String>, EwsError> {
         Ok(match auth {
             EwsAuth::None | EwsAuth::Negotiate(_) => None,
-            EwsAuth::Bearer(token) => Some(format!("Bearer {token}")),
+            EwsAuth::Bearer(token) => Some(http::bearer(token)),
             EwsAuth::OAuth2 {
                 tokens,
                 provider,
                 secret,
-            } => {
-                let token = tokens
-                    .access_token(provider, secret, refresh)
+            } => Some(
+                http::oauth2_bearer(tokens.as_ref(), provider, secret, refresh)
                     .await
-                    .map_err(|e| EwsError::Credentials(Box::new(e)))?;
-                Some(format!("Bearer {token}"))
-            }
+                    .map_err(|e| EwsError::Credentials(Box::new(e)))?,
+            ),
             EwsAuth::Basic { username, password } => {
                 let password = self.password(password, refresh).await?;
                 Some(basic_header(username, &password))
@@ -175,12 +161,7 @@ impl HeaderSource {
 }
 
 /// `Basic base64(user:password)`.
-pub fn basic_header(username: &str, password: &str) -> String {
-    format!(
-        "Basic {}",
-        base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
-    )
-}
+pub use nail_net::http::basic as basic_header;
 
 /// The Negotiate token of a `WWW-Authenticate` header value list
 /// (`Negotiate <base64>`); `Some(None)` = the scheme without a token,

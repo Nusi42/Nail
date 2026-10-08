@@ -75,23 +75,9 @@ fn material(params: &PublicParams) -> Option<PublicKeyMaterial> {
     }
 }
 
-fn trim(bytes: &[u8]) -> &[u8] {
-    let skip = bytes.iter().take_while(|b| **b == 0).count();
-    &bytes[skip..]
-}
-
 /// Whether a card key's public material is this OpenPGP component's.
 pub fn same_key(params: &PublicParams, card: &PublicKeyMaterial) -> bool {
-    match (material(params), card) {
-        (
-            Some(PublicKeyMaterial::Rsa { modulus: a, .. }),
-            PublicKeyMaterial::Rsa { modulus: b, .. },
-        ) => trim(&a) == trim(b),
-        (Some(PublicKeyMaterial::Ec { point: a, .. }), PublicKeyMaterial::Ec { point: b, .. }) => {
-            a == *b
-        }
-        _ => false,
-    }
+    material(params).is_some_and(|m| m.same_public_key(card))
 }
 
 /// The component of `key` whose public key is the card key's, with its
@@ -342,7 +328,7 @@ mod tests {
     use crate::read::read_message;
 
     const MODULE: &str = r"C:\test\openpgp-card.dll";
-    const PIN: &str = "123456";
+    use nail_pkcs11::testing::TEST_PIN as PIN;
     const PLAIN: &[u8] = b"From: Ada <ada@example.org>\r\nTo: Bob <bob@example.net>\r\n\
 Subject: Card mail\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSigned on the card.\r\n";
 

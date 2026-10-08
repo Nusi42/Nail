@@ -41,7 +41,6 @@ use mail_parser::{MessageParser, MimeHeaders};
 use nail_api::accounts::SendingMailbox;
 use nail_api::domain::Flags;
 use nail_api::engine::{Envelope, SendProgress, SendReceipt};
-use nail_api::ops::FlagChange;
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -51,8 +50,8 @@ use crate::mail::{MAX_MIME_UPLOAD, encode_mime};
 use crate::wire::{Message, UploadSession};
 use crate::{mailbox_path, mime, path_segment};
 
-/// Graph's unit for upload-session ranges (320 KiB).
-pub const UPLOAD_UNIT: usize = 320 * 1024;
+/// Graph's unit for upload-session ranges (320 KiB = 327,680 bytes).
+pub const UPLOAD_UNIT: usize = 327_680;
 
 /// The default bytes per upload range (10 units, just over 3 MiB).
 pub const DEFAULT_UPLOAD_CHUNK: usize = 10 * UPLOAD_UNIT;
@@ -69,7 +68,7 @@ const REFERENCES_PROP: &str = "String 0x1039";
 /// `PidTagInReplyToId` (`In-Reply-To`).
 const IN_REPLY_TO_PROP: &str = "String 0x1042";
 /// `PidTagMessageFlags`: 1 = read, without 8 (unsent) = not a draft.
-const MESSAGE_FLAGS_PROP: &str = "Integer 0x0E07";
+pub(crate) const MESSAGE_FLAGS_PROP: &str = "Integer 0x0E07";
 
 /// Whether a raw message is too large for one MIME upload.
 pub fn needs_upload_session(raw: &[u8]) -> bool {
@@ -368,10 +367,7 @@ impl GraphEngine {
         raw: &[u8],
         progress: Option<SendProgress<'_>>,
     ) -> Result<SendReceipt, GraphError> {
-        if envelope.to.is_empty() && mime::header_recipients(raw).is_empty() {
-            return Err(GraphError::Rejected("no recipients".into()));
-        }
-        let raw = mime::with_envelope_bcc(raw, &envelope.to)?;
+        let raw = mime::for_sending(raw, envelope)?;
         let parts = DraftParts::from_mime(&raw)?;
         let base = mailbox_path(mailbox);
         let id = self
@@ -459,13 +455,8 @@ impl GraphEngine {
                 return Err(error);
             }
         }
-        let change = FlagChange {
-            seen: Some(flags.seen),
-            flagged: flags.flagged.then_some(true),
-            answered: flags.answered.then_some(true),
-            ..FlagChange::default()
-        };
-        self.set_flags(mailbox, &id, &change).await?;
+        self.set_flags(mailbox, &id, &crate::mail::stored_flags(flags))
+            .await?;
         Ok(id)
     }
 

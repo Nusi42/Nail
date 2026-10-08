@@ -16,22 +16,17 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{Notify, watch};
-use tokio::task::JoinHandle;
-use tokio_rustls::TlsAcceptor;
+use tokio::sync::Notify;
 
 use nail_testkit::MockTls;
-use nail_testkit::tls::TestTls;
 
 use crate::MockNetError;
 use crate::sasl;
-use crate::stream::{Connection, MockStream, args, verb};
+use crate::server::{Journal, MockListener, Session, journal_controls, lock};
+use crate::stream::{Connection, args, verb};
 
 /// Configuration of a [`MockSmtpServer`].
 #[derive(Debug, Clone)]
@@ -69,7 +64,7 @@ impl Default for MockSmtpConfig {
         Self {
             hostname: "mock.nail.example".to_owned(),
             tls: MockTls::None,
-            users: vec![("sam@nail.example".to_owned(), "secret".to_owned())],
+            users: vec![(crate::MOCK_USER.to_owned(), crate::MOCK_PASSWORD.to_owned())],
             oauth_tokens: Vec::new(),
             mechanisms: ["PLAIN", "LOGIN", "XOAUTH2", "OAUTHBEARER"]
                 .map(str::to_owned)
@@ -129,44 +124,16 @@ enum Fault {
     Disconnect,
 }
 
-#[derive(Debug)]
-struct FaultRule {
-    command: String,
-    fault: Fault,
-    /// `None` = forever.
-    remaining: Option<usize>,
-}
-
 #[derive(Debug, Default)]
 struct Shared {
-    faults: Mutex<Vec<FaultRule>>,
+    journal: Journal<Fault>,
     rejected: Mutex<HashMap<String, (u16, String)>>,
     oauth_tokens: Mutex<Vec<(String, String)>>,
     messages: Mutex<Vec<ReceivedMail>>,
-    commands: Mutex<Vec<String>>,
-    connections: AtomicUsize,
     received: Notify,
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 impl Shared {
-    fn take_fault(&self, command: &str) -> Option<Fault> {
-        let mut faults = lock(&self.faults);
-        let index = faults.iter().position(|f| f.command == command)?;
-        let fault = faults[index].fault.clone();
-        match &mut faults[index].remaining {
-            Some(n) if *n <= 1 => {
-                faults.remove(index);
-            }
-            Some(n) => *n -= 1,
-            None => {}
-        }
-        Some(fault)
-    }
-
     fn log(&self, line: &str) {
         let redacted = if verb(line) == "AUTH" {
             let mech = args(line).split_whitespace().next().unwrap_or_default();
@@ -174,77 +141,33 @@ impl Shared {
         } else {
             line.to_owned()
         };
-        lock(&self.commands).push(redacted);
+        self.journal.command(redacted);
     }
 }
 
 /// A running mock SMTP server on `127.0.0.1`. Stops when dropped.
 #[derive(Debug)]
 pub struct MockSmtpServer {
-    addr: SocketAddr,
-    ca_der: Option<Vec<u8>>,
+    listener: MockListener,
     shared: Arc<Shared>,
-    shutdown: watch::Sender<bool>,
-    task: JoinHandle<()>,
+}
+
+/// The address, port, CA and connection count of the listener.
+impl std::ops::Deref for MockSmtpServer {
+    type Target = MockListener;
+
+    fn deref(&self) -> &MockListener {
+        &self.listener
+    }
 }
 
 impl MockSmtpServer {
     /// Starts a server on a free loopback port.
     pub async fn start(config: MockSmtpConfig) -> Result<Self, MockNetError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let addr = listener.local_addr()?;
-        let tls = match config.tls {
-            MockTls::None => None,
-            MockTls::Implicit | MockTls::StartTls => Some(TestTls::generate()?),
-        };
-        let ca_der = tls.as_ref().map(|t| t.ca_der.clone());
-        let acceptor = tls.map(|t| t.acceptor);
         let shared = Arc::new(Shared::default());
         lock(&shared.oauth_tokens).extend(config.oauth_tokens.iter().cloned());
-        let (shutdown, mut stop) = watch::channel(false);
-        let config = Arc::new(config);
-        let task_shared = Arc::clone(&shared);
-        let task = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = stop.changed() => break,
-                    accepted = listener.accept() => {
-                        let Ok((tcp, _)) = accepted else { continue };
-                        task_shared.connections.fetch_add(1, Ordering::SeqCst);
-                        let shared = Arc::clone(&task_shared);
-                        let config = Arc::clone(&config);
-                        let acceptor = acceptor.clone();
-                        tokio::spawn(async move {
-                            if let Err(err) = session(tcp, &shared, &config, acceptor.as_ref()).await {
-                                tracing::debug!(%err, "mock SMTP session ended");
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        Ok(Self {
-            addr,
-            ca_der,
-            shared,
-            shutdown,
-            task,
-        })
-    }
-
-    /// The listening address.
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    /// The listening port.
-    pub fn port(&self) -> u16 {
-        self.addr.port()
-    }
-
-    /// DER of the CA that signed the server certificate (TLS modes only).
-    pub fn ca_der(&self) -> Option<&[u8]> {
-        self.ca_der.as_deref()
+        let listener = MockListener::serve(config.tls, "SMTP", &shared, config, session).await?;
+        Ok(Self { listener, shared })
     }
 
     /// Messages accepted so far.
@@ -274,33 +197,13 @@ impl MockSmtpServer {
         tokio::time::timeout(timeout, wait).await.ok()
     }
 
-    /// Every command line received, in order (`AUTH` payloads removed).
-    pub fn commands(&self) -> Vec<String> {
-        lock(&self.shared.commands).clone()
-    }
-
-    /// Number of accepted TCP connections.
-    pub fn connections(&self) -> usize {
-        self.shared.connections.load(Ordering::SeqCst)
-    }
-
     /// Answers the next `times` occurrences of `command` with `code text`
     /// instead of processing it (`None` = every time).
     pub fn fail(&self, command: &str, code: u16, text: &str, times: Option<usize>) {
-        lock(&self.shared.faults).push(FaultRule {
-            command: command.to_ascii_uppercase(),
-            fault: Fault::Reply(code, text.to_owned()),
-            remaining: times,
-        });
-    }
-
-    /// Drops the connection without answering the next `command`.
-    pub fn disconnect_on(&self, command: &str) {
-        lock(&self.shared.faults).push(FaultRule {
-            command: command.to_ascii_uppercase(),
-            fault: Fault::Disconnect,
-            remaining: Some(1),
-        });
+        self.shared
+            .journal
+            .faults
+            .add(command, Fault::Reply(code, text.to_owned()), times);
     }
 
     /// Answers `RCPT TO:<address>` with `code text` (case-insensitive).
@@ -314,12 +217,7 @@ impl MockSmtpServer {
     }
 }
 
-impl Drop for MockSmtpServer {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        self.task.abort();
-    }
-}
+journal_controls!(MockSmtpServer);
 
 #[derive(Debug, Default)]
 struct Transaction {
@@ -336,17 +234,11 @@ struct SessionState {
 }
 
 async fn session(
-    tcp: TcpStream,
-    shared: &Shared,
-    config: &MockSmtpConfig,
-    acceptor: Option<&TlsAcceptor>,
+    mut conn: Connection,
+    session: Session<Shared, MockSmtpConfig>,
 ) -> std::io::Result<()> {
-    drop(tcp.set_nodelay(true));
-    let mut conn = match (config.tls, acceptor) {
-        (MockTls::Implicit, Some(acceptor)) => Connection::accept_tls(tcp, acceptor).await?,
-        _ => Connection::new(MockStream::Plain(tcp)),
-    };
-    match shared.take_fault("CONNECT") {
+    let (shared, config, acceptor) = session.parts();
+    match shared.journal.faults.take("CONNECT") {
         Some(Fault::Reply(code, text)) => {
             conn.line(&format!("{code} {text}")).await?;
             conn.shutdown().await;
@@ -359,13 +251,11 @@ async fn session(
         .await?;
     let mut st = SessionState::default();
     loop {
-        let Some(raw) = conn.read_line().await? else {
+        let Some((line, verb)) = conn.next_command().await? else {
             return Ok(());
         };
-        let line = String::from_utf8_lossy(&raw).into_owned();
-        let verb = verb(&line);
         shared.log(&line);
-        match shared.take_fault(&verb) {
+        match shared.journal.faults.take(&verb) {
             Some(Fault::Disconnect) => return Ok(()),
             Some(Fault::Reply(code, text)) => {
                 conn.line(&format!("{code} {text}")).await?;
@@ -469,6 +359,27 @@ async fn continuation(conn: &mut Connection, challenge: &str) -> std::io::Result
     Ok((line.trim() != "*").then_some(line))
 }
 
+/// The initial response, else the client's answer to an empty
+/// challenge; `None` when the client cancelled.
+async fn response(
+    conn: &mut Connection,
+    initial: Option<String>,
+) -> std::io::Result<Option<String>> {
+    match initial {
+        Some(p) => Ok(Some(p)),
+        None => continuation(conn, "").await,
+    }
+}
+
+/// The user when `user` / `pass` is an accepted login.
+fn accepted(config: &MockSmtpConfig, user: String, pass: &str) -> Option<String> {
+    config
+        .users
+        .iter()
+        .any(|(u, p)| *u == user && p == pass)
+        .then_some(user)
+}
+
 async fn auth(
     conn: &mut Connection,
     shared: &Shared,
@@ -502,22 +413,14 @@ async fn auth(
     }
     let user = match mechanism.as_str() {
         "PLAIN" => {
-            let payload = match initial {
-                Some(p) => p,
-                None => match continuation(conn, "").await? {
-                    Some(p) => p,
-                    None => return conn.line(CANCELLED).await,
-                },
+            let Some(payload) = response(conn, initial).await? else {
+                return conn.line(CANCELLED).await;
             };
             let Some((user, pass)) = sasl::b64_decode(&payload).and_then(|p| sasl::parse_plain(&p))
             else {
                 return conn.line("501 5.5.2 Cannot decode response").await;
             };
-            config
-                .users
-                .iter()
-                .any(|(u, p)| *u == user && *p == pass)
-                .then_some(user)
+            accepted(config, user, &pass)
         }
         "LOGIN" => {
             let user = match initial {
@@ -534,19 +437,11 @@ async fn auth(
             let (Some(user), Some(pass)) = (decode(&user), decode(&pass)) else {
                 return conn.line("501 5.5.2 Cannot decode response").await;
             };
-            config
-                .users
-                .iter()
-                .any(|(u, p)| *u == user && *p == pass)
-                .then_some(user)
+            accepted(config, user, &pass)
         }
         "XOAUTH2" | "OAUTHBEARER" => {
-            let payload = match initial {
-                Some(p) => p,
-                None => match continuation(conn, "").await? {
-                    Some(p) => p,
-                    None => return conn.line(CANCELLED).await,
-                },
+            let Some(payload) = response(conn, initial).await? else {
+                return conn.line(CANCELLED).await;
             };
             let parsed = sasl::b64_decode(&payload).and_then(|p| {
                 if mechanism == "XOAUTH2" {
@@ -673,7 +568,7 @@ async fn data(
             .line("552 5.3.4 Message size exceeds fixed maximum message size")
             .await;
     };
-    match shared.take_fault("MESSAGE") {
+    match shared.journal.faults.take("MESSAGE") {
         Some(Fault::Reply(code, text)) => return conn.line(&format!("{code} {text}")).await,
         Some(Fault::Disconnect) => {
             return Err(std::io::Error::new(
@@ -705,7 +600,9 @@ async fn data(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::SocketAddr;
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpStream;
 
     /// A tiny line client for driving the server by hand.
     struct Client {

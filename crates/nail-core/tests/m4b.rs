@@ -16,7 +16,6 @@ use nail_api::desktop::{
     DesktopSettings, HostUpdateState, InstallKind, InstallScope, InstallationInfo, UpdateChannel,
     UpdateDisabledReason, UpdateInfo, UpdateSettings, UpdateState, WindowsArch,
 };
-use nail_api::launch::LaunchRequest;
 use nail_api::mapi::{
     MapiAttachment, MapiMessage, MapiRecipient, MapiRecipientClass, MapiResult, MapiUi,
 };
@@ -469,22 +468,8 @@ async fn a_mapi_message_becomes_a_draft_the_ui_opens() {
     // The caller may delete its file now: the draft has the content.
     std::fs::remove_file(&path).unwrap();
     assert_eq!(next_event(&mut events).await, Event::LaunchRequested);
-    let Response::LaunchRequests { requests } = service.handle(Request::TakeLaunchRequests).await
-    else {
-        panic!()
-    };
-    let [LaunchRequest::ComposeDraft { draft_id, program }] = requests.as_slice() else {
-        panic!("{requests:?}")
-    };
+    let (draft, program) = nail_core::demo::take_program_draft(&service).await.unwrap();
     assert_eq!(program.as_deref(), Some("EXCEL.EXE"));
-    let Response::Draft { draft } = service
-        .handle(Request::GetDraft {
-            draft_id: draft_id.clone(),
-        })
-        .await
-    else {
-        panic!()
-    };
     assert_eq!(draft.subject, "Quarterly report");
     assert_eq!(draft.to[0].email, "ada@example.org");
     assert_eq!(draft.to[0].name.as_deref(), Some("Ada"));

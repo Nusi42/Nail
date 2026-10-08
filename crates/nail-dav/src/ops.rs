@@ -7,6 +7,8 @@ use std::fmt::Write as _;
 
 use nail_api::pim::calendar::CalendarComponent;
 use nail_api::pim::source::DiscoveredCollection;
+use nail_net::status as http_status;
+use nail_util::percent::decode as percent_decode;
 use reqwest::Method;
 use reqwest::header::{HeaderName, IF_MATCH, IF_NONE_MATCH};
 use url::Url;
@@ -178,28 +180,7 @@ impl TimeRange {
 }
 
 /// Unix seconds → `YYYYMMDDTHHMMSSZ` (proleptic Gregorian).
-pub fn utc_stamp(secs: i64) -> String {
-    let days = secs.div_euclid(86_400);
-    let rem = secs.rem_euclid(86_400);
-    // Howard Hinnant's civil_from_days.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!(
-        "{y:04}{m:02}{d:02}T{:02}{:02}{:02}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60
-    )
-}
-
+pub use nail_util::ical_text::utc_stamp;
 /// An `addressbook-query` filter: the property contains the text
 /// (case-insensitive).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,26 +240,6 @@ pub struct NewCollection {
 /// The key of a URL: its path.
 pub fn href_key(url: &Url) -> String {
     url.path().to_owned()
-}
-
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let hex = |b: u8| char::from(b).to_digit(16);
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let (Some(hi), Some(lo)) = (hex(bytes[i + 1]), hex(bytes[i + 2]))
-        {
-            out.push(u8::try_from(hi * 16 + lo).unwrap_or(b'?'));
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// The member URL for an item `uid` in `collection`: `<uid>.ics` /
@@ -702,7 +663,7 @@ impl DavClient {
             escape(token.unwrap_or_default())
         );
         let reply = self.report(collection, Depth::Zero, body).await?;
-        if matches!(reply.status, 403 | 409)
+        if matches!(reply.status, 403 | http_status::CONFLICT)
             && multistatus::error_names(&reply.text(), NS_DAV, "valid-sync-token")
         {
             return Err(DavError::InvalidSyncToken);

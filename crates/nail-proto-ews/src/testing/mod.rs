@@ -23,7 +23,7 @@
 //! request log.
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use axum::Router;
@@ -63,12 +63,11 @@ pub const ROOM_LIST: &str = "rooms-hq@corp.example";
 /// The rooms of [`ROOM_LIST`].
 pub const ROOMS: [&str; 2] = ["room1@corp.example", "room2@corp.example"];
 
-/// The client token a [`ScriptedNegotiate`] sends first.
-pub const NEGOTIATE_TOKEN: &[u8] = b"nail-negotiate";
+/// The client token a [`ScriptedNegotiate`] sends first, and its answer to
+/// the challenge (shared with the mock Autodiscover server).
+pub use nail_testkit_net::api_mock::{AUTHENTICATE_TOKEN, NEGOTIATE_TOKEN};
 /// The server's challenge.
 pub const CHALLENGE_TOKEN: &[u8] = b"mock-challenge";
-/// The client's answer to the challenge.
-pub const AUTHENTICATE_TOKEN: &[u8] = b"nail-authenticate";
 /// The server's last (mutual authentication) token.
 pub const MUTUAL_TOKEN: &[u8] = b"mock-mutual";
 
@@ -246,7 +245,7 @@ pub(crate) struct Shared {
 
 impl Shared {
     pub(crate) fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        nail_testkit_net::api_mock::lock(&self.state)
     }
 }
 
@@ -304,6 +303,29 @@ impl MockEwsServer {
             self.addr.port(),
             nail_api::exchange::EWS_PATH
         )
+    }
+
+    /// A client of this server as the own user with `auth`, retrying
+    /// without waits.
+    pub fn client(&self, auth: crate::EwsAuth) -> Result<crate::EwsClient, crate::EwsError> {
+        use crate::client::{CALL_TIMEOUT, lane_http};
+        Ok(crate::EwsClient::with_http(
+            lane_http(CALL_TIMEOUT)?,
+            lane_http(CALL_TIMEOUT)?,
+            &self.url(),
+            auth,
+        )?
+        .with_own_address(OWN_ADDRESS)
+        .with_retry(crate::RetryPolicy::fast()))
+    }
+
+    /// An engine of the account `account` on this server, without
+    /// sign-in (see [`Self::client`]).
+    pub fn engine(&self, account: &str) -> Result<crate::EwsEngine, crate::EwsError> {
+        Ok(crate::EwsEngine::new(
+            self.client(crate::EwsAuth::None)?,
+            account.into(),
+        ))
     }
 
     fn state(&self) -> MutexGuard<'_, State> {

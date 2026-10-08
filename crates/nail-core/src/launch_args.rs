@@ -129,25 +129,7 @@ fn parse_webcal(argument: &str, rest: &str) -> Option<LaunchRequest> {
 /// Decodes `%XX` escapes as UTF-8 (invalid sequences become U+FFFD).
 /// `+` stays a plus sign: RFC 6068 is not form encoding.
 fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && let (Some(hi), Some(lo)) = (
-                bytes.get(i + 1).and_then(|b| (*b as char).to_digit(16)),
-                bytes.get(i + 2).and_then(|b| (*b as char).to_digit(16)),
-            )
-        {
-            // Two hex digits make one byte.
-            out.push(u8::try_from(hi * 16 + lo).unwrap_or(b'?'));
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
+    nail_util::percent::decode(input)
 }
 
 #[cfg(test)]

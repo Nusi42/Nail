@@ -13,8 +13,8 @@ use crate::error::{PortabilityError, Result, SinkError};
 use crate::job::JobContext;
 use crate::sink::{PimImportSink, SourceCollection};
 
-/// `PRODID` of the files Nail writes.
-pub const PRODID: &str = "-//Nail//Nail portability//EN";
+/// `PRODID` of the calendar files Nail exports.
+pub const EXPORT_PRODID: &str = "-//Nail//Nail portability//EN";
 
 /// Reads an `.ics` / `.vcf` file.
 pub fn read_file(path: &Path) -> Result<ImportData> {
@@ -221,7 +221,9 @@ impl IcsBuilder {
     pub fn new(name: &str) -> Self {
         let mut calendar = Component::new("VCALENDAR");
         calendar.properties.push(Property::new("VERSION", "2.0"));
-        calendar.properties.push(Property::new("PRODID", PRODID));
+        calendar
+            .properties
+            .push(Property::new("PRODID", EXPORT_PRODID));
         calendar
             .properties
             .push(Property::new("CALSCALE", "GREGORIAN"));

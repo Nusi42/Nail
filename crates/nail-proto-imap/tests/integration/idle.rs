@@ -9,10 +9,10 @@ use crate::common::*;
 use futures::StreamExt;
 use futures::future::BoxFuture;
 use nail_proto_imap::{
-    CredentialProvider, Credentials, IdleEnd, ImapError, MailboxChange, MailboxWatcher,
-    WatchConfig, WatchEvent, WatchMode,
+    CredentialProvider, Credentials, IdleEnd, IdleOutcome, ImapClient, ImapError, MailboxChange,
+    MailboxWatcher, WatchConfig, WatchEvent, WatchMode,
 };
-use nail_testkit::{MockCapabilities, NO_FLAGS};
+use nail_testkit::{MailStore, MockCapabilities, MockImapServer, NO_FLAGS};
 
 const WAIT: Duration = Duration::from_secs(10);
 
@@ -20,18 +20,37 @@ fn never() -> std::future::Pending<()> {
     std::future::pending()
 }
 
-#[tokio::test]
-async fn idle_reports_new_mail_from_another_client() {
-    let server = modern_server().await;
-    let mut client = login(&server).await;
+/// A logged-in client with the inbox examined.
+async fn in_inbox(server: &MockImapServer) -> ImapClient {
+    let mut client = login(server).await;
     client.examine("INBOX").await.unwrap();
+    client
+}
 
+/// IDLE until `change`, made to the server's store once the client idles,
+/// reaches the client.
+async fn idle_until(
+    client: &mut ImapClient,
+    server: &MockImapServer,
+    change: impl FnOnce(&MailStore),
+) -> IdleOutcome {
     let store = server.store().clone();
     let (outcome, ()) = tokio::join!(client.idle(WAIT, never()), async {
         assert!(server.wait_for_idle(1, WAIT).await);
-        store.add_message("INBOX", &message("pushed"), NO_FLAGS);
+        change(&store);
     });
-    let outcome = outcome.unwrap();
+    outcome.unwrap()
+}
+
+#[tokio::test]
+async fn idle_reports_new_mail_from_another_client() {
+    let server = modern_server().await;
+    let mut client = in_inbox(&server).await;
+
+    let outcome = idle_until(&mut client, &server, |store| {
+        store.add_message("INBOX", &message("pushed"), NO_FLAGS);
+    })
+    .await;
     assert_eq!(outcome.end, IdleEnd::Changes);
     assert_eq!(outcome.changes, [MailboxChange::Exists(4)]);
     // IDLE ended cleanly: the connection works.
@@ -42,14 +61,11 @@ async fn idle_reports_new_mail_from_another_client() {
 #[tokio::test]
 async fn idle_reports_flag_changes_and_vanished_messages_with_qresync() {
     let server = modern_server().await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
-    let store = server.store().clone();
-    let (outcome, ()) = tokio::join!(client.idle(WAIT, never()), async {
-        assert!(server.wait_for_idle(1, WAIT).await);
+    let mut client = in_inbox(&server).await;
+    let outcome = idle_until(&mut client, &server, |store| {
         store.add_flags("INBOX", 3, &["\\Flagged"]);
-    });
-    let outcome = outcome.unwrap();
+    })
+    .await;
     match &outcome.changes[..] {
         [
             MailboxChange::Flags {
@@ -62,11 +78,11 @@ async fn idle_reports_flag_changes_and_vanished_messages_with_qresync() {
         other => panic!("{other:?}"),
     }
 
-    let (outcome, ()) = tokio::join!(client.idle(WAIT, never()), async {
-        assert!(server.wait_for_idle(1, WAIT).await);
+    let outcome = idle_until(&mut client, &server, |store| {
         store.remove_message("INBOX", 2);
-    });
-    assert_eq!(outcome.unwrap().changes, [MailboxChange::Vanished(vec![2])]);
+    })
+    .await;
+    assert_eq!(outcome.changes, [MailboxChange::Vanished(vec![2])]);
 }
 
 #[tokio::test]
@@ -77,21 +93,18 @@ async fn idle_without_qresync_reports_sequence_expunges() {
         ..MockCapabilities::default()
     })
     .await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
-    let store = server.store().clone();
-    let (outcome, ()) = tokio::join!(client.idle(WAIT, never()), async {
-        assert!(server.wait_for_idle(1, WAIT).await);
+    let mut client = in_inbox(&server).await;
+    let outcome = idle_until(&mut client, &server, |store| {
         store.remove_message("INBOX", 2);
-    });
-    assert_eq!(outcome.unwrap().changes, [MailboxChange::Expunged(2)]);
+    })
+    .await;
+    assert_eq!(outcome.changes, [MailboxChange::Expunged(2)]);
 }
 
 #[tokio::test]
 async fn idle_times_out_for_reissue_and_stops_on_request() {
     let server = modern_server().await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
+    let mut client = in_inbox(&server).await;
 
     for _ in 0..2 {
         let outcome = client
@@ -121,7 +134,7 @@ async fn idle_times_out_for_reissue_and_stops_on_request() {
 async fn idle_outlives_the_read_timeout() {
     let server = modern_server().await;
     let config = config_for(&server).with_timeout(Duration::from_millis(150));
-    let mut client = nail_proto_imap::ImapClient::connect(&config, &credentials(&server))
+    let mut client = ImapClient::connect(&config, &credentials(&server))
         .await
         .unwrap();
     client.examine("INBOX").await.unwrap();
@@ -139,8 +152,7 @@ async fn idle_outlives_the_read_timeout() {
 #[tokio::test]
 async fn changes_seen_before_idle_return_at_once() {
     let server = modern_server().await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
+    let mut client = in_inbox(&server).await;
     server
         .store()
         .add_message("INBOX", &message("early"), NO_FLAGS);
@@ -156,8 +168,7 @@ async fn changes_seen_before_idle_return_at_once() {
 #[tokio::test]
 async fn a_connection_dropped_mid_idle_is_connection_lost() {
     let server = modern_server().await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
+    let mut client = in_inbox(&server).await;
     let (outcome, dropped) = tokio::join!(client.idle(WAIT, never()), async {
         assert!(server.wait_for_idle(1, WAIT).await);
         server.drop_idle_connections()
@@ -188,8 +199,7 @@ async fn idle_needs_the_extension_and_a_mailbox() {
 #[tokio::test]
 async fn polling_reports_changes_without_idle() {
     let server = bare_server().await;
-    let mut client = login(&server).await;
-    client.examine("INBOX").await.unwrap();
+    let mut client = in_inbox(&server).await;
     assert_eq!(client.poll().await.unwrap().len(), 0);
     server.store().add_flags("INBOX", 3, &["\\Seen"]);
     server

@@ -1,78 +1,34 @@
 //! Adaptive history polling (no Cloud Pub/Sub push on a desktop client;
 //! plan M3 scope decisions). [`PollTimer`] wraps the contract's
-//! [`AdaptivePoll`] with the account's `poll-interval` /
+//! [`AdaptivePoll`](nail_api::engine::AdaptivePoll) with the account's `poll-interval` /
 //! `max-poll-interval` and reads the outcome of each
 //! [`nail_api::engine::MailApiEngine::changes`] call: changes or a resync
 //! → poll soon, nothing → back off, an error → its `Retry-After` or back
 //! off, more history waiting → continue at once.
 
-use std::time::Duration;
-
-use nail_api::engine::{AdaptivePoll, DeltaOutcome, EngineError};
+use nail_api::engine::{DeltaOutcome, EngineError};
 use nail_api::gmail::GmailOptions;
+pub use nail_net::poll::RoundTimer;
 
-/// When to poll a Gmail account next.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PollTimer {
-    poll: AdaptivePoll,
-    continue_now: bool,
-}
+nail_net::options_timer!(
+    /// When to poll a Gmail account next: [`RoundTimer`] with one `changes`
+    /// call per round.
+    PollTimer,
+    GmailOptions
+);
 
 impl PollTimer {
-    /// A timer for an account's options ([`GmailOptions::poll_range`]).
-    pub fn new(options: &GmailOptions) -> Self {
-        let (min, max) = options.poll_range();
-        Self {
-            poll: AdaptivePoll::new(min, max),
-            continue_now: false,
-        }
-    }
-
-    /// Records the outcome of a `changes` call.
+    /// Records the outcome of a `changes` call (a round of its own).
     pub fn observe(&mut self, outcome: &Result<DeltaOutcome, EngineError>) {
-        self.continue_now = false;
-        match outcome {
-            Ok(DeltaOutcome::CursorExpired) => self.poll.activity(),
-            Ok(DeltaOutcome::Delta(delta)) => {
-                if delta.more {
-                    self.continue_now = true;
-                }
-                if delta.added.is_empty() && delta.changed.is_empty() && delta.removed.is_empty() {
-                    if !delta.more {
-                        self.poll.quiet();
-                    }
-                } else {
-                    self.poll.activity();
-                }
-            }
-            Err(err) => self.poll.failed(err),
-        }
-    }
-
-    /// The user did something (opened the account, pressed "Sync", wrote):
-    /// poll soon.
-    pub fn user_activity(&mut self) {
-        self.poll.activity();
-    }
-
-    /// The wait before the next poll (zero while history is still being
-    /// read in slices).
-    pub fn next_delay(&self) -> Duration {
-        if self.continue_now {
-            Duration::ZERO
-        } else {
-            Duration::from_secs(u64::from(self.poll.next_delay_secs()))
-        }
-    }
-
-    /// The underlying interval state.
-    pub fn poll(&self) -> AdaptivePoll {
-        self.poll
+        self.0.observe(outcome);
+        self.0.end_round();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use nail_api::ErrorCode;
     use nail_api::engine::SyncDelta;

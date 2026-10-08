@@ -7,25 +7,15 @@
 use base64::Engine as _;
 use nail_api::exchange::{CategoryColor, ExchangeWellKnownFolder, InferenceClassification};
 use nail_proto_graph::testing::MockGraphServer;
+use nail_proto_graph::{GraphAuth, GraphClient};
 
 #[tokio::test]
 async fn mock_server_answers_me_over_loopback() {
     let server = MockGraphServer::start("ada@contoso.example").await.unwrap();
     assert!(server.addr().ip().is_loopback());
-    let tls = nail_auth::tls_config().expect("ring TLS configuration");
-    let client = nail_auth::http_client_builder(tls).build().unwrap();
-    let me: serde_json::Value = client
-        .get(format!("{}/me", server.api_base()))
-        .bearer_auth("token")
-        .send()
-        .await
-        .unwrap()
-        .error_for_status()
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(me["mail"], "ada@contoso.example");
+    let client = GraphClient::new(&server.api_base(), GraphAuth::Bearer("token".into())).unwrap();
+    let me = client.me(None).await.unwrap();
+    assert_eq!(me.mail.as_deref(), Some("ada@contoso.example"));
 }
 
 #[test]

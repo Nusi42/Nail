@@ -92,6 +92,27 @@ pub enum EwsError {
     OutlookRuleBlob,
 }
 
+nail_net::client_error_classes!(EwsError, "ews", Credentials, retry by class,
+    codes {
+        Self::RateLimited(_) => ErrorCode::RateLimited,
+        Self::Unavailable(..) => ErrorCode::Unavailable,
+        Self::Rejected { .. } => ErrorCode::Rejected,
+        Self::Conflict(_) | Self::OutlookRuleBlob => ErrorCode::Conflict,
+        Self::Config(_) => ErrorCode::Config,
+        Self::Unsupported(_) => ErrorCode::Unsupported,
+    }
+    texts {
+        Self::RateLimited(_) => LocalizedMessage::new("ews-rate-limited"),
+        Self::Unavailable(..) => LocalizedMessage::new("ews-unavailable"),
+        Self::Rejected { .. } => LocalizedMessage::new("ews-rejected"),
+        Self::Conflict(_) => LocalizedMessage::new("ews-conflict"),
+        Self::Config(_) => LocalizedMessage::new("ews-config"),
+        Self::Credentials(_) => LocalizedMessage::new("ews-credentials"),
+        Self::Unsupported(_) => LocalizedMessage::new("ews-unsupported"),
+        Self::OutlookRuleBlob => LocalizedMessage::new("ews-outlook-rule-blob"),
+    }
+);
+
 impl EwsError {
     /// Every Fluent id [`Self::localized`] can answer.
     pub const MESSAGE_IDS: [&'static str; 18] = [
@@ -115,40 +136,6 @@ impl EwsError {
         "ews-outlook-rule-blob",
     ];
 
-    /// The error class for the UI.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::Network(_) | Self::Timeout | Self::Protocol(_) => ErrorCode::Network,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::AuthFailed => ErrorCode::AuthFailed,
-            Self::Forbidden(_) => ErrorCode::Forbidden,
-            Self::NotFound(_) => ErrorCode::NotFound,
-            Self::RateLimited(_) => ErrorCode::RateLimited,
-            Self::Unavailable(..) => ErrorCode::Unavailable,
-            Self::Status { status, .. } if *status >= 500 => ErrorCode::Unavailable,
-            Self::Rejected { .. } | Self::Status { .. } => ErrorCode::Rejected,
-            Self::Conflict(_) | Self::OutlookRuleBlob => ErrorCode::Conflict,
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::InsecureUrl(_) | Self::Config(_) => ErrorCode::Config,
-            Self::Credentials(e) => e.code,
-            Self::Unsupported(_) => ErrorCode::Unsupported,
-        }
-    }
-
-    /// Whether trying again later may succeed.
-    pub fn retryable(&self) -> bool {
-        match self {
-            Self::Network(_)
-            | Self::Timeout
-            | Self::RateLimited(_)
-            | Self::Unavailable(..)
-            | Self::Protocol(_) => true,
-            Self::Status { status, .. } => *status >= 500,
-            Self::Credentials(e) => e.retryable,
-            _ => false,
-        }
-    }
-
     /// How long the server asked to wait, in seconds.
     pub fn retry_after_secs(&self) -> Option<u32> {
         match self {
@@ -156,32 +143,6 @@ impl EwsError {
             Self::Credentials(e) => e.retry_after_secs,
             _ => None,
         }
-    }
-
-    /// The user-facing text.
-    pub fn localized(&self) -> LocalizedMessage {
-        LocalizedMessage::new(match self {
-            Self::Network(_) => "ews-network",
-            Self::Timeout => "ews-timeout",
-            Self::Tls(_) => "ews-tls",
-            Self::AuthFailed => "ews-auth-failed",
-            Self::Forbidden(_) => "ews-forbidden",
-            Self::NotFound(_) => "ews-missing",
-            Self::RateLimited(_) => "ews-rate-limited",
-            Self::Unavailable(..) => "ews-unavailable",
-            Self::Rejected { .. } => "ews-rejected",
-            Self::Conflict(_) => "ews-conflict",
-            Self::TooLarge(_) => "ews-too-large",
-            Self::Status { status, .. } => {
-                return LocalizedMessage::new("ews-http-status").arg("status", i64::from(*status));
-            }
-            Self::Protocol(_) => "ews-bad-response",
-            Self::InsecureUrl(_) => "ews-insecure-url",
-            Self::Config(_) => "ews-config",
-            Self::Credentials(_) => "ews-credentials",
-            Self::Unsupported(_) => "ews-unsupported",
-            Self::OutlookRuleBlob => "ews-outlook-rule-blob",
-        })
     }
 
     /// The error of an EWS `ResponseCode` (anything but `NoError`), with
@@ -251,22 +212,9 @@ pub fn back_off_secs(ms: u64) -> u32 {
     u32::try_from(ms.div_ceil(1000).max(1)).unwrap_or(u32::MAX)
 }
 
-impl From<EwsError> for EngineError {
-    fn from(err: EwsError) -> Self {
-        if let EwsError::Credentials(inner) = err {
-            return *inner;
-        }
-        let localized = err.localized();
-        let mut out = if err.retryable() {
-            EngineError::temporary(err.code(), err.to_string())
-        } else {
-            EngineError::permanent(err.code(), err.to_string())
-        }
-        .with_localized(localized);
-        out.retry_after_secs = err.retry_after_secs();
-        out
-    }
-}
+nail_net::transport_errors!(EwsError);
+
+nail_net::engine_error_from!(EwsError, Credentials, EwsError::retry_after_secs);
 
 impl From<crate::xml::XmlError> for EwsError {
     fn from(err: crate::xml::XmlError) -> Self {
@@ -277,6 +225,8 @@ impl From<crate::xml::XmlError> for EwsError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    nail_testkit::error_texts_test!(EwsError, "core-ews.ftl");
 
     pub(crate) fn all() -> Vec<EwsError> {
         vec![
@@ -363,32 +313,5 @@ mod tests {
         assert_eq!(passed, inner);
         let blob: EngineError = EwsError::OutlookRuleBlob.into();
         assert_eq!(blob.code, ErrorCode::Conflict);
-    }
-
-    #[test]
-    fn every_error_has_a_listed_message() {
-        for error in all() {
-            let id = error.localized().id;
-            assert!(EwsError::MESSAGE_IDS.contains(&id.as_str()), "{id}");
-            assert_ne!(error.to_string().len(), 0);
-        }
-    }
-
-    #[test]
-    fn catalog_has_every_message() {
-        let catalog = include_str!("../../../locales/en/core-ews.ftl");
-        for id in EwsError::MESSAGE_IDS {
-            assert!(
-                catalog.lines().any(|l| l.starts_with(&format!("{id} ="))),
-                "{id} missing in locales/en/core-ews.ftl"
-            );
-        }
-        let german = include_str!("../../../locales/de/core-ews.ftl");
-        assert!(
-            german
-                .lines()
-                .all(|l| l.trim().is_empty() || l.starts_with('#')),
-            "locales/de/core-ews.ftl stays empty for now"
-        );
     }
 }

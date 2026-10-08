@@ -12,10 +12,9 @@ use nail_api::engine::{
     OutgoingTransport, RemoteWrite, SecretStore, SendReceipt, SyncDelta, WriteOutcome,
 };
 use nail_api::exchange::engine::{
-    ExchangeDirectoryEngine, ExchangeEngine, ExchangeFolderClass, ExchangeMailEngine,
-    ExchangePimEngine, ExchangePimWrite, ExchangePimWriteOutcome, ExchangeServerInfo,
-    ExchangeSettingsEngine, HierarchyDelta, HierarchyOutcome, MeetingSend, NegotiateAuth, PimDelta,
-    PimDeltaOutcome, RemoteCategory,
+    ExchangeDirectoryEngine, ExchangeEngine, ExchangeFolderClass, ExchangePimWrite,
+    ExchangePimWriteOutcome, ExchangeServerInfo, ExchangeSettingsEngine, HierarchyDelta,
+    HierarchyOutcome, MeetingSend, NegotiateAuth, PimDelta, PimDeltaOutcome, RemoteCategory,
 };
 use nail_api::exchange::pim::{ExchangeEvent, ExchangePimFolder, ExchangePimItem, PimFolderKind};
 use nail_api::exchange::rules::ExchangeInboxRule;
@@ -249,6 +248,11 @@ impl EwsEngine {
         Ok(out)
     }
 
+    /// The raw MIME of a message.
+    async fn mime(&self, mailbox: Option<&str>, remote_id: &str) -> Result<Vec<u8>, EwsError> {
+        self.client.get_mime(mailbox, remote_id).await
+    }
+
     async fn hierarchy(
         &self,
         mailbox: Option<&str>,
@@ -404,21 +408,11 @@ impl EwsEngine {
                     }
                 }
                 Err(err) => {
-                    for (index, _) in members {
-                        out[*index] = Some(Err(err.clone()));
-                    }
+                    nail_util::batch::fail_all(&mut out, members.iter().map(|(i, _)| *i), &err);
                 }
             }
         }
-        let mut results = Vec::with_capacity(writes.len());
-        for (index, write) in writes.iter().enumerate() {
-            let result = match out[index].take() {
-                Some(result) => result,
-                None => self.replay(mailbox, write).await,
-            };
-            results.push(result);
-        }
-        results
+        nail_util::batch::finish(writes, out, |write| self.replay(mailbox, write)).await
     }
 
     /// One multi-item request of [`Self::write_many`].
@@ -1325,7 +1319,17 @@ fn engine<T>(result: Result<T, EwsError>) -> Result<T, EngineError> {
     result.map_err(EngineError::from)
 }
 
-impl ExchangeMailEngine for EwsEngine {
+nail_exchange::exchange_mail_engine!(
+    EwsEngine {
+        folder_hierarchy: hierarchy,
+        folder_items: items,
+        fetch_mime: mime,
+        write: replay,
+        classify: classify_items,
+        fetch_headers: fetch_headers,
+        move_to_mailbox: move_to_mailbox,
+    }
+
     fn server_info(&self) -> BoxFuture<'_, Result<ExchangeServerInfo, EngineError>> {
         Box::pin(async move {
             // A live call (not the cached folder list): this also checks
@@ -1359,55 +1363,6 @@ impl ExchangeMailEngine for EwsEngine {
         })
     }
 
-    fn folder_hierarchy<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        cursor: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<HierarchyOutcome, EngineError>> {
-        Box::pin(async move { engine(self.hierarchy(mailbox, cursor).await) })
-    }
-
-    fn folder_items<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        folder: &'a str,
-        cursor: Option<&'a str>,
-        since: Option<i64>,
-    ) -> BoxFuture<'a, Result<DeltaOutcome, EngineError>> {
-        Box::pin(async move { engine(self.items(mailbox, folder, cursor, since).await) })
-    }
-
-    fn fetch_mime<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_id: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
-        Box::pin(async move { engine(self.client.get_mime(mailbox, remote_id).await) })
-    }
-
-    fn write<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        write: &'a RemoteWrite,
-    ) -> BoxFuture<'a, Result<WriteOutcome, EngineError>> {
-        Box::pin(async move { engine(self.replay(mailbox, write).await) })
-    }
-
-    fn classify<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_ids: &'a [String],
-        classification: InferenceClassification,
-        always: bool,
-    ) -> BoxFuture<'a, Result<(), EngineError>> {
-        Box::pin(async move {
-            engine(
-                self.classify_items(mailbox, remote_ids, classification, always)
-                    .await,
-            )
-        })
-    }
-
     fn wait_for_changes<'a>(
         &'a self,
         mailbox: Option<&'a str>,
@@ -1431,38 +1386,7 @@ impl ExchangeMailEngine for EwsEngine {
             Ok(Some(changed))
         })
     }
-
-    fn fetch_headers<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        remote_id: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
-        Box::pin(async move { engine(EwsEngine::fetch_headers(self, mailbox, remote_id).await) })
-    }
-
-    fn move_to_mailbox<'a>(
-        &'a self,
-        from_mailbox: Option<&'a str>,
-        remote_id: &'a str,
-        to_mailbox: Option<&'a str>,
-        to_folder: &'a str,
-        flags: nail_api::domain::Flags,
-    ) -> BoxFuture<'a, Result<String, EngineError>> {
-        Box::pin(async move {
-            engine(
-                EwsEngine::move_to_mailbox(
-                    self,
-                    from_mailbox,
-                    remote_id,
-                    to_mailbox,
-                    to_folder,
-                    flags,
-                )
-                .await,
-            )
-        })
-    }
-}
+);
 
 impl ExchangeSettingsEngine for EwsEngine {
     fn categories(&self) -> BoxFuture<'_, Result<Vec<RemoteCategory>, EngineError>> {
@@ -1568,46 +1492,26 @@ impl ExchangeDirectoryEngine for EwsEngine {
     }
 }
 
-impl ExchangePimEngine for EwsEngine {
-    fn pim_folders<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<Vec<ExchangePimFolder>, EngineError>> {
-        Box::pin(async move { engine(self.pim_folder_list(mailbox).await) })
-    }
+nail_exchange::exchange_pim_engine!(EwsEngine {
+    pim_folders: pim_folder_list,
+    pim_changes: pim_delta,
+    write_pim: pim_write,
+    respond_to_meeting: answer_meeting,
+});
 
-    fn pim_changes<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        folder: &'a ExchangePimFolder,
-        cursor: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<PimDeltaOutcome, EngineError>> {
-        Box::pin(async move { engine(self.pim_delta(mailbox, folder, cursor).await) })
-    }
-
-    fn write_pim<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        write: &'a ExchangePimWrite,
-    ) -> BoxFuture<'a, Result<ExchangePimWriteOutcome, EngineError>> {
-        Box::pin(async move { engine(self.pim_write(mailbox, write).await) })
-    }
-
-    fn respond_to_meeting<'a>(
-        &'a self,
-        mailbox: Option<&'a str>,
-        event_remote_id: &'a str,
+impl EwsEngine {
+    /// Answers a meeting through the meeting API (no iMIP).
+    async fn answer_meeting(
+        &self,
+        mailbox: Option<&str>,
+        event_remote_id: &str,
         response: InvitationResponse,
-        comment: Option<&'a str>,
+        comment: Option<&str>,
         send: bool,
-    ) -> BoxFuture<'a, Result<(), EngineError>> {
-        Box::pin(async move {
-            engine(
-                self.client
-                    .respond_to_meeting(mailbox, event_remote_id, response, comment, send)
-                    .await,
-            )
-        })
+    ) -> Result<(), EwsError> {
+        self.client
+            .respond_to_meeting(mailbox, event_remote_id, response, comment, send)
+            .await
     }
 }
 
@@ -1658,40 +1562,23 @@ mod tests {
     }
 
     fn account(auth: AuthConfig, engine: EngineKind) -> AccountConfig {
-        let mut account = AccountConfig {
-            id: "work".into(),
-            name: "Work".into(),
-            email: "ada@corp.example".into(),
-            enabled: true,
-            incoming: IncomingServer::Exchange {
+        AccountConfig::new(
+            "work",
+            "Work",
+            "ada@corp.example",
+            IncomingServer::Exchange {
                 server: ServerEndpoint {
-                    host: String::new(),
-                    port: 443,
+                    host: "mail.corp.example".into(),
+                    port: nail_net::ports::HTTPS,
                     tls: TlsMode::Implicit,
-                    auth: AuthConfig::None,
+                    auth,
                 },
-                options: ExchangeOptions::default(),
+                options: ExchangeOptions {
+                    streaming: Some(false),
+                    ..ExchangeOptions::for_engine(engine)
+                },
             },
-            outgoing: None,
-            identities: vec![],
-            sync: nail_api::accounts::SyncPolicy::default(),
-            save_sent_copy: None,
-            authserv_ids: Vec::new(),
-            sieve: None,
-        };
-        account.incoming = IncomingServer::Exchange {
-            server: ServerEndpoint {
-                host: "mail.corp.example".into(),
-                port: 443,
-                tls: TlsMode::Implicit,
-                auth,
-            },
-            options: ExchangeOptions {
-                streaming: Some(false),
-                ..ExchangeOptions::for_engine(engine)
-            },
-        };
-        account
+        )
     }
 
     #[test]

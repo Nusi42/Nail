@@ -118,12 +118,8 @@ pub fn fixed_offset_zone(offset_secs: i32) -> Option<Tz> {
 }
 
 fn parse_offset(text: &str) -> Option<i32> {
-    let text = text.trim();
-    let (sign, rest) = match text.as_bytes().first()? {
-        b'-' => (-1, &text[1..]),
-        b'+' => (1, &text[1..]),
-        _ => (1, text),
-    };
+    let (sign, rest) = nail_util::ical_text::split_sign(text.trim())?;
+    let sign = i32::try_from(sign).ok()?;
     let digits: String = rest.chars().filter(|c| *c != ':').collect();
     if !(digits.len() == 4 || digits.len() == 6) || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -338,12 +334,13 @@ impl VTimezone {
             return None;
         }
         let first = NaiveDate::from_ymd_opt(year - 1, 1, 1)?.and_hms_opt(12, 0, 0)?;
-        let samples: Vec<(NaiveDateTime, i32)> = (0..(3 * 365))
-            .filter_map(|day| {
-                let at = first + Duration::days(day);
-                Some((at, Self::offset_in(&transitions, at)?))
-            })
-            .collect();
+        let samples: Vec<(NaiveDateTime, i32)> =
+            (0..(3 * i64::from(nail_util::time::DAYS_PER_YEAR)))
+                .filter_map(|day| {
+                    let at = first + Duration::days(day);
+                    Some((at, Self::offset_in(&transitions, at)?))
+                })
+                .collect();
         let quick: Vec<(NaiveDateTime, i32)> = samples.iter().step_by(91).copied().collect();
         let offset_of =
             |tz: Tz, at: NaiveDateTime| tz.offset_from_utc_datetime(&at).fix().local_minus_utc();
@@ -514,22 +511,13 @@ mod tests {
     use super::*;
     use crate::content::parse;
 
-    const OUTLOOK_BERLIN: &str = "BEGIN:VCALENDAR\r\n\
+    const OUTLOOK_BERLIN: &str = concat!(
+        "BEGIN:VCALENDAR\r\n\
 BEGIN:VTIMEZONE\r\n\
 TZID:Mitteleuropäische Zeit\r\n\
-BEGIN:STANDARD\r\n\
-DTSTART:16011028T030000\r\n\
-RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n\
-TZOFFSETFROM:+0200\r\n\
-TZOFFSETTO:+0100\r\n\
-END:STANDARD\r\n\
-BEGIN:DAYLIGHT\r\n\
-DTSTART:16010325T020000\r\n\
-RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n\
-TZOFFSETFROM:+0100\r\n\
-TZOFFSETTO:+0200\r\n\
-END:DAYLIGHT\r\n\
-END:VTIMEZONE\r\n\
+",
+        crate::cet_rules!(),
+        "END:VTIMEZONE\r\n\
 BEGIN:VTIMEZONE\r\n\
 TZID:Custom Mars Time\r\n\
 BEGIN:STANDARD\r\n\
@@ -550,7 +538,8 @@ BEGIN:VTIMEZONE\r\n\
 TZID:Customized Time Zone\r\n\
 X-MICROSOFT-CDO-TZID:4\r\n\
 END:VTIMEZONE\r\n\
-END:VCALENDAR\r\n";
+END:VCALENDAR\r\n"
+    );
 
     fn at(text: &str) -> NaiveDateTime {
         time::parse_local(text).unwrap()

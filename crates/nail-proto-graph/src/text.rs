@@ -14,16 +14,7 @@ pub fn text_to_html(text: &str) -> String {
         if i > 0 {
             out.push_str("<br>");
         }
-        for c in line.chars() {
-            match c {
-                '&' => out.push_str("&amp;"),
-                '<' => out.push_str("&lt;"),
-                '>' => out.push_str("&gt;"),
-                '"' => out.push_str("&quot;"),
-                '\'' => out.push_str("&#39;"),
-                _ => out.push(c),
-            }
-        }
+        out.push_str(&nail_util::markup::escape_html(line));
     }
     out.push_str("</div></body></html>");
     out

@@ -4,6 +4,8 @@
 use nail_api::ErrorCode;
 use nail_api::engine::EngineError;
 use nail_api::localized::LocalizedMessage;
+use nail_net::api::RetryClass;
+use nail_net::status as http_status;
 
 use crate::wire::ErrorBody;
 
@@ -92,41 +94,30 @@ pub enum GmailError {
     },
 }
 
+nail_net::client_error_classes!(GmailError, "gmail", Token, retry by class,
+    codes {
+        Self::InsufficientScope => ErrorCode::AuthFailed,
+        Self::RateLimited(_) => ErrorCode::RateLimited,
+        Self::Unavailable { .. } => ErrorCode::Unavailable,
+        Self::Rejected(_) | Self::ColorRejected(_) => ErrorCode::Rejected,
+        Self::Conflict(_) => ErrorCode::Conflict,
+        Self::Config(_) => ErrorCode::Config,
+        Self::MoveUnsupported { .. } => ErrorCode::Unsupported,
+    }
+    texts {
+        Self::InsufficientScope => LocalizedMessage::new("gmail-insufficient-scope"),
+        Self::RateLimited(_) => LocalizedMessage::new("gmail-rate-limited"),
+        Self::Unavailable { .. } => LocalizedMessage::new("gmail-unavailable"),
+        Self::Rejected(_) => LocalizedMessage::new("gmail-rejected"),
+        Self::ColorRejected(_) => LocalizedMessage::new("gmail-label-color-rejected"),
+        Self::Conflict(_) => LocalizedMessage::new("gmail-label-conflict"),
+        Self::Config(_) => LocalizedMessage::new("gmail-config"),
+        Self::Token(e) => nail_net::http::token_text(e, "gmail-token"),
+        Self::MoveUnsupported { .. } => LocalizedMessage::new("gmail-move-unsupported"),
+    }
+);
+
 impl GmailError {
-    /// The error class for the UI.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::Network(_) | Self::Timeout | Self::Protocol(_) => ErrorCode::Network,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::AuthFailed | Self::InsufficientScope => ErrorCode::AuthFailed,
-            Self::Forbidden(_) => ErrorCode::Forbidden,
-            Self::NotFound(_) => ErrorCode::NotFound,
-            Self::RateLimited(_) => ErrorCode::RateLimited,
-            Self::Unavailable { .. } => ErrorCode::Unavailable,
-            Self::Status { status, .. } if *status >= 500 => ErrorCode::Unavailable,
-            Self::Rejected(_) | Self::ColorRejected(_) | Self::Status { .. } => ErrorCode::Rejected,
-            Self::Conflict(_) => ErrorCode::Conflict,
-            Self::TooLarge(_) => ErrorCode::TooLarge,
-            Self::InsecureUrl(_) | Self::Config(_) => ErrorCode::Config,
-            Self::Token(e) => e.code,
-            Self::MoveUnsupported { .. } => ErrorCode::Unsupported,
-        }
-    }
-
-    /// Whether trying again later may succeed.
-    pub fn retryable(&self) -> bool {
-        match self {
-            Self::Network(_)
-            | Self::Timeout
-            | Self::RateLimited(_)
-            | Self::Unavailable { .. }
-            | Self::Protocol(_) => true,
-            Self::Status { status, .. } => *status >= 500,
-            Self::Token(e) => e.retryable,
-            _ => false,
-        }
-    }
-
     /// How long the server asked to wait, in seconds.
     pub fn retry_after_secs(&self) -> Option<u32> {
         match self {
@@ -134,37 +125,6 @@ impl GmailError {
             Self::Unavailable { retry_after, .. } => *retry_after,
             Self::Token(e) => e.retry_after_secs,
             _ => None,
-        }
-    }
-
-    /// The user-facing text.
-    pub fn localized(&self) -> LocalizedMessage {
-        match self {
-            Self::Network(_) => LocalizedMessage::new("gmail-network"),
-            Self::Timeout => LocalizedMessage::new("gmail-timeout"),
-            Self::Tls(_) => LocalizedMessage::new("gmail-tls"),
-            Self::AuthFailed => LocalizedMessage::new("gmail-auth-failed"),
-            Self::InsufficientScope => LocalizedMessage::new("gmail-insufficient-scope"),
-            Self::Forbidden(_) => LocalizedMessage::new("gmail-forbidden"),
-            Self::NotFound(_) => LocalizedMessage::new("gmail-missing"),
-            Self::RateLimited(_) => LocalizedMessage::new("gmail-rate-limited"),
-            Self::Unavailable { .. } => LocalizedMessage::new("gmail-unavailable"),
-            Self::Rejected(_) => LocalizedMessage::new("gmail-rejected"),
-            Self::ColorRejected(_) => LocalizedMessage::new("gmail-label-color-rejected"),
-            Self::Conflict(_) => LocalizedMessage::new("gmail-label-conflict"),
-            Self::TooLarge(_) => LocalizedMessage::new("gmail-too-large"),
-            Self::Status { status, .. } => {
-                LocalizedMessage::new("gmail-http-status").arg("status", i64::from(*status))
-            }
-            Self::Protocol(_) => LocalizedMessage::new("gmail-bad-response"),
-            Self::InsecureUrl(_) => LocalizedMessage::new("gmail-insecure-url"),
-            Self::Config(_) => LocalizedMessage::new("gmail-config"),
-            Self::Token(e) => e
-                .localized
-                .as_deref()
-                .cloned()
-                .unwrap_or_else(|| LocalizedMessage::new("gmail-token")),
-            Self::MoveUnsupported { .. } => LocalizedMessage::new("gmail-move-unsupported"),
         }
     }
 
@@ -196,7 +156,7 @@ impl GmailError {
     /// limits and server errors), given its status and error reason.
     pub(crate) fn is_transient(status: u16, reason: Option<&str>) -> bool {
         match status {
-            429 | 500 | 502 | 503 | 504 => true,
+            http_status::TOO_MANY_REQUESTS | 500 | 502 | 503 | http_status::GATEWAY_TIMEOUT => true,
             403 => reason.is_some_and(is_rate_reason),
             _ => false,
         }
@@ -211,10 +171,7 @@ impl GmailError {
         what: &str,
     ) -> Self {
         let reason = body.and_then(ErrorBody::reason);
-        let message = body
-            .map(|b| b.error.message.clone())
-            .filter(|m| !m.is_empty())
-            .map_or_else(|| what.to_owned(), |m| format!("{what}: {m}"));
+        let message = nail_net::http::answer_text(what, body.map(|b| b.error.message.as_str()));
         match status {
             401 => Self::AuthFailed,
             403 if reason.is_some_and(is_rate_reason) => Self::RateLimited(retry_after),
@@ -225,10 +182,10 @@ impl GmailError {
                 Self::InsufficientScope
             }
             403 => Self::Forbidden(message),
-            404 | 410 => Self::NotFound(message),
-            409 => Self::Conflict(message),
-            413 => Self::TooLarge(message),
-            429 => Self::RateLimited(retry_after),
+            404 | http_status::GONE => Self::NotFound(message),
+            http_status::CONFLICT => Self::Conflict(message),
+            http_status::CONTENT_TOO_LARGE => Self::TooLarge(message),
+            http_status::TOO_MANY_REQUESTS => Self::RateLimited(retry_after),
             400 if message.to_ascii_lowercase().contains("color") => Self::ColorRejected(message),
             400 if message.to_ascii_lowercase().contains("too large")
                 || message.to_ascii_lowercase().contains("size exceeds") =>
@@ -252,26 +209,33 @@ fn is_rate_reason(reason: &str) -> bool {
     )
 }
 
-impl From<GmailError> for EngineError {
-    fn from(err: GmailError) -> Self {
-        if let GmailError::Token(inner) = err {
-            return *inner;
-        }
-        let localized = err.localized();
-        let retry_after = err.retry_after_secs();
-        let mut out = if err.retryable() {
-            EngineError::temporary(err.code(), err.to_string())
+nail_net::transport_errors!(GmailError);
+
+nail_net::api_failure!(GmailError, "Gmail", GmailError::retry_class, ErrorBody);
+
+nail_net::engine_error_from!(GmailError, Token, GmailError::retry_after_secs);
+
+impl GmailError {
+    /// Quota / rate limits are retried for any call (not processed);
+    /// server errors only for idempotent ones.
+    fn retry_class(status: u16, body: &[u8]) -> RetryClass {
+        let error_body: Option<ErrorBody> = serde_json::from_slice(body).ok();
+        let reason = error_body.as_ref().and_then(ErrorBody::reason);
+        if !Self::is_transient(status, reason) {
+            RetryClass::Never
+        } else if status == http_status::TOO_MANY_REQUESTS || status == 403 {
+            RetryClass::Always
         } else {
-            EngineError::permanent(err.code(), err.to_string())
-        };
-        out.retry_after_secs = retry_after;
-        out.with_localized(localized)
+            RetryClass::IfIdempotent
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    nail_testkit::error_texts_test!(GmailError, "core-gmail.ftl");
 
     fn all() -> Vec<GmailError> {
         vec![
@@ -415,32 +379,5 @@ mod tests {
         .into();
         assert_eq!(moved.code, ErrorCode::Unsupported);
         assert!(!moved.retryable);
-    }
-
-    #[test]
-    fn every_error_has_a_listed_message() {
-        for error in all() {
-            let id = error.localized().id;
-            assert!(GmailError::MESSAGE_IDS.contains(&id.as_str()), "{id}");
-            assert_ne!(error.to_string().len(), 0);
-        }
-    }
-
-    #[test]
-    fn catalog_has_every_message() {
-        let catalog = include_str!("../../../locales/en/core-gmail.ftl");
-        for id in GmailError::MESSAGE_IDS {
-            assert!(
-                catalog.lines().any(|l| l.starts_with(&format!("{id} ="))),
-                "{id} missing in locales/en/core-gmail.ftl"
-            );
-        }
-        let german = include_str!("../../../locales/de/core-gmail.ftl");
-        assert!(
-            german
-                .lines()
-                .all(|l| l.trim().is_empty() || l.starts_with('#')),
-            "locales/de/core-gmail.ftl stays empty for now"
-        );
     }
 }

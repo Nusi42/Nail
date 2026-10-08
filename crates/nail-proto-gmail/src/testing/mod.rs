@@ -14,15 +14,9 @@
 //! recorded-style fixtures ([`fixtures`]).
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::MutexGuard;
 
-use axum::Router;
-use axum::body::{Body, Bytes};
-use axum::extract::{DefaultBodyLimit, State as AxumState};
-use axum::http::{HeaderMap, Method, Response, StatusCode, Uri};
-use serde_json::Value;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
+use nail_testkit_net::api_mock::{ApiRequest, MockApi, MockReply, MockService};
 
 pub mod fixtures;
 mod mailbox;
@@ -33,36 +27,9 @@ use server::{Quota, State, dispatch};
 
 use crate::wire::Label;
 
-/// An error the server answers instead of handling a request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InjectedError {
-    /// Only this method (`GET`, `POST`, …); `None` = any.
-    pub method: Option<String>,
-    /// Only requests whose path + query contain this; `None` = any.
-    pub path_contains: Option<String>,
-    /// HTTP status.
-    pub status: u16,
-    /// The JSON body.
-    pub body: Value,
-    /// A `Retry-After` header.
-    pub retry_after: Option<String>,
-    /// How many requests it answers before it is gone.
-    pub times: u32,
-}
+nail_testkit_net::injected_error!(server::generic_error);
 
 impl InjectedError {
-    /// An error with `status` and a body like Gmail's.
-    pub fn status(status: u16) -> Self {
-        Self {
-            method: None,
-            path_contains: None,
-            status,
-            body: server::generic_error(status),
-            retry_after: None,
-            times: 1,
-        }
-    }
-
     /// `429 rateLimitExceeded` (recorded), optionally with `Retry-After`.
     pub fn rate_limit(retry_after_secs: Option<u32>) -> Self {
         Self {
@@ -103,35 +70,6 @@ impl InjectedError {
             ..Self::status(404)
         }
     }
-
-    /// Only for requests whose path + query contain `text`.
-    #[must_use]
-    pub fn on(mut self, text: &str) -> Self {
-        self.path_contains = Some(text.to_owned());
-        self
-    }
-
-    /// Only for `method`.
-    #[must_use]
-    pub fn method(mut self, method: &str) -> Self {
-        self.method = Some(method.to_ascii_uppercase());
-        self
-    }
-
-    /// Answers `n` requests (at least 1).
-    #[must_use]
-    pub fn times(mut self, n: u32) -> Self {
-        self.times = n.max(1);
-        self
-    }
-
-    fn matches(&self, method: &str, target: &str) -> bool {
-        self.method.as_deref().is_none_or(|m| m == method)
-            && self
-                .path_contains
-                .as_deref()
-                .is_none_or(|p| target.contains(p))
-    }
 }
 
 /// A request the server saw.
@@ -149,52 +87,30 @@ pub struct RecordedRequest {
     pub token: Option<String>,
 }
 
-type Shared = Arc<Mutex<State>>;
-
 /// A running mock Gmail server; stops when dropped.
 #[derive(Debug)]
 pub struct MockGmailServer {
-    addr: SocketAddr,
-    state: Shared,
-    task: JoinHandle<()>,
+    api: MockApi<State>,
 }
 
-async fn handle(
-    AxumState(state): AxumState<Shared>,
-    method: Method,
-    uri: Uri,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response<Body> {
-    let headers: Vec<(String, String)> = headers
-        .iter()
-        .filter_map(|(n, v)| {
-            v.to_str()
-                .ok()
-                .map(|v| (n.as_str().to_owned(), v.to_owned()))
-        })
-        .collect();
-    let reply = {
-        let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
+/// Largest request body (an 80 MB upload).
+const BODY_LIMIT: usize = 80 * 1024 * 1024;
+
+impl MockService for State {
+    fn answer(&mut self, request: &ApiRequest) -> MockReply {
         dispatch(
-            &mut state,
-            method.as_str(),
-            uri.path(),
-            uri.query().unwrap_or_default(),
-            &headers,
-            &body,
+            self,
+            &request.method,
+            &request.path,
+            &request.query,
+            &request.headers,
+            &request.body,
             false,
         )
-    };
-    let mut response = Response::builder()
-        .status(StatusCode::from_u16(reply.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR));
-    for (name, value) in reply.headers {
-        response = response.header(name, value);
     }
-    response
-        .body(Body::from(reply.body))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
 }
+
+nail_testkit_net::api_mock_controls!(MockGmailServer);
 
 impl MockGmailServer {
     /// Starts a server on a free loopback port with an empty mailbox for
@@ -218,47 +134,30 @@ impl MockGmailServer {
 
     /// Starts a server with `mailbox`.
     pub async fn start_with(mailbox: Mailbox) -> std::io::Result<Self> {
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let addr = listener.local_addr()?;
-        let state: Shared = Arc::new(Mutex::new(State {
+        let state = State {
             mailbox,
             token: None,
             errors: Vec::new(),
             requests: Vec::new(),
             quota: None,
-        }));
-        let app = Router::new()
-            .fallback(handle)
-            .layer(DefaultBodyLimit::max(80 * 1024 * 1024))
-            .with_state(state.clone());
-        let task = tokio::spawn(async move {
-            drop(axum::serve(listener, app).await);
-        });
-        Ok(Self { addr, state, task })
+        };
+        Ok(Self {
+            api: MockApi::start(state, BODY_LIMIT).await?,
+        })
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.api.lock()
     }
 
     /// The server's address (127.0.0.1 and its port).
     pub fn addr(&self) -> SocketAddr {
-        self.addr
+        self.api.addr()
     }
 
     /// The API base URL (`http://127.0.0.1:<port>/gmail/v1/users/me`).
     pub fn api_base(&self) -> String {
-        crate::api_base("127.0.0.1", self.addr.port(), false)
-    }
-
-    /// Accepts only this bearer token (`None` = any non-empty one).
-    pub fn set_token(&self, token: Option<&str>) {
-        self.lock().token = token.map(str::to_owned);
-    }
-
-    /// Answers the next matching request(s) with `error`.
-    pub fn inject(&self, error: InjectedError) {
-        self.lock().errors.push(error);
+        crate::api_base("127.0.0.1", self.api.addr().port(), false)
     }
 
     /// Limits the requests to `units` of Gmail's quota units from now on;
@@ -269,16 +168,6 @@ impl MockGmailServer {
             used: 0,
             retry_after: retry_after_secs,
         });
-    }
-
-    /// The requests so far.
-    pub fn requests(&self) -> Vec<RecordedRequest> {
-        self.lock().requests.clone()
-    }
-
-    /// Forgets the request log.
-    pub fn clear_requests(&self) {
-        self.lock().requests.clear();
     }
 
     /// Runs `f` on the mailbox (any server-side change or inspection).
@@ -375,11 +264,5 @@ impl MockGmailServer {
     /// Messages received through `messages.send`, as sent.
     pub fn sent(&self) -> Vec<Vec<u8>> {
         self.with_mailbox(|m| m.sent().to_vec())
-    }
-}
-
-impl Drop for MockGmailServer {
-    fn drop(&mut self) {
-        self.task.abort();
     }
 }

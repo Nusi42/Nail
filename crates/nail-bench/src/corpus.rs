@@ -39,7 +39,7 @@ use crate::num::{f64_of, f64_of_len, i64_of, usize_of};
 pub const CORPUS_END: i64 = 1_790_791_200;
 
 /// How far back the corpus reaches (seconds; three years).
-pub const CORPUS_SPAN: i64 = 3 * 365 * 24 * 3600;
+pub const CORPUS_SPAN: i64 = 3 * (nail_util::time::DAYS_PER_YEAR as i64) * 24 * 3600;
 
 /// The account's own address (the `To` of received mail, the `From` of
 /// sent mail).

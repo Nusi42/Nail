@@ -185,6 +185,15 @@ pub fn parse_ical_value(text: &str) -> Option<IcalValue> {
     }
 }
 
+/// The instant (RFC 3339, UTC) of an iCalendar `DATE-TIME` (its wall time
+/// taken as UTC) or `DATE` (midnight UTC) value.
+pub fn value_instant(value: &str) -> Option<String> {
+    match parse_ical_value(value)? {
+        IcalValue::DateTime { local, .. } => Some(format_instant(local.and_utc())),
+        IcalValue::Date(d) => Some(format_instant(d.and_time(NaiveTime::MIN).and_utc())),
+    }
+}
+
 /// `20261001`.
 pub fn ical_date(date: NaiveDate) -> String {
     date.format("%Y%m%d").to_string()
@@ -201,49 +210,11 @@ pub fn ical_utc(instant: DateTime<Utc>) -> String {
 }
 
 /// Parses an RFC 5545 `DURATION` (`-PT15M`, `P1DT2H`, `P2W`) into
-/// seconds. Days count 24 hours here; [`parse_duration_parts`] keeps
-/// nominal days apart.
-pub fn parse_duration(text: &str) -> Option<i64> {
-    let (days, seconds) = parse_duration_parts(text)?;
-    days.checked_mul(86_400)?.checked_add(seconds)
-}
-
-/// Parses a `DURATION` into nominal days (weeks × 7 + days) and exact
-/// seconds, both with the sign applied.
-pub fn parse_duration_parts(text: &str) -> Option<(i64, i64)> {
-    let text = text.trim();
-    let (sign, rest) = match text.as_bytes().first()? {
-        b'-' => (-1, &text[1..]),
-        b'+' => (1, &text[1..]),
-        _ => (1, text),
-    };
-    let rest = rest.strip_prefix(['P', 'p'])?;
-    let mut days = 0i64;
-    let mut seconds = 0i64;
-    let mut number = String::new();
-    let mut in_time = false;
-    let mut any = false;
-    for c in rest.chars() {
-        match c.to_ascii_uppercase() {
-            '0'..='9' => number.push(c),
-            'T' if number.is_empty() => in_time = true,
-            unit => {
-                let n: i64 = number.parse().ok()?;
-                number.clear();
-                any = true;
-                match (unit, in_time) {
-                    ('W', false) => days = days.checked_add(n.checked_mul(7)?)?,
-                    ('D', false) => days = days.checked_add(n)?,
-                    ('H', true) => seconds = seconds.checked_add(n.checked_mul(3600)?)?,
-                    ('M', true) => seconds = seconds.checked_add(n.checked_mul(60)?)?,
-                    ('S', true) => seconds = seconds.checked_add(n)?,
-                    _ => return None,
-                }
-            }
-        }
-    }
-    (any && number.is_empty()).then_some((sign * days, sign * seconds))
-}
+/// seconds (days count 24 hours), or into nominal days (weeks × 7 + days)
+/// and exact seconds, both with the sign applied (one definition in
+/// `nail_util::ical_text`, shared with the DAV client and the mock DAV
+/// server).
+pub use nail_util::ical_text::{parse_duration, parse_duration_parts};
 
 /// Writes seconds as a `DURATION` (`-PT15M`, `P1D`, `P1DT2H30M`, `PT0S`);
 /// whole weeks as `P1W`.

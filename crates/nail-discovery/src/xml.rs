@@ -1,13 +1,14 @@
 //! A tiny element tree over [`quick_xml`] events, enough for autoconfig and
-//! Autodiscover documents. Namespaces are ignored (local names only); no
-//! DTDs or custom entities are expanded.
+//! Autodiscover documents (also Exchange's Autodiscover POX answers in
+//! `nail-exchange`). Namespaces are ignored (local names only); no DTDs or
+//! custom entities are expanded; names are matched ASCII case-insensitively.
 
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
 /// An XML element.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Element {
+pub struct Element {
     /// Local name.
     pub name: String,
     /// Attributes (local name, value).
@@ -19,35 +20,32 @@ pub(crate) struct Element {
 }
 
 /// Largest document accepted.
-pub(crate) const MAX_DOCUMENT: usize = 1024 * 1024;
+pub const MAX_DOCUMENT: usize = 1024 * 1024;
 
 impl Element {
     /// The first child named `name` (ASCII case-insensitive).
-    pub(crate) fn child(&self, name: &str) -> Option<&Element> {
+    pub fn child(&self, name: &str) -> Option<&Element> {
         self.children
             .iter()
             .find(|c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// Every child named `name`.
-    pub(crate) fn children_named<'a>(
-        &'a self,
-        name: &'a str,
-    ) -> impl Iterator<Item = &'a Element> + 'a {
+    pub fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Element> + 'a {
         self.children
             .iter()
             .filter(move |c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// The trimmed, non-empty text of the first child named `name`.
-    pub(crate) fn text_of(&self, name: &str) -> Option<String> {
+    pub fn text_of(&self, name: &str) -> Option<String> {
         self.child(name)
             .map(|c| c.text.trim().to_owned())
             .filter(|t| !t.is_empty())
     }
 
     /// An attribute value.
-    pub(crate) fn attr(&self, name: &str) -> Option<&str> {
+    pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case(name))
@@ -81,8 +79,16 @@ fn start(e: &quick_xml::events::BytesStart<'_>) -> Element {
     }
 }
 
+/// Escapes text for an element or attribute value.
+pub fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 /// Parses a document and returns its root element.
-pub(crate) fn parse(xml: &[u8]) -> Result<Element, String> {
+pub fn parse(xml: &[u8]) -> Result<Element, String> {
     if xml.len() > MAX_DOCUMENT {
         return Err("document too large".to_owned());
     }

@@ -4,6 +4,9 @@
 //! conflicts, collection management, authentication, TLS and failures.
 #![cfg(test)]
 
+mod common;
+
+use common::{event, url};
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -37,18 +40,6 @@ async fn server() -> MockDavServer {
     MockDavServer::start(MockDavConfig::default())
         .await
         .unwrap()
-}
-
-fn url(server: &MockDavServer, path: &str) -> Url {
-    Url::parse(&server.url(path)).unwrap()
-}
-
-fn event(uid: &str, start: &str, end: &str, extra: &str) -> String {
-    format!(
-        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail//Test//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\n\
-         DTSTAMP:20261001T000000Z\r\nDTSTART:{start}\r\nDTEND:{end}\r\n{extra}SUMMARY:{uid}\r\n\
-         END:VEVENT\r\nEND:VCALENDAR\r\n"
-    )
 }
 
 fn todo(uid: &str) -> String {

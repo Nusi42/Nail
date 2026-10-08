@@ -100,6 +100,23 @@ pub fn tags_for_categories<C: CategoryLike>(categories: &[String], master: &[C])
     out
 }
 
+/// A message's categories after adding the tags `add` and removing the
+/// tags `remove` (case-insensitive like Outlook; the existing spelling and
+/// order stay; blank tags and tags also being removed are not added).
+pub fn merge(current: &[String], add: &[String], remove: &[String]) -> Vec<String> {
+    let removed = |name: &str| remove.iter().any(|r| r.eq_ignore_ascii_case(name));
+    let mut out: Vec<String> = current.iter().filter(|c| !removed(c)).cloned().collect();
+    for tag in add {
+        if !tag.trim().is_empty()
+            && !removed(tag)
+            && !out.iter().any(|c| c.eq_ignore_ascii_case(tag))
+        {
+            out.push(tag.clone());
+        }
+    }
+    out
+}
+
 /// A message's tags after renaming category `old` to `new`; `None` when
 /// the message does not have the tag (nothing to queue).
 pub fn retag(tags: &[String], old: &str, new: &str) -> Option<Vec<String>> {
@@ -167,6 +184,21 @@ pub fn nearest_color(hex: &str) -> CategoryColor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merging_keeps_spelling_and_order() {
+        let s = |v: &[&str]| v.iter().map(|t| (*t).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            merge(
+                &s(&["Blue", "Work"]),
+                &s(&["work", "New", " "]),
+                &s(&["blue"])
+            ),
+            s(&["Work", "New"])
+        );
+        assert_eq!(merge(&[], &s(&["a"]), &s(&["A"])), Vec::<String>::new());
+        assert_eq!(merge(&s(&["x"]), &[], &[]), s(&["x"]));
+    }
 
     fn master() -> Vec<RemoteCategory> {
         vec![

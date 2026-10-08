@@ -126,12 +126,7 @@ pub(crate) fn raw_headers(raw: &[u8]) -> Vec<(String, String)> {
     out
 }
 
-fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    headers
-        .iter()
-        .find(|(n, _)| n.eq_ignore_ascii_case(name))
-        .map(|(_, v)| v.as_str())
-}
+use nail_util::named::first as header_value;
 
 fn strip_id(id: &str) -> String {
     id.trim()

@@ -24,8 +24,8 @@ use crate::import::{FolderLocation, MailFolderSource, RawMessage};
 use crate::job::JobContext;
 use crate::message::push_keyword;
 
-/// Deepest nested tree read.
-pub const MAX_DEPTH: usize = 32;
+/// Deepest folder tree read.
+pub use crate::folder::MAX_FOLDER_DEPTH as MAX_DEPTH;
 
 /// The info separators read (`:2,` and the Windows variants).
 pub const INFO_SEPARATORS: [char; 3] = [':', ';', '!'];

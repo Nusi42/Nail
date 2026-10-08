@@ -283,27 +283,22 @@ fn recipient_info(cert: &Cert, cek: &[u8], cipher: ContentCipher) -> Result<Reci
 /// shared secret.
 fn ephemeral_agreement(recipient: &PublicKey) -> Result<(Vec<u8>, Zeroizing<Vec<u8>>)> {
     use p256::elliptic_curve::sec1::ToEncodedPoint;
+    // The same agreement on each curve's types.
+    macro_rules! agree {
+        ($curve:ident, $peer:expr) => {{
+            let secret = $curve::ecdh::EphemeralSecret::random(&mut OsRng);
+            let point = secret
+                .public_key()
+                .to_encoded_point(false)
+                .as_bytes()
+                .to_vec();
+            let shared = secret.diffie_hellman($peer);
+            Ok((point, Zeroizing::new(shared.raw_secret_bytes().to_vec())))
+        }};
+    }
     match recipient {
-        PublicKey::P256(peer) => {
-            let secret = p256::ecdh::EphemeralSecret::random(&mut OsRng);
-            let point = secret
-                .public_key()
-                .to_encoded_point(false)
-                .as_bytes()
-                .to_vec();
-            let shared = secret.diffie_hellman(peer);
-            Ok((point, Zeroizing::new(shared.raw_secret_bytes().to_vec())))
-        }
-        PublicKey::P384(peer) => {
-            let secret = p384::ecdh::EphemeralSecret::random(&mut OsRng);
-            let point = secret
-                .public_key()
-                .to_encoded_point(false)
-                .as_bytes()
-                .to_vec();
-            let shared = secret.diffie_hellman(peer);
-            Ok((point, Zeroizing::new(shared.raw_secret_bytes().to_vec())))
-        }
+        PublicKey::P256(peer) => agree!(p256, peer),
+        PublicKey::P384(peer) => agree!(p384, peer),
         PublicKey::Rsa(_) => Err(Error::Crypto("not an EC key".into())),
     }
 }

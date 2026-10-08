@@ -24,7 +24,7 @@ use crate::updater::Updater;
 use crate::updater_tauri::TauriBackend;
 
 /// The label of the main window.
-pub const MAIN_WINDOW: &str = "main";
+pub use nail_api::windows::MAIN_WINDOW;
 
 /// What the shell keeps for its lifetime (managed by Tauri).
 pub struct ShellState {
@@ -67,12 +67,12 @@ pub fn closes_to_tray(setting: bool, has_tray: bool, quitting: bool) -> bool {
 /// (`NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY`,
 /// `NAIL_MAPI_PIPE`, `NAIL_TEST_BACKGROUND_WINDOWS`): only with the `test-overrides` feature, which the e2e
 /// desktop build enables and installer builds never do.
-pub const TEST_OVERRIDES: bool = cfg!(feature = "test-overrides");
+pub const HONOURS_TEST_ENV: bool = cfg!(feature = "test-overrides");
 
 /// A test-only environment variable: its value in `test-overrides` builds,
 /// else `None` (a set variable is logged and ignored).
 pub fn test_env(name: &str) -> Option<String> {
-    test_env_with(TEST_OVERRIDES, name, |n| std::env::var(n).ok())
+    test_env_with(HONOURS_TEST_ENV, name, |n| std::env::var(n).ok())
 }
 
 fn test_env_with(
@@ -453,7 +453,7 @@ mod tests {
         // environment is ignored too.
         #[cfg(not(feature = "test-overrides"))]
         {
-            const { assert!(!TEST_OVERRIDES) };
+            const { assert!(!HONOURS_TEST_ENV) };
             // PATH is always set, and still ignored.
             assert!(std::env::var_os("PATH").is_some());
             assert_eq!(test_env("PATH"), None);

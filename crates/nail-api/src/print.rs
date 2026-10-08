@@ -127,14 +127,11 @@ fn day_number(date: &str) -> Option<i64> {
     if d < 1 || d > *max_day {
         return None;
     }
-    // Howard Hinnant's days_from_civil.
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    Some(era * 146_097 + doe - 719_468)
+    Some(nail_util::time::days_from_civil(
+        y,
+        u32::try_from(m).ok()?,
+        u32::try_from(d).ok()?,
+    ))
 }
 
 impl PrintTarget {

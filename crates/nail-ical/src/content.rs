@@ -896,6 +896,23 @@ pub fn decode_charset(bytes: &[u8], charset: Option<&str>) -> String {
     text.into_owned()
 }
 
+impl ContentIssue {
+    /// The import issue of this problem in a document of `component`s
+    /// (`VCALENDAR`, `VCARD`): an unclosed component, else a malformed line.
+    pub(crate) fn to_issue(&self, component: &str) -> crate::issues::Issue {
+        use crate::issues::{Issue, IssueKind};
+        match self.kind {
+            ContentIssueKind::Unclosed => Issue::new(
+                IssueKind::Unclosed {
+                    component: component.into(),
+                },
+                Some(self.line),
+            ),
+            _ => Issue::new(IssueKind::MalformedLine, Some(self.line)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

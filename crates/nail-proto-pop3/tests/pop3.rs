@@ -10,10 +10,9 @@ use nail_proto_pop3::{
     LeavePolicy, Pop3Client, Pop3Config, Pop3Credentials, Pop3Error, TlsTrust, plan_deletions,
     plan_downloads, test_login, vanished,
 };
-use nail_testkit_net::{MockPop3Config, MockPop3Server, MockTls, Pop3Message};
-
-const USER: &str = "sam@nail.example";
-const PASS: &str = "secret";
+use nail_testkit_net::{
+    MOCK_PASSWORD as PASS, MOCK_USER as USER, MockPop3Config, MockPop3Server, MockTls, Pop3Message,
+};
 
 fn maildrop() -> Vec<Pop3Message> {
     vec![
@@ -383,14 +382,19 @@ async fn connection_faults() {
 #[tokio::test]
 async fn full_sync_round_with_policy() {
     let server = server(MockPop3Config::default()).await;
-    let now = 1_800_000_000;
+    let now = nail_util::time::FIXTURE_LATER;
     let mut known: HashMap<String, i64> = HashMap::new();
+    // A logged-in session and the server's listing.
+    let connect = async || {
+        let mut client = logged_in(&plain(&server), &Pop3Credentials::password(USER, PASS))
+            .await
+            .unwrap();
+        let listing = client.messages().await.unwrap();
+        (client, listing)
+    };
 
     // First round: download everything, keep it on the server.
-    let mut client = logged_in(&plain(&server), &Pop3Credentials::password(USER, PASS))
-        .await
-        .unwrap();
-    let listing = client.messages().await.unwrap();
+    let (mut client, listing) = connect().await;
     let keys: HashSet<String> = known.keys().cloned().collect();
     for m in plan_downloads(&listing, &keys) {
         let data = client.retr(m.number).await.unwrap();
@@ -410,10 +414,7 @@ async fn full_sync_round_with_policy() {
     assert_eq!(server.uids(), ["uid-3"]);
 
     // Second round: only the new message is downloaded; old UIDs vanished.
-    let mut client = logged_in(&plain(&server), &Pop3Credentials::password(USER, PASS))
-        .await
-        .unwrap();
-    let listing = client.messages().await.unwrap();
+    let (client, listing) = connect().await;
     let keys: HashSet<String> = known.keys().cloned().collect();
     let new: Vec<_> = plan_downloads(&listing, &keys)
         .into_iter()

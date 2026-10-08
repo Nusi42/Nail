@@ -57,24 +57,31 @@ async fn sign_in_then_send_with_xoauth2_and_refresh() {
     let user = oauth.user_of(&signed_in.access_token).unwrap();
     smtp.add_oauth_token(&user, &signed_in.access_token);
 
-    let auth = SmtpAuth::from_config(
-        &"work".into(),
-        &AuthConfig::OAuth2 {
-            username: user.clone(),
-            provider: "google".into(),
-            secret: None,
-            mechanism: None,
-        },
-        store.clone(),
-        tokens.clone(),
-    )
-    .unwrap();
-    let config = SmtpConfig::new("127.0.0.1")
-        .with_port(smtp.port())
-        .with_tls(TlsMode::Plaintext)
-        .with_timeout(Duration::from_secs(5));
+    // The account's OAuth2 login over the token store, and a plaintext
+    // connection to a local server.
+    let auth = || {
+        SmtpAuth::from_config(
+            &"work".into(),
+            &AuthConfig::OAuth2 {
+                username: user.clone(),
+                provider: "google".into(),
+                secret: None,
+                mechanism: None,
+            },
+            store.clone(),
+            tokens.clone(),
+        )
+        .unwrap()
+    };
+    let local = |port: u16| {
+        SmtpConfig::new("127.0.0.1")
+            .with_port(port)
+            .with_tls(TlsMode::Plaintext)
+            .with_timeout(Duration::from_secs(5))
+    };
+    let config = local(smtp.port());
     let transport: Arc<dyn OutgoingTransport> =
-        Arc::new(SmtpTransport::new(config, auth, SendOptions::default()));
+        Arc::new(SmtpTransport::new(config, auth(), SendOptions::default()));
     let envelope = Envelope {
         from: user.clone(),
         to: vec!["bob@example.org".into()],
@@ -91,10 +98,7 @@ async fn sign_in_then_send_with_xoauth2_and_refresh() {
         .await
         .unwrap();
     let issued_before = oauth.issued().len();
-    let refreshed_config = SmtpConfig::new("127.0.0.1")
-        .with_port(smtp2.port())
-        .with_tls(TlsMode::Plaintext)
-        .with_timeout(Duration::from_secs(5));
+    let refreshed_config = local(smtp2.port());
     // Pre-register the token the next refresh will issue (the mock numbers
     // its tokens sequentially: `access-<n>`).
     let current: usize = signed_in
@@ -104,19 +108,7 @@ async fn sign_in_then_send_with_xoauth2_and_refresh() {
         .parse()
         .unwrap();
     smtp2.add_oauth_token(&user, &format!("access-{}", current + 1));
-    let auth = SmtpAuth::from_config(
-        &"work".into(),
-        &AuthConfig::OAuth2 {
-            username: user.clone(),
-            provider: "google".into(),
-            secret: None,
-            mechanism: None,
-        },
-        store,
-        tokens,
-    )
-    .unwrap();
-    SmtpTransport::new(refreshed_config, auth, SendOptions::default())
+    SmtpTransport::new(refreshed_config, auth(), SendOptions::default())
         .send_message(&envelope, b"Subject: two\r\n\r\nsecond\r\n")
         .await
         .unwrap();

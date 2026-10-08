@@ -170,178 +170,14 @@ fn visit(commands: &[Command], f: &mut impl FnMut(&str, &[Argument])) {
 // ---------------------------------------------------------------------------
 // Lexer
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Tok {
-    Ident(String),
-    Tag(String),
-    Number(u64),
-    Str(String),
-    Comment(String),
-    Punct(char),
-}
+// The tokens are shared with the mock ManageSieve server's script check.
+use nail_util::sieve_lex::Tok;
 
 fn lex(script: &str) -> Result<Vec<(usize, Tok)>, ParseError> {
-    let chars: Vec<char> = script.chars().collect();
-    let mut out = Vec::new();
-    let mut line = 1usize;
-    let mut i = 0usize;
-    let fail = |line: usize, message: &str| ParseError {
-        line,
-        message: message.to_owned(),
-    };
-    while i < chars.len() {
-        let c = chars[i];
-        match c {
-            '\n' => {
-                line += 1;
-                i += 1;
-            }
-            c if c.is_whitespace() => i += 1,
-            '#' => {
-                let start = i + 1;
-                while i < chars.len() && chars[i] != '\n' {
-                    i += 1;
-                }
-                let text: String = chars[start..i].iter().collect();
-                out.push((line, Tok::Comment(text.trim().to_owned())));
-            }
-            '/' if chars.get(i + 1) == Some(&'*') => {
-                let start = line;
-                i += 2;
-                loop {
-                    if i + 1 >= chars.len() {
-                        return Err(fail(start, "unterminated comment"));
-                    }
-                    if chars[i] == '*' && chars[i + 1] == '/' {
-                        i += 2;
-                        break;
-                    }
-                    if chars[i] == '\n' {
-                        line += 1;
-                    }
-                    i += 1;
-                }
-            }
-            '"' => {
-                let start = line;
-                i += 1;
-                let mut s = String::new();
-                loop {
-                    match chars.get(i) {
-                        None => return Err(fail(start, "unterminated string")),
-                        Some('"') => {
-                            i += 1;
-                            break;
-                        }
-                        Some('\\') => {
-                            let Some(next) = chars.get(i + 1) else {
-                                return Err(fail(start, "unterminated string"));
-                            };
-                            s.push(*next);
-                            i += 2;
-                        }
-                        Some('\r') if chars.get(i + 1) == Some(&'\n') => i += 1,
-                        Some(ch) => {
-                            if *ch == '\n' {
-                                line += 1;
-                            }
-                            s.push(*ch);
-                            i += 1;
-                        }
-                    }
-                }
-                out.push((start, Tok::Str(s)));
-            }
-            '[' | ']' | '(' | ')' | '{' | '}' | ',' | ';' => {
-                out.push((line, Tok::Punct(c)));
-                i += 1;
-            }
-            ':' => {
-                let start = i;
-                i += 1;
-                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                    i += 1;
-                }
-                if i == start + 1 || chars[start + 1].is_ascii_digit() {
-                    return Err(fail(line, "invalid tag"));
-                }
-                let tag: String = chars[start..i].iter().collect();
-                out.push((line, Tok::Tag(tag.to_ascii_lowercase())));
-            }
-            c if c.is_ascii_digit() => {
-                let start = i;
-                while i < chars.len() && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                let digits: String = chars[start..i].iter().collect();
-                let mut n: u64 = digits.parse().map_err(|_| fail(line, "number too large"))?;
-                let factor = match chars.get(i) {
-                    Some('K' | 'k') => 1 << 10,
-                    Some('M' | 'm') => 1 << 20,
-                    Some('G' | 'g') => 1 << 30,
-                    _ => 1,
-                };
-                if factor > 1 {
-                    i += 1;
-                    n = n
-                        .checked_mul(factor)
-                        .ok_or_else(|| fail(line, "number too large"))?;
-                }
-                out.push((line, Tok::Number(n)));
-            }
-            c if c.is_ascii_alphabetic() || c == '_' => {
-                let start = i;
-                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                    i += 1;
-                }
-                let word = chars[start..i]
-                    .iter()
-                    .collect::<String>()
-                    .to_ascii_lowercase();
-                if word == "text" && chars.get(i) == Some(&':') {
-                    let start_line = line;
-                    i += 1;
-                    // Rest of the line: whitespace, optionally a comment.
-                    while i < chars.len() && chars[i] != '\n' {
-                        if chars[i] == '#' {
-                            while i < chars.len() && chars[i] != '\n' {
-                                i += 1;
-                            }
-                            break;
-                        }
-                        if !chars[i].is_whitespace() {
-                            return Err(fail(line, "text after \"text:\""));
-                        }
-                        i += 1;
-                    }
-                    let mut s = String::new();
-                    loop {
-                        if i >= chars.len() {
-                            return Err(fail(start_line, "unterminated multi-line string"));
-                        }
-                        i += 1; // the '\n'
-                        line += 1;
-                        let begin = i;
-                        while i < chars.len() && chars[i] != '\n' {
-                            i += 1;
-                        }
-                        let text: String = chars[begin..i].iter().collect();
-                        let text = text.strip_suffix('\r').unwrap_or(&text);
-                        if text == "." {
-                            break;
-                        }
-                        s.push_str(text.strip_prefix('.').unwrap_or(text));
-                        s.push('\n');
-                    }
-                    out.push((start_line, Tok::Str(s)));
-                } else {
-                    out.push((line, Tok::Ident(word)));
-                }
-            }
-            other => return Err(fail(line, &format!("unexpected character {other:?}"))),
-        }
-    }
-    Ok(out)
+    nail_util::sieve_lex::lex(script).map_err(|e| ParseError {
+        line: e.line,
+        message: e.message,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +190,7 @@ struct Parser {
 }
 
 /// Deepest nesting of blocks and tests accepted (servers limit it too).
-const MAX_DEPTH: usize = 64;
+const MAX_BLOCK_DEPTH: usize = 64;
 
 /// Parses a script.
 pub fn parse(script: &str) -> Result<Script, ParseError> {
@@ -440,7 +276,7 @@ impl Parser {
             Some(Tok::Punct(';')) => None,
             Some(Tok::Punct('{')) => {
                 self.depth += 1;
-                if self.depth > MAX_DEPTH {
+                if self.depth > MAX_BLOCK_DEPTH {
                     return self.fail("nesting too deep");
                 }
                 let block = self.commands(true)?;
@@ -522,7 +358,7 @@ impl Parser {
 
     fn test(&mut self) -> Result<Test, ParseError> {
         self.depth += 1;
-        if self.depth > MAX_DEPTH {
+        if self.depth > MAX_BLOCK_DEPTH {
             return self.fail("nesting too deep");
         }
         self.skip_comments();

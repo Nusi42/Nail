@@ -114,6 +114,21 @@ pub struct AppArgs {
 }
 
 impl AppArgs {
+    /// The arguments of a run on these directories (`seed`: demo data),
+    /// everything else default (tests and harnesses).
+    pub fn in_dirs(
+        data_dir: &std::path::Path,
+        config_dir: &std::path::Path,
+        seed: Option<&str>,
+    ) -> Self {
+        Self {
+            data_dir: Some(data_dir.into()),
+            config_dir: Some(config_dir.into()),
+            seed: seed.map(str::to_owned),
+            ..Self::default()
+        }
+    }
+
     /// The service options these arguments describe, with the platform
     /// defaults for missing directories (a seeded run: `temp`, see
     /// [`Self::demo_dir`]).
@@ -789,6 +804,20 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// A data and a config directory for one test.
+    fn test_dirs() -> (tempfile::TempDir, tempfile::TempDir) {
+        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap())
+    }
+
+    /// The service of a run on the test's directories.
+    fn open_in(
+        data: &tempfile::TempDir,
+        config: &tempfile::TempDir,
+        seed: Option<&str>,
+    ) -> Service {
+        open_service(&AppArgs::in_dirs(data.path(), config.path(), seed)).unwrap()
+    }
+
     #[test]
     fn event_channel_name() {
         assert_eq!(EVENT_CHANNEL, "nail://event");
@@ -926,15 +955,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_mcp_server_starts_with_the_app() {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: None,
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let (data, config) = test_dirs();
+        let service = open_in(&data, &config, None);
         let running = start_mcp(&service, data.path()).await.unwrap();
         assert!(nail_core::mcp_endpoint_path(data.path()).exists());
         let (response, _) = call(&service, Request::GetMcpServerInfo).await;
@@ -951,15 +973,8 @@ mod tests {
     /// the new one when they change.
     #[tokio::test]
     async fn the_mcp_server_follows_its_port_setting() {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let (data, config) = test_dirs();
+        let service = open_in(&data, &config, Some("demo"));
         let free = std::net::TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
@@ -1006,15 +1021,8 @@ mod tests {
     /// M2c: OS notifications show the core's texts in the app's language.
     #[test]
     fn notification_texts_are_rendered() {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let (data, config) = test_dirs();
+        let service = open_in(&data, &config, Some("demo"));
         let notification = nail_api::triage::MailNotification {
             id: "n".into(),
             tag: "t".into(),
@@ -1043,15 +1051,8 @@ mod tests {
     /// never learned about missed mail or config changes.
     #[tokio::test]
     async fn a_lagging_forwarder_resyncs_the_webview() {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let (data, config) = test_dirs();
+        let service = open_in(&data, &config, Some("demo"));
         let events = service.subscribe();
         // Overflow the receiver before the forwarder reads anything.
         for _ in 0..nail_core::EVENT_CAPACITY + 10 {
@@ -1106,15 +1107,8 @@ mod tests {
         assert_eq!(none.body().len(), 0);
         assert_eq!(none.headers()["x-content-type-options"], "nosniff");
 
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let (data, config) = test_dirs();
+        let service = open_in(&data, &config, Some("demo"));
         let proxy = service.remote_proxy().unwrap();
         // A forged token: 404, inert headers, no body.
         let forged = proxy_response(Some(&proxy), "/forged.token").await;
@@ -1137,16 +1131,9 @@ mod tests {
 
     #[tokio::test]
     async fn call_answers_and_resends_config_errors() {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
+        let (data, config) = test_dirs();
         std::fs::write(config.path().join("theme.kdl"), "theme \"x\" {\n").unwrap();
-        let args = AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..AppArgs::default()
-        };
-        let service = open_service(&args).unwrap();
+        let service = open_in(&data, &config, Some("demo"));
 
         let (response, events) = call(&service, Request::ListAccounts).await;
         let Response::Accounts { accounts } = response else {

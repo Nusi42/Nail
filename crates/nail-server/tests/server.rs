@@ -5,7 +5,6 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
-use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request as HttpRequest, StatusCode, header};
@@ -23,7 +22,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tower::ServiceExt;
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+use nail_testkit::TEST_TIMEOUT as TIMEOUT;
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 

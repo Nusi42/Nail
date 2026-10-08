@@ -727,6 +727,23 @@ mod tests {
 
     use std::sync::Arc;
 
+    /// The plaintext of enveloped data `der` for `cert`, decrypted with the
+    /// CNG `key` (panics unless decrypted).
+    fn decrypted(der: &[u8], cert: &Cert, key: &WindowsKey) -> Vec<u8> {
+        let (_, d) = enveloped::decrypt(
+            der,
+            &[DecryptionKey {
+                cert,
+                key: Some(key),
+            }],
+        )
+        .unwrap();
+        let Decryption::Decrypted { plaintext, .. } = d else {
+            panic!("not decrypted")
+        };
+        plaintext.to_vec()
+    }
+
     fn pfx(name: &str) -> Arc<StoreHandle> {
         Arc::new(StoreHandle::from_pfx(&fixture(name), P12_PASSWORD).unwrap())
     }
@@ -801,31 +818,12 @@ mod tests {
 
         for cipher in [ContentCipher::Aes256Gcm, ContentCipher::Aes128Cbc] {
             let der = enveloped::encrypt(b"for CNG", std::slice::from_ref(&alice), cipher).unwrap();
-            let (_, d) = enveloped::decrypt(
-                &der,
-                &[DecryptionKey {
-                    cert: &alice,
-                    key: Some(&key),
-                }],
-            )
-            .unwrap();
-            let Decryption::Decrypted { plaintext, .. } = d else {
-                panic!("not decrypted")
-            };
-            assert_eq!(plaintext.as_slice(), b"for CNG");
+            assert_eq!(decrypted(&der, &alice, &key), b"for CNG");
         }
         // RSA-OAEP from OpenSSL.
         let message = fixture("alice-enc-oaep.eml");
         let body = crate::mime::decode_body(&message).unwrap();
-        let (_, d) = enveloped::decrypt(
-            &body,
-            &[DecryptionKey {
-                cert: &alice,
-                key: Some(&key),
-            }],
-        )
-        .unwrap();
-        assert!(matches!(d, Decryption::Decrypted { .. }));
+        decrypted(&body, &alice, &key);
     }
 
     #[test]
@@ -860,18 +858,7 @@ mod tests {
             ContentCipher::Aes256Gcm,
         )
         .unwrap();
-        let (_, d) = enveloped::decrypt(
-            &der,
-            &[DecryptionKey {
-                cert: &bob,
-                key: Some(&key),
-            }],
-        )
-        .unwrap();
-        let Decryption::Decrypted { plaintext, .. } = d else {
-            panic!("not decrypted")
-        };
-        assert_eq!(plaintext.as_slice(), b"for CNG ECDH");
+        assert_eq!(decrypted(&der, &bob, &key), b"for CNG ECDH");
     }
 
     #[test]

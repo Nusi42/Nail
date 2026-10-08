@@ -81,8 +81,20 @@ fn max_reach(alarms: &[Alarm]) -> Duration {
         })
         .max()
         .map_or_else(Duration::zero, |s| {
-            Duration::seconds(i64::try_from(s).unwrap_or(i64::MAX / 2_000))
+            // Unreadable: half the longest duration (dates stay computable).
+            Duration::seconds(i64::try_from(s).unwrap_or(Duration::MAX.num_seconds() / 2))
         })
+}
+
+/// The alarms of an event: the series' and every override's.
+pub fn all_alarms(event: &CalendarEvent) -> Vec<Alarm> {
+    event
+        .fields
+        .alarms
+        .iter()
+        .chain(event.overrides.iter().flat_map(|o| o.fields.alarms.iter()))
+        .cloned()
+        .collect()
 }
 
 /// The firings of an event's alarms in `[from, to)`, ordered by time.
@@ -94,13 +106,7 @@ pub fn event_firings(
     to: DateTime<Utc>,
     viewer: Tz,
 ) -> Vec<AlarmFiring> {
-    let all_alarms: Vec<Alarm> = event
-        .fields
-        .alarms
-        .iter()
-        .chain(event.overrides.iter().flat_map(|o| o.fields.alarms.iter()))
-        .cloned()
-        .collect();
+    let all_alarms = all_alarms(event);
     if all_alarms.is_empty() {
         return Vec::new();
     }

@@ -68,26 +68,13 @@ pub enum Pop3Error {
     Io(String),
 }
 
-impl Pop3Error {
-    /// The API error code for this error.
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            Self::AuthFailed(_) => ErrorCode::AuthFailed,
-            Self::AuthUnsupported(_) | Self::StartTlsUnavailable | Self::Unsupported(_) => {
-                ErrorCode::Unsupported
-            }
-            Self::InvalidServerName(_) => ErrorCode::Config,
-            Self::Tls(_) => ErrorCode::Tls,
-            Self::Refused { .. } => ErrorCode::Rejected,
-            Self::Connect { .. }
-            | Self::Temporary(_)
-            | Self::ConnectionLost
-            | Self::Timeout(_)
-            | Self::Protocol(_)
-            | Self::Io(_) => ErrorCode::Network,
-        }
-    }
+nail_net::line_client_codes!(Pop3Error {
+    Self::InvalidServerName(_) => ErrorCode::Config,
+    Self::Refused { .. } => ErrorCode::Rejected,
+    Self::Temporary(_) | Self::ConnectionLost | Self::Io(_) => ErrorCode::Network,
+});
 
+impl Pop3Error {
     /// Whether retrying later (after reconnecting) may succeed.
     pub fn is_retryable(&self) -> bool {
         matches!(
@@ -117,15 +104,15 @@ impl From<Pop3Error> for EngineError {
 
 impl From<io::Error> for Pop3Error {
     fn from(err: io::Error) -> Self {
-        match err.kind() {
-            io::ErrorKind::UnexpectedEof
-            | io::ErrorKind::ConnectionReset
-            | io::ErrorKind::ConnectionAborted
-            | io::ErrorKind::BrokenPipe => Self::ConnectionLost,
-            _ => Self::Io(err.to_string()),
+        if nail_net::io::is_disconnect(&err) {
+            Self::ConnectionLost
+        } else {
+            Self::Io(err.to_string())
         }
     }
 }
+
+nail_net::tls_errors!(Pop3Error);
 
 /// Classifies an `-ERR` answer to a login attempt using the RFC 2449 /
 /// RFC 3206 response codes.

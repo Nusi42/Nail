@@ -12,6 +12,7 @@ use std::fmt;
 use std::net::SocketAddr;
 
 use nail_api::engine::BoxFuture;
+use nail_net::http;
 use url::Url;
 
 /// Largest response body read (Autodiscover answers are a few KB).
@@ -93,13 +94,6 @@ impl HttpRequest {
         }
     }
 
-    /// Adds a header.
-    #[must_use]
-    pub fn header(mut self, name: &str, value: impl Into<String>) -> Self {
-        self.headers.push((name.to_owned(), value.into()));
-        self
-    }
-
     /// The request with `Authorization` set (replacing an earlier one).
     #[must_use]
     pub fn with_authorization(mut self, value: String) -> Self {
@@ -139,32 +133,45 @@ impl HttpResponse {
         }
     }
 
-    /// Adds a header.
-    #[must_use]
-    pub fn header(mut self, name: &str, value: impl Into<String>) -> Self {
-        self.headers.push((name.to_owned(), value.into()));
-        self
-    }
-
     /// The first value of a header (case-insensitive name).
     pub fn header_value(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        nail_util::named::first(&self.headers, name)
     }
 
     /// Every value of a header.
     pub fn headers_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
-        self.headers
-            .iter()
-            .filter(move |(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        nail_util::named::all(&self.headers, name)
     }
 
     /// Whether this is a redirect (`301`, `302`, `303`, `307`, `308`).
     pub fn is_redirect(&self) -> bool {
-        matches!(self.status, 301 | 302 | 303 | 307 | 308)
+        http::is_redirect(self.status)
+    }
+}
+
+/// A request or response with headers (name, value) and the builder that
+/// adds one.
+pub trait WithHeaders: Sized {
+    /// The headers.
+    fn header_list(&mut self) -> &mut Vec<(String, String)>;
+
+    /// Adds a header.
+    #[must_use]
+    fn header(mut self, name: &str, value: impl Into<String>) -> Self {
+        http::push_header(self.header_list(), name, value);
+        self
+    }
+}
+
+impl WithHeaders for HttpRequest {
+    fn header_list(&mut self) -> &mut Vec<(String, String)> {
+        &mut self.headers
+    }
+}
+
+impl WithHeaders for HttpResponse {
+    fn header_list(&mut self) -> &mut Vec<(String, String)> {
+        &mut self.headers
     }
 }
 
@@ -232,34 +239,8 @@ impl ReqwestHttp {
     }
 
     fn target(&self, url: &Url) -> (Url, Option<String>) {
-        match self.route_all_to {
-            None => (url.clone(), None),
-            Some(addr) => {
-                let mut routed = url.clone();
-                let host = match url.port() {
-                    Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()),
-                    None => url.host_str().unwrap_or_default().to_owned(),
-                };
-                // The setters only fail for URLs that cannot have a host.
-                let _ = routed.set_scheme("http");
-                let _ = routed.set_ip_host(addr.ip());
-                let _ = routed.set_port(Some(addr.port()));
-                (routed, Some(host))
-            }
-        }
+        http::route(url, self.route_all_to, true)
     }
-}
-
-fn is_tls_error(error: &reqwest::Error) -> bool {
-    let mut source: Option<&dyn std::error::Error> = Some(error);
-    while let Some(e) = source {
-        let text = e.to_string().to_ascii_lowercase();
-        if text.contains("certificate") || text.contains("tls") || text.contains("handshake") {
-            return true;
-        }
-        source = e.source();
-    }
-    false
 }
 
 impl ExchangeHttp for ReqwestHttp {
@@ -284,41 +265,21 @@ impl ExchangeHttp for ReqwestHttp {
                 builder = builder.body(request.body.clone());
             }
             let response = builder.send().await.map_err(|e| HttpError {
-                tls: is_tls_error(&e),
+                tls: http::mentions_tls(&http::error_chain(&e)),
                 message: e.without_url().to_string(),
             })?;
             let status = response.status().as_u16();
-            let headers = response
-                .headers()
-                .iter()
-                .filter_map(|(name, value)| {
-                    value
-                        .to_str()
-                        .ok()
-                        .map(|v| (name.as_str().to_owned(), v.to_owned()))
-                })
-                .collect();
+            let headers = http::header_pairs(response.headers());
             let mut response = response;
-            if response
-                .content_length()
-                .is_some_and(|l| l > MAX_BODY as u64)
-            {
-                return Err(HttpError::network("response too large"));
-            }
             // Read in chunks and stop at the limit: Autodiscover talks to
             // untrusted hosts, and a chunked answer without an end must not
             // fill the memory (ADR 0078).
-            let mut body = Vec::new();
-            while let Some(chunk) = response
-                .chunk()
+            let body = http::read_limited(&mut response, MAX_BODY)
                 .await
-                .map_err(|e| HttpError::network(e.without_url().to_string()))?
-            {
-                if body.len() + chunk.len() > MAX_BODY {
-                    return Err(HttpError::network("response too large"));
-                }
-                body.extend_from_slice(&chunk);
-            }
+                .map_err(|e| match e {
+                    http::BodyError::TooLarge => HttpError::network("response too large"),
+                    http::BodyError::Transport(e) => HttpError::network(e.to_string()),
+                })?;
             Ok(HttpResponse {
                 status,
                 headers,
@@ -367,7 +328,7 @@ mod tests {
             .with_authorization("Basic c2VjcmV0".into());
         let text = format!("{request:?}");
         assert!(!text.contains("c2VjcmV0"), "{text}");
-        assert!(text.contains("<redacted>"));
+        assert!(text.contains(nail_util::redact::REDACTED));
         assert!(request.has_authorization());
         let replaced = request.with_authorization("Negotiate abc".into());
         assert_eq!(

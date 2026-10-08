@@ -141,11 +141,7 @@ pub fn is_loopback_url(text: &str) -> bool {
     let Some(host) = url.host_str() else {
         return false;
     };
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback())
+    nail_api::exchange::is_loopback_host(host)
 }
 
 /// What the shell knows about itself before reading the registry.

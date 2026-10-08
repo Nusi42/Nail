@@ -6,6 +6,9 @@
 //! `SCHEDULE-STATUS`.
 #![cfg(test)]
 
+mod common;
+
+use common::{event, url};
 use nail_api::ErrorCode;
 use nail_api::engine::FreeBusyProvider;
 use nail_api::ids::PimSourceId;
@@ -20,7 +23,6 @@ use nail_dav::{
 };
 use nail_testkit_net::{MockDavConfig, MockDavServer, MockDavUser};
 use pretty_assertions::assert_eq;
-use url::Url;
 
 fn login(user: &str) -> DavClient {
     DavClient::new(DavAuth::Basic {
@@ -44,18 +46,6 @@ async fn server(auto_schedule: bool) -> MockDavServer {
     .unwrap()
 }
 
-fn url(server: &MockDavServer, path: &str) -> Url {
-    Url::parse(&server.url(path)).unwrap()
-}
-
-fn event(uid: &str, start: &str, end: &str, extra: &str) -> String {
-    format!(
-        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail//Test//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\n\
-         DTSTAMP:20261001T000000Z\r\nDTSTART:{start}\r\nDTEND:{end}\r\n{extra}SUMMARY:{uid}\r\n\
-         END:VEVENT\r\nEND:VCALENDAR\r\n"
-    )
-}
-
 fn period(start: &str, end: &str, kind: BusyKind) -> BusyPeriod {
     BusyPeriod {
         start: start.into(),
@@ -75,6 +65,26 @@ fn query(attendees: &[&str]) -> FreeBusyQuery {
 
 // ---------------------------------------------------------------------------
 // Discovery
+
+/// Writes `text` as `name` into the personal calendar: stored as sent
+/// (an `ETag`, no changed data) and not scheduled by the server.
+async fn write_unscheduled(client: &DavClient, server: &MockDavServer, name: &str, text: &str) {
+    let target = url(
+        server,
+        &format!("{}{name}", server.calendar_path("personal")),
+    );
+    let outcome = write_object(client, &target, CollectionKind::Calendar, text, None)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        WriteOutcome::Written {
+            etag: Some(_),
+            data: None
+        }
+    ));
+    assert_eq!(server.scheduled_messages().len(), 0);
+}
 
 #[tokio::test]
 async fn discovers_inbox_outbox_addresses_and_capabilities() {
@@ -650,42 +660,14 @@ async fn client_scheduling_and_servers_that_do_not_schedule() {
         &["ada@example.org".to_owned()],
         true
     ));
-    let target = url(
-        &server,
-        &format!("{}meet-1.ics", server.calendar_path("personal")),
-    );
-    let outcome = write_object(&ada, &target, CollectionKind::Calendar, &text, None)
-        .await
-        .unwrap();
-    assert!(matches!(
-        outcome,
-        WriteOutcome::Written {
-            etag: Some(_),
-            data: None
-        }
-    ));
-    assert_eq!(server.scheduled_messages().len(), 0);
+    write_unscheduled(&ada, &server, "meet-1.ics", &text).await;
     assert_eq!(server.inbox("bob").len(), 0);
 
     // With auto-scheduling off, plain meetings are not delivered either.
     server.set_auto_schedule(false);
     assert!(!server.auto_schedule());
-    let other = url(
-        &server,
-        &format!("{}meet-2.ics", server.calendar_path("personal")),
-    );
     let plain = meeting("").replace("meet-1", "meet-2");
-    let outcome = write_object(&ada, &other, CollectionKind::Calendar, &plain, None)
-        .await
-        .unwrap();
-    assert!(matches!(
-        outcome,
-        WriteOutcome::Written {
-            etag: Some(_),
-            data: None
-        }
-    ));
-    assert_eq!(server.scheduled_messages().len(), 0);
+    write_unscheduled(&ada, &server, "meet-2.ics", &plain).await;
     let info = discover_scheduling(&ada, &url(&server, &server.principal_path()), None)
         .await
         .unwrap();

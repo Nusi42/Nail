@@ -75,18 +75,7 @@ impl ReqwestFetch {
     }
 
     fn target(&self, url: &Url) -> (Url, Option<String>) {
-        match self.route_all_to {
-            None => (url.clone(), None),
-            Some(addr) => {
-                let mut routed = url.clone();
-                let host = url.host_str().unwrap_or_default().to_owned();
-                // Both setters only fail for URLs that cannot have a host.
-                let _ = routed.set_scheme("http");
-                let _ = routed.set_ip_host(addr.ip());
-                let _ = routed.set_port(Some(addr.port()));
-                (routed, Some(host))
-            }
-        }
+        nail_net::http::route(url, self.route_all_to, false)
     }
 
     async fn run(
@@ -98,7 +87,7 @@ impl ReqwestFetch {
             Some(host) => request.header(reqwest::header::HOST, host),
             None => request,
         };
-        let response = request
+        let mut response = request
             .send()
             .await
             .map_err(|e| NetError(e.without_url().to_string()))?;
@@ -108,23 +97,16 @@ impl ReqwestFetch {
             .get(reqwest::header::LOCATION)
             .and_then(|l| l.to_str().ok())
             .map(str::to_owned);
-        if response
-            .content_length()
-            .is_some_and(|l| l > MAX_DOCUMENT as u64)
-        {
-            return Err(NetError("response too large".to_owned()));
-        }
-        let body = response
-            .bytes()
+        let body = nail_net::http::read_limited(&mut response, MAX_DOCUMENT)
             .await
-            .map_err(|e| NetError(e.without_url().to_string()))?;
-        if body.len() > MAX_DOCUMENT {
-            return Err(NetError("response too large".to_owned()));
-        }
+            .map_err(|e| match e {
+                nail_net::http::BodyError::TooLarge => NetError("response too large".to_owned()),
+                nail_net::http::BodyError::Transport(t) => NetError(t.to_string()),
+            })?;
         Ok(HttpReply {
             status,
             location,
-            body: body.to_vec(),
+            body,
         })
     }
 }

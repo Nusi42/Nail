@@ -7,8 +7,6 @@
 //! root) or `action` (the 1-based index of an action in `then`), like
 //! `nail-sieve`'s reasons.
 
-use nail_api::localized::LocalizedMessage;
-
 // --- Autodiscover ----------------------------------------------------------
 
 /// The address is not an email address.
@@ -190,51 +188,19 @@ pub const ALL: &[&str] = &[
     PIM_FLOATING,
 ];
 
-/// A reason about the condition at `position` (child indexes from the
-/// root).
-pub fn at_condition(id: &str, position: &[u32]) -> LocalizedMessage {
-    LocalizedMessage::new(id).arg("position", position_text(position))
-}
-
-/// A reason about the action at 0-based `index`.
-pub fn at_action(id: &str, index: usize) -> LocalizedMessage {
-    LocalizedMessage::new(id).arg("action", index + 1)
-}
-
-/// `[]` → `"1"`, `[0, 2]` → `"1.1.3"`: the root is 1, children count from 1.
-pub fn position_text(path: &[u32]) -> String {
-    std::iter::once("1".to_owned())
-        .chain(path.iter().map(|i| (i + 1).to_string()))
-        .collect::<Vec<_>>()
-        .join(".")
-}
+/// A reason about the condition at `position` / the action at a 0-based
+/// index (one definition with the other rule placements).
+pub use nail_api::sieve::{reason_at_action as at_action, reason_at_condition as at_condition};
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::localized::{MessageArg, is_message_id};
 
     #[test]
     fn ids_are_valid_and_unique() {
-        let unique: std::collections::BTreeSet<_> = ALL.iter().collect();
-        assert_eq!(unique.len(), ALL.len());
-        for id in ALL {
-            assert!(is_message_id(id), "{id}");
-            assert!(id.starts_with("exchange-"), "{id}");
-        }
-    }
-
-    #[test]
-    fn positions_count_from_one() {
-        assert_eq!(position_text(&[]), "1");
-        assert_eq!(position_text(&[0, 2]), "1.1.3");
         assert_eq!(
-            at_action(RULE_REPLY, 0).args["action"],
-            MessageArg::Number(1)
-        );
-        assert_eq!(
-            at_condition(RULE_QUERY, &[1]).args["position"],
-            MessageArg::Text("1.2".into())
+            nail_api::localized::bad_ids(ALL, &["exchange-"]),
+            Vec::<&str>::new()
         );
     }
 
@@ -245,17 +211,11 @@ mod tests {
     fn catalog_has_every_id() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales");
         let en = std::fs::read_to_string(root.join("en/core-exchange.ftl")).unwrap();
-        let defined: Vec<&str> = en
-            .lines()
-            .filter_map(|l| l.split_once(" =").map(|(id, _)| id))
-            .filter(|id| is_message_id(id))
-            .collect();
-        for id in ALL {
-            assert!(
-                defined.contains(id),
-                "{id} missing in locales/en/core-exchange.ftl"
-            );
-        }
+        assert_eq!(
+            nail_api::localized::missing_ids(&en, ALL),
+            Vec::<&str>::new(),
+            "missing in locales/en/core-exchange.ftl"
+        );
         assert!(root.join("de/core-exchange.ftl").exists());
     }
 

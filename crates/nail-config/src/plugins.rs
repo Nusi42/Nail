@@ -37,7 +37,7 @@ use crate::write_back::{EditError, LayoutEditor, NEW_LAYOUT};
 use crate::{LAYOUT_FILE, LayoutFile, parse_layout_all};
 
 /// The main window: panels go there in a layout from before the rail.
-pub const MAIN_WINDOW: &str = "main";
+pub use nail_api::windows::MAIN_WINDOW;
 
 /// The mail view's window of the default layout (M5b): panels go there
 /// when the main window hosts the views.

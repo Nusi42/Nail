@@ -3,24 +3,22 @@
 //! Routes match on method, the `Host` header (port ignored) and the path, so
 //! one server can stand in for `autoconfig.example.org`, `example.org`,
 //! `autoconfig.thunderbird.net` and `autodiscover.example.org` at once: the
-//! client under test sends every request to [`MockHttpServer::addr`] and
+//! client under test sends every request to [`Served::addr`](crate::api_mock::Served::addr) and
 //! keeps the original host name in the `Host` header. Unmatched requests get
 //! `404`. Every request is recorded.
 
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::extract::{Request, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::body::Bytes;
+use axum::extract::State;
+use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
-use tokio::net::TcpListener;
-use tokio::sync::watch;
-use tokio::task::JoinHandle;
 
 use crate::MockNetError;
+use crate::api_mock::{self, ApiRequest, Served};
+use crate::server::lock;
 
 /// A canned response.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,54 +102,33 @@ struct Inner {
     requests: Mutex<Vec<RecordedRequest>>,
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 /// A running mock HTTP server on `127.0.0.1`. Stops when dropped.
 #[derive(Debug)]
 pub struct MockHttpServer {
-    addr: SocketAddr,
+    served: Served,
     inner: Arc<Inner>,
-    shutdown: watch::Sender<bool>,
-    task: JoinHandle<()>,
+}
+
+/// The address and base URL of the server.
+impl std::ops::Deref for MockHttpServer {
+    type Target = Served;
+
+    fn deref(&self) -> &Served {
+        &self.served
+    }
 }
 
 impl MockHttpServer {
     /// Starts a server without routes on a free loopback port.
     pub async fn start() -> Result<Self, MockNetError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let addr = listener.local_addr()?;
         let inner = Arc::new(Inner::default());
         let app = Router::new()
             .fallback(handle)
             .with_state(Arc::clone(&inner));
-        let (shutdown, mut stop) = watch::channel(false);
-        let task = tokio::spawn(async move {
-            drop(
-                axum::serve(listener, app)
-                    .with_graceful_shutdown(async move {
-                        let _ = stop.changed().await;
-                    })
-                    .await,
-            );
-        });
         Ok(Self {
-            addr,
+            served: Served::start(app).await?,
             inner,
-            shutdown,
-            task,
         })
-    }
-
-    /// The listening address.
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    /// `http://127.0.0.1:<port>`.
-    pub fn base_url(&self) -> String {
-        format!("http://{}", self.addr)
     }
 
     /// Answers `GET <path>` for `host` (`None` = any host) with `response`.
@@ -187,19 +164,16 @@ impl MockHttpServer {
     }
 }
 
-impl Drop for MockHttpServer {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        self.task.abort();
-    }
-}
-
-async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
-    let method = request.method().as_str().to_owned();
+async fn handle(
+    State(inner): State<Arc<Inner>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let request = ApiRequest::new(&method, &uri, &headers, &body);
     let host = request
-        .headers()
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
+        .header("host")
         .map(|h| {
             // Strip the port (IPv6 literals keep their brackets).
             match h.rfind(':') {
@@ -209,17 +183,18 @@ async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
             .to_ascii_lowercase()
         })
         .unwrap_or_default();
-    let path = request.uri().path().to_owned();
-    let query = request.uri().query().map(str::to_owned);
-    let body = to_bytes(request.into_body(), 1024 * 1024)
-        .await
-        .map(|b| b.to_vec())
-        .unwrap_or_default();
+    let ApiRequest {
+        method,
+        path,
+        query,
+        body,
+        ..
+    } = request;
     lock(&inner.requests).push(RecordedRequest {
         method: method.clone(),
         host: host.clone(),
         path: path.clone(),
-        query,
+        query: (!query.is_empty()).then_some(query),
         body,
     });
     let matched = lock(&inner.routes)
@@ -237,26 +212,18 @@ async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
     if let Some(delay) = response.delay {
         tokio::time::sleep(delay).await;
     }
-    let mut out = Response::new(Body::from(response.body));
-    *out.status_mut() =
-        StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    if let Ok(value) = HeaderValue::from_str(&response.content_type) {
-        out.headers_mut().insert(header::CONTENT_TYPE, value);
-    }
-    for (name, value) in response.headers {
-        if let (Ok(name), Ok(value)) = (
-            header::HeaderName::from_bytes(name.as_bytes()),
-            HeaderValue::from_str(&value),
-        ) {
-            out.headers_mut().insert(name, value);
-        }
-    }
-    out
+    let content_type = ("content-type".to_owned(), response.content_type);
+    api_mock::response(
+        response.status,
+        std::iter::once(content_type).chain(response.headers),
+        response.body,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::SocketAddr;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     async fn raw(addr: SocketAddr, request: &str) -> String {

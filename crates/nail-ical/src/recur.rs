@@ -50,15 +50,7 @@ pub fn chrono_weekday(day: Weekday) -> chrono::Weekday {
 
 /// The contract's weekday for chrono's.
 pub fn api_weekday(day: chrono::Weekday) -> Weekday {
-    match day {
-        chrono::Weekday::Mon => Weekday::Mon,
-        chrono::Weekday::Tue => Weekday::Tue,
-        chrono::Weekday::Wed => Weekday::Wed,
-        chrono::Weekday::Thu => Weekday::Thu,
-        chrono::Weekday::Fri => Weekday::Fri,
-        chrono::Weekday::Sat => Weekday::Sat,
-        chrono::Weekday::Sun => Weekday::Sun,
-    }
+    Weekday::from_monday(day.num_days_from_monday())
 }
 
 fn weekday_code(day: Weekday) -> &'static str {
@@ -353,11 +345,8 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 }
 
 fn days_in_year(year: i32) -> i32 {
-    if NaiveDate::from_ymd_opt(year, 2, 29).is_some() {
-        366
-    } else {
-        365
-    }
+    // At most 366: always fits.
+    i32::try_from(nail_util::time::days_in_year(i64::from(year))).unwrap_or(366)
 }
 
 /// First day of week 1 of `year` (the first week with at least four days
@@ -520,6 +509,15 @@ impl RuleIter {
         (base, unit)
     }
 
+    /// The first day (per `WKST`) of the week the series starts in.
+    fn first_week(&self) -> Option<NaiveDate> {
+        let start_day = self.start.date();
+        let back = (7 + i64::from(start_day.weekday().num_days_from_monday())
+            - i64::from(self.week_start.num_days_from_monday()))
+            % 7;
+        start_day.checked_sub_signed(Duration::days(back))
+    }
+
     /// The index of the period that contains `target` (negative for
     /// targets before the start).
     fn period_of(&self, target: NaiveDateTime) -> Option<i64> {
@@ -529,14 +527,9 @@ impl RuleIter {
                 (i64::from(target.year()) * 12 + i64::from(target.month0()))
                     - (i64::from(self.start.year()) * 12 + i64::from(self.start.month0()))
             }
-            Frequency::Weekly => {
-                let start_day = self.start.date();
-                let back = (7 + i64::from(start_day.weekday().num_days_from_monday())
-                    - i64::from(self.week_start.num_days_from_monday()))
-                    % 7;
-                let week = start_day.checked_sub_signed(Duration::days(back))?;
-                (target.date() - week).num_days().div_euclid(7)
-            }
+            Frequency::Weekly => (target.date() - self.first_week()?)
+                .num_days()
+                .div_euclid(7),
             Frequency::Daily => (target.date() - self.start.date()).num_days(),
             Frequency::Hourly | Frequency::Minutely | Frequency::Secondly => {
                 let (base, unit) = self.sub_daily_base();
@@ -744,12 +737,8 @@ impl RuleIter {
                 self.period += 1;
             }
             Frequency::Weekly => {
-                let start_day = self.start.date();
-                let back = (7 + i64::from(start_day.weekday().num_days_from_monday())
-                    - i64::from(self.week_start.num_days_from_monday()))
-                    % 7;
-                let week = start_day
-                    .checked_sub_signed(Duration::days(back))?
+                let week = self
+                    .first_week()?
                     .checked_add_signed(Duration::days(step.checked_mul(7)?))?;
                 if week.year() > 9999 {
                     return None;

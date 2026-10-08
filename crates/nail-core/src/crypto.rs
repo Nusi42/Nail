@@ -728,10 +728,7 @@ fn smime_own(
         .store()
         .list_keys(Some(CryptoTechnology::Smime), true)?
         .into_iter()
-        .filter(|k| match fingerprint {
-            Some(fp) => k.data.fingerprint.eq_ignore_ascii_case(fp),
-            None => k.data.emails.iter().any(|e| e.eq_ignore_ascii_case(email)),
-        })
+        .filter(|k| nail_smime::keyring::is_identity_key(k, email, fingerprint))
         .max_by_key(|k| k.data.created_at))
 }
 

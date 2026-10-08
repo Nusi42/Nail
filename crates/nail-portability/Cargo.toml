@@ -12,6 +12,8 @@ publish.workspace = true
 # Licences: MIT / Apache-2.0 / Zlib only; no OpenSSL.
 [dependencies]
 nail-api.workspace = true
+# Shared helpers (percent-decoding, the secret stand-in; ADR 0171).
+nail-util.workspace = true
 # Message parsing (headers, Message-ID, dates) and iCalendar / vCard.
 nail-ical.workspace = true
 mail-parser.workspace = true

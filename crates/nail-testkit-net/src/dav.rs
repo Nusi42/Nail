@@ -71,13 +71,13 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write as _;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::Router;
-use axum::body::{Body, to_bytes};
+use axum::body::to_bytes;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::Response;
 use base64::Engine as _;
 use tokio::net::TcpListener;
@@ -90,9 +90,12 @@ use crate::stream::MockStream;
 
 mod ical;
 mod schedule;
-mod xml;
 
-use xml::{Element, escape};
+use nail_net::xml::ns::{
+    APPLE_ICAL as NS_APPLE, CALDAV as NS_CALDAV, CALENDARSERVER as NS_CS, CARDDAV as NS_CARDDAV,
+    DAV as NS_DAV,
+};
+use nail_net::xml::{self, Element, escape};
 
 /// The path the mock serves its principals under (`<user>/` follows).
 pub const PRINCIPAL_PATH: &str = "/dav/principals/";
@@ -103,11 +106,6 @@ pub const CALENDARS_PATH: &str = "/dav/calendars/";
 /// Prefix of address book homes (`<user>/` follows).
 pub const ADDRESSBOOKS_PATH: &str = "/dav/addressbooks/";
 
-const NS_DAV: &str = "DAV:";
-const NS_CALDAV: &str = "urn:ietf:params:xml:ns:caldav";
-const NS_CARDDAV: &str = "urn:ietf:params:xml:ns:carddav";
-const NS_CS: &str = "http://calendarserver.org/ns/";
-const NS_APPLE: &str = "http://apple.com/ns/ical/";
 const SYNC_TOKEN_PREFIX: &str = "http://nail.mock/sync/";
 const MAX_BODY: usize = 16 * 1024 * 1024;
 
@@ -173,7 +171,7 @@ impl MockDavUser {
     pub fn new(username: &str) -> Self {
         Self {
             username: username.to_owned(),
-            password: "secret".to_owned(),
+            password: crate::MOCK_PASSWORD.to_owned(),
             email: format!("{username}@example.org"),
             user_type: "INDIVIDUAL".to_owned(),
             display_name: username.to_owned(),
@@ -212,7 +210,7 @@ impl Default for MockDavConfig {
     fn default() -> Self {
         Self {
             username: "ada".to_owned(),
-            password: "secret".to_owned(),
+            password: crate::MOCK_PASSWORD.to_owned(),
             bearer_token: None,
             tls: false,
             well_known: true,
@@ -402,9 +400,7 @@ fn outbox_of(user: &str) -> String {
     format!("{CALENDARS_PATH}{user}/outbox/")
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
+use crate::server::lock;
 
 impl Inner {
     fn principal(&self) -> String {
@@ -891,14 +887,8 @@ fn header_text(headers: &HeaderMap, name: &str) -> Option<String> {
 }
 
 fn respond(status: u16, content_type: Option<&str>, body: String) -> Response {
-    let mut out = Response::new(Body::from(body));
-    *out.status_mut() = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    if let Some(ct) = content_type
-        && let Ok(value) = HeaderValue::from_str(ct)
-    {
-        out.headers_mut().insert(header::CONTENT_TYPE, value);
-    }
-    out
+    let content_type = content_type.map(|ct| ("content-type", ct));
+    crate::api_mock::response(status, content_type, body.into_bytes())
 }
 
 fn with_header(mut response: Response, name: &'static str, value: &str) -> Response {
@@ -1362,6 +1352,11 @@ fn parse_body(body: &str) -> Result<Option<Element>, Box<Response>> {
     xml::parse(body).map(Some).map_err(|_| Box::new(empty(400)))
 }
 
+/// A request body that must be there (else `400`).
+fn required_body(body: &str) -> Result<Element, Box<Response>> {
+    parse_body(body)?.ok_or_else(|| Box::new(empty(400)))
+}
+
 fn propfind(inner: &Inner, request: &DavRequest, me: &str) -> Response {
     let root = match parse_body(&request.body) {
         Ok(root) => root,
@@ -1417,9 +1412,8 @@ fn propfind(inner: &Inner, request: &DavRequest, me: &str) -> Response {
 }
 
 fn report(inner: &Inner, request: &DavRequest, me: &str) -> Response {
-    let root = match parse_body(&request.body) {
-        Ok(Some(root)) => root,
-        Ok(None) => return empty(400),
+    let root = match required_body(&request.body) {
+        Ok(root) => root,
         Err(response) => return *response,
     };
     let props = requested_props(&root);
@@ -1912,9 +1906,8 @@ fn mkcol(inner: &Inner, request: &DavRequest, calendar: bool, me: &str) -> Respo
 }
 
 fn proppatch(inner: &Inner, request: &DavRequest) -> Response {
-    let root = match parse_body(&request.body) {
-        Ok(Some(root)) => root,
-        Ok(None) => return empty(400),
+    let root = match required_body(&request.body) {
+        Ok(root) => root,
         Err(response) => return *response,
     };
     let mut data = lock(&inner.data);

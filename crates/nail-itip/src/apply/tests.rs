@@ -33,11 +33,12 @@ fn berlin(local: &str) -> PimTime {
 }
 
 fn status_of(fields: &EventFields, email: &str) -> Option<ParticipationStatus> {
-    fields
-        .attendees
-        .iter()
-        .find(|a| a.email == email)
-        .map(|a| a.status)
+    attendee_in(fields, email).map(|a| a.status)
+}
+
+/// The attendee `email` of an event's fields.
+fn attendee_in<'a>(fields: &'a EventFields, email: &str) -> Option<&'a Attendee> {
+    fields.attendees.iter().find(|a| a.email == email)
 }
 
 #[test]
@@ -254,12 +255,7 @@ fn replies_set_partstat_on_the_series() {
         status_of(&updated.fields, "bob@example.org"),
         Some(ParticipationStatus::Accepted)
     );
-    let bob = updated
-        .fields
-        .attendees
-        .iter()
-        .find(|a| a.email == "bob@example.org")
-        .unwrap();
+    let bob = attendee_in(&updated.fields, "bob@example.org").unwrap();
     assert!(!bob.rsvp);
     assert_eq!(updated.sequence, existing.sequence);
     // An uninvited attendee is added (party crashing).
@@ -365,20 +361,10 @@ ATTENDEE;DELEGATED-FROM=\"mailto:bob@example.org\";PARTSTAT=NEEDS-ACTION:mailto:
         None,
     );
     let updated = apply_reply(&existing, &object).unwrap();
-    let bob = updated
-        .fields
-        .attendees
-        .iter()
-        .find(|a| a.email == "bob@example.org")
-        .unwrap();
+    let bob = attendee_in(&updated.fields, "bob@example.org").unwrap();
     assert_eq!(bob.status, ParticipationStatus::Delegated);
     assert_eq!(bob.delegated_to, ["dan@example.org"]);
-    let dan = updated
-        .fields
-        .attendees
-        .iter()
-        .find(|a| a.email == "dan@example.org")
-        .unwrap();
+    let dan = attendee_in(&updated.fields, "dan@example.org").unwrap();
     assert_eq!(dan.delegated_from, ["bob@example.org"]);
     assert_eq!(updated.fields.attendees.len(), 3);
     // The delegate's own reply later.
@@ -442,20 +428,10 @@ fn my_answers_and_delegation() {
     let mut delegate_to = Attendee::new("Dan@Example.org");
     delegate_to.name = Some("Dan".into());
     let delegated = delegate(&existing, "bob@example.org", &delegate_to, None).unwrap();
-    let bob = delegated
-        .fields
-        .attendees
-        .iter()
-        .find(|a| a.email == "bob@example.org")
-        .unwrap();
+    let bob = attendee_in(&delegated.fields, "bob@example.org").unwrap();
     assert_eq!(bob.status, ParticipationStatus::Delegated);
     assert_eq!(bob.delegated_to, ["dan@example.org"]);
-    let dan = delegated
-        .fields
-        .attendees
-        .iter()
-        .find(|a| a.email == "dan@example.org")
-        .unwrap();
+    let dan = attendee_in(&delegated.fields, "dan@example.org").unwrap();
     assert!(dan.rsvp);
     assert_eq!(dan.delegated_from, ["bob@example.org"]);
     assert_eq!(dan.status, ParticipationStatus::NeedsAction);

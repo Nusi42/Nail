@@ -25,12 +25,12 @@
 #![warn(missing_docs)]
 
 mod autoconfig;
-mod autodiscover;
+pub mod autodiscover;
 mod discover;
 mod email;
 mod net;
 mod system_dns;
-mod xml;
+pub mod xml;
 
 pub use discover::{
     Discoverer, DiscoveryError, ISPDB_BASE, discover, flag_foreign_hosts, protocols, rank,

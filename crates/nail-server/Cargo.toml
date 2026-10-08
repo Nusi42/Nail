@@ -43,6 +43,8 @@ url.workspace = true
 ipconfig.workspace = true
 
 [dev-dependencies]
+# The shared test timeout (ADR 0171).
+nail-testkit.workspace = true
 nail-core = { workspace = true, features = ["demo"] }
 tempfile.workspace = true
 pretty_assertions.workspace = true

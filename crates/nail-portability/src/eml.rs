@@ -14,7 +14,7 @@ use crate::job::JobContext;
 use crate::message::{header_facts, issue_label};
 
 /// Deepest folder tree read.
-pub const MAX_DEPTH: usize = 32;
+pub use crate::folder::MAX_FOLDER_DEPTH as MAX_DEPTH;
 
 /// Whether a path is an `.eml` file name.
 pub fn is_eml(path: &Path) -> bool {

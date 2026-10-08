@@ -68,8 +68,8 @@ use crate::texts;
 /// Most redirects (HTTP, `redirectUrl`, `redirectAddr`) of one run.
 pub const MAX_HOPS: usize = 10;
 
-/// Default time for a whole run.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(1);
+/// Default time for a whole run (the protocol clients' default).
+pub use nail_net::DEFAULT_TIMEOUT;
 
 /// What to discover.
 #[derive(Debug, Clone, Default)]
@@ -599,7 +599,7 @@ impl Run<'_> {
             .into_iter()
             .filter_map(|r| {
                 let target = r.target.trim_end_matches('.');
-                let url = if r.port == 443 {
+                let url = if r.port == nail_net::ports::HTTPS {
                     format!("https://{target}/autodiscover/autodiscover.xml")
                 } else {
                     format!("https://{target}:{}/autodiscover/autodiscover.xml", r.port)

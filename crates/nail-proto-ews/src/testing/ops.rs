@@ -887,16 +887,7 @@ fn create_message(
         }
         let mut saved_in = None;
         if save {
-            let (m, folder) = match saved_folder {
-                Some(reference) => {
-                    let (m, f) = resolve_folder(state, reference)?;
-                    (m, state.mailboxes[m].folders[f].id.clone())
-                }
-                None => (
-                    own,
-                    default_folder(state, own, "sentitems").ok_or("ErrorFolderNotFound")?,
-                ),
-            };
+            let (m, folder) = saved_or_default(state, saved_folder, own, "sentitems")?;
             saved_in = Some(state.mailboxes[m].address.clone());
             let props = fixtures::message_props(&raw, true, &[]);
             state.add_item(m, &folder, "Message", props, Some(raw.clone()));
@@ -909,16 +900,7 @@ fn create_message(
         });
         return Ok("<m:Items/>".to_owned());
     }
-    let (m, folder) = match saved_folder {
-        Some(reference) => {
-            let (m, f) = resolve_folder(state, reference)?;
-            (m, state.mailboxes[m].folders[f].id.clone())
-        }
-        None => (
-            own,
-            default_folder(state, own, "drafts").ok_or("ErrorFolderNotFound")?,
-        ),
-    };
+    let (m, folder) = saved_or_default(state, saved_folder, own, "drafts")?;
     let read = item.child_bool("IsRead").unwrap_or(false);
     let mut props = fixtures::message_props(&raw, read, &item.strings("Categories", "String"));
     let has_flags = crate::types::extended_property(item, "0x0E07").is_some();
@@ -947,6 +929,26 @@ fn create_message(
     ))
 }
 
+/// The mailbox and folder an item is saved in: the request's
+/// `SavedItemFolderId`, else the own mailbox's well-known `fallback`.
+fn saved_or_default(
+    state: &State,
+    saved_folder: Option<&Element>,
+    own: usize,
+    fallback: &str,
+) -> Result<(usize, String), &'static str> {
+    match saved_folder {
+        Some(reference) => {
+            let (m, f) = resolve_folder(state, reference)?;
+            Ok((m, state.mailboxes[m].folders[f].id.clone()))
+        }
+        None => Ok((
+            own,
+            default_folder(state, own, fallback).ok_or("ErrorFolderNotFound")?,
+        )),
+    }
+}
+
 fn create_pim(
     state: &mut State,
     item: &Element,
@@ -960,16 +962,7 @@ fn create_pim(
         "Task" => "tasks",
         _ => "contacts",
     };
-    let (m, folder) = match saved_folder {
-        Some(reference) => {
-            let (m, f) = resolve_folder(state, reference)?;
-            (m, state.mailboxes[m].folders[f].id.clone())
-        }
-        None => (
-            own,
-            default_folder(state, own, fallback).ok_or("ErrorFolderNotFound")?,
-        ),
-    };
+    let (m, folder) = saved_or_default(state, saved_folder, own, fallback)?;
     let mut props = item.clone();
     normalize_times(&mut props, ctx.zone);
     if item.name == "CalendarItem" {
@@ -1338,6 +1331,15 @@ pub(crate) fn move_item(
     Ok(new_id)
 }
 
+/// The `Id`s of an operation's `ItemIds`.
+fn item_ids(op: &Element) -> impl Iterator<Item = &str> {
+    op.child("ItemIds")
+        .map(|i| i.children.as_slice())
+        .unwrap_or_default()
+        .iter()
+        .map(|reference| reference.attr("Id").unwrap_or_default())
+}
+
 fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> String {
     let name = if copy { "CopyItem" } else { "MoveItem" };
     let target = op.child("ToFolderId").and_then(|t| t.children.first());
@@ -1354,12 +1356,7 @@ fn move_or_copy(state: &mut State, op: &Element, copy: bool) -> String {
         }
     };
     let mut out = Vec::new();
-    for reference in op
-        .child("ItemIds")
-        .map(|i| i.children.as_slice())
-        .unwrap_or_default()
-    {
-        let id = reference.attr("Id").unwrap_or_default();
+    for id in item_ids(op) {
         out.push(match move_item(state, id, &folder, copy) {
             Ok(new_id) => {
                 let (m, i) = state.item_location(&new_id).unwrap_or_default();
@@ -1387,12 +1384,7 @@ fn delete_item(state: &mut State, op: &Element) -> String {
         .unwrap_or("SendToNone")
         .to_owned();
     let mut out = Vec::new();
-    for reference in op
-        .child("ItemIds")
-        .map(|i| i.children.as_slice())
-        .unwrap_or_default()
-    {
-        let id = reference.attr("Id").unwrap_or_default();
+    for id in item_ids(op) {
         let result: Result<(), &'static str> = if let Some((m, i)) = state.item_location(id) {
             let item = state.mailboxes[m].items[i].clone();
             if item.tag == "CalendarItem"
@@ -1747,11 +1739,17 @@ fn availability_response(op: &str, class_ok: bool, code: &str, inner: &str) -> S
     )
 }
 
-fn get_oof(state: &State, op: &Element) -> String {
+/// Whether an automatic-replies call names the own mailbox (others are
+/// refused).
+fn names_own_mailbox(state: &State, op: &Element) -> bool {
     let address = op
         .path(&["Mailbox", "Address"])
         .map(|a| a.text.trim().to_ascii_lowercase());
-    if address.as_deref() != Some(state.own.as_str()) {
+    address.as_deref() == Some(state.own.as_str())
+}
+
+fn get_oof(state: &State, op: &Element) -> String {
+    if !names_own_mailbox(state, op) {
         return availability_response("GetUserOofSettings", false, "ErrorAccessDenied", "");
     }
     let oof = &state.oof;
@@ -1777,10 +1775,7 @@ fn get_oof(state: &State, op: &Element) -> String {
 }
 
 fn set_oof(state: &mut State, op: &Element) -> String {
-    let address = op
-        .path(&["Mailbox", "Address"])
-        .map(|a| a.text.trim().to_ascii_lowercase());
-    if address.as_deref() != Some(state.own.as_str()) {
+    if !names_own_mailbox(state, op) {
         return availability_response("SetUserOofSettings", false, "ErrorAccessDenied", "");
     }
     let Some(settings) = op.child("UserOofSettings") else {

@@ -15,10 +15,7 @@ use std::cell::RefCell;
 
 use base64::Engine as _;
 use chrono::{DateTime, Datelike, Utc};
-use nail_api::pim::calendar::{
-    AlarmRelated, AttendeeKind, AttendeeRole, EventStatus, ParticipationStatus, Transparency,
-    Visibility,
-};
+use nail_api::pim::calendar::{AlarmRelated, EventStatus, Transparency, Visibility};
 use nail_api::pim::task::TaskStatus;
 use nail_api::pim::{
     Alarm, AlarmAction, AlarmTrigger, Attendee, CalendarEvent, ConferenceLink, EventFields,
@@ -72,7 +69,7 @@ impl WriteOptions<'_> {
 
 /// Replaces every property named in `names` with `new`, at the position
 /// of the first old one (or at the end).
-fn replace(c: &mut Component, names: &[&str], new: Vec<Property>) {
+pub(crate) fn replace(c: &mut Component, names: &[&str], new: Vec<Property>) {
     let position = c
         .properties
         .iter()
@@ -86,7 +83,7 @@ fn replace(c: &mut Component, names: &[&str], new: Vec<Property>) {
 
 /// `new` with the original's group and the original's parameters that
 /// are not `managed` (and not set by `new`).
-fn merged(original: Option<&Property>, mut new: Property, managed: &[&str]) -> Property {
+pub(crate) fn merged(original: Option<&Property>, mut new: Property, managed: &[&str]) -> Property {
     if let Some(original) = original {
         let mut params: Vec<content::Param> = original
             .params
@@ -172,13 +169,7 @@ fn utc_prop(name: &str, instant: Option<&str>) -> Option<Property> {
 }
 
 fn read_instant(c: &Component, name: &str) -> Option<String> {
-    let p = c.property(name)?;
-    match time::parse_ical_value(&p.value)? {
-        time::IcalValue::DateTime { local, .. } => Some(time::format_instant(local.and_utc())),
-        time::IcalValue::Date(d) => Some(time::format_instant(
-            d.and_time(chrono::NaiveTime::MIN).and_utc(),
-        )),
-    }
+    time::value_instant(&c.property(name)?.value)
 }
 
 fn normalized_instant(instant: Option<&str>) -> Option<String> {
@@ -597,45 +588,7 @@ fn finish(c: &mut Component, before: &str, options: &WriteOptions<'_>) {
 // Events
 
 fn attendee_prop(a: &Attendee) -> Property {
-    let mut p = Property::new("ATTENDEE", format!("mailto:{}", a.email));
-    if let Some(name) = &a.name {
-        p = p.with_param("CN", name.clone());
-    }
-    p = p.with_param(
-        "ROLE",
-        match a.role {
-            AttendeeRole::Chair => "CHAIR",
-            AttendeeRole::Required => "REQ-PARTICIPANT",
-            AttendeeRole::Optional => "OPT-PARTICIPANT",
-            AttendeeRole::NonParticipant => "NON-PARTICIPANT",
-        },
-    );
-    p = p.with_param(
-        "PARTSTAT",
-        match a.status {
-            ParticipationStatus::NeedsAction => "NEEDS-ACTION",
-            ParticipationStatus::Accepted => "ACCEPTED",
-            ParticipationStatus::Declined => "DECLINED",
-            ParticipationStatus::Tentative => "TENTATIVE",
-            ParticipationStatus::Delegated => "DELEGATED",
-        },
-    );
-    let kind = match a.kind {
-        AttendeeKind::Individual => None,
-        AttendeeKind::Group => Some("GROUP"),
-        AttendeeKind::Resource => Some("RESOURCE"),
-        AttendeeKind::Room => Some("ROOM"),
-        AttendeeKind::Unknown => Some("UNKNOWN"),
-    };
-    if let Some(kind) = kind {
-        p = p.with_param("CUTYPE", kind);
-    }
-    if a.rsvp {
-        p = p.with_param("RSVP", "TRUE");
-    }
-    let mailto = |v: &Vec<String>| v.iter().map(|e| format!("mailto:{e}")).collect();
-    p.with_param_values("DELEGATED-TO", mailto(&a.delegated_to))
-        .with_param_values("DELEGATED-FROM", mailto(&a.delegated_from))
+    crate::attendee::property(a, |e| format!("mailto:{e}"))
 }
 
 const ATTENDEE_PARAMS: &[&str] = &[
@@ -1247,7 +1200,7 @@ fn task_component(
 mod tests {
     use super::*;
     use crate::ical::{ParseOptions, parse_calendar};
-    use nail_api::pim::calendar::Frequency;
+    use nail_api::pim::calendar::{Frequency, ParticipationStatus};
     use nail_api::pim::source::PimItemSync;
     use nail_api::pim::{EventOverride, RecurrenceRule};
     use pretty_assertions::assert_eq;
@@ -1267,25 +1220,16 @@ mod tests {
         )
     }
 
-    const GOOGLE: &str = "BEGIN:VCALENDAR\r\n\
+    const GOOGLE: &str = concat!(
+        "BEGIN:VCALENDAR\r\n\
 PRODID:-//Google Inc//Google Calendar 70.9054//EN\r\n\
 VERSION:2.0\r\n\
 CALSCALE:GREGORIAN\r\n\
 BEGIN:VTIMEZONE\r\n\
 TZID:W. Europe Standard Time\r\n\
-BEGIN:STANDARD\r\n\
-DTSTART:16011028T030000\r\n\
-RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n\
-TZOFFSETFROM:+0200\r\n\
-TZOFFSETTO:+0100\r\n\
-END:STANDARD\r\n\
-BEGIN:DAYLIGHT\r\n\
-DTSTART:16010325T020000\r\n\
-RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n\
-TZOFFSETFROM:+0100\r\n\
-TZOFFSETTO:+0200\r\n\
-END:DAYLIGHT\r\n\
-END:VTIMEZONE\r\n\
+",
+        crate::cet_rules!(),
+        "END:VTIMEZONE\r\n\
 BEGIN:VEVENT\r\n\
 DTSTART;TZID=W. Europe Standard Time:20261005T090000\r\n\
 DTEND;TZID=W. Europe Standard Time:20261005T093000\r\n\
@@ -1310,7 +1254,8 @@ DESCRIPTION:This is an event reminder\r\n\
 TRIGGER:-P0DT0H10M0S\r\n\
 END:VALARM\r\n\
 END:VEVENT\r\n\
-END:VCALENDAR\r\n";
+END:VCALENDAR\r\n"
+    );
 
     #[test]
     fn unchanged_events_are_written_byte_for_byte() {

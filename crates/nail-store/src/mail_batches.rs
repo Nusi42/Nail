@@ -452,7 +452,7 @@ mod tests {
     use crate::queue::OpState;
     use nail_api::{Account, AccountId, AccountKind, Flags, Folder, FolderRole, MessageSummary};
 
-    const NOW: i64 = 1_800_000_000;
+    use nail_util::time::FIXTURE_LATER as NOW;
 
     fn store() -> Store {
         let store = Store::open_in_memory().unwrap();

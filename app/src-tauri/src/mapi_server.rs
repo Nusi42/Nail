@@ -345,22 +345,32 @@ mod tests {
         assert_eq!(server.name(), name);
         for _ in 0..2 {
             let mut client = ClientOptions::new().open(&name).unwrap();
-            let request = MapiPipeRequest {
-                version: MAPI_PROTOCOL_VERSION,
-                message: message(),
-            };
-            client
-                .write_all(&encode_frame(&request).unwrap())
-                .await
-                .unwrap();
-            let mut header = [0u8; 4];
-            client.read_exact(&mut header).await.unwrap();
-            let mut body = vec![0u8; frame_len(header).unwrap()];
-            client.read_exact(&mut body).await.unwrap();
-            let response: MapiPipeResponse = decode_frame(&body).unwrap();
+            send_request(&mut client).await;
+            let response = read_response(&mut client).await;
             assert_eq!(response.result, MapiResult::AttachmentTooLarge);
         }
         assert_eq!(seen.lock().unwrap().len(), 2, "one instance after another");
+    }
+
+    /// Sends the test message as a client would.
+    async fn send_request(client: &mut (impl AsyncWrite + Unpin)) {
+        let request = MapiPipeRequest {
+            version: MAPI_PROTOCOL_VERSION,
+            message: message(),
+        };
+        client
+            .write_all(&encode_frame(&request).unwrap())
+            .await
+            .unwrap();
+    }
+
+    /// Reads the server's answer frame.
+    async fn read_response(client: &mut (impl AsyncRead + Unpin)) -> MapiPipeResponse {
+        let mut header = [0u8; 4];
+        client.read_exact(&mut header).await.unwrap();
+        let mut body = vec![0u8; frame_len(header).unwrap()];
+        client.read_exact(&mut body).await.unwrap();
+        decode_frame(&body).unwrap()
     }
 
     /// Regression (WP115): the server disconnected right after writing, so a
@@ -381,21 +391,10 @@ mod tests {
         )
         .unwrap();
         let mut client = ClientOptions::new().open(&name).unwrap();
-        let request = MapiPipeRequest {
-            version: MAPI_PROTOCOL_VERSION,
-            message: message(),
-        };
-        client
-            .write_all(&encode_frame(&request).unwrap())
-            .await
-            .unwrap();
+        send_request(&mut client).await;
         // The server has answered long before the client reads.
         tokio::time::sleep(Duration::from_millis(500)).await;
-        let mut header = [0u8; 4];
-        client.read_exact(&mut header).await.unwrap();
-        let mut body = vec![0u8; frame_len(header).unwrap()];
-        client.read_exact(&mut body).await.unwrap();
-        let response: MapiPipeResponse = decode_frame(&body).unwrap();
+        let response = read_response(&mut client).await;
         assert_eq!(response.result, MapiResult::Success);
     }
 

@@ -22,25 +22,7 @@ fn header_section(raw: &[u8]) -> &[u8] {
 
 /// Every header as (lowercase name, unfolded value).
 pub fn headers(raw: &[u8]) -> Vec<(String, String)> {
-    let text = String::from_utf8_lossy(header_section(raw));
-    let mut out: Vec<(String, String)> = Vec::new();
-    for line in text.split('\n') {
-        let line = line.trim_end_matches('\r');
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with([' ', '\t']) {
-            if let Some((_, value)) = out.last_mut() {
-                value.push(' ');
-                value.push_str(line.trim());
-            }
-            continue;
-        }
-        if let Some((name, value)) = line.split_once(':') {
-            out.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
-        }
-    }
-    out
+    nail_util::mime_text::unfold_headers(header_section(raw))
 }
 
 /// The first value of header `name` (case-insensitive).
@@ -136,12 +118,20 @@ pub fn with_envelope_bcc(raw: &[u8], envelope: &[String]) -> Result<Vec<u8>, Gra
         }
         missing.push(lower);
     }
-    if missing.is_empty() {
-        return Ok(raw.to_vec());
+    Ok(nail_util::mime_text::with_bcc(raw, &missing))
+}
+
+/// The message to send: refused without any recipient, else with the
+/// envelope recipients the headers lack in a `Bcc` header
+/// ([`with_envelope_bcc`]).
+pub fn for_sending(
+    raw: &[u8],
+    envelope: &nail_api::engine::Envelope,
+) -> Result<Vec<u8>, GraphError> {
+    if envelope.to.is_empty() && header_recipients(raw).is_empty() {
+        return Err(GraphError::Rejected("no recipients".into()));
     }
-    let mut out = format!("Bcc: {}\r\n", missing.join(", ")).into_bytes();
-    out.extend_from_slice(raw);
-    Ok(out)
+    with_envelope_bcc(raw, &envelope.to)
 }
 
 #[cfg(test)]

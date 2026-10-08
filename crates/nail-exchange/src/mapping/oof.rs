@@ -22,7 +22,7 @@ use nail_api::sieve::VacationSettings;
 use crate::texts;
 
 /// Length of a schedule that has a start but no end (days).
-pub const OPEN_END_DAYS: i64 = 365;
+pub const OPEN_END_DAYS: i64 = nail_util::time::DAYS_PER_YEAR as i64;
 
 /// A mapped value and what did not carry over.
 #[derive(Debug, Clone, PartialEq, Eq)]

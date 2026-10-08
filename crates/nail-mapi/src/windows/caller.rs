@@ -36,35 +36,46 @@ fn opt<T>(buffer: Option<&Vec<T>>) -> *mut T {
     buffer.map_or(null_mut(), |b| b.as_ptr().cast_mut())
 }
 
-impl CallerMessage {
-    /// Calls `f` with a `MapiMessageW` pointing at UTF-16 copies.
-    pub fn with_wide<R>(&self, f: impl FnOnce(*const MapiMessageW) -> R) -> R {
-        let w = |s: &Option<String>| s.as_deref().map(to_wide);
-        let subject = w(&self.subject);
-        let body = w(&self.body);
-        let names: Vec<_> = self.recipients.iter().map(|r| (w(&r.1), w(&r.2))).collect();
-        let mut recips: Vec<MapiRecipDescW> = self
+/// Builds the Simple MAPI message structures of `$message` with every
+/// text converted by `$convert` (UTF-16 or ANSI copies that live until
+/// `$call` returns) and runs `$call` with a pointer to the message.
+macro_rules! with_message {
+    ($message:expr, $convert:expr, $recip:ident, $file:ident, $msg:ident, $call:expr) => {{
+        let message = $message;
+        let c = |s: &Option<String>| s.as_deref().map($convert);
+        let subject = c(&message.subject);
+        let body = c(&message.body);
+        let names: Vec<_> = message
+            .recipients
+            .iter()
+            .map(|r| (c(&r.1), c(&r.2)))
+            .collect();
+        let mut recips: Vec<$recip> = message
             .recipients
             .iter()
             .zip(&names)
-            .map(|(r, (name, address))| MapiRecipDescW {
+            .map(|(r, (name, address))| $recip {
                 ulRecipClass: r.0,
                 lpszName: opt(name.as_ref()),
                 lpszAddress: opt(address.as_ref()),
                 ..Default::default()
             })
             .collect();
-        let paths: Vec<_> = self.files.iter().map(|(p, n)| (to_wide(p), w(n))).collect();
-        let mut files: Vec<MapiFileDescW> = paths
+        let paths: Vec<_> = message
+            .files
             .iter()
-            .map(|(path, name)| MapiFileDescW {
+            .map(|(p, n)| ($convert(p), c(n)))
+            .collect();
+        let mut files: Vec<$file> = paths
+            .iter()
+            .map(|(path, name)| $file {
                 nPosition: u32::MAX,
                 lpszPathName: path.as_ptr().cast_mut(),
                 lpszFileName: opt(name.as_ref()),
                 ..Default::default()
             })
             .collect();
-        let message = MapiMessageW {
+        let mut built = $msg {
             lpszSubject: opt(subject.as_ref()),
             lpszNoteText: opt(body.as_ref()),
             nRecipCount: super::count_u32(recips.len()),
@@ -81,54 +92,26 @@ impl CallerMessage {
             },
             ..Default::default()
         };
-        f(&raw const message)
+        $call(&raw mut built)
+    }};
+}
+
+impl CallerMessage {
+    /// Calls `f` with a `MapiMessageW` pointing at UTF-16 copies.
+    pub fn with_wide<R>(&self, f: impl FnOnce(*const MapiMessageW) -> R) -> R {
+        with_message!(
+            self,
+            to_wide,
+            MapiRecipDescW,
+            MapiFileDescW,
+            MapiMessageW,
+            |m: *mut MapiMessageW| f(m)
+        )
     }
 
     /// Calls `f` with an ANSI `MapiMessage`.
     pub fn with_ansi<R>(&self, f: impl FnOnce(*mut MapiMessage) -> R) -> R {
-        let a = |s: &Option<String>| s.as_deref().map(to_ansi);
-        let subject = a(&self.subject);
-        let body = a(&self.body);
-        let names: Vec<_> = self.recipients.iter().map(|r| (a(&r.1), a(&r.2))).collect();
-        let mut recips: Vec<MapiRecipDesc> = self
-            .recipients
-            .iter()
-            .zip(&names)
-            .map(|(r, (name, address))| MapiRecipDesc {
-                ulRecipClass: r.0,
-                lpszName: opt(name.as_ref()),
-                lpszAddress: opt(address.as_ref()),
-                ..Default::default()
-            })
-            .collect();
-        let paths: Vec<_> = self.files.iter().map(|(p, n)| (to_ansi(p), a(n))).collect();
-        let mut files: Vec<MapiFileDesc> = paths
-            .iter()
-            .map(|(path, name)| MapiFileDesc {
-                nPosition: u32::MAX,
-                lpszPathName: path.as_ptr().cast_mut(),
-                lpszFileName: opt(name.as_ref()),
-                ..Default::default()
-            })
-            .collect();
-        let mut message = MapiMessage {
-            lpszSubject: opt(subject.as_ref()),
-            lpszNoteText: opt(body.as_ref()),
-            nRecipCount: super::count_u32(recips.len()),
-            lpRecips: if recips.is_empty() {
-                null_mut()
-            } else {
-                recips.as_mut_ptr()
-            },
-            nFileCount: super::count_u32(files.len()),
-            lpFiles: if files.is_empty() {
-                null_mut()
-            } else {
-                files.as_mut_ptr()
-            },
-            ..Default::default()
-        };
-        f(&raw mut message)
+        with_message!(self, to_ansi, MapiRecipDesc, MapiFileDesc, MapiMessage, f)
     }
 }
 

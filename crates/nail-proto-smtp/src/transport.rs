@@ -11,8 +11,10 @@ use nail_api::engine::{
     SendReceipt,
 };
 use nail_api::ids::AccountId;
+use nail_net::trust::debug_fields;
 
 use crate::client::SmtpSession;
+
 use crate::config::{SendOptions, SmtpConfig, SmtpCredentials};
 
 /// Where an [`SmtpTransport`] gets its credentials from, per connection.
@@ -56,22 +58,27 @@ impl fmt::Debug for SmtpAuth {
             Self::Credentials(c) => f.debug_tuple("Credentials").field(c).finish(),
             Self::StoredPassword {
                 username, secret, ..
-            } => f
-                .debug_struct("StoredPassword")
-                .field("username", username)
-                .field("secret", secret)
-                .finish_non_exhaustive(),
+            } => debug_fields(
+                f,
+                "StoredPassword",
+                &[("username", username), ("secret", secret)],
+                false,
+            ),
             Self::OAuth2 {
                 username,
                 provider,
                 secret,
                 ..
-            } => f
-                .debug_struct("OAuth2")
-                .field("username", username)
-                .field("provider", provider)
-                .field("secret", secret)
-                .finish_non_exhaustive(),
+            } => debug_fields(
+                f,
+                "OAuth2",
+                &[
+                    ("username", username),
+                    ("provider", provider),
+                    ("secret", secret),
+                ],
+                false,
+            ),
         }
     }
 }

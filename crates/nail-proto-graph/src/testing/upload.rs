@@ -9,19 +9,19 @@ use std::fmt::Write as _;
 use base64::Engine as _;
 use serde_json::{Value, json};
 
-use super::server::{Reply, Req, State};
+use super::server::{Replies as _, Reply, Req, State};
 use super::tenant::{
     CompletedUpload, JsonDraft, MockError, MockResult, MockUpload, SentMail, Tenant,
 };
 
 /// Graph's request size limit.
-pub(crate) const MAX_REQUEST: usize = 4 * 1024 * 1024;
+pub(crate) use crate::mail::MAX_REQUEST;
 
 /// Upload ranges must be multiples of this (except the last).
-pub(crate) const UPLOAD_UNIT: usize = 320 * 1024;
+pub(crate) use crate::upload::UPLOAD_UNIT;
 
 /// `PidTagMessageFlags`.
-const MESSAGE_FLAGS_PROP: &str = "Integer 0x0E07";
+use crate::upload::MESSAGE_FLAGS_PROP;
 
 /// The answer to a request over 4 MB.
 pub(crate) fn too_large() -> MockError {

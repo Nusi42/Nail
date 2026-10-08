@@ -3,6 +3,7 @@
 //! ([`GmailLabelSettings`]). System labels shown as folders map to
 //! [`GmailFolder`]s; user labels are Nail tags named like the label.
 
+use serde::de::IgnoredAny;
 use std::collections::HashMap;
 
 use nail_api::gmail::{
@@ -305,7 +306,7 @@ impl GmailClient {
 
     /// `labels.delete`: removes a user label (and it from every message).
     pub async fn delete_label(&self, id: &str) -> Result<(), GmailError> {
-        self.call(
+        self.json::<IgnoredAny>(
             Method::DELETE,
             &["labels", id],
             &[],

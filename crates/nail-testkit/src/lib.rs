@@ -26,10 +26,16 @@
 //! # Ok(()) }
 //! ```
 
+pub mod catalog;
 pub mod corpus;
+pub mod exchange;
 pub mod imap;
 pub mod mailstore;
 pub mod tls;
+pub mod tokens;
+
+/// How long tests wait for a mock server or an event before they fail.
+pub const TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub use corpus::{
     CRYPTO_FIXTURE_DIR, CorpusFolder, CorpusMessage, CryptoFixtures, DEMO_CONVERSATIONS,

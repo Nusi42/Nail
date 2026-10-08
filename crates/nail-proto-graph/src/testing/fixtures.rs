@@ -16,6 +16,9 @@
 /// The demo tenant (JSON; see `Tenant::from_fixture`).
 pub const DEMO_TENANT: &str = include_str!("../../fixtures/tenant-demo.json");
 
+/// The shared mailbox of [`DEMO_TENANT`].
+pub const DEMO_SHARED_MAILBOX: &str = "support@contoso.example";
+
 /// Recorded error bodies by name (`429`, `410`, `404`, `403`, `401`,
 /// `503`, `500`, `mailbox-on-premises`).
 pub const RECORDED_ERRORS: &str = include_str!("../../fixtures/responses/errors.json");

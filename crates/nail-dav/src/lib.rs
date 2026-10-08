@@ -30,7 +30,7 @@
 //!   ([`own_busy_periods`]).
 //! * [`icalendar`] — the small content-line layer both use (`nail-ical`
 //!   stays the full iCalendar model).
-//! * XML through [`quick_xml`] ([`xml`]); errors map to
+//! * XML through `nail_net::xml` ([`xml`]); errors map to
 //!   [`nail_api::ErrorCode`]s and `dav-*` Fluent texts ([`DavError`]).
 //!
 //! The mock CalDAV / CardDAV server lives in `nail-testkit-net`
@@ -71,16 +71,12 @@ pub use scheduling::{
 pub use sync::{CollectionState, SyncMethod, SyncOptions, SyncOutcome, sync_collection};
 pub use write::{DeleteOutcome, ServerVersion, WriteOutcome, delete_object, write_object};
 
-/// The WebDAV namespace.
-pub const NS_DAV: &str = "DAV:";
-/// The CalDAV namespace (RFC 4791).
-pub const NS_CALDAV: &str = "urn:ietf:params:xml:ns:caldav";
-/// The CardDAV namespace (RFC 6352).
-pub const NS_CARDDAV: &str = "urn:ietf:params:xml:ns:carddav";
-/// The CalendarServer namespace (`getctag`).
-pub const NS_CALENDARSERVER: &str = "http://calendarserver.org/ns/";
-/// Apple's iCal namespace (`calendar-color`).
-pub const NS_APPLE_ICAL: &str = "http://apple.com/ns/ical/";
+/// The XML namespaces (one definition in `nail_net::xml::ns`, shared with
+/// the mock DAV server).
+pub use nail_net::xml::ns::{
+    APPLE_ICAL as NS_APPLE_ICAL, CALDAV as NS_CALDAV, CALENDARSERVER as NS_CALENDARSERVER,
+    CARDDAV as NS_CARDDAV, DAV as NS_DAV,
+};
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

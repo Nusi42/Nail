@@ -467,12 +467,7 @@ mod tests {
                 Ok(())
             }),
         }));
-        let args = crate::AppArgs {
-            data_dir: Some(data.path().into()),
-            config_dir: Some(config.path().into()),
-            seed: Some("demo".into()),
-            ..crate::AppArgs::default()
-        };
+        let args = crate::AppArgs::in_dirs(data.path(), config.path(), Some("demo"));
         let mut options = args.service_options().unwrap();
         options.desktop = Some(host.clone());
         let service = Service::open(options).unwrap();

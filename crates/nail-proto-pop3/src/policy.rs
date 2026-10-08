@@ -146,7 +146,7 @@ mod tests {
         items.iter().map(|s| (*s).to_owned()).collect()
     }
 
-    const NOW: i64 = 1_800_000_000;
+    use nail_util::time::FIXTURE_LATER as NOW;
 
     #[test]
     fn options_defaults() {

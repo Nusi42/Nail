@@ -15,7 +15,7 @@ use zeroize::Zeroizing;
 use crate::cryptoki_module::CryptokiModule;
 use crate::error::CardError;
 use crate::module::{
-    DecryptMechanism, Module, ObjectInfo, PublicKeyMaterial, SignMechanism, TokenInfo,
+    DecryptMechanism, KeyOp, Module, ObjectInfo, PublicKeyMaterial, SignMechanism, TokenInfo,
 };
 use crate::pin::PinPrompter;
 
@@ -453,9 +453,11 @@ impl CardKey {
     /// [`SignMechanism::RsaPkcs1`]).
     pub fn sign(&self, mechanism: SignMechanism, data: &[u8]) -> Result<Vec<u8>, CardError> {
         let id = self.id();
+        let op = KeyOp::Sign { mechanism, data };
         self.with_login(PinPurpose::Sign, |module, slot| {
-            module.sign(slot, &id, mechanism, data)
+            module.private_op(slot, &id, op)
         })
+        .map(|signature| signature.to_vec())
     }
 
     /// Decrypts a key-transport ciphertext.
@@ -465,16 +467,18 @@ impl CardKey {
         data: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, CardError> {
         let id = self.id();
+        let op = KeyOp::Decrypt { mechanism, data };
         self.with_login(PinPurpose::Decrypt, |module, slot| {
-            module.decrypt(slot, &id, mechanism, data)
+            module.private_op(slot, &id, op)
         })
     }
 
     /// ECDH with a peer's SEC1 point: the raw shared secret.
     pub fn ecdh(&self, peer_point: &[u8]) -> Result<Zeroizing<Vec<u8>>, CardError> {
         let id = self.id();
+        let op = KeyOp::Ecdh { peer_point };
         self.with_login(PinPurpose::Decrypt, |module, slot| {
-            module.ecdh(slot, &id, peer_point)
+            module.private_op(slot, &id, op)
         })
     }
 }

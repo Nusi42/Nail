@@ -15,7 +15,7 @@ use nail_api::exchange::engine::{NegotiateAuth, NegotiateSession, NegotiateStep}
 use nail_discovery::{DnsLookup, MxRecord, NetError, SrvRecord};
 use nail_exchange::autodiscover::{
     AutodiscoverError, AutodiscoverOutcome, AutodiscoverRequest, Autodiscoverer, ExchangeDiscovery,
-    RedirectReason,
+    RedirectConfirmation, RedirectReason,
 };
 use nail_exchange::http::ReqwestHttp;
 use nail_exchange::negotiate::{AuthScheme, HttpLogin, Password, SignInError, WindowsLogin};
@@ -137,6 +137,19 @@ fn found(outcome: AutodiscoverOutcome) -> ExchangeDiscovery {
         AutodiscoverOutcome::Found(found) => *found,
         other => panic!("expected settings, got {other:?}"),
     }
+}
+
+/// Discovery for ada@corp.example with a password, which must stop at a
+/// redirect the user confirms.
+async fn ada_redirect(d: &Autodiscoverer) -> RedirectConfirmation {
+    let outcome = d
+        .discover(&request("ada@corp.example", basic("secret")))
+        .await
+        .unwrap();
+    let AutodiscoverOutcome::ConfirmRedirect(confirm) = outcome else {
+        panic!("a confirmation, got {outcome:?}");
+    };
+    confirm
 }
 
 #[tokio::test]
@@ -320,13 +333,7 @@ async fn foreign_redirects_need_confirmation() {
     ])
     .await;
     let d = discoverer(&server, false);
-    let outcome = d
-        .discover(&request("ada@corp.example", basic("secret")))
-        .await
-        .unwrap();
-    let AutodiscoverOutcome::ConfirmRedirect(confirm) = outcome else {
-        panic!("a confirmation, got {outcome:?}");
-    };
+    let confirm = ada_redirect(&d).await;
     assert_eq!(confirm.host, "mail.hoster.example");
     assert_eq!(confirm.domain, "corp.example");
     assert_eq!(confirm.reason, RedirectReason::HttpRedirect);
@@ -428,13 +435,7 @@ async fn http_method_and_srv_targets_always_ask() {
     ])
     .await;
     let d = discoverer(&server, false);
-    let outcome = d
-        .discover(&request("ada@corp.example", basic("secret")))
-        .await
-        .unwrap();
-    let AutodiscoverOutcome::ConfirmRedirect(confirm) = outcome else {
-        panic!("a confirmation, got {outcome:?}");
-    };
+    let confirm = ada_redirect(&d).await;
     assert_eq!(confirm.reason, RedirectReason::HttpMethod);
     assert_eq!(confirm.host, "ad.corp-mail.example");
     let mut confirmed = request("ada@corp.example", basic("secret"));
@@ -461,13 +462,7 @@ async fn http_method_and_srv_targets_always_ask() {
     let d = Autodiscoverer::new(Arc::new(http))
         .with_online_host(None)
         .with_dns(Arc::new(dns));
-    let outcome = d
-        .discover(&request("ada@corp.example", basic("secret")))
-        .await
-        .unwrap();
-    let AutodiscoverOutcome::ConfirmRedirect(confirm) = outcome else {
-        panic!("a confirmation, got {outcome:?}");
-    };
+    let confirm = ada_redirect(&d).await;
     assert_eq!(confirm.reason, RedirectReason::Srv);
     assert_eq!(confirm.host, "mail.srv.example");
     assert_eq!(srv_server.hosts_with_credentials().len(), 0);

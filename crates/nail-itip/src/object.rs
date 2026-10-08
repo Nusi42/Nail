@@ -11,13 +11,13 @@
 
 use std::collections::HashSet;
 
-use chrono::NaiveTime;
 use nail_api::pim::PimTime;
-use nail_api::pim::calendar::ParticipationStatus;
-use nail_api::pim::calendar::{Attendee, AttendeeKind, AttendeeRole, EventFields, Organizer};
+use nail_api::pim::calendar::{Attendee, EventFields, Organizer};
 use nail_api::scheduling::{ItipIssue, ItipMethod};
+use nail_ical::attendee;
+pub use nail_ical::attendee::partstat;
 use nail_ical::content::{self, Component, Property};
-use nail_ical::time::{self, IcalValue};
+use nail_ical::time::{self};
 use nail_ical::{ParseOptions, ParsedEvent, parse_calendar};
 
 use crate::address::{normalize, same};
@@ -29,42 +29,12 @@ pub const MAX_ITIP_BYTES: usize = 4 * 1024 * 1024;
 /// occurrences are ignored.
 pub const MAX_COMPONENTS: usize = 256;
 
-/// `SCHEDULE-AGENT` of an `ORGANIZER` / `ATTENDEE` (RFC 6638 §7.1): who
-/// delivers scheduling messages for that calendar user.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum ScheduleAgent {
-    /// `SERVER` (the default; unknown values count as `SERVER`, RFC 6638
-    /// §7.1): a scheduling server delivers.
-    #[default]
-    Server,
-    /// `CLIENT`: the calendar client delivers (iMIP from Nail).
-    Client,
-    /// `NONE`: nobody delivers.
-    None,
-}
+/// `SCHEDULE-AGENT` of an `ORGANIZER` / `ATTENDEE` (RFC 6638 §7.1).
+pub use nail_api::scheduling::ScheduleAgent;
 
-impl ScheduleAgent {
-    /// The agent named by a property's `SCHEDULE-AGENT` parameter.
-    pub fn of(property: &Property) -> Self {
-        match property
-            .param("SCHEDULE-AGENT")
-            .map(|v| v.trim().to_ascii_uppercase())
-            .as_deref()
-        {
-            Some("CLIENT") => Self::Client,
-            Some("NONE") => Self::None,
-            _ => Self::Server,
-        }
-    }
-
-    /// The parameter value.
-    pub fn as_ical(self) -> &'static str {
-        match self {
-            Self::Server => "SERVER",
-            Self::Client => "CLIENT",
-            Self::None => "NONE",
-        }
-    }
+/// The agent named by a property's `SCHEDULE-AGENT` parameter.
+pub fn schedule_agent_of(property: &Property) -> ScheduleAgent {
+    ScheduleAgent::parse(property.param("SCHEDULE-AGENT"))
 }
 
 /// An `ATTENDEE` with the scheduling parameters the event model drops.
@@ -397,7 +367,7 @@ fn read_component(c: &Component, uid: &str, zones: &[Component]) -> ItipComponen
             .map(normalize_uri)
             .filter(|s| !s.is_empty()),
         organizer_agent: organizer_property
-            .map(ScheduleAgent::of)
+            .map(schedule_agent_of)
             .unwrap_or_default(),
         attendees,
         comment: (!comments.is_empty()).then(|| comments.join("\n")),
@@ -417,12 +387,7 @@ fn normalize_uri(value: &str) -> String {
 /// RFC 3339 UTC of a `DATE-TIME` (a value without `Z` is read as UTC, as
 /// `DTSTAMP` must be UTC).
 fn utc_instant(value: &str) -> Option<String> {
-    match time::parse_ical_value(value)? {
-        IcalValue::DateTime { local, .. } => Some(time::format_instant(local.and_utc())),
-        IcalValue::Date(date) => Some(time::format_instant(
-            date.and_time(NaiveTime::MIN).and_utc(),
-        )),
-    }
+    time::value_instant(value)
 }
 
 /// `TZID`s used by a component's properties (alarms included).
@@ -503,7 +468,7 @@ fn read_attendees(c: &Component) -> Vec<ItipAttendee> {
                     .param("SENT-BY")
                     .map(normalize_uri)
                     .filter(|s| !s.is_empty()),
-                schedule_agent: ScheduleAgent::of(p),
+                schedule_agent: schedule_agent_of(p),
             })
         })
         .collect()
@@ -516,61 +481,17 @@ pub(crate) fn read_attendee(p: &Property) -> Option<Attendee> {
     if email.is_empty() {
         return None;
     }
-    let upper = |name: &str| p.param(name).map(|v| v.trim().to_ascii_uppercase());
-    Some(Attendee {
+    let name = p
+        .param("CN")
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty());
+    Some(attendee::read(
+        p,
         email,
-        name: p
-            .param("CN")
-            .map(|n| n.trim().to_owned())
-            .filter(|n| !n.is_empty()),
-        role: match upper("ROLE").as_deref() {
-            Some("CHAIR") => AttendeeRole::Chair,
-            Some("OPT-PARTICIPANT") => AttendeeRole::Optional,
-            Some("NON-PARTICIPANT") => AttendeeRole::NonParticipant,
-            _ => AttendeeRole::Required,
-        },
-        status: status_of(upper("PARTSTAT").as_deref()),
-        kind: match upper("CUTYPE").as_deref() {
-            Some("GROUP") => AttendeeKind::Group,
-            Some("RESOURCE") => AttendeeKind::Resource,
-            Some("ROOM") => AttendeeKind::Room,
-            Some("UNKNOWN") => AttendeeKind::Unknown,
-            _ => AttendeeKind::Individual,
-        },
-        rsvp: upper("RSVP").as_deref() == Some("TRUE"),
-        delegated_to: p
-            .param_values("DELEGATED-TO")
-            .map(normalize_uri)
-            .filter(|s| !s.is_empty())
-            .collect(),
-        delegated_from: p
-            .param_values("DELEGATED-FROM")
-            .map(normalize_uri)
-            .filter(|s| !s.is_empty())
-            .collect(),
-    })
-}
-
-/// The status of a `PARTSTAT` keyword (unknown = needs action).
-pub(crate) fn status_of(keyword: Option<&str>) -> ParticipationStatus {
-    match keyword {
-        Some("ACCEPTED") => ParticipationStatus::Accepted,
-        Some("DECLINED") => ParticipationStatus::Declined,
-        Some("TENTATIVE") => ParticipationStatus::Tentative,
-        Some("DELEGATED") => ParticipationStatus::Delegated,
-        _ => ParticipationStatus::NeedsAction,
-    }
-}
-
-/// The `PARTSTAT` keyword of a status.
-pub fn partstat(status: ParticipationStatus) -> &'static str {
-    match status {
-        ParticipationStatus::NeedsAction => "NEEDS-ACTION",
-        ParticipationStatus::Accepted => "ACCEPTED",
-        ParticipationStatus::Declined => "DECLINED",
-        ParticipationStatus::Tentative => "TENTATIVE",
-        ParticipationStatus::Delegated => "DELEGATED",
-    }
+        name,
+        |param| p.param(param).map(|v| v.trim().to_ascii_uppercase()),
+        |v| Some(normalize_uri(v)).filter(|s| !s.is_empty()),
+    ))
 }
 
 #[cfg(test)]
@@ -578,6 +499,7 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::*;
+    use nail_api::pim::calendar::ParticipationStatus;
     use pretty_assertions::assert_eq;
 
     pub(crate) fn cal(method: &str, body: &str) -> String {
@@ -815,10 +737,10 @@ ORGANIZER:mailto:ada@example.org\r\nEND:VEVENT\r\n"
     #[test]
     fn schedule_agent_values() {
         let p = Property::new("ATTENDEE", "mailto:a@b.c").with_param("SCHEDULE-AGENT", "none");
-        assert_eq!(ScheduleAgent::of(&p), ScheduleAgent::None);
+        assert_eq!(schedule_agent_of(&p), ScheduleAgent::None);
         let p = Property::new("ATTENDEE", "mailto:a@b.c").with_param("SCHEDULE-AGENT", "X-FOO");
-        assert_eq!(ScheduleAgent::of(&p), ScheduleAgent::Server);
-        assert_eq!(ScheduleAgent::Client.as_ical(), "CLIENT");
+        assert_eq!(schedule_agent_of(&p), ScheduleAgent::Server);
+        assert_eq!(ScheduleAgent::Client.as_str(), "CLIENT");
         assert_eq!(partstat(ParticipationStatus::Delegated), "DELEGATED");
     }
 }

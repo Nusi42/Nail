@@ -72,14 +72,7 @@ pub const CRATE: &str = env!("CARGO_PKG_NAME");
 /// The Graph base URL on `host` (`https`, or `http` when `tls` is false:
 /// loopback test servers only), e.g. `https://graph.microsoft.com/v1.0`.
 pub fn api_base(host: &str, port: u16, tls: bool) -> String {
-    let scheme = if tls { "https" } else { "http" };
-    let default_port = if tls { 443 } else { 80 };
-    let base = nail_api::exchange::GRAPH_BASE_PATH;
-    if port == default_port {
-        format!("{scheme}://{host}{base}")
-    } else {
-        format!("{scheme}://{host}:{port}{base}")
-    }
+    nail_net::http::origin_url(host, port, tls, nail_api::exchange::GRAPH_BASE_PATH)
 }
 
 /// The path of a mailbox's resources: `/me` for the account's own,

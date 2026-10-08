@@ -23,23 +23,17 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::MutexGuard;
 
-use axum::Router;
-use axum::body::{Body, Bytes};
-use axum::extract::State as AxumState;
-use axum::http::{HeaderMap, Method, Response, StatusCode, Uri};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
+/// The fake Negotiate client's first token and the token that completes
+/// the fake handshake (shared with the mock EWS server).
+pub use nail_testkit_net::api_mock::{AUTHENTICATE_TOKEN, NEGOTIATE_TOKEN};
+use nail_testkit_net::api_mock::{ApiRequest, MockApi, MockReply, MockService};
 
-/// The first token a fake Negotiate client sends.
-pub const NEGOTIATE_TOKEN: &[u8] = b"nail-negotiate";
 /// The mock's challenge.
 pub const CHALLENGE_TOKEN: &[u8] = b"nail-challenge";
-/// The token that completes the fake handshake.
-pub const AUTHENTICATE_TOKEN: &[u8] = b"nail-authenticate";
 
 /// An Autodiscover v2 answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,14 +126,10 @@ struct State {
     requests: Vec<MockRequest>,
 }
 
-type Shared = Arc<Mutex<State>>;
-
 /// A running mock Autodiscover server; stops when dropped.
 #[derive(Debug)]
 pub struct MockAutodiscoverServer {
-    addr: SocketAddr,
-    state: Shared,
-    task: JoinHandle<()>,
+    api: MockApi<State>,
 }
 
 fn escape(text: &str) -> String {
@@ -278,35 +268,29 @@ fn email_in(body: &[u8]) -> String {
         .unwrap_or_default()
 }
 
-fn dispatch(state: &mut State, method: &str, uri: &Uri, headers: &HeaderMap, body: &[u8]) -> Reply {
-    let host = headers
-        .get("host")
-        .and_then(|h| h.to_str().ok())
+fn dispatch(state: &mut State, request: &ApiRequest) -> Reply {
+    let (method, body) = (request.method.as_str(), request.body.as_slice());
+    let host = request
+        .header("host")
         .unwrap_or_default()
         .split(':')
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let authorization = headers
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .map(str::to_owned);
+    let authorization = request.header("authorization").map(str::to_owned);
     state.requests.push(MockRequest {
         host: host.clone(),
         method: method.to_owned(),
-        path: uri
-            .path_and_query()
-            .map_or_else(|| uri.path().to_owned(), |p| p.as_str().to_owned()),
+        path: request.path_and_query(),
         authorization: authorization.clone(),
     });
     let Some(config) = state.hosts.get(&host).or(state.any_host.as_ref()).cloned() else {
         return Reply::new(404, "");
     };
-    let path = uri.path().to_ascii_lowercase();
+    let path = request.path.to_ascii_lowercase();
     if method == "GET" && path.starts_with("/autodiscover/autodiscover.json/v1.0/") {
-        let protocol = uri
-            .query()
-            .unwrap_or_default()
+        let protocol = request
+            .query
             .split('&')
             .find_map(|p| p.strip_prefix("Protocol="))
             .unwrap_or("EWS")
@@ -363,25 +347,20 @@ fn dispatch(state: &mut State, method: &str, uri: &Uri, headers: &HeaderMap, bod
     Reply::new(404, "")
 }
 
-async fn handle(
-    AxumState(state): AxumState<Shared>,
-    method: Method,
-    uri: Uri,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response<Body> {
-    let reply = {
-        let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
-        dispatch(&mut state, method.as_str(), &uri, &headers, &body)
-    };
-    let mut response = Response::builder()
-        .status(StatusCode::from_u16(reply.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR));
-    for (name, value) in reply.headers {
-        response = response.header(name, value);
+/// Largest request body (Autodiscover requests are a few KB).
+const BODY_LIMIT: usize = 1024 * 1024;
+
+impl MockService for State {
+    fn answer(&mut self, request: &ApiRequest) -> MockReply {
+        let reply = dispatch(self, request);
+        let mut answer = MockReply::with_body(reply.status, None, reply.body.into_bytes());
+        answer.headers = reply
+            .headers
+            .into_iter()
+            .map(|(n, v)| (n.to_owned(), v))
+            .collect();
+        answer
     }
-    response
-        .body(Body::from(reply.body))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
 impl MockAutodiscoverServer {
@@ -399,22 +378,18 @@ impl MockAutodiscoverServer {
     /// Starts a server playing these hosts (lowercase names); other hosts
     /// answer `404`.
     pub async fn start_hosts(hosts: BTreeMap<String, MockHost>) -> std::io::Result<Self> {
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let addr = listener.local_addr()?;
-        let state: Shared = Arc::new(Mutex::new(State {
+        let state = State {
             hosts,
             any_host: None,
             requests: Vec::new(),
-        }));
-        let app = Router::new().fallback(handle).with_state(state.clone());
-        let task = tokio::spawn(async move {
-            drop(axum::serve(listener, app).await);
-        });
-        Ok(Self { addr, state, task })
+        };
+        Ok(Self {
+            api: MockApi::start(state, BODY_LIMIT).await?,
+        })
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.api.lock()
     }
 
     /// Sets (or replaces) what a host answers.
@@ -424,12 +399,12 @@ impl MockAutodiscoverServer {
 
     /// The server's address (127.0.0.1 and its port).
     pub fn addr(&self) -> SocketAddr {
-        self.addr
+        self.api.addr()
     }
 
     /// The host to ask (`127.0.0.1:<port>`).
     pub fn host(&self) -> String {
-        format!("127.0.0.1:{}", self.addr.port())
+        format!("127.0.0.1:{}", self.api.addr().port())
     }
 
     /// The requests so far.
@@ -453,12 +428,6 @@ impl MockAutodiscoverServer {
     /// Forgets the request log.
     pub fn clear_requests(&self) {
         self.lock().requests.clear();
-    }
-}
-
-impl Drop for MockAutodiscoverServer {
-    fn drop(&mut self) {
-        self.task.abort();
     }
 }
 

@@ -93,11 +93,8 @@ mod tests {
             let data = tempfile::tempdir().unwrap();
             let config = tempfile::tempdir().unwrap();
             let args = crate::AppArgs {
-                data_dir: Some(data.path().into()),
-                config_dir: Some(config.path().into()),
-                seed: Some("demo".into()),
                 locale: Some(locale.into()),
-                ..crate::AppArgs::default()
+                ..crate::AppArgs::in_dirs(data.path(), config.path(), Some("demo"))
             };
             let service = crate::open_service(&args).unwrap();
             for message in TrayAction::ALL

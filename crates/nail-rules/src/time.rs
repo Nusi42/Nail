@@ -2,13 +2,7 @@
 
 /// Days since 1970-01-01 (Howard Hinnant's `days_from_civil`).
 pub fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
-    let y = i64::from(year) - i64::from(month <= 2);
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let m = i64::from(month);
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + i64::from(day) - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
+    nail_util::time::days_from_civil(i64::from(year), u32::from(month), u32::from(day))
 }
 
 /// Parses `YYYY-MM-DD` into days since 1970-01-01; `None` unless it is a
