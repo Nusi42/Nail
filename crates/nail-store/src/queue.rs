@@ -59,7 +59,7 @@ impl std::fmt::Display for OpId {
 }
 
 /// A change to some flags and tags: the contract type, stored compactly
-/// ([`compact_flag_change`]).
+/// (`compact_flag_change`).
 pub use nail_api::FlagChange;
 
 /// The stored form of a [`FlagChange`]: unset flags and empty tag lists are

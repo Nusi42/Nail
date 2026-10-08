@@ -184,7 +184,7 @@ struct RefuseResolver;
 /// proxy, no redirects (each `Location` is a new, checked hop), no
 /// `Referer`, no pooled connections, `user_agent`, `timeout` for the whole
 /// request, and every DNS lookup refused: names reach only the addresses
-/// [`pin`] gives them.
+/// [`pin_host`] gives them.
 pub fn pinned_builder(
     tls: &rustls::ClientConfig,
     user_agent: &str,

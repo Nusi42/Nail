@@ -1,4 +1,4 @@
-# ADR 0172: Q2 WP-rust-engines — one definition for the engines' shared code
+# ADR 0173: Q2 WP-rust-engines — one definition for the engines' shared code
 
 - Status: accepted (package of wave Q2; the integrator renumbers)
 - Date: 2026-10-08

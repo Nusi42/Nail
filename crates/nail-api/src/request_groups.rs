@@ -31,7 +31,7 @@ macro_rules! config_merge_requests {
 }
 
 /// The remote-login requests `nail-remote-auth` answers itself (password,
-/// TOTP, pairing codes); part of [`remote_admin_requests`].
+/// TOTP, pairing codes); part of [`remote_admin_requests`](crate::remote_admin_requests).
 #[macro_export]
 macro_rules! remote_auth_requests {
     () => {

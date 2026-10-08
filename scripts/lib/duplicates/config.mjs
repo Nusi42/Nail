@@ -71,9 +71,10 @@ export const SELF =
 export const DATA_DIR = "scripts/duplicates";
 
 /**
- * Files of {@link DATA_DIR}: the ratchet baselines (findings that existed when
- * Q2 started; new findings fail at once, these until Q2 removes them) and the
- * reasoned exceptions of the SSOT checks.
+ * Files of {@link DATA_DIR}: the reasoned exceptions of the SSOT checks, the
+ * hand-mirror inventory and the optional ratchet baselines (recorded findings
+ * that do not fail; Q2 used them during the wave and deleted them at the
+ * integration, ADR 0176, so every finding fails while they are absent).
  */
 export const DATA_FILES = {
   /** jscpd's own baseline format (`--baseline`): fingerprints of known clones. */

@@ -35,9 +35,13 @@ impl Vectors {
     ///
     /// When `out` does not serialize to JSON (a test bug).
     pub fn case(&mut self, function: &str, args: Value, out: impl Serialize) -> &mut Self {
-        let out = serde_json::to_value(out).expect("vector answers serialize to JSON");
-        self.cases
-            .push(json!({ "fn": function, "args": args, "out": out }));
+        let out = serde_json::to_value(out)
+            .unwrap_or_else(|e| panic!("vector answers serialize to JSON: {e}"));
+        let mut case = serde_json::Map::new();
+        case.insert("fn".to_owned(), Value::from(function));
+        case.insert("args".to_owned(), args);
+        case.insert("out".to_owned(), out);
+        self.cases.push(Value::Object(case));
         self
     }
 
@@ -60,8 +64,12 @@ impl Vectors {
         let path = vectors_dir().join(format!("{area}.json"));
         let text = self.render();
         if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-            std::fs::create_dir_all(vectors_dir()).expect("vectors directory");
-            std::fs::write(&path, &text).expect("vector file written");
+            if let Err(e) = std::fs::create_dir_all(vectors_dir()) {
+                panic!("vectors directory: {e}");
+            }
+            if let Err(e) = std::fs::write(&path, &text) {
+                panic!("{}: {e}", path.display());
+            }
         }
         let actual = std::fs::read_to_string(&path)
             .unwrap_or_default()

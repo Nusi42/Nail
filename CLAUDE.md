@@ -43,7 +43,15 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   rule, mapping, schema) has one source of truth and one definition; everything else derives it (generated code,
   imports, shared tokens, shared helpers). Rust ↔ TypeScript facts are generated (ts-rs, `npm run gen:api`) or pinned by
   a test, never mirrored by hand. No copy-pasted logic: the second copy is the moment to extract a shared function,
-  component or test helper. Reviews report every violation as must-fix; the duplicate check in `npm run check` stays at 0.
+  component or test helper. Reviews report every violation as must-fix; the duplicate check (`node
+  scripts/check-duplicates.mjs`, blocking since Q2: `--strict` in `npm run check`, `--files` in the hooks) stays at 0.
+  Where shared things live (Q2, ADRs 0172–0176): Rust helpers without dependencies in `nail-util`, transport / HTTP /
+  XML plumbing in `nail-net`, contract samples in `nail_api::testing` (feature `testing`), test support in the
+  `testing` features of nail-core / nail-store / nail-rules / nail-portability / nail-proxy and in nail-testkit(-net);
+  TS constants in the generated `ui/src/api/generated/constants.ts` (from `nail_api::ts_constants`), other contract
+  values in `ui/src/api/contract.ts`, test ids in `ui/src/test/mockIds.ts`, shared skin rules / lengths in
+  `ui/src/theme/declarations.ts`; one English text under two ids = a Fluent reference (`id = { common-… }`; generic
+  labels in `locales/en/common.ftl`); a reasoned non-violation goes into `scripts/duplicates/allow.json`.
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
@@ -155,6 +163,11 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        MailActionKind / MailActionIssue, MailActionResult + MailBatchId undo); ApplyMailAction /
                        ResolveMailTargets / UndoMailAction; MCP `conversations` args; remote_content FRAME_HEIGHT_MESSAGE /
                        RENDER_PARENT_PARAM / MAX_FRAME_HEIGHT
+                       Q2 (ADRs 0172, 0175): testing.rs (feature `testing`: sample contract values, test instants such as
+                       TUESDAY_NOON), request_groups (macros), Request / Response::wire_type, hosts.rs (is_loopback_host,
+                       authority_host, url_host, DNS-name checks), ActionItem (shared by toolbar / menu items),
+                       PluginTextField, labels::Labeled (generic over `labeled_enum!`), ts_vectors.rs (Rust answers for
+                       the UI's ports, crates/nail-api/fixtures/ts-vectors)
                        Q2 (ADR 0171): ts_constants.rs (ui_constants / plugin_constants → generated `constants.ts`, values
                        re-exported by index.ts; add a contract constant there, then `npm run gen:api`)
                        P2 (ADR 0148): domain ThreadParticipant ({name, email, me, unread}, address flattened) in
@@ -317,8 +330,11 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        to NAIL_FAKE_INSTALLER_RECORD instead of installing; ADR 0092);
                        conversations/ = P2 demo conversations (ADR 0152: demo_corpus_with_conversations,
                        conversation_corpus, MailStore::demo_with_conversations, DEMO_CONVERSATIONS; shown by the seeds of
-                       nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged)
-crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers; managesieve.rs:
+                       nail serve through nail_core::demo::DemoMail; demo_corpus() / MailStore::demo() unchanged);
+                       Q2 (ADR 0173): catalog, exchange (shared Exchange fixtures), tokens::FakeTokens, TEST_TIMEOUT (the
+                       one test wait)
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers (Q2: server.rs
+                       shared accept loop, api_mock.rs shared JSON-API mock plumbing; ADR 0173); managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
                        sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
                        several principals, schedule inbox / outbox, free/busy POST, switchable
@@ -559,10 +575,14 @@ crates/nail-bench      M4c WP123 (ADR 0097): corpus.rs (deterministic 100k corpu
                        child process), run.rs (metrics through Service; the account is handed over as local so
                        `nail serve` shows the data), memory.rs; bin nail-bench (run / check / corpus / mock-imap);
                        budgets = e2e/perf/budgets.json
-crates/nail-util       Q2 (ADR 0171): shared helpers without dependencies; time.rs (days_from_civil / civil_from_days,
-                       is_leap_year, days_in_month, unix_now, iso_date, rfc3339_utc: the one civil-date implementation)
-crates/nail-net        Q2 (ADR 0171): shared transport / line framing / HTTP retry plumbing of the protocol clients and
-                       mock servers (WP-rust-engines; starts empty)
+crates/nail-util       Q2 (ADRs 0171, 0173): shared helpers without dependencies; time.rs (days_from_civil / civil_from_days,
+                       is_leap_year, days_in_month, unix_now, iso_date, parse_iso_date, rfc3339_utc, weekday_from_monday,
+                       last_weekday_of_month, SECS_PER_DAY: the one civil-date implementation), batch (batched writes
+                       with a one-by-one fallback), expiring (expiring map), ical_text, markup (HTML escaping), mime_text,
+                       named (case-insensitive pair lookups), percent, redact, sieve_lex (the Sieve lexer)
+crates/nail-net        Q2 (ADR 0173): shared plumbing of the protocol clients and mock servers, features http / io /
+                       deflate / tls / xml: streams, TLS, line framing, HTTP client / retry / errors, one ApiClient for
+                       Gmail and Graph, the poll timer, the XML tree, ports and status codes
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -765,7 +785,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        <build dir>/screens/p2/quickwin/);
                        support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
-                       Q2 (ADR 0172): servers only via support/nail.ts nailPerTest / nailPerFile / nailFixture /
+                       Q2 (ADR 0175): servers only via support/nail.ts nailPerTest / nailPerFile / nailFixture /
                        nailOnDemand (support/serve.mjs spawnServe + coreRequest), desktop apps via support/desktop.ts
                        desktopTests / desktopPerFile / desktopPerTest; shared steps in support/{views,compose,mcp,
                        calendar,demo,axe,remote,windowTour}.ts (windowTour = the a11y and P1 window sweeps);
@@ -817,8 +837,10 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        post-edit hook of .claude/settings.json) + lib/run-checks.mjs (per-file checks, shared with pre-commit.mjs)
                        Q2 (ADR 0171): check-duplicates.mjs + lib/duplicates/ (config.mjs thresholds + ignores, jscpd.mjs,
                        sources.mjs lexer, ssot.mjs checks, owners.mjs package of each finding, index.mjs, report.mjs, cli.mjs);
-                       duplicates/ = ratchet baselines (integrator only), allow.json (reasoned exceptions), mirrors.json
-                       (curated hand mirrors)
+                       duplicates/ = allow.json (reasoned exceptions; `pinnedBy` = the pinning test) + mirrors.json
+                       (curated hand mirrors, empty since Q2); the ratchet baselines were deleted at the Q2 integration
+                       (ADR 0176: every finding fails); Q2 (ADR 0175): lib/{args,program,cargo}.mjs (argument loop,
+                       run-as-main, cargo invocation), test/rust-ts-pins.test.mjs (Rust lists the bindings cannot see)
 Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: typescript-eslint strictTypeChecked +
                        stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
                        eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
@@ -841,8 +863,8 @@ cargo fmt --all --check
 npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`, perf + visual script tests
 cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
-npm run check:duplicates                   # duplicate / SSOT check (Q2, ADR 0171; a step of npm run check and the hooks): new findings fail
-node scripts/check-duplicates.mjs --owner WP-ui --list    # a Q2 package's findings; --strict [--owner …] = every finding fails; --update-baseline (integrator)
+npm run check:duplicates                   # duplicate / SSOT check (Q2, ADRs 0171, 0176; `--strict` in npm run check, `--files` in the hooks): every finding fails
+node scripts/check-duplicates.mjs --list   # print every finding (--owner WP-… = one Q2 package's; --update-baseline only for a future ratchet wave)
 npm run check                              # everything, 0 warnings (ADR 0123): rustfmt, taplo, Prettier, EditorConfig, typos, markdownlint, actionlint, ESLint, tsc, clippy + rustdoc -D warnings, cargo machete, cargo deny
 node scripts/check.mjs --only eslint,tsc   # a subset (--skip, --list, --advisories = cargo deny advisories, on in CI; --fail-fast)
 npm run lint                               # ESLint (whole repo, type-aware, --max-warnings 0) + tsc (every tsconfig) + Prettier (whole repo)
@@ -854,7 +876,7 @@ npm run e2e                                # builds ui + nail-cli + desktop app,
 npm run e2e:only                           # Playwright against what is already built
 npm run build:desktop                      # nail-app (custom-protocol + test-overrides) + DLL / harness for the desktop smoke tests, own target dir
 npm run gen:api                            # regenerate ui/src/api/generated + packages/plugin-api/src/generated incl. constants.ts / .json (a test fails when stale)
-NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors   # crates/nail-api/fixtures/ts-vectors (Rust answers for the UI ports; also -p nail-config / -p nail-core ts_vectors; ADR 0172)
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors   # crates/nail-api/fixtures/ts-vectors (Rust answers for the UI ports; also -p nail-config / -p nail-core ts_vectors; ADR 0175)
 npm run docs -w packages/plugin-api        # regenerate the reference sections of userDocs/en/plugins/{api-reference,components}.md (a test fails when stale)
 node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|composer|attachment] [--id] [--name] [--sdk]   # scaffold a plug-in
 npm run package --prefix examples/<name>   # build + pack an example (follow-up, attachment-check, csv-preview; dist/ gitignored)
@@ -1199,6 +1221,14 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   test pinning a Rust ↔ TS pair). Contract constants for TS come from `nail_api::ts_constants` (`constants.ts`).
   Packages: WP-rust-core, WP-rust-engines (+ clones shared by core and engine crates), WP-ui, WP-mirrors-tooling (every
   Rust ↔ TS mirror, packages / examples / e2e / scripts); `scripts/lib/duplicates/owners.mjs` assigns each finding.
+- Q2 integration (ADR 0176; packages ADRs 0172 rust-core, 0173 rust-engines, 0174 UI, 0175 mirrors / tooling): 2,076
+  findings → 0, the baselines are deleted and the check blocks (`npm run check` `--strict`, hooks `--files`, CI through
+  `npm run check`). Catalog tests use `nail_config::l10n::assert_message_ids_in_catalog`; nail-itip / nail-pgp render
+  `itip.ftl` / `core-crypto.ftl` alone, so those keep their shared texts as definitions and `common.ftl` refers to them;
+  Rust code that builds a bundle from one core catalog must add `common.ftl` (references). `Feature.windows` gives sizes
+  only for windows `defaults/layout.kdl` does not size (`features/windowSizes.test.ts`). Debounces use
+  `state/debounce` (`TYPING_PAUSE_MS`). Examples and templates build with `nail-plugin build`. The rules UI ports
+  (print days, PIN / smartcard, sync, triage, …) are checked against `crates/nail-api/fixtures/ts-vectors/`.
 - M5d contract: ADR 0131 (layout edits = new `LayoutPatch` kinds through `UpdateLayout` (+ `base_revision`); `hidden=`
   on layout nodes; `presets` section with four default mail presets; actions `layout.customize` / `toolbar.customize`,
   `menu "context:toolbar"`; theme edits `EditTheme` / `DuplicateTheme` / `RenameTheme` / `DeleteTheme` /

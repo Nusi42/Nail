@@ -94,7 +94,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Socket-bind check (ADR 0057), then UI unit tests (Vitest) incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
 | UI unit tests with their console output, also when piped | `cd ui && npx vitest run --silent=false --reporter=default` (no `stderr \|` block expected) |
 | Socket-bind check only | `npm run check:sockets` |
-| Duplicate / SSOT check (Q2, ADR 0171; a step of `npm run check`) | `npm run check:duplicates`; a package's work list `node scripts/check-duplicates.mjs --owner WP-… --list`, its gate `--strict --owner WP-…` |
+| Duplicate / SSOT check (Q2, ADRs 0171, 0176; a step of `npm run check`, blocking) | `npm run check:duplicates`; every finding `node scripts/check-duplicates.mjs --list` |
 | ESLint (type-aware, whole repository, `--max-warnings 0`), tsc (every tsconfig), Prettier (whole repository) | `npm run lint` |
 | Markdown, TOML, EditorConfig | `npm run lint:md`, `npm run lint:toml`, `npm run lint:editorconfig` |
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
@@ -191,7 +191,7 @@ working.
 | Workflows | actionlint | — | — |
 | Every text file | EditorConfig check (`scripts/check-editorconfig.mjs`) | `.editorconfig` | your editor |
 | `Cargo.toml` dependencies | cargo machete; cargo deny | `deny.toml` | remove the dependency |
-| Code, CSS-in-TS, Fluent catalogs, constants | duplicate / SSOT check (jscpd + the checks of `scripts/lib/duplicates/`, ADR 0171) | `scripts/lib/duplicates/config.mjs`, `scripts/duplicates/` (baselines, `allow.json`, `mirrors.json`) | share the code or fact (SSOT / ODR / DRY) |
+| Code, CSS-in-TS, Fluent catalogs, constants | duplicate / SSOT check (jscpd + the checks of `scripts/lib/duplicates/`, ADR 0171) | `scripts/lib/duplicates/config.mjs`, `scripts/duplicates/` (`allow.json`, `mirrors.json`) | share the code or fact (SSOT / ODR / DRY) |
 
 The **duplicate check** (`scripts/check-duplicates.mjs`, wave Q2, ADR 0171)
 runs jscpd (≥ 50 tokens and ≥ 5 lines) over the code and over the CSS-in-TS,
@@ -199,17 +199,17 @@ plus the SSOT checks jscpd cannot see: hand mirrors between Rust and
 TypeScript (comments, constants, string lists, the curated
 `scripts/duplicates/mirrors.json`), constants defined twice, one English text
 under several Fluent ids, colours and lengths in CSS-in-TS, repeated magic
-numbers. It is a ratchet: the findings recorded in
-`scripts/duplicates/*baseline.json` (the state when Q2 started) are reported,
-new ones fail — a third copy of a known fragment too. Only the integrator
-rewrites the baselines (`--update-baseline`); a finding that is no violation
+numbers. It is blocking (ADR 0176): during Q2 it was a ratchet over recorded
+baselines, which the integration deleted at 0 findings, so every finding fails
+(`npm run check` runs it with `--strict`, the hooks with `--files` for the
+staged / edited files). A finding that is no violation
 goes into `scripts/duplicates/allow.json` with its reason (`pinnedBy` names
 the test that pins a Rust ↔ TypeScript pair). Rust ↔ TypeScript constants
 come from `crates/nail-api/src/ts_constants.rs` (`npm run gen:api` writes
 `ui/src/api/generated/constants.ts` and `constants.json`, the same for the
 plug-in SDK); rules the UI ports from Rust are checked against generated
 test vectors (`crates/nail-api/fixtures/ts-vectors/`, `ui/src/test/vectors.ts`;
-ADR 0172).
+ADR 0175).
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
@@ -220,7 +220,7 @@ select some, `--fail-fast` stops at the first failure. Cargo runs with
 The **pre-commit hook** (`.githooks/pre-commit`, enabled by `npm install` /
 `npm ci` through the `prepare` script, which sets `core.hooksPath`) runs
 rustfmt, Prettier, ESLint, taplo, markdownlint, typos, the EditorConfig
-check and the duplicate check (new findings touching the staged files; about
+check and the duplicate check (every finding touching the staged files; about
 3 s, it scans the whole checkout) on the staged files only, in parallel (measured at Q1: about 5 s for a
 commit with TypeScript files, most of it type-aware ESLint starting up;
 0.2 s for Rust / Markdown / TOML only). It reads the

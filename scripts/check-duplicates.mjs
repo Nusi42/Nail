@@ -5,11 +5,12 @@
 // ids, theme values in CSS-in-TS, repeated magic numbers). A step of
 // `npm run check` and of the git / post-edit hooks.
 //
-// Ratchet: findings recorded in scripts/duplicates/*baseline.json (the state
-// when Q2 started) are reported; new ones fail. The Q2 packages remove the
-// recorded ones (`--owner WP-… --list` is a package's work list, `--strict
-// --owner WP-…` its gate); the integrator empties the baselines, after which
-// every finding fails. Exceptions with a reason: scripts/duplicates/allow.json.
+// Blocking since the Q2 integration (ADR 0176): the ratchet baselines
+// (scripts/duplicates/*baseline.json) are deleted, so every finding fails —
+// `npm run check` passes `--strict`, the git / post-edit hooks `--files` (the
+// findings that touch the staged / edited files). `--owner WP-… --list` still
+// lists one Q2 package's findings. Exceptions with a reason:
+// scripts/duplicates/allow.json (`pinnedBy` names the test that pins a pair).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

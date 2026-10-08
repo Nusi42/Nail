@@ -120,9 +120,9 @@ export function checkSteps(options = {}) {
     },
     {
       id: "duplicates",
-      title: "Duplicates and SSOT (jscpd, mirrors, constants, Fluent texts; new findings fail)",
+      title: "Duplicates and SSOT (jscpd, mirrors, constants, Fluent texts; every finding fails)",
       tool: "node",
-      args: ["scripts/check-duplicates.mjs"],
+      args: ["scripts/check-duplicates.mjs", "--strict"],
       install: INSTALL.npm,
     },
     {

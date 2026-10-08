@@ -1,4 +1,4 @@
-# ADR 0172: Q2 WP-mirrors-tooling — one source for every Rust ↔ TypeScript fact, DRY tooling and e2e
+# ADR 0175: Q2 WP-mirrors-tooling — one source for every Rust ↔ TypeScript fact, DRY tooling and e2e
 
 Status: accepted · 2026-10-08 · Q2 WP-mirrors-tooling (contract ADR 0171; the
 integrator renumbers)
