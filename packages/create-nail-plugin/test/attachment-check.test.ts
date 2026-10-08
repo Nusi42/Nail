@@ -3,51 +3,25 @@
  * logic and its before-send hook against the SDK's test host, in English
  * and German (the keyword lists come from the plug-in's catalogs).
  */
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-
 import type { PluginOutgoingMessage } from "@nail/plugin-api";
-import { loadCatalogs } from "@nail/plugin-api/tools";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { testOutgoingMessage } from "@nail/plugin-api/testing";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import {
-  loadBundle,
-  prepareExample,
-  readManifest,
-  type LoadedPlugin,
-  type PreparedExample,
-} from "./helpers";
+import { pluginLoader, useExample } from "./helpers";
 import type * as CheckModule from "../../../examples/attachment-check/src/check";
 
 type Check = typeof CheckModule;
 
-let example: PreparedExample;
+const attachmentCheck = useExample<Check>("attachment-check", "check");
 let check: Check;
-beforeAll(async () => {
-  example = prepareExample("attachment-check");
-  check = (await import(pathToFileURL(path.join(example.source, "src", "check.ts")).href)) as Check;
-});
-afterAll(() => {
-  example.cleanup();
+beforeAll(() => {
+  check = attachmentCheck.module;
 });
 
 const outgoing = (
   text: string,
   extra: Partial<PluginOutgoingMessage> = {},
-): PluginOutgoingMessage => ({
-  draftId: "d1",
-  accountId: "work",
-  identityId: "work-main",
-  from: { name: null, email: "me@example.org" },
-  to: [{ name: "Ada", email: "ada@example.org" }],
-  cc: [],
-  bcc: [],
-  subject: "Quarterly report",
-  text,
-  attachments: [],
-  encrypted: false,
-  ...extra,
-});
+): PluginOutgoingMessage => testOutgoingMessage({ subject: "Quarterly report", text, ...extra });
 
 describe("keywords", () => {
   it("parses lists with prefixes, phrases and duplicates", () => {
@@ -79,20 +53,7 @@ describe("keywords", () => {
 });
 
 describe("the before-send hook", () => {
-  let loaded: LoadedPlugin | undefined;
-  afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
-  });
-
-  async function load(options: Parameters<typeof loadBundle>[1] = {}) {
-    loaded = await loadBundle(example.bundle, {
-      manifest: readManifest(example.source),
-      catalogs: loadCatalogs(example.source),
-      ...options,
-    });
-    return loaded.host;
-  }
+  const load = pluginLoader(() => attachmentCheck.example.dir);
 
   it("vetoes a mail that mentions a missing attachment, naming the word", async () => {
     const host = await load();

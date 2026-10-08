@@ -19,7 +19,7 @@ import type {
   Response,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
-import { ACCOUNT_PERMISSIONS } from "./grants";
+import { takesAccounts as permissionTakesAccounts } from "./grants";
 import { createExtensionsMockState, type ExtensionsMockState } from "./extensionsMock";
 import { answerHost, createMockHost, type MockHost } from "./mockHost";
 import { charCount } from "../../text/chars";
@@ -157,7 +157,7 @@ export function checkGrants(plugin: PluginInfo, grants: PluginGrant[]): string |
     }
     if (seen.has(grant.permission)) return `permission ${grant.permission} granted twice`;
     seen.add(grant.permission);
-    const takesAccounts = ACCOUNT_PERMISSIONS.includes(grant.permission);
+    const takesAccounts = permissionTakesAccounts(grant.permission);
     if (grant.accounts && (!takesAccounts || grant.accounts.length === 0)) {
       return `permission ${grant.permission} cannot be limited to these accounts`;
     }

@@ -8,7 +8,6 @@
  */
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { defaultTheme } from "../../api/mockData";
 import { UI_STATE_SETTINGS_SECTION } from "../../state/uiState";
 import { violations } from "../../test/axe";
 import {
@@ -19,17 +18,16 @@ import {
   stubElementSizesEachTest,
 } from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
-import { resolveMockTheme } from "../appearance/themes";
 import { SETTINGS_SKIN_CSS } from "./skin";
-import { THEME_CASES } from "../../test/themes";
+import { THEME_DENSITY_CASES, builtinTheme } from "../../test/themes";
 
 stubElementSizesEachTest();
 
 describe("settings page: axe in every theme and density", () => {
-  it.each(THEME_CASES)(
+  it.each(THEME_DENSITY_CASES)(
     "%s / %s",
     async (id, density) => {
-      const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
+      const theme = builtinTheme(id, density);
       const compiled = compileTheme(theme);
       expect(compiled.warnings).toEqual([]);
       expect(compiled.css).toContain(SETTINGS_SKIN_CSS);

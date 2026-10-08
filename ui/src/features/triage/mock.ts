@@ -13,16 +13,18 @@
  * queued writes (`Queued` + `OpStatus`). `decorateJunk` adds the verdict
  * of marked mail to `GetMessage`.
  */
-import type {
-  FolderId,
-  JunkSettings,
-  JunkStatus,
-  MessageBody,
-  MessageSummary,
-  NotificationSettings,
-  Request,
-  Response,
-  SnoozedMessage,
+import {
+  JUNK_ISSUE_MESSAGE_IDS,
+  NOTIFICATION_ISSUE_MESSAGE_IDS,
+  type FolderId,
+  type JunkSettings,
+  type JunkStatus,
+  type MessageBody,
+  type MessageSummary,
+  type NotificationSettings,
+  type Request,
+  type Response,
+  type SnoozedMessage,
 } from "../../api/generated";
 import { errorResponse, findMessages, queue, type MockCore } from "../../api/mockMail";
 import {
@@ -133,7 +135,7 @@ export function answerTriage(core: MockCore, request: TriageRequest): Response {
       return junkStatus(core, request.account_id);
     case "UpdateJunkSettings": {
       const issue = junkIssues(request.settings)[0];
-      if (issue !== undefined) return invalid("junk settings", `junk-issue-${issue}`);
+      if (issue !== undefined) return invalid("junk settings", JUNK_ISSUE_MESSAGE_IDS[issue]);
       const answer = junkStatus(core, request.account_id);
       if (answer.type === "Error") return answer;
       s.junk[request.account_id] = structuredClone(request.settings);
@@ -164,7 +166,7 @@ export function answerTriage(core: MockCore, request: TriageRequest): Response {
     case "UpdateNotificationSettings": {
       const issue = notificationIssues(request.settings)[0];
       if (issue !== undefined) {
-        return invalid("notification settings", `notification-issue-${issue}`);
+        return invalid("notification settings", NOTIFICATION_ISSUE_MESSAGE_IDS[issue]);
       }
       s.notifications = structuredClone(request.settings);
       core.emit({ type: "NotificationSettingsChanged" });

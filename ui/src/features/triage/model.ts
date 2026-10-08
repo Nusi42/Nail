@@ -1,35 +1,26 @@
 /**
- * Pure helpers of the triage feature, mirroring `nail_api::triage`
- * (ADR 0043): defaults and validation of the junk and notification
- * settings, and the names the UI shows.
+ * Pure helpers of the triage feature (`nail_api::triage`, ADR 0043): the
+ * defaults and value lists come generated; the validation is a port pinned
+ * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`);
+ * and the names the UI shows.
  */
-import type {
-  JunkIssue,
-  JunkSettings,
-  JunkSource,
-  NotificationIssue,
-  NotificationSettings,
-  Weekday,
+import {
+  DEFAULT_JUNK_SETTINGS,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type JunkIssue,
+  type JunkSettings,
+  type NotificationIssue,
+  type NotificationSettings,
 } from "../../api/generated";
 
-export const JUNK_ISSUES: readonly JunkIssue[] = ["threshold", "min-training"];
-export const JUNK_SOURCES: readonly JunkSource[] = ["server", "classifier", "user"];
-export const NOTIFICATION_ISSUES: readonly NotificationIssue[] = [
-  "quiet-hours-time",
-  "empty-quiet-hours",
-  "duplicate-override",
-];
-export const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export {
+  JUNK_SOURCE_VALUES as JUNK_SOURCES,
+  WEEKDAY_VALUES as WEEKDAYS,
+} from "../../api/generated";
 
 /** `JunkSettings::default()`. */
 export function defaultJunkSettings(): JunkSettings {
-  return {
-    enabled: false,
-    threshold: 90,
-    min_training: 10,
-    honor_server_flags: true,
-    move_to_junk: true,
-  };
+  return { ...DEFAULT_JUNK_SETTINGS };
 }
 
 /** The most messages the junk filter may wait for before it decides (`JunkSettings::issues`). */
@@ -46,12 +37,8 @@ export function junkIssues(s: JunkSettings): JunkIssue[] {
 /** `NotificationSettings::default()`. */
 export function defaultNotificationSettings(): NotificationSettings {
   return {
-    enabled: true,
-    show_preview: true,
-    sound: true,
-    folders: "inbox",
-    overrides: [],
-    quiet_hours: null,
+    ...DEFAULT_NOTIFICATION_SETTINGS,
+    overrides: [...DEFAULT_NOTIFICATION_SETTINGS.overrides],
   };
 }
 

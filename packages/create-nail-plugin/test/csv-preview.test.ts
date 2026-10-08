@@ -2,32 +2,18 @@
  * The "CSV preview" example (examples/csv-preview): CSV parsing and the
  * preview renderer against the SDK's test host (a table component).
  */
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-
 import type { PluginPreview, PluginUiNode } from "@nail/plugin-api";
-import { loadCatalogs } from "@nail/plugin-api/tools";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import {
-  loadBundle,
-  prepareExample,
-  readManifest,
-  type LoadedPlugin,
-  type PreparedExample,
-} from "./helpers";
+import { pluginLoader, useExample } from "./helpers";
 import type * as CsvModule from "../../../examples/csv-preview/src/csv";
 
 type Csv = typeof CsvModule;
 
-let example: PreparedExample;
+const csvPreview = useExample<Csv>("csv-preview", "csv");
 let csv: Csv;
-beforeAll(async () => {
-  example = prepareExample("csv-preview");
-  csv = (await import(pathToFileURL(path.join(example.source, "src", "csv.ts")).href)) as Csv;
-});
-afterAll(() => {
-  example.cleanup();
+beforeAll(() => {
+  csv = csvPreview.module;
 });
 
 describe("CSV parsing", () => {
@@ -88,20 +74,7 @@ describe("CSV parsing", () => {
 });
 
 describe("the preview renderer", () => {
-  let loaded: LoadedPlugin | undefined;
-  afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
-  });
-
-  async function load(options: Parameters<typeof loadBundle>[1] = {}) {
-    loaded = await loadBundle(example.bundle, {
-      manifest: readManifest(example.source),
-      catalogs: loadCatalogs(example.source),
-      ...options,
-    });
-    return loaded.host;
-  }
+  const load = pluginLoader(() => csvPreview.example.dir);
 
   const children = (preview: PluginPreview) =>
     preview.kind === "tree"

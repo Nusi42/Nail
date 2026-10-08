@@ -6,112 +6,43 @@
  * (`invalid-id`, `unknown-command`, …).
  */
 
+import { CONTRACT } from "./contract.mjs";
 import { isCron } from "./cron.mjs";
 
 /** Every permission Nail offers (plus `network:<host>`), in display order. */
-export const PERMISSIONS = [
-  "mail.read",
-  "mail.read.body",
-  "calendar.read",
-  "ui.dialogs",
-  "notifications",
-  "storage",
-  "mail.organize",
-  "mail.send",
-  "calendar.write",
-  "contacts.write",
-  "tasks.write",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "composer",
-  "attachments",
-  "background",
-  "mcp.expose",
-];
+export const { PLUGIN_PERMISSIONS: PERMISSIONS } = CONTRACT;
 
 /** Permissions of the design that this version refuses (`permission-not-in-preview`). */
-export const FUTURE_PERMISSIONS = [
-  "mail.read.encrypted",
-  "contacts.read",
-  "tasks.read",
-  "ui.webview",
-];
+export const { FUTURE_PERMISSIONS } = CONTRACT;
 
-/**
- * Permissions another one needs in the same manifest (`missing-required-permission`).
- *
- * @type {Partial<Record<string, string[]>>}
- */
-export const REQUIRED_PERMISSIONS = {
-  "mail.read.body": ["mail.read"],
-  "mail.organize": ["mail.read"],
-  "hooks.arrival": ["mail.read"],
-  "hooks.open": ["mail.read"],
-};
+/** Permissions another one needs in the same manifest (`missing-required-permission`). */
+export const REQUIRED_PERMISSIONS = /** @type {Partial<Record<string, string[]>>} */ (
+  CONTRACT.REQUIRED_PERMISSIONS
+);
 
 /** Permissions a grant can limit to accounts. */
-export const ACCOUNT_PERMISSIONS = [
-  "mail.read",
-  "mail.read.body",
-  "mail.organize",
-  "mail.send",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "attachments",
-];
+export const { ACCOUNT_PERMISSIONS } = CONTRACT;
 
 /** Permissions that let a plug-in change the user's data (the install dialog highlights them). */
-export const WRITE_PERMISSIONS = [
-  "mail.organize",
-  "mail.send",
-  "calendar.write",
-  "contacts.write",
-  "tasks.write",
-];
+export const { WRITE_PERMISSIONS } = CONTRACT;
 
 /** Hook kinds and their permissions. */
-export const HOOK_PERMISSIONS = {
-  arrival: "hooks.arrival",
-  beforeSend: "hooks.beforeSend",
-  open: "hooks.open",
-};
+export const { HOOK_PERMISSIONS } = CONTRACT;
 
 /** Events a background job can subscribe to. */
-export const JOB_EVENTS = [
-  "message.received",
-  "message.sent",
-  "selection.changed",
-  "event.reminder",
-  "app.started",
-];
+export const { PLUGIN_EVENT_NAME_VALUES: JOB_EVENTS } = CONTRACT;
 
 /** MCP scopes (what an exposed tool may require of a client). */
-export const MCP_SCOPES = [
-  "read",
-  "raw-source",
-  "attachments",
-  "encrypted",
-  "context",
-  "organize",
-  "permanent-delete",
-  "draft",
-  "send",
-  "calendar",
-  "pim",
-  "rules",
-];
+export const { MCP_SCOPE_VALUES: MCP_SCOPES } = CONTRACT;
 
-/** Largest attachment a preview renderer may declare (bytes). */
-export const MAX_PREVIEW_INPUT = 10 * 1024 * 1024;
-/** Longest MCP tool name (`<plugin>__<tool>`). */
-export const MAX_MCP_TOOL_NAME = 64;
-/** Largest `inputSchema` (bytes of JSON). */
-export const MAX_MCP_TOOL_SCHEMA = 16 * 1024;
+/**
+ * Largest attachment a preview renderer may declare (bytes), longest MCP
+ * tool name (`<plugin>__<tool>`), largest `inputSchema` (bytes of JSON).
+ */
+export const { MAX_PREVIEW_INPUT, MAX_MCP_TOOL_NAME, MAX_MCP_TOOL_SCHEMA } = CONTRACT;
 
 const COMMAND_CONTEXTS = ["list", "reader", "composer", "global"];
-const KEY_CONTEXTS = ["global", "list", "reader", "composer", "search", "window"];
+const { KEY_CONTEXTS } = CONTRACT;
 
 /**
  * Whether `value` is a JSON object (not `null`, not an array).

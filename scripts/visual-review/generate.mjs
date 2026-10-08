@@ -26,9 +26,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { forEachArg } from "../lib/args.mjs";
+import { buildBase as checkoutBuildBase } from "../lib/build.mjs";
 import { parseJson } from "../lib/json.mjs";
+import { repoRoot, runMain } from "../lib/program.mjs";
 
 /**
  * One manifest entry: a screen of a theme × density variant (or a whole
@@ -50,8 +51,7 @@ import { parseJson } from "../lib/json.mjs";
 
 /** @typedef {Partial<Record<string, string>>} Env */
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-export const repoRoot = path.resolve(here, "..", "..");
+export { repoRoot };
 
 /** Statuses in the order the summary lists them (lib/capture.ts `CaptureStatus`). */
 export const STATUSES = ["changed", "new", "error", "passed", "captured", "skipped"];
@@ -78,7 +78,7 @@ const SCREEN_ORDER = [
  * @param {Env} [env]
  */
 export function buildBase(env = process.env) {
-  return env.NAIL_BUILD_DIR ?? path.join(repoRoot, ".nail-build");
+  return checkoutBuildBase(env, repoRoot);
 }
 
 /**
@@ -101,18 +101,13 @@ export function parseArgs(argv, env = process.env) {
       process.platform,
     ),
   };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const v = argv[++i];
-      if (!v) throw new Error(`${arg} needs a value`);
-      return path.resolve(v);
-    };
+  forEachArg(argv, (arg, reader) => {
+    const value = () => path.resolve(reader.value());
     if (arg === "--results") options.results = value();
     else if (arg === "--out") options.out = value();
     else if (arg === "--baselines") options.baselines = value();
     else throw new Error(`unknown argument ${arg}`);
-  }
+  });
   return { ...options, out: options.out ?? path.join(options.results, "review") };
 }
 
@@ -525,16 +520,11 @@ export function buildReview(options, now = new Date()) {
   return { file, summary, orphans, entries };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    const { file, summary } = buildReview(parseArgs(process.argv.slice(2)));
-    const counts = STATUSES.filter((s) => (summary[s] ?? 0) > 0).map(
-      (s) => `${String(summary[s])} ${s}`,
-    );
-    console.log(`visual review: ${counts.join(", ") || "no results"}`);
-    console.log(file);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 2;
-  }
-}
+await runMain(import.meta.url, (argv) => {
+  const { file, summary } = buildReview(parseArgs(argv));
+  const counts = STATUSES.filter((s) => (summary[s] ?? 0) > 0).map(
+    (s) => `${String(summary[s])} ${s}`,
+  );
+  console.log(`visual review: ${counts.join(", ") || "no results"}`);
+  console.log(file);
+});

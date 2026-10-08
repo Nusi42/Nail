@@ -1,68 +1,53 @@
 /**
- * The contract's rules for writes by agents and plug-ins, mirrored from
- * `nail_api::agents` (ADR 0079) for the mock core and the confirmation
- * center: which kinds are destructive, which ask by default, and the
- * policy table of an actor.
+ * The contract's rules for writes by agents and plug-ins (`nail_api::agents`,
+ * ADR 0079) for the mock core and the confirmation center: the per-kind
+ * rules come generated (`ACTION_KIND_RULES`), the policy table is a port
+ * pinned by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * `model.test.ts`).
  */
-import type {
-  ActionActor,
-  ActionAttribution,
-  ActionKind,
-  ActionPolicy,
-  ActionPolicyMode,
-  ActionTargetKind,
-  ConfirmationSource,
-  ConfirmationState,
+import {
+  ACTION_KIND_MESSAGE_IDS,
+  ACTION_KIND_RULES,
+  ACTION_KIND_VALUES,
+  CONFIRMATION_STATE_MESSAGE_IDS,
+  type ActionActor,
+  type ActionAttribution,
+  type ActionKind,
+  type ActionPolicy,
+  type ActionPolicyMode,
+  type ActionTargetKind,
+  type ConfirmationSource,
+  type ConfirmationState,
 } from "../../api/generated";
 
-/** Every kind, in display order (`ActionKind::ALL`). */
-export const ACTION_KINDS: readonly ActionKind[] = [
-  "organize",
-  "trash",
-  "permanent-delete",
-  "draft",
-  "send",
-  "calendar",
-  "invite",
-  "contact",
-  "task",
-  "pim-delete",
-  "rule",
-];
-
-/** Every state (`ConfirmationState::ALL`). */
-export const CONFIRMATION_STATES: readonly ConfirmationState[] = [
-  "pending",
-  "approved",
-  "denied",
-  "expired",
-  "cancelled",
-  "failed",
-];
+export {
+  ACTION_KIND_VALUES as ACTION_KINDS,
+  CONFIRMATION_STATE_VALUES as CONFIRMATION_STATES,
+} from "../../api/generated";
 
 /** Kinds that remove data: they always ask (`ActionKind::is_destructive`). */
 export function isDestructive(kind: ActionKind): boolean {
-  return kind === "trash" || kind === "permanent-delete" || kind === "pim-delete";
+  return ACTION_KIND_RULES[kind].destructive;
 }
 
 /** Kinds that send mail (`ActionKind::is_outgoing`). */
 export function isOutgoing(kind: ActionKind): boolean {
-  return kind === "send" || kind === "invite";
+  return ACTION_KIND_RULES[kind].outgoing;
 }
 
 /** Whether "always allow" may be set (`ActionKind::can_always_allow`). */
 export function canAlwaysAllow(kind: ActionKind): boolean {
-  return !isDestructive(kind);
+  return ACTION_KIND_RULES[kind].can_always_allow;
 }
 
 /** The policy until the user changes it (`ActionKind::default_mode`). */
 export function defaultMode(kind: ActionKind): ActionPolicyMode {
-  return isDestructive(kind) || isOutgoing(kind) || kind === "rule" ? "ask" : "allow";
+  return ACTION_KIND_RULES[kind].default_mode;
 }
 
 /** The full table of an actor from its stored modes (`ActionPolicy::table`). */
 export function policyTable(stored: Partial<Record<ActionKind, ActionPolicyMode>>): ActionPolicy[] {
-  return ACTION_KINDS.map((kind) => {
+  return ACTION_KIND_VALUES.map((kind) => {
     const raw = stored[kind];
     const honoured = raw === "ask" || (raw === "allow" && canAlwaysAllow(kind)) ? raw : undefined;
     return {
@@ -81,12 +66,12 @@ export function actorKey(actor: ActionActor): string {
 
 /** Fluent id of a kind's name (in `core-agents.ftl`). */
 export function kindMessageId(kind: ActionKind): string {
-  return `action-kind-${kind}`;
+  return ACTION_KIND_MESSAGE_IDS[kind];
 }
 
 /** Fluent id of a state's name (in `core-agents.ftl`). */
 export function stateMessageId(state: ConfirmationState): string {
-  return `confirmation-state-${state}`;
+  return CONFIRMATION_STATE_MESSAGE_IDS[state];
 }
 
 /** Every kind of affected item (`ActionTargetKind`). */

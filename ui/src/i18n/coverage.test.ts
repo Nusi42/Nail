@@ -44,6 +44,7 @@ import * as shellMessages from "../features/shell/messages";
 import * as windowsMessages from "../features/windows/messages";
 import * as popoutMessages from "../features/popout/messages";
 import * as layoutEditorMessages from "../features/layout-editor/messages";
+import { KEY_CONTEXTS as PLUGIN_KEY_CONTEXTS } from "../api/generated";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
 import { must } from "../test/must";
@@ -392,18 +393,9 @@ describe("English catalog coverage", () => {
     }
     const layout = readFileSync(join(repoDir, "defaults/layout.kdl"), "utf8");
     const fromLayout = [...layout.matchAll(/\bkeys\s+context="([^"]+)"/g)].map((m) => m[1]);
-    // The contexts a plug-in manifest may bind keys in (Rust and the SDK's
-    // manifest checker).
-    const fromPlugins = [
-      "crates/nail-api/src/plugins/manifest.rs",
-      "packages/plugin-api/tools/manifest.mjs",
-    ].flatMap((path) => {
-      const list = /KEY_CONTEXTS[^=]*=\s*&?\[([^\]]*)\]/.exec(
-        readFileSync(join(repoDir, path), "utf8"),
-      );
-      expect(list, path).not.toBeNull();
-      return [...(list?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    });
+    // The contexts a plug-in manifest may bind keys in (the contract's
+    // `KEY_CONTEXTS`, generated; the SDK's manifest checker reads the same).
+    const fromPlugins = [...PLUGIN_KEY_CONTEXTS];
     expect(fromLayout.length).toBeGreaterThan(3);
     expect(fromPlugins.length).toBeGreaterThan(3);
     const unknown = [...fromSources, ...fromLayout, ...fromPlugins].filter(

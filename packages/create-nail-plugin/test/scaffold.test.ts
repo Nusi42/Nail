@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { readZip } from "@nail/plugin-api/tools";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { main } from "../index.mjs";
@@ -15,9 +14,10 @@ import {
   toPluginId,
 } from "../scaffold.mjs";
 import {
+  buildAndPack,
   linkDependencies,
   loadBundle,
-  node,
+  nailPlugin,
   readManifest,
   SDK,
   tempDir,
@@ -31,8 +31,6 @@ const EXPECTED_FILES = [
   "locales/en.ftl",
   "manifest.json",
   "package.json",
-  "scripts/build.mjs",
-  "scripts/pack.mjs",
   "src/index.tsx",
   "tsconfig.json",
 ];
@@ -161,18 +159,16 @@ describe("a scaffolded plug-in", () => {
     linkDependencies(dir);
 
     typecheck(dir);
-    const build = node(dir, "scripts/build.mjs");
-    expect(build).toBe("");
+    expect(buildAndPack(dir, "hello-plugin")).toEqual([
+      "manifest.json",
+      "dist/index.js",
+      "locales/en.ftl",
+    ]);
     const bundle = readFileSync(path.join(dir, "dist", "index.js"), "utf8");
     // One self-contained ES module: no imports or requires left, no Node APIs.
     expect(bundle).not.toMatch(/^\s*import\s/m);
     expect(bundle).not.toMatch(/\brequire\(/);
     expect(bundle).toMatch(/export\s*\{\s*\w+ as default\s*\}/);
-
-    const packed = node(dir, "scripts/pack.mjs");
-    expect(packed).toMatch(/hello-plugin\.nailplugin/);
-    const zip = readZip(readFileSync(path.join(dir, "dist", "hello-plugin.nailplugin")));
-    expect(zip.map((e) => e.name)).toEqual(["manifest.json", "dist/index.js", "locales/en.ftl"]);
 
     const manifest = readManifest(dir);
     loaded = await loadBundle(path.join(dir, "dist", "index.js"), {
@@ -205,7 +201,7 @@ describe("a scaffolded plug-in", () => {
     const dir = temp();
     scaffold({ dir, id: "unbuilt", force: true });
     linkDependencies(dir);
-    expect(() => node(dir, "scripts/pack.mjs")).toThrow(/build the plug-in first/);
+    expect(() => nailPlugin(dir, "pack")).toThrow(/build the plug-in first/);
   });
 
   it("links the SDK of this repository", () => {

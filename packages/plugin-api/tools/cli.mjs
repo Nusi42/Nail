@@ -4,32 +4,37 @@
  * developer tool, not part of Nail's UI):
  *
  *   nail-plugin check [dir]              check manifest.json
+ *   nail-plugin build [dir] [--watch]    bundle src/index.tsx into the manifest's `main`
  *   nail-plugin pack [dir] [--out FILE]  pack a built plug-in into a .nailplugin
  */
 import path from "node:path";
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
+import { buildPlugin } from "./build.mjs";
 import { PackError, packPlugin, readManifest } from "./pack.mjs";
+import { runAsProgram } from "./program.mjs";
 
-const USAGE = "usage: nail-plugin check [dir] | nail-plugin pack [dir] [--out FILE]";
+const USAGE =
+  "usage: nail-plugin check [dir] | nail-plugin build [dir] [--watch] | nail-plugin pack [dir] [--out FILE]";
 
 /**
- * Runs the CLI.
+ * Runs the CLI (`build` answers a promise: the bundle is written then).
  * @param {string[]} argv arguments after the program name
  * @param {{ log: (s: string) => void, error: (s: string) => void }} [io]
- * @returns {number} exit code
+ * @returns {number | Promise<number>} exit code
  */
 export function main(argv, io = console) {
   const [command, ...rest] = argv;
   let dir = ".";
   /** @type {string | undefined} */
   let out;
+  let watch = false;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i] ?? "";
     if (arg === "--out" && rest[i + 1] !== undefined) {
       out = rest[i + 1];
       i += 1;
+    } else if (arg === "--watch" && command === "build") {
+      watch = true;
     } else if (!arg.startsWith("--")) {
       dir = arg;
     } else {
@@ -42,6 +47,9 @@ export function main(argv, io = console) {
       const { manifest } = readManifest(dir);
       io.log(`${manifest.id} ${manifest.version}: manifest.json looks fine`);
       return 0;
+    }
+    if (command === "build") {
+      return buildPlugin({ dir, watch }).then(() => 0);
     }
     if (command === "pack") {
       const result = packPlugin({ dir, out });
@@ -62,15 +70,4 @@ export function main(argv, io = console) {
   return 2;
 }
 
-/** Whether this module is the program (also through npm's bin links). */
-function isMain() {
-  try {
-    return realpathSync(process.argv[1] ?? "") === realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isMain()) {
-  process.exitCode = main(process.argv.slice(2));
-}
+await runAsProgram(import.meta.url, main);

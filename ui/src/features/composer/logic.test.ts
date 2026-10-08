@@ -1,6 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { TransportClient } from "../../api/client";
-import type { Draft, Identity, Response } from "../../api/generated";
+import {
+  MAX_ATTACHMENT_BYTES,
+  type Draft,
+  type Identity,
+  type Response,
+} from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { createMockData } from "../../api/mockData";
 import { emptyComposer, type ComposeContext } from "../../state/compose";
@@ -27,14 +32,7 @@ import {
   switchMode,
   uploadFiles,
 } from "./flows";
-import {
-  acceptRichDrafts,
-  convertDraft,
-  renderMarkdown,
-  saveRichDraft,
-  suggest,
-  MOCK_MAX_ATTACHMENT,
-} from "./mock";
+import { acceptRichDrafts, convertDraft, renderMarkdown, saveRichDraft, suggest } from "./mock";
 import { mentionsAttachment, needsReminder, ownText, parseKeywords } from "./reminder";
 import { activeComposer } from "./sessions";
 import { emptyRich, instanceRichStore, primeRich, richStoreFor } from "./store";
@@ -236,7 +234,7 @@ describe("composer mock", () => {
         "AttachmentUploaded",
       ),
     ).rejects.toMatchObject({ code: "invalid_request" });
-    const big = "A".repeat(Math.ceil((MOCK_MAX_ATTACHMENT * 4) / 3) + 8);
+    const big = "A".repeat(Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 8);
     await expect(
       client.request(
         { type: "UploadAttachment", filename: "big", mime: "x/y", data: big, content_id: null },

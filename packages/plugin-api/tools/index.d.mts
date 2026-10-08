@@ -1,4 +1,5 @@
 /** Node-side tools of `@nail/plugin-api` (packing `.nailplugin` archives). */
+import type { BuildOptions } from "esbuild";
 import type { PluginManifest } from "../src/generated";
 
 /** A problem found in `manifest.json` (same kinds as Nail's `PluginManifestIssue`). */
@@ -74,6 +75,26 @@ export interface PackResult {
   /** The manifest. */
   manifest: PluginManifest;
 }
+
+/** The esbuild options of the plug-in in `dir` (`src/index.tsx` into the manifest's `main`, or `outfile`). */
+export declare function pluginBuildOptions(
+  dir: string,
+  options?: { outfile?: string },
+): BuildOptions;
+/** Builds the plug-in in `dir` once, or on every change with `watch` (esbuild is a peer dependency). */
+export declare function buildPlugin(options: {
+  dir: string;
+  watch?: boolean;
+  outfile?: string;
+}): Promise<void>;
+
+/** Whether the module at `moduleUrl` (its `import.meta.url`) is the program. */
+export declare function isProgram(moduleUrl: string): boolean;
+/** Runs `main` with the program's arguments when the module is the program; sets the exit code. */
+export declare function runAsProgram(
+  moduleUrl: string,
+  main: (argv: string[]) => number | Promise<number>,
+): Promise<void>;
 
 /** Packs `dir` into `out` (default `<dir>/dist/<id>.nailplugin`). */
 export declare function packPlugin(options: { dir: string; out?: string | undefined }): PackResult;

@@ -5,7 +5,8 @@
  * texts the core builds, `core-triage.ftl`); ids built at runtime are
  * listed by `runtimeIds`.
  */
-import { JUNK_ISSUES, JUNK_SOURCES, NOTIFICATION_ISSUES, SNOOZE_PRESETS, WEEKDAYS } from "./model";
+import { JUNK_ISSUE_MESSAGE_IDS, NOTIFICATION_ISSUE_MESSAGE_IDS } from "../../api/generated";
+import { JUNK_SOURCES, SNOOZE_PRESETS, WEEKDAYS } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["junk-", "snooze-", "notification-"];
@@ -21,9 +22,9 @@ export const notMessages: readonly string[] = [
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   return [
-    ...JUNK_ISSUES.map((i) => `junk-issue-${i}`),
+    ...Object.values(JUNK_ISSUE_MESSAGE_IDS),
     ...JUNK_SOURCES.map((s) => `junk-source-${s}`),
-    ...NOTIFICATION_ISSUES.map((i) => `notification-issue-${i}`),
+    ...Object.values(NOTIFICATION_ISSUE_MESSAGE_IDS),
     ...SNOOZE_PRESETS.map((p) => `snooze-preset-${p}`),
     ...WEEKDAYS.map((d) => `notification-day-${d}`),
     ...["default", "on", "off"].map((c) => `notification-override-${c}`),

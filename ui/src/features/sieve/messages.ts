@@ -4,7 +4,8 @@
  * one of `prefixes` must exist in `locales/en/sieve.ftl`; ids built at
  * runtime are listed by `runtimeIds`.
  */
-import { RULE_PLACEMENTS, SIEVE_STATES, VACATION_ISSUES } from "./model";
+import { VACATION_ISSUE_MESSAGE_IDS } from "../../api/generated";
+import { RULE_PLACEMENTS, SIEVE_STATES } from "./model";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["sieve-", "vacation-"];
@@ -19,7 +20,7 @@ export function runtimeIds(): string[] {
   return [
     ...SIEVE_STATES.map((s) => `sieve-state-${s}`),
     ...RULE_PLACEMENTS.map((p) => `sieve-placement-${p}`),
-    ...VACATION_ISSUES.map((i) => `vacation-issue-${i}`),
+    ...Object.values(VACATION_ISSUE_MESSAGE_IDS),
     ...MANAGESIEVE_ISSUES.map((i) => `sieve-issue-${i}`),
   ];
 }

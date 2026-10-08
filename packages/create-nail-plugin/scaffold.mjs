@@ -1,7 +1,7 @@
 /**
  * Scaffolds a Nail plug-in folder from `template/`: manifest.json,
- * src/index.tsx, tsconfig.json, package.json, scripts/build.mjs (esbuild),
- * scripts/pack.mjs (.nailplugin), locales/en.ftl, README.md, .gitignore.
+ * src/index.tsx, tsconfig.json, package.json (its scripts run the SDK's
+ * `nail-plugin build` / `nail-plugin pack`), locales/en.ftl, README.md, .gitignore.
  * A template other than `command` replaces manifest.json, src/index.tsx
  * and locales/en.ftl with those of `templates/<name>/` (M4a: `hook`,
  * `composer`, `attachment`).
@@ -22,6 +22,21 @@ export const TEMPLATES_DIR = path.join(here, "templates");
 export const TEMPLATES = ["command", "hook", "composer", "attachment"];
 /** The SDK package in this repository (`packages/plugin-api`). */
 export const SDK_DIR = path.resolve(here, "..", "plugin-api");
+/** The example plug-ins of this repository (`examples/`; built like the template's). */
+export const EXAMPLES_DIR = path.resolve(here, "..", "..", "examples");
+
+/**
+ * The names of the example plug-ins: every folder of {@link EXAMPLES_DIR}
+ * with a `manifest.json`, sorted.
+ *
+ * @returns {string[]}
+ */
+export function exampleNames() {
+  return readdirSync(EXAMPLES_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(path.join(EXAMPLES_DIR, e.name, "manifest.json")))
+    .map((e) => e.name)
+    .sort();
+}
 
 /** Template files whose names npm would drop or mangle when publishing. */
 /** @type {Partial<Record<string, string>>} */

@@ -28,7 +28,6 @@ const files = import.meta.glob<string>("../../../../defaults/themes/*.kdl", {
   eager: true,
 });
 
-/** Categories whose unitless numbers are pixels (as in `nail-config`). */
 /** Token variants a theme file may give. */
 const VARIANTS = new Set(["light", "dark", "high-contrast", "print", "compact"]);
 

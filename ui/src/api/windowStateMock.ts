@@ -26,6 +26,7 @@ import {
   windowKind,
 } from "../state/windows";
 import { charCount } from "../text/chars";
+import { POP_OUT_ISSUE_MESSAGE_IDS, WINDOW_STATE_ISSUE_MESSAGE_IDS } from "./generated";
 
 /** The requests answered here. */
 export const WINDOW_STATE_REQUESTS = [
@@ -148,7 +149,7 @@ export function answerWindowState(core: MockCore, request: WindowStateRequest): 
         return error(
           "invalid_request",
           `window state \`${request.window}\`: ${issue}`,
-          `window-state-issue-${issue}`,
+          WINDOW_STATE_ISSUE_MESSAGE_IDS[issue],
         );
       }
       setState(core, request.window, request.state);
@@ -180,7 +181,7 @@ export function answerWindowState(core: MockCore, request: WindowStateRequest): 
         return error(
           "invalid_request",
           `pop-out \`${request.window}\`: ${issue}`,
-          `pop-out-issue-${issue}`,
+          POP_OUT_ISSUE_MESSAGE_IDS[issue],
         );
       }
       if (open) {

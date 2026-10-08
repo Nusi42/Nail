@@ -12,24 +12,19 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 
 import { createUpdateServer, listenLoopback } from "./lib/update-server.mjs";
+import { forEachArg } from "./lib/args.mjs";
 
 /** @param {string[]} argv */
 function parse(argv) {
   /** @type {{ port: number, root?: string, portFile?: string, log?: string }} */
   const o = { port: 0 };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] ?? "";
-    const value = () => {
-      const v = argv[++i];
-      if (v === undefined || v.startsWith("--")) throw new Error(`${arg} needs a value`);
-      return v;
-    };
+  forEachArg(argv, (arg, { value }) => {
     if (arg === "--root") o.root = value();
     else if (arg === "--port") o.port = Number(value());
     else if (arg === "--port-file") o.portFile = value();
     else if (arg === "--log") o.log = value();
     else throw new Error(`unknown option ${arg}`);
-  }
+  });
   const { root } = o;
   if (!root) throw new Error("--root is required");
   if (!Number.isInteger(o.port) || o.port < 0 || o.port > 65535) throw new Error("bad --port");

@@ -27,7 +27,14 @@ import {
   type ReactNode,
 } from "react";
 import { errorMessageIdOf } from "../api/client";
-import type { Account, AccountState, FavoriteFolder, Folder, SavedSearch } from "../api/generated";
+import {
+  FAVORITE_FOLDER_MESSAGE_IDS,
+  type Account,
+  type AccountState,
+  type FavoriteFolder,
+  type Folder,
+  type SavedSearch,
+} from "../api/generated";
 import { useActions } from "../actions/ActionsProvider";
 import { MailboxFolderBadge } from "../features/exchange";
 import { isActiveSearch, useSavedSearches } from "../features/customization/SmartFolders";
@@ -446,7 +453,9 @@ function FavoritesSection({
             onClick={choose}
           >
             <Icon name={FAVORITE_ICONS[favorite]} part="folder-tree.item.icon" />
-            <span data-part="folder-tree.item.name">{t(`favorite-folder-${favorite}`)}</span>
+            <span data-part="folder-tree.item.name">
+              {t(FAVORITE_FOLDER_MESSAGE_IDS[favorite])}
+            </span>
             {pane.showUnread && count !== null && count > 0 && (
               <span
                 data-part="folder-tree.item.unread-count"

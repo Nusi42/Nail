@@ -25,6 +25,8 @@ export {
   packPlugin,
   readManifest,
 } from "./pack.mjs";
+export { buildPlugin, pluginBuildOptions } from "./build.mjs";
+export { isProgram, runAsProgram } from "./program.mjs";
 export { createZip, readZip } from "./zip.mjs";
 export {
   CronError,

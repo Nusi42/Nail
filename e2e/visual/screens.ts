@@ -18,7 +18,7 @@
  * accessible name, as in the regular e2e suite.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
-import { READER_SUBJECT } from "../support/views";
+import { READER_SUBJECT, messageRows, runFromPalette } from "../support/views";
 
 /** The fixed clock of every screen but the calendar: after the demo mail's dates. */
 export const MAIN_TIME = new Date("2026-09-30T10:00:00Z");
@@ -87,8 +87,6 @@ async function showView(
   await expect(region).toBeVisible();
   return region;
 }
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-
 /** A narrow window (M5b review: the views at 1024 px). */
 const NARROW = { width: 1024, height: 900 } as const;
 
@@ -125,7 +123,7 @@ export const layoutWindow = (page: Page, name: string) =>
 /** Loads the app and waits until the demo mail is listed. */
 export async function loadMainWindow(page: Page, url: string): Promise<void> {
   await page.goto(url);
-  await expect(rows(page).filter({ hasText: SAMPLE_MESSAGE }).first()).toBeVisible();
+  await expect(messageRows(page).filter({ hasText: SAMPLE_MESSAGE }).first()).toBeVisible();
   // Account states show (status dots); never capture one mid-connect.
   await expect(page.locator('[data-status="connecting"]')).toHaveCount(0, { timeout: 60_000 });
 }
@@ -148,7 +146,7 @@ export const CONVERSATION_UNREAD = `subject:"${CONVERSATION}" from:marie@radium.
  * feed with the unread card and the newest open (P2 Design A).
  */
 async function selectConversation(page: Page) {
-  await rows(page).filter({ hasText: CONVERSATION }).first().click();
+  await messageRows(page).filter({ hasText: CONVERSATION }).first().click();
   const feed = page.getByRole("feed");
   await expect(feed).toBeVisible();
   await expect(page.locator(READER_SUBJECT)).toContainText(CONVERSATION);
@@ -164,7 +162,7 @@ async function selectConversation(page: Page) {
 }
 
 async function selectMessage(page: Page, subject: string) {
-  await rows(page).filter({ hasText: subject }).first().click();
+  await messageRows(page).filter({ hasText: subject }).first().click();
   await expect(page.locator(READER_SUBJECT)).toContainText(subject);
   await pinListScroll(page, subject);
 }
@@ -206,7 +204,7 @@ async function listScrollSettled(page: Page): Promise<void> {
  * runs under load).
  */
 async function pinListScroll(page: Page, subject: string): Promise<void> {
-  const row = rows(page).filter({ hasText: subject }).first();
+  const row = messageRows(page).filter({ hasText: subject }).first();
   // Scrolling renders and measures further rows, which can move the row
   // again: repeat until the position holds (twice at most in practice).
   for (let pass = 0; pass < 5; pass++) {
@@ -228,21 +226,6 @@ async function pinListScroll(page: Page, subject: string): Promise<void> {
     if (!moved) break;
   }
   await expect(row).toBeInViewport();
-}
-
-/** Runs an action from the command palette (Ctrl+K) by searching for `query`. */
-async function openFromPalette(page: Page, query: string, option: string) {
-  const palette = page.getByRole("dialog", { name: "Command palette" });
-  await expect(async () => {
-    if (!(await palette.isVisible())) await page.keyboard.press("Control+k");
-    await expect(palette).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 10_000 });
-  await palette.getByRole("combobox").fill(query);
-  await palette
-    .getByRole("option", { name: new RegExp(`^${option}`) })
-    .first()
-    .click();
-  await expect(palette).toBeHidden();
 }
 
 async function selectSample(page: Page) {
@@ -396,7 +379,10 @@ export const SCREENS: readonly Screen[] = [
     title: "Context menu of a message",
     async open(page) {
       await selectSample(page);
-      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click({ button: "right" });
+      await messageRows(page)
+        .filter({ hasText: SAMPLE_MESSAGE })
+        .first()
+        .click({ button: "right" });
       await expect(page.getByRole("menu")).toBeVisible();
     },
   },
@@ -436,7 +422,10 @@ export const SCREENS: readonly Screen[] = [
     title: "Dialog (Move to…)",
     async open(page) {
       await selectSample(page);
-      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click({ button: "right" });
+      await messageRows(page)
+        .filter({ hasText: SAMPLE_MESSAGE })
+        .first()
+        .click({ button: "right" });
       await page.getByRole("menu").getByRole("menuitem", { name: "Move to…" }).click();
       await expect(layoutWindow(page, "move")).toBeVisible();
     },
@@ -448,10 +437,10 @@ export const SCREENS: readonly Screen[] = [
     // the sample conversation goes to Trash first and comes back afterwards.
     async open(page) {
       await selectSample(page);
-      const row = rows(page).filter({ hasText: SAMPLE_MESSAGE }).first();
+      const row = messageRows(page).filter({ hasText: SAMPLE_MESSAGE }).first();
       const account = (await row.getAttribute("data-account")) ?? "";
       await page.keyboard.press("Delete");
-      await expect(rows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
+      await expect(messageRows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
       // The undo toast times out; the screen shows without it.
       await page
         .locator('[data-part="mail-actions.toast"]')
@@ -471,9 +460,9 @@ export const SCREENS: readonly Screen[] = [
       const confirm = layoutWindow(page, "mail-delete-permanently");
       await confirm.getByRole("button", { name: "Cancel" }).click();
       await expect(confirm).toBeHidden();
-      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
+      await messageRows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
       await page.keyboard.press("z");
-      await expect(rows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
+      await expect(messageRows(page).filter({ hasText: SAMPLE_MESSAGE })).toHaveCount(0);
     },
   },
   // M5d: the in-app editors (nothing is written: no screen changes a file).
@@ -483,7 +472,7 @@ export const SCREENS: readonly Screen[] = [
     // No message selected: the list's header row would scroll it by a
     // timing-dependent amount to keep the selected row visible.
     async open(page) {
-      await openFromPalette(page, "customize layout", "Customize layout");
+      await runFromPalette(page, "customize layout", "Customize layout");
       const editor = page.getByRole("region", { name: "Customizing layout: Mail" });
       await expect(editor).toBeVisible();
       await editor.getByRole("button", { name: "Move Folders", exact: true }).click();
@@ -541,7 +530,7 @@ export const SCREENS: readonly Screen[] = [
     id: "theme-editor",
     title: "Theme editor on the theme in use (tokens, live preview)",
     async open(page) {
-      await openFromPalette(page, "edit theme", "Edit theme");
+      await runFromPalette(page, "edit theme", "Edit theme");
       const editor = layoutWindow(page, "theme-editor");
       await expect(editor.getByRole("tablist", { name: "Theme sections" })).toBeVisible();
       await expect(

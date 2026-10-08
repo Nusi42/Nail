@@ -1,8 +1,8 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, startNail, type NailServer } from "../support/nail";
-import { openSettingsTab, showView, viewRegion } from "../support/views";
+import { nailPerTest, control } from "../support/nail";
+import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "../support/views";
 
 /**
  * Wave M5a (ADRs 0102–0107) against `nail serve --seed demo-multi`: the
@@ -14,15 +14,7 @@ import { openSettingsTab, showView, viewRegion } from "../support/views";
  * reader (a download in the browser).
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo-multi" });
 
 /** Accent colours of the built-in themes (defaults/themes/*.kdl). */
 const ACCENT = {
@@ -33,10 +25,7 @@ const ACCENT = {
   "high-contrast": "#ffff00",
 } as const;
 
-async function open(page: Page) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-}
+const open = (page: Page) => openMail(page, server.url);
 
 /** The accent the page renders now (the compiled theme's token on the root). */
 function accent(page: Page): Promise<string> {
@@ -167,8 +156,7 @@ test("Compact density applies to every theme and hides the tag line", async ({ p
   await open(page);
   const tagLines = page.locator('[data-part="message-list.row.tag-line"]');
   await expect(tagLines.first()).toBeVisible();
-  const rowHeight = async () =>
-    (await page.locator('[data-part="message-list.row"]').first().boundingBox())?.height ?? 0;
+  const rowHeight = async () => (await messageRows(page).first().boundingBox())?.height ?? 0;
   const comfortable = await rowHeight();
 
   const appearance = await openAppearance(page);
@@ -248,10 +236,7 @@ test("a theme file added to themes/ is listed at once and can be used", async ({
 test("an attachment is downloaded from its card in the browser", async ({ page }) => {
   await open(page);
   // The demo invoice carries a PDF and a CSV file.
-  await page
-    .locator('[data-part="message-list.row"]', { hasText: "Your invoice for September 2026" })
-    .first()
-    .click();
+  await messageRows(page).filter({ hasText: "Your invoice for September 2026" }).first().click();
   const cards = page.locator('[data-part="attachment-card"]');
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0).locator('[data-part="attachment-card.type"]')).toHaveText("PDF");

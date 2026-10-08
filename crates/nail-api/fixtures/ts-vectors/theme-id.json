@@ -1,0 +1,88 @@
+{
+  "cases": [
+    {
+      "args": [
+        "My Ocean!"
+      ],
+      "fn": "themeIdFromName",
+      "out": "my-ocean"
+    },
+    {
+      "args": [
+        "Café"
+      ],
+      "fn": "themeIdFromName",
+      "out": "cafe"
+    },
+    {
+      "args": [
+        "2024"
+      ],
+      "fn": "themeIdFromName",
+      "out": "theme-2024"
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "themeIdFromName",
+      "out": "theme"
+    },
+    {
+      "args": [
+        "   "
+      ],
+      "fn": "themeIdFromName",
+      "out": "theme"
+    },
+    {
+      "args": [
+        "!!!"
+      ],
+      "fn": "themeIdFromName",
+      "out": "theme"
+    },
+    {
+      "args": [
+        "Ünïcödé Thème"
+      ],
+      "fn": "themeIdFromName",
+      "out": "unicode-theme"
+    },
+    {
+      "args": [
+        "a--b__c"
+      ],
+      "fn": "themeIdFromName",
+      "out": "a-b-c"
+    },
+    {
+      "args": [
+        " trailing - "
+      ],
+      "fn": "themeIdFromName",
+      "out": "trailing"
+    },
+    {
+      "args": [
+        "ﬁne ligature"
+      ],
+      "fn": "themeIdFromName",
+      "out": "fine-ligature"
+    },
+    {
+      "args": [
+        "日本語"
+      ],
+      "fn": "themeIdFromName",
+      "out": "theme"
+    },
+    {
+      "args": [
+        "Long name Long name Long name Long name Long name Long name Long name Long name Long name Long name "
+      ],
+      "fn": "themeIdFromName",
+      "out": "long-name-long-name-long-name-long-name-long-name-long-name"
+    }
+  ]
+}

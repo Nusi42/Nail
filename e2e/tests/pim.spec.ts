@@ -1,16 +1,17 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { McpSession } from "../support/mcp";
-import { control, startNail, tempDir, type NailServer } from "../support/nail";
+import { McpSession, createMcpClient, grantMcpAccess } from "../support/mcp";
+import { tempDir, control, nailOnDemand } from "../support/nail";
 import {
   composerWindow,
-  openSettingsTab,
   showView,
   toolbarAction,
   viewRegion,
+  openMail,
+  closeWindow,
 } from "../support/views";
-import { defined } from "../support/defined";
+import { eventChip, icalTime, openCalendar } from "../support/calendar";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -21,40 +22,9 @@ import { defined } from "../support/defined";
  * the MCP server.
  */
 
-let server: NailServer;
+const server = nailOnDemand();
 
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
-
-async function openApp(page: Page) {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-}
-
-/** Opens the calendar window from the main toolbar. */
-async function openCalendar(page: Page): Promise<Locator> {
-  await showView(page, "Calendar");
-  const window = viewRegion(page, "Calendar");
-  await expect(window).toBeVisible();
-  return window;
-}
-
-/** An event chip in the calendar views, by the start of its label. */
-const chip = (scope: Locator, title: string) =>
-  scope.getByRole("button", { name: new RegExp(`^${title},`) }).first();
-
-/** Today + `days` at `hour`:00 UTC, as an iCalendar UTC time. */
-function icalTime(days: number, hour: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + days);
-  d.setUTCHours(hour, 0, 0, 0);
-  return d
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
-}
+const openApp = (page: Page) => openMail(page, server.url);
 
 /** Today + `days` at `hour`:00 UTC, in Unix seconds. */
 function unixAt(days: number, hour: number, minute = 0): number {
@@ -103,7 +73,7 @@ async function syncNow(page: Page) {
 }
 
 test("a recurring event is changed for this and the following occurrences", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
   const calendar = await openCalendar(page);
   await calendar.getByRole("button", { name: "New event" }).click();
@@ -112,32 +82,31 @@ test("a recurring event is changed for this and the following occurrences", asyn
   await editor.getByLabel("Repeats").selectOption("weekly");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
-  await expect(chip(calendar, "Book club")).toBeVisible();
+  await expect(eventChip(calendar, "Book club")).toBeVisible();
 
   // Next week: change this and the following occurrences.
   await calendar.getByRole("button", { name: "Next", exact: true }).click();
-  await chip(calendar, "Book club").click();
+  await eventChip(calendar, "Book club").click();
   await expect(editor).toBeVisible();
   await editor.getByRole("radio", { name: "This and following occurrences" }).check();
   await editor.getByLabel("Title", { exact: true }).fill("Book club (new room)");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
-  await expect(chip(calendar, "Book club \\(new room\\)")).toBeVisible();
+  await expect(eventChip(calendar, "Book club \\(new room\\)")).toBeVisible();
   await calendar.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(chip(calendar, "Book club \\(new room\\)")).toBeVisible();
+  await expect(eventChip(calendar, "Book club \\(new room\\)")).toBeVisible();
   // This week keeps the original series.
   await calendar.getByRole("button", { name: "Today" }).click();
-  await expect(chip(calendar, "Book club")).toBeVisible();
-  await expect(chip(calendar, "Book club \\(new room\\)")).toHaveCount(0);
+  await expect(eventChip(calendar, "Book club")).toBeVisible();
+  await expect(eventChip(calendar, "Book club \\(new room\\)")).toHaveCount(0);
 });
 
 test("an event syncs to the CalDAV server and a server-side change appears", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
+  const calendar = await openCalendar(page, { agenda: true });
   // The server's sample event.
-  await expect(chip(calendar, "Team sync")).toBeVisible();
+  await expect(eventChip(calendar, "Team sync")).toBeVisible();
 
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
@@ -158,22 +127,20 @@ test("an event syncs to the CalDAV server and a server-side change appears", asy
     data: serverEvent("lunch@other.example", "Lunch with Charles", 1, 12),
   });
   await syncNow(page);
-  await expect(chip(calendar, "Lunch with Charles")).toBeVisible();
+  await expect(eventChip(calendar, "Lunch with Charles")).toBeVisible();
 });
 
 test("an ICS subscription shows its events read-only", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
-  const holiday = chip(calendar, "Founders' Day");
+  const calendar = await openCalendar(page, { agenda: true });
+  const holiday = eventChip(calendar, "Founders' Day");
   await expect(holiday).toBeVisible();
   await holiday.click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
   await expect(editor.getByText("This item is read-only.")).toBeVisible();
   await expect(editor.getByRole("button", { name: "Save" })).toHaveCount(0);
-  await editor.getByRole("button", { name: "Close" }).first().click();
-  await expect(editor).toBeHidden();
+  await closeWindow(editor);
 
   // A new subscription from the sources dialog.
   const feeds = await control<{ town: string }>(server, "feeds");
@@ -188,21 +155,20 @@ test("an ICS subscription shows its events read-only", async ({ page }) => {
   await sources.getByRole("button", { name: "Add" }).click();
   await expect(sources.getByText("Added. Nail is syncing it now.")).toBeVisible();
   await sources.getByRole("button", { name: "Close" }).first().click();
-  await expect(chip(calendar, "Town fair")).toBeVisible();
+  await expect(eventChip(calendar, "Town fair")).toBeVisible();
 });
 
 test("a reminder fires at the controlled clock time", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
+  const calendar = await openCalendar(page, { agenda: true });
   await control(server, "dav-put", {
     collection: "personal",
     name: "checkup.ics",
     data: serverEvent("checkup@other.example", "Checkup", 1, 10, "-PT10M"),
   });
   await syncNow(page);
-  await expect(chip(calendar, "Checkup")).toBeVisible();
+  await expect(eventChip(calendar, "Checkup")).toBeVisible();
   const toast = page.getByRole("group", { name: "Reminder: Checkup" });
   await control(server, "clock-set", { at: unixAt(1, 9, 40) });
   await page.waitForTimeout(1500);
@@ -214,11 +180,17 @@ test("a reminder fires at the controlled clock time", async ({ page }) => {
   await expect(toast).toHaveCount(0);
 });
 
-test("a contact syncs to CardDAV and is suggested in the composer", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+/** Starts demo-multi and shows the contacts view. */
+async function openContacts(page: Page): Promise<Locator> {
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
   await showView(page, "Contacts");
   const contacts = viewRegion(page, "Contacts");
+  return contacts;
+}
+
+test("a contact syncs to CardDAV and is suggested in the composer", async ({ page }) => {
+  const contacts = await openContacts(page);
   await expect(contacts.getByRole("option", { name: /Grace Hopper/ })).toBeVisible();
   await contacts.getByRole("button", { name: "New contact" }).click();
   const editor = page.getByRole("dialog", { name: "Contact", exact: true });
@@ -248,10 +220,7 @@ test("a contact syncs to CardDAV and is suggested in the composer", async ({ pag
 });
 
 test("duplicate contacts are merged", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
-  await openApp(page);
-  await showView(page, "Contacts");
-  const contacts = viewRegion(page, "Contacts");
+  const contacts = await openContacts(page);
   await expect(contacts.getByRole("option", { name: /Grace Hopper/ })).toHaveCount(1);
   // The same person in the local address book.
   await contacts.getByRole("button", { name: "New contact" }).click();
@@ -277,7 +246,7 @@ test("duplicate contacts are merged", async ({ page }) => {
 });
 
 test("a task gets subtasks", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
   await showView(page, "Tasks");
   const window = viewRegion(page, "Tasks");
@@ -304,7 +273,7 @@ test("an .ics file given at launch is imported", async ({ page }) => {
   const dir = tempDir("launch");
   const file = path.join(dir, "launch.ics");
   writeFileSync(file, serverEvent("launch@example.org", "Launch party", 1, 18));
-  server = await startNail({ seed: "demo-multi", launch: [file] });
+  await server.start({ seed: "demo-multi", launch: [file] });
   await page.goto(server.url);
   const dialog = page.getByRole("dialog", { name: "Import calendar or contacts", exact: true });
   await expect(
@@ -313,36 +282,20 @@ test("an .ics file given at launch is imported", async ({ page }) => {
   await dialog.getByRole("button", { name: "Import" }).click();
   await expect(dialog.getByRole("status")).toHaveText("Imported: 1 new, 0 updated, 0 skipped.");
   await dialog.getByRole("button", { name: "Close" }).first().click();
-  const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
-  await expect(chip(calendar, "Launch party")).toBeVisible();
+  const calendar = await openCalendar(page, { agenda: true });
+  await expect(eventChip(calendar, "Launch party")).toBeVisible();
 });
 
 test("an MCP client lists events after a grant", async ({ page }) => {
-  server = await startNail({ seed: "demo-multi" });
+  await server.start({ seed: "demo-multi" });
   await openApp(page);
-  await showView(page, "Settings");
-  const settings = viewRegion(page, "Settings");
-  await openSettingsTab(page, "MCP clients");
-  const serverLine = settings.locator('[data-part="mcp-clients.server"]');
-  await expect(serverLine).toHaveAttribute("data-state", "running");
-  const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];
-  expect(url).toBeDefined();
-  await settings.getByRole("textbox", { name: "Client name" }).fill("Calendar agent");
-  await settings.getByRole("button", { name: "Create client" }).click();
-  const token = (await settings.locator('[data-part="mcp-token.value"]').textContent())?.trim();
-  expect(token).toMatch(/^nail_mcp_/);
-
-  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
+  const client = await createMcpClient(page, "Calendar agent");
+  const mcp = new McpSession(client.url, client.token);
   await mcp.open();
   const before = await mcp.request("tools/call", { name: "list_events", arguments: {} });
   expect(JSON.stringify(before)).toMatch(/denied/);
 
-  const form = settings.getByRole("form", { name: "Access of Calendar agent" });
-  await form.getByRole("checkbox", { name: "Read mail" }).check();
-  await form.getByRole("checkbox", { name: /All accounts/ }).check();
-  await form.getByRole("button", { name: "Save access" }).click();
-  await expect(form.getByRole("status")).toHaveText("Access saved.");
+  await grantMcpAccess(client.access, ["Read mail"]);
 
   await expect
     .poll(async () =>

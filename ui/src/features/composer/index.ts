@@ -22,7 +22,8 @@ import { useUiStoreApi, type UiState } from "../../state/uiStore";
 import type { Feature } from "../types";
 import { CloseConfirmDialog, DiscardConfirmDialog } from "./ConfirmDialogs";
 import { switchMode } from "./flows";
-import { composerSubjectTitle, COMPOSER_MODES } from "./Composer";
+import { composerSubjectTitle } from "./Composer";
+import { COMPOSER_MODE_VALUES } from "../../api/generated";
 import {
   CLOSE_CONFIRM_KIND,
   composerOf,
@@ -67,7 +68,7 @@ const richOf = (ctx: ActionContext) => richStoreFor(ctx.store, target(ctx));
 
 function modeArg(args: readonly JsonValue[]) {
   const mode = args[0];
-  return COMPOSER_MODES.find((m) => m === mode) ?? null;
+  return COMPOSER_MODE_VALUES.find((m) => m === mode) ?? null;
 }
 
 /** Action ids → handlers. */

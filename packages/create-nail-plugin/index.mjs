@@ -12,8 +12,8 @@
  * package.json; the default is a `file:` path to this repository's SDK.
  */
 import path from "node:path";
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+
+import { runAsProgram } from "@nail/plugin-api/tools";
 
 import { scaffold, ScaffoldError, TEMPLATES } from "./scaffold.mjs";
 
@@ -72,15 +72,4 @@ export function main(argv, io = console) {
   }
 }
 
-/** Whether this module is the program (also through npm's bin links). */
-function isMain() {
-  try {
-    return realpathSync(process.argv[1] ?? "") === realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isMain()) {
-  process.exitCode = main(process.argv.slice(2));
-}
+await runAsProgram(import.meta.url, main);

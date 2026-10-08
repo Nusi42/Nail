@@ -1,7 +1,7 @@
 /**
- * The folder pane's sections (M5b, ADR 0109) — the UI side of
- * `nail_api::views::folder_pane_sections`, same rules, tested against the
- * same cases (`folderPane.test.ts`):
+ * The folder pane's sections (M5b, ADR 0109) — the port of
+ * `nail_api::views::folder_pane_sections`, pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `layout/views.test.ts`):
  *
  * - sections in the order of the `folder-tree sections=` option (default
  *   `favorites accounts smart-folders`);
@@ -13,45 +13,29 @@
  * - collapsed sections come from the UI state
  *   (`folder-pane.collapsed`, `state/uiState.ts`).
  */
-import type { AccountId, FavoriteFolder, FolderPaneSectionKind } from "../api/generated";
-
-/** `FolderPaneSectionKind::ALL`. */
-export const FOLDER_SECTION_KINDS: readonly FolderPaneSectionKind[] = [
-  "favorites",
-  "accounts",
-  "smart-folders",
-];
-
-/** `FavoriteFolder::ALL`. */
-export const FAVORITE_FOLDERS: readonly FavoriteFolder[] = [
-  "all-inboxes",
-  "unread",
-  "flagged",
-  "snoozed",
-  "drafts",
-  "sent",
-  "outbox",
-];
-
-/** `DEFAULT_FAVORITES`. */
-export const DEFAULT_FAVORITES: readonly FavoriteFolder[] = [
-  "all-inboxes",
-  "flagged",
-  "snoozed",
-  "drafts",
-];
-
-/** `ACCOUNT_COLOR_SLOTS`. */
-export const ACCOUNT_COLOR_SLOTS = 8;
+import {
+  ACCOUNT_COLOR_SLOTS,
+  type AccountId,
+  type FavoriteFolder,
+  FAVORITES_SECTION_ID,
+  type FolderPaneSectionKind,
+  SMART_FOLDERS_SECTION_ID,
+} from "../api/generated";
+export {
+  ACCOUNT_COLOR_SLOTS,
+  DEFAULT_FAVORITES,
+  FAVORITES_SECTION_ID,
+  FAVORITE_FOLDER_VALUES as FAVORITE_FOLDERS,
+  FOLDER_PANE_SECTION_KIND_VALUES as FOLDER_SECTION_KINDS,
+  SMART_FOLDERS_SECTION_ID,
+} from "../api/generated";
 
 /** `account_color_slot`: the 1-based colour slot of the account at `index`. */
 export function accountColorSlot(index: number): number {
   return (index % ACCOUNT_COLOR_SLOTS) + 1;
 }
 
-/** `FAVORITES_SECTION_ID`, `SMART_FOLDERS_SECTION_ID`, `account_section_id`. */
-export const FAVORITES_SECTION_ID = "favorites";
-export const SMART_FOLDERS_SECTION_ID = "smart-folders";
+/** `account_section_id`: the section id of an account (`account:<id>`). */
 export function accountSectionId(account: AccountId): string {
   return `account:${account}`;
 }

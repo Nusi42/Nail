@@ -4,13 +4,14 @@
  * the theme's (`form.*` parts).
  */
 import { useId, type ReactNode } from "react";
-import type {
-  AuthConfig,
-  IncomingServer,
-  MailProtocol,
-  OutgoingServer,
-  ServerEndpoint,
-  TlsMode,
+import {
+  DEFAULT_PORTS,
+  type AuthConfig,
+  type IncomingServer,
+  type MailProtocol,
+  type OutgoingServer,
+  type ServerEndpoint,
+  type TlsMode,
 } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
 import type { MessageArgs } from "../i18n/localizer";
@@ -308,21 +309,9 @@ export function Section({ titleId, children }: { titleId: string; children: Reac
 // ---------------------------------------------------------------------------
 // Servers
 
-/** Default port of a protocol for a TLS mode (mirrors `nail_api::default_port`). */
+/** Default port of a protocol for a TLS mode (`nail_api::default_port`, generated). */
 export function defaultPort(protocol: MailProtocol, tls: TlsMode): number {
-  const implicit = tls === "implicit";
-  switch (protocol) {
-    case "imap":
-      return implicit ? 993 : 143;
-    case "pop3":
-      return implicit ? 995 : 110;
-    case "smtp":
-      return implicit ? 465 : 587;
-    case "gmail":
-    case "graph":
-    case "ews":
-      return implicit ? 443 : 80;
-  }
+  return DEFAULT_PORTS[protocol][tls];
 }
 
 const TLS_CHOICES: Choice[] = [

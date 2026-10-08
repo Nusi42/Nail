@@ -9,13 +9,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { JsonValue } from "../api/generated";
 import { useClient } from "./queries";
-
-/** `nail_api::views::UI_STATE_COLLAPSED_SECTIONS` (array of section ids). */
-export const UI_STATE_COLLAPSED_SECTIONS = "folder-pane.collapsed";
-/** `nail_api::views::UI_STATE_VIEW` (the last view id). */
-export const UI_STATE_VIEW = "shell.view";
-/** `nail_api::views::UI_STATE_SETTINGS_SECTION` (the last settings section). */
-export const UI_STATE_SETTINGS_SECTION = "settings.section";
+export {
+  UI_STATE_COLLAPSED_SECTIONS,
+  UI_STATE_SETTINGS_SECTION,
+  UI_STATE_VIEW,
+} from "../api/generated";
 
 /** The query key of the whole UI state. */
 export const uiStateKey = ["ui-state"] as const;

@@ -1,6 +1,7 @@
 /**
- * Which plug-in extensions apply where (M4a, ADR 0079), mirrored from
- * `nail_api::plugins::extensions` for the UI: preview renderers and
+ * Which plug-in extensions apply where (M4a, ADR 0079), ported from
+ * `nail_api::plugins::extensions` for the UI (the matching rules pinned by
+ * `crates/nail-api/tests/ts_vectors.rs`, the limits and lists generated): preview renderers and
  * actions for an attachment, actions for a link, composer actions and
  * Markdown blocks, the "what it adds" list of a manifest, write
  * permissions, and applying a composer edit to plain text.
@@ -8,32 +9,23 @@
  * Only running plug-ins with the needed grant contribute (the core checks
  * again; this only decides what the UI offers).
  */
-import type {
-  AttachmentInfo,
-  ComposerEdit,
-  ComposerSelection,
-  PluginHookKind,
-  PluginInfo,
-  PluginManifest,
-  PluginPermission,
+import {
+  type AttachmentInfo,
+  type ComposerEdit,
+  type ComposerSelection,
+  MAX_PREVIEW_INPUT,
+  WRITE_PERMISSIONS,
+  type PluginHookKind,
+  type PluginInfo,
+  type PluginManifest,
+  type PluginPermission,
 } from "../../api/generated";
+import { parsePluginPanelId } from "./ids";
+export { MAX_PREVIEW_INPUT, PREVIEW_IMAGE_TYPES, WRITE_PERMISSIONS } from "../../api/generated";
 
-/** Largest attachment a preview renderer gets (`MAX_PREVIEW_INPUT`). */
-export const MAX_PREVIEW_INPUT = 10 * 1024 * 1024;
-/** Image types a preview may be (`PREVIEW_IMAGE_TYPES`; never SVG). */
-export const PREVIEW_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
-/** Permissions that let a plug-in change the user's data (`PluginPermission::is_write`). */
-export const WRITE_PERMISSIONS: readonly PluginPermission[] = [
-  "mail.organize",
-  "mail.send",
-  "calendar.write",
-  "contacts.write",
-  "tasks.write",
-];
-
+/** Whether the permission lets a plug-in change the user's data (`PluginPermission::is_write`). */
 export function isWritePermission(permission: PluginPermission): boolean {
-  return WRITE_PERMISSIONS.includes(permission);
+  return (WRITE_PERMISSIONS as readonly PluginPermission[]).includes(permission);
 }
 
 /** Whether the plug-in runs (enabled, started, not crashed). */
@@ -57,11 +49,10 @@ export function extensionId(pluginId: string, name: string): string {
   return `${pluginId}.${name}`;
 }
 
-/** Splits an extension id (`parse_plugin_extension_id`). */
+/** Splits an extension id (`parse_plugin_extension_id`: a plug-in id and a contribution name). */
 export function parseExtensionId(id: string): { plugin: string; name: string } | null {
-  const dot = id.indexOf(".");
-  if (dot <= 0 || dot === id.length - 1) return null;
-  return { plugin: id.slice(0, dot), name: id.slice(dot + 1) };
+  const parsed = parsePluginPanelId(id);
+  return parsed ? { plugin: parsed.plugin, name: parsed.panel } : null;
 }
 
 /** `matches_file`: a MIME pattern (`type/*` allowed) or the file's extension. */

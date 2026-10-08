@@ -1,8 +1,11 @@
 /**
- * The UI's window model (M5c, ADR 0116) against the same cases as
- * `nail_api::windows` (`crates/nail-api/src/windows.rs` tests).
+ * The UI's window model (M5c, ADR 0116): the ports of `nail_api::windows`
+ * over the vectors generated from the Rust rules (`windows.json`), and the
+ * UI-only helpers.
  */
 import type { WindowGeometry, WindowState } from "../api/generated";
+import windowsVectors from "../../../crates/nail-api/fixtures/ts-vectors/windows.json";
+import { describeVectors } from "../test/vectors";
 import {
   CONFIRMATION_WINDOW_SPEC,
   DEFAULT_WINDOW_SPEC,
@@ -13,6 +16,7 @@ import {
   MIN_WINDOW_EDGE,
   checkWindowStateWrite,
   isValidGeometry,
+  isWindowInstance,
   isWindowKind,
   newWindowInstance,
   normalizeSpec,
@@ -151,4 +155,20 @@ describe("window model (M5c)", () => {
     expect(checkWindowStateWrite(full, "new-window", null)).toBeNull();
     expect(checkWindowStateWrite(full, "new-window", state(null))).toBeNull();
   });
+});
+
+describeVectors("window model", windowsVectors, {
+  isWindowKind,
+  isWindowInstance,
+  parseWindowId,
+  windowKind,
+  windowId,
+  popOutRoute,
+  popOutLabel,
+  parsePopOutRoute,
+  normalizeSpec,
+  withFrame,
+  isValidGeometry,
+  checkWindowStateWrite: (kinds: string[], window: string, write: WindowState | null) =>
+    checkWindowStateWrite(Object.fromEntries(kinds.map((k) => [k, state(null)])), window, write),
 });

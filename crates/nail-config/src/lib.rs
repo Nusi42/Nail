@@ -74,6 +74,8 @@ mod selector;
 mod theme;
 mod theme_edit;
 pub mod themes;
+#[cfg(test)]
+mod ts_vectors;
 mod ui_state;
 mod widgets;
 mod window_state;

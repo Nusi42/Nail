@@ -1,0 +1,2155 @@
+{
+  "cases": [
+    {
+      "args": [
+        "composer"
+      ],
+      "fn": "isWindowKind",
+      "out": true
+    },
+    {
+      "args": [
+        "pim-event-editor"
+      ],
+      "fn": "isWindowKind",
+      "out": true
+    },
+    {
+      "args": [
+        "a1"
+      ],
+      "fn": "isWindowKind",
+      "out": true
+    },
+    {
+      "args": [
+        "x"
+      ],
+      "fn": "isWindowKind",
+      "out": true
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "Composer"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "1x"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "a-"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "a--b"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "a b"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "a.b"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "a:b"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "fn": "isWindowKind",
+      "out": false
+    },
+    {
+      "args": [
+        "d42"
+      ],
+      "fn": "isWindowInstance",
+      "out": true
+    },
+    {
+      "args": [
+        "Draft_1-x"
+      ],
+      "fn": "isWindowInstance",
+      "out": true
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isWindowInstance",
+      "out": false
+    },
+    {
+      "args": [
+        "a b"
+      ],
+      "fn": "isWindowInstance",
+      "out": false
+    },
+    {
+      "args": [
+        "a:b"
+      ],
+      "fn": "isWindowInstance",
+      "out": false
+    },
+    {
+      "args": [
+        "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      ],
+      "fn": "isWindowInstance",
+      "out": false
+    },
+    {
+      "args": [
+        "composer:d42"
+      ],
+      "fn": "parseWindowId",
+      "out": {
+        "instance": "d42",
+        "kind": "composer"
+      }
+    },
+    {
+      "args": [
+        "composer:d42"
+      ],
+      "fn": "windowKind",
+      "out": "composer"
+    },
+    {
+      "args": [
+        "settings"
+      ],
+      "fn": "parseWindowId",
+      "out": {
+        "instance": null,
+        "kind": "settings"
+      }
+    },
+    {
+      "args": [
+        "settings"
+      ],
+      "fn": "windowKind",
+      "out": "settings"
+    },
+    {
+      "args": [
+        "composer:Draft_1-x"
+      ],
+      "fn": "parseWindowId",
+      "out": {
+        "instance": "Draft_1-x",
+        "kind": "composer"
+      }
+    },
+    {
+      "args": [
+        "composer:Draft_1-x"
+      ],
+      "fn": "windowKind",
+      "out": "composer"
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "windowKind",
+      "out": ""
+    },
+    {
+      "args": [
+        "composer:"
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        "composer:"
+      ],
+      "fn": "windowKind",
+      "out": "composer"
+    },
+    {
+      "args": [
+        ":x"
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        ":x"
+      ],
+      "fn": "windowKind",
+      "out": ""
+    },
+    {
+      "args": [
+        "composer:a:b"
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        "composer:a:b"
+      ],
+      "fn": "windowKind",
+      "out": "composer"
+    },
+    {
+      "args": [
+        "composer:a b"
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        "composer:a b"
+      ],
+      "fn": "windowKind",
+      "out": "composer"
+    },
+    {
+      "args": [
+        "Composer:x"
+      ],
+      "fn": "parseWindowId",
+      "out": null
+    },
+    {
+      "args": [
+        "Composer:x"
+      ],
+      "fn": "windowKind",
+      "out": "Composer"
+    },
+    {
+      "args": [
+        "composer",
+        "d1"
+      ],
+      "fn": "windowId",
+      "out": "composer:d1"
+    },
+    {
+      "args": [
+        "settings",
+        null
+      ],
+      "fn": "windowId",
+      "out": "settings"
+    },
+    {
+      "args": [
+        "composer:d1"
+      ],
+      "fn": "popOutRoute",
+      "out": "#/window/composer:d1"
+    },
+    {
+      "args": [
+        "composer:d1"
+      ],
+      "fn": "popOutLabel",
+      "out": "popout-composer:d1"
+    },
+    {
+      "args": [
+        "settings"
+      ],
+      "fn": "popOutRoute",
+      "out": "#/window/settings"
+    },
+    {
+      "args": [
+        "settings"
+      ],
+      "fn": "popOutLabel",
+      "out": "popout-settings"
+    },
+    {
+      "args": [
+        "#/window/composer:d1"
+      ],
+      "fn": "parsePopOutRoute",
+      "out": "composer:d1"
+    },
+    {
+      "args": [
+        "#/window/Bad"
+      ],
+      "fn": "parsePopOutRoute",
+      "out": null
+    },
+    {
+      "args": [
+        "#/print/x"
+      ],
+      "fn": "parsePopOutRoute",
+      "out": null
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "parsePopOutRoute",
+      "out": null
+    },
+    {
+      "args": [
+        "#/window/"
+      ],
+      "fn": "parsePopOutRoute",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 240,
+            "width": 360
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 520,
+            "width": 720
+          }
+        }
+      ],
+      "fn": "normalizeSpec",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 240,
+          "width": 360
+        },
+        "modal": false,
+        "pop_out": false,
+        "resizable": true,
+        "size": {
+          "height": 520,
+          "width": 720
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 160,
+            "width": 320
+          },
+          "modal": true,
+          "pop_out": false,
+          "resizable": false,
+          "size": {
+            "height": 220,
+            "width": 440
+          }
+        }
+      ],
+      "fn": "normalizeSpec",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 160,
+          "width": 320
+        },
+        "modal": true,
+        "pop_out": false,
+        "resizable": false,
+        "size": {
+          "height": 220,
+          "width": 440
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "multiple",
+          "min_size": {
+            "height": 50000,
+            "width": 10
+          },
+          "modal": false,
+          "pop_out": true,
+          "resizable": true,
+          "size": {
+            "height": 100,
+            "width": 5
+          }
+        }
+      ],
+      "fn": "normalizeSpec",
+      "out": {
+        "instances": "multiple",
+        "min_size": {
+          "height": 16384,
+          "width": 120
+        },
+        "modal": false,
+        "pop_out": true,
+        "resizable": true,
+        "size": {
+          "height": 16384,
+          "width": 120
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 400,
+            "width": 500
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 900,
+            "width": 300
+          }
+        }
+      ],
+      "fn": "normalizeSpec",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 400,
+          "width": 500
+        },
+        "modal": false,
+        "pop_out": false,
+        "resizable": true,
+        "size": {
+          "height": 900,
+          "width": 500
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 240,
+            "width": 360
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 520,
+            "width": 720
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": null,
+          "pop_out": null,
+          "resizable": null,
+          "size": null
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 240,
+          "width": 360
+        },
+        "modal": false,
+        "pop_out": false,
+        "resizable": true,
+        "size": {
+          "height": 520,
+          "width": 720
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 240,
+            "width": 360
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 520,
+            "width": 720
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": true,
+          "pop_out": null,
+          "resizable": null,
+          "size": {
+            "height": 700,
+            "width": 900
+          }
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 240,
+          "width": 360
+        },
+        "modal": true,
+        "pop_out": false,
+        "resizable": true,
+        "size": {
+          "height": 700,
+          "width": 900
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 240,
+            "width": 360
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 520,
+            "width": 720
+          }
+        },
+        {
+          "instances": "multiple",
+          "min_size": {
+            "height": 50,
+            "width": 1000
+          },
+          "modal": null,
+          "pop_out": true,
+          "resizable": null,
+          "size": null
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "multiple",
+        "min_size": {
+          "height": 120,
+          "width": 1000
+        },
+        "modal": false,
+        "pop_out": true,
+        "resizable": true,
+        "size": {
+          "height": 520,
+          "width": 1000
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 240,
+            "width": 360
+          },
+          "modal": false,
+          "pop_out": false,
+          "resizable": true,
+          "size": {
+            "height": 520,
+            "width": 720
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": null,
+          "pop_out": null,
+          "resizable": false,
+          "size": {
+            "height": 1,
+            "width": 100000
+          }
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 240,
+          "width": 360
+        },
+        "modal": false,
+        "pop_out": false,
+        "resizable": false,
+        "size": {
+          "height": 240,
+          "width": 16384
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 160,
+            "width": 320
+          },
+          "modal": true,
+          "pop_out": false,
+          "resizable": false,
+          "size": {
+            "height": 220,
+            "width": 440
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": null,
+          "pop_out": null,
+          "resizable": null,
+          "size": null
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 160,
+          "width": 320
+        },
+        "modal": true,
+        "pop_out": false,
+        "resizable": false,
+        "size": {
+          "height": 220,
+          "width": 440
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 160,
+            "width": 320
+          },
+          "modal": true,
+          "pop_out": false,
+          "resizable": false,
+          "size": {
+            "height": 220,
+            "width": 440
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": true,
+          "pop_out": null,
+          "resizable": null,
+          "size": {
+            "height": 700,
+            "width": 900
+          }
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 160,
+          "width": 320
+        },
+        "modal": true,
+        "pop_out": false,
+        "resizable": false,
+        "size": {
+          "height": 700,
+          "width": 900
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 160,
+            "width": 320
+          },
+          "modal": true,
+          "pop_out": false,
+          "resizable": false,
+          "size": {
+            "height": 220,
+            "width": 440
+          }
+        },
+        {
+          "instances": "multiple",
+          "min_size": {
+            "height": 50,
+            "width": 1000
+          },
+          "modal": null,
+          "pop_out": true,
+          "resizable": null,
+          "size": null
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "multiple",
+        "min_size": {
+          "height": 120,
+          "width": 1000
+        },
+        "modal": true,
+        "pop_out": true,
+        "resizable": false,
+        "size": {
+          "height": 220,
+          "width": 1000
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "instances": "single",
+          "min_size": {
+            "height": 160,
+            "width": 320
+          },
+          "modal": true,
+          "pop_out": false,
+          "resizable": false,
+          "size": {
+            "height": 220,
+            "width": 440
+          }
+        },
+        {
+          "instances": null,
+          "min_size": null,
+          "modal": null,
+          "pop_out": null,
+          "resizable": false,
+          "size": {
+            "height": 1,
+            "width": 100000
+          }
+        }
+      ],
+      "fn": "withFrame",
+      "out": {
+        "instances": "single",
+        "min_size": {
+          "height": 160,
+          "width": 320
+        },
+        "modal": true,
+        "pop_out": false,
+        "resizable": false,
+        "size": {
+          "height": 160,
+          "width": 16384
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 520,
+            "width": 720,
+            "x": 0,
+            "y": 0
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 16384,
+            "width": 1,
+            "x": -65536,
+            "y": 65536
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 100,
+            "width": 0,
+            "x": 0,
+            "y": 0
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 16385,
+            "width": 100,
+            "x": 0,
+            "y": 0
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 100,
+            "width": 100,
+            "x": 65537,
+            "y": 0
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 100,
+            "width": 100,
+            "x": 0,
+            "y": -65537
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "maximized": true,
+          "rect": {
+            "height": 100,
+            "width": 100,
+            "x": 0,
+            "y": 0
+          },
+          "snap": null
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "maximized": false,
+          "rect": {
+            "height": 100,
+            "width": 100,
+            "x": 0,
+            "y": 0
+          },
+          "snap": "left"
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "maximized": true,
+          "rect": {
+            "height": 100,
+            "width": 100,
+            "x": 0,
+            "y": 0
+          },
+          "snap": "right"
+        }
+      ],
+      "fn": "isValidGeometry",
+      "out": false
+    },
+    {
+      "args": [
+        [],
+        "composer",
+        {
+          "page": {
+            "maximized": false,
+            "rect": {
+              "height": 520,
+              "width": 720,
+              "x": 0,
+              "y": 0
+            },
+            "snap": null
+          },
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": null
+    },
+    {
+      "args": [
+        [],
+        "Bad Kind",
+        {
+          "page": {
+            "maximized": false,
+            "rect": {
+              "height": 520,
+              "width": 720,
+              "x": 0,
+              "y": 0
+            },
+            "snap": null
+          },
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": "invalid-window"
+    },
+    {
+      "args": [
+        [],
+        "Bad Kind",
+        null
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": "invalid-window"
+    },
+    {
+      "args": [
+        [],
+        "composer",
+        null
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": null
+    },
+    {
+      "args": [
+        [],
+        "composer",
+        {
+          "page": {
+            "maximized": false,
+            "rect": {
+              "height": 100,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "snap": null
+          },
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": "invalid-geometry"
+    },
+    {
+      "args": [
+        [
+          "kind0",
+          "kind1",
+          "kind10",
+          "kind100",
+          "kind101",
+          "kind102",
+          "kind103",
+          "kind104",
+          "kind105",
+          "kind106",
+          "kind107",
+          "kind108",
+          "kind109",
+          "kind11",
+          "kind110",
+          "kind111",
+          "kind112",
+          "kind113",
+          "kind114",
+          "kind115",
+          "kind116",
+          "kind117",
+          "kind118",
+          "kind119",
+          "kind12",
+          "kind120",
+          "kind121",
+          "kind122",
+          "kind123",
+          "kind124",
+          "kind125",
+          "kind126",
+          "kind127",
+          "kind128",
+          "kind129",
+          "kind13",
+          "kind130",
+          "kind131",
+          "kind132",
+          "kind133",
+          "kind134",
+          "kind135",
+          "kind136",
+          "kind137",
+          "kind138",
+          "kind139",
+          "kind14",
+          "kind140",
+          "kind141",
+          "kind142",
+          "kind143",
+          "kind144",
+          "kind145",
+          "kind146",
+          "kind147",
+          "kind148",
+          "kind149",
+          "kind15",
+          "kind150",
+          "kind151",
+          "kind152",
+          "kind153",
+          "kind154",
+          "kind155",
+          "kind156",
+          "kind157",
+          "kind158",
+          "kind159",
+          "kind16",
+          "kind160",
+          "kind161",
+          "kind162",
+          "kind163",
+          "kind164",
+          "kind165",
+          "kind166",
+          "kind167",
+          "kind168",
+          "kind169",
+          "kind17",
+          "kind170",
+          "kind171",
+          "kind172",
+          "kind173",
+          "kind174",
+          "kind175",
+          "kind176",
+          "kind177",
+          "kind178",
+          "kind179",
+          "kind18",
+          "kind180",
+          "kind181",
+          "kind182",
+          "kind183",
+          "kind184",
+          "kind185",
+          "kind186",
+          "kind187",
+          "kind188",
+          "kind189",
+          "kind19",
+          "kind190",
+          "kind191",
+          "kind192",
+          "kind193",
+          "kind194",
+          "kind195",
+          "kind196",
+          "kind197",
+          "kind198",
+          "kind199",
+          "kind2",
+          "kind20",
+          "kind200",
+          "kind201",
+          "kind202",
+          "kind203",
+          "kind204",
+          "kind205",
+          "kind206",
+          "kind207",
+          "kind208",
+          "kind209",
+          "kind21",
+          "kind210",
+          "kind211",
+          "kind212",
+          "kind213",
+          "kind214",
+          "kind215",
+          "kind216",
+          "kind217",
+          "kind218",
+          "kind219",
+          "kind22",
+          "kind220",
+          "kind221",
+          "kind222",
+          "kind223",
+          "kind224",
+          "kind225",
+          "kind226",
+          "kind227",
+          "kind228",
+          "kind229",
+          "kind23",
+          "kind230",
+          "kind231",
+          "kind232",
+          "kind233",
+          "kind234",
+          "kind235",
+          "kind236",
+          "kind237",
+          "kind238",
+          "kind239",
+          "kind24",
+          "kind240",
+          "kind241",
+          "kind242",
+          "kind243",
+          "kind244",
+          "kind245",
+          "kind246",
+          "kind247",
+          "kind248",
+          "kind249",
+          "kind25",
+          "kind250",
+          "kind251",
+          "kind252",
+          "kind253",
+          "kind254",
+          "kind255",
+          "kind26",
+          "kind27",
+          "kind28",
+          "kind29",
+          "kind3",
+          "kind30",
+          "kind31",
+          "kind32",
+          "kind33",
+          "kind34",
+          "kind35",
+          "kind36",
+          "kind37",
+          "kind38",
+          "kind39",
+          "kind4",
+          "kind40",
+          "kind41",
+          "kind42",
+          "kind43",
+          "kind44",
+          "kind45",
+          "kind46",
+          "kind47",
+          "kind48",
+          "kind49",
+          "kind5",
+          "kind50",
+          "kind51",
+          "kind52",
+          "kind53",
+          "kind54",
+          "kind55",
+          "kind56",
+          "kind57",
+          "kind58",
+          "kind59",
+          "kind6",
+          "kind60",
+          "kind61",
+          "kind62",
+          "kind63",
+          "kind64",
+          "kind65",
+          "kind66",
+          "kind67",
+          "kind68",
+          "kind69",
+          "kind7",
+          "kind70",
+          "kind71",
+          "kind72",
+          "kind73",
+          "kind74",
+          "kind75",
+          "kind76",
+          "kind77",
+          "kind78",
+          "kind79",
+          "kind8",
+          "kind80",
+          "kind81",
+          "kind82",
+          "kind83",
+          "kind84",
+          "kind85",
+          "kind86",
+          "kind87",
+          "kind88",
+          "kind89",
+          "kind9",
+          "kind90",
+          "kind91",
+          "kind92",
+          "kind93",
+          "kind94",
+          "kind95",
+          "kind96",
+          "kind97",
+          "kind98",
+          "kind99"
+        ],
+        "composer",
+        {
+          "page": {
+            "maximized": false,
+            "rect": {
+              "height": 520,
+              "width": 720,
+              "x": 0,
+              "y": 0
+            },
+            "snap": null
+          },
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": "too-many-windows"
+    },
+    {
+      "args": [
+        [
+          "kind0",
+          "kind1",
+          "kind10",
+          "kind100",
+          "kind101",
+          "kind102",
+          "kind103",
+          "kind104",
+          "kind105",
+          "kind106",
+          "kind107",
+          "kind108",
+          "kind109",
+          "kind11",
+          "kind110",
+          "kind111",
+          "kind112",
+          "kind113",
+          "kind114",
+          "kind115",
+          "kind116",
+          "kind117",
+          "kind118",
+          "kind119",
+          "kind12",
+          "kind120",
+          "kind121",
+          "kind122",
+          "kind123",
+          "kind124",
+          "kind125",
+          "kind126",
+          "kind127",
+          "kind128",
+          "kind129",
+          "kind13",
+          "kind130",
+          "kind131",
+          "kind132",
+          "kind133",
+          "kind134",
+          "kind135",
+          "kind136",
+          "kind137",
+          "kind138",
+          "kind139",
+          "kind14",
+          "kind140",
+          "kind141",
+          "kind142",
+          "kind143",
+          "kind144",
+          "kind145",
+          "kind146",
+          "kind147",
+          "kind148",
+          "kind149",
+          "kind15",
+          "kind150",
+          "kind151",
+          "kind152",
+          "kind153",
+          "kind154",
+          "kind155",
+          "kind156",
+          "kind157",
+          "kind158",
+          "kind159",
+          "kind16",
+          "kind160",
+          "kind161",
+          "kind162",
+          "kind163",
+          "kind164",
+          "kind165",
+          "kind166",
+          "kind167",
+          "kind168",
+          "kind169",
+          "kind17",
+          "kind170",
+          "kind171",
+          "kind172",
+          "kind173",
+          "kind174",
+          "kind175",
+          "kind176",
+          "kind177",
+          "kind178",
+          "kind179",
+          "kind18",
+          "kind180",
+          "kind181",
+          "kind182",
+          "kind183",
+          "kind184",
+          "kind185",
+          "kind186",
+          "kind187",
+          "kind188",
+          "kind189",
+          "kind19",
+          "kind190",
+          "kind191",
+          "kind192",
+          "kind193",
+          "kind194",
+          "kind195",
+          "kind196",
+          "kind197",
+          "kind198",
+          "kind199",
+          "kind2",
+          "kind20",
+          "kind200",
+          "kind201",
+          "kind202",
+          "kind203",
+          "kind204",
+          "kind205",
+          "kind206",
+          "kind207",
+          "kind208",
+          "kind209",
+          "kind21",
+          "kind210",
+          "kind211",
+          "kind212",
+          "kind213",
+          "kind214",
+          "kind215",
+          "kind216",
+          "kind217",
+          "kind218",
+          "kind219",
+          "kind22",
+          "kind220",
+          "kind221",
+          "kind222",
+          "kind223",
+          "kind224",
+          "kind225",
+          "kind226",
+          "kind227",
+          "kind228",
+          "kind229",
+          "kind23",
+          "kind230",
+          "kind231",
+          "kind232",
+          "kind233",
+          "kind234",
+          "kind235",
+          "kind236",
+          "kind237",
+          "kind238",
+          "kind239",
+          "kind24",
+          "kind240",
+          "kind241",
+          "kind242",
+          "kind243",
+          "kind244",
+          "kind245",
+          "kind246",
+          "kind247",
+          "kind248",
+          "kind249",
+          "kind25",
+          "kind250",
+          "kind251",
+          "kind252",
+          "kind253",
+          "kind254",
+          "kind255",
+          "kind26",
+          "kind27",
+          "kind28",
+          "kind29",
+          "kind3",
+          "kind30",
+          "kind31",
+          "kind32",
+          "kind33",
+          "kind34",
+          "kind35",
+          "kind36",
+          "kind37",
+          "kind38",
+          "kind39",
+          "kind4",
+          "kind40",
+          "kind41",
+          "kind42",
+          "kind43",
+          "kind44",
+          "kind45",
+          "kind46",
+          "kind47",
+          "kind48",
+          "kind49",
+          "kind5",
+          "kind50",
+          "kind51",
+          "kind52",
+          "kind53",
+          "kind54",
+          "kind55",
+          "kind56",
+          "kind57",
+          "kind58",
+          "kind59",
+          "kind6",
+          "kind60",
+          "kind61",
+          "kind62",
+          "kind63",
+          "kind64",
+          "kind65",
+          "kind66",
+          "kind67",
+          "kind68",
+          "kind69",
+          "kind7",
+          "kind70",
+          "kind71",
+          "kind72",
+          "kind73",
+          "kind74",
+          "kind75",
+          "kind76",
+          "kind77",
+          "kind78",
+          "kind79",
+          "kind8",
+          "kind80",
+          "kind81",
+          "kind82",
+          "kind83",
+          "kind84",
+          "kind85",
+          "kind86",
+          "kind87",
+          "kind88",
+          "kind89",
+          "kind9",
+          "kind90",
+          "kind91",
+          "kind92",
+          "kind93",
+          "kind94",
+          "kind95",
+          "kind96",
+          "kind97",
+          "kind98",
+          "kind99"
+        ],
+        "composer",
+        {
+          "page": null,
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": null
+    },
+    {
+      "args": [
+        [
+          "kind0",
+          "kind1",
+          "kind10",
+          "kind100",
+          "kind101",
+          "kind102",
+          "kind103",
+          "kind104",
+          "kind105",
+          "kind106",
+          "kind107",
+          "kind108",
+          "kind109",
+          "kind11",
+          "kind110",
+          "kind111",
+          "kind112",
+          "kind113",
+          "kind114",
+          "kind115",
+          "kind116",
+          "kind117",
+          "kind118",
+          "kind119",
+          "kind12",
+          "kind120",
+          "kind121",
+          "kind122",
+          "kind123",
+          "kind124",
+          "kind125",
+          "kind126",
+          "kind127",
+          "kind128",
+          "kind129",
+          "kind13",
+          "kind130",
+          "kind131",
+          "kind132",
+          "kind133",
+          "kind134",
+          "kind135",
+          "kind136",
+          "kind137",
+          "kind138",
+          "kind139",
+          "kind14",
+          "kind140",
+          "kind141",
+          "kind142",
+          "kind143",
+          "kind144",
+          "kind145",
+          "kind146",
+          "kind147",
+          "kind148",
+          "kind149",
+          "kind15",
+          "kind150",
+          "kind151",
+          "kind152",
+          "kind153",
+          "kind154",
+          "kind155",
+          "kind156",
+          "kind157",
+          "kind158",
+          "kind159",
+          "kind16",
+          "kind160",
+          "kind161",
+          "kind162",
+          "kind163",
+          "kind164",
+          "kind165",
+          "kind166",
+          "kind167",
+          "kind168",
+          "kind169",
+          "kind17",
+          "kind170",
+          "kind171",
+          "kind172",
+          "kind173",
+          "kind174",
+          "kind175",
+          "kind176",
+          "kind177",
+          "kind178",
+          "kind179",
+          "kind18",
+          "kind180",
+          "kind181",
+          "kind182",
+          "kind183",
+          "kind184",
+          "kind185",
+          "kind186",
+          "kind187",
+          "kind188",
+          "kind189",
+          "kind19",
+          "kind190",
+          "kind191",
+          "kind192",
+          "kind193",
+          "kind194",
+          "kind195",
+          "kind196",
+          "kind197",
+          "kind198",
+          "kind199",
+          "kind2",
+          "kind20",
+          "kind200",
+          "kind201",
+          "kind202",
+          "kind203",
+          "kind204",
+          "kind205",
+          "kind206",
+          "kind207",
+          "kind208",
+          "kind209",
+          "kind21",
+          "kind210",
+          "kind211",
+          "kind212",
+          "kind213",
+          "kind214",
+          "kind215",
+          "kind216",
+          "kind217",
+          "kind218",
+          "kind219",
+          "kind22",
+          "kind220",
+          "kind221",
+          "kind222",
+          "kind223",
+          "kind224",
+          "kind225",
+          "kind226",
+          "kind227",
+          "kind228",
+          "kind229",
+          "kind23",
+          "kind230",
+          "kind231",
+          "kind232",
+          "kind233",
+          "kind234",
+          "kind235",
+          "kind236",
+          "kind237",
+          "kind238",
+          "kind239",
+          "kind24",
+          "kind240",
+          "kind241",
+          "kind242",
+          "kind243",
+          "kind244",
+          "kind245",
+          "kind246",
+          "kind247",
+          "kind248",
+          "kind249",
+          "kind25",
+          "kind250",
+          "kind251",
+          "kind252",
+          "kind253",
+          "kind254",
+          "kind255",
+          "kind26",
+          "kind27",
+          "kind28",
+          "kind29",
+          "kind3",
+          "kind30",
+          "kind31",
+          "kind32",
+          "kind33",
+          "kind34",
+          "kind35",
+          "kind36",
+          "kind37",
+          "kind38",
+          "kind39",
+          "kind4",
+          "kind40",
+          "kind41",
+          "kind42",
+          "kind43",
+          "kind44",
+          "kind45",
+          "kind46",
+          "kind47",
+          "kind48",
+          "kind49",
+          "kind5",
+          "kind50",
+          "kind51",
+          "kind52",
+          "kind53",
+          "kind54",
+          "kind55",
+          "kind56",
+          "kind57",
+          "kind58",
+          "kind59",
+          "kind6",
+          "kind60",
+          "kind61",
+          "kind62",
+          "kind63",
+          "kind64",
+          "kind65",
+          "kind66",
+          "kind67",
+          "kind68",
+          "kind69",
+          "kind7",
+          "kind70",
+          "kind71",
+          "kind72",
+          "kind73",
+          "kind74",
+          "kind75",
+          "kind76",
+          "kind77",
+          "kind78",
+          "kind79",
+          "kind8",
+          "kind80",
+          "kind81",
+          "kind82",
+          "kind83",
+          "kind84",
+          "kind85",
+          "kind86",
+          "kind87",
+          "kind88",
+          "kind89",
+          "kind9",
+          "kind90",
+          "kind91",
+          "kind92",
+          "kind93",
+          "kind94",
+          "kind95",
+          "kind96",
+          "kind97",
+          "kind98",
+          "kind99"
+        ],
+        "composer",
+        {
+          "page": null,
+          "pop_out": null,
+          "popped_out": true
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": "too-many-windows"
+    },
+    {
+      "args": [
+        [
+          "kind0",
+          "kind1",
+          "kind10",
+          "kind100",
+          "kind101",
+          "kind102",
+          "kind103",
+          "kind104",
+          "kind105",
+          "kind106",
+          "kind107",
+          "kind108",
+          "kind109",
+          "kind11",
+          "kind110",
+          "kind111",
+          "kind112",
+          "kind113",
+          "kind114",
+          "kind115",
+          "kind116",
+          "kind117",
+          "kind118",
+          "kind119",
+          "kind12",
+          "kind120",
+          "kind121",
+          "kind122",
+          "kind123",
+          "kind124",
+          "kind125",
+          "kind126",
+          "kind127",
+          "kind128",
+          "kind129",
+          "kind13",
+          "kind130",
+          "kind131",
+          "kind132",
+          "kind133",
+          "kind134",
+          "kind135",
+          "kind136",
+          "kind137",
+          "kind138",
+          "kind139",
+          "kind14",
+          "kind140",
+          "kind141",
+          "kind142",
+          "kind143",
+          "kind144",
+          "kind145",
+          "kind146",
+          "kind147",
+          "kind148",
+          "kind149",
+          "kind15",
+          "kind150",
+          "kind151",
+          "kind152",
+          "kind153",
+          "kind154",
+          "kind155",
+          "kind156",
+          "kind157",
+          "kind158",
+          "kind159",
+          "kind16",
+          "kind160",
+          "kind161",
+          "kind162",
+          "kind163",
+          "kind164",
+          "kind165",
+          "kind166",
+          "kind167",
+          "kind168",
+          "kind169",
+          "kind17",
+          "kind170",
+          "kind171",
+          "kind172",
+          "kind173",
+          "kind174",
+          "kind175",
+          "kind176",
+          "kind177",
+          "kind178",
+          "kind179",
+          "kind18",
+          "kind180",
+          "kind181",
+          "kind182",
+          "kind183",
+          "kind184",
+          "kind185",
+          "kind186",
+          "kind187",
+          "kind188",
+          "kind189",
+          "kind19",
+          "kind190",
+          "kind191",
+          "kind192",
+          "kind193",
+          "kind194",
+          "kind195",
+          "kind196",
+          "kind197",
+          "kind198",
+          "kind199",
+          "kind2",
+          "kind20",
+          "kind200",
+          "kind201",
+          "kind202",
+          "kind203",
+          "kind204",
+          "kind205",
+          "kind206",
+          "kind207",
+          "kind208",
+          "kind209",
+          "kind21",
+          "kind210",
+          "kind211",
+          "kind212",
+          "kind213",
+          "kind214",
+          "kind215",
+          "kind216",
+          "kind217",
+          "kind218",
+          "kind219",
+          "kind22",
+          "kind220",
+          "kind221",
+          "kind222",
+          "kind223",
+          "kind224",
+          "kind225",
+          "kind226",
+          "kind227",
+          "kind228",
+          "kind229",
+          "kind23",
+          "kind230",
+          "kind231",
+          "kind232",
+          "kind233",
+          "kind234",
+          "kind235",
+          "kind236",
+          "kind237",
+          "kind238",
+          "kind239",
+          "kind24",
+          "kind240",
+          "kind241",
+          "kind242",
+          "kind243",
+          "kind244",
+          "kind245",
+          "kind246",
+          "kind247",
+          "kind248",
+          "kind249",
+          "kind25",
+          "kind250",
+          "kind251",
+          "kind252",
+          "kind253",
+          "kind254",
+          "kind255",
+          "kind26",
+          "kind27",
+          "kind28",
+          "kind29",
+          "kind3",
+          "kind30",
+          "kind31",
+          "kind32",
+          "kind33",
+          "kind34",
+          "kind35",
+          "kind36",
+          "kind37",
+          "kind38",
+          "kind39",
+          "kind4",
+          "kind40",
+          "kind41",
+          "kind42",
+          "kind43",
+          "kind44",
+          "kind45",
+          "kind46",
+          "kind47",
+          "kind48",
+          "kind49",
+          "kind5",
+          "kind50",
+          "kind51",
+          "kind52",
+          "kind53",
+          "kind54",
+          "kind55",
+          "kind56",
+          "kind57",
+          "kind58",
+          "kind59",
+          "kind6",
+          "kind60",
+          "kind61",
+          "kind62",
+          "kind63",
+          "kind64",
+          "kind65",
+          "kind66",
+          "kind67",
+          "kind68",
+          "kind69",
+          "kind7",
+          "kind70",
+          "kind71",
+          "kind72",
+          "kind73",
+          "kind74",
+          "kind75",
+          "kind76",
+          "kind77",
+          "kind78",
+          "kind79",
+          "kind8",
+          "kind80",
+          "kind81",
+          "kind82",
+          "kind83",
+          "kind84",
+          "kind85",
+          "kind86",
+          "kind87",
+          "kind88",
+          "kind89",
+          "kind9",
+          "kind90",
+          "kind91",
+          "kind92",
+          "kind93",
+          "kind94",
+          "kind95",
+          "kind96",
+          "kind97",
+          "kind98",
+          "kind99"
+        ],
+        "kind3",
+        {
+          "page": {
+            "maximized": false,
+            "rect": {
+              "height": 520,
+              "width": 720,
+              "x": 0,
+              "y": 0
+            },
+            "snap": null
+          },
+          "pop_out": null,
+          "popped_out": false
+        }
+      ],
+      "fn": "checkWindowStateWrite",
+      "out": null
+    }
+  ]
+}

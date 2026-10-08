@@ -38,10 +38,8 @@ The new folder contains:
 | `manifest.json` | Id, name, version, permissions, commands, toolbar placements, translations ([manifest reference](manifest.md)) |
 | `src/index.tsx` | The plug-in's code |
 | `locales/en.ftl` | Texts the manifest refers to as `%id%` and the code reads with `nail.l10n.t` ([translations](localization.md)) |
-| `scripts/build.mjs` | Bundles `src/index.tsx` into `dist/index.js` with esbuild |
-| `scripts/pack.mjs` | Packs `dist/<id>.nailplugin` |
 | `tsconfig.json` | TypeScript settings: JSX through `@nail/plugin-api`, only the sandbox's globals |
-| `package.json` | The scripts below; `@nail/plugin-api` points at the SDK in the repository |
+| `package.json` | The scripts below (they run the SDK's `nail-plugin build` — `src/index.tsx` into `dist/index.js` with esbuild — and `nail-plugin pack`); `@nail/plugin-api` points at the SDK in the repository |
 
 Then:
 

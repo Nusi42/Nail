@@ -21,6 +21,7 @@
  * tools ({@link PluginActivationContext}).
  */
 import type {
+  ActionKind,
   CalendarId,
   ComposerTextFormat,
   DraftId,
@@ -92,18 +93,7 @@ export interface PluginMailSearchOptions {
  * allows them for the plug-in; the other kinds run without asking unless
  * the user makes them ask.
  */
-export type PluginActionKind =
-  | "organize"
-  | "trash"
-  | "permanent-delete"
-  | "draft"
-  | "send"
-  | "calendar"
-  | "invite"
-  | "contact"
-  | "task"
-  | "pim-delete"
-  | "rule";
+export type PluginActionKind = ActionKind;
 
 /**
  * How a write ended (the same answer MCP's write tools give, in
@@ -206,7 +196,7 @@ export interface PluginDraftAttachment {
   filename: string;
   /** MIME type (default: from the file name). */
   mimeType?: string;
-  /** The content (at most 25 MB). */
+  /** The content (at most `MAX_ATTACHMENT_BYTES`). */
   data?: Uint8Array | ArrayBuffer;
   /** Or the content as base64. */
   dataBase64?: string;

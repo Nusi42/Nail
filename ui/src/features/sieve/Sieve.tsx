@@ -12,12 +12,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { errorMessageId, errorMessageOf } from "../../api/client";
-import type {
-  AccountConfig,
-  LocalizedMessage,
-  ManageSieveConfig,
-  SieveAccountStatus,
-  VacationSettings,
+import {
+  VACATION_ISSUE_MESSAGE_IDS,
+  type AccountConfig,
+  type LocalizedMessage,
+  type ManageSieveConfig,
+  type SieveAccountStatus,
+  type VacationSettings,
 } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
@@ -369,7 +370,7 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
     const settings = { ...draft, addresses: parseAddressList(addresses) };
     const issues = vacationIssues(settings);
     if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: `vacation-issue-${i}` })));
+      setProblems(issues.map((i) => ({ id: VACATION_ISSUE_MESSAGE_IDS[i] })));
       return;
     }
     setProblems([]);

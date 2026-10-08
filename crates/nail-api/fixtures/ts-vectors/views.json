@@ -1,0 +1,936 @@
+{
+  "cases": [
+    {
+      "args": [
+        "default-layout",
+        "mail",
+        1
+      ],
+      "fn": "stepView",
+      "out": "calendar"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "settings"
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar",
+        1
+      ],
+      "fn": "stepView",
+      "out": "contacts"
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "mail"
+    },
+    {
+      "args": [
+        "default-layout",
+        "contacts",
+        1
+      ],
+      "fn": "stepView",
+      "out": "tasks"
+    },
+    {
+      "args": [
+        "default-layout",
+        "contacts",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "calendar"
+    },
+    {
+      "args": [
+        "default-layout",
+        "tasks",
+        1
+      ],
+      "fn": "stepView",
+      "out": "settings"
+    },
+    {
+      "args": [
+        "default-layout",
+        "tasks",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "contacts"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings",
+        1
+      ],
+      "fn": "stepView",
+      "out": "mail"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "tasks"
+    },
+    {
+      "args": [
+        "default-layout",
+        "nope",
+        1
+      ],
+      "fn": "stepView",
+      "out": "mail"
+    },
+    {
+      "args": [
+        "default-layout",
+        "nope",
+        -1
+      ],
+      "fn": "stepView",
+      "out": "mail"
+    },
+    {
+      "args": [
+        "default-layout",
+        "mail"
+      ],
+      "fn": "viewOfWindow",
+      "out": "mail"
+    },
+    {
+      "args": [
+        "default-layout",
+        "calendar"
+      ],
+      "fn": "viewOfWindow",
+      "out": "calendar"
+    },
+    {
+      "args": [
+        "default-layout",
+        "settings"
+      ],
+      "fn": "viewOfWindow",
+      "out": "settings"
+    },
+    {
+      "args": [
+        "default-layout",
+        "main"
+      ],
+      "fn": "viewOfWindow",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "nope"
+      ],
+      "fn": "viewOfWindow",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout"
+      ],
+      "fn": "startView",
+      "out": "mail"
+    },
+    {
+      "args": [
+        0
+      ],
+      "fn": "accountColorSlot",
+      "out": 1
+    },
+    {
+      "args": [
+        1
+      ],
+      "fn": "accountColorSlot",
+      "out": 2
+    },
+    {
+      "args": [
+        7
+      ],
+      "fn": "accountColorSlot",
+      "out": 8
+    },
+    {
+      "args": [
+        8
+      ],
+      "fn": "accountColorSlot",
+      "out": 1
+    },
+    {
+      "args": [
+        9
+      ],
+      "fn": "accountColorSlot",
+      "out": 2
+    },
+    {
+      "args": [
+        17
+      ],
+      "fn": "accountColorSlot",
+      "out": 2
+    },
+    {
+      "args": [
+        [
+          "favorites",
+          "accounts",
+          "smart-folders"
+        ],
+        [
+          "all-inboxes",
+          "flagged"
+        ],
+        [
+          "a1",
+          "a2"
+        ],
+        0,
+        []
+      ],
+      "fn": "folderPaneSections",
+      "out": [
+        {
+          "accountId": null,
+          "collapsed": false,
+          "colorSlot": null,
+          "id": "favorites",
+          "kind": "favorites"
+        },
+        {
+          "accountId": "a1",
+          "collapsed": false,
+          "colorSlot": 1,
+          "id": "account:a1",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "a2",
+          "collapsed": false,
+          "colorSlot": 2,
+          "id": "account:a2",
+          "kind": "accounts"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          "favorites",
+          "accounts",
+          "smart-folders"
+        ],
+        [],
+        [
+          "a1"
+        ],
+        2,
+        [
+          "account:a1",
+          "smart-folders"
+        ]
+      ],
+      "fn": "folderPaneSections",
+      "out": [
+        {
+          "accountId": "a1",
+          "collapsed": true,
+          "colorSlot": 1,
+          "id": "account:a1",
+          "kind": "accounts"
+        },
+        {
+          "accountId": null,
+          "collapsed": true,
+          "colorSlot": null,
+          "id": "smart-folders",
+          "kind": "smart-folders"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          "smart-folders",
+          "favorites"
+        ],
+        [
+          "unread"
+        ],
+        [],
+        1,
+        [
+          "favorites"
+        ]
+      ],
+      "fn": "folderPaneSections",
+      "out": [
+        {
+          "accountId": null,
+          "collapsed": false,
+          "colorSlot": null,
+          "id": "smart-folders",
+          "kind": "smart-folders"
+        },
+        {
+          "accountId": null,
+          "collapsed": true,
+          "colorSlot": null,
+          "id": "favorites",
+          "kind": "favorites"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          "favorites",
+          "accounts",
+          "smart-folders"
+        ],
+        [
+          "drafts"
+        ],
+        [
+          "acc1",
+          "acc2",
+          "acc3",
+          "acc4",
+          "acc5",
+          "acc6",
+          "acc7",
+          "acc8",
+          "acc9",
+          "acc10"
+        ],
+        0,
+        []
+      ],
+      "fn": "folderPaneSections",
+      "out": [
+        {
+          "accountId": null,
+          "collapsed": false,
+          "colorSlot": null,
+          "id": "favorites",
+          "kind": "favorites"
+        },
+        {
+          "accountId": "acc1",
+          "collapsed": false,
+          "colorSlot": 1,
+          "id": "account:acc1",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc2",
+          "collapsed": false,
+          "colorSlot": 2,
+          "id": "account:acc2",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc3",
+          "collapsed": false,
+          "colorSlot": 3,
+          "id": "account:acc3",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc4",
+          "collapsed": false,
+          "colorSlot": 4,
+          "id": "account:acc4",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc5",
+          "collapsed": false,
+          "colorSlot": 5,
+          "id": "account:acc5",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc6",
+          "collapsed": false,
+          "colorSlot": 6,
+          "id": "account:acc6",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc7",
+          "collapsed": false,
+          "colorSlot": 7,
+          "id": "account:acc7",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc8",
+          "collapsed": false,
+          "colorSlot": 8,
+          "id": "account:acc8",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc9",
+          "collapsed": false,
+          "colorSlot": 1,
+          "id": "account:acc9",
+          "kind": "accounts"
+        },
+        {
+          "accountId": "acc10",
+          "collapsed": false,
+          "colorSlot": 2,
+          "id": "account:acc10",
+          "kind": "accounts"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "a",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": 1,
+            "type": "action"
+          },
+          {
+            "action": "b",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "c",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": 3,
+            "type": "action"
+          },
+          {
+            "action": "d",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": null,
+            "type": "action"
+          },
+          {
+            "action": "e",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": 3,
+            "type": "action"
+          },
+          {
+            "type": "spacer"
+          },
+          {
+            "action": "f",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": 2,
+            "type": "action"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        4,
+        1,
+        5,
+        3,
+        7,
+        0
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "only",
+            "args": [],
+            "display": null,
+            "icon": null,
+            "label": null,
+            "rank": null,
+            "type": "action"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        0
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "type": "spacer"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": []
+    },
+    {
+      "args": [
+        []
+      ],
+      "fn": "overflowOrder",
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "mail.compose",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 1,
+            "type": "action"
+          },
+          {
+            "action": "sync.now",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 2,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "outbox.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "snooze.list",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "pim.calendar.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "pim.contacts.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "pim.tasks.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "type": "spacer"
+          },
+          {
+            "action": "account.add",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "settings.open",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        12,
+        11,
+        9,
+        8,
+        7,
+        5,
+        4,
+        3,
+        1,
+        0
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "mail.reply",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 1,
+            "type": "action"
+          },
+          {
+            "action": "mail.reply-all",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 2,
+            "type": "action"
+          },
+          {
+            "action": "mail.forward",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 3,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "mail.archive",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 4,
+            "type": "action"
+          },
+          {
+            "action": "mail.delete",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 5,
+            "type": "action"
+          },
+          {
+            "action": "mail.move",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 6,
+            "type": "action"
+          },
+          {
+            "action": "mail.toggle-flag",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 7,
+            "type": "action"
+          },
+          {
+            "action": "snooze.open",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 8,
+            "type": "action"
+          },
+          {
+            "type": "spacer"
+          },
+          {
+            "icon": null,
+            "items": [
+              {
+                "label": "@toolbar.group.message",
+                "type": "header"
+              },
+              {
+                "action": "mail.toggle-read",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "junk.mark",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "gmail.apply-labels",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "exchange.apply-categories",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "exchange.classify",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "security.autocrypt.import",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "print.message",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "label": "@toolbar.group.turn-into",
+                "type": "header"
+              },
+              {
+                "action": "calendar.event-from-message",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "tasks.from-message",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "rules.create-from-message",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              }
+            ],
+            "label": null,
+            "type": "more"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        8,
+        7,
+        6,
+        5,
+        4,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "scheduling.find-time",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 2,
+            "type": "action"
+          },
+          {
+            "type": "spacer"
+          },
+          {
+            "action": "pim.sync",
+            "args": [],
+            "display": "icon",
+            "icon": null,
+            "label": null,
+            "rank": 3,
+            "type": "action"
+          },
+          {
+            "icon": null,
+            "items": [
+              {
+                "action": "tasks.new",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "contacts.new",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "action": "print.event",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "print.agenda",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "action": "pim.import",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "pim.sources",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
+                "action": "scheduling.settings",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              }
+            ],
+            "label": null,
+            "type": "more"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        2,
+        0
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "action": "customize.merge",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "customize.errors",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          },
+          {
+            "action": "inspector.toggle",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "type": "action"
+          }
+        ]
+      ],
+      "fn": "overflowOrder",
+      "out": [
+        2,
+        1,
+        0
+      ]
+    }
+  ]
+}

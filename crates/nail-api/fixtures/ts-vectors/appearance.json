@@ -1,0 +1,2811 @@
+{
+  "cases": [
+    {
+      "args": [
+        "#abc"
+      ],
+      "fn": "isHexColor",
+      "out": true
+    },
+    {
+      "args": [
+        "#AbCdEf"
+      ],
+      "fn": "isHexColor",
+      "out": true
+    },
+    {
+      "args": [
+        "#12345"
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        "abc"
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        "#ggg"
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        "#1234567"
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        "#"
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isHexColor",
+      "out": false
+    },
+    {
+      "args": [
+        "frost"
+      ],
+      "fn": "isThemeId",
+      "out": true
+    },
+    {
+      "args": [
+        "my-theme-2"
+      ],
+      "fn": "isThemeId",
+      "out": true
+    },
+    {
+      "args": [
+        "Frost"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "2024"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "a--b"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "a-"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "a_b"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "fn": "isThemeId",
+      "out": false
+    },
+    {
+      "args": [
+        "My Ocean"
+      ],
+      "fn": "isThemeName",
+      "out": true
+    },
+    {
+      "args": [
+        "  "
+      ],
+      "fn": "isThemeName",
+      "out": false
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "isThemeName",
+      "out": false
+    },
+    {
+      "args": [
+        "tab\there"
+      ],
+      "fn": "isThemeName",
+      "out": false
+    },
+    {
+      "args": [
+        " padded "
+      ],
+      "fn": "isThemeName",
+      "out": true
+    },
+    {
+      "args": [
+        "äöü"
+      ],
+      "fn": "isThemeName",
+      "out": true
+    },
+    {
+      "args": [
+        "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+      ],
+      "fn": "isThemeName",
+      "out": false
+    },
+    {
+      "args": [
+        {}
+      ],
+      "fn": "overrideIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "accent": "#fff",
+          "font_size": 11,
+          "radius": 0
+        }
+      ],
+      "fn": "overrideIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "accent": "red",
+          "font_size": 10,
+          "radius": 21
+        }
+      ],
+      "fn": "overrideIssues",
+      "out": [
+        "font-size-range",
+        "radius-range",
+        "accent-invalid"
+      ]
+    },
+    {
+      "args": [
+        {
+          "font_size": 21
+        }
+      ],
+      "fn": "overrideIssues",
+      "out": [
+        "font-size-range"
+      ]
+    },
+    {
+      "args": [
+        {
+          "accent": "#12345g"
+        }
+      ],
+      "fn": "overrideIssues",
+      "out": [
+        "accent-invalid"
+      ]
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "ocean"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "high-contrast"
+    },
+    {
+      "args": [
+        {
+          "dark": "ocean",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "frost",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "high-contrast"
+    },
+    {
+      "args": [
+        {
+          "dark": "broken",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "broken",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "high-contrast"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": true,
+          "light": "missing",
+          "overrides": {},
+          "theme": "frost"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "ocean"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "ocean"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "ocean"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "ocean"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "ocean"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "graphite"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "broken"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        null,
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "light"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": false,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        {
+          "dark": "graphite",
+          "density": "comfortable",
+          "follow_system": false,
+          "light": "frost",
+          "overrides": {},
+          "theme": "missing"
+        },
+        {
+          "high_contrast": true,
+          "scheme": "dark"
+        },
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "activeTheme",
+      "out": "frost"
+    },
+    {
+      "args": [
+        "frost",
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "accentIgnored",
+      "out": false
+    },
+    {
+      "args": [
+        "high-contrast",
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "accentIgnored",
+      "out": true
+    },
+    {
+      "args": [
+        "mine-hc",
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "accentIgnored",
+      "out": true
+    },
+    {
+      "args": [
+        "missing",
+        [
+          {
+            "file": "frost.kdl",
+            "id": "frost",
+            "kind": "light",
+            "name": "frost",
+            "source": "builtin"
+          },
+          {
+            "file": "graphite.kdl",
+            "id": "graphite",
+            "kind": "dark",
+            "name": "graphite",
+            "source": "builtin"
+          },
+          {
+            "file": "high-contrast.kdl",
+            "id": "high-contrast",
+            "kind": "high-contrast",
+            "name": "high-contrast",
+            "source": "builtin"
+          },
+          {
+            "file": "ocean.kdl",
+            "id": "ocean",
+            "kind": "dark",
+            "name": "ocean",
+            "source": "builtin"
+          },
+          {
+            "file": "broken.kdl",
+            "id": "broken",
+            "kind": "dark",
+            "name": "broken",
+            "problem": {
+              "args": {},
+              "id": "theme-problem-unreadable"
+            },
+            "source": "builtin"
+          },
+          {
+            "file": "mine-hc.kdl",
+            "id": "mine-hc",
+            "kind": "high-contrast",
+            "name": "mine-hc",
+            "source": "builtin"
+          }
+        ]
+      ],
+      "fn": "accentIgnored",
+      "out": false
+    }
+  ]
+}

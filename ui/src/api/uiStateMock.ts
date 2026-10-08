@@ -5,6 +5,7 @@
  */
 import type { JsonValue, Request, Response, UiStateIssue } from "./generated";
 import type { MockCore } from "./mockMail";
+import { UI_STATE_ISSUE_MESSAGE_IDS } from "./generated";
 
 /** The requests answered here. */
 export const UI_STATE_REQUESTS = [
@@ -71,7 +72,7 @@ export function answerUiState(core: MockCore, request: UiStateRequest): Response
         type: "Error",
         code: "invalid_request",
         message: `UI state \`${request.key}\`: ${issue}`,
-        localized: { id: `ui-state-issue-${issue}` },
+        localized: { id: UI_STATE_ISSUE_MESSAGE_IDS[issue] },
       };
     }
     const before = Object.hasOwn(state, request.key) ? state[request.key] : null;

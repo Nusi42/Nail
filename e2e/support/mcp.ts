@@ -1,4 +1,6 @@
+import { expect, type Locator, type Page } from "@playwright/test";
 import { defined } from "./defined";
+import { openSettingsTab } from "./views";
 /**
  * A minimal MCP client over Streamable HTTP (JSON-RPC over POST; answers
  * come as JSON or as a server-sent event stream), enough for the e2e
@@ -98,4 +100,49 @@ async function readEvent(response: Response, id: number): Promise<JsonRpcRespons
     await reader.cancel().catch(() => undefined);
   }
   throw new Error(`no response for request ${String(id)}`);
+}
+
+/** An MCP client created in Settings → MCP clients. */
+export interface McpClient {
+  /** The settings view. */
+  settings: Locator;
+  /** The server's endpoint, as the settings show it. */
+  url: string;
+  /** The client's token (shown once). */
+  token: string;
+  /** The client's access form. */
+  access: Locator;
+}
+
+/**
+ * Opens Settings → MCP clients, waits for the running MCP server and
+ * creates the client `name` (no access yet).
+ */
+export async function createMcpClient(page: Page, name: string): Promise<McpClient> {
+  const settings = await openSettingsTab(page, "MCP clients");
+  // The server runs; its URL is shown.
+  const serverLine = settings.locator('[data-part="mcp-clients.server"]');
+  await expect(serverLine).toHaveAttribute("data-state", "running");
+  const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];
+  // A new client's token is shown once.
+  await settings.getByRole("textbox", { name: "Client name" }).fill(name);
+  await settings.getByRole("button", { name: "Create client" }).click();
+  const token = (await settings.locator('[data-part="mcp-token.value"]').textContent())?.trim();
+  expect(token).toMatch(/^nail_mcp_/);
+  return {
+    settings,
+    url: defined(url, "the MCP URL"),
+    token: defined(token, "the token"),
+    access: settings.getByRole("form", { name: `Access of ${name}` }),
+  };
+}
+
+/** Grants the permissions `scopes` (their labels) for all accounts and saves. */
+export async function grantMcpAccess(access: Locator, scopes: readonly string[]): Promise<void> {
+  for (const scope of scopes) {
+    await access.getByRole("checkbox", { name: scope, exact: true }).check();
+  }
+  await access.getByRole("checkbox", { name: /All accounts/ }).check();
+  await access.getByRole("button", { name: "Save access" }).click();
+  await expect(access.getByRole("status")).toHaveText("Access saved.");
 }

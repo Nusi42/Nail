@@ -1,8 +1,8 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
-import { McpSession, type JsonRpcResponse } from "../support/mcp";
-import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { openSettings, rail, showView } from "../support/views";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { McpSession, type JsonRpcResponse, createMcpClient, grantMcpAccess } from "../support/mcp";
+import { nailFixture, control, serverMessages, type NailServer } from "../support/nail";
+import { axeViolations } from "../support/axe";
+import { openSettings, rail, showView, closeWindow, openMail } from "../support/views";
 import { defined } from "../support/defined";
 
 /**
@@ -14,63 +14,28 @@ import { defined } from "../support/defined";
  * and can never be always-allowed; the `summarize_thread` prompt returns
  * the thread; the client's rate limit, saved in the settings, trips.
  */
-const test = base.extend<{ nail: NailServer }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
-  nail: async ({}, use) => {
-    const server = await startNail({ seed: "demo-multi" });
-    await use(server);
-    await server.stop();
-  },
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-
-/** Every axe violation. */
-async function violations(page: Page) {
-  const results = await new AxeBuilder({ page }).analyze();
-  return results.violations.map((v) => ({
-    id: v.id,
-    targets: v.nodes.map((n) => n.target.join(" ")),
-  }));
-}
+const test = nailFixture({ seed: "demo-multi" });
 
 /** The rail's confirmations badge (M5b; absent while nothing waits). */
 const confirmationsBadge = (page: Page) =>
   page.locator('[data-part="nav-rail.badge"][data-badge="confirmations"]');
 
-async function closeDialog(page: Page, name: string) {
-  const dialog = page.getByRole("dialog", { name });
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
-}
-
 /**
- * Creates the MCP client "Claude" in Settings → MCP clients with the given
+ * Opens Nail and creates the MCP client "Claude" in Settings → MCP clients with the given
  * permissions for all accounts and opens an MCP session for it. Leaves the
  * settings window open.
  */
 async function agent(
   page: Page,
+  nail: NailServer,
   scopes: string[],
 ): Promise<{ mcp: McpSession; settings: Locator }> {
-  const settings = await openSettings(page, "Agents (MCP)");
-  const serverLine = settings.locator('[data-part="mcp-clients.server"]');
-  await expect(serverLine).toHaveAttribute("data-state", "running");
-  const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];
-  expect(url).toBeDefined();
-  await settings.getByRole("textbox", { name: "Client name" }).fill("Claude");
-  await settings.getByRole("button", { name: "Create client" }).click();
-  const token = (await settings.locator('[data-part="mcp-token.value"]').textContent())?.trim();
-  expect(token).toMatch(/^nail_mcp_/);
-  const form = settings.getByRole("form", { name: "Access of Claude" });
-  for (const scope of scopes)
-    await form.getByRole("checkbox", { name: scope, exact: true }).check();
-  await form.getByRole("checkbox", { name: /All accounts/ }).check();
-  await form.getByRole("button", { name: "Save access" }).click();
-  await expect(form.getByRole("status")).toHaveText("Access saved.");
-  const mcp = new McpSession(defined(url, "the MCP URL"), defined(token, "the token"));
+  await openMail(page, nail.url);
+  const client = await createMcpClient(page, "Claude");
+  await grantMcpAccess(client.access, scopes);
+  const mcp = new McpSession(client.url, client.token);
   await mcp.open();
-  return { mcp, settings };
+  return { mcp, settings: client.settings };
 }
 
 /** A tool call's structured result. */
@@ -115,9 +80,7 @@ test("an agent's draft needs no confirmation, sending waits for approval and alw
   page,
   nail,
 }) => {
-  await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
-  const { mcp } = await agent(page, ["Read mail", "Write drafts", "Send mail"]);
+  const { mcp } = await agent(page, nail, ["Read mail", "Write drafts", "Send mail"]);
   await showView(page, "Mail");
 
   // A draft runs without asking.
@@ -135,14 +98,14 @@ test("an agent's draft needs no confirmation, sending waits for approval and alw
   await expect(card).toHaveAttribute("data-risk", "outgoing");
   await expect(card).toContainText("AI agent “Claude” (MCP client)");
   await expect(card).toContainText("Agent plan");
-  expect(await violations(page), "confirmation center with a pending send").toEqual([]);
+  expect(await axeViolations(page), "confirmation center with a pending send").toEqual([]);
   await card.getByRole("checkbox", { name: /without asking: Send mail/ }).check();
   await card.getByRole("button", { name: "Approve", exact: true }).click();
   const sent = result(await sending);
   expect(sent.status).toBe("done");
   expect(sent.confirmation_id).toBeDefined();
   await expect.poll(() => smtpSubjects(nail), { timeout: 30_000 }).toContain("Subject: Agent plan");
-  await closeDialog(page, "Confirmations");
+  await closeWindow(page.getByRole("dialog", { name: "Confirmations" }));
 
   // "Always allow" stored the client's policy: the next send runs at once.
   const second = await draft(mcp, "Agent follow-up");
@@ -160,9 +123,11 @@ test("a denied delete changes nothing and a permanent delete always asks", async
   page,
   nail,
 }) => {
-  await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
-  const { mcp } = await agent(page, ["Read mail", "Organize mail", "Delete mail permanently"]);
+  const { mcp } = await agent(page, nail, [
+    "Read mail",
+    "Organize mail",
+    "Delete mail permanently",
+  ]);
   await showView(page, "Mail");
   const found = await call(mcp, "search_messages", { query: "subject:Welcome" });
   const id = /"id":"([^"]+)"/.exec(JSON.stringify(found.result))?.[1];
@@ -179,7 +144,7 @@ test("a denied delete changes nothing and a permanent delete always asks", async
   await card.getByRole("button", { name: "Deny" }).click();
   expect(result(await trashing).status).toBe("denied");
   expect((await serverMessages(nail, "INBOX")).length).toBe(before);
-  await closeDialog(page, "Confirmations");
+  await closeWindow(page.getByRole("dialog", { name: "Confirmations" }));
 
   // Permanent delete asks too, with the danger button and no always-allow.
   const deleting = call(mcp, "delete_messages", { message_ids: [id], permanent: true });
@@ -199,9 +164,7 @@ test("the summarize_thread prompt returns the thread and the rate limit trips", 
   page,
   nail,
 }) => {
-  await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
-  const { mcp, settings } = await agent(page, ["Read mail", "Write drafts"]);
+  const { mcp, settings } = await agent(page, nail, ["Read mail", "Write drafts"]);
 
   // The prompt carries the thread's messages, marked as untrusted data.
   const found = await call(mcp, "search_messages", { query: "subject:Welcome" });

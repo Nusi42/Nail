@@ -4,33 +4,18 @@
  * the message), denied and expired confirmations, missing permissions,
  * the panel and the reminder job.
  */
-import type { PluginMessage, PluginUiNode } from "@nail/plugin-api";
-import { loadCatalogs } from "@nail/plugin-api/tools";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { PluginUiNode } from "@nail/plugin-api";
+import { testMessage } from "@nail/plugin-api/testing";
+import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  loadBundle,
-  prepareExample,
-  readManifest,
-  type LoadedPlugin,
-  type PreparedExample,
-} from "./helpers";
+import { pluginLoader, useExample } from "./helpers";
 
-const message: PluginMessage = {
-  id: "m1",
-  uri: "nail://messages/m1",
-  accountId: "work",
-  folderId: "INBOX",
+const message = testMessage("m1", {
   subject: "Contract renewal",
   from: { name: "Ada Lovelace", email: "ada@example.org" },
-  to: [],
-  cc: [],
   date: "2026-09-29T10:00:00Z",
   flags: { seen: true, flagged: false, answered: false, draft: false },
-  tags: [],
-  hasAttachments: false,
-  encrypted: false,
-};
+});
 
 const lists = [
   { id: "work", name: "Work", default: true, readOnly: false },
@@ -38,31 +23,21 @@ const lists = [
   { id: "holidays", name: "Holidays", default: false, readOnly: true },
 ];
 
-let example: PreparedExample;
-beforeAll(() => {
-  example = prepareExample("follow-up");
-});
-afterAll(() => {
-  example.cleanup();
-});
+const followUp = useExample("follow-up");
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const isoDate = (d: Date) =>
   `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 describe("the follow-up plug-in at run time", () => {
-  let loaded: LoadedPlugin | undefined;
   const answers: { button: string | null; values: Record<string, unknown> }[] = [];
   afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
     answers.length = 0;
   });
 
-  async function load(options: Parameters<typeof loadBundle>[1] = {}) {
-    loaded = await loadBundle(example.bundle, {
-      manifest: readManifest(example.source),
-      catalogs: loadCatalogs(example.source),
+  const load = pluginLoader(
+    () => followUp.example.dir,
+    () => ({
       messages: [message],
       taskLists: lists,
       settings: { "default-days": 1, remind: true },
@@ -71,10 +46,8 @@ describe("the follow-up plug-in at run time", () => {
         if (!next) throw new Error("unexpected dialog");
         return next as never;
       },
-      ...options,
-    });
-    return loaded.host;
-  }
+    }),
+  );
 
   const stackOf = (nodes: PluginUiNode[] | undefined) =>
     (nodes?.[0] as Extract<PluginUiNode, { type: "stack" }>).children;
@@ -234,7 +207,6 @@ describe("the follow-up plug-in at run time", () => {
       title: "Select a message to follow up on",
       level: "warning",
     });
-    loaded?.restore();
 
     host = await load({ permissions: ["ui.dialogs", "notifications", "storage", "tasks.write"] });
     await host.runCommand("follow-up", { selection: { messageIds: ["m1"] } });
@@ -242,7 +214,6 @@ describe("the follow-up plug-in at run time", () => {
       { title: "This message cannot be read by the Follow up plug-in", level: "error" },
     ]);
     expect(host.logs[0]?.level).toBe("warn");
-    loaded?.restore();
 
     host = await load({ permissions: ["mail.read", "ui.dialogs", "notifications", "storage"] });
     await host.runCommand("follow-up", { selection: { messageIds: ["m1"] } });
@@ -253,7 +224,6 @@ describe("the follow-up plug-in at run time", () => {
         level: "error",
       },
     ]);
-    loaded?.restore();
 
     host = await load({ taskLists: lists.slice(2, 3) });
     await host.runCommand("follow-up", { selection: { messageIds: ["m1"] } });

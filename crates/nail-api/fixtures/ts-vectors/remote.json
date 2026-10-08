@@ -1,0 +1,713 @@
+{
+  "cases": [
+    {
+      "args": [
+        "127.0.0.1/32"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "10.1.0.0/16"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "10.0.0.0/7"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "172.16.0.0/12"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "172.32.0.0/16"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "192.168.1.0/24"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "169.254.0.0/16"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "100.64.0.0/10"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "100.128.0.0/10"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "8.8.8.8/32"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "::1/128"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "::1/127"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "fd00::/8"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "fc00::/6"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "fe80::1/64"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "2001:db8::/32"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "::ffff:192.168.0.1/128"
+      ],
+      "fn": "isLocalNetwork",
+      "out": true
+    },
+    {
+      "args": [
+        "::ffff:8.8.8.8/128"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "not-a-net"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "10.0.0.1"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "10.0.0.0/33"
+      ],
+      "fn": "isLocalNetwork",
+      "out": false
+    },
+    {
+      "args": [
+        "read-only"
+      ],
+      "fn": "presetGrant",
+      "out": {
+        "admin": false,
+        "mail": {
+          "accounts": [],
+          "all_accounts": true,
+          "excluded_folders": [],
+          "scopes": [
+            "read",
+            "raw-source",
+            "attachments"
+          ],
+          "skip_draft_confirmation": false
+        }
+      }
+    },
+    {
+      "args": [
+        "no-send"
+      ],
+      "fn": "presetGrant",
+      "out": {
+        "admin": false,
+        "mail": {
+          "accounts": [],
+          "all_accounts": true,
+          "excluded_folders": [],
+          "scopes": [
+            "read",
+            "raw-source",
+            "attachments",
+            "organize",
+            "permanent-delete",
+            "draft",
+            "calendar",
+            "pim",
+            "rules"
+          ],
+          "skip_draft_confirmation": false
+        }
+      }
+    },
+    {
+      "args": [
+        "full"
+      ],
+      "fn": "presetGrant",
+      "out": {
+        "admin": false,
+        "mail": {
+          "accounts": [],
+          "all_accounts": true,
+          "excluded_folders": [],
+          "scopes": [
+            "read",
+            "raw-source",
+            "attachments",
+            "organize",
+            "permanent-delete",
+            "draft",
+            "send",
+            "calendar",
+            "pim",
+            "rules"
+          ],
+          "skip_draft_confirmation": false
+        }
+      }
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "nope",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-bind-address"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "192.168.1.5",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "off"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "tls-required"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "192.168.1.5",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 0,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-port"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": true,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "internet-mode-locked"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "acme"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "acme-needs-internet-mode",
+        "acme-incomplete"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": true,
+            "contact_email": null,
+            "directory_url": "https://acme.example/dir",
+            "domains": [
+              "mail.example.org"
+            ]
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": true,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "acme"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "internet-mode-locked"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [
+            "10.0.0.0/8",
+            "nope"
+          ],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-network"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [
+            "8.8.8.0/24"
+          ],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "public-network"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [
+            "192.168.0.0/16",
+            "::1/128"
+          ],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": "bad name",
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-host-name"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": "nail.example.org",
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 0,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-session-limits"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 600,
+          "session_max_hours": 2,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-session-limits"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 90,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 0,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-session-limits"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 0,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-audit-retention"
+      ]
+    },
+    {
+      "args": [
+        {
+          "acme": {
+            "accept_terms": false,
+            "contact_email": null,
+            "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+            "domains": []
+          },
+          "allowed_networks": [],
+          "audit_retention_days": 3651,
+          "bind_address": "127.0.0.1",
+          "enabled": false,
+          "host_name": null,
+          "internet_mode": false,
+          "port": 4780,
+          "reauth_minutes": 5,
+          "session_idle_minutes": 30,
+          "session_max_hours": 12,
+          "tls": "self-signed"
+        }
+      ],
+      "fn": "settingsIssues",
+      "out": [
+        "invalid-audit-retention"
+      ]
+    }
+  ]
+}

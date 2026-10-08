@@ -1,27 +1,21 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test as base } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { expect } from "@playwright/test";
+import { startNail, nailFixture } from "../support/nail";
+import { messageRows, messageList } from "../support/views";
 
 /**
  * Tests that change theme.kdl / layout.kdl get their own `nail serve`, so
  * they never disturb tests using the shared server.
  */
-const test = base.extend<{ nail: NailServer }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
-  nail: async ({}, use) => {
-    const server = await startNail();
-    await use(server);
-    await server.stop();
-  },
-});
+const test = nailFixture();
 
 const accent = () =>
   getComputedStyle(document.documentElement).getPropertyValue("--nail-color-accent").trim();
 
 test("editing theme.kdl hot-reloads a CSS custom property", async ({ page, nail }) => {
   await page.goto(nail.url);
-  await expect(page.locator('[data-part="message-list"]')).toBeVisible();
+  await expect(messageList(page)).toBeVisible();
   const before = await page.evaluate(accent);
   expect(before).not.toBe("");
   expect(before.toLowerCase()).not.toBe("#ff0066");
@@ -76,7 +70,7 @@ test("editing layout.kdl moves and removes panes", async ({ page, nail }) => {
   await expect(panes.nth(1).locator('[data-part="folder-tree"]')).toBeVisible();
   await expect(page.locator('[data-part="message-view"]')).toHaveCount(0);
   await expect(page.locator('[data-part="status-bar"]')).toHaveCount(0);
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
 });
 
 test("the server's German locale falls back to English strings", async ({ page }) => {

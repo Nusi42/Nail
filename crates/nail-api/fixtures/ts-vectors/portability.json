@@ -1,0 +1,792 @@
+{
+  "cases": [
+    {
+      "args": [
+        "mbox"
+      ],
+      "fn": "importIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "mbox"
+      ],
+      "fn": "importHasMail",
+      "out": true
+    },
+    {
+      "args": [
+        "mbox"
+      ],
+      "fn": "importHasPim",
+      "out": false
+    },
+    {
+      "args": [
+        "eml-folder"
+      ],
+      "fn": "importIsDirectory",
+      "out": true
+    },
+    {
+      "args": [
+        "eml-folder"
+      ],
+      "fn": "importHasMail",
+      "out": true
+    },
+    {
+      "args": [
+        "eml-folder"
+      ],
+      "fn": "importHasPim",
+      "out": false
+    },
+    {
+      "args": [
+        "maildir"
+      ],
+      "fn": "importIsDirectory",
+      "out": true
+    },
+    {
+      "args": [
+        "maildir"
+      ],
+      "fn": "importHasMail",
+      "out": true
+    },
+    {
+      "args": [
+        "maildir"
+      ],
+      "fn": "importHasPim",
+      "out": false
+    },
+    {
+      "args": [
+        "thunderbird-profile"
+      ],
+      "fn": "importIsDirectory",
+      "out": true
+    },
+    {
+      "args": [
+        "thunderbird-profile"
+      ],
+      "fn": "importHasMail",
+      "out": true
+    },
+    {
+      "args": [
+        "thunderbird-profile"
+      ],
+      "fn": "importHasPim",
+      "out": true
+    },
+    {
+      "args": [
+        "ics"
+      ],
+      "fn": "importIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "ics"
+      ],
+      "fn": "importHasMail",
+      "out": false
+    },
+    {
+      "args": [
+        "ics"
+      ],
+      "fn": "importHasPim",
+      "out": true
+    },
+    {
+      "args": [
+        "vcard"
+      ],
+      "fn": "importIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard"
+      ],
+      "fn": "importHasMail",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard"
+      ],
+      "fn": "importHasPim",
+      "out": true
+    },
+    {
+      "args": [
+        "mbox"
+      ],
+      "fn": "exportIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "mbox"
+      ],
+      "fn": "exportExtension",
+      "out": "mbox"
+    },
+    {
+      "args": [
+        "mbox",
+        "folders"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "mbox",
+        "messages"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "mbox",
+        "calendars"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "mbox",
+        "address-books"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "eml"
+      ],
+      "fn": "exportIsDirectory",
+      "out": true
+    },
+    {
+      "args": [
+        "eml"
+      ],
+      "fn": "exportExtension",
+      "out": "eml"
+    },
+    {
+      "args": [
+        "eml",
+        "folders"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "eml",
+        "messages"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "eml",
+        "calendars"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "eml",
+        "address-books"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "maildir"
+      ],
+      "fn": "exportIsDirectory",
+      "out": true
+    },
+    {
+      "args": [
+        "maildir"
+      ],
+      "fn": "exportExtension",
+      "out": null
+    },
+    {
+      "args": [
+        "maildir",
+        "folders"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "maildir",
+        "messages"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "maildir",
+        "calendars"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "maildir",
+        "address-books"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "ics"
+      ],
+      "fn": "exportIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "ics"
+      ],
+      "fn": "exportExtension",
+      "out": "ics"
+    },
+    {
+      "args": [
+        "ics",
+        "folders"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "ics",
+        "messages"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "ics",
+        "calendars"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "ics",
+        "address-books"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard"
+      ],
+      "fn": "exportIsDirectory",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard"
+      ],
+      "fn": "exportExtension",
+      "out": "vcf"
+    },
+    {
+      "args": [
+        "vcard",
+        "folders"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard",
+        "messages"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard",
+        "calendars"
+      ],
+      "fn": "exportAccepts",
+      "out": false
+    },
+    {
+      "args": [
+        "vcard",
+        "address-books"
+      ],
+      "fn": "exportAccepts",
+      "out": true
+    },
+    {
+      "args": [
+        "settings"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "theme"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "layout"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "rules"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "accounts"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "local-mail"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "keys"
+      ],
+      "fn": "backupDefaultOn",
+      "out": false
+    },
+    {
+      "args": [
+        "pim-local"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "plugins"
+      ],
+      "fn": "backupDefaultOn",
+      "out": true
+    },
+    {
+      "args": [
+        "system-info"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "logs"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "config"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "account-status"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "store-stats"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "operation-queue"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "plugins"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": false
+    },
+    {
+      "args": [
+        "mail-headers"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": true
+    },
+    {
+      "args": [
+        "mail-content"
+      ],
+      "fn": "diagnosticsIsMail",
+      "out": true
+    },
+    {
+      "args": [
+        "running"
+      ],
+      "fn": "isFinished",
+      "out": false
+    },
+    {
+      "args": [
+        "completed"
+      ],
+      "fn": "isFinished",
+      "out": true
+    },
+    {
+      "args": [
+        "completed-with-issues"
+      ],
+      "fn": "isFinished",
+      "out": true
+    },
+    {
+      "args": [
+        "failed"
+      ],
+      "fn": "isFinished",
+      "out": true
+    },
+    {
+      "args": [
+        "cancelled"
+      ],
+      "fn": "isFinished",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "items": []
+        }
+      ],
+      "fn": "backupContentsIssues",
+      "out": [
+        "nothing-chosen"
+      ]
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "settings",
+            "keys"
+          ]
+        }
+      ],
+      "fn": "backupContentsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "theme",
+            "theme"
+          ]
+        }
+      ],
+      "fn": "backupContentsIssues",
+      "out": [
+        "duplicate-item"
+      ]
+    },
+    {
+      "args": [
+        ""
+      ],
+      "fn": "passphraseIssues",
+      "out": [
+        "passphrase-too-short"
+      ]
+    },
+    {
+      "args": [
+        "ppppppppppp"
+      ],
+      "fn": "passphraseIssues",
+      "out": [
+        "passphrase-too-short"
+      ]
+    },
+    {
+      "args": [
+        "pppppppppppp"
+      ],
+      "fn": "passphraseIssues",
+      "out": []
+    },
+    {
+      "args": [
+        "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+      ],
+      "fn": "passphraseIssues",
+      "out": [
+        "passphrase-too-long"
+      ]
+    },
+    {
+      "args": [
+        "äöüß€😀aaaaaa"
+      ],
+      "fn": "passphraseIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "items": [],
+          "message_ids": [],
+          "redact_addresses": true
+        }
+      ],
+      "fn": "diagnosticsIssues",
+      "out": [
+        "nothing-chosen"
+      ]
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "logs"
+          ],
+          "message_ids": [],
+          "redact_addresses": true
+        }
+      ],
+      "fn": "diagnosticsIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "mail-headers"
+          ],
+          "message_ids": [],
+          "redact_addresses": true
+        }
+      ],
+      "fn": "diagnosticsIssues",
+      "out": [
+        "no-messages"
+      ]
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "logs"
+          ],
+          "message_ids": [
+            "m1"
+          ],
+          "redact_addresses": true
+        }
+      ],
+      "fn": "diagnosticsIssues",
+      "out": [
+        "messages-without-mail-item"
+      ]
+    },
+    {
+      "args": [
+        {
+          "items": [
+            "mail-content"
+          ],
+          "message_ids": [
+            "m0",
+            "m1",
+            "m2",
+            "m3",
+            "m4",
+            "m5",
+            "m6",
+            "m7",
+            "m8",
+            "m9",
+            "m10",
+            "m11",
+            "m12",
+            "m13",
+            "m14",
+            "m15",
+            "m16",
+            "m17",
+            "m18",
+            "m19",
+            "m20"
+          ],
+          "redact_addresses": true
+        }
+      ],
+      "fn": "diagnosticsIssues",
+      "out": [
+        "too-many-messages"
+      ]
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 0,
+          "bytes_total": null,
+          "current": null,
+          "done": 0,
+          "phase": "reading",
+          "total": null
+        }
+      ],
+      "fn": "progressFraction",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 0,
+          "bytes_total": null,
+          "current": null,
+          "done": 5,
+          "phase": "reading",
+          "total": 10
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 0.5
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 300,
+          "bytes_total": 1000,
+          "current": null,
+          "done": 5,
+          "phase": "reading",
+          "total": 10
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 0.3
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 0,
+          "bytes_total": null,
+          "current": null,
+          "done": 12,
+          "phase": "reading",
+          "total": 10
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 1.0
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 0,
+          "bytes_total": null,
+          "current": null,
+          "done": 0,
+          "phase": "reading",
+          "total": 0
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 1.0
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 0,
+          "bytes_total": 0,
+          "current": null,
+          "done": 0,
+          "phase": "reading",
+          "total": null
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 1.0
+    },
+    {
+      "args": [
+        {
+          "bytes_done": 10,
+          "bytes_total": 40,
+          "current": null,
+          "done": 3,
+          "phase": "reading",
+          "total": 0
+        }
+      ],
+      "fn": "progressFraction",
+      "out": 0.25
+    }
+  ]
+}

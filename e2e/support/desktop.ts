@@ -4,10 +4,10 @@
  * remote debugging port so Playwright can attach over CDP.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { chromium, expect, type Browser, type Page } from "@playwright/test";
-import { buildOutputDir, repoRoot } from "./nail";
+import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
+import { buildOutputDir, freePort, repoRoot, tempDir } from "./nail";
 import { defined } from "./defined";
 
 /** The desktop build's output directory (`<build dir>/desktop-target/debug`). */
@@ -56,6 +56,8 @@ export interface DesktopOptions {
   args?: string[];
   /** More environment variables for the app (test variables of the shell). */
   env?: Record<string, string>;
+  /** {@link launchDesktop}: leave the first-run screen open. */
+  keepFirstRun?: boolean;
 }
 
 /**
@@ -152,6 +154,137 @@ export async function connectDesktop(app: DesktopApp): Promise<{ browser: Browse
   );
   await expectWindowsInBackground(page);
   return { browser, page };
+}
+
+/**
+ * Marks the calling spec file (or `describe` block) as desktop tests: they
+ * need Windows with WebView2 and `npm run build:desktop`, run in CI only
+ * with `NAIL_E2E_DESKTOP=1` (locally always), one app window at a time,
+ * each test within `timeout`.
+ */
+export function desktopTests(timeout = 240_000): void {
+  test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
+  test.skip(
+    !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
+    "set NAIL_E2E_DESKTOP=1 to run the desktop tests in CI",
+  );
+  test.describe.configure({ mode: "serial", timeout });
+}
+
+/** A desktop app the tests drive: the process, Playwright's connection and the app's page. */
+export interface DesktopSession {
+  app: DesktopApp;
+  browser: Browser;
+  page: Page;
+}
+
+/** Ends a session (also one only half started). */
+async function closeSession(session: Partial<DesktopSession>): Promise<void> {
+  await session.browser?.close().catch(() => undefined);
+  await session.app?.stop();
+}
+
+/**
+ * Starts the desktop app on a free port, connects to it and skips the
+ * first-run screen. A start that fails (WebView2 slow to open its port or
+ * to load the page on a busy machine — the P3 flake) is retried once with
+ * a new app.
+ */
+export async function launchDesktop(
+  options: string[] | DesktopOptions = [],
+): Promise<DesktopSession> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const session: Partial<DesktopSession> = {};
+    try {
+      session.app = await startDesktop(freePort(), options);
+      const { browser, page } = await connectDesktop(session.app);
+      session.browser = browser;
+      if (Array.isArray(options) || options.keepFirstRun !== true) await skipFirstRun(page);
+      return { app: session.app, browser, page };
+    } catch (error) {
+      lastError = error;
+      await closeSession(session);
+      console.warn(`desktop start ${String(attempt)} failed: ${String(error)}`);
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * How long a file's shared app may take to start: two attempts of
+ * {@link launchDesktop} (CDP port, page, first-run screen), beyond the
+ * tests' own timeout.
+ */
+export const DESKTOP_START_TIMEOUT = 600_000;
+
+/**
+ * One desktop app for every test of the calling spec file (or `describe`
+ * block), started in `beforeAll` (with its own timeout) and stopped in
+ * `afterAll`; its fields reach the running session.
+ */
+export function desktopPerFile(options: string[] | DesktopOptions = []): DesktopSession {
+  let current: DesktopSession | undefined;
+  const running = (): DesktopSession => {
+    if (!current) throw new Error("no desktop app is running (used outside a test?)");
+    return current;
+  };
+  test.beforeAll(async () => {
+    test.setTimeout(DESKTOP_START_TIMEOUT);
+    current = await launchDesktop(options);
+  });
+  test.afterAll(async () => {
+    // `beforeAll` may have failed before the app ran.
+    if (current) await closeSession(current);
+    current = undefined;
+  });
+  return {
+    get app() {
+      return running().app;
+    },
+    get browser() {
+      return running().browser;
+    },
+    get page() {
+      return running().page;
+    },
+  };
+}
+
+/**
+ * A desktop app per test of the calling spec file: the answer launches one
+ * ({@link launchDesktop}); every app a test launched is stopped after it.
+ */
+export function desktopPerTest(): (options?: string[] | DesktopOptions) => Promise<DesktopSession> {
+  const sessions: DesktopSession[] = [];
+  test.afterEach(async () => {
+    for (const session of sessions.splice(0)) await closeSession(session);
+  });
+  return async (options = []) => {
+    const session = await launchDesktop(options);
+    sessions.push(session);
+    return session;
+  };
+}
+
+/**
+ * A config directory with one switched-off account and Ada's identity:
+ * the composer can send (to the outbox) without a mail server.
+ */
+export function configWithIdentity(): string {
+  const dir = tempDir("desktop-config");
+  writeFileSync(
+    path.join(dir, "accounts.kdl"),
+    [
+      'account "work" email="ada@example.org" name="Work" enabled=#false {',
+      '    imap host="127.0.0.1" port=1 tls="plaintext"',
+      '    smtp host="127.0.0.1" port=1 tls="plaintext"',
+      '    identity "ada@example.org" name="Ada Lovelace"',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  return dir;
 }
 
 /**

@@ -1,6 +1,7 @@
 /**
- * Toolbar overflow (M5b): `overflowOrder` mirrors
- * `nail_api::views::tests::overflow_moves_unranked_from_the_end_then_highest_rank`;
+ * Toolbar overflow (M5b): `overflowOrder` is the port of
+ * `nail_api::views::overflow_order`, pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `views.test.ts`);
  * fitting and hidden disabled actions are the renderer's shared rules.
  */
 import type { ToolbarItem } from "../api/generated";

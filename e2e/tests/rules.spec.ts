@@ -1,8 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { readerAction, runFromPalette } from "../support/views";
+import { nailPerTest, control, serverMessages } from "../support/nail";
+import {
+  readerAction,
+  runFromPalette,
+  messageRows,
+  DEMO_MULTI_CONVERSATIONS,
+  openMail,
+} from "../support/views";
 
 /**
  * Filter rules (ADR 0024) against the `demo-multi` mock servers: an arrival
@@ -11,21 +17,12 @@ import { readerAction, runFromPalette } from "../support/views";
  * from a message.
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo-multi" });
 
 const rulesFile = () => readFileSync(path.join(server.configDir, "rules.kdl"), "utf8");
 
 async function openRules(page: Page): Promise<Locator> {
-  await page.goto(server.url);
-  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
   await runFromPalette(page, "filter rules", "Filter rules");
   const window = page.getByRole("dialog", { name: "Filter rules" });
   await expect(window).toBeVisible();
@@ -136,9 +133,7 @@ test("the test-rule preview lists matches and explains them", async ({ page }) =
 
 test("a rule is created from a message", async ({ page }) => {
   await page.goto(server.url);
-  const row = page
-    .locator('[data-part="message-list.row"]')
-    .filter({ hasText: "Release notes for M1" });
+  const row = messageRows(page).filter({ hasText: "Release notes for M1" });
   await row.click();
   await readerAction(page, "Create rule from message");
   const window = page.getByRole("dialog", { name: "Filter rules" });

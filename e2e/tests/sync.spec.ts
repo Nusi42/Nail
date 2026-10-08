@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { startNail } from "../support/nail";
-import { accountSections, READER_SUBJECT, sectionInbox } from "../support/views";
+import {
+  accountSections,
+  READER_SUBJECT,
+  sectionInbox,
+  messageRows,
+  refreshList,
+} from "../support/views";
 
 test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) => {
   // The demo corpus served by an in-process mock IMAP server.
@@ -21,12 +27,11 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
     const inbox = sectionInbox(accounts.nth(0));
     await expect(inbox).toBeVisible();
     await inbox.click();
-    const rows = page.locator('[data-part="message-list.row"]');
+    const rows = messageRows(page);
     await expect(rows).toHaveCount(14);
 
     const status = page.locator('[data-item="sync-progress"]');
-    await page.locator('[data-part="message-list"]').focus();
-    await page.keyboard.press("F5");
+    await refreshList(page);
     await expect.poll(() => sent.some((f) => f.includes('"SyncNow"'))).toBe(true);
     await expect.poll(() => received.some((f) => f.includes('"SyncStarted"'))).toBe(true);
     await expect(status).toHaveAttribute("data-state", "idle");

@@ -316,6 +316,18 @@ const LOCAL_V4: [([u8; 4], u8); 6] = [
 ];
 const LOCAL_V6: [(u128, u8); 3] = [(1, 128), (0xfc00_u128 << 112, 7), (0xfe80_u128 << 112, 10)];
 
+/// [`LOCAL_V4`] and [`LOCAL_V6`] as CIDR text (for the generated TypeScript
+/// constants).
+pub(crate) fn local_networks() -> Vec<String> {
+    let v4 = LOCAL_V4
+        .iter()
+        .map(|(base, len)| format!("{}/{len}", std::net::Ipv4Addr::from(*base)));
+    let v6 = LOCAL_V6
+        .iter()
+        .map(|(base, len)| format!("{}/{len}", std::net::Ipv6Addr::from(*base)));
+    v4.chain(v6).collect()
+}
+
 fn v4_in(ip: u32, prefix: u8, (base, len): ([u8; 4], u8)) -> bool {
     let mask = if len == 0 { 0 } else { u32::MAX << (32 - len) };
     prefix >= len && ip & mask == u32::from_be_bytes(base)

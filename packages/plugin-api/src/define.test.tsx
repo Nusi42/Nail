@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { PluginActivationContext } from "./api";
 import { definePlugin, toPreview } from "./define";
 import { banner, previewImage, veto } from "./extensions";
-import type { PluginManifest, PluginMessage, PluginOutgoingMessage } from "./generated";
+import type { PluginManifest } from "./generated";
 import { nail } from "./nail";
-import { createTestHost, type TestHost } from "./testing";
+import { createTestHost, testMessage, testOutgoingMessage, type TestHost } from "./testing";
 
 const manifest: PluginManifest = {
   id: "kitchen-sink",
@@ -40,34 +40,9 @@ const manifest: PluginManifest = {
   },
 };
 
-const message: PluginMessage = {
-  id: "m1",
-  uri: "nail://messages/m1",
-  accountId: "work",
-  folderId: "INBOX",
-  subject: "Hello",
-  to: [],
-  cc: [],
-  date: "2026-10-01T10:00:00Z",
-  flags: { seen: false, flagged: false, answered: false, draft: false },
-  tags: [],
-  hasAttachments: false,
-  encrypted: false,
-};
+const message = testMessage("m1", { subject: "Hello" });
 
-const outgoing: PluginOutgoingMessage = {
-  draftId: "d1",
-  accountId: "work",
-  identityId: "work-main",
-  from: { name: null, email: "me@example.org" },
-  to: [{ name: "Ada", email: "ada@example.org" }],
-  cc: [],
-  bcc: [],
-  subject: "Report",
-  text: "Hi",
-  attachments: [],
-  encrypted: false,
-};
+const outgoing = testOutgoingMessage();
 
 const kitchenSink = () =>
   definePlugin({

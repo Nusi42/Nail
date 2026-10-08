@@ -206,7 +206,10 @@ rewrites the baselines (`--update-baseline`); a finding that is no violation
 goes into `scripts/duplicates/allow.json` with its reason (`pinnedBy` names
 the test that pins a Rust ↔ TypeScript pair). Rust ↔ TypeScript constants
 come from `crates/nail-api/src/ts_constants.rs` (`npm run gen:api` writes
-`ui/src/api/generated/constants.ts`).
+`ui/src/api/generated/constants.ts` and `constants.json`, the same for the
+plug-in SDK); rules the UI ports from Rust are checked against generated
+test vectors (`crates/nail-api/fixtures/ts-vectors/`, `ui/src/test/vectors.ts`;
+ADR 0172).
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
@@ -590,6 +593,7 @@ regenerate it with the matching command:
 | --- | --- |
 | `ui/src/api/generated/` (TypeScript types from `nail-api`) | `npm run gen:api` |
 | `packages/plugin-api/src/generated/` (plug-in-facing TypeScript types from `nail-api`, M2d) | `npm run gen:api` |
+| `crates/nail-api/fixtures/ts-vectors/*.json` (Rust answers the UI's ports must give, Q2) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors`, `… cargo test -p nail-config ts_vectors`, `… cargo test -p nail-core ts_vectors` |
 | Reference sections of `userDocs/en/plugins/api-reference.md` and `components.md` (from the SDK types and `ui.rs` doc comments) | `npm run docs -w packages/plugin-api` |
 | `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema` |
 | `crates/nail-mime/tests/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test corpus`, or `cargo insta review` |

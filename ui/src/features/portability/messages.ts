@@ -6,7 +6,12 @@
  * items, diagnostics items — are in `locales/en/core-portability.ftl`);
  * ids built at runtime are listed by `runtimeIds`.
  */
-import type { ExportSource } from "../../api/generated";
+import {
+  BACKUP_ISSUE_MESSAGE_IDS,
+  DIAGNOSTICS_ISSUE_MESSAGE_IDS,
+  IMPORT_COLLECTION_KIND_MESSAGE_IDS,
+  type ExportSource,
+} from "../../api/generated";
 import {
   BACKUP_ITEMS,
   COUNT_KEYS,
@@ -72,9 +77,7 @@ export function runtimeIds(): string[] {
     ...SEVERITIES.map(severityId),
     ...ISSUE_CODES.map(issueCodeId),
     ...BACKUP_ITEMS.flatMap((i) => [backupItemId(i), `portability-backup-item-hint-${i}`]),
-    ...["nothing-chosen", "duplicate-item", "passphrase-too-short", "passphrase-too-long"].map(
-      (i) => `backup-issue-${i}`,
-    ),
+    ...Object.values(BACKUP_ISSUE_MESSAGE_IDS),
     "backup-wrong-passphrase",
     ...RESTORE_EFFECTS.map(restoreEffectId),
     ...DIAGNOSTICS_ITEMS.flatMap((i) => [
@@ -82,10 +85,8 @@ export function runtimeIds(): string[] {
       `portability-diagnostics-item-hint-${i}`,
     ]),
     ...REDACTIONS.map(redactionId),
-    ...["nothing-chosen", "no-messages", "messages-without-mail-item", "too-many-messages"].map(
-      (i) => `diagnostics-issue-${i}`,
-    ),
-    ...["calendar", "task-list", "address-book"].map((k) => `import-collection-${k}`),
+    ...Object.values(DIAGNOSTICS_ISSUE_MESSAGE_IDS),
+    ...Object.values(IMPORT_COLLECTION_KIND_MESSAGE_IDS),
     ...COUNT_KEYS.map(countId),
     ...["mbox", "all", "ics", "vcard", "eml", "backup", "zip"].map(
       (f) => `portability-filter-${f}`,

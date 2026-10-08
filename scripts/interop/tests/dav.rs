@@ -287,22 +287,23 @@ async fn check_carddav(interop: &Interop, server: &DavServer) {
         assert!(matches!(outcome, WriteOutcome::Written { .. }), "{name}");
         hrefs.push(item.path().to_owned());
     }
-    let found = ours
-        .addressbook_query(
-            &book,
-            Some(&TextMatch {
-                property: "FN".into(),
-                text: "lovelace".into(),
-            }),
-            true,
-        )
-        .await
-        .unwrap();
-    assert_eq!(found.len(), 1, "{name}: {found:?}");
-    assert!(
-        found[0].data.as_deref().unwrap().contains("Ada Lovelace"),
-        "{name}"
-    );
+    // A query by family name finds exactly that person's card.
+    for full in ["Ada Lovelace", "Bob Builder"] {
+        let family = full.rsplit(' ').next().unwrap_or(full).to_lowercase();
+        let filter = TextMatch {
+            property: "FN".into(),
+            text: family,
+        };
+        let found = ours
+            .addressbook_query(&book, Some(&filter), true)
+            .await
+            .unwrap();
+        assert_eq!(found.len(), 1, "{name} {full}: {found:?}");
+        assert!(
+            found[0].data.as_deref().unwrap_or_default().contains(full),
+            "{name} {full}"
+        );
+    }
 
     let mut wanted = hrefs.clone();
     wanted.push(format!("{}missing.vcf", book.path()));

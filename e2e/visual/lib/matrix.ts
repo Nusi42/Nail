@@ -12,6 +12,8 @@
  * Pure and dependency-free (only erasable TypeScript), so `node --test`
  * runs its tests directly (`matrix.test.ts`).
  */
+import { DENSITY_VALUES } from "../../../ui/src/api/generated/constants.ts";
+import type { Density } from "../../../ui/src/api/generated/Density.ts";
 
 /** The built-in themes of the M5 proposal, in gallery order. */
 export const EXPECTED_THEMES = ["frost", "sage", "graphite", "nocturne", "high-contrast"] as const;
@@ -24,9 +26,9 @@ export const EXPECTED_THEMES = ["frost", "sage", "graphite", "nocturne", "high-c
  */
 export const CURRENT_THEME = "current";
 
-/** `nail_api::appearance::Density`. */
-export const DENSITIES = ["comfortable", "compact"] as const;
-export type Density = (typeof DENSITIES)[number];
+/** `nail_api::appearance::Density` (generated). */
+export const DENSITIES = DENSITY_VALUES;
+export type { Density };
 
 /** The parts of `nail_api::ThemeInfo` the harness reads. */
 export interface ThemeInfoLike {

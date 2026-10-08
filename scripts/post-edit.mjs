@@ -13,9 +13,10 @@
 // never checked: nothing runs in the master.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { parseJson } from "./lib/json.mjs";
+import { isMain } from "./lib/program.mjs";
 import { isInOneDrive } from "./lib/work-folder.mjs";
 
 /** Exit code that makes Claude Code show stderr to the agent. */
@@ -92,6 +93,5 @@ async function main() {
   process.exitCode = FEEDBACK_EXIT_CODE;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await main();
-}
+// Not runMain: a broken hook must not block edits (exit code 2 is feedback).
+if (isMain(import.meta.url)) await main();

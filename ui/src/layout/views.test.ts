@@ -1,10 +1,15 @@
 /**
- * Views and the rail (M5b): mirrors `nail_api::views` tests
- * (`views_step_in_rail_order_and_wrap`) and `ResolvedLayout::start_view`.
+ * Views and the rail (M5b): the ports of `nail_api::views` (views, folder
+ * pane sections, toolbar overflow) over the vectors generated from the Rust
+ * rules (`views.json`), and the UI-only helpers.
  */
 import type { LayoutNode, ResolvedLayout, ViewDef } from "../api/generated";
 import defaultLayoutJson from "../../../crates/nail-api/fixtures/default-layout.json";
+import viewsVectors from "../../../crates/nail-api/fixtures/ts-vectors/views.json";
 import { normalizeLayout } from "../api/normalize";
+import { defaultLayout, describeVectors } from "../test/vectors";
+import { accountColorSlot, folderPaneSections } from "../widgets/folderPane";
+import { overflowOrder } from "./overflow";
 import {
   BUILTIN_VIEWS,
   SETTINGS_GROUPS,
@@ -108,4 +113,14 @@ describe("views (M5b)", () => {
       expect(l.toolbar_settings[toolbar]).toBeDefined();
     }
   });
+});
+
+describeVectors("views", viewsVectors, {
+  stepView: (_layout: string, current: string, step: 1 | -1) =>
+    stepView(defaultLayout(), current, step),
+  viewOfWindow: (_layout: string, window: string) => viewOfWindow(defaultLayout(), window),
+  startView: () => startView(defaultLayout()),
+  accountColorSlot,
+  folderPaneSections,
+  overflowOrder,
 });

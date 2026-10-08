@@ -1,9 +1,10 @@
-import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser } from "@playwright/test";
 import {
   expectWindowsInBackground,
-  skipFirstRun,
   startDesktop,
-  type DesktopApp,
+  desktopTests,
+  desktopPerFile,
+  connectDesktop,
 } from "../support/desktop";
 import { freePort } from "../support/nail";
 import {
@@ -13,8 +14,8 @@ import {
   openSettingsTab,
   showView,
   viewRegion,
+  messageRows,
 } from "../support/views";
-import { defined } from "../support/defined";
 
 /**
  * Smoke test of the desktop app (Tauri 2 + WebView2): the real
@@ -26,39 +27,15 @@ import { defined } from "../support/defined";
  * CI it runs only with `NAIL_E2E_DESKTOP=1`; locally it always runs.
  */
 
-test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
-test.skip(
-  !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
-  "set NAIL_E2E_DESKTOP=1 to run the desktop smoke test in CI",
-);
-// One app window at a time; starting it takes a while.
-test.describe.configure({ mode: "serial", timeout: 180_000 });
-
-let app: DesktopApp;
-let browser: Browser;
-let page: Page;
-
-test.beforeAll(async () => {
-  app = await startDesktop(freePort());
-  browser = await chromium.connectOverCDP(app.cdpUrl);
-  await expect
-    .poll(() => browser.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
-    .toBeGreaterThan(0);
-  page = defined(browser.contexts().flatMap((c) => c.pages())[0], "the app's page");
-  // M4b: a fresh profile gets the first-run screen once.
-  await skipFirstRun(page);
-});
-
-test.afterAll(async () => {
-  // `beforeAll` may have failed before assigning them.
-  await (browser as Browser | undefined)?.close().catch(() => undefined);
-  await (app as DesktopApp | undefined)?.stop();
-});
+desktopTests(180_000);
+// M4b: a fresh profile gets the first-run screen once (skipped).
+const desktop = desktopPerFile();
 
 test("the desktop app shows the demo mail through Tauri IPC", async () => {
+  const page = desktop.page;
   // ADR 0146: the test app's window never reaches the developer's screen.
   await expectWindowsInBackground(page);
-  const rows = page.locator('[data-part="message-list.row"]');
+  const rows = messageRows(page);
   await expect(rows).toHaveCount(11, { timeout: 60_000 });
   await expect(page.locator('[data-part="folder-tree.item"]')).toHaveCount(3);
   // The built UI from the custom protocol, not a dev server.
@@ -76,9 +53,10 @@ test("the desktop app shows the demo mail through Tauri IPC", async () => {
 });
 
 test("Shift+F10 opens the context menu of the selected message", async () => {
+  const page = desktop.page;
   // The desktop's keyboard path (WebView2 could take Shift+F10 for its own
   // menu): Nail's menu for the focused row, closed with Escape.
-  const row = page.locator('[data-part="message-list.row"]').first();
+  const row = messageRows(page).first();
   await row.click();
   await page.keyboard.press("Shift+F10");
   const menu = page.getByRole("menu");
@@ -89,6 +67,7 @@ test("Shift+F10 opens the context menu of the selected message", async () => {
 });
 
 test("the rich composer renders Markdown in the core and the MCP server runs", async () => {
+  const page = desktop.page;
   await newMessageButton(page).click();
   const dialog = composerWindow(page);
   await expect(dialog).toBeVisible();
@@ -119,12 +98,11 @@ test("a mailto: link the app is started with opens the composer", async () => {
   const linked = await startDesktop(freePort(), [
     "mailto:grace@navy.example?subject=Hello%20from%20a%20link&body=See%20you%20soon",
   ]);
-  const cdp = await chromium.connectOverCDP(linked.cdpUrl);
+  let browser: Browser | undefined;
   try {
-    await expect
-      .poll(() => cdp.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
-      .toBeGreaterThan(0);
-    const window = defined(cdp.contexts().flatMap((c) => c.pages())[0], "the app's page");
+    const connected = await connectDesktop(linked);
+    browser = connected.browser;
+    const window = connected.page;
     // The composer opened by the link comes first (no first-run screen over it).
     const dialog = composerWindow(window);
     await expect(dialog).toBeVisible({ timeout: 60_000 });
@@ -133,7 +111,7 @@ test("a mailto: link the app is started with opens the composer", async () => {
     await expect(dialog.getByRole("textbox", { name: "Message" })).toHaveValue(/^See you soon/);
     await expectWindowsInBackground(window);
   } finally {
-    await cdp.close().catch(() => undefined);
+    await browser?.close().catch(() => undefined);
     await linked.stop();
   }
 });

@@ -82,6 +82,7 @@ import type {
   PluginRenderPurpose,
   PluginUiNode,
 } from "./generated";
+import { ACCOUNT_PERMISSIONS, ACTION_KIND_RULES, PLUGIN_PERMISSIONS } from "./generated";
 import { toBytes, decodeUtf8, encodeUtf8 } from "./bytes";
 import {
   arrivalProblems,
@@ -98,43 +99,57 @@ import { createPluginApiError } from "./nail";
 import { checkTree } from "./tree";
 
 /** Every permission except `network:*` (the default grant of a test host without a manifest). */
-export const ALL_FIXED_PERMISSIONS: PluginPermission[] = [
-  "mail.read",
-  "mail.read.body",
-  "calendar.read",
-  "ui.dialogs",
-  "notifications",
-  "storage",
-  "mail.organize",
-  "mail.send",
-  "calendar.write",
-  "contacts.write",
-  "tasks.write",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "composer",
-  "attachments",
-  "background",
-  "mcp.expose",
-];
+export const ALL_FIXED_PERMISSIONS: readonly PluginPermission[] = PLUGIN_PERMISSIONS;
 
 /** Permissions a grant can limit to accounts (as in Nail). */
-const ACCOUNT_PERMISSIONS = new Set([
-  "mail.read",
-  "mail.read.body",
-  "mail.organize",
-  "mail.send",
-  "hooks.arrival",
-  "hooks.beforeSend",
-  "hooks.open",
-  "attachments",
-]);
+const ACCOUNT_PERMISSION_SET: ReadonlySet<string> = new Set(ACCOUNT_PERMISSIONS);
 
-/** Kinds that always ask (no policy relaxes them). */
-const DESTRUCTIVE = new Set<PluginActionKind>(["trash", "permanent-delete", "pim-delete"]);
-/** Kinds that ask unless the user allows them. */
-const ASK_BY_DEFAULT = new Set<PluginActionKind>(["send", "invite", "rule"]);
+/**
+ * A message for a test host's `messages`: `id` with its `nail://messages/<id>`
+ * URI, in the Inbox of the account `work`, unread, dated 2026-10-01 10:00
+ * UTC, subject `Subject <id>`; `overrides` replace any field.
+ */
+export function testMessage(id: string, overrides: Partial<PluginMessage> = {}): PluginMessage {
+  return {
+    id,
+    uri: `nail://messages/${id}`,
+    accountId: "work",
+    folderId: "INBOX",
+    subject: `Subject ${id}`,
+    to: [],
+    cc: [],
+    date: "2026-10-01T10:00:00Z",
+    flags: { seen: false, flagged: false, answered: false, draft: false },
+    tags: [],
+    hasAttachments: false,
+    encrypted: false,
+    ...overrides,
+  };
+}
+
+/**
+ * A message about to be sent, for `runBeforeSend`: the draft `d1` of
+ * `me@example.org` (account `work`) to Ada, subject "Report", text "Hi",
+ * no attachments; `overrides` replace any field.
+ */
+export function testOutgoingMessage(
+  overrides: Partial<PluginOutgoingMessage> = {},
+): PluginOutgoingMessage {
+  return {
+    draftId: "d1",
+    accountId: "work",
+    identityId: "work-main",
+    from: { name: null, email: "me@example.org" },
+    to: [{ name: "Ada", email: "ada@example.org" }],
+    cc: [],
+    bcc: [],
+    subject: "Report",
+    text: "Hi",
+    attachments: [],
+    encrypted: false,
+    ...overrides,
+  };
+}
 
 /** Answers a dialog in a test. */
 export type DialogResponder = (
@@ -546,7 +561,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
   const has = (permission: string, accountId?: string): boolean =>
     granted.has(permission) &&
     (accountId === undefined ||
-      !ACCOUNT_PERMISSIONS.has(permission) ||
+      !ACCOUNT_PERMISSION_SET.has(permission) ||
       grantAccounts === undefined ||
       grantAccounts.has(accountId));
   const need = (permission: string, accountId?: string): void => {
@@ -617,8 +632,9 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
   };
 
   const policy = (kind: PluginActionKind): "ask" | "allow" => {
-    if (DESTRUCTIVE.has(kind)) return "ask";
-    return options.policies?.[kind] ?? (ASK_BY_DEFAULT.has(kind) ? "ask" : "allow");
+    const rule = ACTION_KIND_RULES[kind];
+    if (rule.destructive) return "ask";
+    return options.policies?.[kind] ?? rule.default_mode;
   };
 
   /** Asks the user when the policy says so, then runs `apply`. */
@@ -640,7 +656,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         operation,
         summary,
         targets,
-        canAlwaysAllow: !DESTRUCTIVE.has(kind),
+        canAlwaysAllow: ACTION_KIND_RULES[kind].can_always_allow,
       };
       const decision = options.confirm ? await options.confirm(request) : "approve";
       confirmations.push({ ...request, decision });

@@ -1,88 +1,53 @@
 /**
- * The M4b desktop contract as the UI sees it (mirrors `nail_api::desktop` /
- * `nail_api::mapi`; ADR 0087): lists of the enum values and the Fluent ids
- * the contract names (texts in `locales/en/core-desktop.ftl`).
+ * The M4b desktop contract as the UI sees it (`nail_api::desktop` /
+ * `nail_api::mapi`; ADR 0087): the enum values and the Fluent ids the
+ * contract names come generated (texts in `locales/en/core-desktop.ftl`);
+ * the update-state rules are ports pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`).
  */
-import type {
-  DefaultAppState,
-  DefaultAppTarget,
-  InstallKind,
-  InstallScope,
-  MapiResult,
-  UpdateChannel,
-  UpdateDisabledReason,
-  UpdateFailure,
-  UpdateInfo,
-  UpdateState,
+import {
+  DEFAULT_APP_STATE_MESSAGE_IDS,
+  DEFAULT_APP_TARGET_MESSAGE_IDS,
+  INSTALL_KIND_MESSAGE_IDS,
+  INSTALL_SCOPE_MESSAGE_IDS,
+  MAPI_RESULT_MESSAGE_IDS,
+  UPDATE_CHANNEL_MESSAGE_IDS,
+  UPDATE_DISABLED_REASON_MESSAGE_IDS,
+  UPDATE_FAILURE_MESSAGE_IDS,
+  type DefaultAppState,
+  type DefaultAppTarget,
+  type InstallKind,
+  type InstallScope,
+  type MapiResult,
+  type UpdateChannel,
+  type UpdateDisabledReason,
+  type UpdateFailure,
+  type UpdateInfo,
+  type UpdateState,
 } from "../../api/generated";
 
-export const INSTALL_KINDS = [
-  "nsis",
-  "msi",
-  "portable",
-  "development",
-] as const satisfies readonly InstallKind[];
-export const INSTALL_SCOPES = [
-  "per-user",
-  "per-machine",
-] as const satisfies readonly InstallScope[];
-export const UPDATE_CHANNELS = ["stable", "beta"] as const satisfies readonly UpdateChannel[];
-export const UPDATE_DISABLED_REASONS = [
-  "msi-managed",
-  "policy",
-  "portable",
-  "development",
-  "not-configured",
-] as const satisfies readonly UpdateDisabledReason[];
-export const UPDATE_FAILURES = [
-  "network",
-  "manifest",
-  "signature",
-  "download",
-  "install",
-] as const satisfies readonly UpdateFailure[];
-/** In the order the UI lists them (`DefaultAppTarget::ALL`). */
-export const DEFAULT_APP_TARGETS = [
-  "mailto",
-  "webcal",
-  "webcals",
-  "eml",
-  "ics",
-  "vcf",
-] as const satisfies readonly DefaultAppTarget[];
-export const DEFAULT_APP_STATES = [
-  "default",
-  "other",
-  "unknown",
-] as const satisfies readonly DefaultAppState[];
-export const MAPI_RESULTS = [
-  "success",
-  "user-abort",
-  "failure",
-  "login-failure",
-  "insufficient-memory",
-  "access-denied",
-  "too-many-files",
-  "too-many-recipients",
-  "attachment-not-found",
-  "attachment-open-failure",
-  "unknown-recipient",
-  "bad-recip-type",
-  "text-too-large",
-  "invalid-recips",
-  "not-supported",
-  "attachment-too-large",
-] as const satisfies readonly MapiResult[];
+export {
+  DEFAULT_APP_STATE_VALUES as DEFAULT_APP_STATES,
+  DEFAULT_APP_TARGET_VALUES as DEFAULT_APP_TARGETS,
+  INSTALL_KIND_VALUES as INSTALL_KINDS,
+  INSTALL_SCOPE_VALUES as INSTALL_SCOPES,
+  MAPI_RESULT_VALUES as MAPI_RESULTS,
+  UPDATE_CHANNEL_VALUES as UPDATE_CHANNELS,
+  UPDATE_DISABLED_REASON_VALUES as UPDATE_DISABLED_REASONS,
+  UPDATE_FAILURE_VALUES as UPDATE_FAILURES,
+} from "../../api/generated";
 
-export const installKindMessageId = (kind: InstallKind) => `install-kind-${kind}`;
-export const installScopeMessageId = (scope: InstallScope) => `install-scope-${scope}`;
-export const channelMessageId = (channel: UpdateChannel) => `update-channel-${channel}`;
+export const installKindMessageId = (kind: InstallKind) => INSTALL_KIND_MESSAGE_IDS[kind];
+export const installScopeMessageId = (scope: InstallScope) => INSTALL_SCOPE_MESSAGE_IDS[scope];
+export const channelMessageId = (channel: UpdateChannel) => UPDATE_CHANNEL_MESSAGE_IDS[channel];
 export const disabledReasonMessageId = (reason: UpdateDisabledReason) =>
-  `update-disabled-${reason}`;
-export const failureMessageId = (failure: UpdateFailure) => `update-failure-${failure}`;
-export const defaultAppMessageId = (target: DefaultAppTarget) => `default-app-${target}`;
-export const defaultAppStateMessageId = (state: DefaultAppState) => `default-app-state-${state}`;
-export const mapiResultMessageId = (result: MapiResult) => `mapi-result-${result}`;
+  UPDATE_DISABLED_REASON_MESSAGE_IDS[reason];
+export const failureMessageId = (failure: UpdateFailure) => UPDATE_FAILURE_MESSAGE_IDS[failure];
+export const defaultAppMessageId = (target: DefaultAppTarget) =>
+  DEFAULT_APP_TARGET_MESSAGE_IDS[target];
+export const defaultAppStateMessageId = (state: DefaultAppState) =>
+  DEFAULT_APP_STATE_MESSAGE_IDS[state];
+export const mapiResultMessageId = (result: MapiResult) => MAPI_RESULT_MESSAGE_IDS[result];
 
 /** Whether "Check now" applies (`UpdateState::can_check`). */
 export function canCheck(state: UpdateState): boolean {

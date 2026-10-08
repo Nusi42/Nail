@@ -4,23 +4,19 @@
  * search scoped to the folder the list shows (or added to the search the
  * user typed). `ListFilter::search_term` on the Rust side; same table.
  */
-import type { AccountId, FolderId, ListFilter } from "../api/generated";
+import {
+  type AccountId,
+  type FolderId,
+  LIST_FILTER_TERMS,
+  LIST_FILTER_VALUES,
+  type ListFilter,
+} from "../api/generated";
 import type { SearchScope } from "../state/queries";
-
-/** `ListFilter::ALL`. */
-export const LIST_FILTERS: readonly ListFilter[] = ["all", "unread", "flagged", "attachments"];
-
-/** `ListFilter::search_term`. */
-export const LIST_FILTER_TERMS: Readonly<Record<ListFilter, string | null>> = {
-  all: null,
-  unread: "is:unread",
-  flagged: "is:flagged",
-  attachments: "has:attachment",
-};
+export { LIST_FILTER_TERMS, LIST_FILTER_VALUES as LIST_FILTERS } from "../api/generated";
 
 /** Whether a JSON value names a filter (`list.filter "<filter>"`). */
 export function isListFilter(value: unknown): value is ListFilter {
-  return typeof value === "string" && (LIST_FILTERS as readonly string[]).includes(value);
+  return typeof value === "string" && (LIST_FILTER_VALUES as readonly string[]).includes(value);
 }
 
 /**

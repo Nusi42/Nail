@@ -1,49 +1,25 @@
 /**
- * Pure helpers of the sieve feature, mirroring `nail_api::sieve` (ADR 0043):
- * the vacation defaults and validation (`VacationSettings::issues`) and the
- * state names the UI shows.
+ * Pure helpers of the sieve feature (`nail_api::sieve`, ADR 0043): the
+ * vacation defaults and the value lists come generated; the validation
+ * (`VacationSettings::issues`, `ManageSieveConfig::issues`) is a port pinned
+ * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`).
  */
-import type {
-  RulePlacement,
-  SieveState,
-  VacationIssue,
-  VacationSettings,
+import {
+  DEFAULT_VACATION,
+  MAX_SCRIPT_NAME_LEN,
+  type VacationIssue,
+  type VacationSettings,
 } from "../../api/generated";
 import { charCount } from "../../text/chars";
 
-export const SIEVE_STATES: readonly SieveState[] = [
-  "disabled",
-  "unavailable",
-  "pending",
-  "uploading",
-  "in-sync",
-  "failed",
-];
-
-export const RULE_PLACEMENTS: readonly RulePlacement[] = ["server", "client", "not-expressible"];
-
-export const VACATION_ISSUES: readonly VacationIssue[] = [
-  "empty-body",
-  "days",
-  "date",
-  "end-before-start",
-  "address",
-  "subject",
-];
+export {
+  RULE_PLACEMENT_VALUES as RULE_PLACEMENTS,
+  SIEVE_STATE_VALUES as SIEVE_STATES,
+} from "../../api/generated";
 
 /** `VacationSettings::default()`. */
 export function defaultVacation(): VacationSettings {
-  return {
-    enabled: false,
-    subject: "",
-    body: "",
-    start_date: null,
-    end_date: null,
-    days: 7,
-    addresses: [],
-    from: null,
-    skip_lists: true,
-  };
+  return { ...DEFAULT_VACATION, addresses: [...DEFAULT_VACATION.addresses] };
 }
 
 /** `nail_api::sieve::is_iso_date`. */
@@ -97,7 +73,9 @@ export function manageSieveIssues(c: {
   const name = c.script_name;
   if (
     name !== null &&
-    (name.trim() === "" || charCount(name) > 128 || SCRIPT_NAME_FORBIDDEN.test(name))
+    (name.trim() === "" ||
+      charCount(name) > MAX_SCRIPT_NAME_LEN ||
+      SCRIPT_NAME_FORBIDDEN.test(name))
   ) {
     out.push("script-name");
   }

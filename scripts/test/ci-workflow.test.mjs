@@ -1,6 +1,7 @@
 // Checks of .github/workflows/ci.yml against the repository (M4b review):
 // a desktop spec that skips itself in CI unless NAIL_E2E_DESKTOP is set
-// must be run by the `desktop` job, or it never runs in CI at all.
+// (through `desktopTests()`) must be run by the `desktop` job, or it never
+// runs in CI at all.
 // Run: node --test "scripts/test/*.test.mjs"
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -11,8 +12,14 @@ const root = new URL("../../", import.meta.url);
 const read = (relative) => readFileSync(new URL(relative, root), "utf8");
 
 test("every desktop-gated Playwright spec runs in the desktop job", () => {
+  // The gate: `desktopTests()` of e2e/support/desktop.ts (Q2), which skips
+  // in CI unless NAIL_E2E_DESKTOP is set.
+  const support = read("e2e/support/desktop.ts");
+  assert.match(support, /export function desktopTests\([^]*?NAIL_E2E_DESKTOP/);
+  const gated = (/** @type {string} */ text) =>
+    text.includes("NAIL_E2E_DESKTOP") || text.includes("desktopTests(");
   const specs = readdirSync(new URL("e2e/tests/", root)).filter(
-    (name) => name.endsWith(".spec.ts") && read(`e2e/tests/${name}`).includes("NAIL_E2E_DESKTOP"),
+    (name) => name.endsWith(".spec.ts") && gated(read(`e2e/tests/${name}`)),
   );
   assert.ok(specs.includes("desktop.spec.ts"));
   assert.ok(specs.includes("desktop-m4b.spec.ts"));

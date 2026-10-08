@@ -7,19 +7,19 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { PluginMessage, PluginOutgoingMessage } from "@nail/plugin-api";
-import { checkManifest, loadCatalogs, readZip } from "@nail/plugin-api/tools";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { testMessage, testOutgoingMessage } from "@nail/plugin-api/testing";
+import { checkManifest } from "@nail/plugin-api/tools";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { main } from "../index.mjs";
 import { scaffold, ScaffoldError, TEMPLATES } from "../scaffold.mjs";
 import {
+  buildAndPack,
   linkDependencies,
-  loadBundle,
-  node,
+  pluginLoader,
   readManifest,
   tempDir,
   typecheck,
-  type LoadedPlugin,
 } from "./helpers";
 
 const root = tempDir("nail-templates-");
@@ -35,11 +35,11 @@ function build(template: string): string {
   expect(checkManifest(readManifest(dir))).toEqual([]);
   linkDependencies(dir);
   typecheck(dir);
-  expect(node(dir, "scripts/build.mjs")).toBe("");
-  const packed = node(dir, "scripts/pack.mjs");
-  expect(packed).toMatch(new RegExp(`my-${template}\\.nailplugin`));
-  const zip = readZip(readFileSync(path.join(dir, "dist", `my-${template}.nailplugin`)));
-  expect(zip.map((e) => e.name)).toEqual(["manifest.json", "dist/index.js", "locales/en.ftl"]);
+  expect(buildAndPack(dir, `my-${template}`)).toEqual([
+    "manifest.json",
+    "dist/index.js",
+    "locales/en.ftl",
+  ]);
   // Every %id% of the manifest is in the catalog.
   const catalog = readFileSync(path.join(dir, "locales", "en.ftl"), "utf8");
   for (const t of JSON.stringify(readManifest(dir)).match(/%[a-z-]+%/g) ?? []) {
@@ -48,30 +48,8 @@ function build(template: string): string {
   return dir;
 }
 
-async function load(dir: string, options: Parameters<typeof loadBundle>[1] = {}) {
-  const manifest = readManifest(dir);
-  return loadBundle(path.join(dir, "dist", "index.js"), {
-    manifest,
-    catalogs: loadCatalogs(dir),
-    ...options,
-  });
-}
-
-const message = (email: string): PluginMessage => ({
-  id: "m1",
-  uri: "nail://messages/m1",
-  accountId: "work",
-  folderId: "INBOX",
-  subject: "Hello",
-  from: { name: "Sender", email },
-  to: [],
-  cc: [],
-  date: "2026-10-01T10:00:00Z",
-  flags: { seen: false, flagged: false, answered: false, draft: false },
-  tags: [],
-  hasAttachments: false,
-  encrypted: false,
-});
+const message = (email: string): PluginMessage =>
+  testMessage("m1", { subject: "Hello", from: { name: "Sender", email } });
 
 describe("templates", () => {
   it("are offered by name and refuse unknown ones", () => {
@@ -91,43 +69,28 @@ describe("templates", () => {
 
 describe("the hook template", () => {
   let dir = "";
-  let loaded: LoadedPlugin | undefined;
   beforeAll(() => {
     dir = build("hook");
   });
-  afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
-  });
+  const load = pluginLoader(() => dir);
 
-  const outgoing = (subject: string): PluginOutgoingMessage => ({
-    draftId: "d1",
-    accountId: "work",
-    identityId: "work-main",
-    from: { name: null, email: "me@example.com" },
-    to: [{ name: null, email: "ada@example.org" }],
-    cc: [],
-    bcc: [],
-    subject,
-    text: "Hi",
-    attachments: [],
-    encrypted: false,
-  });
+  const outgoing = (subject: string): PluginOutgoingMessage =>
+    testOutgoingMessage({ from: { name: null, email: "me@example.com" }, subject });
 
   it("vetoes a message without a subject", async () => {
-    loaded = await load(dir);
-    expect(loaded.host.hookNames().sort()).toEqual(["beforeSend", "open"]);
-    expect(await loaded.host.runBeforeSend(outgoing("  "))).toEqual({
+    const host = await load();
+    expect(host.hookNames().sort()).toEqual(["beforeSend", "open"]);
+    expect(await host.runBeforeSend(outgoing("  "))).toEqual({
       outcome: "vetoed",
       result: { veto: { reason: "This message has no subject. Add one, or send it anyway." } },
       problems: [],
     });
-    expect((await loaded.host.runBeforeSend(outgoing("Report"))).outcome).toBe("ok");
+    expect((await host.runBeforeSend(outgoing("Report"))).outcome).toBe("ok");
   });
 
   it("marks mail from outside the domain", async () => {
-    loaded = await load(dir, { settings: { "internal-domain": "example.com" } });
-    const external = await loaded.host.runOpen(message("ada@other.example"));
+    const host = await load({ settings: { "internal-domain": "example.com" } });
+    const external = await host.runOpen(message("ada@other.example"));
     expect(external.result).toEqual({
       badges: [
         {
@@ -137,25 +100,20 @@ describe("the hook template", () => {
         },
       ],
     });
-    expect((await loaded.host.runOpen(message("bob@example.com"))).result).toBeUndefined();
-    expect((await loaded.host.runOpen(message("eve@mail.example.com"))).result).toBeUndefined();
+    expect((await host.runOpen(message("bob@example.com"))).result).toBeUndefined();
+    expect((await host.runOpen(message("eve@mail.example.com"))).result).toBeUndefined();
   });
 });
 
 describe("the composer template", () => {
   let dir = "";
-  let loaded: LoadedPlugin | undefined;
   beforeAll(() => {
     dir = build("composer");
   });
-  afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
-  });
+  const load = pluginLoader(() => dir);
 
   it("inserts the date and upper-cases the selection", async () => {
-    loaded = await load(dir);
-    const { host } = loaded;
+    const host = await load();
     expect(host.extensionNames().composerActions).toEqual(["insert-date", "upper-case"]);
     await host.runComposerAction("insert-date", { draftId: "d1" });
     expect(host.composerEdits[0]?.edit.text).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -173,8 +131,8 @@ describe("the composer template", () => {
   });
 
   it("renders callout blocks with escaped HTML", async () => {
-    loaded = await load(dir);
-    expect(await loaded.host.renderMarkdownBlock("callout", " a < b \n", "send")).toEqual({
+    const host = await load();
+    expect(await host.renderMarkdownBlock("callout", " a < b \n", "send")).toEqual({
       html: "<blockquote><p><strong>Note:</strong> a &lt; b</p></blockquote>",
       text: "Note: a < b",
     });
@@ -183,18 +141,14 @@ describe("the composer template", () => {
 
 describe("the attachment template", () => {
   let dir = "";
-  let loaded: LoadedPlugin | undefined;
   beforeAll(() => {
     dir = build("attachment");
   });
-  afterEach(() => {
-    loaded?.restore();
-    loaded = undefined;
-  });
+  const load = pluginLoader(() => dir);
 
   it("previews text files as a table", async () => {
-    loaded = await load(dir);
-    const preview = await loaded.host.renderPreview(
+    const host = await load();
+    const preview = await host.renderPreview(
       "text",
       { name: "notes.txt", mimeType: "text/plain" },
       "first line\nsecond line\n",
@@ -219,7 +173,7 @@ describe("the attachment template", () => {
       ],
     });
     const long = Array.from({ length: 50 }, (_, i) => `line ${String(i)}`).join("\n");
-    const big = await loaded.host.renderPreview("text", { name: "a.log" }, long);
+    const big = await host.renderPreview("text", { name: "a.log" }, long);
     const stack = big.kind === "tree" ? big.tree[0] : undefined;
     expect(stack?.type === "stack" && stack.children.at(-1)).toEqual({
       type: "text",
@@ -227,13 +181,13 @@ describe("the attachment template", () => {
       value: "The first 40 lines are shown.",
     });
     await expect(
-      loaded.host.renderPreview("text", { name: "huge.txt" }, new Uint8Array(1_048_577)),
+      host.renderPreview("text", { name: "huge.txt" }, new Uint8Array(1_048_577)),
     ).rejects.toMatchObject({ code: "too_large" });
   });
 
   it("counts words in an attachment", async () => {
-    loaded = await load(dir);
-    await loaded.host.runAttachmentAction("count-words", { name: "a.txt" }, "one two three");
-    expect(loaded.host.notifications).toEqual([{ title: "“a.txt” has 3 words." }]);
+    const host = await load();
+    await host.runAttachmentAction("count-words", { name: "a.txt" }, "one two three");
+    expect(host.notifications).toEqual([{ title: "“a.txt” has 3 words." }]);
   });
 });

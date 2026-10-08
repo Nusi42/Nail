@@ -23,7 +23,8 @@ use nail_proto_smtp::{
     SendOptions, SmtpConfig, SmtpCredentials, SmtpSession, TlsTrust as SmtpTrust,
 };
 
-const TIMEOUT: Duration = Duration::from_secs(30);
+/// How long one step against a real server may take (servers in containers on CI).
+const SERVER_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn imap_config(interop: &Interop, server: &Server, security: Security) -> ImapConfig {
     let port = match security {
@@ -34,7 +35,7 @@ fn imap_config(interop: &Interop, server: &Server, security: Security) -> ImapCo
         .with_port(port)
         .with_security(security)
         .with_tls_trust(ImapTrust::CustomRoots(interop.roots.clone()))
-        .with_timeout(TIMEOUT)
+        .with_timeout(SERVER_TIMEOUT)
 }
 
 async fn imap(interop: &Interop, server: &Server, security: Security) -> ImapClient {
@@ -55,7 +56,7 @@ fn pop3_config(interop: &Interop, server: &Server, tls: TlsMode) -> Pop3Config {
         .with_port(port)
         .with_tls(tls)
         .with_trust(Pop3Trust::CustomRoots(interop.roots.clone()))
-        .with_timeout(TIMEOUT)
+        .with_timeout(SERVER_TIMEOUT)
 }
 
 fn pop3_credentials(interop: &Interop, password: &str) -> Pop3Credentials {
@@ -75,7 +76,7 @@ fn smtp_config(interop: &Interop, server: &Server, tls: TlsMode) -> SmtpConfig {
         .with_port(port)
         .with_tls(tls)
         .with_trust(SmtpTrust::CustomRoots(interop.roots.clone()))
-        .with_timeout(TIMEOUT)
+        .with_timeout(SERVER_TIMEOUT)
 }
 
 fn smtp_credentials(interop: &Interop, password: &str) -> SmtpCredentials {
@@ -297,7 +298,7 @@ async fn smtp_submission_delivers_to_the_mailbox() {
 
             // Delivery is asynchronous: poll the inbox.
             let mut imap = imap(&interop, server, Security::ImplicitTls).await;
-            let deadline = tokio::time::Instant::now() + TIMEOUT;
+            let deadline = tokio::time::Instant::now() + SERVER_TIMEOUT;
             loop {
                 if !imap
                     .find_by_message_id("INBOX", &id)
@@ -348,7 +349,7 @@ fn sieve_config(interop: &Interop, server: &Server) -> nail_sieve::SieveConfig {
         .with_port(server.sieve_port())
         .with_tls(TlsMode::Starttls)
         .with_trust(nail_sieve::TlsTrust::CustomRoots(interop.roots.clone()))
-        .with_timeout(TIMEOUT)
+        .with_timeout(SERVER_TIMEOUT)
 }
 
 async fn sieve(interop: &Interop, server: &Server) -> nail_sieve::SieveSession {

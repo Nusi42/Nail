@@ -1,17 +1,17 @@
-/** The built-in themes and densities the accessibility sweeps cover. */
-import { BUILTIN_THEMES, DENSITIES } from "../features/appearance/model";
+/**
+ * The theme matrix of the accessibility tests (wave Q2, DRY): every
+ * built-in theme in every density, from the generated contract, resolved
+ * as the mock core resolves it. `themes.test.ts` pins the built-in list.
+ */
+import { BUILTIN_THEMES, DENSITY_VALUES, type Density } from "../api/generated";
+import { defaultTheme } from "../api/mockData";
+import { resolveMockTheme } from "../features/appearance/themes";
 
-export { DENSITIES };
+/** Every built-in theme in every density: [theme id, density]. */
+export const THEME_DENSITY_CASES = BUILTIN_THEMES.flatMap(([id]) =>
+  DENSITY_VALUES.map((density) => [id, density] as const),
+);
 
-/** The built-in themes by id. */
-export const THEME_IDS = BUILTIN_THEMES.map(([id]) => id);
-
-/** Every built-in theme in every density. */
-export const THEME_CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
-
-/** A sweep covers exactly the five built-in themes (a new one must be added to it). */
-export function itCoversTheBuiltInThemes(): void {
-  it("covers the five built-in themes", () => {
-    expect(THEME_IDS).toEqual(["frost", "sage", "graphite", "nocturne", "high-contrast"]);
-  });
-}
+/** The built-in theme `id` in `density`, without overrides. */
+export const builtinTheme = (id: string, density: Density = "comfortable") =>
+  resolveMockTheme(defaultTheme(), id, { density, overrides: {} });

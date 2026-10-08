@@ -19,7 +19,7 @@ import { isSafeImage, PluginTree } from "./tree/PluginTree";
 
 /** The `data:` URI of an image preview, or `null` when it is not an allowed raster image. */
 export function previewImageSrc(preview: Extract<PluginPreview, { kind: "image" }>): string | null {
-  if (!PREVIEW_IMAGE_TYPES.includes(preview.mimeType)) return null;
+  if (!(PREVIEW_IMAGE_TYPES as readonly string[]).includes(preview.mimeType)) return null;
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(preview.data)) return null;
   const src = `data:${preview.mimeType};base64,${preview.data}`;
   return isSafeImage(src) ? src : null;

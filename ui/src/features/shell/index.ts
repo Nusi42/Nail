@@ -7,8 +7,8 @@
  * confirmations), and Calendar / Contacts / Tasks as full views with the
  * existing PIM widgets.
  *
- * The contract's rules are in `../../layout/views.ts` (mirrors
- * `nail_api::views`); the active view is `UiState.activeView`
+ * The contract's rules are in `../../layout/views.ts` (ports of
+ * `nail_api::views`, pinned by `crates/nail-api/tests/ts_vectors.rs`); the active view is `UiState.activeView`
  * (`../../state/uiStore.ts`), remembered in the core's UI state under
  * `shell.view` (`../../state/uiState.ts`). Texts: `locales/{en,de}/shell.ftl`
  * (contract ids in `core-shell.ftl`).

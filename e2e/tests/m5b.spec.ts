@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { nailOnDemand } from "../support/nail";
 import { createUser, enableRemoteUi, pairBrowser, pairingCode } from "../support/remote";
 import {
   openSettings,
@@ -11,6 +11,8 @@ import {
   runFromPalette,
   showView,
   viewRegion,
+  messageRows,
+  openMail,
 } from "../support/views";
 
 /**
@@ -24,19 +26,11 @@ import {
  * light / dark mode.
  */
 
-let server: NailServer;
-
-test.afterEach(async () => {
-  // `beforeEach` may have failed before assigning it.
-  await (server as NailServer | undefined)?.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
+const server = nailOnDemand();
 
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
-  server = await startNail({ seed });
-  await page.goto(server.url);
-  await expect(rows(page).first()).toBeVisible();
+  await server.start({ seed });
+  await openMail(page, server.url);
 }
 
 /** Whether the focused element is inside `region`. */
@@ -50,7 +44,7 @@ test("the rail and the shortcuts switch views; focus follows into the view", asy
   await expect(viewRegion(page, "Mail")).toBeVisible();
   await expect(railButton(page, "Calendar")).toHaveAttribute("aria-keyshortcuts", "Control+2");
 
-  await rows(page).first().click();
+  await messageRows(page).first().click();
   for (const [key, view] of [
     ["Control+2", "Calendar"],
     ["Control+3", "Contacts"],
@@ -68,7 +62,7 @@ test("the rail and the shortcuts switch views; focus follows into the view", asy
   await page.keyboard.press("g");
   await page.keyboard.press("m");
   await expect(viewRegion(page, "Mail")).toBeVisible();
-  await expect(rows(page).first()).toHaveAttribute("aria-selected", "true");
+  await expect(messageRows(page).first()).toHaveAttribute("aria-selected", "true");
 
   // A click on the rail keeps the focus on the rail; arrow keys move on it.
   await showView(page, "Calendar");
@@ -112,7 +106,7 @@ test("the reader bar moves actions into More when narrow and runs them from ther
   page,
 }) => {
   await open(page);
-  await rows(page).filter({ hasText: "Welcome to Nail" }).first().click();
+  await messageRows(page).filter({ hasText: "Welcome to Nail" }).first().click();
   const bar = readerToolbar(page);
   // Reply is the primary, labelled action; Archive is an icon with its key.
   await expect(bar.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
@@ -150,7 +144,7 @@ test("filter chips narrow the list to unread, flagged or mail with attachments",
 }) => {
   await open(page);
   const chips = page.getByRole("group", { name: "Filter messages" });
-  const all = await rows(page).count();
+  const all = await messageRows(page).count();
   for (const [chip, state] of [
     ["Unread", /unread/],
     ["Flagged", /flagged/],
@@ -161,19 +155,19 @@ test("filter chips narrow the list to unread, flagged or mail with attachments",
       "aria-pressed",
       "true",
     );
-    await expect.poll(() => rows(page).count()).toBeLessThan(all);
-    await expect.poll(() => rows(page).count()).toBeGreaterThan(0);
-    for (const row of await rows(page).all()) {
+    await expect.poll(() => messageRows(page).count()).toBeLessThan(all);
+    await expect.poll(() => messageRows(page).count()).toBeGreaterThan(0);
+    for (const row of await messageRows(page).all()) {
       await expect(row).toHaveAttribute("data-state", state);
     }
     await chips.getByRole("button", { name: "All", exact: true }).click();
-    await expect.poll(() => rows(page).count()).toBe(all);
+    await expect.poll(() => messageRows(page).count()).toBe(all);
   }
 });
 
 test("menus hide what does not apply; overflowed bar actions lead More", async ({ page }) => {
   await open(page, "demo-multi");
-  const welcome = rows(page).filter({ hasText: "Welcome to Nail" }).first();
+  const welcome = messageRows(page).filter({ hasText: "Welcome to Nail" }).first();
   await welcome.click();
   // Right-click on an ordinary IMAP message: no greyed-out entries.
   await welcome.click({ button: "right" });
@@ -341,20 +335,20 @@ test("the calendar switches views and recolours a calendar from its menu", async
 });
 
 test("dates follow the UI language, not a German browser", async ({ browser }) => {
-  server = await startNail({ seed: "demo" });
+  await server.start({ seed: "demo" });
   const context = await browser.newContext({ locale: "de-DE" });
   const page = await context.newPage();
   await page.goto(server.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  const dates = await rows(page).allTextContents();
+  const dates = await messageRows(page).allTextContents();
   // No German relative dates.
   expect(dates.join(" ")).not.toMatch(/\b(vor|gestern|Uhr|Okt|Mär)\b/); // spellchecker:disable-line
   await context.close();
 });
 
 test("an old layout keeps its main window and is offered the new default", async ({ page }) => {
-  server = await startNail({ seed: "demo" });
+  await server.start({ seed: "demo" });
   writeFileSync(
     path.join(server.configDir, "layout.kdl"),
     [
@@ -371,7 +365,7 @@ test("an old layout keeps its main window and is offered the new default", async
     ].join("\n"),
   );
   await page.goto(server.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await expect(rail(page)).toHaveCount(0);
   // The views still work: they open as windows.
   await page.keyboard.press("Control+2");
@@ -395,14 +389,14 @@ test("an old layout keeps its main window and is offered the new default", async
 });
 
 test("a remote browser follows its own light / dark mode", async ({ page }) => {
-  server = await startNail({ seed: "demo" });
+  await server.start({ seed: "demo" });
   const remote = await enableRemoteUi(server);
   const userId = await createUser(server, "ada");
   const code = await pairingCode(server, userId);
 
   // The desktop (light OS in seeded runs).
   await page.goto(server.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-nail-mode", "light");
 
   const browser = page.context().browser();
@@ -411,7 +405,7 @@ test("a remote browser follows its own light / dark mode", async ({ page }) => {
   const other = await context.newPage();
   await pairBrowser(other, remote, code);
   await other.getByRole("button", { name: "Not now" }).click();
-  await expect(other.locator('[data-part="message-list.row"]').first()).toBeVisible();
+  await expect(messageRows(other).first()).toBeVisible();
   await expect(other.locator("html")).toHaveAttribute("data-nail-mode", "dark");
   // The host stays light.
   await expect(page.locator("html")).toHaveAttribute("data-nail-mode", "light");

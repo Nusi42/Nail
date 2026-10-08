@@ -3,51 +3,51 @@
  * print view's route, the named CSS page of the options (`@page a4-portrait`
  * in `PRINT_BASE_CSS`), the agenda's default range, the occurrence string of
  * an event instance, and quoted-text folding for "without quoted text".
+ * The contract's rules are ports pinned by `crates/nail-api/tests/ts_vectors.rs`
+ * (vectors run in `model.test.ts`); its defaults are generated.
  */
-import type {
-  PageOrientation,
-  PageSize,
-  PimTime,
-  PrintOptions,
-  PrintTarget,
+import {
+  DEFAULT_PRINT_OPTIONS,
+  MAX_AGENDA_DAYS,
+  PRINT_TARGET_ISSUE_MESSAGE_IDS,
+  type PageOrientation,
+  type PageSize,
+  type PimTime,
+  type PrintOptions,
+  type PrintTarget,
 } from "../../api/generated";
 import { ORIENTATIONS, PAGE_SIZES } from "./messages";
 import { DAY_MS } from "../../state/clock";
+export { MAX_AGENDA_DAYS } from "../../api/generated";
 
 /** `nail_api::print::print_view_route`. */
 export function printViewRoute(jobId: string): string {
   return `#/print/${jobId}`;
 }
 
-/** `nail_api::print::MAX_AGENDA_DAYS`. */
-export const MAX_AGENDA_DAYS = 366;
-
 /** `PrintTarget::issues` (the first one), as a Fluent id; `null` = fine. */
 export function targetIssue(target: PrintTarget): string | null {
   if (target.type !== "agenda") return null;
-  const day = (d: string) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`))
-      ? Date.parse(`${d}T00:00:00Z`) / DAY_MS
-      : null;
+  // A real calendar day (`2026-02-30` is none), like the core's `day_number`.
+  const day = (d: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    if (!match) return null;
+    const [year, month, date] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    const utc = Date.UTC(year, month - 1, date);
+    const back = new Date(utc);
+    return back.getUTCMonth() === month - 1 && back.getUTCDate() === date ? utc / DAY_MS : null;
+  };
   const start = day(target.start);
   const end = day(target.end);
-  if (start === null || end === null) return "print-target-issue-invalid-date";
-  if (end < start) return "print-target-issue-end-before-start";
-  if (end - start + 1 > MAX_AGENDA_DAYS) return "print-target-issue-range-too-long";
+  if (start === null || end === null) return PRINT_TARGET_ISSUE_MESSAGE_IDS["invalid-date"];
+  if (end < start) return PRINT_TARGET_ISSUE_MESSAGE_IDS["end-before-start"];
+  if (end - start + 1 > MAX_AGENDA_DAYS) return PRINT_TARGET_ISSUE_MESSAGE_IDS["range-too-long"];
   return null;
 }
 
-/** `PrintOptions::default()`. */
+/** `PrintOptions::default()` (a fresh copy). */
 export function defaultPrintOptions(): PrintOptions {
-  return {
-    page_size: "a4",
-    orientation: "portrait",
-    headers: "basic",
-    quoted_text: true,
-    attachment_list: true,
-    remote_images: false,
-    backgrounds: false,
-  };
+  return { ...DEFAULT_PRINT_OPTIONS };
 }
 
 /** The job id of a print-view route (`#/print/<id>`), else `null`. */

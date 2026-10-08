@@ -20,7 +20,9 @@ export interface IconProps {
 /** The Lucide name a layout / plug-in icon name stands for, if bundled. */
 export function lucideName(name: string): string | null {
   if (Object.hasOwn(LUCIDE_ICONS, name)) return name;
-  const legacy = Object.hasOwn(LEGACY_ICON_NAMES, name) ? LEGACY_ICON_NAMES[name] : undefined;
+  const legacy = Object.hasOwn(LEGACY_ICON_NAMES, name)
+    ? LEGACY_ICON_NAMES[name as keyof typeof LEGACY_ICON_NAMES]
+    : undefined;
   return legacy !== undefined && Object.hasOwn(LUCIDE_ICONS, legacy) ? legacy : null;
 }
 

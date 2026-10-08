@@ -20,14 +20,11 @@
  * in the browser, the `nail-proxy` protocol in the desktop app.
  */
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { ResolvedTheme } from "../api/generated";
+import { PROXY_PATH, PROXY_URL_SCHEME, type ResolvedTheme } from "../api/generated";
 import { isSafeValue, resolveTokenRefs } from "./compile";
 import { ACCENT_BAR } from "./declarations";
 
-/** `nail_api::remote_content::PROXY_URL_SCHEME`. */
-export const PROXY_URL_SCHEME = "nail-proxy:";
-/** `nail_api::remote_content::PROXY_PATH`. */
-export const PROXY_PATH = "/api/proxy/";
+export { PROXY_PATH, PROXY_URL_SCHEME } from "../api/generated";
 
 /** CSP of the reader document (nothing remote). */
 export const READER_CSP =

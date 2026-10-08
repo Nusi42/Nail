@@ -1,0 +1,274 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "type": "archive"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "type": "archive"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "archive"
+    },
+    {
+      "args": [
+        {
+          "type": "trash"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "thread"
+    },
+    {
+      "args": [
+        {
+          "type": "trash"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "trash"
+    },
+    {
+      "args": [
+        {
+          "type": "delete-permanently"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "type": "delete-permanently"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "delete-permanently"
+    },
+    {
+      "args": [
+        {
+          "target": {
+            "role": "inbox"
+          },
+          "type": "move"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "target": {
+            "role": "inbox"
+          },
+          "type": "move"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "move"
+    },
+    {
+      "args": [
+        {
+          "target": {
+            "folder_id": "f1"
+          },
+          "type": "move"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "target": {
+            "folder_id": "f1"
+          },
+          "type": "move"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "move"
+    },
+    {
+      "args": [
+        {
+          "read": true,
+          "type": "mark-read"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "whole"
+    },
+    {
+      "args": [
+        {
+          "read": true,
+          "type": "mark-read"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "mark-read"
+    },
+    {
+      "args": [
+        {
+          "read": false,
+          "type": "mark-read"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "whole"
+    },
+    {
+      "args": [
+        {
+          "read": false,
+          "type": "mark-read"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "mark-unread"
+    },
+    {
+      "args": [
+        {
+          "flagged": true,
+          "type": "flag"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "newest"
+    },
+    {
+      "args": [
+        {
+          "flagged": true,
+          "type": "flag"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "flag"
+    },
+    {
+      "args": [
+        {
+          "flagged": false,
+          "type": "flag"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "whole"
+    },
+    {
+      "args": [
+        {
+          "flagged": false,
+          "type": "flag"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "unflag"
+    },
+    {
+      "args": [
+        {
+          "add": [
+            "a"
+          ],
+          "remove": [],
+          "type": "tags"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "whole"
+    },
+    {
+      "args": [
+        {
+          "add": [
+            "a"
+          ],
+          "remove": [],
+          "type": "tags"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "tags"
+    },
+    {
+      "args": [
+        {
+          "type": "snooze",
+          "until": "2026-10-09T08:00:00Z",
+          "wake_folder_id": null
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "type": "snooze",
+          "until": "2026-10-09T08:00:00Z",
+          "wake_folder_id": null
+        }
+      ],
+      "fn": "kindOf",
+      "out": "snooze"
+    },
+    {
+      "args": [
+        {
+          "junk": true,
+          "type": "junk"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "junk": true,
+          "type": "junk"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "junk"
+    },
+    {
+      "args": [
+        {
+          "junk": false,
+          "type": "junk"
+        }
+      ],
+      "fn": "reachOf",
+      "out": "listed"
+    },
+    {
+      "args": [
+        {
+          "junk": false,
+          "type": "junk"
+        }
+      ],
+      "fn": "kindOf",
+      "out": "not-junk"
+    }
+  ]
+}

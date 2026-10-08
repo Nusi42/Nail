@@ -1,40 +1,35 @@
 /**
  * The appearance rules the UI needs outside the mock core: the built-in
  * theme ids, the override ranges and their validation, and which theme is
- * active. They mirror `nail_api::appearance`; the mock core
+ * active. The constants are generated; the rules are ports of
+ * `nail_api::appearance` pinned by `crates/nail-api/tests/ts_vectors.rs`
+ * (vectors run in `model.test.ts`); the mock core
  * (`./mock.ts`) answers the requests with them. Kept apart from the mock so
  * the app bundle does not carry the mock core.
  */
-import type {
-  Density,
-  AppearanceSettings,
-  SystemAppearance,
-  ThemeInfo,
-  ThemeKind,
-  ThemeOverrides,
-  ThemeOverridesIssue,
+import {
+  type AppearanceSettings,
+  DEFAULT_DARK_THEME,
+  MAX_THEME_ID_CHARS,
+  MAX_THEME_NAME_CHARS,
+  DEFAULT_LIGHT_THEME,
+  FONT_SIZE_RANGE,
+  HIGH_CONTRAST_THEME,
+  RADIUS_RANGE,
+  type SystemAppearance,
+  type ThemeInfo,
+  type ThemeOverrides,
+  type ThemeOverridesIssue,
 } from "../../api/generated";
-
-/** `nail_api::appearance::BUILTIN_THEMES` (gallery order). */
-/** The densities, in the order the appearance page offers them. */
-export const DENSITIES: readonly Density[] = ["comfortable", "compact"];
-
-export const BUILTIN_THEMES: readonly (readonly [string, ThemeKind])[] = [
-  ["frost", "light"],
-  ["sage", "light"],
-  ["graphite", "dark"],
-  ["nocturne", "dark"],
-  ["high-contrast", "high-contrast"],
-];
-
-/** `DEFAULT_LIGHT_THEME`, `DEFAULT_DARK_THEME`, `HIGH_CONTRAST_THEME`. */
-export const DEFAULT_LIGHT_THEME = "frost";
-export const DEFAULT_DARK_THEME = "graphite";
-export const HIGH_CONTRAST_THEME = "high-contrast";
-
-/** `FONT_SIZE_RANGE`, `RADIUS_RANGE` (px, inclusive). */
-export const FONT_SIZE_RANGE = [11, 20] as const;
-export const RADIUS_RANGE = [0, 20] as const;
+import { charCount } from "../../text/chars";
+export {
+  BUILTIN_THEMES,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  FONT_SIZE_RANGE,
+  HIGH_CONTRAST_THEME,
+  RADIUS_RANGE,
+} from "../../api/generated";
 
 /** `nail_api::appearance::is_hex_color`. */
 export function isHexColor(value: string): boolean {
@@ -78,17 +73,15 @@ export function accentIgnored(active: string, themes: readonly ThemeInfo[]): boo
   return themes.find((t) => t.id === active)?.kind === "high-contrast";
 }
 
-/** The longest theme name the core accepts (`edit-issue-invalid-theme-name`). */
-export const THEME_NAME_MAX = 64;
-
 /** A theme id (file stem): lowercase kebab starting with a letter (`nail_api::appearance::is_theme_id`). */
 export function isThemeId(id: string): boolean {
-  return /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(id) && id.length <= THEME_NAME_MAX;
+  return /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(id) && id.length <= MAX_THEME_ID_CHARS;
 }
 
 /**
  * The id the core derives from a theme name (`id_from_name` in
- * `crates/nail-config/src/theme_edit.rs`): `My Ocean!` → `my-ocean`,
+ * `crates/nail-config/src/theme_edit.rs`; pinned by
+ * `crates/nail-config/src/ts_vectors.rs`): `My Ocean!` → `my-ocean`,
  * `Café` → `cafe`, `2024` → `theme-2024`, nothing usable → `theme`; room
  * is left for a `-<n>` suffix.
  */
@@ -100,13 +93,16 @@ export function themeIdFromName(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   if (!/^[a-z]/.test(id)) id = id === "" ? "theme" : `theme-${id}`;
-  return id.slice(0, THEME_NAME_MAX - 4).replace(/-+$/, "");
+  return id.slice(0, MAX_THEME_ID_CHARS - 4).replace(/-+$/, "");
 }
 
-/** Whether a name is one the core accepts. */
+/**
+ * Whether a name is one the core accepts (`nail_api::editing::is_theme_name`):
+ * not blank, at most `MAX_THEME_NAME_CHARS` characters, no control
+ * characters.
+ */
 export function isThemeName(name: string): boolean {
-  const trimmed = name.trim();
-  return trimmed !== "" && trimmed.length <= THEME_NAME_MAX;
+  return name.trim() !== "" && charCount(name) <= MAX_THEME_NAME_CHARS && !/\p{Cc}/u.test(name);
 }
 
 /**

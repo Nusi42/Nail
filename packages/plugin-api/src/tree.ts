@@ -4,16 +4,14 @@
  * mistakes early: too many or too deeply nested nodes, duplicate or missing
  * ids, images that are not raster `data:` URIs.
  */
-import type { PluginUiNode } from "./generated";
-
-/** Most nodes in one tree. */
-export const MAX_UI_NODES = 500;
-/** Deepest nesting (a top-level node has depth 1). */
-export const MAX_UI_DEPTH = 8;
-/** Most options, rows or messages of one node. */
-export const MAX_UI_ITEMS = 500;
-/** Image types an `image` node may carry. */
-export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+import {
+  IMAGE_TYPES,
+  MAX_UI_DEPTH,
+  MAX_UI_ITEMS,
+  MAX_UI_NODES,
+  type PluginUiNode,
+} from "./generated";
+export { IMAGE_TYPES, MAX_UI_DEPTH, MAX_UI_ITEMS, MAX_UI_NODES } from "./generated";
 
 /** A problem found by {@link checkTree}. */
 export interface TreeIssue {

@@ -81,6 +81,7 @@ const API_SECTIONS = [
     [
       ["api.ts", "PluginWriteResult"],
       ["api.ts", "PluginActionKind"],
+      ["generated/ActionKind.ts", "ActionKind"],
       ["extensions.ts", "isDone"],
       ["extensions.ts", "createdId"],
       ["api.ts", "PluginMessageChanges"],

@@ -1,8 +1,9 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
-import { layoutIssues, formatIssues } from "../support/responsive";
+import { nailPerTest } from "../support/nail";
+import { expectNoIssuesIn } from "../support/responsive";
+import { messageRows, DEMO_MULTI_CONVERSATIONS, openMail } from "../support/views";
 
 /**
  * The P2 quick win (Design C, ADR 0148) on the real core, kept for layouts
@@ -11,8 +12,6 @@ import { layoutIssues, formatIssues } from "../support/responsive";
  * three messages of the conversation, the older ones folded into "N earlier
  * messages" — and Nail offers once to turn it into the card feed.
  */
-
-let server: NailServer;
 
 /** A user layout from before P2: the strip above the message. */
 const STRIP_LAYOUT = [
@@ -38,21 +37,15 @@ const STRIP_LAYOUT = [
   "",
 ].join("\n");
 
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-  writeFileSync(path.join(server.configDir, "layout.kdl"), STRIP_LAYOUT);
+const server = nailPerTest({ seed: "demo-multi" }, (s) => {
+  writeFileSync(path.join(s.configDir, "layout.kdl"), STRIP_LAYOUT);
 });
 
-test.afterEach(async () => {
-  await server.stop();
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const offer = (page: Page) => page.getByRole("region", { name: "Read conversations as cards" });
 
 /** Selects the long Nightingale conversation (four in the Inbox, three replies in Sent). */
 async function openNightingale(page: Page) {
-  const row = rows(page).filter({ hasText: "Project Nightingale kickoff" });
+  const row = messageRows(page).filter({ hasText: "Project Nightingale kickoff" });
   await expect(row).toHaveCount(1);
   await row.click();
   return row;
@@ -60,9 +53,7 @@ async function openNightingale(page: Page) {
 
 test("an old layout keeps the strip; the count covers the replies from Sent", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await page.goto(server.url);
-  // 17 conversations in the unified inbox (P2 demo threads).
-  await expect(rows(page)).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
   await offer(page).getByRole("button", { name: "Not now" }).click();
   await expect(offer(page)).toHaveCount(0);
 
@@ -70,7 +61,7 @@ test("an old layout keeps the strip; the count covers the replies from Sent", as
   await expect(row).toHaveAttribute("data-state", /\bthread\b/);
   // Four in the Inbox and three replies from Sent (WP201).
   await expect(row.locator('[data-part="message-list.row.count"]')).toHaveText("7");
-  const single = rows(page).filter({ hasText: "Welcome to Nail" });
+  const single = messageRows(page).filter({ hasText: "Welcome to Nail" });
   await expect(single.locator('[data-part="message-list.row.count"]')).toBeHidden();
 
   // The strip: the newest three, the other four folded; no own scroll bar.
@@ -93,14 +84,11 @@ test("an old layout keeps the strip; the count covers the replies from Sent", as
   await fold.click();
   await expect(items).toHaveCount(7);
   await expect(page.locator('[data-part="message-view"]')).toBeVisible();
-  const issues = (await layoutIssues(page)).filter(
-    (i) => i.element.includes("thread-view") || i.element.includes("message-list"),
-  );
-  expect(issues, formatIssues(issues)).toEqual([]);
+  await expectNoIssuesIn(page, ["thread-view", "message-list"]);
 
   // Dismissed once, the offer stays away.
   await page.reload();
-  await expect(rows(page)).toHaveCount(17);
+  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
   await openNightingale(page);
   await expect(page.locator('[data-part="thread-view.item"]')).toHaveCount(3);
   await expect(offer(page)).toHaveCount(0);
@@ -108,8 +96,7 @@ test("an old layout keeps the strip; the count covers the replies from Sent", as
 
 test("the offer turns the strip into the card feed", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await page.goto(server.url);
-  await expect(rows(page)).toHaveCount(17);
+  await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
   await offer(page).getByRole("button", { name: "Use cards" }).click();
   await expect(offer(page)).toHaveCount(0);
   await openNightingale(page);

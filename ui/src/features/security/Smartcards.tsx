@@ -13,12 +13,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type {
-  CryptoTechnology,
-  Pkcs11Module,
-  SmartcardObject,
-  SmartcardSettings,
-  SmartcardToken,
+import {
+  SMARTCARD_ERROR_MESSAGE_IDS,
+  SMARTCARD_KEY_USAGE_MESSAGE_IDS,
+  SMARTCARD_OBJECT_KIND_MESSAGE_IDS,
+  type CryptoTechnology,
+  type Pkcs11Module,
+  type SmartcardObject,
+  type SmartcardSettings,
+  type SmartcardToken,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { DATE_ONLY, useDateFormat } from "../../i18n/format";
@@ -248,12 +251,14 @@ function ObjectRow({ token, object }: { token: SmartcardToken; object: Smartcard
 
   return (
     <li data-part="smartcards.object" data-kind={object.kind}>
-      <span data-part="smartcards.object.kind">{t(`smartcard-object-${object.kind}`)}</span>
+      <span data-part="smartcards.object.kind">
+        {t(SMARTCARD_OBJECT_KIND_MESSAGE_IDS[object.kind])}
+      </span>
       <span data-part="smartcards.object.label">{object.label}</span>
       {object.algorithm && <span data-part="smartcards.object.algorithm">{object.algorithm}</span>}
       {object.usages.length > 0 && (
         <span data-part="smartcards.object.usages">
-          {object.usages.map((u) => t(`smartcard-usage-${u}`)).join(", ")}
+          {object.usages.map((u) => t(SMARTCARD_KEY_USAGE_MESSAGE_IDS[u])).join(", ")}
         </span>
       )}
       {cert && (
@@ -383,7 +388,7 @@ export function SmartcardsWidget() {
               >
                 {t("security-smartcard-module-problem", {
                   module: p.module,
-                  problem: t(`smartcard-error-${p.error}`),
+                  problem: t(SMARTCARD_ERROR_MESSAGE_IDS[p.error]),
                 })}
               </p>
             ))}

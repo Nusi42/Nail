@@ -2,8 +2,9 @@
 
 Example Nail plug-ins (M2d preview, WP63 ADR `docs/adr/0053-plugin-sdk.md`;
 full API M4a, WP103 ADR `docs/adr/0082-plugin-sdk-m4a.md`). Each one is built with
-the starter template's scripts (`scripts/build.mjs`, `scripts/pack.mjs`,
-`tsconfig.json`, identical to `packages/create-nail-plugin/template/`) and its
+the starter template's scripts (`nail-plugin build` / `nail-plugin pack` of
+`@nail/plugin-api`) and `tsconfig.json`, identical to
+`packages/create-nail-plugin/template/`, and its
 runtime texts come from its own Fluent catalogs through `nail.l10n`.
 
 ## `follow-up`

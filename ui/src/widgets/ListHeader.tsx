@@ -10,7 +10,13 @@
  * (default "all unread flagged attachments").
  */
 import { folderRoleLabelId } from "./folderNames";
-import type { Account, AccountId, Folder, ListFilter } from "../api/generated";
+import {
+  LIST_FILTER_MESSAGE_IDS,
+  type Account,
+  type AccountId,
+  type Folder,
+  type ListFilter,
+} from "../api/generated";
 import { ariaShortcut, keyLabel } from "../features/menus";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
@@ -145,7 +151,7 @@ export function ListHeader({ node }: WidgetProps) {
                 setListFilter(chip);
               }}
             >
-              {t(`list-filter-${chip}`)}
+              {t(LIST_FILTER_MESSAGE_IDS[chip])}
             </button>
           ))}
         </div>

@@ -4,7 +4,6 @@
  * left to the Playwright scan; this catches names, roles and landmarks.
  * Also checks the skin reaches the compiled theme.
  */
-import { defaultTheme } from "../../api/mockData";
 import { WindowView } from "../../layout/LayoutRenderer";
 import { violations } from "../../test/axe";
 import {
@@ -15,17 +14,16 @@ import {
 } from "../../test/harness";
 import { compileTheme } from "../../theme/compile";
 import { BUILTIN_THEMES } from "../appearance";
-import { resolveMockTheme } from "../appearance/themes";
 import { seedAgentsDemo } from "../agents/mockSeed";
 import { SHELL_SKIN_CSS } from "./skin";
 import { hostLayout } from "./testing";
-import { THEME_CASES } from "../../test/themes";
+import { THEME_DENSITY_CASES, builtinTheme } from "../../test/themes";
 
 stubElementSizesEachTest();
 
 /** Every theme and density, each with one of the views (every view twice). */
 const VIEWS = ["mail", "calendar", "contacts", "tasks", "settings"] as const;
-const CASES = THEME_CASES.map(
+const CASES = THEME_DENSITY_CASES.map(
   ([id, density], i) => [id, density, VIEWS[i % VIEWS.length] ?? "mail"] as const,
 );
 
@@ -33,7 +31,7 @@ describe("shell accessibility", () => {
   it.each(CASES)(
     "%s / %s: the rail and the %s view have no violations",
     async (id, density, view) => {
-      const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
+      const theme = builtinTheme(id, density);
       const env = createEnv({
         state: {
           activeAccountId: "acc-personal",
@@ -74,7 +72,7 @@ describe("shell accessibility", () => {
       expect(SHELL_SKIN_CSS).toContain(`[data-part="${part}"]`);
     }
     for (const [id] of BUILTIN_THEMES) {
-      const theme = resolveMockTheme(defaultTheme(), id, { density: "comfortable", overrides: {} });
+      const theme = builtinTheme(id);
       expect(compileTheme(theme).css).toContain(SHELL_SKIN_CSS);
     }
   });

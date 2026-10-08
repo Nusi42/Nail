@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
-import { control, startNail, type NailServer } from "../support/nail";
-import { openSettingsTab, showView, viewRegion } from "../support/views";
+import { expect, test, type Page } from "@playwright/test";
+import { nailPerTest, control } from "../support/nail";
+import { openSettingsTab, showView, viewRegion, messageRows } from "../support/views";
 
 /**
  * Remote content (M2b, ADR 0041) against `--seed demo-multi`: its proxy
@@ -10,20 +10,20 @@ import { openSettingsTab, showView, viewRegion } from "../support/views";
  * never from the reader, and private targets stay refused.
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo-multi" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo-multi" });
 
 interface RemoteHosts {
   images: string;
   private: string;
   requests: string[];
+}
+
+/** The newsletter's logo loaded in the reader (through the proxy). */
+async function expectLogoLoaded(page: Page): Promise<void> {
+  const logo = page.frameLocator('iframe[data-part="message-view.body"]').getByAltText("logo");
+  await expect
+    .poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
+    .toBe(1);
 }
 
 test("remote images load through the proxy after allowing the sender; private targets are refused", async ({
@@ -47,7 +47,7 @@ test("remote images load through the proxy after allowing the sender; private ta
   await control(server, "imap-deliver", { raw });
 
   await page.goto(server.url);
-  const row = page.locator('[data-part="message-list.row"]', { hasText: "Autumn bulbs" });
+  const row = messageRows(page).filter({ hasText: "Autumn bulbs" });
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.click();
 
@@ -73,10 +73,7 @@ test("remote images load through the proxy after allowing the sender; private ta
   expect(srcdoc).not.toContain(hosts.images);
 
   // The image arrives through the proxy (the reader never contacts the host).
-  const logo = page.frameLocator('iframe[data-part="message-view.body"]').getByAltText("logo");
-  await expect
-    .poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
-    .toBe(1);
+  await expectLogoLoaded(page);
   const requested = await control<RemoteHosts>(server, "remote-content");
   expect(requested.requests).toContain("/logo.png");
 
@@ -106,16 +103,13 @@ test("remote content can be loaded once without remembering the sender", async (
   ].join("\n");
   await control(server, "imap-deliver", { raw });
   await page.goto(server.url);
-  const row = page.locator('[data-part="message-list.row"]', { hasText: "Our autumn blends" });
+  const row = messageRows(page).filter({ hasText: "Our autumn blends" });
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.click();
   const bar = page.getByRole("region", { name: "Remote content" });
   await bar.getByRole("button", { name: "Load once" }).click();
   await expect(bar).toContainText("Remote content is loaded this time only.");
-  const logo = page.frameLocator('iframe[data-part="message-view.body"]').getByAltText("logo");
-  await expect
-    .poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
-    .toBe(1);
+  await expectLogoLoaded(page);
   // Nothing was added to the allow-lists (Settings → Privacy).
   await showView(page, "Settings");
   const settings = viewRegion(page, "Settings");

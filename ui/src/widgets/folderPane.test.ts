@@ -1,7 +1,7 @@
 /**
- * Folder-pane sections (M5b): mirrors
- * `nail_api::views::tests::folder_pane_sections_follow_the_rules` and
- * `account_colours_cycle`.
+ * Folder-pane sections (M5b): the UI's own cases; the port of
+ * `nail_api::views::folder_pane_sections` is pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `layout/views.test.ts`).
  */
 import {
   DEFAULT_FAVORITES,

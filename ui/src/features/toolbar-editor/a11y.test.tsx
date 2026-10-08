@@ -5,9 +5,7 @@
  * token-only and well-formed.
  */
 import { act, fireEvent, waitFor } from "@testing-library/react";
-import { defaultTheme } from "../../api/mockData";
 import { BUILTIN_THEMES } from "../appearance";
-import { resolveMockTheme } from "../appearance/themes";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { violations } from "../../test/axe";
@@ -20,20 +18,15 @@ import {
   CUSTOMIZER_SHORT,
   TOOLBAR_CUSTOMIZER_SKIN_CSS,
 } from "./skin";
-import { itCoversTheBuiltInThemes } from "../../test/themes";
+import { builtinTheme } from "../../test/themes";
 
 const THEMES = BUILTIN_THEMES.map(([id]) => id);
 
 describe("toolbar customizer accessibility (M5d)", () => {
-  itCoversTheBuiltInThemes();
-
   it.each(THEMES)(
     "%s: the customizer window and the settings card have no violations",
     async (id) => {
-      const theme = resolveMockTheme(defaultTheme(), id, {
-        density: "comfortable",
-        overrides: {},
-      });
+      const theme = builtinTheme(id);
       // The theme still compiles with the customizer's skin after it.
       expect(compileTheme(theme).warnings).toEqual([]);
       const env = createEnv();

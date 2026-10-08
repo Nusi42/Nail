@@ -4,15 +4,20 @@
  * packer, output outside the repository), and small hand-written plug-ins
  * packed or laid out as development folders.
  */
+import { spawn, type ChildProcess } from "node:child_process";
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { packPlugin } from "@nail/plugin-api/tools";
+import { createInterface } from "node:readline";
+import { packPlugin, pluginBuildOptions } from "@nail/plugin-api/tools";
+import { exampleNames } from "../../packages/create-nail-plugin/scaffold.mjs";
+import { expect, type Locator, type Page } from "@playwright/test";
 import * as esbuild from "esbuild";
-import { buildOutputDir, repoRoot, tempDir } from "./nail";
+import { buildOutputDir, nailBinary, repoRoot, tempDir } from "./nail";
+import { closeWindow, openSettingsTab } from "./views";
 
-/** Where the global setup leaves the built examples (`NAIL_E2E_EXAMPLE_<NAME>`). */
-export const EXAMPLES = ["follow-up", "attachment-check", "csv-preview"] as const;
-export type ExampleName = (typeof EXAMPLES)[number];
+/** The examples the global setup builds (left in `NAIL_E2E_EXAMPLE_<NAME>`). */
+export { exampleNames };
+export type ExampleName = string;
 
 /** The environment variable holding an example's package path. */
 export function exampleEnv(name: ExampleName): string {
@@ -21,8 +26,8 @@ export function exampleEnv(name: ExampleName): string {
 
 /**
  * Builds `examples/<name>` into `<build>/e2e/plugins/<name>` with the
- * examples' own esbuild settings (scripts/build.mjs) and packs it; returns
- * the `.nailplugin` path. Nothing is written into the repo.
+ * examples' own build (`nail-plugin build`'s esbuild settings) and packs it;
+ * returns the `.nailplugin` path. Nothing is written into the repo.
  */
 export async function buildExample(name: ExampleName): Promise<string> {
   const example = path.join(repoRoot, "examples", name);
@@ -32,18 +37,7 @@ export async function buildExample(name: ExampleName): Promise<string> {
   cpSync(path.join(example, "manifest.json"), path.join(staging, "manifest.json"));
   cpSync(path.join(example, "locales"), path.join(staging, "locales"), { recursive: true });
   await esbuild.build({
-    absWorkingDir: example,
-    entryPoints: ["src/index.tsx"],
-    outfile: path.join(staging, "dist", "index.js"),
-    bundle: true,
-    format: "esm",
-    platform: "neutral",
-    target: "es2023",
-    mainFields: ["module", "main"],
-    jsx: "automatic",
-    jsxImportSource: "@nail/plugin-api",
-    charset: "utf8",
-    legalComments: "none",
+    ...pluginBuildOptions(example, { outfile: path.join(staging, "dist", "index.js") }),
     logLevel: "warning",
   });
   const out = path.join(staging, "..", `${name}.nailplugin`);
@@ -108,6 +102,66 @@ export function commandManifest(
     contributes: {
       commands: [{ ...command, contexts: ["reader"] }],
       placements: [{ toolbar: "reader", after: "mail.forward", command: command.id }],
+    },
+  };
+}
+
+/**
+ * Installs the package `file` through Settings → Plug-ins: checks it (its
+ * heading matches `title`), installs it and, with `place`, adds its
+ * contributions to the layout. Answers the settings view.
+ */
+export async function installPlugin(
+  page: Page,
+  file: string,
+  title: RegExp,
+  options: { place?: boolean } = {},
+): Promise<Locator> {
+  const settings = await openSettingsTab(page, "Plug-ins");
+  await settings.getByRole("button", { name: "Install a plug-in…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Install a plug-in" });
+  await dialog.getByRole("textbox", { name: "Path of the .nailplugin file" }).fill(file);
+  await dialog.getByRole("button", { name: "Check the plug-in" }).click();
+  await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+  await dialog.getByRole("button", { name: "Install", exact: true }).click();
+  await expect(dialog.getByText(/is installed\./)).toBeVisible();
+  if (options.place === true) {
+    await dialog.getByRole("button", { name: /^Add \d+ items? to the layout$/ }).click();
+    await expect(dialog.getByText(/Added to your layout/)).toBeVisible();
+  }
+  await closeWindow(dialog);
+  return settings;
+}
+
+/** A running `nail plugin dev` console: its stdout lines. */
+export interface DevConsole {
+  child: ChildProcess;
+  lines: string[];
+  /** Waits for a console line containing `text`. */
+  waitFor(text: string): Promise<void>;
+}
+
+/**
+ * Runs `nail plugin dev <folder> …target` (`--url URL` of a running
+ * `nail serve`, or `--data-dir DIR` of the desktop app) in English.
+ */
+export function pluginDevConsole(folder: string, target: readonly string[]): DevConsole {
+  const child = spawn(nailBinary(), ["plugin", "dev", folder, ...target], {
+    stdio: ["ignore", "pipe", "inherit"],
+    env: { ...process.env, NAIL_LOG: "error", NAIL_LOCALE: "en" },
+  });
+  const lines: string[] = [];
+  createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
+  return {
+    child,
+    lines,
+    async waitFor(text: string) {
+      await expect
+        .poll(() => lines.some((l) => l.includes(text)), {
+          message: `console line with "${text}"; saw ${JSON.stringify(lines)}`,
+          timeout: 30_000,
+        })
+        .toBe(true);
     },
   };
 }

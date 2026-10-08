@@ -1,6 +1,6 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { nailPerTest } from "../support/nail";
+import { axeViolations } from "../support/axe";
 import {
   createUser,
   enableRemoteUi,
@@ -13,7 +13,7 @@ import {
   virtualAuthenticator,
   type RemoteUi,
 } from "../support/remote";
-import { openSettingsTab, showView, viewRegion } from "../support/views";
+import { openSettingsTab, showView, viewRegion, messageRows } from "../support/views";
 
 /**
  * The remote UI (M2b, ADR 0041): the desktop turns it on (TLS with a
@@ -22,21 +22,13 @@ import { openSettingsTab, showView, viewRegion } from "../support/views";
  * `nail serve` stays the desktop (loopback, no login).
  */
 
-let server: NailServer;
-
-test.beforeEach(async () => {
-  server = await startNail({ seed: "demo" });
-});
-
-test.afterEach(async () => {
-  await server.stop();
-});
+const server = nailPerTest({ seed: "demo" });
 
 /** The app of the remote UI is up (the demo inbox is listed). */
 async function expectApp(page: Page) {
   // The UI state (the last view) is shared with the desktop (M5b): show Mail.
   await showView(page, "Mail");
-  await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible({
+  await expect(messageRows(page).first()).toBeVisible({
     timeout: 20_000,
   });
 }
@@ -66,6 +58,17 @@ async function pairAndSkipPasskey(page: Page, remote: RemoteUi, code: string) {
   await expectApp(page);
 }
 
+/** A browser paired for `user` (no passkey), signed out again, at the password login. */
+async function pairedAtPasswordLogin(page: Page, remote: RemoteUi, user: string) {
+  const other = await remoteContext(page);
+  const phone = await other.newPage();
+  await pairAndSkipPasskey(phone, remote, await pairingCode(server, user));
+  await logout(phone);
+  const usePassword = phone.getByRole("button", { name: "Use a password instead" });
+  if (await usePassword.isVisible()) await usePassword.click();
+  return { other, phone };
+}
+
 test("a second browser pairs with a code from the desktop", async ({ page }) => {
   const remote = await enableRemoteUi(server);
   await createUser(server, "ada");
@@ -87,10 +90,7 @@ test("a second browser pairs with a code from the desktop", async ({ page }) => 
   await phone.goto(remote.url);
   await expect(phone.getByRole("main", { name: "Sign in to Nail" })).toBeVisible();
   // The themed login page (M2c) passes axe, colour contrast included.
-  const axe = await new AxeBuilder({ page: phone }).analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`)).toEqual(
-    [],
-  );
+  expect(await axeViolations(phone)).toEqual([]);
   // The fingerprint to compare is the one the desktop shows.
   const status = await rpcOk(server, { type: "GetRemoteUiSettings" }, "RemoteUi");
   const fingerprint = (status.status as { certificate: { fingerprint_sha256: string } }).certificate
@@ -166,13 +166,7 @@ test("password and two-step verification sign a paired browser in", async ({ pag
     "RemoteUserSaved",
   );
 
-  const other = await remoteContext(page);
-  const phone = await other.newPage();
-  await pairAndSkipPasskey(phone, remote, await pairingCode(server, user));
-  await logout(phone);
-
-  const usePassword = phone.getByRole("button", { name: "Use a password instead" });
-  if (await usePassword.isVisible()) await usePassword.click();
+  const { other, phone } = await pairedAtPasswordLogin(page, remote, user);
   await phone.getByRole("textbox", { name: "User name" }).fill("ada");
   await phone.getByLabel("Password", { exact: true }).fill(password);
   await phone.getByRole("button", { name: "Sign in" }).click();
@@ -197,12 +191,7 @@ test("guessing passwords is slowed down", async ({ page }) => {
     { type: "SetRemotePassword", user_id: user, password: "correct horse battery staple" },
     "RemoteUserSaved",
   );
-  const other = await remoteContext(page);
-  const phone = await other.newPage();
-  await pairAndSkipPasskey(phone, remote, await pairingCode(server, user));
-  await logout(phone);
-  const usePassword = phone.getByRole("button", { name: "Use a password instead" });
-  if (await usePassword.isVisible()) await usePassword.click();
+  const { other, phone } = await pairedAtPasswordLogin(page, remote, user);
 
   const signIn = phone.getByRole("button", { name: "Sign in" });
   await phone.getByRole("textbox", { name: "User name" }).fill("ada");

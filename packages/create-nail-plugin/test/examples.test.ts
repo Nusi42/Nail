@@ -13,8 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { TEMPLATE_DIR } from "../scaffold.mjs";
 import {
-  EXAMPLES,
-  node,
+  buildAndPack,
+  exampleNames,
   prepareExample,
   readManifest,
   REPO,
@@ -32,7 +32,7 @@ function usedIds(dir: string): string[] {
   return [...ids].sort();
 }
 
-describe.each(EXAMPLES)("the %s example", (name) => {
+describe.each(exampleNames())("the %s example", (name) => {
   let example: PreparedExample;
   beforeAll(() => {
     example = prepareExample(name);
@@ -41,8 +41,13 @@ describe.each(EXAMPLES)("the %s example", (name) => {
     example.cleanup();
   });
 
-  it("uses the template's build and pack scripts and tsconfig", () => {
-    for (const file of ["scripts/build.mjs", "scripts/pack.mjs", "tsconfig.json", ".gitignore"]) {
+  it("uses the template's scripts and tsconfig", () => {
+    const scripts = (file: string) =>
+      (JSON.parse(readFileSync(file, "utf8")) as { scripts: Record<string, string> }).scripts;
+    expect(scripts(path.join(example.source, "package.json"))).toEqual(
+      scripts(path.join(TEMPLATE_DIR, "package.json")),
+    );
+    for (const file of ["tsconfig.json", ".gitignore"]) {
       const template = file === ".gitignore" ? "gitignore" : file;
       expect(readFileSync(path.join(example.source, file), "utf8"), file).toBe(
         readFileSync(path.join(TEMPLATE_DIR, template), "utf8"),
@@ -79,11 +84,13 @@ describe.each(EXAMPLES)("the %s example", (name) => {
     expect(code).not.toMatch(/^\s*import\s/m);
     expect(code).not.toMatch(/\brequire\(/);
     expect(code).toMatch(/export\s*\{[^}]*\bas default\b[^}]*\}/);
-    const out = node(example.dir, "scripts/pack.mjs");
-    expect(out).toMatch(new RegExp(`${name}\\.nailplugin`));
-    const zip = readZip(readFileSync(path.join(example.dir, "dist", `${name}.nailplugin`)));
     const locales = Object.values(readManifest(example.source).contributes?.locales ?? {});
-    expect(zip.map((e) => e.name)).toEqual(["manifest.json", "dist/index.js", ...locales.sort()]);
+    expect(buildAndPack(example.dir, name)).toEqual([
+      "manifest.json",
+      "dist/index.js",
+      ...locales.sort(),
+    ]);
+    const zip = readZip(readFileSync(path.join(example.dir, "dist", `${name}.nailplugin`)));
     expect(zip[1]?.data.toString("utf8")).toBe(code);
   });
 

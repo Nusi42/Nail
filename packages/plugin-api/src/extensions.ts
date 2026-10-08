@@ -6,58 +6,56 @@
  * authoritative: an answer it finds invalid is skipped and counted as a
  * failed call.
  */
-import type {
-  PluginArrivalResult,
-  PluginBadgeSpec,
-  PluginBannerButton,
-  PluginBannerSpec,
-  PluginBeforeSendResult,
-  PluginContentAddition,
-  PluginMarkdownBlockResult,
-  PluginNotificationLevel,
-  PluginOpenResult,
-  PluginPreview,
+import {
+  MAX_ADDED_CONTENT,
+  MAX_ADDED_HEADERS,
+  MAX_ARRIVAL_ACTIONS,
+  MAX_BADGE_TEXT,
+  MAX_BLOCK_HTML,
+  MAX_HEADER_NAME,
+  MAX_HEADER_VALUE,
+  MAX_HOOK_TEXT,
+  MAX_OPEN_ITEMS,
+  MAX_PREVIEW_IMAGE,
+  type PluginArrivalResult,
+  type PluginBadgeSpec,
+  type PluginBannerButton,
+  type PluginBannerSpec,
+  type PluginBeforeSendResult,
+  type PluginContentAddition,
+  type PluginMarkdownBlockResult,
+  type PluginNotificationLevel,
+  type PluginOpenResult,
+  type PluginPreview,
+  PREVIEW_IMAGE_TYPES,
+  RESERVED_HEADER_PREFIX,
 } from "./generated";
 import type { PluginWriteResult } from "./api";
 import { toBase64, toBytes } from "./bytes";
 import { toNodes, type UiChild } from "./jsx-runtime";
 import { checkTree } from "./tree";
+export {
+  HOOK_TIMEOUT_MS,
+  JOB_WALL_CLOCK_MS,
+  MAX_ADDED_CONTENT,
+  MAX_ADDED_HEADERS,
+  MAX_ARRIVAL_ACTIONS,
+  MAX_BADGE_TEXT,
+  MAX_BLOCK_HTML,
+  MAX_HEADER_NAME,
+  MAX_HEADER_VALUE,
+  MAX_HOOK_TEXT,
+  MAX_HOOK_TIMEOUT_MS,
+  MAX_OPEN_ITEMS,
+  MAX_PREVIEW_IMAGE,
+  MAX_PREVIEW_INPUT,
+  MIN_HOOK_TIMEOUT_MS,
+  PREVIEW_IMAGE_TYPES,
+  RESERVED_HEADER_PREFIX,
+} from "./generated";
 
-/** Longest veto reason, banner text or badge tooltip (characters). */
-export const MAX_HOOK_TEXT = 500;
-/** Longest badge text (characters). */
-export const MAX_BADGE_TEXT = 32;
-/** Most banners and most badges one open hook call may answer. */
-export const MAX_OPEN_ITEMS = 3;
 /** Most buttons of one banner. */
 export const MAX_BANNER_BUTTONS = 3;
-/** Most actions one arrival hook call may answer. */
-export const MAX_ARRIVAL_ACTIONS = 20;
-/** Most headers one before-send call may add. */
-export const MAX_ADDED_HEADERS = 10;
-/** Longest header name (bytes). */
-export const MAX_HEADER_NAME = 76;
-/** Longest added header value (bytes). */
-export const MAX_HEADER_VALUE = 998;
-/** Largest content one before-send call may add (UTF-8 bytes of text + HTML). */
-export const MAX_ADDED_CONTENT = 64 * 1024;
-/** Header names plug-ins may never add (case-insensitive prefix). */
-export const RESERVED_HEADER_PREFIX = "X-Nail-";
-/** Image types a preview may answer (no SVG: it can carry script). */
-export const PREVIEW_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
-/** Largest preview image (bytes, decoded). */
-export const MAX_PREVIEW_IMAGE = 5 * 1024 * 1024;
-/** Largest attachment a preview renderer gets (bytes). */
-export const MAX_PREVIEW_INPUT = 10 * 1024 * 1024;
-/** Largest HTML a Markdown block may render to (bytes). */
-export const MAX_BLOCK_HTML = 256 * 1024;
-/** Default budgets of the hooks (ms). */
-export const HOOK_TIMEOUT_MS = { arrival: 2_000, beforeSend: 3_000, open: 1_000 } as const;
-/** Shortest and longest budget a manifest may ask for (ms). */
-export const MIN_HOOK_TIMEOUT_MS = 50;
-export const MAX_HOOK_TIMEOUT_MS = 10_000;
-/** Wall-clock limit of one background job run (ms). */
-export const JOB_WALL_CLOCK_MS = 60_000;
 
 /** Length in Unicode scalar values, as Nail's Rust side counts (`chars().count()`). */
 const chars = (text: string) => Array.from(text).length;

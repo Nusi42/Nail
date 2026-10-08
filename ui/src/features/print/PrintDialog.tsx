@@ -16,15 +16,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { NailError, errorMessageOf } from "../../api/client";
-import type {
-  AgendaLayout,
-  HeaderDetail,
-  LocalizedMessage,
-  PageOrientation,
-  PageSize,
-  PdfFile,
-  PrintOptions,
-  PrintTarget,
+import {
+  AGENDA_LAYOUT_MESSAGE_IDS,
+  HEADER_DETAIL_MESSAGE_IDS,
+  PAGE_ORIENTATION_MESSAGE_IDS,
+  PAGE_SIZE_MESSAGE_IDS,
+  type AgendaLayout,
+  type HeaderDetail,
+  type LocalizedMessage,
+  type PageOrientation,
+  type PageSize,
+  type PdfFile,
+  type PrintOptions,
+  type PrintTarget,
 } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -143,7 +147,7 @@ function AgendaFields({
       >
         {AGENDA_LAYOUTS.map((l) => (
           <option key={l} value={l}>
-            {t(`print-agenda-layout-${l}`)}
+            {t(AGENDA_LAYOUT_MESSAGE_IDS[l])}
           </option>
         ))}
       </SelectField>
@@ -189,7 +193,7 @@ function OptionFields({
       >
         {PAGE_SIZES.map((s) => (
           <option key={s} value={s}>
-            {t(`print-page-size-${s}`)}
+            {t(PAGE_SIZE_MESSAGE_IDS[s])}
           </option>
         ))}
       </SelectField>
@@ -203,7 +207,7 @@ function OptionFields({
       >
         {ORIENTATIONS.map((o) => (
           <option key={o} value={o}>
-            {t(`print-orientation-${o}`)}
+            {t(PAGE_ORIENTATION_MESSAGE_IDS[o])}
           </option>
         ))}
       </SelectField>
@@ -219,7 +223,7 @@ function OptionFields({
           >
             {HEADER_DETAILS.map((h) => (
               <option key={h} value={h}>
-                {t(`print-headers-${h}`)}
+                {t(HEADER_DETAIL_MESSAGE_IDS[h])}
               </option>
             ))}
           </SelectField>

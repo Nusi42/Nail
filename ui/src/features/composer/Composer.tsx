@@ -18,7 +18,7 @@ import {
 } from "react";
 import { contextsOf, isFieldCombo } from "../../actions/ActionsProvider";
 import { KeyMatcher, comboFromEvent } from "../../actions/keys";
-import type { ComposerMode, Identity } from "../../api/generated";
+import { COMPOSER_MODE_VALUES, type ComposerMode, type Identity } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
@@ -61,9 +61,6 @@ import {
   type RichState,
 } from "./store";
 import { formatSize } from "../../widgets/AttachmentCard";
-
-/** The editing modes, in switcher order. */
-export const COMPOSER_MODES: readonly ComposerMode[] = ["plain", "html", "markdown"];
 
 /** `Ada Lovelace <ada@example.org>` for the identity picker. */
 export function identityLabel(identity: Identity): string {
@@ -163,7 +160,7 @@ function ModeSwitcher({ ctx, mode }: { ctx: ComposeContext; mode: ComposerMode }
   const switching = useRich((s) => s.switching);
   return (
     <div data-part="composer.modes" role="radiogroup" aria-label={t("common-format")}>
-      {COMPOSER_MODES.map((m) => (
+      {COMPOSER_MODE_VALUES.map((m) => (
         <button
           key={m}
           type="button"

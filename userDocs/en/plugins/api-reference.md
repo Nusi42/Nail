@@ -396,7 +396,15 @@ How a write ended (the same answer MCP's write tools give, in camelCase). Writes
 The kind of a write, as Nail's confirmations and "always allow" policies name it (`nail_api::agents::ActionKind`). Trash, permanent delete and deleting events / contacts / tasks (`pim-delete`) always ask the user; sending, invitations and rule changes ask unless the user allows them for the plug-in; the other kinds run without asking unless the user makes them ask.
 
 ```ts
-type PluginActionKind = | "organize" | "trash" | "permanent-delete" | "draft" | "send" | "calendar" | "invite" | "contact" | "task" | "pim-delete" | "rule";
+type PluginActionKind = ActionKind;
+```
+
+### `ActionKind`
+
+What kind of write an action is.
+
+```ts
+type ActionKind = "organize" | "trash" | "permanent-delete" | "draft" | "send" | "calendar" | "invite" | "contact" | "task" | "pim-delete" | "rule";
 ```
 
 ### `isDone`
@@ -463,7 +471,7 @@ An attachment of a draft: its bytes (`data`, or `dataBase64`), or an attachment 
 | --- | --- | --- |
 | `filename` | `string` | File name. |
 | `mimeType?` | `string` | MIME type (default: from the file name). |
-| `data?` | `Uint8Array \| ArrayBuffer` | The content (at most 25 MB). |
+| `data?` | `Uint8Array \| ArrayBuffer` | The content (at most `MAX_ATTACHMENT_BYTES`). |
 | `dataBase64?` | `string` | Or the content as base64. |
 | `fromMessageId?` | `MessageId` | Or: copy an attachment of this message … |
 | `fromAttachmentIndex?` | `number` | … with this index. |

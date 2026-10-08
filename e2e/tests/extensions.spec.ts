@@ -1,8 +1,9 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
-import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { examplePackage, packFiles } from "../support/plugins";
-import { composerWindow, openSettingsTab, showView } from "../support/views";
+import { expect, type Page } from "@playwright/test";
+import { nailFixture, control, serverMessages } from "../support/nail";
+import { axeViolations } from "../support/axe";
+import { examplePackage, packFiles, installPlugin } from "../support/plugins";
+import { openSettingsTab, showView, messageRows } from "../support/views";
+import { newMessage } from "../support/compose";
 
 /**
  * Wave M4a plug-in extension points wired into the core (plan WP105, ADR
@@ -16,34 +17,11 @@ import { composerWindow, openSettingsTab, showView } from "../support/views";
  * "Run now" runs it again; a runaway arrival hook is stopped while the
  * mail still arrives.
  */
-const test = base.extend<{ nail: NailServer }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern for fixtures without dependencies
-  nail: async ({}, use) => {
-    const server = await startNail({ seed: "demo-multi" });
-    await use(server);
-    await server.stop();
-  },
-});
-
-const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-
-/** The settings view at the section of a former settings tab (M5b). */
-function openSettings(page: Page, tab: string): Promise<Locator> {
-  return openSettingsTab(page, tab);
-}
+const test = nailFixture({ seed: "demo-multi" });
 
 /** Installs a package with every permission allowed; closes the settings. */
 async function install(page: Page, file: string, title: RegExp): Promise<void> {
-  const settings = await openSettings(page, "Plug-ins");
-  await settings.getByRole("button", { name: "Install a plug-in…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Install a plug-in" });
-  await dialog.getByRole("textbox", { name: "Path of the .nailplugin file" }).fill(file);
-  await dialog.getByRole("button", { name: "Check the plug-in" }).click();
-  await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
-  await dialog.getByRole("button", { name: "Install", exact: true }).click();
-  await expect(dialog.getByText(/is installed\./)).toBeVisible();
-  await dialog.getByRole("button", { name: "Close" }).first().click();
-  await expect(dialog).toBeHidden();
+  const settings = await installPlugin(page, file, title);
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]').last(),
   ).toBeVisible();
@@ -70,16 +48,13 @@ test("the before-send example vetoes a mail without its attachment and Send anyw
   nail,
 }) => {
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, examplePackage("attachment-check"), /^Attachment check 1\.0\.0$/);
 
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
-  await composer.getByRole("textbox", { name: "Subject" }).fill("Quarterly report");
-  await composer
-    .getByRole("textbox", { name: "Message" })
-    .fill("Hi Grace,\n\nplease see the file from yesterday.\n\nAda");
+  const composer = await newMessage(page, {
+    subject: "Quarterly report",
+    text: "Hi Grace,\n\nplease see the file from yesterday.\n\nAda",
+  });
   await composer.getByRole("button", { name: "Send", exact: true }).click();
 
   // The veto names the plug-in and its reason; nothing was sent.
@@ -90,11 +65,7 @@ test("the before-send example vetoes a mail without its attachment and Send anyw
   await expect(veto).toHaveAttribute("data-owner", /^composer:/);
   await expect(veto).toContainText("Plug-in “Attachment check”:");
   await expect(veto).toContainText("You mention “see the file”, but nothing is attached.");
-  const axe = await new AxeBuilder({ page }).include('[data-part="plugin-veto"]').analyze();
-  expect(
-    axe.violations.map((v) => v.id),
-    "veto dialog",
-  ).toEqual([]);
+  expect(await axeViolations(page, '[data-part="plugin-veto"]'), "veto dialog").toEqual([]);
   await veto.getByRole("button", { name: "Keep editing" }).click();
   await expect(veto).toBeHidden();
   await expect(composer.getByRole("textbox", { name: "Subject" })).toHaveValue("Quarterly report");
@@ -141,11 +112,11 @@ test("an arrival hook tags new mail and an open hook's banner button reaches the
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Triage helper 1\.0\.0$/);
 
   await control(nail, "imap-deliver", { raw: mail("Invoice 2026-10") });
-  const row = rows(page).filter({ hasText: "Invoice 2026-10" });
+  const row = messageRows(page).filter({ hasText: "Invoice 2026-10" });
   await expect(row).toBeVisible({ timeout: 20_000 });
   // The tag went through the operation queue to the server.
   await expect
@@ -171,7 +142,7 @@ test("an arrival hook tags new mail and an open hook's banner button reaches the
 
 test("the attachment preview example renders a CSV", async ({ page, nail }) => {
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, examplePackage("csv-preview"), /^CSV preview 1\.0\.0$|^CSV/);
   const raw = [
     "From: Grace Hopper <grace@navy.example>",
@@ -197,7 +168,7 @@ test("the attachment preview example renders a CSV", async ({ page, nail }) => {
     "",
   ].join("\r\n");
   await control(nail, "imap-deliver", { raw });
-  const row = rows(page).filter({ hasText: "Team list" });
+  const row = messageRows(page).filter({ hasText: "Team list" });
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.click();
   const preview = page.getByRole("region", { name: "Preview of team.csv" });
@@ -239,12 +210,12 @@ test("a background job runs on schedule on the controlled clock and Run now runs
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Hourly digest 1\.0\.0$/);
 
   // Two hours later on the core's clock the hourly job has run.
   await control(nail, "clock-advance", { seconds: 7200 });
-  const settings = await openSettings(page, "Plug-ins");
+  const settings = await openSettingsTab(page, "Plug-ins");
   const entry = settings.locator('[data-part="plugin-manager.plugin"]').filter({
     hasText: "Hourly digest",
   });
@@ -281,20 +252,22 @@ test("a runaway arrival hook is stopped and the mail still arrives", async ({ pa
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Looper 1\.0\.0$/);
 
   await control(nail, "imap-deliver", { raw: mail("Still arrives") });
-  await expect(rows(page).filter({ hasText: "Still arrives" })).toBeVisible({ timeout: 20_000 });
+  await expect(messageRows(page).filter({ hasText: "Still arrives" })).toBeVisible({
+    timeout: 20_000,
+  });
   // The core stops the plug-in after its CPU budget and flags it.
-  const settings = await openSettings(page, "Plug-ins");
+  const settings = await openSettingsTab(page, "Plug-ins");
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="crashed"]'),
   ).toContainText("Stopped after a problem", { timeout: 20_000 });
   await showView(page, "Mail");
   // Mail keeps arriving.
   await control(nail, "imap-deliver", { raw: mail("Arrives after the stop") });
-  await expect(rows(page).filter({ hasText: "Arrives after the stop" })).toBeVisible({
+  await expect(messageRows(page).filter({ hasText: "Arrives after the stop" })).toBeVisible({
     timeout: 20_000,
   });
 });
@@ -322,13 +295,10 @@ test("a composer action inserts text into the open draft, attributed to its plug
     };`,
   });
   await page.goto(nail.url);
-  await expect(rows(page).first()).toBeVisible();
+  await expect(messageRows(page).first()).toBeVisible();
   await install(page, file, /^Greeter 1\.0\.0$/);
 
-  await page.keyboard.press("c");
-  const composer = composerWindow(page);
-  await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
-  await composer.getByRole("textbox", { name: "Subject" }).fill("Greetings");
+  const composer = await newMessage(page, { subject: "Greetings" });
   await composer.getByRole("button", { name: "Plug-in actions" }).click();
   await page.getByRole("menuitem", { name: /Insert a greeting/ }).click();
   await expect(composer.getByRole("textbox", { name: "Message" })).toHaveValue(

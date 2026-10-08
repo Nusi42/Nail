@@ -13,6 +13,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { DefinedPlugin, PluginManifest } from "@nail/plugin-api";
 import { createTestHost, type TestHost, type TestHostOptions } from "@nail/plugin-api/testing";
+import { loadCatalogs, readZip } from "@nail/plugin-api/tools";
+import { exampleNames } from "../scaffold.mjs";
+import { afterAll, afterEach, beforeAll, expect } from "vitest";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 /** The repository root. */
@@ -80,6 +83,28 @@ export function node(cwd: string, script: string, ...args: string[]): string {
   }
 }
 
+/**
+ * Runs `nail-plugin …args` (the linked SDK's CLI, as npm's bin link would)
+ * in `dir`; returns stdout.
+ */
+export function nailPlugin(dir: string, ...args: string[]): string {
+  return node(
+    dir,
+    path.join(dir, "node_modules", "@nail", "plugin-api", "tools", "cli.mjs"),
+    ...args,
+  );
+}
+
+/**
+ * Builds and packs the plug-in `id` in `dir` with `nail-plugin` (the build
+ * prints nothing on stdout); returns the archive's entry names.
+ */
+export function buildAndPack(dir: string, id: string): string[] {
+  expect(nailPlugin(dir, "build")).toBe("");
+  expect(nailPlugin(dir, "pack")).toMatch(new RegExp(`${id}\\.nailplugin`));
+  return readZip(readFileSync(path.join(dir, "dist", `${id}.nailplugin`))).map((e) => e.name);
+}
+
 /** Type-checks a plug-in folder with its tsconfig.json. */
 export function typecheck(dir: string): string {
   return node(dir, path.join(packageDir("typescript"), "bin", "tsc"), "-p", ".");
@@ -91,7 +116,7 @@ export function readManifest(dir: string): PluginManifest {
 }
 
 /** The example plug-ins in `examples/`. */
-export const EXAMPLES = ["follow-up", "attachment-check", "csv-preview"] as const;
+export { exampleNames };
 
 /** An example copied to a temp folder, type-checked and built. */
 export interface PreparedExample {
@@ -110,14 +135,14 @@ export interface PreparedExample {
  * `node_modules/`), links the dependencies, type-checks and builds it
  * with its own scripts — nothing is written into the repository.
  */
-export function prepareExample(name: (typeof EXAMPLES)[number]): PreparedExample {
+export function prepareExample(name: string): PreparedExample {
   const source = path.join(REPO, "examples", name);
   const t = tempDir(`nail-${name}-`);
   const dir = path.join(t.dir, name);
   copyPlugin(source, dir);
   linkDependencies(dir);
   typecheck(dir);
-  node(dir, "scripts/build.mjs");
+  nailPlugin(dir, "build");
   return { source, dir, bundle: path.join(dir, "dist", "index.js"), cleanup: t.cleanup };
 }
 
@@ -148,4 +173,72 @@ export async function loadBundle(file: string, options: TestHostOptions): Promis
     restore();
     throw error;
   }
+}
+
+/** An example prepared for a test file, and one of its source modules. */
+export interface ExampleUnderTest<M> {
+  /** The prepared copy (after `beforeAll`). */
+  readonly example: PreparedExample;
+  /** `src/<module>.ts` of the example, imported (after `beforeAll`). */
+  readonly module: M;
+}
+
+/**
+ * Prepares `examples/<name>` for the calling test file (in `beforeAll`,
+ * removed in `afterAll`) and imports its `src/<module>.ts` for unit tests
+ * of the plug-in's own logic.
+ */
+export function useExample<M = never>(name: string, module?: string): ExampleUnderTest<M> {
+  let example: PreparedExample | undefined;
+  let imported: M | undefined;
+  beforeAll(async () => {
+    example = prepareExample(name);
+    if (module !== undefined) {
+      const file = path.join(example.source, "src", `${module}.ts`);
+      imported = (await import(pathToFileURL(file).href)) as M;
+    }
+  });
+  afterAll(() => {
+    example?.cleanup();
+  });
+  const ready = <T>(value: T | undefined, what: string): T => {
+    if (value === undefined) throw new Error(`${what} is not ready (used outside a test?)`);
+    return value;
+  };
+  return {
+    get example() {
+      return ready(example, `the ${name} example`);
+    },
+    get module() {
+      return ready(imported, `${name}/src/${String(module)}.ts`);
+    },
+  };
+}
+
+/**
+ * The `load(options)` of a describe block: loads the plug-in built in
+ * `dir()` (`dist/index.js`, its manifest and catalogs, then `defaults()`
+ * and `options`) into a fresh test host, and restores the global `nail`
+ * after each test.
+ */
+export function pluginLoader(
+  dir: () => string,
+  defaults: () => TestHostOptions = () => ({}),
+): (options?: TestHostOptions) => Promise<TestHost> {
+  let loaded: LoadedPlugin | undefined;
+  afterEach(() => {
+    loaded?.restore();
+    loaded = undefined;
+  });
+  return async (options = {}) => {
+    loaded?.restore();
+    const root = dir();
+    loaded = await loadBundle(path.join(root, "dist", "index.js"), {
+      manifest: readManifest(root),
+      catalogs: loadCatalogs(root),
+      ...defaults(),
+      ...options,
+    });
+    return loaded.host;
+  };
 }

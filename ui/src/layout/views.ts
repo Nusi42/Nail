@@ -1,7 +1,8 @@
 /**
  * Views behind the navigation rail (M5b, ADR 0109) — the UI side of
- * `nail_api::views` and the layout's `views` / `rail` sections, same rules,
- * tested against the same cases (`views.test.ts` mirrors the Rust tests).
+ * `nail_api::views` and the layout's `views` / `rail` sections: the
+ * constants are generated, the rules are ports pinned by
+ * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `views.test.ts`).
  *
  * - A view shows a layout window (`ViewDef.window`) inside the `view-host`
  *   widget; without a `view-host` in the main window, `view.show` opens the
@@ -10,30 +11,26 @@
  * - `view.next` / `view.previous` step through the rail's views (else the
  *   definition order) and wrap around.
  */
-import type { LayoutNode, RailItem, ResolvedLayout, ViewDef } from "../api/generated";
-
-/** `nail_api::views` view ids of the default layout, in rail order. */
-export const BUILTIN_VIEWS = ["mail", "calendar", "contacts", "tasks", "settings"] as const;
-
-/** `view.show "<view>"`. */
-export const VIEW_SHOW_ACTION = "view.show";
-/** `view.next`. */
-export const VIEW_NEXT_ACTION = "view.next";
-/** `view.previous`. */
-export const VIEW_PREVIOUS_ACTION = "view.previous";
-
-/** Widget kinds of the M5b shell (`nail_api::views::*_WIDGET`). */
-export const NAV_RAIL_WIDGET = "nav-rail";
-export const VIEW_HOST_WIDGET = "view-host";
-export const SETTINGS_PAGE_WIDGET = "settings-page";
-export const LIST_HEADER_WIDGET = "list-header";
-
-/** The settings groups of the default layout (`SETTINGS_GROUPS`). */
-export const SETTINGS_GROUPS = ["general", "look-and-feel", "security", "extensions"] as const;
-
-/** `settings.section "<id>"` and `settings.search`. */
-export const SETTINGS_SECTION_ACTION = "settings.section";
-export const SETTINGS_SEARCH_ACTION = "settings.search";
+import {
+  type LayoutNode,
+  type RailItem,
+  type ResolvedLayout,
+  VIEW_HOST_WIDGET,
+  type ViewDef,
+} from "../api/generated";
+export {
+  BUILTIN_VIEWS,
+  LIST_HEADER_WIDGET,
+  NAV_RAIL_WIDGET,
+  SETTINGS_GROUPS,
+  SETTINGS_PAGE_WIDGET,
+  SETTINGS_SEARCH_ACTION,
+  SETTINGS_SECTION_ACTION,
+  VIEW_HOST_WIDGET,
+  VIEW_NEXT_ACTION,
+  VIEW_PREVIOUS_ACTION,
+  VIEW_SHOW_ACTION,
+} from "../api/generated";
 
 /** The view a view id names, if the layout defines it. */
 export function viewDef(layout: ResolvedLayout, id: string): ViewDef | null {

@@ -6,42 +6,17 @@
  */
 import { createHash, createHmac } from "node:crypto";
 import { connect } from "node:tls";
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { freePort, type NailServer } from "./nail";
+import { coreRequest } from "./serve.mjs";
+import { showView } from "./views";
 
 /** A core answer (`nail_api::Response`), loosely typed. */
 export type CoreResponse = { type: string } & Record<string, unknown>;
 
 /** Sends one request to the core over the local server's WebSocket. */
 export async function rpc(server: NailServer, request: object): Promise<CoreResponse> {
-  const url = new URL("api/ws", server.url);
-  url.protocol = url.protocol.replace("http", "ws");
-  const socket = new WebSocket(url);
-  return new Promise<CoreResponse>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.close();
-      reject(new Error(`no answer to ${JSON.stringify(request)}`));
-    }, 30_000);
-    socket.addEventListener("open", () => {
-      socket.send(JSON.stringify({ id: 1, request }));
-    });
-    socket.addEventListener("message", (message) => {
-      const frame = JSON.parse(String(message.data)) as {
-        kind: string;
-        id?: number;
-        response?: CoreResponse;
-      };
-      if (frame.kind === "response" && frame.id === 1 && frame.response) {
-        clearTimeout(timer);
-        socket.close();
-        resolve(frame.response);
-      }
-    });
-    socket.addEventListener("error", () => {
-      clearTimeout(timer);
-      reject(new Error("WebSocket error"));
-    });
-  });
+  return (await coreRequest(server.url, request, 30_000)) as CoreResponse;
 }
 
 /** Like {@link rpc}, failing unless the answer has type `expected`. */
@@ -213,4 +188,35 @@ export async function pairBrowser(page: Page, remote: RemoteUi, code: string, de
   await form.getByRole("textbox", { name: "Pairing code" }).fill(code);
   await form.getByRole("textbox", { name: "Name for this device" }).fill(device);
   await form.getByRole("button", { name: "Pair this browser" }).click();
+}
+
+/**
+ * The remote UI switched on, the user "ada" and a desktop-sized remote
+ * browser paired as her device (no passkey), on the mail view.
+ */
+export async function pairedRemoteMail(
+  page: Page,
+  server: NailServer,
+): Promise<{ remote: RemoteUi; context: BrowserContext; phone: Page }> {
+  const remote = await enableRemoteUi(server);
+  const user = await createUser(server, "ada");
+  const context = await remoteContext(page);
+  const phone = await context.newPage();
+  await phone.setViewportSize({ width: 1280, height: 1000 });
+  await pairBrowser(phone, remote, await pairingCode(server, user));
+  await phone.getByRole("button", { name: "Not now" }).click();
+  await showView(phone, "Mail");
+  return { remote, context, phone };
+}
+
+/** Selects the dark theme `themeId` and opens the app on the mail view. */
+export async function openInDarkTheme(
+  page: Page,
+  server: NailServer,
+  themeId: string,
+): Promise<void> {
+  await rpcOk(server, { type: "SetTheme", theme_id: themeId }, "Themes");
+  await page.goto(server.url);
+  await showView(page, "Mail");
+  await expect(page.locator("html")).toHaveAttribute("data-nail-mode", "dark");
 }

@@ -408,7 +408,7 @@ fn every_locale_has_the_same_catalog_files() {
     assert_eq!(ftl_file_names("de"), en);
 }
 
-/// `fixtures/icons.json` mirrors `nail_api::icons` for the UI's icon
+/// `fixtures/icons.json` is written from `nail_api::icons` for the UI's icon
 /// registry test. Regenerate with
 /// `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test fixtures`
 /// (then `npx prettier --write crates/nail-api/fixtures`).

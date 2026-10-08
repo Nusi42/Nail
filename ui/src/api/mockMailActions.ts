@@ -2,7 +2,8 @@
  * Mail actions on conversations in the mock core (P3, ADR 0164):
  * `ApplyMailAction`, `ResolveMailTargets` and `UndoMailAction` with the
  * contract's semantics — targets resolve per action
- * (`nail_api::mail_actions::MailAction::reach`, mirrored by `reachOf`), the
+ * (`nail_api::mail_actions::MailAction::reach`, ported as `reachOf` and
+ * pinned by `crates/nail-api/tests/ts_vectors.rs`), the
  * change is applied at once and replayed per account like every mock write,
  * and each action is one batch with one undo (the messages' folders, flags
  * and tags as they were). Snooze and junk reuse the triage mock.
@@ -11,6 +12,7 @@ import type {
   ConversationReach,
   FolderId,
   MailAction,
+  MailActionIssue,
   MailActionKind,
   MailActionResult,
   MailBatchId,
@@ -31,7 +33,11 @@ import {
   updateFlags,
   type MockCore,
 } from "./mockMail";
-import { MAIL_UNDO_SECS, MAX_MAIL_ACTION_TARGETS } from "./generated/constants";
+import {
+  MAIL_ACTION_ISSUE_MESSAGE_IDS,
+  MAIL_UNDO_SECS,
+  MAX_MAIL_ACTION_TARGETS,
+} from "./generated/constants";
 import type { MockData } from "./mockData";
 import { answerTriage } from "../features/triage/mock";
 
@@ -113,10 +119,14 @@ function batchesOf(d: MockData): Map<MailBatchId, Batch> {
   return map;
 }
 
-function issue(id: string, message: string, code: "invalid_request" | "not_found" | "conflict") {
+function issue(
+  id: MailActionIssue,
+  message: string,
+  code: "invalid_request" | "not_found" | "conflict",
+) {
   return {
     ...errorResponse(code, message),
-    localized: { id: `mail-action-issue-${id}`, args: {} },
+    localized: { id: MAIL_ACTION_ISSUE_MESSAGE_IDS[id], args: {} },
   };
 }
 

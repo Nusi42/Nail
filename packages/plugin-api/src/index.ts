@@ -14,6 +14,8 @@
  */
 export type * from "./generated";
 export type * from "./api";
+/** Largest attachment a draft may carry (bytes; `nail_api::compose::MAX_ATTACHMENT_BYTES`). */
+export { MAX_ATTACHMENT_BYTES } from "./generated";
 export {
   createPluginApiError,
   isPluginApiError,

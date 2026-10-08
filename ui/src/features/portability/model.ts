@@ -1,114 +1,76 @@
 /**
- * Pure helpers of the import / export / backup / diagnostics UI that mirror
- * `nail_api::{portability, backup, diagnostics}` (ADR 0094): the formats'
- * shapes (file or folder, mail or PIM data, file-dialog filters), which
- * export formats fit which source, the checks the core makes before a job
- * starts (backup contents, passphrases, diagnostics options), progress
- * fractions and byte sizes.
+ * Pure helpers of the import / export / backup / diagnostics UI
+ * (`nail_api::{portability, backup, diagnostics}`, ADR 0094): the value
+ * lists, Fluent ids, limits and defaults come generated; the formats' shapes
+ * (file or folder, mail or PIM data), which export formats fit which source,
+ * the checks the core makes before a job starts and progress fractions are
+ * ports pinned by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * `model.test.ts`); file-dialog filters and byte sizes are the UI's own.
  */
-import type {
-  BackupContents,
-  BackupIssue,
-  BackupItem,
-  DiagnosticsIssue,
-  DiagnosticsItem,
-  DiagnosticsOptions,
-  ExportFormat,
-  ExportSource,
-  ImportFormat,
-  IssueSeverity,
-  ItemIssue,
-  JobCounts,
-  JobKind,
-  JobPhase,
-  JobProgress,
-  JobState,
-  MboxVariant,
-  PathFilter,
-  PortabilityIssueCode,
-  Redaction,
-  RestoreEffect,
+import {
+  BACKUP_FILE_EXTENSION,
+  BACKUP_ISSUE_MESSAGE_IDS,
+  BACKUP_ITEM_MESSAGE_IDS,
+  DEFAULT_BACKUP_CONTENTS,
+  DEFAULT_DIAGNOSTICS_OPTIONS,
+  DIAGNOSTICS_ISSUE_MESSAGE_IDS,
+  DIAGNOSTICS_ITEM_MESSAGE_IDS,
+  EXPORT_FORMAT_MESSAGE_IDS,
+  IMPORT_FORMAT_MESSAGE_IDS,
+  ISSUE_SEVERITY_MESSAGE_IDS,
+  JOB_KIND_MESSAGE_IDS,
+  JOB_PHASE_MESSAGE_IDS,
+  JOB_STATE_MESSAGE_IDS,
+  MAX_BACKUP_PASSPHRASE_CHARS,
+  MAX_DIAGNOSTICS_MESSAGES,
+  MBOX_VARIANT_MESSAGE_IDS,
+  MIN_BACKUP_PASSPHRASE_CHARS,
+  PORTABILITY_ISSUE_CODE_MESSAGE_IDS,
+  REDACTION_MESSAGE_IDS,
+  RESTORE_EFFECT_MESSAGE_IDS,
+  type BackupContents,
+  type BackupIssue,
+  type BackupItem,
+  type DiagnosticsIssue,
+  type DiagnosticsItem,
+  type DiagnosticsOptions,
+  type ExportFormat,
+  type ExportSource,
+  type ImportFormat,
+  type IssueSeverity,
+  type ItemIssue,
+  type JobCounts,
+  type JobKind,
+  type JobPhase,
+  type JobProgress,
+  type JobState,
+  type MboxVariant,
+  type PathFilter,
+  type PortabilityIssueCode,
+  type Redaction,
+  type RestoreEffect,
 } from "../../api/generated";
 import { charCount } from "../../text/chars";
 
-export const IMPORT_FORMATS: readonly ImportFormat[] = [
-  "mbox",
-  "eml-folder",
-  "maildir",
-  "thunderbird-profile",
-  "ics",
-  "vcard",
-];
-export const EXPORT_FORMATS: readonly ExportFormat[] = ["mbox", "eml", "maildir", "ics", "vcard"];
-export const MBOX_VARIANTS: readonly MboxVariant[] = ["mboxrd", "mboxo"];
-export const JOB_KINDS: readonly JobKind[] = [
-  "import",
-  "export",
-  "backup",
-  "verify-backup",
-  "restore",
-];
-export const JOB_PHASES: readonly JobPhase[] = [
-  "queued",
-  "scanning",
-  "reading",
-  "writing",
-  "verifying",
-  "finishing",
-];
-export const JOB_STATES: readonly JobState[] = [
-  "running",
-  "completed",
-  "completed-with-issues",
-  "failed",
-  "cancelled",
-];
-export const SEVERITIES: readonly IssueSeverity[] = ["warning", "skipped"];
-export const ISSUE_CODES: readonly PortabilityIssueCode[] = [
-  "unreadable-file",
-  "malformed-message",
-  "too-large",
-  "truncated",
-  "duplicate",
-  "unknown-flag",
-  "invalid-folder-name",
-  "invalid-calendar-data",
-  "invalid-contact-data",
-  "unsupported-format",
-  "filter-not-expressible",
-  "account-not-expressible",
-  "secret-not-imported",
-  "write-failed",
-  "target-exists",
-  "checksum-mismatch",
-  "entry-missing",
-  "newer-format",
-  "needs-attention",
-];
-export const BACKUP_ITEMS: readonly BackupItem[] = [
-  "settings",
-  "theme",
-  "layout",
-  "rules",
-  "accounts",
-  "local-mail",
-  "keys",
-  "pim-local",
-  "plugins",
-];
-export const RESTORE_EFFECTS: readonly RestoreEffect[] = ["replace", "merge", "add", "skip"];
-export const DIAGNOSTICS_ITEMS: readonly DiagnosticsItem[] = [
-  "system-info",
-  "logs",
-  "config",
-  "account-status",
-  "store-stats",
-  "operation-queue",
-  "plugins",
-  "mail-headers",
-  "mail-content",
-];
-export const REDACTIONS: readonly Redaction[] = ["secrets", "addresses", "subjects", "paths"];
+export {
+  BACKUP_FILE_EXTENSION,
+  BACKUP_ITEM_VALUES as BACKUP_ITEMS,
+  DIAGNOSTICS_ITEM_VALUES as DIAGNOSTICS_ITEMS,
+  EXPORT_FORMAT_VALUES as EXPORT_FORMATS,
+  IMPORT_FORMAT_VALUES as IMPORT_FORMATS,
+  ISSUE_SEVERITY_VALUES as SEVERITIES,
+  JOB_KIND_VALUES as JOB_KINDS,
+  JOB_PHASE_VALUES as JOB_PHASES,
+  JOB_STATE_VALUES as JOB_STATES,
+  LOCAL_FOLDERS_ACCOUNT_ID,
+  MAX_BACKUP_PASSPHRASE_CHARS,
+  MAX_DIAGNOSTICS_MESSAGES,
+  MBOX_VARIANT_VALUES as MBOX_VARIANTS,
+  MIN_BACKUP_PASSPHRASE_CHARS,
+  PORTABILITY_ISSUE_CODE_VALUES as ISSUE_CODES,
+  REDACTION_VALUES as REDACTIONS,
+  RESTORE_EFFECT_VALUES as RESTORE_EFFECTS,
+} from "../../api/generated";
 
 /** The counts a report shows, in this order (zero counts are left out). */
 export const COUNT_KEYS: readonly (keyof JobCounts)[] = [
@@ -128,32 +90,21 @@ export const COUNT_KEYS: readonly (keyof JobCounts)[] = [
 /** Fluent id of a count (`portability-count-messages`). */
 export const countId = (key: keyof JobCounts) => `portability-count-${key}`;
 
-/** `nail_api::portability::LOCAL_FOLDERS_ACCOUNT_ID`. */
-export const LOCAL_FOLDERS_ACCOUNT_ID = "local-folders";
-/** `nail_api::backup::BACKUP_FILE_EXTENSION`. */
-export const BACKUP_FILE_EXTENSION = "nailbackup";
-/** `nail_api::backup::MIN_BACKUP_PASSPHRASE_CHARS`. */
-export const MIN_BACKUP_PASSPHRASE_CHARS = 12;
-/** `nail_api::backup::MAX_BACKUP_PASSPHRASE_CHARS`. */
-export const MAX_BACKUP_PASSPHRASE_CHARS = 1024;
-/** `nail_api::diagnostics::MAX_DIAGNOSTICS_MESSAGES`. */
-export const MAX_DIAGNOSTICS_MESSAGES = 20;
-
 /** Fluent ids of the contract's labels (`core-portability.ftl`). */
-export const importFormatId = (f: ImportFormat) => `import-format-${f}`;
-export const exportFormatId = (f: ExportFormat) => `export-format-${f}`;
-export const mboxVariantId = (v: MboxVariant) => `mbox-variant-${v}`;
-export const jobKindId = (k: JobKind) => `portability-job-${k}`;
-export const jobPhaseId = (p: JobPhase) => `portability-phase-${p}`;
-export const jobStateId = (s: JobState) => `portability-state-${s}`;
-export const severityId = (s: IssueSeverity) => `portability-severity-${s}`;
-export const issueCodeId = (c: PortabilityIssueCode) => `portability-issue-${c}`;
-export const backupItemId = (i: BackupItem) => `backup-item-${i}`;
-export const backupIssueId = (i: BackupIssue) => `backup-issue-${i}`;
-export const restoreEffectId = (e: RestoreEffect) => `restore-effect-${e}`;
-export const diagnosticsItemId = (i: DiagnosticsItem) => `diagnostics-item-${i}`;
-export const redactionId = (r: Redaction) => `diagnostics-redaction-${r}`;
-export const diagnosticsIssueId = (i: DiagnosticsIssue) => `diagnostics-issue-${i}`;
+export const importFormatId = (f: ImportFormat) => IMPORT_FORMAT_MESSAGE_IDS[f];
+export const exportFormatId = (f: ExportFormat) => EXPORT_FORMAT_MESSAGE_IDS[f];
+export const mboxVariantId = (v: MboxVariant) => MBOX_VARIANT_MESSAGE_IDS[v];
+export const jobKindId = (k: JobKind) => JOB_KIND_MESSAGE_IDS[k];
+export const jobPhaseId = (p: JobPhase) => JOB_PHASE_MESSAGE_IDS[p];
+export const jobStateId = (s: JobState) => JOB_STATE_MESSAGE_IDS[s];
+export const severityId = (s: IssueSeverity) => ISSUE_SEVERITY_MESSAGE_IDS[s];
+export const issueCodeId = (c: PortabilityIssueCode) => PORTABILITY_ISSUE_CODE_MESSAGE_IDS[c];
+export const backupItemId = (i: BackupItem) => BACKUP_ITEM_MESSAGE_IDS[i];
+export const backupIssueId = (i: BackupIssue) => BACKUP_ISSUE_MESSAGE_IDS[i];
+export const restoreEffectId = (e: RestoreEffect) => RESTORE_EFFECT_MESSAGE_IDS[e];
+export const diagnosticsItemId = (i: DiagnosticsItem) => DIAGNOSTICS_ITEM_MESSAGE_IDS[i];
+export const redactionId = (r: Redaction) => REDACTION_MESSAGE_IDS[r];
+export const diagnosticsIssueId = (i: DiagnosticsIssue) => DIAGNOSTICS_ISSUE_MESSAGE_IDS[i];
 
 /** `ImportFormat::is_directory`. */
 export function importIsDirectory(format: ImportFormat): boolean {
@@ -244,7 +195,7 @@ export function backupDefaultOn(item: BackupItem): boolean {
 
 /** `BackupContents::default()`: everything but the keys. */
 export function defaultBackupContents(): BackupContents {
-  return { items: BACKUP_ITEMS.filter(backupDefaultOn) };
+  return { items: [...DEFAULT_BACKUP_CONTENTS.items] };
 }
 
 /** `BackupContents::issues`. */
@@ -271,9 +222,9 @@ export function diagnosticsIsMail(item: DiagnosticsItem): boolean {
 /** `DiagnosticsOptions::default()`: no mail content, addresses redacted. */
 export function defaultDiagnosticsOptions(): DiagnosticsOptions {
   return {
-    items: DIAGNOSTICS_ITEMS.filter((i) => !diagnosticsIsMail(i)),
-    message_ids: [],
-    redact_addresses: true,
+    ...DEFAULT_DIAGNOSTICS_OPTIONS,
+    items: [...DEFAULT_DIAGNOSTICS_OPTIONS.items],
+    message_ids: [...DEFAULT_DIAGNOSTICS_OPTIONS.message_ids],
   };
 }
 
@@ -288,14 +239,17 @@ export function diagnosticsIssues(options: DiagnosticsOptions): DiagnosticsIssue
   return issues;
 }
 
-/** `JobProgress::fraction`: 0..1 when the total is known. */
+/**
+ * `JobProgress::fraction`: done as 0..1 (bytes when their total is known,
+ * else items; an empty total is done), `null` while the total is unknown.
+ */
 export function progressFraction(progress: JobProgress): number | null {
-  if (progress.total !== null && progress.total > 0) {
-    return Math.min(1, progress.done / progress.total);
+  const { bytes_total: bytesTotal, total } = progress;
+  if (bytesTotal !== null && bytesTotal > 0) {
+    return Math.min(progress.bytes_done, bytesTotal) / bytesTotal;
   }
-  if (progress.bytes_total !== null && progress.bytes_total > 0) {
-    return Math.min(1, progress.bytes_done / progress.bytes_total);
-  }
+  if (total !== null && total > 0) return Math.min(progress.done, total) / total;
+  if (total === 0 || (bytesTotal === 0 && total === null)) return 1;
   return null;
 }
 
