@@ -307,6 +307,7 @@ node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,
     [--version V] [--update-base URL [--insecure-loopback-updates]] [--dev-updater-key] [--no-mapi] [--no-portable]
                                                   # NSIS + MSI, portable zip, NailMapi.dll (own arch + x86), SBOMs, SHA256SUMS → <build dir>/dist
 powershell -File scripts/installer-smoke.ps1      # silent per-user install to a temp dir, start, [update,] uninstall
+powershell -File scripts/installer-payload-smoke.ps1   # beside an installed Nail: setup checks + its payload run seeded (ADR 0186)
 powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install with properties, start, upgrade, uninstall (CI)
 node scripts/update-manifest.mjs --version V --channel stable --artifacts DIR --download-base URL --out DIR   # <channel>/latest.json, signatures checked first
 node scripts/update-server.mjs --root DIR [--port N]   # loopback update server (127.0.0.1 only)

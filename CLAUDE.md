@@ -922,6 +922,7 @@ npm run visual:update                      # also write baselines of new / chang
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
 powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, [update,] uninstall
+powershell -File scripts/installer-payload-smoke.ps1   # beside an installed Nail: setup + its payload, never runs the setup (ADR 0186)
 powershell -File scripts/msi-smoke.ps1         # elevated (CI): silent MSI install with properties, start, upgrade, uninstall
 node scripts/update-server.mjs --root DIR      # loopback update server; update-manifest.mjs / winget-manifest.mjs write manifests
 node scripts/sbom.mjs                      # CycloneDX SBOMs
