@@ -19,6 +19,15 @@ context-menu-label-folder-tree-account = Account actions
 context-menu-label-composer = Composer actions
 context-menu-label-calendar-list-calendar = Calendar actions
 context-menu-label-nav-rail = View
+context-menu-label-folder-tree = Mail
+context-menu-label-text = Edit
+
+## The text menu (fields, editors, selectable text)
+
+edit-action-cut = Cut
+edit-action-copy = Copy
+edit-action-paste = Paste
+edit-action-select-all = Select all
 
 ## Key names in shortcuts (menus, key binding editor)
 

@@ -749,6 +749,8 @@ impl<R: tauri::Runtime> PopOutWindows for TauriPopOuts<R> {
         ))
         .title(&spec.title)
         .visible(false)
+        // ADR 0184: Nail's own Paste reads the clipboard without a prompt.
+        .enable_clipboard_access()
         .min_inner_size(
             f64::from(spec.min_size.width),
             f64::from(spec.min_size.height),

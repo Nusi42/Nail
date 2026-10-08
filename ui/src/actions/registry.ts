@@ -30,6 +30,7 @@ import {
   undoLast,
 } from "../features/mail-actions/run";
 import { setPendingMove } from "../features/mail-actions/move";
+import { contextTarget } from "../features/menus";
 import { currentTargets, hasTargets, listSelectionFor } from "./mailTargets";
 import type { UiStore } from "../state/uiStore";
 
@@ -129,12 +130,12 @@ export const builtinActions: Record<string, ActionHandler> = {
     },
     enabled: (_ctx, args) => typeof args[0] === "string",
   },
+  // Check for new mail (ADR 0183): every account, or the account whose
+  // menu (folder pane) it was chosen from.
   "sync.now": {
     run: async (ctx) => {
-      await ctx.client.request(
-        { type: "SyncNow", account_id: ctx.store.getState().activeAccountId },
-        "SyncStarted",
-      );
+      const account = contextTarget(ctx.store)?.accountId ?? null;
+      await ctx.client.request({ type: "SyncNow", account_id: account }, "SyncStarted");
     },
   },
 

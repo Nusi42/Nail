@@ -36,6 +36,10 @@ export const CONTEXT_MENU_PARTS: Readonly<Record<string, string>> = {
   "calendar-list.calendar": "calendar",
   // M5d: the View menu on the navigation rail.
   "nav-rail": "global",
+  // ADR 0184: the folder pane around its items, and text (fields, editors,
+  // selectable text).
+  "folder-tree": "global",
+  text: "global",
 };
 
 /** `context:<part>`. */

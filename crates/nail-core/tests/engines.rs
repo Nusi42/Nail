@@ -9,8 +9,8 @@ use std::future::Future;
 use std::time::Duration;
 
 use nail_api::accounts::{
-    AccountConfig, ComposerMode, EndpointSlot, IncomingServer, SecretInput, SecretValue,
-    VirtualAccountConfig,
+    AccountConfig, ComposerMode, EndpointSlot, IncomingServer, MailProtocol, SecretInput,
+    SecretValue, VirtualAccountConfig,
 };
 use nail_api::{
     AccountId, AccountState, Address, Draft, ErrorCode, Event, FlagChange, Folder, FolderId,
@@ -989,7 +989,16 @@ async fn accounts_are_discovered_tested_added_and_removed() {
         panic!()
     };
     let candidate = candidates.first().expect("autoconfig found the servers");
+    // The file lists POP3 first; IMAP is proposed first (ADR 0180).
+    assert_eq!(candidate.incoming.protocol(), MailProtocol::Imap);
     assert_eq!(candidate.incoming.server().port, f.demo.new_imap.port());
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|c| c.incoming.protocol())
+            .collect::<Vec<_>>(),
+        [MailProtocol::Imap, MailProtocol::Pop3]
+    );
 
     let config = AccountConfig {
         id: AccountId::new(""),

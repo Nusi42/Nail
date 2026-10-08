@@ -353,13 +353,19 @@ fn home_message(n: u32, subject: &str, body: &str) -> Vec<u8> {
     .into_bytes()
 }
 
-fn autoconfig_xml(imap_port: u16, smtp_port: u16) -> String {
+/// The autoconfig file of `new.example`. Like many providers' files it
+/// lists POP3 before IMAP; setup still proposes IMAP first (ADR 0180).
+fn autoconfig_xml(pop3_port: u16, imap_port: u16, smtp_port: u16) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <clientConfig version="1.1">
   <emailProvider id="new.example">
     <domain>new.example</domain>
     <displayName>New Example Mail</displayName>
+    <incomingServer type="pop3">
+      <hostname>127.0.0.1</hostname><port>{pop3_port}</port><socketType>plain</socketType>
+      <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication>
+    </incomingServer>
     <incomingServer type="imap">
       <hostname>127.0.0.1</hostname><port>{imap_port}</port><socketType>plain</socketType>
       <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication>
@@ -643,7 +649,7 @@ pub async fn start_demo_multi_with(mail: DemoMail) -> Result<DemoMulti> {
     http.get(
         Some("autoconfig.new.example"),
         "/mail/config-v1.1.xml",
-        MockResponse::xml(autoconfig_xml(new_imap.port(), smtp.port())),
+        MockResponse::xml(autoconfig_xml(home.port(), new_imap.port(), smtp.port())),
     );
     // `elsewhere.example` only has SRV records, pointing outside its domain:
     // setup shows them as unverified.

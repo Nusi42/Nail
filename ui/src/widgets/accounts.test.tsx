@@ -40,7 +40,7 @@ describe("account-setup", () => {
     await waitFor(() => expect(setup).toHaveAttribute("data-step", "servers"));
     expect(screen.getByRole("radio", { name: /Your provider's configuration/ })).toBeChecked();
     expect(
-      screen.getByText("Incoming imap.example.net:993, outgoing smtp.example.net:465"),
+      screen.getByText("Incoming (IMAP) imap.example.net:993, outgoing smtp.example.net:465"),
     ).toBeInTheDocument();
     const testButton = screen.getByRole("button", { name: "Test connection" });
     expect(testButton).toBeDisabled();
@@ -129,6 +129,14 @@ describe("account-setup", () => {
     const incoming = screen.getByRole("group", { name: "Incoming mail" });
     const host = within(incoming).getByRole("textbox", { name: "Server" });
     expect(host).toHaveValue("imap.home.invalid");
+    // IMAP is the default (ADR 0180): selected, and the first choice offered.
+    const protocol = within(incoming).getByRole("combobox", { name: "Protocol" });
+    expect(protocol).toHaveValue("imap");
+    expect(
+      within(protocol)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["IMAP", "POP3"]);
     await user.clear(host);
     await user.type(host, "unreachable.home.invalid");
     fireEvent.change(within(incoming).getByRole("combobox", { name: "Security" }), {

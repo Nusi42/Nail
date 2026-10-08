@@ -54,13 +54,13 @@ describe("actions", () => {
     expect(ctx.store.getState().selectedMessageId).toBe("a");
   });
 
-  it("toggles nodes and syncs the active account", async () => {
+  it("toggles nodes and checks every account for new mail (ADR 0183)", async () => {
     const ctx = context();
     const { dispatch } = createDispatcher(ctx);
     await dispatch("view.toggle", ["reader"]);
     expect(ctx.store.getState().hiddenNodes).toEqual(["reader"]);
     await dispatch("sync.now");
-    expect(ctx.transport.requests).toContainEqual({ type: "SyncNow", account_id: "acc-work" });
+    expect(ctx.transport.requests).toContainEqual({ type: "SyncNow", account_id: null });
   });
 
   it("reports availability", () => {

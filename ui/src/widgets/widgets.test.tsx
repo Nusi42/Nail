@@ -370,7 +370,7 @@ describe("toolbar", () => {
     renderNode(widget("toolbar", { options: { toolbar: "main" } }), env, { layout });
     fireEvent.click(screen.getByRole("button", { name: "Check for new mail" }));
     await waitFor(() => {
-      expect(env.transport.requests).toContainEqual({ type: "SyncNow", account_id: "acc-work" });
+      expect(env.transport.requests).toContainEqual({ type: "SyncNow", account_id: null });
     });
     fireEvent.click(screen.getByRole("button", { name: "Sidebar" }));
     expect(env.store.getState().hiddenNodes).toEqual(["sidebar"]);

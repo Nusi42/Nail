@@ -2,7 +2,11 @@
 
 ## The folder pane
 
-**New message** sits on top. Below it:
+**New message** sits on top, with **Check for new mail** (the round arrow)
+beside it: it fetches new mail of every account from the servers at once
+(also F5 or Ctrl+R). The arrow turns while accounts synchronize; it is off
+while the computer has no network, and a failure shows in the status bar.
+Below them:
 
 - **Favorites** — the same folders of all accounts together: **All
   inboxes**, **Flagged** and **Unread** (searches across every account),
@@ -25,7 +29,14 @@ through the whole pane. Right-click an account's heading for its actions
 (check for mail, automatic replies, account settings). Right-click menus
 show only what applies to the message or folder: **Not junk**, for
 example, appears in the Junk folder and for mail Nail's junk filter
-flagged.
+flagged. Right-click the pane around its folders for **Check for new mail**,
+**New message** and **Add account**.
+
+Where Nail has no menu for a place, a right-click does nothing. On text you
+can select — mail, the addresses and subject in the reader, contact
+details, keys, error details — and in every text field, a right-click
+offers **Cut**, **Copy**, **Paste** and **Select all** (as far as they
+apply). Nail's own labels and buttons are not selectable.
 
 ## The list header
 

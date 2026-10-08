@@ -96,7 +96,7 @@ describe("key labels", () => {
 });
 
 describe("context targets", () => {
-  it("maps DOM parts to menu parts and leaves text fields alone", () => {
+  it("maps DOM parts to menu parts and text fields to the text menu (ADR 0184)", () => {
     document.body.innerHTML = `
       <div data-part="message-list" aria-activedescendant="r1" tabindex="0">
         <div id="r1" data-part="message-list.row" data-message="m1" data-thread="t1" data-account="a"><span id="in">x</span></div>
@@ -115,8 +115,12 @@ describe("context targets", () => {
       part: "folder-tree.folder",
       folderId: "f1",
     });
-    expect(findContextTarget(document.getElementById("text"))).toBeNull();
+    expect(findContextTarget(document.getElementById("text"))).toMatchObject({
+      part: "text",
+      selection: { range: null, field: [0, 0] },
+    });
     expect(isTextInput(document.getElementById("box"))).toBe(false);
+    expect(findContextTarget(document.getElementById("box"))?.part).toBe("message-list.row");
     expect(findContextTarget(document.body)).toBeNull();
     document.body.innerHTML = "";
   });
@@ -243,13 +247,35 @@ describe("context menu", () => {
     expect(contextTarget(env.store)).toBeNull();
   });
 
-  it("keeps the browser menu in text fields and closes on outside clicks", async () => {
+  it("never shows the browser's menu; text fields get the text menu (ADR 0184)", async () => {
     const { env, container } = renderMail();
     const row = await firstRow(container);
     const field = screen.getByRole("textbox", { name: "field" });
-    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
-    field.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
+    const rightClick = (target: Element) => {
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: 3,
+        clientY: 3,
+      });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+      return event;
+    };
+    // A place without a menu of its own: nothing, and no browser menu either.
+    expect(rightClick(document.body).defaultPrevented).toBe(true);
+    expect(screen.queryByRole("menu")).toBeNull();
+    // An empty field: Paste and Select all (nothing to cut or copy).
+    expect(rightClick(field).defaultPrevented).toBe(true);
+    const menu = await screen.findByRole("menu", { name: "Edit" });
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["PasteCtrl+V", "Select allCtrl+A"]);
+    fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("menu")).toBeNull();
 
     fireEvent.contextMenu(row, { clientX: 1, clientY: 1, button: 2 });

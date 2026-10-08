@@ -250,3 +250,80 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
     )
     .toBe(true);
 });
+
+/** The page's size (the window's inner size in CSS pixels). */
+async function pageSize(page: Page) {
+  return page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+}
+
+test("windows follow the OS window's size; WebView2 shows no menu or reload of its own", async () => {
+  const page = await launch();
+  // ADR 0184: WebView2's own context menus are off in every window.
+  const menus = () =>
+    shellControl(page, "default-context-menus") as Promise<Record<string, boolean>>;
+  await expect.poll(async () => (await menus()).main).toBe(false);
+
+  // ADR 0181: the composer follows the main window, smaller and larger.
+  const id = await newComposer(page, "Resized");
+  const inPage = page.locator(`[data-part="window"][data-window="${id}"]`);
+  const rect = async () => defined(await inPage.boundingBox(), "the composer's box");
+  for (const [width, height] of [
+    [900, 560],
+    [1400, 1000],
+  ] as const) {
+    await shellControl(page, `resize-main:${String(width)}x${String(height)}`);
+    // DPI scaling may round the inner size by a pixel.
+    await expect
+      .poll(async () => Math.abs((await pageSize(page)).width - width))
+      .toBeLessThanOrEqual(2);
+    const size = await pageSize(page);
+    await expect
+      .poll(async () => {
+        const box = await rect();
+        return (
+          box.x >= 0 &&
+          box.y >= 0 &&
+          box.x + box.width <= size.width + 1 &&
+          box.y + box.height <= size.height + 1
+        );
+      })
+      .toBe(true);
+    const box = await rect();
+    expect(Math.round(box.width)).toBe(Math.min(820, size.width));
+    expect(Math.round(box.height)).toBe(Math.min(720, size.height));
+  }
+
+  // ADR 0183: F5 / Ctrl+R in a field check for mail; the page is not reloaded.
+  await page.evaluate(() => Reflect.set(window, "nailStillHere", true));
+  await inPage.getByRole("textbox", { name: "Subject" }).focus();
+  await page.keyboard.press("F5");
+  await page.keyboard.press("Control+R");
+  await expect(inPage.getByRole("textbox", { name: "Subject" })).toHaveValue("Resized");
+  expect(await page.evaluate(() => Reflect.get(window, "nailStillHere") === true)).toBe(true);
+
+  // The popped-out composer fills its OS window at every size.
+  await inPage.getByRole("button", { name: "Open in new window" }).click();
+  const popped = await popOutPage(id);
+  const host = popped.locator(`[data-part="pop-out"][data-window="${id}"]`);
+  await expect(host).toBeVisible();
+  for (const [width, height] of [
+    [640, 480],
+    [1000, 760],
+  ] as const) {
+    await shellControl(page, `resize-pop-outs:${String(width)}x${String(height)}`);
+    await expect
+      .poll(async () => Math.abs((await pageSize(popped)).width - width))
+      .toBeLessThanOrEqual(2);
+    const size = await pageSize(popped);
+    await expect
+      .poll(async () => {
+        const box = defined(await host.boundingBox(), "the pop-out page");
+        return [Math.round(box.width), Math.round(box.height)];
+      })
+      .toEqual([size.width, size.height]);
+    await expect(host.getByRole("button", { name: "Send", exact: true })).toBeInViewport();
+  }
+  await expect.poll(async () => (await menus())[`popout-${id}`]).toBe(false);
+  await clickClosing(host.getByRole("button", { name: "Return to main window" }), popped);
+  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+});

@@ -12,15 +12,10 @@ import {
   RESPONSIVE_SKIN_CSS,
   TWO_PANES_NARROW,
 } from "./skinResponsive";
+import { uiSources } from "../test/sources";
 
 /** Every component's source, to check that the parts named here exist. */
-const sources = Object.values(
-  import.meta.glob<string>(["../**/*.tsx", "!../**/*.test.tsx"], {
-    query: "?raw",
-    import: "default",
-    eager: true,
-  }),
-).join("\n");
+const sources = uiSources;
 
 /** The rule bodies whose selector list contains `selector`. */
 const rulesFor = (selector: string): string[] =>

@@ -52,6 +52,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
             // M5b (WP162): the New message button on top of the grouped
             // pane (default #true).
             ("compose", OptionType::Bool),
+            // ADR 0183: Check for new mail beside it (default #true).
+            ("check-mail", OptionType::Bool),
         ],
         &[],
         false,

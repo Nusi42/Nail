@@ -80,6 +80,17 @@ pub const CONTEXT_MENU_PARTS: &[ContextMenuPart] = &[
         part: "nav-rail",
         key_context: "global",
     },
+    // ADR 0184: the folder pane around its folders and accounts (Check for
+    // new mail, New message, Add account) and text — fields, editors and
+    // selectable text (Cut, Copy, Paste, Select all).
+    ContextMenuPart {
+        part: "folder-tree",
+        key_context: "global",
+    },
+    ContextMenuPart {
+        part: "text",
+        key_context: "global",
+    },
 ];
 
 /// The key context of a part's context menu (`"global"` for parts not in

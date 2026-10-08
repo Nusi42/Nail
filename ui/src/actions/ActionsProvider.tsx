@@ -63,6 +63,19 @@ export function isActivation(combo: string, target: EventTarget | null): boolean
   return target instanceof Element && target.closest(ACTIVATABLE) !== null;
 }
 
+/**
+ * The keys a browser reloads the page with (ADR 0183). Nail is never
+ * reloaded by them: wherever the focus is they run their binding (F5 and
+ * Ctrl+R: Check for new mail by default), or nothing.
+ */
+export const RELOAD_KEYS: ReadonlySet<string> = new Set([
+  "f5",
+  "shift+f5",
+  "ctrl+f5",
+  "ctrl+r",
+  "ctrl+shift+r",
+]);
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -119,7 +132,11 @@ export function ActionsProvider({
         event.target instanceof Element && event.target !== document.body ? event.target : null;
       const around = contextsOf(focused);
       let contexts: string[];
-      if (isEditable(event.target)) {
+      if (RELOAD_KEYS.has(combo)) {
+        event.preventDefault();
+        if (matcher.pending) return;
+        contexts = [...around, "global"];
+      } else if (isEditable(event.target)) {
         // In text fields only the field's own contexts apply, and only chords.
         if (!isFieldCombo(combo) || around.length === 0 || matcher.pending) return;
         contexts = around;
