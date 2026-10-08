@@ -7,40 +7,27 @@
 
 #![cfg(test)]
 
-use std::time::Duration;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{NIGHTINGALE as SUBJECT, demo_folder, eventually, remote_session};
+use nail_core::testing::{TempService, error_of};
 
 use nail_api::agents::{ActionActor, ActionAttribution};
 use nail_api::mail_actions::{MailActionKind, MailActionResult};
-use nail_api::remote::{
-    AuthRequest, AuthResponse, DEVICE_COOKIE, RemoteAccessPreset, RemoteGrant, SESSION_COOKIE,
-};
+use nail_api::remote::RemoteAccessPreset;
 use nail_api::{
     AccountId, ErrorCode, Folder, FolderId, FolderRole, MailAction, MessageId, MessageTarget,
     MoveTarget, Request, Response, ThreadSummary,
 };
-use nail_core::demo::{
-    DEMO_ACCOUNT_ID, DemoMail, MULTI_WORK_ID, demo_options, seed_demo, start_demo_multi_with,
-};
+use nail_core::demo::{DEMO_ACCOUNT_ID, DemoMail, MULTI_WORK_ID, start_demo_multi_with};
 use nail_core::{McpCore, Service, ServiceOptions};
 use nail_mcp::CoreAccess;
-use nail_remote_auth::{ClientMeta, Cookies, RemoteSessionCtx};
 
-const SUBJECT: &str = "Project Nightingale kickoff";
-
-struct Fixture {
-    service: Service,
-    _data: tempfile::TempDir,
-    _config: tempfile::TempDir,
-}
+type Fixture = TempService;
 
 fn setup() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(demo_options(options)).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
+    let temp = TempService::seeded();
+    let service = &temp.service;
     // Trash and Junk folders for deletes and junk (the demo corpus has
     // none).
     for (name, role) in [("Trash", FolderRole::Trash), ("Junk", FolderRole::Junk)] {
@@ -58,21 +45,7 @@ fn setup() -> Fixture {
             })
             .unwrap();
     }
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
-}
-
-fn folder(f: &Fixture, role: FolderRole) -> Folder {
-    f.service
-        .store()
-        .list_folders(&AccountId::new(DEMO_ACCOUNT_ID))
-        .unwrap()
-        .into_iter()
-        .find(|folder| folder.role == role)
-        .unwrap()
+    temp
 }
 
 async fn nightingale(f: &Fixture, folder: &Folder) -> ThreadSummary {
@@ -92,15 +65,27 @@ async fn nightingale(f: &Fixture, folder: &Folder) -> ThreadSummary {
     }
 }
 
+/// The inbox and its Nightingale conversation row.
+async fn inbox_nightingale(f: &Fixture) -> (Folder, ThreadSummary) {
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let row = nightingale(f, &inbox).await;
+    (inbox, row)
+}
+
+/// The whole conversation of `row` as listed in `folder`.
+fn whole(row: &ThreadSummary, folder: &Folder) -> Vec<MessageTarget> {
+    vec![MessageTarget::conversation(
+        row.id.clone(),
+        Some(folder.id.clone()),
+    )]
+}
+
 #[tokio::test]
 async fn reach_picks_the_listed_messages_or_the_whole_conversation() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let row = nightingale(&f, &inbox).await;
-    let target = vec![MessageTarget::conversation(
-        row.id.clone(),
-        Some(inbox.id.clone()),
-    )];
+    let (inbox, row) = inbox_nightingale(&f).await;
+
+    let target = whole(&row, &inbox);
     let resolve = |action| Request::ResolveMailTargets {
         targets: target.clone(),
         action,
@@ -141,16 +126,13 @@ async fn reach_picks_the_listed_messages_or_the_whole_conversation() {
 #[tokio::test]
 async fn archiving_a_conversation_leaves_the_users_replies_in_sent() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let sent = folder(&f, FolderRole::Sent);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let sent = demo_folder(&f.service, FolderRole::Sent);
+
     let result = match f
         .service
         .handle(Request::ApplyMailAction {
-            targets: vec![MessageTarget::conversation(
-                row.id.clone(),
-                Some(inbox.id.clone()),
-            )],
+            targets: whole(&row, &inbox),
             action: MailAction::Archive,
         })
         .await
@@ -179,8 +161,8 @@ async fn archiving_a_conversation_leaves_the_users_replies_in_sent() {
 #[tokio::test]
 async fn delete_permanently_only_from_trash_or_junk() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+
     match f
         .service
         .handle(Request::ApplyMailAction {
@@ -253,31 +235,14 @@ fn where_are(f: &Fixture, thread: &nail_api::ThreadId) -> Vec<(FolderId, usize)>
     out
 }
 
-fn issue_of(response: &Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (*code, localized.as_ref().map(|l| l.id.clone())),
-        other => panic!("{other:?}"),
-    }
-}
-
 #[tokio::test]
 async fn one_batch_one_undo_and_every_message_back_where_it_was() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let archive = folder(&f, FolderRole::Archive);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let archive = demo_folder(&f.service, FolderRole::Archive);
+
     let before = where_are(&f, &row.id);
-    let result = apply(
-        &f,
-        vec![MessageTarget::conversation(
-            row.id.clone(),
-            Some(inbox.id.clone()),
-        )],
-        MailAction::Archive,
-    )
-    .await;
+    let result = apply(&f, whole(&row, &inbox), MailAction::Archive).await;
     let batch = result.batch_id.clone().expect("archiving is undoable");
     assert!(result.undo_until.is_some());
     assert_eq!(result.op_ids.len(), 4, "one queued move per message");
@@ -305,7 +270,7 @@ async fn one_batch_one_undo_and_every_message_back_where_it_was() {
         .handle(Request::UndoMailAction { batch_id: batch })
         .await;
     assert_eq!(
-        issue_of(&again),
+        error_of(&again),
         (
             ErrorCode::Conflict,
             Some("mail-action-issue-undone-already".into())
@@ -318,7 +283,7 @@ async fn one_batch_one_undo_and_every_message_back_where_it_was() {
         })
         .await;
     assert_eq!(
-        issue_of(&unknown),
+        error_of(&unknown),
         (
             ErrorCode::NotFound,
             Some("mail-action-issue-undo-expired".into())
@@ -329,20 +294,12 @@ async fn one_batch_one_undo_and_every_message_back_where_it_was() {
 #[tokio::test]
 async fn delete_reaches_the_replies_in_sent_and_undo_returns_each() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let sent = folder(&f, FolderRole::Sent);
-    let trash = folder(&f, FolderRole::Trash);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let sent = demo_folder(&f.service, FolderRole::Sent);
+    let trash = demo_folder(&f.service, FolderRole::Trash);
+
     let before = where_are(&f, &row.id);
-    let result = apply(
-        &f,
-        vec![MessageTarget::conversation(
-            row.id.clone(),
-            Some(inbox.id.clone()),
-        )],
-        MailAction::Trash,
-    )
-    .await;
+    let result = apply(&f, whole(&row, &inbox), MailAction::Trash).await;
     assert_eq!(result.kind, MailActionKind::Trash);
     assert_eq!(result.message_ids.len(), 7, "four listed, three replies");
     let after = where_are(&f, &row.id);
@@ -385,12 +342,9 @@ async fn delete_reaches_the_replies_in_sent_and_undo_returns_each() {
 #[tokio::test]
 async fn read_state_and_flags_undo_per_message() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let row = nightingale(&f, &inbox).await;
-    let target = vec![MessageTarget::conversation(
-        row.id.clone(),
-        Some(inbox.id.clone()),
-    )];
+    let (inbox, row) = inbox_nightingale(&f).await;
+
+    let target = whole(&row, &inbox);
     let flags = |f: &Fixture| -> Vec<(MessageId, bool, bool)> {
         let (_, messages) = f.service.store().get_thread(&row.id, None).unwrap();
         let mut out: Vec<_> = messages
@@ -421,13 +375,10 @@ async fn read_state_and_flags_undo_per_message() {
 #[tokio::test]
 async fn snooze_and_junk_undo_their_side_effects() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+
     let before = where_are(&f, &row.id);
-    let target = vec![MessageTarget::conversation(
-        row.id.clone(),
-        Some(inbox.id.clone()),
-    )];
+    let target = whole(&row, &inbox);
     let snoozed = apply(
         &f,
         target.clone(),
@@ -474,22 +425,15 @@ async fn snooze_and_junk_undo_their_side_effects() {
 #[tokio::test]
 async fn an_agents_batch_is_its_own_to_undo() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+
     let mcp = McpCore(f.service.clone());
-    let by = ActionAttribution {
-        actor: ActionActor::mcp_client("claude"),
-        name: "Claude".into(),
-        on_behalf_of: None,
-    };
+    let by = ActionAttribution::new(ActionActor::mcp_client("claude"), "Claude");
     let result = match mcp
         .handle_write(
             &by,
             Request::ApplyMailAction {
-                targets: vec![MessageTarget::conversation(
-                    row.id.clone(),
-                    Some(inbox.id.clone()),
-                )],
+                targets: whole(&row, &inbox),
                 action: MailAction::Archive,
             },
         )
@@ -506,13 +450,9 @@ async fn an_agents_batch_is_its_own_to_undo() {
             batch_id: batch.clone(),
         })
         .await;
-    assert_eq!(issue_of(&user).0, ErrorCode::NotFound);
+    assert_eq!(error_of(&user).0, ErrorCode::NotFound);
     // … nor another agent's; the agent's own does.
-    let other = ActionAttribution {
-        actor: ActionActor::plugin("some.plugin"),
-        name: "Plug-in".into(),
-        on_behalf_of: None,
-    };
+    let other = ActionAttribution::new(ActionActor::plugin("some.plugin"), "Plug-in");
     let response = mcp
         .handle_write(
             &other,
@@ -521,90 +461,23 @@ async fn an_agents_batch_is_its_own_to_undo() {
             },
         )
         .await;
-    assert_eq!(issue_of(&response).0, ErrorCode::NotFound);
+    assert_eq!(error_of(&response).0, ErrorCode::NotFound);
     let response = mcp
         .handle_write(&by, Request::UndoMailAction { batch_id: batch })
         .await;
     assert!(matches!(response, Response::Queued { .. }), "{response:?}");
 }
 
-/// A user with `grant` and a browser paired to them.
-async fn remote_session(f: &Fixture, name: &str, grant: RemoteGrant) -> RemoteSessionCtx {
-    let user = match f
-        .service
-        .handle(Request::CreateRemoteUser {
-            name: name.into(),
-            display_name: None,
-            grant,
-        })
-        .await
-    {
-        Response::RemoteUserSaved { user } => user,
-        other => panic!("{other:?}"),
-    };
-    let code = match f
-        .service
-        .handle(Request::CreatePairingCode {
-            user_id: user.id.clone(),
-            device_name: Some("Phone".into()),
-            grant: None,
-            ttl_minutes: None,
-        })
-        .await
-    {
-        Response::PairingCodeCreated { code, .. } => code,
-        other => panic!("{other:?}"),
-    };
-    let auth = f.service.remote_auth();
-    let client = ClientMeta {
-        ip: Some("192.168.1.20".parse().unwrap()),
-        user_agent: Some("Test".into()),
-    };
-    let anonymous = Cookies::default();
-    let csrf = auth.csrf_token(&anonymous);
-    let reply = auth
-        .handle_auth(
-            AuthRequest::Pair {
-                code,
-                device_name: "Phone".into(),
-            },
-            &anonymous,
-            &client,
-            Some(&csrf),
-        )
-        .await;
-    assert!(
-        matches!(reply.response, AuthResponse::LoggedIn { .. }),
-        "{:?}",
-        reply.response
-    );
-    let mut cookies = Cookies::default();
-    for set in &reply.cookies {
-        let (pair, _) = set.split_once(';').unwrap_or((set, ""));
-        let (name, value) = pair.split_once('=').unwrap();
-        let value = Some(zeroize::Zeroizing::new(value.to_owned()));
-        match name {
-            SESSION_COOKIE => cookies.session = value,
-            DEVICE_COOKIE => cookies.device = value,
-            other => panic!("{other}"),
-        }
-    }
-    auth.resolve(&cookies, &client).unwrap().ctx
-}
-
 #[tokio::test]
 async fn a_remote_session_acts_on_what_its_grant_shows_and_undoes_its_own() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let sent = folder(&f, FolderRole::Sent);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let sent = demo_folder(&f.service, FolderRole::Sent);
+
     let mut grant = RemoteAccessPreset::NoSend.grant();
     grant.mail.excluded_folders = vec![sent.id.clone()];
-    let ctx = remote_session(&f, "no-sent", grant).await;
-    let target = vec![MessageTarget::conversation(
-        row.id.clone(),
-        Some(inbox.id.clone()),
-    )];
+    let ctx = remote_session(&f.service, "no-sent", grant).await;
+    let target = whole(&row, &inbox);
     // Delete reaches the replies in Sent — but not for this session, and it
     // is not refused for them either.
     let resolved = match f
@@ -650,7 +523,7 @@ async fn a_remote_session_acts_on_what_its_grant_shows_and_undoes_its_own() {
             batch_id: batch.clone(),
         })
         .await;
-    assert_eq!(issue_of(&user).0, ErrorCode::NotFound);
+    assert_eq!(error_of(&user).0, ErrorCode::NotFound);
     let undone = f
         .service
         .handle_remote(&ctx, Request::UndoMailAction { batch_id: batch })
@@ -669,31 +542,11 @@ async fn a_remote_session_acts_on_what_its_grant_shows_and_undoes_its_own() {
             },
         )
         .await;
-    assert_eq!(issue_of(&refused).0, ErrorCode::Forbidden);
+    assert_eq!(error_of(&refused).0, ErrorCode::Forbidden);
 }
 
 // ---------------------------------------------------------------------------
 // The demo-multi IMAP account against the mock server
-
-const TIMEOUT: Duration = Duration::from_secs(30);
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
 
 /// Lab-move messages per mailbox on the mock server.
 fn on_server(demo: &nail_core::demo::DemoMulti) -> Vec<(String, usize)> {
@@ -770,10 +623,7 @@ async fn the_lab_move_conversation_on_the_imap_server() {
         [("INBOX".to_owned(), 9), ("Sent".to_owned(), 3)],
         "the demo conversation"
     );
-    let target = vec![MessageTarget::conversation(
-        row.id.clone(),
-        Some(inbox.id.clone()),
-    )];
+    let target = whole(&row, &inbox);
     let act = |action: MailAction| {
         let (service, target) = (service.clone(), target.clone());
         async move {
@@ -865,18 +715,10 @@ async fn the_lab_move_conversation_on_the_imap_server() {
 #[tokio::test]
 async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let trash = folder(&f, FolderRole::Trash);
-    let row = nightingale(&f, &inbox).await;
-    apply(
-        &f,
-        vec![MessageTarget::conversation(
-            row.id.clone(),
-            Some(inbox.id.clone()),
-        )],
-        MailAction::Trash,
-    )
-    .await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let trash = demo_folder(&f.service, FolderRole::Trash);
+
+    apply(&f, whole(&row, &inbox), MailAction::Trash).await;
     let in_trash = where_are(&f, &row.id);
     assert_eq!(in_trash, vec![(trash.id.clone(), 7)]);
     let trash_row = nightingale(&f, &trash).await;
@@ -891,7 +733,7 @@ async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
         })
         .await;
     assert_eq!(
-        issue_of(&again),
+        error_of(&again),
         (
             ErrorCode::InvalidRequest,
             Some("mail-action-issue-no-messages".into())
@@ -905,7 +747,7 @@ async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
             action: MailAction::Trash,
         })
         .await;
-    assert_eq!(issue_of(&one).0, ErrorCode::InvalidRequest);
+    assert_eq!(error_of(&one).0, ErrorCode::InvalidRequest);
     assert_eq!(where_are(&f, &row.id), in_trash, "nothing was expunged");
 
     // A remote session without the permanent-delete scope cannot expunge
@@ -915,7 +757,7 @@ async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
         .mail
         .scopes
         .retain(|s| *s != nail_api::mcp::McpScope::PermanentDelete);
-    let ctx = remote_session(&f, "organize-only", grant).await;
+    let ctx = remote_session(&f.service, "organize-only", grant).await;
     let refused = f
         .service
         .handle_remote(
@@ -926,7 +768,7 @@ async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
             },
         )
         .await;
-    assert_eq!(issue_of(&refused).0, ErrorCode::Forbidden);
+    assert_eq!(error_of(&refused).0, ErrorCode::Forbidden);
     assert_eq!(where_are(&f, &row.id), in_trash);
 }
 
@@ -936,11 +778,11 @@ async fn trash_on_a_conversation_in_trash_never_deletes_for_good() {
 #[tokio::test]
 async fn delete_takes_the_whole_thread_and_a_restore_returns_replies_to_sent() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let archive = folder(&f, FolderRole::Archive);
-    let sent = folder(&f, FolderRole::Sent);
-    let trash = folder(&f, FolderRole::Trash);
-    let row = nightingale(&f, &inbox).await;
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let archive = demo_folder(&f.service, FolderRole::Archive);
+    let sent = demo_folder(&f.service, FolderRole::Sent);
+    let trash = demo_folder(&f.service, FolderRole::Trash);
+
     // The account's configured address is not the one its mail is sent
     // from: the addresses in Sent still tell which messages are the user's.
     let store = f.service.store();
@@ -963,15 +805,7 @@ async fn delete_takes_the_whole_thread_and_a_restore_returns_replies_to_sent() {
     .await;
     let before = where_are(&f, &row.id);
     assert!(before.contains(&(archive.id.clone(), 1)), "{before:?}");
-    let deleted = apply(
-        &f,
-        vec![MessageTarget::conversation(
-            row.id.clone(),
-            Some(inbox.id.clone()),
-        )],
-        MailAction::Trash,
-    )
-    .await;
+    let deleted = apply(&f, whole(&row, &inbox), MailAction::Trash).await;
     assert_eq!(deleted.message_ids.len(), 7, "inbox, archive and Sent");
     assert_eq!(where_are(&f, &row.id), vec![(trash.id.clone(), 7)]);
 

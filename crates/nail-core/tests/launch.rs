@@ -4,26 +4,19 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use nail_core::testing::TempService;
+
 use std::time::Duration;
 
 use nail_api::launch::{LaunchRequest, MailtoLink, OPENED_FILES_ACCOUNT_ID};
 use nail_api::{ErrorCode, Event, Request, Response};
-use nail_core::demo::demo_options;
-use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
-
-fn open() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    (Service::open(demo_options(options)).unwrap(), data, config)
-}
 
 #[tokio::test]
 async fn launch_requests_are_handed_out_once_and_announced() {
-    let (service, _d, _c) = open();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let mut events = service.subscribe();
     let compose = LaunchRequest::Compose {
         mailto: MailtoLink {
@@ -52,7 +45,7 @@ async fn launch_requests_are_handed_out_once_and_announced() {
 
 #[tokio::test]
 async fn an_opened_eml_file_is_imported_and_readable() {
-    let (service, _d, _c) = open();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("Offer.eml");
     std::fs::write(

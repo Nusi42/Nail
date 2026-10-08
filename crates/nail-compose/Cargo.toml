@@ -11,6 +11,8 @@ publish.workspace = true
 # Shared helpers (HTML escaping; ADR 0171).
 nail-util.workspace = true
 nail-api.workspace = true
+# The Markdown dialect shared with the reader (`markdown_options`).
+nail-mime.workspace = true
 mail-builder.workspace = true
 comrak.workspace = true
 css-inline.workspace = true
@@ -23,7 +25,6 @@ hex.workspace = true
 dom_query = { version = "0.28.0", default-features = false }
 
 [dev-dependencies]
-nail-mime.workspace = true
 pretty_assertions.workspace = true
 
 [lints]

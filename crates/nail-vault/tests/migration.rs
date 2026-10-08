@@ -11,10 +11,7 @@ use std::sync::Arc;
 
 use nail_api::engine::{EngineError, MemorySecretStore, SecretStore};
 use nail_api::security::{VaultPhase, VaultState, VaultStatus};
-use nail_api::{
-    Account, AccountKind, Address, Draft, ErrorCode, Flags, Folder, FolderRole, MessageSummary,
-    SecretRef,
-};
+use nail_api::{Draft, ErrorCode, MessageSummary, SecretRef};
 use nail_search::{CommitPolicy, IndexDocument, SearchIndex, query::TextField};
 use nail_store::{BlobHash, BlobStore, SEALED_MAGIC, Store, StoredMessage};
 use nail_vault::{INDEX_VERSION_FILE, Vault, VaultError};
@@ -73,51 +70,16 @@ fn seed() -> DataDir {
         hashes: Vec::new(),
     };
     let (store, blobs, _vault) = data.open();
-    store
-        .upsert_account(&Account {
-            id: "a1".into(),
-            name: "Ada".into(),
-            email: "ada@example.org".into(),
-            kind: AccountKind::Imap,
-        })
-        .unwrap();
-    store
-        .upsert_folder(&Folder {
-            id: "inbox".into(),
-            account_id: "a1".into(),
-            parent_id: None,
-            name: "INBOX".into(),
-            path: "INBOX".into(),
-            role: FolderRole::Inbox,
-            unread: 0,
-            total: 0,
-        })
-        .unwrap();
+    nail_store::testing::add_inbox(&store, "a1", "inbox");
     let mut hashes = Vec::new();
     let index = SearchIndex::open(data.index_dir(), CommitPolicy::default()).unwrap();
     for i in 0..MESSAGES {
         let raw = raw_message(i);
         let hash = blobs.put(&raw).unwrap();
         let mut m = StoredMessage::new(MessageSummary {
-            id: format!("m{i}").as_str().into(),
-            folder_id: "inbox".into(),
-            account_id: "a1".into(),
             subject: format!("Plan {i}"),
-            from: Some(Address {
-                name: Some("Ada".into()),
-                email: "ada@example.org".into(),
-            }),
-            to: Vec::new(),
-            date: "2026-09-01T10:00:00Z".into(),
-            flags: Flags::default(),
-            has_attachments: false,
             preview: format!("secret-preview-{i}"),
-            thread_id: None,
-            tags: Vec::new(),
-            duplicates: Vec::new(),
-            headers_only: false,
-            gmail: None,
-            exchange: None,
+            ..nail_api::testing::summary(&format!("m{i}"), "a1", "inbox")
         });
         m.blob_hash = Some(hash.clone());
         store.upsert_message(&m).unwrap();

@@ -4,23 +4,16 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use nail_core::testing::TempService;
+
 use nail_api::pim::{
     AddressBookSettings, CalendarComponent, CalendarSettings, ConflictChoice, ContactFields,
     EditScope, EventFields, PimImportSource, PimItemRef, PimSourceConfig, PimSourceSettings,
     PimTime, TaskFields,
 };
 use nail_api::{ErrorCode, Request, Response};
-use nail_core::{Service, ServiceOptions};
-
-fn setup() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    (service, data, config)
-}
 
 /// One request of every M3a kind.
 fn every_pim_request() -> Vec<Request> {
@@ -259,7 +252,7 @@ fn every_pim_request() -> Vec<Request> {
 
 #[tokio::test]
 async fn every_pim_request_is_served() {
-    let (service, _data, _config) = setup();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let requests = every_pim_request();
     assert_eq!(requests.len(), 52);
     for request in requests {

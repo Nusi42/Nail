@@ -52,8 +52,7 @@ export default {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stopped_plugin_runs_none_of_its_queued_work() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec(
         "queued",
         &["storage", "network:api.example.com"],
@@ -142,8 +141,7 @@ async fn stopping_interrupts_a_running_turn_at_once() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn refused_calls_count_against_the_per_call_log_cap() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", () => {

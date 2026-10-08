@@ -165,6 +165,12 @@ impl ApiError {
         Self::new(ErrorCode::InvalidRequest, message)
     }
 
+    /// [`ErrorCode::InvalidRequest`] with the user-facing text `id` (a
+    /// Fluent id without arguments).
+    pub fn invalid_localized(message: impl Into<String>, id: impl Into<String>) -> Self {
+        Self::invalid_request(message).with_localized(LocalizedMessage::new(id))
+    }
+
     /// Shorthand for [`ErrorCode::Unsupported`].
     pub fn unsupported(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unsupported, message)

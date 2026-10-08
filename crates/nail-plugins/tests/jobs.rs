@@ -357,14 +357,5 @@ async fn jobs_need_the_background_permission() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(fake.results("nobg", "RUN boot ").len(), 1);
     // Registering an undeclared job is refused.
-    host.start(spec(
-        "undeclared",
-        &[],
-        r#"export default { activate(ctx) {
-             try { ctx.jobs.register("x", () => {}); } catch (e) { nail.log.info("REG " + e.code); }
-           } };"#,
-    ))
-    .await
-    .unwrap();
-    assert_eq!(result(&fake, "undeclared", "REG ").await, "invalid_request");
+    assert_registration_refused(&fake, &host, r#"ctx.jobs.register("x", () => {})"#).await;
 }

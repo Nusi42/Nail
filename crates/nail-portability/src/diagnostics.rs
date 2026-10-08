@@ -362,10 +362,7 @@ fn preview_of(text: &str) -> String {
     if text.len() <= DIAGNOSTICS_PREVIEW_BYTES {
         return text.to_owned();
     }
-    let mut end = DIAGNOSTICS_PREVIEW_BYTES;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(DIAGNOSTICS_PREVIEW_BYTES);
     text[..end].to_owned()
 }
 

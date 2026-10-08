@@ -545,37 +545,41 @@ impl SieveSession {
     }
 }
 
-/// Reads the capability greeting: string lines up to `OK`. Anything else
-/// (an IMAP or POP3 greeting on the port) is not ManageSieve.
-async fn read_greeting(conn: &mut Conn) -> Result<(Vec<Vec<Token>>, Status)> {
+/// Reads data lines up to the status line; `refuse` stops at a data line
+/// (given how many were read before it) with an error.
+async fn read_until_status(
+    conn: &mut Conn,
+    refuse: impl Fn(&[Token], usize) -> Option<SieveError>,
+) -> Result<(Vec<Vec<Token>>, Status)> {
     let mut lines = Vec::new();
     loop {
         let tokens = conn.read_tokens().await?;
         if let Some(st) = status(&tokens) {
             return Ok((lines, st));
         }
-        if !matches!(tokens.first(), Some(Token::Str(_))) || lines.len() > 100 {
-            return Err(SieveError::NotManageSieve(format!(
-                "unexpected greeting {tokens:?}"
-            )));
+        if let Some(error) = refuse(&tokens, lines.len()) {
+            return Err(error);
         }
         lines.push(tokens);
     }
 }
 
+/// Reads the capability greeting: string lines up to `OK`. Anything else
+/// (an IMAP or POP3 greeting on the port) is not ManageSieve.
+async fn read_greeting(conn: &mut Conn) -> Result<(Vec<Vec<Token>>, Status)> {
+    read_until_status(conn, |tokens, read| {
+        (!matches!(tokens.first(), Some(Token::Str(_))) || read > 100)
+            .then(|| SieveError::NotManageSieve(format!("unexpected greeting {tokens:?}")))
+    })
+    .await
+}
+
 /// Reads data lines up to the status line.
 async fn read_response(conn: &mut Conn) -> Result<(Vec<Vec<Token>>, Status)> {
-    let mut lines = Vec::new();
-    loop {
-        let tokens = conn.read_tokens().await?;
-        if let Some(st) = status(&tokens) {
-            return Ok((lines, st));
-        }
-        if lines.len() > 10_000 {
-            return Err(SieveError::Protocol("response too long".to_owned()));
-        }
-        lines.push(tokens);
-    }
+    read_until_status(conn, |_, read| {
+        (read > 10_000).then(|| SieveError::Protocol("response too long".to_owned()))
+    })
+    .await
 }
 
 fn refused(command: &str, st: Status) -> SieveError {

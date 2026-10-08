@@ -6,8 +6,8 @@
 //! diagnostic that accompanies every message (logs, `message` fields).
 //!
 //! [`Catalog`] is a `fluent-bundle` over the same `locales/<lang>/*.ftl`
-//! catalogs the UI loads, embedded at build time ([`EN_FILES`],
-//! [`DE_FILES`]). Lookups fall back per key: the requested language first,
+//! catalogs the UI loads, embedded at build time ([`CATALOGS`], listed by
+//! `build.rs` from the `locales/` folders). Lookups fall back per key: the requested language first,
 //! then English, then the message id itself. [`english`] renders with the
 //! English catalog (the diagnostics), [`Catalog::for_locale`] with a
 //! requested language.
@@ -24,380 +24,7 @@ use fluent_bundle::{FluentArgs, FluentResource, FluentValue};
 use nail_api::localized::{LocalizedMessage, MessageArg};
 use unic_langid::LanguageIdentifier;
 
-/// The English catalogs (complete), by file name.
-pub const EN_FILES: &[(&str, &str)] = &[
-    (
-        "accounts.ftl",
-        include_str!("../../../locales/en/accounts.ftl"),
-    ),
-    ("agents.ftl", include_str!("../../../locales/en/agents.ftl")),
-    ("app.ftl", include_str!("../../../locales/en/app.ftl")),
-    (
-        "appearance.ftl",
-        include_str!("../../../locales/en/appearance.ftl"),
-    ),
-    ("common.ftl", include_str!("../../../locales/en/common.ftl")),
-    (
-        "compose.ftl",
-        include_str!("../../../locales/en/compose.ftl"),
-    ),
-    (
-        "composer.ftl",
-        include_str!("../../../locales/en/composer.ftl"),
-    ),
-    (
-        "core-agents.ftl",
-        include_str!("../../../locales/en/core-agents.ftl"),
-    ),
-    (
-        "core-appearance.ftl",
-        include_str!("../../../locales/en/core-appearance.ftl"),
-    ),
-    (
-        "core-crypto.ftl",
-        include_str!("../../../locales/en/core-crypto.ftl"),
-    ),
-    (
-        "core-dav.ftl",
-        include_str!("../../../locales/en/core-dav.ftl"),
-    ),
-    (
-        "core-editors.ftl",
-        include_str!("../../../locales/en/core-editors.ftl"),
-    ),
-    (
-        "core-desktop.ftl",
-        include_str!("../../../locales/en/core-desktop.ftl"),
-    ),
-    (
-        "core-ews.ftl",
-        include_str!("../../../locales/en/core-ews.ftl"),
-    ),
-    (
-        "core-exchange.ftl",
-        include_str!("../../../locales/en/core-exchange.ftl"),
-    ),
-    (
-        "core-gmail.ftl",
-        include_str!("../../../locales/en/core-gmail.ftl"),
-    ),
-    (
-        "core-graph.ftl",
-        include_str!("../../../locales/en/core-graph.ftl"),
-    ),
-    (
-        "core-ical.ftl",
-        include_str!("../../../locales/en/core-ical.ftl"),
-    ),
-    (
-        "core-mcp.ftl",
-        include_str!("../../../locales/en/core-mcp.ftl"),
-    ),
-    (
-        "core-pim.ftl",
-        include_str!("../../../locales/en/core-pim.ftl"),
-    ),
-    (
-        "core-plugins.ftl",
-        include_str!("../../../locales/en/core-plugins.ftl"),
-    ),
-    (
-        "core-portability.ftl",
-        include_str!("../../../locales/en/core-portability.ftl"),
-    ),
-    (
-        "core-scheduling.ftl",
-        include_str!("../../../locales/en/core-scheduling.ftl"),
-    ),
-    (
-        "core-sieve.ftl",
-        include_str!("../../../locales/en/core-sieve.ftl"),
-    ),
-    (
-        "core-triage.ftl",
-        include_str!("../../../locales/en/core-triage.ftl"),
-    ),
-    (
-        "core-vault.ftl",
-        include_str!("../../../locales/en/core-vault.ftl"),
-    ),
-    (
-        "core-shell.ftl",
-        include_str!("../../../locales/en/core-shell.ftl"),
-    ),
-    (
-        "core-windows.ftl",
-        include_str!("../../../locales/en/core-windows.ftl"),
-    ),
-    ("core.ftl", include_str!("../../../locales/en/core.ftl")),
-    (
-        "customization.ftl",
-        include_str!("../../../locales/en/customization.ftl"),
-    ),
-    (
-        "exchange.ftl",
-        include_str!("../../../locales/en/exchange.ftl"),
-    ),
-    ("gmail.ftl", include_str!("../../../locales/en/gmail.ftl")),
-    ("itip.ftl", include_str!("../../../locales/en/itip.ftl")),
-    (
-        "layout-editor.ftl",
-        include_str!("../../../locales/en/layout-editor.ftl"),
-    ),
-    ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
-    ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
-    (
-        "palette.ftl",
-        include_str!("../../../locales/en/palette.ftl"),
-    ),
-    ("pim.ftl", include_str!("../../../locales/en/pim.ftl")),
-    (
-        "plugins.ftl",
-        include_str!("../../../locales/en/plugins.ftl"),
-    ),
-    ("popout.ftl", include_str!("../../../locales/en/popout.ftl")),
-    (
-        "conversations.ftl",
-        include_str!("../../../locales/en/conversations.ftl"),
-    ),
-    (
-        "conversation-list.ftl",
-        include_str!("../../../locales/en/conversation-list.ftl"),
-    ),
-    (
-        "conversation-reader.ftl",
-        include_str!("../../../locales/en/conversation-reader.ftl"),
-    ),
-    (
-        "core-mail-actions.ftl",
-        include_str!("../../../locales/en/core-mail-actions.ftl"),
-    ),
-    (
-        "mail-actions.ftl",
-        include_str!("../../../locales/en/mail-actions.ftl"),
-    ),
-    (
-        "portability.ftl",
-        include_str!("../../../locales/en/portability.ftl"),
-    ),
-    ("print.ftl", include_str!("../../../locales/en/print.ftl")),
-    ("remote.ftl", include_str!("../../../locales/en/remote.ftl")),
-    ("rules.ftl", include_str!("../../../locales/en/rules.ftl")),
-    (
-        "scheduling.ftl",
-        include_str!("../../../locales/en/scheduling.ftl"),
-    ),
-    (
-        "security.ftl",
-        include_str!("../../../locales/en/security.ftl"),
-    ),
-    (
-        "settings.ftl",
-        include_str!("../../../locales/en/settings.ftl"),
-    ),
-    ("shell.ftl", include_str!("../../../locales/en/shell.ftl")),
-    ("sieve.ftl", include_str!("../../../locales/en/sieve.ftl")),
-    ("sync.ftl", include_str!("../../../locales/en/sync.ftl")),
-    ("system.ftl", include_str!("../../../locales/en/system.ftl")),
-    (
-        "toolbar-editor.ftl",
-        include_str!("../../../locales/en/toolbar-editor.ftl"),
-    ),
-    ("triage.ftl", include_str!("../../../locales/en/triage.ftl")),
-    (
-        "windows.ftl",
-        include_str!("../../../locales/en/windows.ftl"),
-    ),
-];
-
-/// The German catalogs (may be empty; English fills the gaps per key).
-pub const DE_FILES: &[(&str, &str)] = &[
-    (
-        "accounts.ftl",
-        include_str!("../../../locales/de/accounts.ftl"),
-    ),
-    ("agents.ftl", include_str!("../../../locales/de/agents.ftl")),
-    ("app.ftl", include_str!("../../../locales/de/app.ftl")),
-    (
-        "appearance.ftl",
-        include_str!("../../../locales/de/appearance.ftl"),
-    ),
-    ("common.ftl", include_str!("../../../locales/de/common.ftl")),
-    (
-        "compose.ftl",
-        include_str!("../../../locales/de/compose.ftl"),
-    ),
-    (
-        "composer.ftl",
-        include_str!("../../../locales/de/composer.ftl"),
-    ),
-    (
-        "core-agents.ftl",
-        include_str!("../../../locales/de/core-agents.ftl"),
-    ),
-    (
-        "core-appearance.ftl",
-        include_str!("../../../locales/de/core-appearance.ftl"),
-    ),
-    (
-        "core-crypto.ftl",
-        include_str!("../../../locales/de/core-crypto.ftl"),
-    ),
-    (
-        "core-dav.ftl",
-        include_str!("../../../locales/de/core-dav.ftl"),
-    ),
-    (
-        "core-editors.ftl",
-        include_str!("../../../locales/de/core-editors.ftl"),
-    ),
-    (
-        "core-desktop.ftl",
-        include_str!("../../../locales/de/core-desktop.ftl"),
-    ),
-    (
-        "core-ews.ftl",
-        include_str!("../../../locales/de/core-ews.ftl"),
-    ),
-    (
-        "core-exchange.ftl",
-        include_str!("../../../locales/de/core-exchange.ftl"),
-    ),
-    (
-        "core-gmail.ftl",
-        include_str!("../../../locales/de/core-gmail.ftl"),
-    ),
-    (
-        "core-graph.ftl",
-        include_str!("../../../locales/de/core-graph.ftl"),
-    ),
-    (
-        "core-ical.ftl",
-        include_str!("../../../locales/de/core-ical.ftl"),
-    ),
-    (
-        "core-mcp.ftl",
-        include_str!("../../../locales/de/core-mcp.ftl"),
-    ),
-    (
-        "core-pim.ftl",
-        include_str!("../../../locales/de/core-pim.ftl"),
-    ),
-    (
-        "core-plugins.ftl",
-        include_str!("../../../locales/de/core-plugins.ftl"),
-    ),
-    (
-        "core-portability.ftl",
-        include_str!("../../../locales/de/core-portability.ftl"),
-    ),
-    (
-        "core-scheduling.ftl",
-        include_str!("../../../locales/de/core-scheduling.ftl"),
-    ),
-    (
-        "core-sieve.ftl",
-        include_str!("../../../locales/de/core-sieve.ftl"),
-    ),
-    (
-        "core-triage.ftl",
-        include_str!("../../../locales/de/core-triage.ftl"),
-    ),
-    (
-        "core-vault.ftl",
-        include_str!("../../../locales/de/core-vault.ftl"),
-    ),
-    (
-        "core-shell.ftl",
-        include_str!("../../../locales/de/core-shell.ftl"),
-    ),
-    (
-        "core-windows.ftl",
-        include_str!("../../../locales/de/core-windows.ftl"),
-    ),
-    ("core.ftl", include_str!("../../../locales/de/core.ftl")),
-    (
-        "customization.ftl",
-        include_str!("../../../locales/de/customization.ftl"),
-    ),
-    (
-        "exchange.ftl",
-        include_str!("../../../locales/de/exchange.ftl"),
-    ),
-    ("gmail.ftl", include_str!("../../../locales/de/gmail.ftl")),
-    ("itip.ftl", include_str!("../../../locales/de/itip.ftl")),
-    (
-        "layout-editor.ftl",
-        include_str!("../../../locales/de/layout-editor.ftl"),
-    ),
-    ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
-    ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
-    (
-        "palette.ftl",
-        include_str!("../../../locales/de/palette.ftl"),
-    ),
-    ("pim.ftl", include_str!("../../../locales/de/pim.ftl")),
-    (
-        "plugins.ftl",
-        include_str!("../../../locales/de/plugins.ftl"),
-    ),
-    ("popout.ftl", include_str!("../../../locales/de/popout.ftl")),
-    (
-        "conversations.ftl",
-        include_str!("../../../locales/de/conversations.ftl"),
-    ),
-    (
-        "conversation-list.ftl",
-        include_str!("../../../locales/de/conversation-list.ftl"),
-    ),
-    (
-        "conversation-reader.ftl",
-        include_str!("../../../locales/de/conversation-reader.ftl"),
-    ),
-    (
-        "core-mail-actions.ftl",
-        include_str!("../../../locales/de/core-mail-actions.ftl"),
-    ),
-    (
-        "mail-actions.ftl",
-        include_str!("../../../locales/de/mail-actions.ftl"),
-    ),
-    (
-        "portability.ftl",
-        include_str!("../../../locales/de/portability.ftl"),
-    ),
-    ("print.ftl", include_str!("../../../locales/de/print.ftl")),
-    ("remote.ftl", include_str!("../../../locales/de/remote.ftl")),
-    ("rules.ftl", include_str!("../../../locales/de/rules.ftl")),
-    (
-        "scheduling.ftl",
-        include_str!("../../../locales/de/scheduling.ftl"),
-    ),
-    (
-        "security.ftl",
-        include_str!("../../../locales/de/security.ftl"),
-    ),
-    (
-        "settings.ftl",
-        include_str!("../../../locales/de/settings.ftl"),
-    ),
-    ("shell.ftl", include_str!("../../../locales/de/shell.ftl")),
-    ("sieve.ftl", include_str!("../../../locales/de/sieve.ftl")),
-    ("sync.ftl", include_str!("../../../locales/de/sync.ftl")),
-    ("system.ftl", include_str!("../../../locales/de/system.ftl")),
-    (
-        "toolbar-editor.ftl",
-        include_str!("../../../locales/de/toolbar-editor.ftl"),
-    ),
-    ("triage.ftl", include_str!("../../../locales/de/triage.ftl")),
-    (
-        "windows.ftl",
-        include_str!("../../../locales/de/windows.ftl"),
-    ),
-];
-
-/// The languages with embedded catalogs, English first.
-pub const LANGUAGES: &[&str] = &["en", "de"];
+include!(concat!(env!("OUT_DIR"), "/catalogs.rs"));
 
 /// A message without arguments (shorthand for [`LocalizedMessage::new`]).
 pub fn msg(id: &str) -> LocalizedMessage {
@@ -443,14 +70,26 @@ impl std::fmt::Debug for Catalog {
     }
 }
 
-fn english_bundle() -> &'static Bundle {
-    static EN: OnceLock<Bundle> = OnceLock::new();
-    EN.get_or_init(|| bundle("en", EN_FILES))
+/// The bundle of each language of [`LANGUAGES`], in that order.
+fn bundles() -> &'static [Bundle] {
+    static PER_LANGUAGE: OnceLock<Vec<Bundle>> = OnceLock::new();
+    PER_LANGUAGE.get_or_init(|| {
+        CATALOGS
+            .iter()
+            .map(|(language, files)| bundle(language, files))
+            .collect()
+    })
 }
 
-fn german_bundle() -> &'static Bundle {
-    static DE: OnceLock<Bundle> = OnceLock::new();
-    DE.get_or_init(|| bundle("de", DE_FILES))
+/// The bundle of `language` (one of [`LANGUAGES`]).
+fn language_bundle(language: &str) -> Option<&'static Bundle> {
+    let index = LANGUAGES.iter().position(|l| *l == language)?;
+    bundles().get(index)
+}
+
+fn english_bundle() -> &'static Bundle {
+    // English is the first language (build.rs).
+    &bundles()[0]
 }
 
 impl Catalog {
@@ -465,10 +104,10 @@ impl Catalog {
     /// The catalog for a BCP 47 tag (`de-AT`, `de_DE.UTF-8`, …): its
     /// language when Nail ships it, else English.
     pub fn for_locale(tag: Option<&str>) -> Self {
-        match language_of(tag) {
-            Some("de") => Self {
-                bundles: vec![german_bundle(), english_bundle()],
-                language: "de",
+        match language_of(tag).and_then(|l| Some((l, language_bundle(l)?))) {
+            Some((language, bundle)) if language != "en" => Self {
+                bundles: vec![bundle, english_bundle()],
+                language,
             },
             _ => Self::english(),
         }
@@ -560,6 +199,21 @@ pub fn locale_from(var: impl Fn(&str) -> Option<String>) -> Option<String> {
         .find(|v| !v.is_empty() && v != "C" && v != "POSIX")
 }
 
+/// Test support: fails when the `.rs` files under `<manifest_dir>/src`
+/// spell out a message id with one of `prefixes` that the English
+/// catalogs lack (see [`missing_message_ids`]). Pass
+/// `env!("CARGO_MANIFEST_DIR")`.
+///
+/// # Panics
+///
+/// When an id is missing, naming each one and its file.
+#[doc(hidden)]
+#[track_caller]
+pub fn assert_message_ids_in_catalog(manifest_dir: &str, prefixes: &[&str]) {
+    let missing = missing_message_ids(&std::path::Path::new(manifest_dir).join("src"), prefixes);
+    assert!(missing.is_empty(), "{missing:#?}");
+}
+
 /// Test support: message ids with one of `prefixes` that the `.rs` files
 /// under `dir` spell out as string literals (`"config-…"`) but the English
 /// catalogs lack, as `(file, id)`. Producers of localized messages call it
@@ -602,32 +256,26 @@ pub fn missing_message_ids(dir: &std::path::Path, prefixes: &[&str]) -> Vec<(Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeSet;
     use std::path::PathBuf;
 
-    fn locales() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../locales")
-    }
-
-    fn dir_files(lang: &str) -> BTreeSet<String> {
-        std::fs::read_dir(locales().join(lang))
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .filter(|n| {
-                std::path::Path::new(n)
-                    .extension()
-                    .is_some_and(|e| e == "ftl")
-            })
-            .collect()
-    }
-
-    /// The embedded lists name every catalog file (a new file needs a line
-    /// in [`EN_FILES`] / [`DE_FILES`]).
+    /// `build.rs` embeds every catalog folder and file, English first.
     #[test]
     fn every_catalog_file_is_embedded() {
-        for (lang, files) in [("en", EN_FILES), ("de", DE_FILES)] {
-            let embedded: BTreeSet<String> = files.iter().map(|(n, _)| (*n).to_owned()).collect();
-            assert_eq!(embedded, dir_files(lang), "{lang}");
+        let locales = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../locales");
+        assert_eq!(LANGUAGES, ["en", "de"]);
+        for (lang, files) in CATALOGS {
+            let on_disk = std::fs::read_dir(locales.join(lang))
+                .unwrap()
+                .filter(|e| {
+                    e.as_ref()
+                        .unwrap()
+                        .path()
+                        .extension()
+                        .is_some_and(|x| x == "ftl")
+                })
+                .count();
+            assert_eq!(files.len(), on_disk, "{lang}");
+            assert!(files.iter().any(|(n, _)| *n == "core.ftl"), "{lang}");
         }
     }
 
@@ -646,7 +294,7 @@ mod tests {
     /// Every embedded English catalog parses without Fluent syntax errors.
     #[test]
     fn english_catalogs_parse() {
-        for (name, text) in EN_FILES {
+        for (name, text) in CATALOGS[0].1 {
             if let Err((_, errors)) = FluentResource::try_new((*text).to_owned()) {
                 panic!("{name}: {errors:?}");
             }
@@ -679,6 +327,25 @@ mod tests {
 
     /// German falls back to English per key (the German catalogs are
     /// empty for now).
+    /// One text per meaning (wave Q2): a message that only references
+    /// another renders its text, with the caller's arguments.
+    #[test]
+    fn message_references_render_the_shared_text() {
+        assert_eq!(
+            english(&msg("config-pim-account-unknown").arg("name", "x")),
+            english(&msg("config-member-unknown").arg("name", "x"))
+        );
+        assert_eq!(
+            english(&msg("config-pim-account-unknown").arg("name", "x")),
+            "unknown account \"x\""
+        );
+        assert_eq!(english(&msg("export-format-mbox")), "mbox file");
+        assert_eq!(
+            english(&msg("exchange-rule-reason-disabled")),
+            "The rule is switched off."
+        );
+    }
+
     #[test]
     fn languages_fall_back_to_english() {
         let de = Catalog::for_locale(Some("de-AT"));

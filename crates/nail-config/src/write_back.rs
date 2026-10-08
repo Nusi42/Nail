@@ -21,7 +21,7 @@ use crate::kdl_edit::{
     Style, append_rendered, ensure_multiline, first_arg, parse_rendered, remove_node,
     replace_rendered, same_node, set_prop, str_prop, to_text,
 };
-use crate::kdl_util::is_kebab;
+use crate::kdl_util::{children, is_kebab};
 use crate::l10n::msg;
 use crate::layout::normalize_key;
 use crate::layout_edit;
@@ -124,12 +124,71 @@ pub(crate) struct LayoutEditor {
     pub(crate) style: Style,
 }
 
+/// The indexes of the children of `node` that are `<kind> "<name>"` nodes.
+fn named_children<'n>(
+    node: &'n KdlNode,
+    kind: &'n str,
+    name: &'n str,
+) -> impl Iterator<Item = usize> + 'n {
+    children(node)
+        .iter()
+        .enumerate()
+        .filter(move |(_, c)| c.name().value() == kind && first_arg(c) == Some(name))
+        .map(|(i, _)| i)
+}
+
+/// Refuses a toolbar name that is not kebab-case.
+fn check_toolbar_name(name: &str) -> Result<(), EditError> {
+    if is_kebab(name) {
+        Ok(())
+    } else {
+        Err(invalid(
+            msg("config-toolbar-name-invalid").arg("name", name),
+        ))
+    }
+}
+
+/// The normalized `key` of a binding in `context` (`global` or kebab-case).
+fn binding_key(context: &str, key: &str) -> Result<String, EditError> {
+    if context != "global" && !is_kebab(context) {
+        return Err(invalid(
+            msg("config-key-context-invalid").arg("context", context),
+        ));
+    }
+    normalize_key(key).map_err(invalid)
+}
+
 /// Where a `window "<name>"` node is: `body[top]`, or the `inner`-th child
 /// of the breakpoint `body[top]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Site {
     pub(crate) top: usize,
     pub(crate) inner: Option<usize>,
+}
+
+impl Site {
+    /// The `window` node in `body`.
+    pub(crate) fn node(self, body: &KdlDocument) -> Option<&KdlNode> {
+        let top = body.nodes().get(self.top)?;
+        match self.inner {
+            None => Some(top),
+            Some(inner) => top.children()?.nodes().get(inner),
+        }
+    }
+
+    /// The `window` node in `body`, for editing.
+    pub(crate) fn node_mut(self, body: &mut KdlDocument) -> &mut KdlNode {
+        let top = &mut body.nodes_mut()[self.top];
+        match self.inner {
+            None => top,
+            Some(inner) => &mut top.ensure_children().nodes_mut()[inner],
+        }
+    }
+
+    /// The depth of the `window` node: 1 at the top, 2 inside a breakpoint.
+    pub(crate) fn depth(self) -> usize {
+        if self.inner.is_some() { 2 } else { 1 }
+    }
 }
 
 impl LayoutEditor {
@@ -265,19 +324,10 @@ impl LayoutEditor {
             match node.name().value() {
                 "window" if first_arg(node) == Some(name) => sites.push(Site { top, inner: None }),
                 "breakpoint" => {
-                    for (inner, child) in node
-                        .children()
-                        .map_or(&[][..], KdlDocument::nodes)
-                        .iter()
-                        .enumerate()
-                    {
-                        if child.name().value() == "window" && first_arg(child) == Some(name) {
-                            sites.push(Site {
-                                top,
-                                inner: Some(inner),
-                            });
-                        }
-                    }
+                    sites.extend(named_children(node, "window", name).map(|inner| Site {
+                        top,
+                        inner: Some(inner),
+                    }));
                 }
                 _ => {}
             }
@@ -378,11 +428,7 @@ impl LayoutEditor {
                     .arg("breakpoint", node.breakpoint),
             )
         })?;
-        let body = self.body();
-        let window = match site.inner {
-            None => &mut body.nodes_mut()[site.top],
-            Some(inner) => &mut body.nodes_mut()[site.top].ensure_children().nodes_mut()[inner],
-        };
+        let window = site.node_mut(self.body());
         let mut current = window
             .children_mut()
             .as_mut()
@@ -418,16 +464,7 @@ impl LayoutEditor {
             if node_name == kind && first_arg(node) == Some(name) {
                 sites.push((None, top));
             } else if node_name == plural {
-                for (inner, child) in node
-                    .children()
-                    .map_or(&[][..], KdlDocument::nodes)
-                    .iter()
-                    .enumerate()
-                {
-                    if child.name().value() == kind && first_arg(child) == Some(name) {
-                        sites.push((Some(top), inner));
-                    }
-                }
+                sites.extend(named_children(node, kind, name).map(|inner| (Some(top), inner)));
             }
         }
         sites
@@ -438,11 +475,7 @@ impl LayoutEditor {
         name: &str,
         items: &[ToolbarItem],
     ) -> Result<(), EditError> {
-        if !is_kebab(name) {
-            return Err(invalid(
-                msg("config-toolbar-name-invalid").arg("name", name),
-            ));
-        }
+        check_toolbar_name(name)?;
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
         let Some(&(block, index)) = sites.last() else {
@@ -529,11 +562,7 @@ impl LayoutEditor {
     /// Removes the file's definitions of a toolbar; a full (non-sparse)
     /// file gets the default items written back.
     fn reset_toolbar(&mut self, name: &str) -> Result<(), EditError> {
-        if !is_kebab(name) {
-            return Err(invalid(
-                msg("config-toolbar-name-invalid").arg("name", name),
-            ));
-        }
+        check_toolbar_name(name)?;
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
         let mut emptied = Vec::new();
@@ -565,12 +594,7 @@ impl LayoutEditor {
     /// Removes the file's `bind` / `unbind` lines for a key; a full
     /// (non-sparse) file gets the default binding written back.
     fn reset_binding(&mut self, context: &str, key: &str) -> Result<(), EditError> {
-        if context != "global" && !is_kebab(context) {
-            return Err(invalid(
-                msg("config-key-context-invalid").arg("context", context),
-            ));
-        }
-        let key = normalize_key(key).map_err(invalid)?;
+        let key = binding_key(context, key)?;
         let style = self.style.clone();
         let blocks = Self::keys_blocks(self.body(), context);
         let mut emptied = Vec::new();
@@ -631,12 +655,7 @@ impl LayoutEditor {
         key: &str,
         action: Option<(&String, &Vec<Value>)>,
     ) -> Result<(), EditError> {
-        if context != "global" && !is_kebab(context) {
-            return Err(invalid(
-                msg("config-key-context-invalid").arg("context", context),
-            ));
-        }
-        let key = normalize_key(key).map_err(invalid)?;
+        let key = binding_key(context, key)?;
         let style = self.style.clone();
         let blocks = Self::keys_blocks(self.body(), context);
         let mut matches: Vec<(usize, usize)> = Vec::new();

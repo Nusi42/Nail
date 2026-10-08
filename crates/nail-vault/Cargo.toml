@@ -30,6 +30,9 @@ chrono.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+# Sample accounts, folders and messages (`nail_api::testing`, `nail_store::testing`).
+nail-api = { workspace = true, features = ["testing"] }
+nail-store = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 # End-to-end: a real search index over the encrypted directory.
 nail-search.workspace = true

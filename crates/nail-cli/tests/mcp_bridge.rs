@@ -4,7 +4,7 @@
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Arc;
 
 use nail_api::compose::Draft;
@@ -17,6 +17,50 @@ use nail_mcp::{
     AttachmentData, DataResult, McpData, McpServer, MessagePage, SearchOutcome, ServerOptions,
     ThreadData,
 };
+
+/// Registers the MCP client `cli` (default grant); returns its token.
+async fn create_client(store: &nail_store::Store) -> String {
+    let Response::McpClientCreated { token, .. } = nail_mcp::admin::handle(
+        store,
+        None,
+        Request::CreateMcpClient {
+            name: "cli".into(),
+            grant: McpGrant::default(),
+        },
+        |_| {},
+    )
+    .await
+    .unwrap() else {
+        panic!("created expected");
+    };
+    token
+}
+
+/// Initializes the MCP session over the bridge's stdio and lists the
+/// tools; returns stdin (closing it ends the bridge) and both answers.
+fn handshake(child: &mut Child) -> (ChildStdin, serde_json::Value, serde_json::Value) {
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut read_line = || {
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        serde_json::from_str::<serde_json::Value>(&line).unwrap()
+    };
+    writeln!(
+        stdin,
+        r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"2025-06-18","capabilities":{{}},"clientInfo":{{"name":"test","version":"1"}}}}}}"#
+    )
+    .unwrap();
+    let initialized = read_line();
+    writeln!(
+        stdin,
+        r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#
+    )
+    .unwrap();
+    writeln!(stdin, r#"{{"jsonrpc":"2.0","id":2,"method":"tools/list"}}"#).unwrap();
+    let tools = read_line();
+    (stdin, initialized, tools)
+}
 
 /// No data at all: every read is "not found".
 struct Empty;
@@ -94,19 +138,7 @@ async fn nail_mcp_bridges_stdio_to_the_server() {
     let server = McpServer::start(store.clone(), Arc::new(Empty), ServerOptions::default())
         .await
         .unwrap();
-    let Response::McpClientCreated { token, .. } = nail_mcp::admin::handle(
-        &store,
-        None,
-        Request::CreateMcpClient {
-            name: "cli".into(),
-            grant: McpGrant::default(),
-        },
-        |_| {},
-    )
-    .await
-    .unwrap() else {
-        panic!("created expected");
-    };
+    let token = create_client(&store).await;
     let url = server.url().to_owned();
 
     // The child process talks blocking stdio; run it off the runtime.
@@ -120,22 +152,7 @@ async fn nail_mcp_bridges_stdio_to_the_server() {
             .stderr(Stdio::inherit())
             .spawn()
             .unwrap();
-        let mut stdin = child.stdin.take().unwrap();
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
-        let mut read_line = || {
-            let mut line = String::new();
-            stdout.read_line(&mut line).unwrap();
-            serde_json::from_str::<serde_json::Value>(&line).unwrap()
-        };
-        writeln!(
-            stdin,
-            r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"2025-06-18","capabilities":{{}},"clientInfo":{{"name":"test","version":"1"}}}}}}"#
-        )
-        .unwrap();
-        let initialized = read_line();
-        writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#).unwrap();
-        writeln!(stdin, r#"{{"jsonrpc":"2.0","id":2,"method":"tools/list"}}"#).unwrap();
-        let tools = read_line();
+        let (stdin, initialized, tools) = handshake(&mut child);
         drop(stdin);
         let status = child.wait().unwrap();
         (initialized, tools, status.success())
@@ -193,20 +210,7 @@ async fn nail_mcp_starts_nail_headless_when_it_is_not_running() {
                 &nail_api::mcp::McpSettings { port: Some(port) },
             )
             .unwrap();
-        let Response::McpClientCreated { token, .. } = nail_mcp::admin::handle(
-            &store,
-            None,
-            Request::CreateMcpClient {
-                name: "cli".into(),
-                grant: McpGrant::default(),
-            },
-            |_| {},
-        )
-        .await
-        .unwrap() else {
-            panic!("created expected");
-        };
-        token
+        create_client(&store).await
     };
     let data_dir = data.path().to_path_buf();
     let config_dir = config.path().to_path_buf();
@@ -226,23 +230,7 @@ async fn nail_mcp_starts_nail_headless_when_it_is_not_running() {
                 .stderr(Stdio::piped())
                 .spawn()
                 .unwrap();
-            let mut stdin = child.stdin.take().unwrap();
-            let mut stdout = BufReader::new(child.stdout.take().unwrap());
-            let mut read_line = || {
-                let mut line = String::new();
-                stdout.read_line(&mut line).unwrap();
-                serde_json::from_str::<serde_json::Value>(&line).unwrap()
-            };
-            writeln!(
-                stdin,
-                r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"2025-06-18","capabilities":{{}},"clientInfo":{{"name":"test","version":"1"}}}}}}"#
-            )
-            .unwrap();
-            let initialized = read_line();
-            writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#)
-                .unwrap();
-            writeln!(stdin, r#"{{"jsonrpc":"2.0","id":2,"method":"tools/list"}}"#).unwrap();
-            let tools = read_line();
+            let (stdin, initialized, tools) = handshake(&mut child);
             // While it runs, the data directory is taken and announced.
             let locked = nail_store::DataDirLock::acquire(&data_dir, "test")
                 .err()

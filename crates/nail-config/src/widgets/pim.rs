@@ -107,33 +107,20 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn pim_widgets_are_unique_and_kebab_case() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-            assert!(spec.options.is_some(), "{} has typed options", spec.kind);
-        }
-    }
+    use crate::widgets::testing::parses;
 
     #[test]
-    fn pim_widgets_parse_in_a_layout() {
-        let text = "layout \"x\" extends=\"default\" {
-    window \"calendar-test\" {
-        stack {
-            mini-month time-zone=\"Europe/Berlin\"
-            calendar-list
-            calendar view=\"week\" views=\"day week month\" scroll-to=8 header=#true
-            agenda days=3
-            task-list sort=\"due\" show-completed=#false header=#true
-            contact-list page-size=50 header=#true
-            contact-card
-            pim-settings
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
+    fn pim_widgets_parse() {
+        assert!(parses(&[
+            "mini-month time-zone=\"Europe/Berlin\"",
+            "calendar-list",
+            "calendar view=\"week\" views=\"day week month\" scroll-to=8 header=#true",
+            "agenda days=3",
+            "task-list sort=\"due\" show-completed=#false header=#true",
+            "contact-list page-size=50 header=#true",
+            "contact-card",
+            "pim-settings",
+        ]));
     }
 
     #[test]
@@ -144,13 +131,7 @@ mod tests {
             "agenda colour=\"red\"",
             "calendar scroll-to=\"eight\"",
         ] {
-            let text = format!(
-                "layout \"x\" extends=\"default\" {{\n    window \"w\" {{\n        {bad}\n    }}\n}}\n"
-            );
-            assert!(
-                crate::parse_layout(&text, "layout.kdl").is_err(),
-                "{bad} should be refused"
-            );
+            assert!(!parses(&[bad]), "{bad} should be refused");
         }
     }
 }

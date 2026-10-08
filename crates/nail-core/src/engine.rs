@@ -147,6 +147,32 @@ pub(crate) async fn pause(
 impl Service {
     /// Records an account's connection state; broadcasts
     /// [`Event::AccountStatus`] when it changed.
+    /// Reports a failed sync pass of `account`: the state its error
+    /// means, and a [`nail_api::Event::SyncFailed`].
+    pub(crate) fn report_sync_failure(&self, account: &AccountId, err: &crate::CoreError) {
+        let code = err.code();
+        self.set_status(
+            account,
+            state_for_error(code),
+            Some((code, err.to_string(), err.localized())),
+        );
+        self.broadcast(Event::SyncFailed {
+            account_id: account.clone(),
+            code,
+            message: err.to_string(),
+            localized: err.localized(),
+        });
+    }
+
+    /// Reports an account whose engine cannot start: offline, with why.
+    pub(crate) fn report_offline(&self, account: &AccountId, err: &crate::CoreError) {
+        self.set_status(
+            account,
+            AccountState::Offline,
+            Some((err.code(), err.to_string(), err.localized())),
+        );
+    }
+
     pub(crate) fn set_status(
         &self,
         account: &AccountId,

@@ -42,8 +42,7 @@ export default {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn starts_runs_commands_and_filters_the_context() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let mut spec = spec("cmd", &["mail.read"], RUN_LOGS_CONTEXT);
     spec.grants = vec![grant("mail.read", Some(&["work"]))];
     host.start(spec).await.unwrap();
@@ -127,8 +126,7 @@ async fn starts_runs_commands_and_filters_the_context() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn without_mail_read_the_context_is_empty() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("blind", &[], RUN_LOGS_CONTEXT))
         .await
         .unwrap();
@@ -177,8 +175,7 @@ fn opened(fake: &Fake) -> Option<Box<nail_api::plugins::PluginDialog>> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dialogs_open_act_and_resolve_with_values() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let mut spec = spec("dlg", &["ui.dialogs", "mail.read"], DIALOG);
     spec.grants = vec![
         grant("ui.dialogs", None),
@@ -260,8 +257,7 @@ async fn dialogs_open_act_and_resolve_with_values() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dismissed_dialogs_and_unknown_buttons_resolve_with_null() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("dlg2", &["ui.dialogs"], DIALOG))
         .await
         .unwrap();
@@ -288,8 +284,7 @@ async fn dismissed_dialogs_and_unknown_buttons_resolve_with_null() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn stopping_a_plugin_closes_its_dialogs() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("dlg3", &["ui.dialogs"], DIALOG))
         .await
         .unwrap();
@@ -317,8 +312,7 @@ async fn stopping_a_plugin_closes_its_dialogs() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn invalid_dialogs_are_refused_and_logged() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export function activate(ctx) {
         ctx.commands.register("run", async () => {
@@ -407,8 +401,7 @@ async fn notifications_carry_the_client_and_are_limited() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn denied_permissions_are_forbidden_and_logged() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       const calls = {
         dialog: () => nail.ui.showDialog({ title: "x", body: [] }),
@@ -472,8 +465,7 @@ async fn denied_permissions_are_forbidden_and_logged() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn grants_can_change_while_running() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", async () => {
@@ -509,8 +501,7 @@ async fn grants_can_change_while_running() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn mail_reads_follow_account_grants_and_never_expose_encrypted_bodies() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       async function attempt(f) { try { return await f(); } catch (e) { return "ERR " + e.code; } }
       export default { activate(ctx) {
@@ -576,8 +567,7 @@ async fn mail_reads_follow_account_grants_and_never_expose_encrypted_bodies() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bodies_need_their_own_grant_and_virtual_accounts_expand() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       async function attempt(f) { try { return (await f()).id; } catch (e) { return e.code; } }
       export default { activate(ctx) {
@@ -608,8 +598,7 @@ async fn bodies_need_their_own_grant_and_virtual_accounts_expand() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn storage_round_trips_within_its_quota() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", async () => {
@@ -657,8 +646,7 @@ async fn storage_round_trips_within_its_quota() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn fetch_goes_through_the_core_to_declared_hosts_only() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       async function attempt(f) { try { return await f(); } catch (e) { return e.code; } }
       export default { activate(ctx) {
@@ -710,8 +698,7 @@ async fn fetch_goes_through_the_core_to_declared_hosts_only() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn settings_have_defaults_and_follow_updates() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         nail.log.info("START " + JSON.stringify(nail.settings.all()));
@@ -792,8 +779,7 @@ async fn logs_console_and_the_per_call_cap() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn panels_render_update_and_act() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       let clicks = 0;
       export default { activate(ctx) {
@@ -860,8 +846,7 @@ async fn panels_render_update_and_act() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn invalid_panel_trees_are_refused() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.panels.register("side", () => [{ type: "progress", value: 250 }]);
@@ -887,8 +872,7 @@ async fn invalid_panel_trees_are_refused() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn timers_fire_and_can_be_cleared() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate() {
         const cleared = setTimeout(() => nail.log.info("T cleared"), 20);
@@ -911,8 +895,7 @@ async fn timers_fire_and_can_be_cleared() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn relative_imports_inside_the_package_work() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let spec = spec_with_files(
         "mods",
         &[],
@@ -935,8 +918,7 @@ async fn relative_imports_inside_the_package_work() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn activate_may_be_async_and_plugins_see_their_identity() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export async function activate(ctx) {
         await new Promise((r) => setTimeout(r, 10));

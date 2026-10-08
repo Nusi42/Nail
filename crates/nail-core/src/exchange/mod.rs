@@ -52,6 +52,9 @@ use crate::engine::unix_now;
 use crate::error::{CoreError, Result};
 use crate::service::{Service, lock};
 
+/// Most pages of one folder or collection in one pass (a runaway cursor).
+pub(crate) const MAX_PAGES: u32 = 1_000;
+
 pub(crate) use sync::run;
 
 /// The Microsoft Graph endpoint Graph proposals and accounts point at
@@ -237,11 +240,7 @@ impl ExchangeCtl {
 /// The configuration of an Exchange account (`invalid_request` for
 /// others).
 pub(crate) fn exchange_account(service: &Service, id: &AccountId) -> Result<AccountConfig> {
-    let config = service.inner.accounts.config();
-    let account = config
-        .account(id)
-        .cloned()
-        .ok_or_else(|| ApiError::not_found(format!("account {id}")))?;
+    let account = service.account_config(id)?;
     if !matches!(account.incoming, IncomingServer::Exchange { .. }) {
         return Err(
             ApiError::invalid_request(format!("account {id} is not an Exchange account")).into(),
@@ -562,11 +561,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 rooms,
             })
         }
-        other => Err(ApiError::internal(format!(
-            "{} routed to Exchange",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("{} routed to Exchange", other.wire_type())).into())
+        }
     }
 }
 
@@ -821,22 +818,29 @@ pub(crate) async fn replies(service: &Service, account: &AccountId) -> Result<Au
         .await?)
 }
 
-/// The rooms' consent warning as an error.
-fn rooms_forbidden(
+/// A rooms answer of the server; a refusal records the rooms' consent
+/// warning and becomes its error.
+fn rooms_answer<T>(
     service: &Service,
     account: &AccountId,
-    err: &nail_api::engine::EngineError,
-) -> CoreError {
-    service
-        .inner
-        .exchange
-        .add_warning(account, ExchangeWarning::RoomsNeedConsent);
-    changed(service, account, &[ExchangeArea::Status]);
-    ApiError::new(ErrorCode::Forbidden, err.message.clone())
-        .with_localized(LocalizedMessage::new(
-            ExchangeWarning::RoomsNeedConsent.message_id(),
-        ))
-        .into()
+    answer: std::result::Result<T, nail_api::engine::EngineError>,
+) -> Result<T> {
+    match answer {
+        Ok(value) => Ok(value),
+        Err(err) if err.code == ErrorCode::Forbidden => {
+            service
+                .inner
+                .exchange
+                .add_warning(account, ExchangeWarning::RoomsNeedConsent);
+            changed(service, account, &[ExchangeArea::Status]);
+            Err(ApiError::new(ErrorCode::Forbidden, err.message)
+                .with_localized(LocalizedMessage::new(
+                    ExchangeWarning::RoomsNeedConsent.message_id(),
+                ))
+                .into())
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 /// `ListRoomLists`: the cache, or the server when asked (or never asked).
@@ -854,13 +858,7 @@ async fn room_lists(
         return Ok(cached);
     }
     let engine = engine_of(service, account)?;
-    let lists = match engine.room_lists().await {
-        Ok(lists) => lists,
-        Err(err) if err.code == ErrorCode::Forbidden => {
-            return Err(rooms_forbidden(service, &account.id, &err));
-        }
-        Err(err) => return Err(err.into()),
-    };
+    let lists = rooms_answer(service, &account.id, engine.room_lists().await)?;
     let (id, record) = (account.id.clone(), lists.clone());
     let now = unix_now();
     service
@@ -902,13 +900,7 @@ async fn find_rooms(
     let rooms = if fetched.is_some() && !refresh {
         cached
     } else {
-        let rooms = match engine.rooms(room_list).await {
-            Ok(rooms) => rooms,
-            Err(err) if err.code == ErrorCode::Forbidden => {
-                return Err(rooms_forbidden(service, &account.id, &err));
-            }
-            Err(err) => return Err(err.into()),
-        };
+        let rooms = rooms_answer(service, &account.id, engine.rooms(room_list).await)?;
         let (id, key, record) = (
             account.id.clone(),
             room_list.map(str::to_owned),

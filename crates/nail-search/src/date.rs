@@ -5,24 +5,11 @@ use crate::query::DateValue;
 
 /// Whether `year-month-day` is a real calendar day.
 pub(crate) fn is_valid_day(year: i32, month: u8, day: u8) -> bool {
-    (1..=12).contains(&month) && day >= 1 && day <= days_in_month(year, month)
+    nail_util::time::days_in_month(i64::from(year), u32::from(month))
+        .is_some_and(|max| day >= 1 && u32::from(day) <= max)
 }
 
-fn is_leap(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-fn days_in_month(year: i32, month: u8) -> u8 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 if is_leap(year) => 29,
-        2 => 28,
-        _ => 0,
-    }
-}
-
-/// Days since 1970-01-01 (Howard Hinnant's `days_from_civil`).
+/// Days since 1970-01-01 ([`nail_util::time::days_from_civil`]).
 pub(crate) fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
     nail_util::time::days_from_civil(i64::from(year), u32::from(month), u32::from(day))
 }

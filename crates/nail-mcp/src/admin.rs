@@ -43,16 +43,7 @@ pub fn token_hint(token: &str) -> String {
 
 /// Whether `request` is one of the requests [`handle`] answers.
 pub fn is_admin_request(request: &Request) -> bool {
-    matches!(
-        request,
-        Request::ListMcpClients
-            | Request::CreateMcpClient { .. }
-            | Request::UpdateMcpGrants { .. }
-            | Request::RevokeMcpClient { .. }
-            | Request::ListMcpAudit { .. }
-            | Request::GetMcpServerInfo
-            | Request::UpdateMcpRateLimits { .. }
-    )
+    matches!(request, nail_api::mcp_admin_requests!())
 }
 
 /// Answers one administration request. `server` is the running server's
@@ -149,10 +140,7 @@ pub async fn handle(
         }),
         other => Err(ApiError::invalid_request(format!(
             "not an MCP administration request: {}",
-            serde_json::to_value(&other)
-                .ok()
-                .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_owned))
-                .unwrap_or_default()
+            other.wire_type()
         ))),
     }
 }

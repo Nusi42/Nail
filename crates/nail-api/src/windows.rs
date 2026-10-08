@@ -708,7 +708,6 @@ pub fn check_pop_out(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
@@ -1055,31 +1054,13 @@ mod tests {
 
     #[test]
     fn labels() {
-        assert_labels(WindowSnap::ALL, WindowSnap::as_str, WindowSnap::message_id);
-        assert_labels(
-            WindowInstances::ALL,
-            WindowInstances::as_str,
-            WindowInstances::message_id,
-        );
-        assert_labels(
-            WindowFrameIssue::ALL,
-            WindowFrameIssue::as_str,
-            WindowFrameIssue::message_id,
-        );
-        assert_labels(
-            WindowStateIssue::ALL,
-            WindowStateIssue::as_str,
-            WindowStateIssue::message_id,
-        );
-        assert_labels(
-            PopOutChange::ALL,
-            PopOutChange::as_str,
-            PopOutChange::message_id,
-        );
-        assert_labels(
-            PopOutIssue::ALL,
-            PopOutIssue::as_str,
-            PopOutIssue::message_id,
+        assert_wire_labels!(
+            WindowSnap,
+            WindowInstances,
+            WindowFrameIssue,
+            WindowStateIssue,
+            PopOutChange,
+            PopOutIssue
         );
     }
 }

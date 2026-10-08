@@ -70,7 +70,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} is not a sync-policy request",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -134,28 +134,11 @@ pub(crate) fn set_rule(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::accounts::{
-        AuthConfig, BodyPolicy, ImapOptions, ServerEndpoint, SyncPolicy, TlsMode,
-    };
+    use nail_api::accounts::{BodyPolicy, SyncPolicy};
     use nail_api::domain::FolderRole;
 
     fn account() -> AccountConfig {
         AccountConfig {
-            id: "work".into(),
-            name: "Work".into(),
-            email: "ada@example.org".into(),
-            enabled: true,
-            incoming: IncomingServer::Imap {
-                server: ServerEndpoint {
-                    host: "imap.example.org".into(),
-                    port: 993,
-                    tls: TlsMode::Implicit,
-                    auth: AuthConfig::None,
-                },
-                options: ImapOptions::default(),
-            },
-            outgoing: None,
-            identities: vec![],
             sync: SyncPolicy {
                 bodies: Some(BodyPolicy::Recent { days: 30 }),
                 folders: vec![FolderPolicy {
@@ -165,9 +148,7 @@ mod tests {
                     idle: None,
                 }],
             },
-            save_sent_copy: None,
-            authserv_ids: vec![],
-            sieve: None,
+            ..nail_api::testing::imap_account()
         }
     }
 

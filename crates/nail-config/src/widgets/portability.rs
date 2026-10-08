@@ -22,48 +22,26 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn portability_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            import-export show-jobs=#false
-            backup-restore show-jobs=#true
-            diagnostics
-            security-recovery-key
-            security-smartcards
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-    }
+    use crate::widgets::testing::parses;
+
+    const KINDS: [&str; 5] = [
+        "import-export",
+        "backup-restore",
+        "diagnostics",
+        "security-recovery-key",
+        "security-smartcards",
+    ];
 
     #[test]
-    fn unknown_options_are_refused() {
-        for widget in [
-            "import-export",
-            "backup-restore",
-            "diagnostics",
-            "security-recovery-key",
-            "security-smartcards",
-        ] {
-            let text = format!(
-                "layout \"x\" extends=\"default\" {{
-    window \"main\" {{
-        stack {{
-            {widget} show-everything=#true
-        }}
-    }}
-}}
-"
-            );
+    fn portability_widgets_parse() {
+        assert!(parses(&[
+            "import-export show-jobs=#false",
+            "backup-restore show-jobs=#true",
+        ]));
+        assert!(parses(&KINDS));
+        for widget in KINDS {
             assert!(
-                crate::parse_layout(&text, "layout.kdl").is_err(),
+                !parses(&[&format!("{widget} show-everything=#true")]),
                 "{widget}"
             );
         }

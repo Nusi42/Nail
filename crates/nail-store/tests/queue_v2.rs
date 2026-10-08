@@ -2,6 +2,7 @@
 //! sync-side merge that keeps pending local changes.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use std::future::Future;
@@ -347,18 +348,34 @@ fn tag_changes_apply_locally() {
         store.get_message(&"m1".into()).unwrap().summary.tags,
         ["later", "work"]
     );
-    let api = nail_api::FlagChange {
+    let change = FlagChange {
         flagged: Some(true),
         add_tags: vec!["x".into()],
-        ..nail_api::FlagChange::default()
+        ..FlagChange::default()
     };
-    let change = FlagChange::from(api);
-    assert_eq!(change.flagged, Some(true));
-    assert_eq!(change.add_tags, ["x"]);
-    // Old payloads without tags still parse, new ones omit empty lists.
+    // Old payloads without tags still parse, new ones omit unset fields.
+    let op = Operation::UpdateFlags {
+        message_id: "m1".into(),
+        change,
+    };
+    let stored = serde_json::to_value(&op).unwrap();
     assert_eq!(
-        serde_json::to_value(&change).unwrap(),
-        json!({"flagged": true, "add_tags": ["x"]})
+        stored,
+        json!({"type": "update_flags", "message_id": "m1", "change": {"flagged": true, "add_tags": ["x"]}})
+    );
+    assert_eq!(serde_json::from_value::<Operation>(stored).unwrap(), op);
+    assert_eq!(
+        serde_json::from_value::<Operation>(
+            json!({"type": "update_flags", "message_id": "m1", "change": {"seen": true}})
+        )
+        .unwrap(),
+        Operation::UpdateFlags {
+            message_id: "m1".into(),
+            change: FlagChange {
+                seen: Some(true),
+                ..FlagChange::default()
+            }
+        }
     );
 }
 

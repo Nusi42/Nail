@@ -8,8 +8,12 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{desktop_service, next_event};
+use nail_core::testing::error_of;
+
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use nail_api::desktop::{
     DefaultAppState, DefaultAppsStatus, DesktopChange, DesktopHost, DesktopNotifier,
@@ -163,26 +167,6 @@ fn update() -> UpdateInfo {
     }
 }
 
-fn open(host: Option<Arc<FakeHost>>) -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    (service, data, config)
-}
-
-fn error_of(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("error expected, got {other:?}"),
-    }
-}
-
 fn status_of(response: Response) -> nail_api::UpdateStatus {
     match response {
         Response::UpdateStatus { status } => *status,
@@ -190,16 +174,9 @@ fn status_of(response: Response) -> nail_api::UpdateStatus {
     }
 }
 
-async fn next_event(events: &mut tokio::sync::broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(5), events.recv())
-        .await
-        .unwrap()
-        .unwrap()
-}
-
 #[tokio::test]
 async fn without_the_desktop_only_the_first_run_is_served() {
-    let (service, _d, _c) = open(None);
+    let (service, _d, _c) = desktop_service::<FakeHost>(None);
     for request in [
         Request::GetInstallation,
         Request::GetUpdateStatus,
@@ -230,7 +207,7 @@ async fn without_the_desktop_only_the_first_run_is_served() {
 #[tokio::test]
 async fn the_updater_follows_settings_and_states() {
     let host = FakeHost::with(nsis());
-    let (service, _d, _c) = open(Some(host.clone()));
+    let (service, _d, _c) = desktop_service(Some(host.clone()));
     // The stored (default) settings reach the host when the core opens.
     assert_eq!(
         host.state.lock().unwrap().applied_updates,
@@ -302,7 +279,7 @@ async fn the_updater_follows_settings_and_states() {
 async fn policy_disables_the_updater_and_locks_the_channel() {
     let host = FakeHost::with(msi());
     host.set_update(UpdateState::Available { update: update() });
-    let (service, _d, _c) = open(Some(host.clone()));
+    let (service, _d, _c) = desktop_service(Some(host.clone()));
     let status = status_of(service.handle(Request::GetUpdateStatus).await);
     assert_eq!(
         status.state,
@@ -343,7 +320,7 @@ async fn policy_disables_the_updater_and_locks_the_channel() {
 #[tokio::test]
 async fn desktop_settings_are_stored_and_applied() {
     let host = FakeHost::with(nsis());
-    let (service, _d, _c) = open(Some(host.clone()));
+    let (service, _d, _c) = desktop_service(Some(host.clone()));
     let Response::DesktopSettings {
         settings,
         dev_endpoint_url,
@@ -404,7 +381,7 @@ async fn desktop_settings_are_stored_and_applied() {
 #[tokio::test]
 async fn default_apps_come_from_the_host() {
     let host = FakeHost::with(msi());
-    let (service, _d, _c) = open(Some(host.clone()));
+    let (service, _d, _c) = desktop_service(Some(host.clone()));
     let Response::DefaultApps {
         status,
         settings_uri,
@@ -487,7 +464,7 @@ async fn a_mapi_message_becomes_a_draft_the_ui_opens() {
 
 #[tokio::test]
 async fn mapi_errors_map_to_mapi_codes() {
-    let (service, _d, _c) = open(None);
+    let (service, _d, _c) = desktop_service::<FakeHost>(None);
     let files = tempfile::tempdir().unwrap();
     let missing = files.path().join("gone.pdf");
     assert_eq!(

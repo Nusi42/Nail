@@ -156,16 +156,7 @@ mod m5b_tests {
 
     #[test]
     fn folder_tree_options_are_checked() {
-        let layout = |widget: &str| {
-            format!(
-                "layout \"x\" extends=\"default\" {{
-    window \"w\" {{
-        {widget}
-    }}
-}}
-"
-            )
-        };
+        let layout = |widget: &str| crate::widgets::testing::layout_with(&[widget]);
         crate::parse_layout(
             &layout("folder-tree sections=\"accounts favorites\" favorites=\"all-inboxes drafts\" collapsible=#false account-colors=#true compose=#false"),
             "layout.kdl",
@@ -195,14 +186,7 @@ mod m5b_tests {
 #[cfg(test)]
 mod p2_tests {
     fn layout(widget: &str) -> String {
-        format!(
-            "layout \"x\" extends=\"default\" {{
-    window \"w\" {{
-        {widget}
-    }}
-}}
-"
-        )
+        crate::widgets::testing::layout_with(&[widget])
     }
 
     /// P2 (ADR 0148): the conversation modes of the message list.
@@ -224,14 +208,7 @@ mod p2_tests {
 #[cfg(test)]
 mod p2_reader_tests {
     fn layout(widget: &str) -> String {
-        format!(
-            "layout \"x\" extends=\"default\" {{
-    window \"w\" {{
-        {widget}
-    }}
-}}
-"
-        )
+        crate::widgets::testing::layout_with(&[widget])
     }
 
     /// P2 WP203: the reader's card feed and its card widgets.

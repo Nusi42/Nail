@@ -11,16 +11,10 @@
 
 use nail_api::editing::HistoryScope;
 use nail_api::{ApiError, Event, Request, Response};
-use nail_config::{ConfigManager, ConfigUpdate};
+use nail_config::ConfigManager;
 
 use crate::error::Result;
 use crate::service::Service;
-
-fn broadcast(service: &Service, updates: &[ConfigUpdate]) {
-    for update in updates {
-        service.broadcast(update.to_event());
-    }
-}
 
 /// Sends the scope's history (after a write, an undo / redo, or a change of
 /// its files on disk).
@@ -32,10 +26,19 @@ pub(crate) fn broadcast_history(service: &Service, scope: HistoryScope) {
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
+    on_config(service, request, handle_blocking).await
+}
+
+/// Runs `handler` for a request on the config files: off the async
+/// runtime, since the config manager does blocking file I/O.
+pub(crate) async fn on_config(
+    service: &Service,
+    request: Request,
+    handler: fn(&Service, &ConfigManager, Request) -> Result<Response>,
+) -> Result<Response> {
     let config = service.config().clone();
-    // The config manager does blocking file I/O.
     let service = service.clone();
-    tokio::task::spawn_blocking(move || handle_blocking(&service, &config, request)).await?
+    tokio::task::spawn_blocking(move || handler(&service, &config, request)).await?
 }
 
 fn handle_blocking(
@@ -49,7 +52,7 @@ fn handle_blocking(
         },
         Request::UndoEdit { scope, force } => {
             let (history, updates) = config.undo_edit(scope, force)?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             service.broadcast(Event::EditHistoryChanged {
                 history: history.clone(),
             });
@@ -57,7 +60,7 @@ fn handle_blocking(
         }
         Request::RedoEdit { scope, force } => {
             let (history, updates) = config.redo_edit(scope, force)?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             service.broadcast(Event::EditHistoryChanged {
                 history: history.clone(),
             });
@@ -73,7 +76,7 @@ fn handle_blocking(
         } => {
             let (appearance, updates) =
                 config.edit_theme(&target, &patches, base_revision.as_deref())?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_history(service, HistoryScope::Appearance);
             Response::Themes {
                 appearance: Box::new(appearance),
@@ -81,7 +84,7 @@ fn handle_blocking(
         }
         Request::DuplicateTheme { theme_id, name } => {
             let (theme_id, appearance, updates) = config.duplicate_theme(&theme_id, &name)?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_history(service, HistoryScope::Appearance);
             Response::ThemeSaved {
                 theme_id,
@@ -95,7 +98,7 @@ fn handle_blocking(
         } => {
             let (theme_id, appearance, updates) =
                 config.rename_theme(&theme_id, &name, new_id.as_deref())?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_history(service, HistoryScope::Appearance);
             Response::ThemeSaved {
                 theme_id,
@@ -104,7 +107,7 @@ fn handle_blocking(
         }
         Request::DeleteTheme { theme_id } => {
             let (appearance, updates) = config.delete_theme(&theme_id)?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_history(service, HistoryScope::Appearance);
             Response::Themes {
                 appearance: Box::new(appearance),
@@ -113,7 +116,7 @@ fn handle_blocking(
         other => {
             return Err(ApiError::internal(format!(
                 "{} routed to the editing module",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -129,13 +132,8 @@ mod tests {
 
     /// A service on temporary config / data directories (no watcher).
     fn service() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-        let config = tempfile::tempdir().unwrap();
-        let data = tempfile::tempdir().unwrap();
-        let mut options = crate::ServiceOptions::new(data.path(), config.path());
-        options.watch_config = false;
-        options.start_engines = false;
-        let service = Service::open(crate::demo::demo_options(options)).unwrap();
-        (service, config, data)
+        let t = crate::testing::TempService::quiet();
+        (t.service, t.config, t.data)
     }
 
     fn history(response: Response) -> nail_api::editing::EditHistory {

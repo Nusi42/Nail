@@ -345,11 +345,7 @@ fn get_key_in(conn: &rusqlite::Connection, n: i64) -> Result<StoredKey> {
         .ok_or_else(|| Error::not_found("key", key_id(n)))
 }
 
-fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
+use nail_util::time::unix_now as now;
 
 fn write_emails(tx: &Transaction<'_>, n: i64, emails: &[String]) -> Result<()> {
     tx.execute("DELETE FROM crypto_key_emails WHERE key_id = ?1", [n])?;

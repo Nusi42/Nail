@@ -5,8 +5,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::next_event;
+
 use std::sync::Arc;
-use std::time::Duration;
 
 use base64::Engine as _;
 use nail_api::appearance::{
@@ -18,7 +21,6 @@ use nail_core::demo::{DEMO_ACCOUNT_ID, seed_demo};
 use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
-use tokio::sync::broadcast;
 
 struct Fixture {
     service: Service,
@@ -43,13 +45,6 @@ fn open() -> Fixture {
         config_dir,
         _data_dir: data_dir,
     }
-}
-
-async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(10), rx.recv())
-        .await
-        .expect("no event within 10 s")
-        .unwrap()
 }
 
 async fn themes(service: &Service, request: Request) -> Appearance {

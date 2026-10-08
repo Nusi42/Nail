@@ -19,7 +19,7 @@
 //!   (categories, automatic replies, rules, Focused Inbox) through the
 //!   settings / classify calls.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use nail_api::engine::{
@@ -45,26 +45,22 @@ use nail_store::exchange::{
 use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
 
-use super::{RunningEngine, changed, exchange_parts};
-use crate::engine::{Signals, state_for_error, stopped, unix_now};
+use super::{MAX_PAGES, RunningEngine, changed, exchange_parts};
+use crate::engine::{Signals, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
-use crate::ingest::{IncomingMessage, ingest_with_remote};
-use crate::replay::{OpExecutor, replay_account};
+use crate::ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message};
+use crate::replay::{
+    Grouped, OpExecutor, group_results, group_slots, recorded_or, replay_account, sort_group,
+};
 use crate::service::{Service, lock};
 
 /// Settings (categories, automatic replies, rules) are read every this
 /// many passes (and after local changes or "Sync").
 pub(crate) const SETTINGS_EVERY: u32 = 10;
 
-/// Messages fetched per store transaction.
-const INGEST_CHUNK: usize = 25;
-
 /// Longest a streaming wait lasts before a pass runs anyway.
 const STREAM_WAIT_SECS: u32 = 60;
-
-/// Most pages of one folder in one pass (a runaway cursor).
-const MAX_PAGES: u32 = 1_000;
 
 /// How often a pass syncs the folders of a mailbox again because a folder
 /// reported messages removed after they were synced (see
@@ -122,11 +118,7 @@ pub(crate) async fn run(
     let (engine, batch) = match super::setup::engines_for(&service, &account) {
         Ok(engines) => engines,
         Err(err) => {
-            service.set_status(
-                &account.id,
-                AccountState::Offline,
-                Some((err.code(), err.to_string(), err.localized())),
-            );
+            service.report_offline(&account.id, &err);
             stopped(&mut stop).await;
             return;
         }
@@ -180,19 +172,8 @@ pub(crate) async fn run(
                     .unwrap_or_else(|| state.poll.next_delay())
             }
             Err(err) => {
-                let code = err.code();
                 tracing::info!(account = %account.id, %err, "Exchange sync failed");
-                service.set_status(
-                    &account.id,
-                    state_for_error(code),
-                    Some((code, err.to_string(), err.localized())),
-                );
-                service.broadcast(Event::SyncFailed {
-                    account_id: account.id.clone(),
-                    code,
-                    message: err.to_string(),
-                    localized: err.localized(),
-                });
+                service.report_sync_failure(&account.id, &err);
                 let engine_err: EngineError = err.into();
                 if let Some(secs) = engine_err.retry_after_secs {
                     record_throttle(&service, &account.id, secs).await;
@@ -271,53 +252,102 @@ pub(crate) async fn run(
                             push_ok = false;
                         }
                     },
-                    () = signals.sync.notified() => {
-                        state.poll.user_activity();
-                        state.folders.wake_all();
-                        state.settings_due = true;
-                        break;
-                    }
-                    () = signals.replay.notified() => {
-                        replay(&service, &account.id, &running).await;
-                        super::pim::replay_writes(&service, &account, running.engine.as_ref()).await;
-                    }
-                    () = running.settings_wake.notified() => {
-                        state.settings_due = true;
-                        break;
-                    }
-                    () = stopped(&mut stop) => {
-                        service.inner.exchange.unregister(&account.id, &running);
-                        return;
+                    wake = next_wake(&signals, &running, &mut stop) => {
+                        match woken(wake, &service, &account, &running, &mut state).await {
+                            Next::Pass => break,
+                            Next::Wait => {}
+                            Next::Stop => return,
+                        }
                     }
                 }
                 continue;
             }
             tokio::select! {
                 () = tokio::time::sleep_until(deadline) => break,
-                () = signals.sync.notified() => {
-                    state.poll.user_activity();
-                    state.folders.wake_all();
-                    state.settings_due = true;
-                    break;
-                }
-                () = signals.replay.notified() => {
-                    state.poll.user_activity();
-                    replay(&service, &account.id, &running).await;
-                    super::pim::replay_writes(&service, &account, running.engine.as_ref()).await;
-                }
-                () = running.settings_wake.notified() => {
-                    state.settings_due = true;
-                    break;
-                }
-                () = stopped(&mut stop) => {
-                    service.inner.exchange.unregister(&account.id, &running);
-                    return;
+                wake = next_wake(&signals, &running, &mut stop) => {
+                    if matches!(wake, Wake::Replay) {
+                        // Polling: a write is the user at work.
+                        state.poll.user_activity();
+                    }
+                    match woken(wake, &service, &account, &running, &mut state).await {
+                        Next::Pass => break,
+                        Next::Wait => {}
+                        Next::Stop => return,
+                    }
                 }
             }
         }
     }
     service.inner.exchange.unregister(&account.id, &running);
     tracing::info!(account = %account.id, "engine stopped");
+}
+
+/// What woke a waiting engine.
+enum Wake {
+    /// "Sync now".
+    Sync,
+    /// Writes to replay.
+    Replay,
+    /// A settings pass is due.
+    Settings,
+    /// The engine stops.
+    Stop,
+}
+
+/// What the engine does after a wake-up.
+enum Next {
+    /// A sync pass now.
+    Pass,
+    /// Wait on.
+    Wait,
+    /// End the engine.
+    Stop,
+}
+
+/// Waits for the next wake-up of a waiting engine.
+async fn next_wake(
+    signals: &Signals,
+    running: &RunningEngine,
+    stop: &mut watch::Receiver<bool>,
+) -> Wake {
+    tokio::select! {
+        () = signals.sync.notified() => Wake::Sync,
+        () = signals.replay.notified() => Wake::Replay,
+        () = running.settings_wake.notified() => Wake::Settings,
+        () = stopped(stop) => Wake::Stop,
+    }
+}
+
+/// Handles a wake-up: "Sync now" wakes every folder and the settings,
+/// writes are replayed (mail and PIM), a stop unregisters the engine.
+async fn woken(
+    wake: Wake,
+    service: &Service,
+    account: &AccountConfig,
+    running: &Arc<RunningEngine>,
+    state: &mut LoopState,
+) -> Next {
+    match wake {
+        Wake::Sync => {
+            state.poll.user_activity();
+            state.folders.wake_all();
+            state.settings_due = true;
+            Next::Pass
+        }
+        Wake::Replay => {
+            replay(service, &account.id, running).await;
+            super::pim::replay_writes(service, account, running.engine.as_ref()).await;
+            Next::Wait
+        }
+        Wake::Settings => {
+            state.settings_due = true;
+            Next::Pass
+        }
+        Wake::Stop => {
+            service.inner.exchange.unregister(&account.id, running);
+            Next::Stop
+        }
+    }
 }
 
 /// The wait after streaming notifications failed: the back-off (doubling
@@ -509,6 +539,24 @@ struct KnownFolder {
     change_key: Option<String>,
 }
 
+/// The stored folders of one mailbox of an account (`None` = its own).
+async fn mailbox_folders(
+    service: &Service,
+    account: &AccountId,
+    mailbox: Option<&str>,
+) -> Result<Vec<ExchangeFolderRecord>> {
+    let (id, key) = (account.clone(), mailbox.map(str::to_owned));
+    Ok(service
+        .store()
+        .call(move |s| {
+            Ok(s.exchange_folders(&id)?
+                .into_iter()
+                .filter(|f| f.mailbox == key)
+                .collect())
+        })
+        .await?)
+}
+
 /// Syncs a mailbox: hierarchy, then the due mail folders.
 async fn sync_mailbox(
     service: &Service,
@@ -518,17 +566,7 @@ async fn sync_mailbox(
     state: &mut LoopState,
 ) -> Result<()> {
     sync_hierarchy(service, account, engine.as_ref(), mailbox).await?;
-    let id = account.id.clone();
-    let key = mailbox.map(str::to_owned);
-    let folders: Vec<ExchangeFolderRecord> = service
-        .store()
-        .call(move |s| {
-            Ok(s.exchange_folders(&id)?
-                .into_iter()
-                .filter(|f| f.mailbox == key)
-                .collect())
-        })
-        .await?;
+    let folders = mailbox_folders(service, &account.id, mailbox).await?;
     for f in &folders {
         let priority = mailbox.is_none() && f.well_known == Some(ExchangeWellKnownFolder::Inbox);
         state
@@ -561,16 +599,7 @@ async fn sync_mailbox(
     let mut rounds = 0u32;
     loop {
         // Read again: a folder synced in this pass has a newer cursor.
-        let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
-        let current: Vec<ExchangeFolderRecord> = service
-            .store()
-            .call(move |s| {
-                Ok(s.exchange_folders(&id)?
-                    .into_iter()
-                    .filter(|f| f.mailbox == key)
-                    .collect())
-            })
-            .await?;
+        let current = mailbox_folders(service, &account.id, mailbox).await?;
         let gone = since_removal.stale(current);
         if gone.is_empty() {
             break;
@@ -918,7 +947,7 @@ async fn remove_folders(service: &Service, folders: &[FolderId]) -> Result<()> {
             Ok(out)
         })
         .await?;
-    remove_messages(service, messages).await?;
+    crate::ingest::remove_messages(service, messages).await?;
     let list = folders.to_vec();
     service
         .store()
@@ -1251,30 +1280,10 @@ async fn flush_removed(
     if gone.is_empty() {
         return Ok(());
     }
-    remove_messages(service, gone).await?;
+    crate::ingest::remove_messages(service, gone).await?;
     service.broadcast(Event::MailChanged {
         folder_ids: Vec::new(),
     });
-    Ok(())
-}
-
-async fn remove_messages(service: &Service, ids: Vec<MessageId>) -> Result<()> {
-    if ids.is_empty() {
-        return Ok(());
-    }
-    let index = service.inner.search.get();
-    service
-        .store()
-        .call(move |s| {
-            for id in &ids {
-                s.delete_message(id)?;
-            }
-            if let Err(err) = index.remove(&ids) {
-                tracing::warn!(%err, "cannot remove deleted messages from the index");
-            }
-            Ok(())
-        })
-        .await?;
     Ok(())
 }
 
@@ -1550,7 +1559,7 @@ async fn store_messages(
         nail_exchange::policy::effective(&account.sync, &local_folder.path, local_folder.role);
     let now = unix_now();
     let mut new_ids: Vec<MessageId> = Vec::new();
-    for chunk in messages.chunks(INGEST_CHUNK) {
+    for chunk in messages.chunks(API_INGEST_CHUNK) {
         for m in chunk {
             let change = RemoteMessageChange {
                 remote_id: m.remote_id.clone(),
@@ -1610,36 +1619,23 @@ async fn store_messages(
                 id: Some(id.clone()),
                 flags: m.flags,
                 keywords: tags,
-                internal_date: m.internal_date.and_then(|t| {
-                    chrono::DateTime::from_timestamp(t, 0)
-                        .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-                }),
+                internal_date: crate::ingest::internal_date(m.internal_date),
                 raw,
                 headers_only,
                 size: m.size,
                 remote_thread_id: m.thread_id.clone(),
             };
-            let blobs = service.blobs().clone();
-            let index = service.inner.search.get();
-            let target = local_folder.clone();
-            let record = item_record(folder, m.change_key.as_ref(), m.exchange.as_ref());
-            let (remote, stored_id) = (m.remote_id.clone(), id.clone());
-            // The message, its server id and its Exchange data in one
-            // transaction: no reader sees it without them (ADR 0120).
-            let report = service
-                .store()
-                .call(move |s| {
-                    let extras = BTreeMap::from([(
-                        stored_id,
-                        RemoteExtras {
-                            remote_id: Some(remote),
-                            exchange: Some(record),
-                            gmail: None,
-                        },
-                    )]);
-                    ingest_with_remote(s, &blobs, Some(&index), &target, &[incoming], &extras)
-                })
-                .await?;
+            let extras = RemoteExtras {
+                remote_id: Some(m.remote_id.clone()),
+                exchange: Some(item_record(
+                    folder,
+                    m.change_key.as_ref(),
+                    m.exchange.as_ref(),
+                )),
+                gmail: None,
+            };
+            let report =
+                ingest_api_message(service, local_folder.clone(), incoming, extras).await?;
             if report.new.contains(&id)
                 && folder.mailbox.is_none()
                 && crate::sync::runs_arrival_rules(local_folder.role)
@@ -1650,13 +1646,7 @@ async fn store_messages(
     }
     if arrivals && !new_ids.is_empty() {
         let queued = new_ids.clone();
-        if let Err(err) = service
-            .store()
-            .call(move |s| crate::rules::queue_for_rules(s, &queued))
-            .await
-        {
-            tracing::warn!(%err, "cannot queue new Exchange mail for the rules");
-        }
+        crate::rules::queue_arrivals(service, queued).await;
         if local_folder.role == FolderRole::Inbox {
             service.broadcast(Event::NewMail {
                 account_id: account.id.clone(),
@@ -1872,17 +1862,12 @@ struct GroupedWrite {
 /// follows).
 type MailboxWrites = (Option<String>, Vec<(usize, RemoteWrite, AfterWrite)>);
 
-/// How one operation of a group is replayed.
-enum Grouped {
-    /// Its write goes with the others of the same mailbox.
-    Write(Box<GroupedWrite>),
-    /// Nothing to do.
-    Nothing,
-    /// On its own ([`ExchangeExecutor::run`]).
-    Alone,
-}
-
-fn grouped(mailbox: Option<String>, write: RemoteWrite, after: AfterWrite) -> Grouped {
+/// A grouped write (with the others of the same mailbox).
+fn grouped(
+    mailbox: Option<String>,
+    write: RemoteWrite,
+    after: AfterWrite,
+) -> Grouped<Box<GroupedWrite>> {
     Grouped::Write(Box::new(GroupedWrite {
         mailbox,
         write,
@@ -1913,6 +1898,69 @@ impl ExchangeExecutor<'_> {
             })
             .await
             .map_err(|e| EngineError::from(CoreError::from(e)))
+    }
+
+    /// The remote id of an operation's message: the recorded one, else the
+    /// row's.
+    async fn remote_id_of(
+        &self,
+        message: &MessageId,
+        source: Option<&nail_store::MessageSource>,
+    ) -> Result<Option<String>, EngineError> {
+        recorded_or(source, async {
+            Ok(self.remote_of(message).await?.map(|(_, r)| r))
+        })
+        .await
+    }
+
+    /// Deletes a message on the server: to Trash (the copy there keeps
+    /// the message's id) or for good.
+    async fn delete(
+        &self,
+        message_id: &MessageId,
+        source: Option<&nail_store::MessageSource>,
+        trash_folder_id: Option<&FolderId>,
+    ) -> Result<(), EngineError> {
+        let Some((remote_id, mailbox)) = self.delete_target(message_id, source).await? else {
+            return Ok(());
+        };
+        let write = if trash_folder_id.is_some() {
+            RemoteWrite::Trash { remote_id }
+        } else {
+            RemoteWrite::Delete { remote_id }
+        };
+        let outcome = self.engine.write(mailbox.as_deref(), &write).await?;
+        if let (
+            WriteOutcome::Done {
+                remote_id: Some(new),
+            },
+            Some(trash),
+        ) = (outcome, trash_folder_id)
+        {
+            let folder = self.folder(trash).await?;
+            self.set_remote(message_id, &new, folder.as_ref()).await;
+        }
+        Ok(())
+    }
+
+    /// What a deletion names: the message's remote id and the mailbox of
+    /// the folder it was in; `None` when the server never had it.
+    async fn delete_target(
+        &self,
+        message: &MessageId,
+        source: Option<&nail_store::MessageSource>,
+    ) -> Result<Option<(String, Option<String>)>, EngineError> {
+        let Some(remote_id) = self.remote_id_of(message, source).await? else {
+            return Ok(None);
+        };
+        let mailbox = match source {
+            Some(source) => self
+                .folder(&source.folder_id)
+                .await?
+                .and_then(|f| f.mailbox),
+            None => None,
+        };
+        Ok(Some((remote_id, mailbox)))
     }
 
     async fn folder(&self, id: &FolderId) -> Result<Option<ExchangeFolderRecord>, EngineError> {
@@ -1970,7 +2018,7 @@ impl ExchangeExecutor<'_> {
 
     /// The write of a grouped operation: a flag change, a move within one
     /// mailbox or a delete; anything else goes on its own.
-    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped, EngineError> {
+    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped<Box<GroupedWrite>>, EngineError> {
         match &op.operation {
             Operation::UpdateFlags { message_id, change } => {
                 let Some((mailbox, remote_id)) = self.remote_of(message_id).await? else {
@@ -1990,10 +2038,7 @@ impl ExchangeExecutor<'_> {
                 target_folder_id,
                 source: Some(source),
             } => {
-                let remote = match &source.remote_id {
-                    Some(r) => Some(r.clone()),
-                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
-                };
+                let remote = self.remote_id_of(message_id, Some(source)).await?;
                 let Some(remote_id) = remote else {
                     return Ok(Grouped::Nothing);
                 };
@@ -2032,19 +2077,10 @@ impl ExchangeExecutor<'_> {
                 trash_folder_id,
                 ..
             } => {
-                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
-                    Some(r) => Some(r),
-                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
-                };
-                let Some(remote_id) = remote else {
+                let Some((remote_id, mailbox)) =
+                    self.delete_target(message_id, source.as_ref()).await?
+                else {
                     return Ok(Grouped::Nothing);
-                };
-                let mailbox = match source {
-                    Some(source) => self
-                        .folder(&source.folder_id)
-                        .await?
-                        .and_then(|f| f.mailbox),
-                    None => None,
                 };
                 Ok(match trash_folder_id {
                     Some(trash) => grouped(
@@ -2073,24 +2109,18 @@ impl ExchangeExecutor<'_> {
             }
             return out;
         };
-        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut out = group_slots(ops.len());
         let mut by_mailbox: Vec<MailboxWrites> = Vec::new();
-        for (index, op) in ops.iter().enumerate() {
-            match self.group_write(op).await {
-                Ok(Grouped::Write(grouped)) => {
-                    let GroupedWrite {
-                        mailbox,
-                        write,
-                        after,
-                    } = *grouped;
-                    match by_mailbox.iter_mut().find(|(m, _)| *m == mailbox) {
-                        Some((_, list)) => list.push((index, write, after)),
-                        None => by_mailbox.push((mailbox, vec![(index, write, after)])),
-                    }
-                }
-                Ok(Grouped::Nothing) => out[index] = Some(Ok(())),
-                Ok(Grouped::Alone) => out[index] = Some(self.run(op).await),
-                Err(err) => out[index] = Some(Err(err)),
+        let grouped = sort_group(ops, &mut out, |op| self.group_write(op), |op| self.run(op)).await;
+        for (index, grouped) in grouped {
+            let GroupedWrite {
+                mailbox,
+                write,
+                after,
+            } = *grouped;
+            match by_mailbox.iter_mut().find(|(m, _)| *m == mailbox) {
+                Some((_, list)) => list.push((index, write, after)),
+                None => by_mailbox.push((mailbox, vec![(index, write, after)])),
             }
         }
         for (mailbox, list) in by_mailbox {
@@ -2114,7 +2144,7 @@ impl ExchangeExecutor<'_> {
                 out[index] = Some(result);
             }
         }
-        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+        group_results(out)
     }
 
     async fn run(&self, op: &QueuedOp) -> Result<(), EngineError> {
@@ -2228,37 +2258,8 @@ impl ExchangeExecutor<'_> {
                 trash_folder_id,
                 ..
             } => {
-                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
-                    Some(r) => Some(r),
-                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
-                };
-                let Some(remote_id) = remote else {
-                    return Ok(());
-                };
-                let mailbox = match source {
-                    Some(source) => self
-                        .folder(&source.folder_id)
-                        .await?
-                        .and_then(|f| f.mailbox),
-                    None => None,
-                };
-                let write = if trash_folder_id.is_some() {
-                    RemoteWrite::Trash { remote_id }
-                } else {
-                    RemoteWrite::Delete { remote_id }
-                };
-                let outcome = self.engine.write(mailbox.as_deref(), &write).await?;
-                if let (
-                    WriteOutcome::Done {
-                        remote_id: Some(new),
-                    },
-                    Some(trash),
-                ) = (outcome, trash_folder_id)
-                {
-                    let folder = self.folder(trash).await?;
-                    self.set_remote(message_id, &new, folder.as_ref()).await;
-                }
-                Ok(())
+                self.delete(message_id, source.as_ref(), trash_folder_id.as_ref())
+                    .await
             }
             Operation::AppendMessage {
                 message_id,
@@ -2267,26 +2268,9 @@ impl ExchangeExecutor<'_> {
                 let Some(folder) = self.folder(folder_id).await? else {
                     return Ok(());
                 };
-                let id = message_id.clone();
-                let blobs = self.service.blobs().clone();
-                let found = self
-                    .service
-                    .store()
-                    .call(move |s| {
-                        let m = match s.get_message(&id) {
-                            Ok(m) => m,
-                            Err(err) if err.is_not_found() => return Ok(None),
-                            Err(err) => return Err(err),
-                        };
-                        let raw = match m.blob_hash {
-                            Some(hash) => blobs.get(&hash).ok(),
-                            None => None,
-                        };
-                        Ok(raw.map(|raw| (raw, m.summary.flags)))
-                    })
-                    .await
-                    .map_err(|e| EngineError::from(CoreError::from(e)))?;
-                let Some((raw, flags)) = found else {
+                let Some((raw, flags)) =
+                    crate::replay::stored_raw(self.service, message_id).await?
+                else {
                     return Ok(());
                 };
                 let write = RemoteWrite::Append {

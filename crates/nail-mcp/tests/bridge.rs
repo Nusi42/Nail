@@ -15,21 +15,37 @@ use nail_mcp::bridge::{self, BridgeError, BridgeOptions};
 use rmcp::ServiceExt;
 use rmcp::model::{ClientConfig, ReadResourceRequestParams};
 
-#[tokio::test]
-async fn the_bridge_forwards_stdio_to_the_app() {
+/// The client `desktop` granted `scopes` on `work`, and a bridge to the
+/// server (`client_name` = the `--client` it names): the client's ends
+/// (stdin, stdout) of the bridge's stdio, and the bridge's task.
+async fn bridged(
+    scopes: &[McpScope],
+    client_name: Option<&str>,
+) -> (
+    common::Env,
+    nail_api::McpClientId,
+    (tokio::io::DuplexStream, tokio::io::DuplexStream),
+    tokio::task::JoinHandle<Result<(), BridgeError>>,
+) {
     let env = start().await;
     let (id, token) = create_client(&env.store, "desktop").await;
-    grant(&env.store, &id, &[McpScope::Read], &["work"]).await;
-
+    grant(&env.store, &id, scopes, &["work"]).await;
     // client stdout → bridge stdin, bridge stdout → client stdin
     let (client_out, bridge_in) = tokio::io::duplex(64 * 1024);
     let (bridge_out, client_in) = tokio::io::duplex(64 * 1024);
     let options = BridgeOptions {
         url: env.server.url().to_owned(),
         token,
-        client_name: Some("desktop".into()),
+        client_name: client_name.map(str::to_owned),
     };
     let bridge = tokio::spawn(bridge::run(options, bridge_in, bridge_out));
+    (env, id, (client_in, client_out), bridge)
+}
+
+#[tokio::test]
+async fn the_bridge_forwards_stdio_to_the_app() {
+    let (env, id, (client_in, client_out), bridge) =
+        bridged(&[McpScope::Read], Some("desktop")).await;
 
     let client = ClientConfig::default()
         .serve((client_in, client_out))
@@ -149,17 +165,7 @@ impl rmcp::ClientHandler for Approving {
 /// the bridge, and its answer comes back.
 #[tokio::test]
 async fn the_bridge_carries_confirmations_both_ways() {
-    let env = start().await;
-    let (id, token) = create_client(&env.store, "desktop").await;
-    grant(&env.store, &id, &[McpScope::Send], &["work"]).await;
-    let (client_out, bridge_in) = tokio::io::duplex(64 * 1024);
-    let (bridge_out, client_in) = tokio::io::duplex(64 * 1024);
-    let options = BridgeOptions {
-        url: env.server.url().to_owned(),
-        token,
-        client_name: None,
-    };
-    let bridge = tokio::spawn(bridge::run(options, bridge_in, bridge_out));
+    let (env, _, (client_in, client_out), bridge) = bridged(&[McpScope::Send], None).await;
     let approving = Approving::default();
     let client = approving
         .clone()

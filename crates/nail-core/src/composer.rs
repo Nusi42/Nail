@@ -159,17 +159,6 @@ fn quote_date(rfc3339: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-fn display(address: &Address) -> String {
-    match address.name.as_deref().map(str::trim) {
-        Some(name) if !name.is_empty() => format!("{name} <{}>", address.email),
-        _ => address.email.clone(),
-    }
-}
-
-fn join(addresses: &[Address]) -> String {
-    addresses.iter().map(display).collect::<Vec<_>>().join(", ")
-}
-
 /// Localized quote header and forward texts for `original`.
 pub(crate) fn quote_strings(
     locale: Option<&str>,
@@ -188,16 +177,25 @@ pub(crate) fn quote_strings(
         .unwrap_or_default();
     let date = quote_date(date);
     let mut fields = vec![
-        (message(locale, "message-header-from"), join(&original.from)),
+        (
+            message(locale, "message-header-from"),
+            Address::list_text(&original.from),
+        ),
         (message(locale, "message-header-date"), date.clone()),
         (
             message(locale, "composer-field-subject"),
             original.subject.clone(),
         ),
-        (message(locale, "message-header-to"), join(&original.to)),
+        (
+            message(locale, "message-header-to"),
+            Address::list_text(&original.to),
+        ),
     ];
     if !original.cc.is_empty() {
-        fields.push((message(locale, "message-header-cc"), join(&original.cc)));
+        fields.push((
+            message(locale, "message-header-cc"),
+            Address::list_text(&original.cc),
+        ));
     }
     QuoteStrings {
         reply_header: message_with(
@@ -277,7 +275,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} routed to the composer module",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }

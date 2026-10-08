@@ -118,13 +118,30 @@ impl ImportTarget {
             store.upsert_account(&row)?;
             account_created = true;
         }
-        Ok(Self {
-            service: service.clone(),
-            account: account.clone(),
-            placement: Placement::Tree {
+        Ok(Self::new(
+            service,
+            account.clone(),
+            Placement::Tree {
                 prefix: String::new(),
                 parent: None,
             },
+            account_created,
+            dry_run,
+        ))
+    }
+
+    /// A target that has placed nothing yet.
+    fn new(
+        service: &Service,
+        account: AccountId,
+        placement: Placement,
+        account_created: bool,
+        dry_run: bool,
+    ) -> Self {
+        Self {
+            service: service.clone(),
+            account,
+            placement,
             folders: BTreeMap::new(),
             merged: Vec::new(),
             pending: Vec::new(),
@@ -133,7 +150,7 @@ impl ImportTarget {
             queued: Vec::new(),
             account_created,
             dry_run,
-        })
+        }
     }
 
     fn resolve_with(service: &Service, target: &MailImportTarget, dry_run: bool) -> Result<Self> {
@@ -209,19 +226,13 @@ impl ImportTarget {
                 }
             }
         };
-        Ok(Self {
-            service: service.clone(),
+        Ok(Self::new(
+            service,
             account,
             placement,
-            folders: BTreeMap::new(),
-            merged: Vec::new(),
-            pending: Vec::new(),
-            changed: HashSet::new(),
-            created: Vec::new(),
-            queued: Vec::new(),
             account_created,
             dry_run,
-        })
+        ))
     }
 
     fn tree(

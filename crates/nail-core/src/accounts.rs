@@ -20,7 +20,7 @@ use nail_config::{AccountsDocument, ConfigError, ConfigErrorKind};
 use crate::error::Result;
 
 /// File name of the account configuration.
-pub(crate) const ACCOUNTS_FILE: &str = "accounts.kdl";
+pub(crate) use nail_config::ACCOUNTS_FILE;
 
 #[derive(Debug)]
 struct State {

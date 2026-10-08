@@ -34,21 +34,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::testing::parses;
+
     #[test]
-    fn gmail_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            label-list show-hidden=#false show-counts=#true
-            category-tabs categories=\"primary social\" show-all=#true show-counts=#false
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
+    fn gmail_widgets_parse() {
+        assert!(parses(&[
+            "label-list show-hidden=#false show-counts=#true",
+            "category-tabs categories=\"primary social\" show-all=#true show-counts=#false",
+        ]));
     }
 }

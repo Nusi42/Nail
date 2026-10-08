@@ -33,8 +33,8 @@ use nail_api::domain::FolderRole;
 use nail_api::ids::AccountId;
 use nail_api::localized::LocalizedMessage;
 use nail_api::rules::{
-    AddressField, AuthMethod, AuthResult, Comparison, Condition, DateComparison, FolderRef, Rule,
-    RuleAction, RuleScope, RuleTrigger, TextMatch, TextOp,
+    AddressField, Comparison, Condition, DateComparison, FolderRef, Rule, RuleAction, RuleScope,
+    RuleTrigger, TextMatch, TextOp,
 };
 use nail_api::sieve::{RulePlacement, RuleSieveStatus, VacationSettings, is_iso_date};
 
@@ -691,11 +691,7 @@ impl<'o, 'a> RuleCompiler<'o, 'a> {
                 self.need("index");
                 format!(
                     "header :index 1 :contains \"authentication-results\" {}",
-                    quote(&format!(
-                        "{}={}",
-                        auth_method(*method),
-                        auth_result(*result)
-                    ))
+                    quote(&format!("{}={}", method.as_str(), result.as_str()))
                 )
             }
             Condition::ListId { matches: None } => "exists \"list-id\"".to_owned(),
@@ -888,26 +884,6 @@ pub(crate) fn address_fields(field: AddressField) -> &'static [&'static str] {
     }
 }
 
-pub(crate) fn auth_method(method: AuthMethod) -> &'static str {
-    match method {
-        AuthMethod::Dkim => "dkim",
-        AuthMethod::Spf => "spf",
-        AuthMethod::Dmarc => "dmarc",
-    }
-}
-
-pub(crate) fn auth_result(result: AuthResult) -> &'static str {
-    match result {
-        AuthResult::Pass => "pass",
-        AuthResult::Fail => "fail",
-        AuthResult::Softfail => "softfail",
-        AuthResult::Neutral => "neutral",
-        AuthResult::None => "none",
-        AuthResult::Temperror => "temperror",
-        AuthResult::Permerror => "permerror",
-    }
-}
-
 /// An IMAP keyword (RFC 3501 atom, not a system flag), as `imap4flags`
 /// needs it.
 pub(crate) fn is_keyword(tag: &str) -> bool {
@@ -1063,10 +1039,11 @@ pub(crate) fn next_day(date: &str) -> Option<String> {
         return None;
     }
     let y: i64 = date[0..4].parse().ok()?;
-    let m: i64 = date[5..7].parse().ok()?;
-    let d: i64 = date[8..10].parse().ok()?;
-    let days = nail_util::time::days_from_civil(y, u32::try_from(m).ok()?, u32::try_from(d).ok()?);
-    Some(nail_util::time::iso_date(days + 1))
+    let m: u32 = date[5..7].parse().ok()?;
+    let d: u32 = date[8..10].parse().ok()?;
+    Some(nail_util::time::iso_date(
+        nail_util::time::days_from_civil(y, m, d) + 1,
+    ))
 }
 
 #[cfg(test)]

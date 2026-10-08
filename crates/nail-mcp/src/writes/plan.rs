@@ -155,15 +155,8 @@ pub(crate) fn not_found(what: impl std::fmt::Display) -> Failure {
 pub(crate) fn unexpected(response: &Response) -> Failure {
     Failure::Api(ApiError::internal(format!(
         "unexpected answer {}",
-        response_type(response)
+        response.wire_type()
     )))
-}
-
-fn response_type(response: &Response) -> String {
-    serde_json::to_value(response)
-        .ok()
-        .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_owned))
-        .unwrap_or_default()
 }
 
 /// A target line.
@@ -220,15 +213,7 @@ pub(crate) fn parse_addresses(list: &[String]) -> Result<Vec<Address>, Failure> 
 
 /// Addresses as one line (`Ada <ada@x>, bob@y`).
 pub(crate) fn addresses_text(list: &[Address]) -> Option<String> {
-    (!list.is_empty()).then(|| {
-        list.iter()
-            .map(|a| match &a.name {
-                Some(name) => format!("{name} <{}>", a.email),
-                None => a.email.clone(),
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    })
+    (!list.is_empty()).then(|| Address::list_text(list))
 }
 
 /// A count for the audit log (`null` for none).

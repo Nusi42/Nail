@@ -185,29 +185,9 @@ fn digits(text: &str) -> Option<u32> {
         .flatten()
 }
 
-fn days_in_month(year: u32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 if (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400) => {
-            29
-        }
-        2 => 28,
-        _ => 0,
-    }
-}
-
 /// Whether `text` is a valid calendar date `YYYY-MM-DD` (years 1–9999).
 pub fn is_date(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
-        return false;
-    }
-    let (Some(y), Some(m), Some(d)) = (digits(&text[..4]), digits(&text[5..7]), digits(&text[8..]))
-    else {
-        return false;
-    };
-    y >= 1 && (1..=12).contains(&m) && d >= 1 && d <= days_in_month(y, m)
+    nail_util::time::parse_iso_date(text).is_some_and(|(y, _, _)| y >= 1)
 }
 
 /// Whether `text` is a valid wall-clock date and time
@@ -284,11 +264,7 @@ pub fn is_plausible_email(text: &str) -> bool {
 /// The host of the part of a URL after `scheme://`: its authority without
 /// path, query, fragment and port (`[::1]` keeps its brackets).
 pub fn authority_host(rest: &str) -> &str {
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    match authority.rsplit_once(':') {
-        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
-        _ => authority,
-    }
+    crate::hosts::authority_host(rest.split(['/', '?', '#']).next().unwrap_or_default())
 }
 
 /// Whether `text` is an `https:` URL, or an `http:` URL of a loopback
@@ -301,11 +277,7 @@ pub fn is_https_or_loopback_url(text: &str) -> bool {
     if !has_url_scheme(text, &["http"]) {
         return false;
     }
-    let host = authority_host(&text["http://".len()..]);
-    matches!(
-        host.to_ascii_lowercase().as_str(),
-        "localhost" | "127.0.0.1" | "[::1]"
-    )
+    crate::hosts::is_loopback_host(authority_host(&text["http://".len()..]))
 }
 
 /// Whether `text` is an absolute URL with one of `schemes` (`https`,
@@ -479,6 +451,33 @@ pub enum PimItemRef {
 }
 
 impl PimItemRef {
+    /// The reference of an item of `kind` with `id`.
+    pub fn new(kind: PimItemKind, id: impl Into<String>) -> Self {
+        let id = id.into();
+        match kind {
+            PimItemKind::Event => Self::Event {
+                event_id: id.into(),
+            },
+            PimItemKind::Task => Self::Task { task_id: id.into() },
+            PimItemKind::Contact => Self::Contact {
+                contact_id: id.into(),
+            },
+            PimItemKind::ContactGroup => Self::ContactGroup {
+                group_id: id.into(),
+            },
+        }
+    }
+
+    /// The item's id.
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Event { event_id } => event_id.as_str(),
+            Self::Task { task_id } => task_id.as_str(),
+            Self::Contact { contact_id } => contact_id.as_str(),
+            Self::ContactGroup { group_id } => group_id.as_str(),
+        }
+    }
+
     /// The item's kind.
     pub fn kind(&self) -> PimItemKind {
         match self {
@@ -647,6 +646,9 @@ mod tests {
         assert!(is_https_or_loopback_url("http://localhost/dav"));
         assert!(!is_https_or_loopback_url("http://dav.example.org/"));
         assert!(!is_https_or_loopback_url("http://127.0.0.1.evil.example/"));
+        assert!(is_https_or_loopback_url("http://[::1]:8080/token"));
+        assert!(!is_https_or_loopback_url("ftp://example.org"));
+        assert!(!is_https_or_loopback_url("https://"));
     }
 
     #[test]

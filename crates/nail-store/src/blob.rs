@@ -124,6 +124,17 @@ pub struct RemovalMark {
     idle: bool,
 }
 
+/// Decompresses a blob's content and checks it against its hash
+/// ([`Error::BlobCorrupt`] when either fails).
+fn decompress_verified(hash: &BlobHash, compressed: &[u8]) -> Result<Vec<u8>> {
+    let bytes = zstd::decode_all(compressed).map_err(|_| Error::BlobCorrupt(hash.clone()))?;
+    if BlobHash::of(&bytes) == *hash {
+        Ok(bytes)
+    } else {
+        Err(Error::BlobCorrupt(hash.clone()))
+    }
+}
+
 fn blob_context(hash: &BlobHash) -> Vec<u8> {
     format!("nail/blob/{hash}").into_bytes()
 }
@@ -239,11 +250,7 @@ impl BlobStore {
         } else {
             stored
         };
-        let bytes = zstd::decode_all(compressed.as_slice())
-            .map_err(|_| Error::BlobCorrupt(hash.clone()))?;
-        if BlobHash::of(&bytes) != *hash {
-            return Err(Error::BlobCorrupt(hash.clone()));
-        }
+        let bytes = decompress_verified(hash, &compressed)?;
         Ok(bytes)
     }
 
@@ -316,11 +323,7 @@ impl BlobStore {
         } else {
             self.cipher.open(&context, &stored)?
         };
-        let bytes = zstd::decode_all(compressed.as_slice())
-            .map_err(|_| Error::BlobCorrupt(hash.clone()))?;
-        if BlobHash::of(&bytes) != *hash {
-            return Err(Error::BlobCorrupt(hash.clone()));
-        }
+        decompress_verified(hash, &compressed)?;
         let new = if seal {
             self.cipher.seal(&context, &compressed)?
         } else {
@@ -536,7 +539,7 @@ mod tests {
     }
 
     fn xor() -> Arc<dyn DataCipher> {
-        Arc::new(crate::seal::tests::XorCipher)
+        Arc::new(crate::seal::tests::XOR)
     }
 
     #[test]

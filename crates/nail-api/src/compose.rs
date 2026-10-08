@@ -161,6 +161,50 @@ impl Draft {
         }
     }
 
+    /// The message the draft quotes, forwards or redirects, if any (whose
+    /// text it may carry: a reader of the draft must be able to read it).
+    pub fn original_message(&self) -> Option<MessageId> {
+        self.context
+            .as_ref()
+            .map(|c| c.message_id.clone())
+            .or_else(|| match &self.automatic {
+                Some(AutomaticMail::Redirect { message_id }) => Some(message_id.clone()),
+                _ => None,
+            })
+    }
+
+    /// The body source in the draft's own mode (plain text, HTML or
+    /// Markdown).
+    pub fn body(&self) -> &str {
+        match self.mode {
+            ComposerMode::Plain => &self.text,
+            ComposerMode::Html => self.html.as_deref().unwrap_or_default(),
+            ComposerMode::Markdown => self.markdown.as_deref().unwrap_or_default(),
+        }
+    }
+
+    /// Sets the body source and the mode: plain text replaces `text` and
+    /// drops the rich sources; a rich source replaces its field and drops
+    /// the other rich source (`text` stays as it is).
+    pub fn set_body(&mut self, mode: ComposerMode, body: String) {
+        self.mode = mode;
+        match mode {
+            ComposerMode::Plain => {
+                self.text = body;
+                self.html = None;
+                self.markdown = None;
+            }
+            ComposerMode::Html => {
+                self.html = Some(body);
+                self.markdown = None;
+            }
+            ComposerMode::Markdown => {
+                self.markdown = Some(body);
+                self.html = None;
+            }
+        }
+    }
+
     /// Whether the draft uses anything beyond plain text (rich bodies or
     /// attachments).
     pub fn uses_rich_content(&self) -> bool {
@@ -279,13 +323,13 @@ pub struct OutboxEntry {
     pub attempts: u32,
     /// Error class of the last failed attempt, else `null`.
     pub error: Option<ErrorCode>,
-    /// Diagnostic detail of the last failed attempt, else `null`.
-    pub message: Option<String>,
     /// The user-facing text (Fluent id + arguments) when the core has a more
     /// specific one than the error class; else `null` (ADR 0043).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub localized: Option<LocalizedMessage>,
+    /// Diagnostic detail of the last failed attempt, else `null`.
+    pub message: Option<String>,
 }
 
 #[cfg(test)]

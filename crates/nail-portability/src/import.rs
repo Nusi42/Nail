@@ -109,6 +109,42 @@ pub struct PimCollectionSource {
     pub location: PimLocation,
 }
 
+/// The bytes of a message file (progress advanced); `None` after visiting
+/// its problem (too large, unreadable).
+pub(crate) fn read_message_file(
+    path: &Path,
+    origin: &ItemRef,
+    ctx: &mut JobContext<'_>,
+    visit: &mut dyn FnMut(&mut JobContext<'_>, RawMessage) -> Result<()>,
+) -> Result<Option<Vec<u8>>> {
+    let size = std::fs::metadata(path).map_or(0, |m| m.len());
+    if size > MAX_IMPORT_MESSAGE_BYTES {
+        ctx.advance(0, size);
+        let problem = RawMessage::problem(
+            origin.clone(),
+            PortabilityIssueCode::TooLarge,
+            format!("{size} bytes"),
+        );
+        visit(ctx, problem)?;
+        return Ok(None);
+    }
+    match std::fs::read(path) {
+        Ok(raw) => {
+            ctx.advance(0, raw.len() as u64);
+            Ok(Some(raw))
+        }
+        Err(e) => {
+            let problem = RawMessage::problem(
+                origin.clone(),
+                PortabilityIssueCode::UnreadableFile,
+                e.to_string(),
+            );
+            visit(ctx, problem)?;
+            Ok(None)
+        }
+    }
+}
+
 /// One message as a reader found it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawMessage {
@@ -618,52 +654,11 @@ pub fn import_message(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::error::SinkError;
-    use crate::sink::{DuplicateKey, ImportedMessage, NullSink};
+    use crate::sink::NullSink;
+    use crate::testing::MemorySink;
     use nail_api::portability::{JobKind, JobReport, JobState};
     use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
     use std::fs;
-
-    /// A sink that keeps everything in memory, like the core's store.
-    #[derive(Default)]
-    pub(crate) struct MemorySink {
-        pub folders: Vec<SourceFolder>,
-        pub messages: HashMap<String, Vec<ImportedMessage>>,
-    }
-
-    impl MailImportSink for MemorySink {
-        fn ensure_folder(&mut self, folder: &SourceFolder) -> std::result::Result<(), SinkError> {
-            if !self.folders.iter().any(|f| f.path == folder.path) {
-                self.folders.push(folder.clone());
-            }
-            Ok(())
-        }
-        fn contains(
-            &mut self,
-            folder: &SourceFolder,
-            key: &DuplicateKey,
-        ) -> std::result::Result<bool, SinkError> {
-            Ok(self
-                .messages
-                .get(&folder.path)
-                .is_some_and(|m| m.iter().any(|m| &m.key == key)))
-        }
-        fn append(
-            &mut self,
-            folder: &SourceFolder,
-            message: ImportedMessage,
-        ) -> std::result::Result<(), SinkError> {
-            if message.raw.windows(4).any(|w| w == b"FAIL") {
-                return Err(SinkError::Item("refused".into()));
-            }
-            self.messages
-                .entry(folder.path.clone())
-                .or_default()
-                .push(message);
-            Ok(())
-        }
-    }
 
     fn new_ctx() -> JobContext<'static> {
         JobContext::silent(JobReport::started("j".into(), JobKind::Import, "t"))
@@ -671,15 +666,20 @@ pub(crate) mod tests {
 
     const MBOX: &str = "From a@b Thu Oct  1 10:00:00 2026\nSubject: one\nMessage-ID: <1@x>\nStatus: RO\nX-Status: F\n\nHello\n>From here\n\nFrom b@c Thu Oct  1 11:00:00 2026\nSubject: two\nMessage-ID: <2@x>\nX-Mozilla-Status: 0008\n\ndeleted\n\nFrom c@d Thu Oct  1 12:00:00 2026\nnot a header line\n\nFrom d@e Thu Oct  1 13:00:00 2026\nSubject: FAIL\n\nx\n\nFrom e@f Thu Oct  1 14:00:00 2026\nSubject: four\nMessage-ID: <4@x>\n\nbye\n";
 
+    /// [`MBOX`] as `<dir>/<name>.mbox`.
+    fn mbox_source(dir: &Path, name: &str) -> ImportSource {
+        let path = dir.join(format!("{name}.mbox"));
+        fs::write(&path, MBOX).unwrap();
+        ImportSource {
+            format: ImportFormat::Mbox,
+            path: path.display().to_string(),
+        }
+    }
+
     #[test]
     fn imports_an_mbox_with_flags_issues_and_duplicates() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Saved.mbox");
-        fs::write(&path, MBOX).unwrap();
-        let source = ImportSource {
-            format: ImportFormat::Mbox,
-            path: path.display().to_string(),
-        };
+        let source = mbox_source(dir.path(), "Saved");
         let preview = preview(&source).unwrap();
         assert_eq!(preview.folders.len(), 1);
         assert_eq!(preview.folders[0].path, "Saved");
@@ -687,17 +687,8 @@ pub(crate) mod tests {
         assert_eq!(preview.counts.messages, 5);
 
         let mut sink = MemorySink::default();
-        let mut ctx = new_ctx();
-        run(
-            &source,
-            &ImportOptions::default(),
-            &mut sink,
-            &mut NullSink,
-            &mut ctx,
-        )
-        .unwrap();
-        let report = ctx.into_report();
-        let saved = &sink.messages["Saved"];
+        let report = sink.import(&source).unwrap();
+        let saved = &sink.messages("Saved");
         assert_eq!(saved.len(), 2);
         assert_eq!(report.counts.messages, 2);
         assert_eq!(report.counts.folders, 1);
@@ -735,18 +726,13 @@ pub(crate) mod tests {
         let report = ctx2.into_report();
         assert_eq!(report.counts.messages, 0);
         assert_eq!(report.counts.duplicates, 2);
-        assert_eq!(sink.messages["Saved"].len(), 2);
+        assert_eq!(sink.messages("Saved").len(), 2);
     }
 
     #[test]
     fn flags_can_be_dropped() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("x.mbox");
-        fs::write(&path, MBOX).unwrap();
-        let source = ImportSource {
-            format: ImportFormat::Mbox,
-            path: path.display().to_string(),
-        };
+        let source = mbox_source(dir.path(), "x");
         let mut sink = MemorySink::default();
         let options = ImportOptions {
             keep_flags: false,
@@ -754,7 +740,7 @@ pub(crate) mod tests {
             ..ImportOptions::default()
         };
         run(&source, &options, &mut sink, &mut NullSink, &mut new_ctx()).unwrap();
-        assert_eq!(sink.messages["x"][0].flags, Flags::default());
+        assert_eq!(sink.messages("x")[0].flags, Flags::default());
     }
 
     #[test]
@@ -832,10 +818,10 @@ pub(crate) mod tests {
         let created: Vec<_> = sink.folders.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(created, vec!["Lists", "Lists/Rust"]);
         assert_eq!(sink.folders[1].parent.as_deref(), Some("Lists"));
-        let rust = &sink.messages["Lists/Rust"];
+        let rust = &sink.messages("Lists/Rust");
         assert_eq!(rust.len(), 1);
         assert!(rust[0].flags.answered && rust[0].flags.flagged && rust[0].flags.seen);
-        assert!(!sink.messages.contains_key("Inbox"));
+        assert_eq!(sink.messages("Inbox").len(), 0);
         assert_eq!(ctx.report.counts.folders, 2);
     }
 
@@ -851,19 +837,11 @@ pub(crate) mod tests {
             path: root.display().to_string(),
         };
         let mut sink = MemorySink::default();
-        let mut ctx = new_ctx();
-        run(
-            &source,
-            &ImportOptions::default(),
-            &mut sink,
-            &mut NullSink,
-            &mut ctx,
-        )
-        .unwrap();
-        assert_eq!(sink.messages["Mails"].len(), 1);
-        assert_eq!(ctx.report.counts.skipped, 1);
+        let report = sink.import(&source).unwrap();
+        assert_eq!(sink.messages("Mails").len(), 1);
+        assert_eq!(report.counts.skipped, 1);
         assert_eq!(
-            ctx.report.issues[0].code,
+            report.issues[0].code,
             PortabilityIssueCode::MalformedMessage
         );
     }
@@ -916,12 +894,7 @@ pub(crate) mod tests {
     #[test]
     fn cancelling_stops_between_messages() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("x.mbox");
-        fs::write(&path, MBOX).unwrap();
-        let source = ImportSource {
-            format: ImportFormat::Mbox,
-            path: path.display().to_string(),
-        };
+        let source = mbox_source(dir.path(), "x");
         let mut ctx = new_ctx();
         ctx.cancel_flag().cancel();
         let result = run(

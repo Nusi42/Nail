@@ -14,11 +14,11 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::testing::parses;
+
     #[test]
-    fn mcp_widgets_are_registered() {
-        let text = "layout \"x\" extends=\"default\" {\n    window \"main\" {\n        stack {\n            mcp-clients\n            mcp-context-indicator\n        }\n    }\n}\n";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-        let bad = text.replace("mcp-clients", "mcp-clients bogus=#true");
-        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
+    fn mcp_widgets_parse() {
+        assert!(parses(&["mcp-clients", "mcp-context-indicator"]));
+        assert!(!parses(&["mcp-clients bogus=#true"]));
     }
 }

@@ -573,9 +573,16 @@ pub(crate) fn manifest_with(id: &str, permissions: &[&str], extra: Value) -> Plu
 
 /// A plug-in with extra contributions, every permission granted.
 pub(crate) fn spec_with(id: &str, permissions: &[&str], extra: Value, js: &str) -> PluginSpec {
-    let manifest = manifest_with(id, permissions, extra);
-    let mut map = BTreeMap::new();
-    map.insert("index.js".to_owned(), js.as_bytes().to_vec());
+    package(manifest_with(id, permissions, extra), &[("index.js", js)])
+}
+
+/// A package of `manifest` with `files` (plus a logo), every permission
+/// granted.
+fn package(manifest: PluginManifest, files: &[(&str, &str)]) -> PluginSpec {
+    let mut map: BTreeMap<String, Vec<u8>> = files
+        .iter()
+        .map(|(p, c)| ((*p).to_owned(), c.as_bytes().to_vec()))
+        .collect();
     map.insert("assets/logo.png".into(), vec![0x89, b'P', b'N', b'G']);
     let grants = all_grants(&manifest);
     PluginSpec {
@@ -600,6 +607,13 @@ pub(crate) fn limits() -> HostLimits {
 
 pub(crate) fn host(fake: &Arc<Fake>) -> PluginHost {
     host_with(fake, limits())
+}
+
+/// A fake core and a host over it with the test [`limits`].
+pub(crate) fn fake_host() -> (Arc<Fake>, PluginHost) {
+    let fake = Fake::new();
+    let host = host(&fake);
+    (fake, host)
 }
 
 pub(crate) fn host_with(fake: &Arc<Fake>, limits: HostLimits) -> PluginHost {
@@ -656,20 +670,7 @@ pub(crate) fn spec_with_files(
     permissions: &[&str],
     files: &[(&str, &str)],
 ) -> PluginSpec {
-    let manifest = manifest(id, permissions);
-    let mut map: BTreeMap<String, Vec<u8>> = files
-        .iter()
-        .map(|(p, c)| ((*p).to_owned(), c.as_bytes().to_vec()))
-        .collect();
-    map.insert("assets/logo.png".into(), vec![0x89, b'P', b'N', b'G']);
-    let grants = all_grants(&manifest);
-    PluginSpec {
-        manifest,
-        files: PackageFiles::from_map(map),
-        grants,
-        settings: BTreeMap::new(),
-        dev_folder: None,
-    }
+    package(manifest(id, permissions), files)
 }
 
 /// Polls `check` until it returns `Some` (10 s at most).
@@ -693,6 +694,23 @@ pub(crate) async fn result(fake: &Fake, plugin: &str, prefix: &str) -> String {
         fake.results(plugin, prefix).into_iter().next()
     })
     .await
+}
+
+/// Starts a plug-in `undeclared` (no contributions) whose activation runs
+/// `register` (a `ctx.….register(…)` call) and checks it was refused.
+pub(crate) async fn assert_registration_refused(fake: &Fake, host: &PluginHost, register: &str) {
+    host.start(spec(
+        "undeclared",
+        &[],
+        &format!(
+            r#"export default {{ activate(ctx) {{
+             try {{ {register}; }} catch (e) {{ nail.log.info("REG " + e.code); }}
+           }} }};"#
+        ),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(result(fake, "undeclared", "REG ").await, "invalid_request");
 }
 
 /// Waits for the first result and parses it as JSON.

@@ -61,18 +61,28 @@ fn request(write: ActorWrite, accounts: Option<&[&str]>) -> ActorWriteRequest {
     }
 }
 
-/// The pending confirmation, once it shows up.
-async fn first_pending(store: &Store) -> nail_api::agents::Confirmation {
-    for _ in 0..500 {
-        let list = store
-            .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
-            .unwrap();
-        if let Some(first) = list.into_iter().next() {
-            return first;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("no pending confirmation");
+/// Runs a write in a task (it waits for a confirmation).
+fn spawn_run(
+    writes: &ActorWrites<FakeData>,
+    request: ActorWriteRequest,
+) -> tokio::task::JoinHandle<Result<McpWriteResult, nail_api::ApiError>> {
+    let writes = writes.clone();
+    tokio::spawn(async move { writes.run(request).await })
+}
+
+/// Denies `pending` in Nail; the waiting write ends denied.
+async fn deny(
+    store: &Store,
+    pending: &nail_api::agents::Confirmation,
+    waiting: tokio::task::JoinHandle<Result<McpWriteResult, nail_api::ApiError>>,
+) {
+    store
+        .decide_confirmation(&pending.id, false, ConfirmationSource::Nail, now())
+        .unwrap();
+    assert!(matches!(
+        waiting.await.unwrap().unwrap(),
+        McpWriteResult::Denied { .. }
+    ));
 }
 
 fn now() -> i64 {
@@ -142,28 +152,16 @@ async fn destructive_plugin_writes_always_ask_and_run_once_approved() {
     let data = Arc::new(FakeData::default());
     let writes = writer(&store, data.clone());
 
-    let waiting = tokio::spawn({
-        let writes = writes.clone();
-        async move {
-            writes
-                .run(request(
-                    ActorWrite::Delete(PimDelete::Task {
-                        task_id: "t1".into(),
-                    }),
-                    None,
-                ))
-                .await
-        }
-    });
-    let pending = loop {
-        let list = store
-            .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
-            .unwrap();
-        if let Some(first) = list.into_iter().next() {
-            break first;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    };
+    let waiting = spawn_run(
+        &writes,
+        request(
+            ActorWrite::Delete(PimDelete::Task {
+                task_id: "t1".into(),
+            }),
+            None,
+        ),
+    );
+    let pending = common::pending(&store).await;
     assert_eq!(pending.kind, ActionKind::PimDelete);
     assert_eq!(pending.operation, "nail.test");
     assert_eq!(pending.requested_by, plugin());
@@ -204,42 +202,19 @@ async fn destructive_plugin_writes_always_ask_and_run_once_approved() {
             )
             .is_err()
     );
-    let waiting = tokio::spawn({
-        let writes = writes.clone();
-        async move {
-            writes
-                .run(request(
-                    ActorWrite::Delete(PimDelete::Event {
-                        event_id: "e1".into(),
-                        occurrence: None,
-                        scope: McpEditScope::All,
-                    }),
-                    None,
-                ))
-                .await
-        }
-    });
-    let pending = loop {
-        let list = store
-            .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
-            .unwrap();
-        if let Some(first) = list.into_iter().next() {
-            break first;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    };
-    store
-        .decide_confirmation(
-            &pending.id,
-            false,
-            ConfirmationSource::Nail,
-            chrono::Utc::now().timestamp(),
-        )
-        .unwrap();
-    assert!(matches!(
-        waiting.await.unwrap().unwrap(),
-        McpWriteResult::Denied { .. }
-    ));
+    let waiting = spawn_run(
+        &writes,
+        request(
+            ActorWrite::Delete(PimDelete::Event {
+                event_id: "e1".into(),
+                occurrence: None,
+                scope: McpEditScope::All,
+            }),
+            None,
+        ),
+    );
+    let pending = common::pending(&store).await;
+    deny(&store, &pending, waiting).await;
     assert_eq!(data.written().len(), 1, "the denied delete did not run");
 }
 
@@ -334,7 +309,7 @@ async fn a_draft_changed_after_the_send_request_is_not_sent() {
         })
     };
     let waiting = send();
-    let pending = first_pending(&store).await;
+    let pending = common::pending(&store).await;
     assert_eq!(pending.kind, ActionKind::Send);
     // The draft is edited (another recipient) while the user looks at it.
     data.changed_drafts.lock().unwrap().push("d1".into());
@@ -351,7 +326,7 @@ async fn a_draft_changed_after_the_send_request_is_not_sent() {
     // Unchanged, the approved draft goes out.
     data.changed_drafts.lock().unwrap().clear();
     let waiting = send();
-    let pending = first_pending(&store).await;
+    let pending = common::pending(&store).await;
     store
         .decide_confirmation(&pending.id, true, ConfirmationSource::Nail, now())
         .unwrap();
@@ -392,22 +367,12 @@ async fn moves_to_trash_ask_and_arrival_actions_never_delete() {
             json!({"message_ids": ["m1"], "move_to_folder_id": "work-trash"}),
         ))
     };
-    let waiting = tokio::spawn({
-        let writes = writes.clone();
-        let request = request(to_trash(), None);
-        async move { writes.run(request).await }
-    });
-    let pending = first_pending(&store).await;
+    let waiting = spawn_run(&writes, request(to_trash(), None));
+    let pending = common::pending(&store).await;
     assert_eq!(pending.kind, ActionKind::Trash);
     assert_eq!(pending.summary.id, "confirmation-summary-trash");
     assert!(!pending.can_always_allow);
-    store
-        .decide_confirmation(&pending.id, false, ConfirmationSource::Nail, now())
-        .unwrap();
-    assert!(matches!(
-        waiting.await.unwrap().unwrap(),
-        McpWriteResult::Denied { .. }
-    ));
+    deny(&store, &pending, waiting).await;
     assert_eq!(data.written().len(), 0);
 
     let mut arrival = request(to_trash(), Some(&["work"]));
@@ -498,12 +463,8 @@ async fn plugins_acting_for_a_client_stay_within_its_grant() {
         &["work"],
     )
     .await;
-    let waiting = tokio::spawn({
-        let writes = writes.clone();
-        let request = for_client(send());
-        async move { writes.run(request).await }
-    });
-    let pending = first_pending(&store).await;
+    let waiting = spawn_run(&writes, for_client(send()));
+    let pending = common::pending(&store).await;
     assert_eq!(pending.kind, ActionKind::Send);
     assert_eq!(
         pending
@@ -514,13 +475,7 @@ async fn plugins_acting_for_a_client_stay_within_its_grant() {
             .client_id,
         client_id
     );
-    store
-        .decide_confirmation(&pending.id, false, ConfirmationSource::Nail, now())
-        .unwrap();
-    assert!(matches!(
-        waiting.await.unwrap().unwrap(),
-        McpWriteResult::Denied { .. }
-    ));
+    deny(&store, &pending, waiting).await;
 
     // The client's writes_per_minute counts the plug-in's writes for it.
     store

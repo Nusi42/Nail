@@ -254,13 +254,13 @@ pub struct ExchangeRulesStatus {
     /// When the server rules were last read (RFC 3339 UTC).
     #[serde(default)]
     pub synced_at: Option<String>,
-    /// Error class of the last failure.
-    #[serde(default)]
-    pub error: Option<ErrorCode>,
     /// The user-facing text of the failure (ADR 0043).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub localized: Option<LocalizedMessage>,
+    /// Error class of the last failure.
+    #[serde(default)]
+    pub error: Option<ErrorCode>,
 }
 
 #[cfg(test)]

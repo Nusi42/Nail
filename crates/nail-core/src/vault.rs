@@ -207,6 +207,24 @@ impl Throttle {
 }
 
 impl Service {
+    /// Opens the search index at `dir` again (the vault changed) and, with
+    /// `open_search`, lets searches use it; reindexes every message when it
+    /// was rebuilt or misses some (returns whether it did).
+    fn reopen_index(&self, dir: &Path, open_search: bool) -> Result<bool> {
+        let index = self.inner.vault.open_index(dir)?;
+        self.inner.search.replace(index);
+        if open_search {
+            self.inner.search.set_closed(false);
+        }
+        let index = self.inner.search.get();
+        let stored = u64::from(self.store().count_messages(&MessageFilter::All)?);
+        if index.was_rebuilt() || index.doc_count()? < stored {
+            crate::ingest::reindex_all(self.store(), self.blobs(), &index)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     /// `SetVaultEncryption`: records the target and starts the migration
     /// in the background. `conflict` while a migration converts data
     /// (unless it stopped with an error: then this retries or reverses it).
@@ -311,14 +329,8 @@ impl Service {
         let reopened = {
             let service = self.clone();
             tokio::task::spawn_blocking(move || -> Result<()> {
-                let index = service.inner.vault.open_index(&dir)?;
-                service.inner.search.replace(index);
-                service.inner.search.set_closed(false);
                 // Mail that arrived meanwhile went to the stand-in.
-                let index = service.inner.search.get();
-                let stored = u64::from(service.store().count_messages(&MessageFilter::All)?);
-                if index.was_rebuilt() || index.doc_count()? < stored {
-                    crate::ingest::reindex_all(service.store(), service.blobs(), &index)?;
+                if service.reopen_index(&dir, true)? {
                     let settings = service
                         .store()
                         .setting::<nail_api::security::SecuritySettings>(
@@ -379,13 +391,11 @@ impl Service {
             Some(p) => {
                 let path = PathBuf::from(p);
                 if !path.is_absolute() {
-                    return Err(
-                        ApiError::invalid_request("the recovery kit needs a full path")
-                            .with_localized(LocalizedMessage::new(
-                                "portability-error-path-not-absolute",
-                            ))
-                            .into(),
-                    );
+                    return Err(ApiError::invalid_localized(
+                        "the recovery kit needs a full path",
+                        "portability-error-path-not-absolute",
+                    )
+                    .into());
                 }
                 Some(path)
             }
@@ -453,13 +463,7 @@ impl Service {
         if was_locked && let Some(dir) = ctl.index_dir.clone() {
             let service = self.clone();
             tokio::task::spawn_blocking(move || -> Result<()> {
-                let index = service.inner.vault.open_index(&dir)?;
-                service.inner.search.replace(index);
-                let index = service.inner.search.get();
-                let stored = u64::from(service.store().count_messages(&MessageFilter::All)?);
-                if index.was_rebuilt() || index.doc_count()? < stored {
-                    crate::ingest::reindex_all(service.store(), service.blobs(), &index)?;
-                }
+                service.reopen_index(&dir, false)?;
                 Ok(())
             })
             .await??;

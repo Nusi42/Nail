@@ -23,6 +23,14 @@ use crate::service::Service;
 /// `None` for all.
 pub(crate) type FolderFilter = Arc<dyn Fn(&ScopeFolder) -> bool + Send + Sync>;
 
+/// A filter as the store's conversation queries take it.
+pub(crate) fn as_keep(filter: Option<&FolderFilter>) -> Option<&dyn Fn(&ScopeFolder) -> bool> {
+    match filter {
+        Some(keep) => Some(keep.as_ref()),
+        None => None,
+    }
+}
+
 impl Service {
     /// The user's addresses per account: the configured accounts' addresses
     /// and identities, and the stored accounts' addresses (local and
@@ -54,7 +62,7 @@ impl Service {
     /// The conversation folders behind a listed folder id, narrowed by
     /// `filter`. Unknown folders fail with `not_found`, as for
     /// `ListMessages`.
-    async fn conversation_scope(
+    pub(crate) async fn conversation_scope(
         &self,
         folder: &FolderId,
         filter: Option<&FolderFilter>,
@@ -133,11 +141,7 @@ impl Service {
             .inner
             .store
             .call(move |s| {
-                let keep: Option<&dyn Fn(&ScopeFolder) -> bool> = match &keep {
-                    Some(k) => Some(k.as_ref()),
-                    None => None,
-                };
-                s.conversation_within(&thread, scope.as_ref(), &own, keep)
+                s.conversation_within(&thread, scope.as_ref(), &own, as_keep(keep.as_ref()))
             })
             .await?)
     }

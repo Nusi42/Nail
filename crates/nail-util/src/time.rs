@@ -93,6 +93,25 @@ pub fn last_weekday_of_month(year: i64, month: u32, weekday: u32) -> Option<u32>
     Some(last - (last_weekday + 7 - weekday % 7) % 7)
 }
 
+/// The civil date `(year, month, day)` of a `YYYY-MM-DD` text: four-digit
+/// year, two-digit month and day, digits only, a real calendar day.
+#[must_use]
+pub fn parse_iso_date(text: &str) -> Option<(i64, u32, u32)> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return None;
+    }
+    let num = |range: std::ops::Range<usize>| {
+        let part = text.get(range)?;
+        part.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| part.parse::<u32>().ok())
+            .flatten()
+    };
+    let (year, month, day) = (i64::from(num(0..4)?), num(5..7)?, num(8..10)?);
+    (day >= 1 && day <= days_in_month(year, month)?).then_some((year, month, day))
+}
+
 /// The current Unix time in seconds (0 when the clock is before 1970).
 #[must_use]
 pub fn unix_now() -> i64 {
@@ -168,6 +187,28 @@ mod tests {
     fn fixture_instants() {
         assert_eq!(rfc3339_utc(FIXTURE_NOW), "2026-09-21T14:13:20Z");
         assert_eq!(rfc3339_utc(FIXTURE_LATER), "2027-01-15T08:00:00Z");
+    }
+
+    #[test]
+    fn parses_iso_dates() {
+        assert_eq!(parse_iso_date("2026-09-10"), Some((2026, 9, 10)));
+        assert_eq!(parse_iso_date("2028-02-29"), Some((2028, 2, 29)));
+        assert_eq!(parse_iso_date("0000-01-01"), Some((0, 1, 1)));
+        for bad in [
+            "2026-02-29",
+            "2026-9-10",
+            "2026-09-10-1",
+            "abcd-09-10",
+            "",
+            "2026-13-01",
+            "2026-00-01",
+            "2026-01-00",
+            "+202-01-01",
+            "2026-01-+1",
+            "2026/01/01",
+        ] {
+            assert_eq!(parse_iso_date(bad), None, "{bad}");
+        }
     }
 
     #[test]

@@ -88,8 +88,8 @@ pub use runtime::{
     PluginUiTarget,
 };
 pub use ui::{
-    PluginSelectOption, PluginTableColumn, PluginUiIssue, PluginUiIssueKind, PluginUiNode,
-    validate_tree,
+    PluginSelectOption, PluginTableColumn, PluginTextField, PluginUiIssue, PluginUiIssueKind,
+    PluginUiNode, validate_tree,
 };
 
 use crate::ids::PluginId;

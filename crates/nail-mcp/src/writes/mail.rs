@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use base64::Engine as _;
 use nail_api::accounts::ComposerMode;
-use nail_api::agents::{ActionKind, ActionTargetKind};
+use nail_api::agents::{ActionChange, ActionKind, ActionTargetKind};
 use nail_api::compose::Draft;
 use nail_api::mcp::McpScope;
 use nail_api::mcp::tools::{
@@ -24,7 +24,7 @@ use super::plan::{
     Action, Plan, Upload, UploadSource, accounts, addresses_text, change, count, invalid, joined,
     not_found, parse_addresses, target, unexpected,
 };
-use super::{Ctx, audit, audit_bools};
+use super::{AuditChange, Ctx, audit, audit_bools};
 use crate::access::Denial;
 use crate::data::McpData;
 use crate::server::Failure;
@@ -128,14 +128,7 @@ impl<D: McpData> Ctx<'_, D> {
     async fn writable_draft(&self, id: &DraftId) -> Result<(Draft, AccountId), Failure> {
         let draft = self.shared.data.draft(id).await?;
         let account = self.identity_account(&draft.identity_id).await?;
-        let original = draft
-            .context
-            .as_ref()
-            .map(|c| c.message_id.clone())
-            .or_else(|| match &draft.automatic {
-                Some(nail_api::AutomaticMail::Redirect { message_id }) => Some(message_id.clone()),
-                _ => None,
-            });
+        let original = draft.original_message();
         if let Some(original) = original {
             self.shared.readable_message(self.access, &original).await?;
         }
@@ -233,35 +226,6 @@ fn mode_of(format: McpTextFormat) -> ComposerMode {
         McpTextFormat::Text => ComposerMode::Plain,
         McpTextFormat::Markdown => ComposerMode::Markdown,
         McpTextFormat::Html => ComposerMode::Html,
-    }
-}
-
-/// The draft's body source in its mode.
-fn body_of(draft: &Draft) -> &str {
-    match draft.mode {
-        ComposerMode::Plain => &draft.text,
-        ComposerMode::Html => draft.html.as_deref().unwrap_or_default(),
-        ComposerMode::Markdown => draft.markdown.as_deref().unwrap_or_default(),
-    }
-}
-
-/// Sets the body source (and the mode).
-fn set_body(draft: &mut Draft, mode: ComposerMode, body: String) {
-    draft.mode = mode;
-    match mode {
-        ComposerMode::Plain => {
-            draft.text = body;
-            draft.html = None;
-            draft.markdown = None;
-        }
-        ComposerMode::Html => {
-            draft.html = Some(body);
-            draft.markdown = None;
-        }
-        ComposerMode::Markdown => {
-            draft.markdown = Some(body);
-            draft.html = None;
-        }
     }
 }
 
@@ -644,39 +608,99 @@ pub(crate) async fn update_messages<D: McpData>(
         } else {
             "mail-action-confirmation-organize"
         };
-        return Ok(Plan {
+        return Ok(requests_plan(
             kind,
-            summary: conversation_summary(id, ctx.actor(), conversations, messages.len()),
-            targets: messages
-                .iter()
-                .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
-                .collect(),
-            changes,
-            accounts: account_ids,
-            audit: audit_lines,
-            sends: 0,
-            action: Action::Requests { requests },
-        });
+            conversation_summary(id, ctx.actor(), conversations, messages.len()),
+            &messages,
+            account_ids,
+            (changes, audit_lines),
+            requests,
+        ));
     } else if kind == ActionKind::Trash {
         "confirmation-summary-trash"
     } else {
         "confirmation-summary-organize"
     };
-    Ok(Plan {
+    Ok(requests_plan(
         kind,
-        summary: LocalizedMessage::new(summary)
+        LocalizedMessage::new(summary)
             .arg("actor", ctx.actor())
             .arg("count", messages.len()),
+        &messages,
+        account_ids,
+        (changes, audit_lines),
+        requests,
+    ))
+}
+
+/// The summary of a draft change.
+fn draft_summary(actor: &str, subject: &str) -> LocalizedMessage {
+    LocalizedMessage::new("confirmation-summary-draft")
+        .arg("actor", actor)
+        .arg("subject", subject)
+}
+
+/// A plan that runs mail `requests` on `messages`.
+fn requests_plan(
+    kind: ActionKind,
+    summary: LocalizedMessage,
+    messages: &[MessageSummary],
+    accounts: Vec<AccountId>,
+    (changes, audit): (Vec<ActionChange>, Vec<AuditChange>),
+    requests: Vec<Request>,
+) -> Plan {
+    Plan {
+        kind,
+        summary,
         targets: messages
             .iter()
             .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
             .collect(),
         changes,
-        accounts: account_ids,
-        audit: audit_lines,
+        accounts,
+        audit,
         sends: 0,
         action: Action::Requests { requests },
-    })
+    }
+}
+
+/// What a deletion of `messages` changes: their folders, before and after
+/// (Trash, or nothing when `permanent`).
+fn deletion_changes(
+    messages: &[MessageSummary],
+    folders: &HashMap<FolderId, Folder>,
+    permanent: bool,
+) -> (Vec<ActionChange>, Vec<AuditChange>) {
+    let names: Vec<String> = messages
+        .iter()
+        .map(|m| {
+            folders
+                .get(&m.folder_id)
+                .map_or_else(|| m.folder_id.as_str().to_owned(), |f| f.name.clone())
+        })
+        .collect();
+    let after = if permanent {
+        None
+    } else {
+        joined(
+            folders
+                .values()
+                .filter(|f| f.role == FolderRole::Trash)
+                .map(|f| f.name.as_str()),
+        )
+    };
+    (
+        vec![change(
+            "action-field-folder",
+            joined(names.iter().map(String::as_str)),
+            after,
+        )],
+        vec![audit(
+            "folder",
+            joined(messages.iter().map(|m| m.folder_id.as_str())),
+            Some(if permanent { "deleted" } else { "trash" }.into()),
+        )],
+    )
 }
 
 /// `delete_messages`: Trash, or permanent with its own scope; always
@@ -714,57 +738,25 @@ pub(crate) async fn delete_messages<D: McpData>(
             m.id
         )));
     }
-    let names: Vec<String> = messages
-        .iter()
-        .map(|m| {
-            folders
-                .get(&m.folder_id)
-                .map_or_else(|| m.folder_id.as_str().to_owned(), |f| f.name.clone())
-        })
-        .collect();
-    let after = if a.permanent {
-        None
-    } else {
-        joined(
-            folders
-                .values()
-                .filter(|f| f.role == FolderRole::Trash)
-                .map(|f| f.name.as_str()),
-        )
-    };
     let summary_id = if a.permanent {
         "confirmation-summary-permanent-delete"
     } else {
         "confirmation-summary-trash"
     };
-    Ok(Plan {
+    let requests = vec![Request::DeleteMessages {
+        message_ids: messages.iter().map(|m| m.id.clone()).collect(),
+        permanent: a.permanent,
+    }];
+    Ok(requests_plan(
         kind,
-        summary: LocalizedMessage::new(summary_id)
+        LocalizedMessage::new(summary_id)
             .arg("actor", ctx.actor())
             .arg("count", messages.len()),
-        targets: messages
-            .iter()
-            .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
-            .collect(),
-        changes: vec![change(
-            "action-field-folder",
-            joined(names.iter().map(String::as_str)),
-            after,
-        )],
-        accounts: account_ids,
-        audit: vec![audit(
-            "folder",
-            joined(messages.iter().map(|m| m.folder_id.as_str())),
-            Some(if a.permanent { "deleted" } else { "trash" }.into()),
-        )],
-        sends: 0,
-        action: Action::Requests {
-            requests: vec![Request::DeleteMessages {
-                message_ids: messages.iter().map(|m| m.id.clone()).collect(),
-                permanent: a.permanent,
-            }],
-        },
-    })
+        &messages,
+        account_ids,
+        deletion_changes(&messages, &folders, a.permanent),
+        requests,
+    ))
 }
 
 /// `delete_messages` with conversations (P3): Trash reaches the whole thread
@@ -797,58 +789,26 @@ async fn delete_conversations<D: McpData>(
     }
     let account_ids = accounts(messages.iter().map(|m| &m.account_id));
     let folders = ctx.folders_of(&account_ids).await?;
-    let names: Vec<String> = messages
-        .iter()
-        .map(|m| {
-            folders
-                .get(&m.folder_id)
-                .map_or_else(|| m.folder_id.as_str().to_owned(), |f| f.name.clone())
-        })
-        .collect();
-    let after = if a.permanent {
-        None
-    } else {
-        joined(
-            folders
-                .values()
-                .filter(|f| f.role == FolderRole::Trash)
-                .map(|f| f.name.as_str()),
-        )
-    };
     let id = if a.permanent {
         "mail-action-confirmation-permanent-delete"
     } else {
         "mail-action-confirmation-trash"
     };
-    Ok(Plan {
-        kind,
-        summary: conversation_summary(id, ctx.actor(), reached.conversations, messages.len()),
+    let requests = vec![Request::ApplyMailAction {
         targets: messages
             .iter()
-            .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject))
+            .map(|m| MessageTarget::message(m.id.clone()))
             .collect(),
-        changes: vec![change(
-            "action-field-folder",
-            joined(names.iter().map(String::as_str)),
-            after,
-        )],
-        accounts: account_ids,
-        audit: vec![audit(
-            "folder",
-            joined(messages.iter().map(|m| m.folder_id.as_str())),
-            Some(if a.permanent { "deleted" } else { "trash" }.into()),
-        )],
-        sends: 0,
-        action: Action::Requests {
-            requests: vec![Request::ApplyMailAction {
-                targets: messages
-                    .iter()
-                    .map(|m| MessageTarget::message(m.id.clone()))
-                    .collect(),
-                action,
-            }],
-        },
-    })
+        action,
+    }];
+    Ok(requests_plan(
+        kind,
+        conversation_summary(id, ctx.actor(), reached.conversations, messages.len()),
+        &messages,
+        account_ids,
+        deletion_changes(&messages, &folders, a.permanent),
+        requests,
+    ))
 }
 
 /// The draft lines a confirmation shows, before → after.
@@ -857,10 +817,7 @@ fn draft_changes<D: McpData>(
     before: Option<&Draft>,
     after: &Draft,
     uploads: &[Upload],
-) -> (
-    Vec<nail_api::agents::ActionChange>,
-    Vec<super::plan::AuditChange>,
-) {
+) -> (Vec<ActionChange>, Vec<AuditChange>) {
     let mut changes = Vec::new();
     let mut lines = Vec::new();
     let pairs = [
@@ -895,7 +852,7 @@ fn draft_changes<D: McpData>(
         ));
         lines.push(audit("subject", None, Some("changed".into())));
     }
-    let (old_body, new_body) = (before.map(body_of), body_of(after));
+    let (old_body, new_body) = (before.map(Draft::body), after.body());
     if old_body != Some(new_body) {
         changes.push(change(
             "action-field-body",
@@ -1018,14 +975,14 @@ pub(crate) async fn create_draft<D: McpData>(
     }
     // The agent's text goes above what the core prepared (signature,
     // quoted original).
-    let prepared = body_of(&draft).to_owned();
+    let prepared = draft.body().to_owned();
     let body = match (a.body.is_empty(), prepared.is_empty()) {
         (true, _) => prepared,
         (false, true) => a.body.clone(),
         (false, false) if mode == ComposerMode::Html => format!("{}\n{prepared}", a.body),
         (false, false) => format!("{}\n\n{prepared}", a.body),
     };
-    set_body(&mut draft, mode, body);
+    draft.set_body(mode, body);
     let uploads = ctx.uploads(&a.attachments).await?;
     let (changes, audit_lines) = draft_changes(ctx, None, &draft, &uploads);
     let mut targets = vec![target(ActionTargetKind::Draft, "new", &draft.subject)];
@@ -1039,9 +996,7 @@ pub(crate) async fn create_draft<D: McpData>(
     );
     Ok(Plan {
         kind: ActionKind::Draft,
-        summary: LocalizedMessage::new("confirmation-summary-draft")
-            .arg("actor", ctx.actor())
-            .arg("subject", draft.subject.as_str()),
+        summary: draft_summary(ctx.actor(), &draft.subject),
         targets,
         changes,
         accounts: vec![account],
@@ -1079,7 +1034,7 @@ pub(crate) async fn update_draft<D: McpData>(
     match (&a.body, a.format) {
         (Some(body), format) => {
             let mode = format.map_or(draft.mode, mode_of);
-            set_body(&mut draft, mode, body.clone());
+            draft.set_body(mode, body.clone());
         }
         (None, Some(format)) if mode_of(format) != draft.mode => {
             return Err(invalid("changing the format needs the new body"));
@@ -1103,9 +1058,7 @@ pub(crate) async fn update_draft<D: McpData>(
     }
     Ok(Plan {
         kind: ActionKind::Draft,
-        summary: LocalizedMessage::new("confirmation-summary-draft")
-            .arg("actor", ctx.actor())
-            .arg("subject", draft.subject.as_str()),
+        summary: draft_summary(ctx.actor(), &draft.subject),
         targets: vec![target(ActionTargetKind::Draft, id.as_str(), &draft.subject)],
         changes,
         accounts: vec![account],
@@ -1172,10 +1125,11 @@ pub(crate) async fn send_message<D: McpData>(
     }
     Ok(Plan {
         kind: ActionKind::Send,
-        summary: LocalizedMessage::new("confirmation-summary-send")
-            .arg("actor", ctx.actor())
-            .arg("subject", draft.subject.as_str())
-            .arg("count", recipients.len()),
+        summary: nail_api::agents::send_summary(
+            ctx.actor(),
+            draft.subject.as_str(),
+            recipients.len(),
+        ),
         targets,
         changes,
         accounts: vec![account],
@@ -1226,13 +1180,11 @@ pub(crate) async fn edit_open_draft<D: McpData>(
         McpTextFormat::Html => ComposerTextFormat::Html,
     };
     let before = (a.op == McpEditOp::ReplaceAll)
-        .then(|| subject_or_none(body_of(&draft)))
+        .then(|| subject_or_none(draft.body()))
         .flatten();
     Ok(Plan {
         kind: ActionKind::Draft,
-        summary: LocalizedMessage::new("confirmation-summary-draft")
-            .arg("actor", ctx.actor())
-            .arg("subject", draft.subject.as_str()),
+        summary: draft_summary(ctx.actor(), &draft.subject),
         targets: vec![target(
             ActionTargetKind::Draft,
             open.as_str(),
@@ -1268,13 +1220,13 @@ mod tests {
     #[test]
     fn bodies_follow_the_mode() {
         let mut draft = Draft::new(IdentityId::new("me@work.example"));
-        set_body(&mut draft, ComposerMode::Markdown, "**hi**".into());
-        assert_eq!(body_of(&draft), "**hi**");
-        set_body(&mut draft, ComposerMode::Html, "<p>hi</p>".into());
-        assert_eq!(body_of(&draft), "<p>hi</p>");
+        draft.set_body(ComposerMode::Markdown, "**hi**".into());
+        assert_eq!(draft.body(), "**hi**");
+        draft.set_body(ComposerMode::Html, "<p>hi</p>".into());
+        assert_eq!(draft.body(), "<p>hi</p>");
         assert_eq!(draft.markdown, None);
-        set_body(&mut draft, ComposerMode::Plain, "hi".into());
-        assert_eq!((body_of(&draft), draft.html.as_deref()), ("hi", None));
+        draft.set_body(ComposerMode::Plain, "hi".into());
+        assert_eq!((draft.body(), draft.html.as_deref()), ("hi", None));
         assert_eq!(mode_of(McpTextFormat::Text), ComposerMode::Plain);
     }
 

@@ -479,6 +479,65 @@ pub(crate) fn reindex_all(
     Ok(count)
 }
 
+/// Messages of an API engine (Gmail, Exchange) fetched per store transaction.
+pub(crate) const API_INGEST_CHUNK: usize = 25;
+
+/// Stores one message of an API engine (Gmail, Exchange) with its server
+/// data in one transaction: no reader sees it without them (ADR 0120).
+pub(crate) async fn ingest_api_message(
+    service: &crate::Service,
+    folder: Folder,
+    incoming: IncomingMessage,
+    extras: RemoteExtras,
+) -> crate::error::Result<IngestReport> {
+    let id = incoming
+        .id
+        .clone()
+        .ok_or_else(|| nail_api::ApiError::internal("an API message without its id"))?;
+    let blobs = service.blobs().clone();
+    let index = service.inner.search.get();
+    Ok(service
+        .store()
+        .call(move |s| {
+            let extras = BTreeMap::from([(id, extras)]);
+            ingest_with_remote(s, &blobs, Some(&index), &folder, &[incoming], &extras)
+        })
+        .await?)
+}
+
+/// Removes messages that left the server: their rows, and their index
+/// entries (a failure there is logged, the rows go anyway).
+pub(crate) async fn remove_messages(
+    service: &crate::Service,
+    ids: Vec<MessageId>,
+) -> crate::error::Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let index = service.inner.search.get();
+    service
+        .store()
+        .call(move |s| {
+            for id in &ids {
+                s.delete_message(id)?;
+            }
+            if let Err(err) = index.remove(&ids) {
+                tracing::warn!(%err, "cannot remove deleted messages from the index");
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// An API server's internal date (Unix seconds) as RFC 3339.
+pub(crate) fn internal_date(secs: Option<i64>) -> Option<String> {
+    secs.and_then(|t| {
+        chrono::DateTime::from_timestamp(t, 0)
+            .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

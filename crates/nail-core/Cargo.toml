@@ -27,8 +27,13 @@ demo = [
     "nail-exchange/testing",
 ]
 
+# Test support for this crate's and other crates' tests (`nail_core::testing`).
+testing = ["demo", "dep:tempfile"]
+
 [dependencies]
 zeroize.workspace = true
+# Temporary directories of `nail_core::testing` (feature `testing`).
+tempfile = { workspace = true, optional = true }
 # M4c (ADR 0094): imports / exports / backups / diagnostics (WP121) and
 # smartcards (WP122), wired by WP125.
 nail-portability.workspace = true
@@ -107,6 +112,10 @@ windows-sys = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
+# The crate's own test support (`nail_core::testing`) for its integration tests.
+nail-core = { workspace = true, features = ["testing"] }
+# Sample contract values (`nail_api::testing`).
+nail-api = { workspace = true, features = ["testing"] }
 # An MCP client for the test of the core-started server's subscriptions.
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 nail-testkit.workspace = true

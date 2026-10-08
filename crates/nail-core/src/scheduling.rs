@@ -166,11 +166,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             service.broadcast(Event::SchedulingSettingsChanged);
             Ok(Response::SchedulingSettings { settings })
         }
-        other => Err(ApiError::internal(format!(
-            "{} routed to scheduling",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("{} routed to scheduling", other.wire_type())).into())
+        }
     }
 }
 
@@ -192,20 +190,26 @@ struct ImipMail<'a> {
     summary: &'a nail_itip::Summary<'a>,
     /// The `Message-ID` it answers.
     in_reply_to: Option<&'a str>,
-    /// What is recorded as sent: UID, recurrence id, sequence, answer.
-    record: (
-        &'a str,
-        Option<&'a PimTime>,
-        u32,
-        Option<ParticipationStatus>,
-    ),
+    /// What is recorded as sent.
+    record: SentKey<'a>,
 }
+
+/// What is recorded about a sent message: UID, recurrence id, sequence,
+/// answer.
+type SentKey<'a> = (
+    &'a str,
+    Option<&'a PimTime>,
+    u32,
+    Option<ParticipationStatus>,
+);
 
 /// `invalid_request` with an `itip-issue-*` text.
 fn issue_error(issue: ItipIssue) -> CoreError {
-    ApiError::invalid_request(format!("the invitation cannot be used: {issue:?}"))
-        .with_localized(LocalizedMessage::new(issue.message_id()))
-        .into()
+    ApiError::invalid_localized(
+        format!("the invitation cannot be used: {issue:?}"),
+        issue.message_id(),
+    )
+    .into()
 }
 
 /// `invalid_request` with a free text (no user-facing id: the UI only
@@ -747,32 +751,42 @@ impl Service {
         let entry = self
             .send_draft(draft_id, None, None, Some(SendCrypto::none()))
             .await?;
-        let recipients: Vec<String> = to.iter().map(|(e, _)| normalize(e)).collect();
-        let (uid, rid, sequence, status) = record;
-        let sent = SentItipRecord {
-            id: 0,
-            account_id: account.id.clone(),
-            identity_id: identity.id.clone(),
+        let result = SentItip {
             method,
+            recipients: to.iter().map(|(e, _)| normalize(e)).collect(),
+            transport: SchedulingTransport::Imip,
+            outbox_id: Some(entry.id),
+        };
+        let sent = self.sent_record(&result, account.id.clone(), identity.id.clone(), record);
+        if let Err(err) = self.store().call(move |s| s.record_sent_itip(&sent)).await {
+            tracing::debug!(%err, "cannot record the sent iTIP message");
+        }
+        Ok(result)
+    }
+
+    /// The store's record of a sent message.
+    fn sent_record(
+        &self,
+        sent: &SentItip,
+        account_id: AccountId,
+        identity_id: IdentityId,
+        (uid, rid, sequence, status): SentKey<'_>,
+    ) -> SentItipRecord {
+        SentItipRecord {
+            id: 0,
+            account_id,
+            identity_id,
+            method: sent.method,
             uid: uid.to_owned(),
             recurrence_id: rid_key(rid),
             sequence,
             dtstamp: nail_store::pim::time::utc_string(self.pim_now()),
             status,
-            recipients: recipients.clone(),
-            transport: SchedulingTransport::Imip,
-            outbox_id: Some(entry.id.clone()),
+            recipients: sent.recipients.clone(),
+            transport: sent.transport,
+            outbox_id: sent.outbox_id.clone(),
             created_at: self.pim_now(),
-        };
-        if let Err(err) = self.store().call(move |s| s.record_sent_itip(&sent)).await {
-            tracing::debug!(%err, "cannot record the sent iTIP message");
         }
-        Ok(SentItip {
-            method,
-            recipients,
-            transport: SchedulingTransport::Imip,
-            outbox_id: Some(entry.id),
-        })
     }
 
     /// Records a message the CalDAV server delivers (nothing is mailed).
@@ -781,35 +795,21 @@ impl Service {
         identity_id: Option<&IdentityId>,
         method: ItipMethod,
         recipients: Vec<String>,
-        record: (&str, Option<&PimTime>, u32, Option<ParticipationStatus>),
+        record: SentKey<'_>,
     ) -> SentItip {
-        if let Some(identity) = identity_id
-            && let Ok((account, _)) = self.identity(identity)
-        {
-            let (uid, rid, sequence, status) = record;
-            let sent = SentItipRecord {
-                id: 0,
-                account_id: account.id,
-                identity_id: identity.clone(),
-                method,
-                uid: uid.to_owned(),
-                recurrence_id: rid_key(rid),
-                sequence,
-                dtstamp: nail_store::pim::time::utc_string(self.pim_now()),
-                status,
-                recipients: recipients.clone(),
-                transport: SchedulingTransport::Server,
-                outbox_id: None,
-                created_at: self.pim_now(),
-            };
-            drop(self.store().call(move |s| s.record_sent_itip(&sent)).await);
-        }
-        SentItip {
+        let result = SentItip {
             method,
             recipients,
             transport: SchedulingTransport::Server,
             outbox_id: None,
+        };
+        if let Some(identity) = identity_id
+            && let Ok((account, _)) = self.identity(identity)
+        {
+            let sent = self.sent_record(&result, account.id, identity.clone(), record);
+            drop(self.store().call(move |s| s.record_sent_itip(&sent)).await);
         }
+        result
     }
 
     fn now_utc(&self) -> DateTime<Utc> {
@@ -1214,30 +1214,42 @@ impl Service {
             .as_ref()
             .map_or(0, |l| l.object.version().sequence);
         let sent = self
-            .send_imip(ImipMail {
-                identity_id: &ctx.identity,
-                method: ItipMethod::Counter,
-                to: &[(organizer.email.clone(), organizer.name.clone())],
-                calendar: text,
-                summary: &summary,
-                in_reply_to: ctx
-                    .loaded
-                    .as_ref()
-                    .and_then(|l| l.imip.message_id.as_deref()),
-                record: (&ctx.uid, ctx.recurrence_id.as_ref(), sequence, None),
-            })
+            .mail_organizer(
+                &ctx,
+                &organizer,
+                ItipMethod::Counter,
+                text,
+                &summary,
+                sequence,
+            )
             .await?;
         let invitation = match &ctx.loaded {
             Some(l) => Some(Box::new(self.card(l).await?)),
             None => None,
         };
-        Ok(SchedulingResult {
-            event: ctx.copy.map(|c| Box::new(c.event)),
-            removed_event_id: None,
-            sent: vec![sent],
-            op_ids: Vec::new(),
-            invitation,
+        Ok(one_sent(ctx.copy, sent, invitation))
+    }
+
+    /// Mails `text` to the organizer of the invitation being answered.
+    async fn mail_organizer(
+        &self,
+        ctx: &AnswerContext,
+        organizer: &nail_api::pim::calendar::Organizer,
+        method: ItipMethod,
+        text: String,
+        summary: &nail_itip::Summary<'_>,
+        sequence: u32,
+    ) -> Result<SentItip> {
+        self.send_imip(ImipMail {
+            identity_id: &ctx.identity,
+            method,
+            to: &[(organizer.email.clone(), organizer.name.clone())],
+            calendar: text,
+            summary,
+            in_reply_to: ctx.answered_message(),
+            record: (&ctx.uid, ctx.recurrence_id.as_ref(), sequence, None),
         })
+        .await
     }
 
     /// `RefreshInvitation`: a `REFRESH` to the organizer.
@@ -1270,26 +1282,9 @@ impl Service {
             ..Default::default()
         };
         let sent = self
-            .send_imip(ImipMail {
-                identity_id: &ctx.identity,
-                method: ItipMethod::Refresh,
-                to: &[(organizer.email.clone(), organizer.name.clone())],
-                calendar: text,
-                summary: &summary,
-                in_reply_to: ctx
-                    .loaded
-                    .as_ref()
-                    .and_then(|l| l.imip.message_id.as_deref()),
-                record: (&ctx.uid, ctx.recurrence_id.as_ref(), 0, None),
-            })
+            .mail_organizer(&ctx, &organizer, ItipMethod::Refresh, text, &summary, 0)
             .await?;
-        Ok(SchedulingResult {
-            event: ctx.copy.map(|c| Box::new(c.event)),
-            removed_event_id: None,
-            sent: vec![sent],
-            op_ids: Vec::new(),
-            invitation: None,
-        })
+        Ok(one_sent(ctx.copy, sent, None))
     }
 
     /// `ForwardInvitation`: the original `REQUEST` unchanged (RFC 5546
@@ -1343,13 +1338,7 @@ impl Service {
                 record: (&ctx.uid, None, 0, None),
             })
             .await?;
-        Ok(SchedulingResult {
-            event: ctx.copy.map(|c| Box::new(c.event)),
-            removed_event_id: None,
-            sent: vec![sent],
-            op_ids: Vec::new(),
-            invitation: None,
-        })
+        Ok(one_sent(ctx.copy, sent, None))
     }
 
     // --- Applying received messages ------------------------------------------
@@ -1660,6 +1649,29 @@ impl Service {
             .ok_or_else(|| refused("you do not organize this event"))
     }
 
+    /// An event the user organizes (after checking an organizer's
+    /// comment): its copy, the organizer's identity and the other
+    /// attendees' addresses.
+    async fn organized_event(
+        &self,
+        event_id: &EventId,
+        comment: Option<&str>,
+    ) -> Result<(Copy, IdentityId, Vec<String>)> {
+        check_comment(comment)?;
+        let copy = self.copy_by_id(event_id).await?;
+        let identity = self.organizer_identity(&copy.event)?;
+        let me = self.me(None);
+        let others = copy
+            .event
+            .fields
+            .attendees
+            .iter()
+            .map(|a| a.email.clone())
+            .filter(|a| !me.contains(a))
+            .collect();
+        Ok((copy, identity, others))
+    }
+
     /// `SendInvitations`.
     async fn send_invitations(
         &self,
@@ -1668,17 +1680,9 @@ impl Service {
         attendees: &[String],
         comment: Option<String>,
     ) -> Result<SchedulingResult> {
-        check_comment(comment.as_deref())?;
-        let copy = self.copy_by_id(event_id).await?;
-        let identity = self.organizer_identity(&copy.event)?;
-        let me = self.me(None);
-        let recipients: Vec<String> = copy
-            .event
-            .fields
-            .attendees
-            .iter()
-            .map(|a| a.email.clone())
-            .filter(|a| !me.contains(a))
+        let (copy, identity, others) = self.organized_event(event_id, comment.as_deref()).await?;
+        let recipients: Vec<String> = others
+            .into_iter()
             .filter(|a| attendees.is_empty() || attendees.iter().any(|w| same(w, a)))
             .collect();
         if recipients.is_empty() {
@@ -1722,22 +1726,11 @@ impl Service {
         attendees: &[String],
         comment: Option<String>,
     ) -> Result<SchedulingResult> {
-        check_comment(comment.as_deref())?;
-        let copy = self.copy_by_id(event_id).await?;
-        let identity = self.organizer_identity(&copy.event)?;
-        let me = self.me(None);
+        let (copy, identity, everyone) = self.organized_event(event_id, comment.as_deref()).await?;
         let raw = copy
             .raw
             .clone()
             .unwrap_or_else(|| self.event_text(&copy.event, None, None));
-        let everyone: Vec<String> = copy
-            .event
-            .fields
-            .attendees
-            .iter()
-            .map(|a| a.email.clone())
-            .filter(|a| !me.contains(a))
-            .collect();
         let sequence = copy.event.sequence + 1;
         let (what, cancelled_for): (CancelWhat<'_>, Vec<String>) = match scope {
             CancelScope::Meeting => (CancelWhat::Meeting, everyone.clone()),
@@ -1983,11 +1976,11 @@ impl Service {
     ) -> Result<FreeBusyResult> {
         let issues = nail_api::scheduling::free_busy_issues(&attendees, &from, &to);
         if let Some(first) = issues.first() {
-            return Err(
-                ApiError::invalid_request(format!("invalid free/busy query: {issues:?}"))
-                    .with_localized(LocalizedMessage::new(first.message_id()))
-                    .into(),
-            );
+            return Err(ApiError::invalid_localized(
+                format!("invalid free/busy query: {issues:?}"),
+                first.message_id(),
+            )
+            .into());
         }
         let me = self.me(None);
         let organizer = identity_id
@@ -2223,6 +2216,30 @@ struct AnswerContext {
     copy: Option<Copy>,
     loaded: Option<Loaded>,
     card: Option<Invitation>,
+}
+
+impl AnswerContext {
+    /// The `Message-ID` of the invitation being answered.
+    fn answered_message(&self) -> Option<&str> {
+        self.loaded
+            .as_ref()
+            .and_then(|l| l.imip.message_id.as_deref())
+    }
+}
+
+/// The result of an action that sent one message and changed no event.
+fn one_sent(
+    copy: Option<Copy>,
+    sent: SentItip,
+    invitation: Option<Box<Invitation>>,
+) -> SchedulingResult {
+    SchedulingResult {
+        event: copy.map(|c| Box::new(c.event)),
+        removed_event_id: None,
+        sent: vec![sent],
+        op_ids: Vec::new(),
+        invitation,
+    }
 }
 
 /// `(address, name)` of `recipients` with the names the event knows.

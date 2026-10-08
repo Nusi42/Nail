@@ -23,7 +23,7 @@
 //! * **Sending** goes through the engine as the account's
 //!   `OutgoingTransport` (`crate::outbox`); Gmail files sent mail itself.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use nail_api::engine::{
@@ -33,23 +33,24 @@ use nail_api::engine::{
 use nail_api::gmail::{GmailFolder, GmailLabelSettings};
 use nail_api::{
     AccountConfig, AccountId, AccountState, ApiError, ErrorCode, Event, Flags, Folder, FolderId,
-    GmailLabelId, IncomingServer, LocalizedMessage, MessageId, Request, Response,
+    GmailLabelId, IncomingServer, MessageId, Request, Response,
 };
 use nail_proto_gmail::{GmailEngine, GmailLabelInfo, PollTimer};
+use nail_store::exchange::RemoteExtras;
 use nail_store::gmail::{GmailLabelOp, GmailLabelOpOutcome, GmailLabelRecord, GmailSyncRecord};
 use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
 
-use crate::engine::{Signals, state_for_error, stopped, unix_now};
-use crate::error::{CoreError, Result};
-use crate::ids;
-use crate::ingest::{IncomingMessage, ingest_with_remote};
-use crate::replay::{OpExecutor, replay_account};
-use crate::service::Service;
-use nail_store::exchange::RemoteExtras;
-
-/// Messages fetched (raw) per store transaction during a listing.
-const INGEST_CHUNK: usize = 25;
+use crate::{
+    engine::{Signals, stopped, unix_now},
+    error::{CoreError, Result},
+    ids,
+    ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message},
+    replay::{
+        Grouped, OpExecutor, group_results, group_slots, recorded_or, replay_account, sort_group,
+    },
+    service::Service,
+};
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
@@ -77,10 +78,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 GmailLabelOp::Create(settings),
             )
             .await?;
-            Ok(Response::GmailLabelSaved {
-                label: Box::new(label(service, &account_id, &label_id).await?),
-                op_ids: vec![op_id],
-            })
+            label_saved(service, &account_id, &label_id, op_id).await
         }
         Request::UpdateGmailLabel {
             account_id,
@@ -97,10 +95,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 GmailLabelOp::Update(settings),
             )
             .await?;
-            Ok(Response::GmailLabelSaved {
-                label: Box::new(label(service, &account_id, &label_id).await?),
-                op_ids: vec![op_id],
-            })
+            label_saved(service, &account_id, &label_id, op_id).await
         }
         Request::DeleteGmailLabel {
             account_id,
@@ -110,21 +105,26 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             queue_label_op(service, &account_id, &label_id, GmailLabelOp::Delete).await?;
             Ok(Response::Done)
         }
-        other => Err(ApiError::internal(format!(
-            "{} routed to Gmail",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => Err(ApiError::internal(format!("{} routed to Gmail", other.wire_type())).into()),
     }
+}
+
+/// The answer to a queued label change: the label as it is now.
+async fn label_saved(
+    service: &Service,
+    account_id: &AccountId,
+    label_id: &GmailLabelId,
+    op_id: nail_api::OpId,
+) -> Result<Response> {
+    Ok(Response::GmailLabelSaved {
+        label: Box::new(label(service, account_id, label_id).await?),
+        op_ids: vec![op_id],
+    })
 }
 
 /// The configuration of a Gmail account (`invalid_request` for others).
 fn gmail_account(service: &Service, id: &AccountId) -> Result<AccountConfig> {
-    let config = service.inner.accounts.config();
-    let account = config
-        .account(id)
-        .cloned()
-        .ok_or_else(|| ApiError::not_found(format!("account {id}")))?;
+    let account = service.account_config(id)?;
     if !matches!(account.incoming, IncomingServer::Gmail { .. }) {
         return Err(
             ApiError::invalid_request(format!("account {id} is not a Gmail account")).into(),
@@ -138,11 +138,11 @@ fn check_label(settings: &GmailLabelSettings) -> Result<()> {
     let issues = settings.issues();
     if let Some(first) = issues.first() {
         let ids: Vec<&str> = issues.iter().map(|i| i.message_id()).collect();
-        return Err(
-            ApiError::invalid_request(format!("invalid label: {}", ids.join(", ")))
-                .with_localized(LocalizedMessage::new(first.message_id()))
-                .into(),
-        );
+        return Err(ApiError::invalid_localized(
+            format!("invalid label: {}", ids.join(", ")),
+            first.message_id(),
+        )
+        .into());
     }
     Ok(())
 }
@@ -161,13 +161,11 @@ async fn duplicate_check(
         .iter()
         .any(|l| l.name.eq_ignore_ascii_case(name) && Some(&l.id) != except)
     {
-        return Err(
-            ApiError::invalid_request(format!("a label named {name:?} exists already"))
-                .with_localized(LocalizedMessage::new(
-                    nail_api::gmail::GmailLabelIssue::DuplicateName.message_id(),
-                ))
-                .into(),
-        );
+        return Err(ApiError::invalid_localized(
+            format!("a label named {name:?} exists already"),
+            nail_api::gmail::GmailLabelIssue::DuplicateName.message_id(),
+        )
+        .into());
     }
     Ok(())
 }
@@ -263,11 +261,7 @@ pub(crate) async fn run(
     let engine = match engine_for(&service, &account) {
         Ok(engine) => Arc::new(engine),
         Err(err) => {
-            service.set_status(
-                &account.id,
-                AccountState::Offline,
-                Some((err.code(), err.to_string(), err.localized())),
-            );
+            service.report_offline(&account.id, &err);
             stopped(&mut stop).await;
             return;
         }
@@ -291,19 +285,8 @@ pub(crate) async fn run(
                 timing.poll_override.unwrap_or_else(|| poll.next_delay())
             }
             Err(err) => {
-                let code = err.code();
                 tracing::info!(account = %account.id, %err, "Gmail sync failed");
-                service.set_status(
-                    &account.id,
-                    state_for_error(code),
-                    Some((code, err.to_string(), err.localized())),
-                );
-                service.broadcast(Event::SyncFailed {
-                    account_id: account.id.clone(),
-                    code,
-                    message: err.to_string(),
-                    localized: err.localized(),
-                });
+                service.report_sync_failure(&account.id, &err);
                 let engine_err: EngineError = err.into();
                 poll.observe(&Err(engine_err));
                 let delay = poll.next_delay().max(backoff);
@@ -592,31 +575,11 @@ async fn full_sync(
                 Ok(gone)
             })
             .await?;
-        remove_messages(service, gone).await?;
+        crate::ingest::remove_messages(service, gone).await?;
     }
     service.broadcast(Event::MailChanged {
         folder_ids: gmail_folders(account).into_iter().map(|f| f.id).collect(),
     });
-    Ok(())
-}
-
-async fn remove_messages(service: &Service, ids: Vec<MessageId>) -> Result<()> {
-    if ids.is_empty() {
-        return Ok(());
-    }
-    let index = service.inner.search.get();
-    service
-        .store()
-        .call(move |s| {
-            for id in &ids {
-                s.delete_message(id)?;
-            }
-            if let Err(err) = index.remove(&ids) {
-                tracing::warn!(%err, "cannot remove deleted messages from the index");
-            }
-            Ok(())
-        })
-        .await?;
     Ok(())
 }
 
@@ -661,7 +624,7 @@ async fn apply_delta(
             Ok(out)
         })
         .await?;
-    remove_messages(service, gone).await?;
+    crate::ingest::remove_messages(service, gone).await?;
     service.broadcast(Event::MailChanged {
         folder_ids: gmail_folders(account).into_iter().map(|f| f.id).collect(),
     });
@@ -726,7 +689,7 @@ async fn store_messages(
         return Ok(());
     }
     let mut new_ids: Vec<(MessageId, FolderId)> = Vec::new();
-    for chunk in messages.chunks(INGEST_CHUNK) {
+    for chunk in messages.chunks(API_INGEST_CHUNK) {
         // Known messages: metadata only.
         let mut fresh: Vec<RemoteMessage> = Vec::new();
         for m in chunk {
@@ -762,35 +725,18 @@ async fn store_messages(
                 id: Some(id.clone()),
                 flags: m.flags,
                 keywords: m.tags.clone(),
-                internal_date: m.internal_date.and_then(|t| {
-                    chrono::DateTime::from_timestamp(t, 0)
-                        .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-                }),
+                internal_date: crate::ingest::internal_date(m.internal_date),
                 raw,
                 headers_only: false,
                 size: m.size,
                 remote_thread_id: m.thread_id.clone(),
             };
-            let blobs = service.blobs().clone();
-            let index = service.inner.search.get();
-            let (target, info, remote) = (folder.clone(), m.gmail.clone(), m.remote_id.clone());
-            let stored_id = id.clone();
-            let report = service
-                .store()
-                .call(move |s| {
-                    // The message and its Gmail data in one transaction:
-                    // no reader sees it without them (ADR 0120).
-                    let extras = BTreeMap::from([(
-                        stored_id,
-                        RemoteExtras {
-                            remote_id: Some(remote),
-                            exchange: None,
-                            gmail: info,
-                        },
-                    )]);
-                    ingest_with_remote(s, &blobs, Some(&index), &target, &[incoming], &extras)
-                })
-                .await?;
+            let extras = RemoteExtras {
+                remote_id: Some(m.remote_id.clone()),
+                exchange: None,
+                gmail: m.gmail.clone(),
+            };
+            let report = ingest_api_message(service, folder.clone(), incoming, extras).await?;
             // Only mail arriving in the inbox or a user folder counts (like
             // IMAP): never the user's own sent mail, Spam or Trash.
             if report.new.contains(&id) && crate::sync::runs_arrival_rules(folder.role) {
@@ -800,13 +746,7 @@ async fn store_messages(
     }
     if arrivals && !new_ids.is_empty() {
         let queued: Vec<MessageId> = new_ids.iter().map(|(id, _)| id.clone()).collect();
-        if let Err(err) = service
-            .store()
-            .call(move |s| crate::rules::queue_for_rules(s, &queued))
-            .await
-        {
-            tracing::warn!(%err, "cannot queue new Gmail mail for the rules");
-        }
+        crate::rules::queue_arrivals(service, queued).await;
         let inbox = ids::folder_id(account, GmailFolder::Inbox.path());
         let mut by_folder: Vec<(FolderId, Vec<MessageId>)> = Vec::new();
         for (id, folder) in new_ids {
@@ -871,14 +811,7 @@ impl GmailExecutor<'_> {
                 };
                 self.write(RemoteWrite::SetFlags {
                     remote_id,
-                    change: nail_api::FlagChange {
-                        seen: change.seen,
-                        flagged: change.flagged,
-                        answered: change.answered,
-                        draft: change.draft,
-                        add_tags: change.add_tags.clone(),
-                        remove_tags: change.remove_tags.clone(),
-                    },
+                    change: change.clone(),
                 })
                 .await?;
                 Ok(())
@@ -888,10 +821,7 @@ impl GmailExecutor<'_> {
                 target_folder_id,
                 source,
             } => {
-                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
-                    Some(r) => Some(r),
-                    None => self.remote_id(message_id).await?,
-                };
+                let remote = self.remote_of(message_id, source.as_ref()).await?;
                 let Some(remote_id) = remote else {
                     return Ok(());
                 };
@@ -931,10 +861,7 @@ impl GmailExecutor<'_> {
                 trash_folder_id,
                 ..
             } => {
-                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
-                    Some(r) => Some(r),
-                    None => self.remote_id(message_id).await?,
-                };
+                let remote = self.remote_of(message_id, source.as_ref()).await?;
                 let Some(remote_id) = remote else {
                     return Ok(());
                 };
@@ -951,26 +878,9 @@ impl GmailExecutor<'_> {
                 folder_id,
             } => {
                 let folder = self.folder_path(folder_id).await?;
-                let id = message_id.clone();
-                let blobs = self.service.blobs().clone();
-                let found = self
-                    .service
-                    .store()
-                    .call(move |s| {
-                        let m = match s.get_message(&id) {
-                            Ok(m) => m,
-                            Err(err) if err.is_not_found() => return Ok(None),
-                            Err(err) => return Err(err),
-                        };
-                        let raw = match m.blob_hash {
-                            Some(hash) => blobs.get(&hash).ok(),
-                            None => None,
-                        };
-                        Ok(raw.map(|raw| (raw, m.summary.flags)))
-                    })
-                    .await
-                    .map_err(|e| EngineError::from(CoreError::from(e)))?;
-                let Some((raw, flags)) = found else {
+                let Some((raw, flags)) =
+                    crate::replay::stored_raw(self.service, message_id).await?
+                else {
                     return Ok(());
                 };
                 if let WriteOutcome::Done {
@@ -1001,16 +911,6 @@ impl GmailExecutor<'_> {
     }
 }
 
-/// How one operation of a group is replayed (P3).
-enum Grouped {
-    /// Its write goes with the others.
-    Write(RemoteWrite),
-    /// Nothing to do (the message never reached the server).
-    Nothing,
-    /// On its own ([`GmailExecutor::run`]): moves into another account.
-    Alone,
-}
-
 impl GmailExecutor<'_> {
     /// The remote id of an operation's message: the recorded one, else the
     /// row's.
@@ -1019,29 +919,19 @@ impl GmailExecutor<'_> {
         message: &MessageId,
         source: Option<&nail_store::MessageSource>,
     ) -> Result<Option<String>, EngineError> {
-        match source.and_then(|s| s.remote_id.clone()) {
-            Some(remote) => Ok(Some(remote)),
-            None => self.remote_id(message).await,
-        }
+        recorded_or(source, self.remote_id(message)).await
     }
 
     /// The write of a grouped operation: a flag change, a move within the
     /// account or a delete.
-    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped, EngineError> {
+    async fn group_write(&self, op: &QueuedOp) -> Result<Grouped<RemoteWrite>, EngineError> {
         let write = match &op.operation {
             Operation::UpdateFlags { message_id, change } => self
                 .remote_of(message_id, None)
                 .await?
                 .map(|remote_id| RemoteWrite::SetFlags {
                     remote_id,
-                    change: nail_api::FlagChange {
-                        seen: change.seen,
-                        flagged: change.flagged,
-                        answered: change.answered,
-                        draft: change.draft,
-                        add_tags: change.add_tags.clone(),
-                        remove_tags: change.remove_tags.clone(),
-                    },
+                    change: change.clone(),
                 }),
             Operation::MoveMessage {
                 message_id,
@@ -1084,27 +974,16 @@ impl GmailExecutor<'_> {
     /// A group of operations (P3, ADR 0164): their writes go to the
     /// engine together (one `batchModify` per label change).
     async fn run_group(&self, ops: &[QueuedOp]) -> Vec<Result<(), EngineError>> {
-        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
-        let mut writes: Vec<RemoteWrite> = Vec::new();
-        let mut members: Vec<usize> = Vec::new();
-        for (index, op) in ops.iter().enumerate() {
-            match self.group_write(op).await {
-                Ok(Grouped::Write(write)) => {
-                    writes.push(write);
-                    members.push(index);
-                }
-                Ok(Grouped::Nothing) => out[index] = Some(Ok(())),
-                Ok(Grouped::Alone) => out[index] = Some(self.run(op).await),
-                Err(err) => out[index] = Some(Err(err)),
-            }
-        }
-        if !writes.is_empty() {
+        let mut out = group_slots(ops.len());
+        let grouped = sort_group(ops, &mut out, |op| self.group_write(op), |op| self.run(op)).await;
+        if !grouped.is_empty() {
+            let (members, writes): (Vec<usize>, Vec<RemoteWrite>) = grouped.into_iter().unzip();
             let results = self.engine.write_many(&writes).await;
             for (index, result) in members.into_iter().zip(results) {
                 out[index] = Some(result.map(drop));
             }
         }
-        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+        group_results(out)
     }
 }
 

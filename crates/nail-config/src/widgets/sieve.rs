@@ -16,36 +16,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 /// Prefixes every widget kind of this feature starts with.
 #[cfg(test)]
-const PREFIXES: &[&str] = &["sieve-", "vacation-"];
-
-#[cfg(test)]
 mod tests {
-    #[test]
-    fn sieve_widgets_are_unique_and_kebab_case() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(
-                super::PREFIXES.iter().any(|p| spec.kind.starts_with(p)),
-                "{}",
-                spec.kind
-            );
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-    }
+    use crate::widgets::testing::{assert_prefixed, parses};
 
     #[test]
-    fn sieve_widgets_parse_in_a_layout() {
-        let text = "layout \"x\" extends=\"default\" {
-    window \"s\" {
-        stack {
-            sieve-status
-            vacation-editor
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-        let bad = text.replace("vacation-editor", "vacation-editor days=3");
-        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
+    fn sieve_widgets_parse() {
+        assert_prefixed(super::WIDGETS, &["sieve-", "vacation-"]);
+        assert!(parses(&["sieve-status", "vacation-editor"]));
+        assert!(!parses(&["vacation-editor days=3"]));
     }
 }

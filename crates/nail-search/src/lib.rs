@@ -29,6 +29,8 @@
 
 mod date;
 mod document;
+#[macro_use]
+mod engine;
 mod error;
 mod exec;
 pub mod imap;

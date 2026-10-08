@@ -22,7 +22,7 @@ use nail_api::plugins::{
     PluginStopReason, PluginUiTarget,
 };
 use nail_api::{Address, ErrorCode, Event};
-use nail_plugins::{AccountScope, PluginWrite};
+use nail_plugins::{AccountScope, ArrivalReport, PluginHost, PluginWrite};
 use serde_json::{Value, json};
 
 fn hooks(defs: Value) -> Value {
@@ -44,8 +44,7 @@ const TAGGER: &str = r#"
 
 #[tokio::test(flavor = "multi_thread")]
 async fn arrival_hooks_tag_mail_through_the_core() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec_with(
         "tagger",
         &["mail.read", "mail.organize", "hooks.arrival"],
@@ -83,8 +82,7 @@ async fn arrival_hooks_tag_mail_through_the_core() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn arrival_hooks_follow_filters_grants_and_body_permissions() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     // Only subjects containing "m1"; bodies readable.
     host.start(spec_with(
         "filtered",
@@ -147,8 +145,7 @@ async fn arrival_hooks_follow_filters_grants_and_body_permissions() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn failing_hooks_are_skipped_counted_and_never_stop_the_plugin() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       let n = 0;
       export default { activate(ctx) {
@@ -196,10 +193,18 @@ async fn failing_hooks_are_skipped_counted_and_never_stop_the_plugin() {
     assert_eq!(fake.writes().len(), 0);
 }
 
+/// Runs the arrival hooks of `m1`, which must end within 2 s whatever the
+/// plug-ins do.
+async fn quick_arrival(host: &PluginHost) -> ArrivalReport {
+    let started = Instant::now();
+    let report = host.arrival_hooks(&"m1".into()).await;
+    assert!(started.elapsed() < Duration::from_secs(2));
+    report
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn slow_hooks_time_out_by_their_own_budget() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.hooks.register("arrival", () => new Promise((r) => setTimeout(() => r(null), 3000)));
@@ -214,9 +219,7 @@ async fn slow_hooks_time_out_by_their_own_budget() {
     ))
     .await
     .unwrap();
-    let started = Instant::now();
-    let report = host.arrival_hooks(&"m1".into()).await;
-    assert!(started.elapsed() < Duration::from_secs(2));
+    let report = quick_arrival(&host).await;
     assert_eq!(report.runs[0].outcome, PluginHookOutcome::TimedOut);
     assert!(report.runs[0].elapsed >= Duration::from_millis(150));
     let line = &fake.localized("slow", "plugin-host-hook-timed-out")[0];
@@ -231,8 +234,7 @@ async fn slow_hooks_time_out_by_their_own_budget() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_runaway_hook_is_stopped_and_the_mail_still_arrives() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec_with(
         "runaway",
         &["mail.read", "hooks.arrival"],
@@ -249,9 +251,7 @@ async fn a_runaway_hook_is_stopped_and_the_mail_still_arrives() {
     ))
     .await
     .unwrap();
-    let started = Instant::now();
-    let report = host.arrival_hooks(&"m1".into()).await;
-    assert!(started.elapsed() < Duration::from_secs(2));
+    let report = quick_arrival(&host).await;
     let outcomes: Vec<_> = report
         .runs
         .iter()
@@ -309,8 +309,7 @@ fn outgoing(account: &str) -> PluginOutgoingMessage {
 /// will be end-to-end encrypted.
 #[tokio::test(flavor = "multi_thread")]
 async fn before_send_hooks_never_see_encrypted_content() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let spy = r#"
       export default { activate(ctx) {
         ctx.hooks.register("beforeSend", (m) => {
@@ -353,8 +352,7 @@ async fn before_send_hooks_never_see_encrypted_content() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn before_send_hooks_veto_and_add_headers_and_content() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let checker = r#"
       export default { activate(ctx) {
         ctx.hooks.register("beforeSend", (m) =>
@@ -448,8 +446,7 @@ async fn before_send_hooks_veto_and_add_headers_and_content() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn open_hooks_show_banners_and_badges_and_get_their_buttons() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.hooks.register("open", ({ message }) => {
@@ -533,8 +530,7 @@ async fn open_hooks_show_banners_and_badges_and_get_their_buttons() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn hooks_without_a_registered_handler_fail_quietly() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec_with(
         "lazy",
         &["mail.read", "hooks.open"],
@@ -547,16 +543,7 @@ async fn hooks_without_a_registered_handler_fail_quietly() {
     assert_eq!(report.runs[0].outcome, PluginHookOutcome::Failed);
     assert!(report.banners.is_empty(), "{:?}", report.banners);
     // Registering an undeclared hook is refused.
-    host.start(spec(
-        "undeclared",
-        &[],
-        r#"export default { activate(ctx) {
-             try { ctx.hooks.register("open", () => null); } catch (e) { nail.log.info("REG " + e.code); }
-           } };"#,
-    ))
-    .await
-    .unwrap();
-    assert_eq!(result(&fake, "undeclared", "REG ").await, "invalid_request");
+    assert_registration_refused(&fake, &host, r#"ctx.hooks.register("open", () => null)"#).await;
 }
 
 #[test]

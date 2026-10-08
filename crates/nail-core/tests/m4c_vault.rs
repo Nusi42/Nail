@@ -4,6 +4,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use nail_core::testing::{error_of, quiet_options_with};
+use tempfile::TempDir;
+
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,11 +20,10 @@ use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
 
 fn open(data: &Path, config: &Path, secrets: &Arc<MemorySecretStore>) -> Service {
-    let mut options = ServiceOptions::new(data, config);
-    options.watch_config = false;
-    options.start_engines = false;
-    options.secrets = Some(secrets.clone());
-    Service::open(nail_core::demo::demo_options(options)).unwrap()
+    Service::open(quiet_options_with(data, config, |o| {
+        o.secrets = Some(secrets.clone());
+    }))
+    .unwrap()
 }
 
 async fn status(service: &Service) -> nail_api::security::VaultStatus {
@@ -27,15 +31,6 @@ async fn status(service: &Service) -> nail_api::security::VaultStatus {
         panic!("vault status expected");
     };
     status
-}
-
-fn error_of(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("error expected, got {other:?}"),
-    }
 }
 
 async fn encrypted(service: &Service) {
@@ -56,12 +51,26 @@ async fn encrypted(service: &Service) {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
+/// A quiet service on fresh directories with its own in-memory keychain.
+fn vault_service() -> (Service, TempDir, TempDir, Arc<MemorySecretStore>) {
     let data = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::new());
     let service = open(data.path(), config.path(), &secrets);
+    (service, data, config, secrets)
+}
+
+/// The service lists the account `id`.
+async fn assert_has_account(service: &Service, id: &nail_api::AccountId) {
+    let Response::Accounts { accounts } = service.handle(Request::ListAccounts).await else {
+        panic!("accounts expected");
+    };
+    assert!(accounts.iter().any(|a| &a.id == id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
+    let (service, data, config, secrets) = vault_service();
     // Plain data: no recovery key.
     assert_eq!(
         error_of(
@@ -183,10 +192,7 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
     let reopened = open(data.path(), config.path(), &secrets);
     let s = status(&reopened).await;
     assert!(!s.needs_recovery && s.error.is_none(), "{s:?}");
-    let Response::Accounts { accounts } = reopened.handle(Request::ListAccounts).await else {
-        panic!("accounts expected");
-    };
-    assert!(accounts.iter().any(|a| a.id == seed.account.id));
+    assert_has_account(&reopened, &seed.account.id).await;
     let Response::VaultStatus { status: removed } =
         reopened.handle(Request::RemoveRecoveryKey).await
     else {
@@ -251,10 +257,7 @@ async fn demo_multi_keeps_the_file_keychain_across_a_restart() {
     let s = status(&reopened).await;
     assert!(!s.needs_recovery && s.error.is_none(), "{s:?}");
     assert_eq!(s.state, VaultState::Encrypted);
-    let Response::Accounts { accounts } = reopened.handle(Request::ListAccounts).await else {
-        panic!("accounts expected");
-    };
-    assert!(accounts.iter().any(|a| a.id == seed.account.id));
+    assert_has_account(&reopened, &seed.account.id).await;
     reopened.shutdown().await;
 }
 
@@ -262,10 +265,7 @@ async fn demo_multi_keeps_the_file_keychain_across_a_restart() {
 /// (`overwrite`) is replaced atomically with the new key's kit.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_confirmed_overwrite_replaces_the_recovery_kit() {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let secrets = Arc::new(MemorySecretStore::new());
-    let service = open(data.path(), config.path(), &secrets);
+    let (service, _data, _config, _secrets) = vault_service();
     encrypted(&service).await;
     let out = tempfile::tempdir().unwrap();
     let kit = out.path().join("recovery-kit.txt");

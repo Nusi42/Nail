@@ -3,58 +3,53 @@
 //! ([`nail_config::ConfigManager::ui_state`]); every change is pushed as
 //! `UiStateChanged` so other windows and sessions follow.
 
-use nail_api::{ApiError, Event, LocalizedMessage, Request, Response};
-use nail_config::UiStateError;
+use nail_api::{ApiError, Event, Request, Response};
+use nail_config::{ConfigManager, UiStateError};
 
 use crate::error::Result;
 use crate::service::Service;
 
 /// `GetUiState`, `SetUiState`.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
-    let config = service.config().clone();
-    let events = service.inner.events.clone();
-    // The config manager reads and writes a file.
-    tokio::task::spawn_blocking(move || -> Result<Response> {
-        let state = match request {
-            Request::GetUiState => config.ui_state(),
-            Request::SetUiState { key, value } => match config.set_ui_state(&key, value.clone()) {
-                Ok((state, changed)) => {
-                    if changed {
-                        drop(events.send(Event::UiStateChanged { key, value }));
-                    }
-                    state
+    crate::editing::on_config(service, request, answer).await
+}
+
+fn answer(service: &Service, config: &ConfigManager, request: Request) -> Result<Response> {
+    let state = match request {
+        Request::GetUiState => config.ui_state(),
+        Request::SetUiState { key, value } => match config.set_ui_state(&key, value.clone()) {
+            Ok((state, changed)) => {
+                if changed {
+                    service.broadcast(Event::UiStateChanged { key, value });
                 }
-                Err(UiStateError::Invalid(issue)) => {
-                    return Err(ApiError::invalid_request(format!(
-                        "UI state `{key}`: {}",
-                        issue.as_str()
-                    ))
-                    .with_localized(LocalizedMessage::new(issue.message_id()))
-                    .into());
-                }
-                Err(err @ UiStateError::Io(_)) => {
-                    return Err(ApiError::internal(err.to_string()).into());
-                }
-            },
-            other => {
-                return Err(ApiError::internal(format!(
-                    "{} is not a UI-state request",
-                    crate::service::request_name(&other)
-                ))
+                state
+            }
+            Err(UiStateError::Invalid(issue)) => {
+                return Err(ApiError::invalid_localized(
+                    format!("UI state `{key}`: {}", issue.as_str()),
+                    issue.message_id(),
+                )
                 .into());
             }
-        };
-        Ok(Response::UiState { state })
-    })
-    .await?
+            Err(err @ UiStateError::Io(_)) => {
+                return Err(ApiError::internal(err.to_string()).into());
+            }
+        },
+        other => {
+            return Err(ApiError::internal(format!(
+                "{} is not a UI-state request",
+                other.wire_type()
+            ))
+            .into());
+        }
+    };
+    Ok(Response::UiState { state })
 }
 
 #[cfg(test)]
 mod tests {
     use nail_api::{ErrorCode, Event, Request, Response};
     use serde_json::json;
-
-    use crate::service::Service;
 
     fn state(response: Response) -> nail_api::ui_state::UiState {
         match response {
@@ -65,12 +60,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_and_events() {
-        let data = tempfile::tempdir().unwrap();
-        let config_dir = tempfile::tempdir().unwrap();
-        let mut options = crate::ServiceOptions::new(data.path(), config_dir.path());
-        options.watch_config = false;
-        options.start_engines = false;
-        let service = Service::open(crate::demo::demo_options(options)).unwrap();
+        let t = crate::testing::TempService::quiet();
+        let service = &t.service;
         let mut events = service.inner.events.subscribe();
         assert!(state(service.handle(Request::GetUiState).await).is_empty());
         let set = Request::SetUiState {

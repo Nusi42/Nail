@@ -47,11 +47,11 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         } => {
             let target = PathBuf::from(&path);
             if !target.is_absolute() {
-                return Err(
-                    ApiError::invalid_request(format!("{path} is not an absolute path"))
-                        .with_localized(LocalizedMessage::new("attachment-path-not-absolute"))
-                        .into(),
-                );
+                return Err(ApiError::invalid_localized(
+                    format!("{path} is not an absolute path"),
+                    "attachment-path-not-absolute",
+                )
+                .into());
             }
             let content = attachment(service, message_id, index).await?;
             tokio::task::spawn_blocking(move || {
@@ -63,7 +63,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         other => Err(ApiError::internal(format!(
             "not an attachment request: {}",
-            crate::service::request_name(&other)
+            other.wire_type()
         ))
         .into()),
     }

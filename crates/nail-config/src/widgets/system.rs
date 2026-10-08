@@ -35,40 +35,18 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn system_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            update-settings show-installation=#false
-            desktop-settings show-dev-endpoint=#false
-            default-apps show-mapi=#true
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-    }
+    use crate::widgets::testing::parses;
 
     #[test]
-    fn unknown_options_are_refused() {
+    fn system_widgets_parse() {
+        assert!(parses(&[
+            "update-settings show-installation=#false",
+            "desktop-settings show-dev-endpoint=#false",
+            "default-apps show-mapi=#true",
+        ]));
         for widget in ["update-settings", "desktop-settings", "default-apps"] {
-            let text = format!(
-                "layout \"x\" extends=\"default\" {{
-    window \"main\" {{
-        stack {{
-            {widget} show-everything=#true
-        }}
-    }}
-}}
-"
-            );
             assert!(
-                crate::parse_layout(&text, "layout.kdl").is_err(),
+                !parses(&[&format!("{widget} show-everything=#true")]),
                 "{widget}"
             );
         }

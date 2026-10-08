@@ -26,7 +26,7 @@ use nail_api::{AccountConfig, AccountState, IncomingServer};
 use nail_proto_imap::{ImapClient, MailboxWatcher, WatchConfig, WatchEvent};
 use tokio::sync::{mpsc, watch};
 
-use crate::engine::{Signals, pause, state_for_error, stopped};
+use crate::engine::{Signals, pause, stopped};
 use crate::error::{CoreError, Result};
 use crate::replay::{ImapExecutor, replay_account};
 use crate::service::Service;
@@ -91,19 +91,8 @@ pub(crate) async fn run(
             }
             Err(err) => CoreError::from(err),
         };
-        let code = err.code();
         tracing::info!(account = %account.id, %err, retry_in = ?backoff, "IMAP connection failed");
-        service.set_status(
-            &account.id,
-            state_for_error(code),
-            Some((code, err.to_string(), err.localized())),
-        );
-        service.broadcast(nail_api::Event::SyncFailed {
-            account_id: account.id.clone(),
-            code,
-            message: err.to_string(),
-            localized: err.localized(),
-        });
+        service.report_sync_failure(&account.id, &err);
         if !pause(backoff, &signals, &mut stop).await {
             break;
         }

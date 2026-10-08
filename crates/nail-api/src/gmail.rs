@@ -119,25 +119,10 @@ pub struct GmailOptions {
 }
 
 impl GmailOptions {
-    /// Default of [`Self::poll_interval_secs`].
-    pub const DEFAULT_POLL_INTERVAL_SECS: u32 = 30;
-    /// Default of [`Self::max_poll_interval_secs`].
-    pub const DEFAULT_MAX_POLL_INTERVAL_SECS: u32 = 300;
-    /// Smallest accepted [`Self::poll_interval_secs`] (quota friendly).
-    pub const MIN_POLL_INTERVAL_SECS: u32 = 10;
-
     /// The effective (minimum, maximum) polling interval in seconds; the
     /// maximum is never below the minimum.
     pub fn poll_range(&self) -> (u32, u32) {
-        let min = self
-            .poll_interval_secs
-            .unwrap_or(Self::DEFAULT_POLL_INTERVAL_SECS)
-            .max(Self::MIN_POLL_INTERVAL_SECS);
-        let max = self
-            .max_poll_interval_secs
-            .unwrap_or(Self::DEFAULT_MAX_POLL_INTERVAL_SECS)
-            .max(min);
-        (min, max)
+        crate::engine::AdaptivePoll::range(self.poll_interval_secs, self.max_poll_interval_secs)
     }
 }
 
@@ -263,26 +248,14 @@ impl GmailFolder {
         match to {
             Self::Inbox => {
                 change.add.push(system::INBOX.to_owned());
-                for label in [system::SPAM, system::TRASH] {
-                    if !change.remove.iter().any(|l| l == label) {
-                        change.remove.push(label.to_owned());
-                    }
-                }
+                change.remove_all(&[system::SPAM, system::TRASH]);
             }
             Self::Spam => {
                 change.add.push(system::SPAM.to_owned());
-                if !change.remove.iter().any(|l| l == system::INBOX) {
-                    change.remove.push(system::INBOX.to_owned());
-                }
+                change.remove_all(&[system::INBOX]);
             }
             Self::Trash => change.add.push(system::TRASH.to_owned()),
-            Self::Archive => {
-                for label in [system::INBOX, system::SPAM, system::TRASH] {
-                    if !change.remove.iter().any(|l| l == label) {
-                        change.remove.push(label.to_owned());
-                    }
-                }
-            }
+            Self::Archive => change.remove_all(&[system::INBOX, system::SPAM, system::TRASH]),
             Self::Sent | Self::Drafts => {}
         }
         Some(change)
@@ -297,6 +270,17 @@ pub struct LabelChange {
     pub add: Vec<String>,
     /// Label ids to remove.
     pub remove: Vec<String>,
+}
+
+impl LabelChange {
+    /// Adds each of `labels` to [`Self::remove`] unless it is there already.
+    fn remove_all(&mut self, labels: &[&str]) {
+        for &label in labels {
+            if !self.remove.iter().any(|l| l == label) {
+                self.remove.push(label.to_owned());
+            }
+        }
+    }
 }
 
 impl LabelChange {

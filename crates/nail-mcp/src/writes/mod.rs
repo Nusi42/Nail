@@ -147,11 +147,10 @@ const MRTR_KEY: &str = "nail_confirmation";
 
 /// Who acts: the client.
 pub(crate) fn attribution(client: &McpClient) -> ActionAttribution {
-    ActionAttribution {
-        actor: ActionActor::mcp_client(client.id.clone()),
-        name: client.name.clone(),
-        on_behalf_of: None,
-    }
+    ActionAttribution::new(
+        ActionActor::mcp_client(client.id.clone()),
+        client.name.clone(),
+    )
 }
 
 /// The agent-facing result of an outcome.
@@ -281,6 +280,51 @@ fn with_confirmation(result: McpWriteResult, id: &ConfirmationId) -> McpWriteRes
 }
 
 impl<D: McpData> Shared<D> {
+    /// The confirmation `by` asks for to run `plan` (`operation` = the
+    /// tool or write).
+    pub(crate) fn new_confirmation(
+        &self,
+        plan: &Plan,
+        by: ActionAttribution,
+        operation: String,
+        idempotency_key: Option<String>,
+    ) -> NewConfirmation {
+        NewConfirmation {
+            requested_by: by,
+            kind: plan.kind,
+            operation,
+            summary: plan.summary.clone(),
+            targets: plan.targets.clone(),
+            changes: plan.changes.clone(),
+            account_ids: plan.accounts.clone(),
+            payload: serde_json::to_value(&plan.action).unwrap_or(Value::Null),
+            idempotency_key,
+            timeout_secs: self.settings.confirmation_timeout_secs,
+        }
+    }
+
+    /// Runs an approved plan and records on its confirmation how it ended.
+    pub(crate) async fn run_approved(
+        &self,
+        by: &ActionAttribution,
+        plan: &Plan,
+        id: &ConfirmationId,
+    ) -> WriteOutcome {
+        let outcome = self.run_plan(by, plan).await;
+        let finished = match &outcome {
+            WriteOutcome::Result(McpWriteResult::Vetoed { reasons }) => {
+                Err(LocalizedMessage::new("mcp-tool-error-vetoed")
+                    .arg("reasons", reasons.join("; ")))
+            }
+            WriteOutcome::Result(_) => Ok(()),
+            WriteOutcome::Failed(err) => Err(failure_text(err)),
+        };
+        if let Err(err) = self.broker.finish(id, finished).await {
+            tracing::warn!(%err, "cannot record how a confirmed write ended");
+        }
+        outcome
+    }
+
     /// Runs an allowed or approved plan for `by`.
     pub(crate) async fn run_plan(&self, by: &ActionAttribution, plan: &Plan) -> WriteOutcome {
         match self.execute(by, &plan.action).await {
@@ -344,18 +388,7 @@ impl<D: McpData> Shared<D> {
         let outcome = match self.broker.wait(&id).await {
             Ok(decided) => match decided.state {
                 ConfirmationState::Approved => {
-                    let outcome = self.run_plan(&attribution(&client), &plan).await;
-                    let finished = match &outcome {
-                        WriteOutcome::Result(McpWriteResult::Vetoed { reasons }) => {
-                            Err(LocalizedMessage::new("mcp-tool-error-vetoed")
-                                .arg("reasons", reasons.join("; ")))
-                        }
-                        WriteOutcome::Result(_) => Ok(()),
-                        WriteOutcome::Failed(err) => Err(failure_text(err)),
-                    };
-                    if let Err(err) = self.broker.finish(&id, finished).await {
-                        tracing::warn!(%err, "cannot record how a confirmed MCP write ended");
-                    }
+                    let outcome = self.run_approved(&attribution(&client), &plan, &id).await;
                     match outcome {
                         WriteOutcome::Result(result) => {
                             WriteOutcome::Result(with_confirmation(result, &id))
@@ -669,18 +702,7 @@ pub(crate) async fn call<D: McpData>(
             .await;
         return Ok(tool_result(&outcome).into());
     }
-    let new = NewConfirmation {
-        requested_by: by,
-        kind: plan.kind,
-        operation: tool.to_owned(),
-        summary: plan.summary.clone(),
-        targets: plan.targets.clone(),
-        changes: plan.changes.clone(),
-        account_ids: plan.accounts.clone(),
-        payload: serde_json::to_value(&plan.action).unwrap_or(Value::Null),
-        idempotency_key: key.clone(),
-        timeout_secs: shared.settings.confirmation_timeout_secs,
-    };
+    let new = shared.new_confirmation(&plan, by, tool.to_owned(), key.clone());
     let (confirmation, existing): (Confirmation, bool) = match shared.broker.submit(new).await {
         Ok(Submitted::New(c)) => (c, false),
         Ok(Submitted::Existing(c)) => (c, true),

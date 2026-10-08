@@ -32,7 +32,7 @@ pim-source-issue-empty-name = The name cannot be empty.
 pim-source-issue-invalid-url = Use an https: address (or webcal: for subscriptions).
 pim-source-issue-missing-url = Enter the server address, or choose the account it belongs to.
 pim-source-issue-missing-auth = Enter a user name for this server.
-pim-source-issue-invalid-color = The colour is not valid.
+pim-source-issue-invalid-color = { pim-issue-invalid-color }
 pim-source-issue-refresh-too-short = The refresh interval must be at least 5 minutes.
 
 ## Source states (PimSourceState)

@@ -44,9 +44,7 @@ impl From<nail_portability::PortabilityError> for CoreError {
 }
 
 fn invalid(message: &str, id: &str) -> CoreError {
-    ApiError::invalid_request(message.to_owned())
-        .with_localized(LocalizedMessage::new(id))
-        .into()
+    ApiError::invalid_localized(message.to_owned(), id).into()
 }
 
 /// An absolute path from a request.
@@ -229,7 +227,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         other => Err(ApiError::internal(format!(
             "{} routed to the portability module",
-            crate::service::request_name(&other)
+            other.wire_type()
         ))
         .into()),
     }
@@ -452,9 +450,7 @@ async fn finish_restore(
     mut target: backup::CoreRestoreTarget,
     report: &mut JobReport,
 ) {
-    for update in std::mem::take(&mut target.updates) {
-        service.broadcast(update.to_event());
-    }
+    service.broadcast_config(&std::mem::take(&mut target.updates));
     for file in std::mem::take(&mut target.reload) {
         match file {
             nail_api::customize::ConfigFile::Accounts => service.reload_accounts_file(),

@@ -78,6 +78,11 @@ const SAVE_EVERY: u64 = 16;
 /// Temporary blob files younger than this may belong to a running write.
 const TEMP_FILE_MIN_AGE: Duration = Duration::from_mins(10);
 
+/// The progress callback of a migration: [`ControlFlow::Break`] pauses it.
+type Progress<'a> = dyn FnMut(&VaultStatus) -> ControlFlow<()> + 'a;
+/// The outcome of a migration phase: paused (`Break`) or done (`Continue`).
+type PhaseResult = Result<ControlFlow<()>, VaultError>;
+
 const PHASES: [VaultPhase; 3] = [VaultPhase::Database, VaultPhase::Blobs, VaultPhase::Index];
 
 fn now() -> i64 {
@@ -440,12 +445,34 @@ impl Vault {
         Ok(self.status_of(&record))
     }
 
-    fn report(
-        &self,
-        record: &VaultRecord,
-        progress: &mut dyn FnMut(&VaultStatus) -> ControlFlow<()>,
-    ) -> ControlFlow<()> {
+    fn report(&self, record: &VaultRecord, progress: &mut Progress<'_>) -> ControlFlow<()> {
         progress(&self.status_of(record))
+    }
+
+    /// Converts `items` one by one, counting them in `record` (saved every
+    /// [`SAVE_EVERY`] items and at the end) and reporting after each.
+    fn convert_each<T, R>(
+        &self,
+        items: Vec<T>,
+        record: &mut VaultRecord,
+        progress: &mut Progress<'_>,
+        mut convert: impl FnMut(T) -> Result<R, VaultError>,
+    ) -> PhaseResult {
+        record.total = items.len() as u64;
+        record.done = 0;
+        self.store.set_vault_state(record)?;
+        for item in items {
+            convert(item)?;
+            record.done += 1;
+            if record.done.is_multiple_of(SAVE_EVERY) {
+                self.store.set_vault_state(record)?;
+            }
+            if self.report(record, progress).is_break() {
+                return Ok(ControlFlow::Break(()));
+            }
+        }
+        self.store.set_vault_state(record)?;
+        Ok(ControlFlow::Continue(()))
     }
 
     fn database_phase(
@@ -453,8 +480,8 @@ impl Vault {
         key: &DataKey,
         seal: bool,
         record: &mut VaultRecord,
-        progress: &mut dyn FnMut(&VaultStatus) -> ControlFlow<()>,
-    ) -> Result<ControlFlow<()>, VaultError> {
+        progress: &mut Progress<'_>,
+    ) -> PhaseResult {
         let counts = self.store.sealed_field_counts()?;
         record.total = counts.total();
         record.done = if seal { counts.sealed } else { counts.plain };
@@ -612,30 +639,18 @@ impl Vault {
         &self,
         seal: bool,
         record: &mut VaultRecord,
-        progress: &mut dyn FnMut(&VaultStatus) -> ControlFlow<()>,
-    ) -> Result<ControlFlow<()>, VaultError> {
+        progress: &mut Progress<'_>,
+    ) -> PhaseResult {
         self.blobs.remove_temp_files(TEMP_FILE_MIN_AGE)?;
         let hashes = self.blobs.hashes()?;
-        record.total = hashes.len() as u64;
-        record.done = 0;
-        self.store.set_vault_state(record)?;
-        for hash in hashes {
+        self.convert_each(hashes, record, progress, |hash| {
             match self.blobs.convert(&hash, seal) {
-                Ok(_) => {}
+                Ok(_) => Ok(()),
                 // Deleted meanwhile (garbage collection).
-                Err(err) if err.is_not_found() => {}
-                Err(err) => return Err(err.into()),
+                Err(err) if err.is_not_found() => Ok(()),
+                Err(err) => Err(err.into()),
             }
-            record.done += 1;
-            if record.done.is_multiple_of(SAVE_EVERY) {
-                self.store.set_vault_state(record)?;
-            }
-            if self.report(record, progress).is_break() {
-                return Ok(ControlFlow::Break(()));
-            }
-        }
-        self.store.set_vault_state(record)?;
-        Ok(ControlFlow::Continue(()))
+        })
     }
 
     fn index_phase(
@@ -643,27 +658,15 @@ impl Vault {
         key: &DataKey,
         seal: bool,
         record: &mut VaultRecord,
-        progress: &mut dyn FnMut(&VaultStatus) -> ControlFlow<()>,
-    ) -> Result<ControlFlow<()>, VaultError> {
+        progress: &mut Progress<'_>,
+    ) -> PhaseResult {
         let Some(dir) = self.index_dir.as_deref().filter(|d| d.is_dir()) else {
             return Ok(ControlFlow::Continue(()));
         };
         let files = index_files(dir)?;
-        record.total = files.len() as u64;
-        record.done = 0;
-        self.store.set_vault_state(record)?;
-        for name in files {
-            convert_index_file(key, dir, &name, seal)?;
-            record.done += 1;
-            if record.done.is_multiple_of(SAVE_EVERY) {
-                self.store.set_vault_state(record)?;
-            }
-            if self.report(record, progress).is_break() {
-                return Ok(ControlFlow::Break(()));
-            }
-        }
-        self.store.set_vault_state(record)?;
-        Ok(ControlFlow::Continue(()))
+        self.convert_each(files, record, progress, |name| {
+            convert_index_file(key, dir, &name, seal)
+        })
     }
 
     /// How the search index's directory must be wrapped now: `None` for a

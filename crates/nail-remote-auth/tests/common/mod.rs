@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 /// Start of the test clock (2026-09-29).
-pub(crate) const T0: i64 = 1_790_000_000;
+pub(crate) use nail_api::testing::T0;
 pub(crate) const HOST: &str = "nail.local";
 pub(crate) const ORIGIN: &str = "https://nail.local:4780";
 pub(crate) const PASSWORD: &str = "correct horse battery";
@@ -127,6 +127,43 @@ impl Harness {
             "{reply:?}"
         );
         browser
+    }
+
+    /// A harness with the user `ada` and a browser paired to her.
+    pub(crate) async fn with_ada() -> (Self, RemoteUser, Browser) {
+        let h = Self::new();
+        let ada = h.user("ada", false).await;
+        let browser = h.paired(&ada, "192.0.2.10").await;
+        (h, ada, browser)
+    }
+
+    /// Two browsers paired to `user` (a phone and a laptop).
+    pub(crate) async fn two_browsers(&self, user: &RemoteUser) -> (Browser, Browser) {
+        (
+            self.paired(user, "192.0.2.10").await,
+            self.paired(user, "192.0.2.11").await,
+        )
+    }
+
+    /// [`Harness::two_browsers`] with each browser's resolved session.
+    pub(crate) async fn two_sessions(
+        &self,
+        user: &RemoteUser,
+    ) -> ((Browser, RemoteSessionCtx), (Browser, RemoteSessionCtx)) {
+        let (mut phone, mut laptop) = self.two_browsers(user).await;
+        let phone_ctx = phone.resolve(self).unwrap();
+        let laptop_ctx = laptop.resolve(self).unwrap();
+        ((phone, phone_ctx), (laptop, laptop_ctx))
+    }
+
+    /// The reply refused the credentials, and the audit says why.
+    pub(crate) fn assert_refused(&self, reply: &AuthReply, detail: &str) {
+        assert_eq!(
+            failure(reply).0,
+            nail_api::remote::AuthFailure::InvalidCredentials
+        );
+        let audit = self.store.list_remote_audit(None, None, 1).unwrap();
+        assert_eq!(audit[0].detail.as_deref(), Some(detail));
     }
 
     pub(crate) fn events(&self) -> Vec<Event> {

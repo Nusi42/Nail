@@ -16,7 +16,8 @@
 
 use kdl::{KdlDocument, KdlDocumentFormat, KdlEntry, KdlNode, KdlNodeFormat, KdlValue};
 
-use crate::accounts::write::{detect_indent, quote, split_leading, uses_crlf};
+pub(crate) use crate::kdl_write::same_node;
+use crate::kdl_write::{detect_indent, quote, split_leading, uses_crlf};
 
 /// The indentation and line-ending style of a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +50,17 @@ impl Default for Style {
             nl: "\n",
         }
     }
+}
+
+/// The children of a node, creating an empty block (` {}`) when it has none.
+pub(crate) fn block_of(node: &mut KdlNode) -> &mut KdlDocument {
+    if node.children().is_none()
+        && let Some(format) = node.format_mut()
+        && format.before_children.is_empty()
+    {
+        " ".clone_into(&mut format.before_children);
+    }
+    node.ensure_children()
 }
 
 /// A KDL value written as source text: strings quoted, numbers plain,
@@ -225,16 +237,9 @@ pub(crate) fn ensure_multiline(block: &mut KdlDocument, depth: usize, style: &St
         }
     }
     let last = &mut block.nodes_mut()[count - 1];
-    let last_ends_line = ends_line(last);
-    if !last_ends_line {
-        let fmt = node_format(last);
-        if fmt.terminator == ";" {
-            fmt.terminator.clear();
-        }
-        fmt.before_terminator = fmt.before_terminator.trim_end().to_owned();
-        fmt.trailing = format!("{}{}", fmt.trailing.trim_end(), style.nl);
-        let doc = doc_format(block);
-        doc.trailing = parent_pad;
+    if !ends_line(last) {
+        end_line(last, style);
+        doc_format(block).trailing = parent_pad;
     }
 }
 
@@ -502,35 +507,6 @@ pub(crate) fn to_text(doc: &KdlDocument, style: &Style) -> String {
         out.push_str(style.nl);
     }
     out
-}
-
-/// Structural equality ignoring formatting (name, arguments in order,
-/// properties, children).
-pub(crate) fn same_node(a: &KdlNode, b: &KdlNode) -> bool {
-    fn props(n: &KdlNode) -> Vec<(&str, &KdlValue)> {
-        let mut props: Vec<_> = n
-            .entries()
-            .iter()
-            .filter_map(|e| e.name().map(|k| (k.value(), e.value())))
-            .collect();
-        props.sort_by(|x, y| x.0.cmp(y.0));
-        props
-    }
-    fn args(n: &KdlNode) -> Vec<&KdlValue> {
-        n.entries()
-            .iter()
-            .filter(|e| e.name().is_none())
-            .map(KdlEntry::value)
-            .collect()
-    }
-    fn kids(n: &KdlNode) -> &[KdlNode] {
-        n.children().map_or(&[], KdlDocument::nodes)
-    }
-    a.name().value() == b.name().value()
-        && args(a) == args(b)
-        && props(a) == props(b)
-        && kids(a).len() == kids(b).len()
-        && kids(a).iter().zip(kids(b)).all(|(x, y)| same_node(x, y))
 }
 
 #[cfg(test)]

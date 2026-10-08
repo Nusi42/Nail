@@ -365,20 +365,9 @@ impl Store {
             let mut queued = Vec::with_capacity(inverses.len());
             let mut skipped = 0;
             for op in &inverses {
-                tx.execute_batch("SAVEPOINT undo_op")?;
-                match crate::queue::enqueue_in_tx(tx, op) {
-                    Ok(enqueued) => {
-                        tx.execute_batch("RELEASE undo_op")?;
-                        queued.push(enqueued);
-                    }
-                    Err(
-                        err @ (Error::NotFound { .. } | Error::Conflict(_) | Error::InvalidData(_)),
-                    ) => {
-                        tx.execute_batch("ROLLBACK TO undo_op; RELEASE undo_op")?;
-                        tracing::debug!(%err, run = %run, "an inverse no longer applies; skipped");
-                        skipped += 1;
-                    }
-                    Err(err) => return Err(err),
+                match crate::queue::enqueue_if_applies(tx, op)? {
+                    Some(enqueued) => queued.push(enqueued),
+                    None => skipped += 1,
                 }
             }
             let changed = tx.execute(
@@ -501,54 +490,26 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use nail_api::rules::FolderRef;
-    use nail_api::{Account, AccountKind, Folder, FolderRole, MessageSummary};
+    use nail_api::testing;
+    use nail_api::{AccountKind, Folder, FolderRole, MessageSummary};
 
     use super::*;
     use crate::queue::FlagChange;
+    use crate::test_store::{add, store_with};
 
     fn store_with_message() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: "a1".into(),
-                name: "A".into(),
-                email: "a@example.org".into(),
-                kind: AccountKind::Imap,
-            })
-            .unwrap();
-        store
-            .upsert_folder(&Folder {
-                id: "inbox".into(),
-                account_id: "a1".into(),
-                parent_id: None,
-                name: "Inbox".into(),
-                path: "INBOX".into(),
-                role: FolderRole::Inbox,
-                total: 0,
-                unread: 0,
-            })
-            .unwrap();
-        let summary = MessageSummary {
-            id: "m1".into(),
-            folder_id: "inbox".into(),
-            account_id: "a1".into(),
-            subject: "Hi".into(),
-            from: None,
-            to: Vec::new(),
-            date: "2026-09-29T10:00:00Z".into(),
-            flags: nail_api::Flags::default(),
-            has_attachments: false,
-            preview: String::new(),
-            thread_id: None,
-            tags: Vec::new(),
-            duplicates: Vec::new(),
-            headers_only: false,
-            gmail: None,
-            exchange: None,
-        };
-        store
-            .upsert_message(&crate::StoredMessage::new(summary))
-            .unwrap();
+        let store = store_with(
+            &testing::account("a1", AccountKind::Imap),
+            &[testing::folder("inbox", "a1", "INBOX", FolderRole::Inbox)],
+        );
+        add(
+            &store,
+            MessageSummary {
+                subject: "Hi".into(),
+                date: "2026-09-29T10:00:00Z".into(),
+                ..testing::summary("m1", "a1", "inbox")
+            },
+        );
         store
     }
 

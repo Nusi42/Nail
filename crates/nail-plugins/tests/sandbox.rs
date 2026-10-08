@@ -50,8 +50,7 @@ fn crashed_with(fake: &Fake, host: &nail_plugins::PluginHost, id: &str, reason: 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_endless_loop_is_stopped_and_others_keep_running() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let runaway = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", () => { for (;;) {} });
@@ -96,8 +95,7 @@ async fn an_endless_loop_is_stopped_and_others_keep_running() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_loop_after_an_await_is_stopped_too() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", async () => {
@@ -117,8 +115,7 @@ async fn a_loop_after_an_await_is_stopped_too() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_loop_while_activating_fails_the_start() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let err = host
         .start(spec("hang", &[], "for (;;) {}"))
         .await
@@ -134,8 +131,7 @@ async fn a_loop_while_activating_fails_the_start() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_catch_cannot_swallow_the_budget() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", () => {
@@ -151,8 +147,7 @@ async fn a_catch_cannot_swallow_the_budget() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runaway_memory_is_stopped() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", () => {
@@ -175,8 +170,7 @@ async fn runaway_memory_is_stopped() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn deep_recursion_throws_instead_of_crashing_the_process() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       function down(n) { return down(n + 1) + 1; }
       export default { activate(ctx) {
@@ -196,8 +190,7 @@ async fn deep_recursion_throws_instead_of_crashing_the_process() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn throwing_handlers_stop_the_plugin() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let sync_throw = r#"
       export default { activate(ctx) {
         ctx.commands.register("run", () => { throw new Error("boom"); });
@@ -248,8 +241,7 @@ async fn throwing_handlers_stop_the_plugin() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unhandled_rejections_are_logged_not_fatal() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate() { nail.storage.get("x"); Promise.reject(new Error("floating")); } };
     "#;
@@ -277,8 +269,7 @@ async fn unhandled_rejections_are_logged_not_fatal() {
 /// `try` is handled: no "unhandled rejection" line.
 #[tokio::test(flavor = "multi_thread")]
 async fn awaited_immediate_rejections_are_not_reported() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default {
         async activate() {
@@ -306,8 +297,7 @@ async fn awaited_immediate_rejections_are_not_reported() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn plugins_have_no_host_access() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       const kinds = [typeof require, typeof process, typeof std, typeof os, typeof fetch,
         typeof XMLHttpRequest, typeof WebSocket, typeof Deno, typeof Bun, typeof module,
@@ -342,8 +332,7 @@ async fn plugins_have_no_host_access() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn plugins_cannot_see_each_other() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec(
         "first",
         &[],
@@ -363,8 +352,7 @@ async fn plugins_cannot_see_each_other() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unsupported_api_versions_are_incompatible() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (_, host) = fake_host();
     let mut spec = spec("future", &[], HEALTHY);
     spec.manifest.api_version = "2".into();
     let err = host.start(spec).await.unwrap_err();
@@ -377,8 +365,7 @@ async fn unsupported_api_versions_are_incompatible() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_missing_main_file_fails_the_start() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (_, host) = fake_host();
     let spec = spec_with_files("nomain", &[], &[("other.js", "")]);
     let err = host.start(spec).await.unwrap_err();
     assert!(err.message.contains("index.js"), "{}", err.message);
@@ -390,8 +377,7 @@ async fn a_missing_main_file_fails_the_start() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn uninstall_and_shutdown_forget_or_stop_plugins() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("one", &[], HEALTHY)).await.unwrap();
     host.start(spec("two", &[], HEALTHY)).await.unwrap();
     assert!(host.stop(&plugin_id("one"), PluginStopReason::Uninstalled));
@@ -406,8 +392,7 @@ async fn uninstall_and_shutdown_forget_or_stop_plugins() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn restarting_replaces_the_running_instance() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("again", &[], HEALTHY)).await.unwrap();
     host.start(spec("again", &[], HEALTHY)).await.unwrap();
     assert_eq!(stop_reasons(&fake, "again"), [PluginStopReason::Reloaded]);
@@ -426,8 +411,7 @@ async fn restarting_replaces_the_running_instance() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn installed_packages_run_from_memory() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let manifest = serde_json::json!({
         "id": "packed", "name": "Packed", "version": "1.2.3", "apiVersion": "1",
         "main": "dist/index.js", "permissions": ["storage"],
@@ -485,8 +469,7 @@ async fn too_many_pending_calls_are_refused() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dropping_the_last_host_stops_its_plugins() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     host.start(spec("orphan", &[], HEALTHY)).await.unwrap();
     let clone = host.clone();
     drop(host);

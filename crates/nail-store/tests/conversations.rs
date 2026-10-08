@@ -2,6 +2,7 @@
 //! user's from Sent, drafts on their own, "me", counts, order and scopes.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use common::{account, folder, message, seeded_store};
@@ -287,15 +288,20 @@ fn ids_of(messages: &[nail_api::ConversationMessage]) -> Vec<&str> {
     messages.iter().map(|m| m.message.id.as_str()).collect()
 }
 
-#[test]
-fn a_copy_in_the_inbox_and_in_sent_counts_once_as_the_listed_copy() {
-    let store = store();
-    // The user sent s3 to themselves: one copy in Sent, one in the Inbox.
+/// The user sent s3 to themselves: one copy in Sent, one in the Inbox.
+fn add_self_sent_copies(store: &Store) {
     let mut sent = mail("s3-sent", "a1", "sent", "me@a1", &["a"], 12);
     sent.meta.as_mut().unwrap().message_id = Some("s3@x".into());
     let mut inbox = mail("s3-inbox", "a1", "inbox", "me@a1", &["a"], 12);
     inbox.meta.as_mut().unwrap().message_id = Some("s3@x".into());
     store.merge_messages(&[sent, inbox]).unwrap();
+}
+
+#[test]
+fn a_copy_in_the_inbox_and_in_sent_counts_once_as_the_listed_copy() {
+    let store = store();
+    // The user sent s3 to themselves: one copy in Sent, one in the Inbox.
+    add_self_sent_copies(&store);
     let scope = folders(&store, &["inbox"]);
     let page = store
         .list_conversations(&scope, &OwnAddresses::new(), 0, 50)
@@ -317,11 +323,7 @@ fn a_narrowed_read_everywhere_drops_hidden_copies_before_they_collapse() {
     // answer, so a hidden copy either stood for the visible one (which then
     // vanished) or showed up in `duplicates`.
     let store = store();
-    let mut sent = mail("s3-sent", "a1", "sent", "me@a1", &["a"], 12);
-    sent.meta.as_mut().unwrap().message_id = Some("s3@x".into());
-    let mut inbox = mail("s3-inbox", "a1", "inbox", "me@a1", &["a"], 12);
-    inbox.meta.as_mut().unwrap().message_id = Some("s3@x".into());
-    store.merge_messages(&[sent, inbox]).unwrap();
+    add_self_sent_copies(&store);
     let scope = folders(&store, &["inbox"]);
     let thread = store
         .list_conversations(&scope, &own(), 0, 50)

@@ -331,7 +331,6 @@ impl Service {
                 return Err(ApiError::invalid_request(format!("invalid tag {tag:?}")).into());
             }
         }
-        let change: nail_store::FlagChange = change.into();
         self.enqueue(
             unique(messages)
                 .into_iter()

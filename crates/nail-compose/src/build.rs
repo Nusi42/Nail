@@ -211,7 +211,8 @@ fn mime_type(att: &DraftAttachment) -> String {
     }
 }
 
-fn attachment_part(
+/// The part carrying an attachment's bytes with its content type.
+fn data_part(
     att: &DraftAttachment,
     blobs: &dyn BlobSource,
 ) -> Result<MimePart<'static>, ComposeError> {
@@ -219,8 +220,14 @@ fn attachment_part(
     Ok(MimePart::new(
         ContentType::new(mime_type(att)),
         BodyPart::Binary(data.into()),
-    )
-    .attachment(clean_header(&att.filename)))
+    ))
+}
+
+fn attachment_part(
+    att: &DraftAttachment,
+    blobs: &dyn BlobSource,
+) -> Result<MimePart<'static>, ComposeError> {
+    Ok(data_part(att, blobs)?.attachment(clean_header(&att.filename)))
 }
 
 fn inline_part(
@@ -228,18 +235,14 @@ fn inline_part(
     cid: &str,
     blobs: &dyn BlobSource,
 ) -> Result<MimePart<'static>, ComposeError> {
-    let data = load(att, blobs)?;
-    Ok(MimePart::new(
-        ContentType::new(mime_type(att)),
-        BodyPart::Binary(data.into()),
-    )
-    .header(
-        "Content-Disposition",
-        HeaderType::ContentType(
-            ContentType::new("inline").attribute("filename", clean_header(&att.filename)),
-        ),
-    )
-    .cid(cid.to_owned()))
+    Ok(data_part(att, blobs)?
+        .header(
+            "Content-Disposition",
+            HeaderType::ContentType(
+                ContentType::new("inline").attribute("filename", clean_header(&att.filename)),
+            ),
+        )
+        .cid(cid.to_owned()))
 }
 
 /// Whether the HTML references `cid:<id>`.

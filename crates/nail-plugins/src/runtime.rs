@@ -56,6 +56,17 @@ use crate::services::{AccountScope, HostLogLine, HttpRequest, PluginWriteRequest
 use crate::tree;
 use crate::writes::{self, Blobs};
 
+/// The gate's scope of `$call` by `$check` (`mail_scope`, `body_scope`),
+/// or (returned) the call's denial.
+macro_rules! scope_or_deny {
+    ($s:expr, $check:ident, $call:expr) => {
+        match $s.gate().$check($call, &$s.expand()) {
+            Ok(scope) => scope,
+            Err(d) => return Ok($s.deny(&d)),
+        }
+    };
+}
+
 /// Longest text of a composer edit (bytes).
 pub(crate) const MAX_COMPOSER_TEXT: usize = 256 * 1024;
 
@@ -502,10 +513,7 @@ fn cut(text: &str, max: usize) -> String {
     if text.len() <= max {
         return text.to_owned();
     }
-    let mut end = max;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(max);
     text[..end].to_owned()
 }
 
@@ -946,10 +954,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
         }
         "mail.get" => {
             let call = "nail.mail.get";
-            let scope = match s.gate().mail_scope(call, &s.expand()) {
-                Ok(scope) => scope,
-                Err(d) => return Ok(s.deny(&d)),
-            };
+            let scope = scope_or_deny!(s, mail_scope, call);
             let id = MessageId::from(str_field(payload, "id")?);
             let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {
@@ -963,10 +968,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
         }
         "mail.getBody" => {
             let call = "nail.mail.getBody";
-            let scope = match s.gate().body_scope(call, &s.expand()) {
-                Ok(scope) => scope,
-                Err(d) => return Ok(s.deny(&d)),
-            };
+            let scope = scope_or_deny!(s, body_scope, call);
             let id = MessageId::from(str_field(payload, "id")?);
             let inner = Arc::clone(&s.inner);
             let hidden = s.hidden_folders();
@@ -997,10 +999,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
         }
         "mail.search" => {
             let call = "nail.mail.search";
-            let scope = match s.gate().mail_scope(call, &s.expand()) {
-                Ok(scope) => scope,
-                Err(d) => return Ok(s.deny(&d)),
-            };
+            let scope = scope_or_deny!(s, mail_scope, call);
             // Where message text may be searched (`mail.read.body`).
             let body_scope = s
                 .gate()
@@ -1031,10 +1030,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
         }
         "mail.thread" => {
             let call = "nail.mail.thread";
-            let scope = match s.gate().mail_scope(call, &s.expand()) {
-                Ok(scope) => scope,
-                Err(d) => return Ok(s.deny(&d)),
-            };
+            let scope = scope_or_deny!(s, mail_scope, call);
             let thread = ThreadId::from(str_field(payload, "threadId")?);
             let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {

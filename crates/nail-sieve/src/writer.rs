@@ -54,6 +54,22 @@ pub(crate) fn quote(text: &str) -> String {
     out
 }
 
+/// The text of a quoted string written by [`quote`] (`"…"` with `\`
+/// escapes), `None` when `text` is not one.
+pub(crate) fn unquote(text: &str) -> Option<String> {
+    let inner = text.strip_prefix('"')?.strip_suffix('"')?;
+    let mut out = String::new();
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            out.extend(chars.next());
+        } else {
+            out.push(c);
+        }
+    }
+    Some(out)
+}
+
 /// A multi-line string (`text:` … `.`), dot-stuffed, for long texts such
 /// as the vacation body; ends with the line break after the final `.`.
 /// Line ends are `\n` here; the client sends CRLF.
@@ -109,6 +125,14 @@ pub fn to_crlf(script: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unquoting_reverses_quoting() {
+        for text in ["plain", "a \"quote\"", "back\\slash", ""] {
+            assert_eq!(unquote(&quote(text)).as_deref(), Some(text));
+        }
+        assert_eq!(unquote("bare"), None);
+    }
 
     #[test]
     fn quoting() {

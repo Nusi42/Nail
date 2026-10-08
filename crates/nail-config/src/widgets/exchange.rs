@@ -42,37 +42,17 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn exchange_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            automatic-replies-banner only-active-account=#true
-            focused-tabs show-all=#false show-switch=#true
-            exchange-mailboxes
-            exchange-categories show-counts=#true show-empty=#false
-            exchange-rules
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-    }
+    use crate::widgets::testing::parses;
 
     #[test]
-    fn unknown_options_are_refused() {
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            focused-tabs show-counts=#true
-        }
-    }
-}
-";
-        assert!(crate::parse_layout(text, "layout.kdl").is_err());
+    fn exchange_widgets_parse() {
+        assert!(parses(&[
+            "automatic-replies-banner only-active-account=#true",
+            "focused-tabs show-all=#false show-switch=#true",
+            "exchange-mailboxes",
+            "exchange-categories show-counts=#true show-empty=#false",
+            "exchange-rules",
+        ]));
+        assert!(!parses(&["focused-tabs show-counts=#true"]));
     }
 }

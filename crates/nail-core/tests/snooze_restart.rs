@@ -9,20 +9,19 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{eventually, messages};
+
 use std::time::Duration;
 
 use nail_api::triage::SnoozedMessage;
-use nail_api::{
-    AccountId, Folder, FolderId, FolderRole, MessageId, MessageSummary, Request, Response,
-};
+use nail_api::{AccountId, Folder, FolderId, FolderRole, MessageId, Request, Response};
 use nail_core::demo::{DemoMulti, MULTI_WORK_ID, start_demo_multi};
 use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
 use tempfile::TempDir;
-
-const TIMEOUT: Duration = Duration::from_secs(20);
 
 struct Fixture {
     demo: DemoMulti,
@@ -80,24 +79,6 @@ impl Fixture {
     }
 }
 
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
 async fn folders(service: &Service) -> Vec<Folder> {
     match service
         .handle(Request::ListFolders {
@@ -112,20 +93,6 @@ async fn folders(service: &Service) -> Vec<Folder> {
 
 async fn folder(service: &Service, role: FolderRole) -> Option<Folder> {
     folders(service).await.into_iter().find(|f| f.role == role)
-}
-
-async fn messages(service: &Service, folder: &FolderId) -> Vec<MessageSummary> {
-    match service
-        .handle(Request::ListMessages {
-            folder_id: folder.clone(),
-            offset: 0,
-            limit: 500,
-        })
-        .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
 }
 
 async fn contains(service: &Service, folder: &FolderId, id: &MessageId) -> bool {

@@ -27,16 +27,6 @@ pub struct IndexDocument {
     pub decrypted: bool,
 }
 
-fn addresses(list: &[Address]) -> String {
-    list.iter()
-        .map(|a| match &a.name {
-            Some(name) => format!("{name} <{}>", a.email),
-            None => a.email.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 impl IndexDocument {
     /// Builds the document from a parsed message.
     pub fn from_parsed(
@@ -47,9 +37,9 @@ impl IndexDocument {
         Self {
             message_id,
             account_id,
-            from: addresses(&parsed.headers.from),
-            to: addresses(&parsed.headers.to),
-            cc: addresses(&parsed.headers.cc),
+            from: Address::list_text(&parsed.headers.from),
+            to: Address::list_text(&parsed.headers.to),
+            cc: Address::list_text(&parsed.headers.cc),
             subject: parsed.headers.subject.clone(),
             body: parsed.text.clone(),
             attachment_names: parsed

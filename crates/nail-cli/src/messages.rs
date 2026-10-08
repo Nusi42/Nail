@@ -186,8 +186,9 @@ mod tests {
     /// Every `cli-*` id built here has an English text in core.ftl.
     #[test]
     fn every_message_id_is_in_the_catalog() {
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let missing = l10n::missing_message_ids(&src, &["cli-", "mcp-core-", "config-"]);
-        assert!(missing.is_empty(), "{missing:#?}");
+        l10n::assert_message_ids_in_catalog(
+            env!("CARGO_MANIFEST_DIR"),
+            &["cli-", "mcp-core-", "config-"],
+        );
     }
 }

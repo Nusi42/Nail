@@ -42,11 +42,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 message: Box::new(summary),
             })
         }
-        other => Err(ApiError::internal(format!(
-            "{} is not a launch request",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("{} is not a launch request", other.wire_type())).into())
+        }
     }
 }
 

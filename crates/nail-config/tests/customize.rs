@@ -2,7 +2,9 @@
 //! backup and revert, "open file at line".
 #![cfg(test)]
 
-use std::sync::mpsc;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
 use std::time::{Duration, Instant};
 
 use nail_api::customize::{MergeChoice, MergeTake};
@@ -11,13 +13,11 @@ use nail_config::{
     BACKUP_DIR, ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_selected_theme,
 };
 
+use common::{watch, write};
+
 const TWO_ERRORS: &str =
     "theme \"x\" extends=\"default\" {\n    bogus\n    tokens { colour \"a\" \"#fff\"; }\n}\n";
 const ACCENT: &str = "theme \"Mine\" extends=\"default\" {\n    tokens {\n        color \"accent\" \"#ff0000\"\n    }\n}\n";
-
-fn write(dir: &std::path::Path, name: &str, text: &str) {
-    std::fs::write(dir.join(name), text).unwrap();
-}
 
 #[test]
 fn all_errors_of_a_file_are_kept_and_reported() {
@@ -124,12 +124,7 @@ fn reload_updates_report_first_error_then_all_then_the_fix() {
 fn the_watcher_sends_all_errors_after_the_first() {
     let dir = tempfile::tempdir().unwrap();
     let manager = ConfigManager::load(dir.path());
-    let (tx, rx) = mpsc::channel();
-    let _watcher = manager
-        .watch(Duration::from_millis(50), move |update| {
-            tx.send(update).ok();
-        })
-        .unwrap();
+    let (_watcher, rx) = watch(&manager);
     write(dir.path(), "theme.kdl", TWO_ERRORS);
     let deadline = Instant::now() + Duration::from_secs(20);
     let mut seen = Vec::new();

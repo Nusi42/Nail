@@ -11,6 +11,8 @@ publish.workspace = true
 nail-api.workspace = true
 # Shared civil-date helpers (ADR 0171).
 nail-util.workspace = true
+# Local wall-clock times across DST changes (one definition with the triage clock).
+nail-triage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -31,7 +33,14 @@ futures-util.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 
+[features]
+# Test support for this crate's and other crates' tests (`nail_store::testing`).
+testing = ["nail-api/testing"]
+
 [dev-dependencies]
+# The crate's own test support (`nail_store::testing`) for its integration tests.
+nail-store = { workspace = true, features = ["testing"] }
+nail-api = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 
 [lints]

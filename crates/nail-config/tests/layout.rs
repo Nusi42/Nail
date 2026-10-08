@@ -228,10 +228,11 @@ layout "All" {
     assert_eq!(
         l.toolbars["main"][0],
         ToolbarItem::Action {
-            action: "mail.reply".into(),
-            args: vec![],
-            label: Some("Answer".into()),
-            icon: Some("reply".into()),
+            item: nail_api::ActionItem {
+                label: Some("Answer".into()),
+                icon: Some("reply".into()),
+                ..nail_api::ActionItem::new("mail.reply")
+            },
             rank: None,
             display: None,
         }

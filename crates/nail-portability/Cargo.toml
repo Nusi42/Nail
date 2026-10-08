@@ -38,11 +38,14 @@ tempfile.workspace = true
 base64.workspace = true
 
 [features]
-# Cheap Argon2id parameters (`KdfParams::insecure_for_tests`) for the
-# tests of crates using this one; never enabled in builds that ship.
+# Cheap Argon2id parameters (`KdfParams::insecure_for_tests`) and the
+# in-memory test doubles (`nail_portability::testing`) for the tests of
+# crates using this one; never enabled in builds that ship.
 testing = []
 
 [dev-dependencies]
+# The crate's own test doubles for its integration tests.
+nail-portability = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 
 [lints]

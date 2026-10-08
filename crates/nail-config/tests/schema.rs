@@ -5,32 +5,11 @@
 //! file models with `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema`.
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
 use pretty_assertions::assert_eq;
 use serde_json::Value;
-
-fn check_snapshot(name: &str, schema: &schemars::Schema) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("schema")
-        .join(name);
-    let actual = serde_json::to_string_pretty(schema).unwrap() + "\n";
-    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, &actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_SNAPSHOTS=1)", path.display()));
-    // Compare as JSON values so key order (serde_json's `preserve_order`
-    // feature may be switched on by other crates) does not matter.
-    let expected: Value = serde_json::from_str(&expected).unwrap();
-    let actual: Value = serde_json::from_str(&actual).unwrap();
-    assert_eq!(
-        actual, expected,
-        "{name} is stale; regenerate with NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema"
-    );
-}
 
 /// Top-level property names, sorted.
 fn properties(schema: &schemars::Schema) -> Vec<String> {
@@ -64,7 +43,7 @@ fn theme_schema_snapshot() {
             "tokens"
         ]
     );
-    check_snapshot("theme.schema.json", &schema);
+    common::schema_snapshot("theme.schema.json", &schema, "schema");
 }
 
 #[test]
@@ -104,7 +83,7 @@ fn layout_schema_snapshot() {
     ] {
         assert!(text.contains(needle), "layout schema lacks {needle}");
     }
-    check_snapshot("layout.schema.json", &schema);
+    common::schema_snapshot("layout.schema.json", &schema, "schema");
 }
 
 #[test]
@@ -123,5 +102,5 @@ fn accounts_schema_snapshot() {
             "virtual-account"
         ]
     );
-    check_snapshot("accounts.schema.json", &schema);
+    common::schema_snapshot("accounts.schema.json", &schema, "schema");
 }

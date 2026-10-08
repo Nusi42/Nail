@@ -153,18 +153,7 @@ pub enum GmailLabelOpOutcome {
     Failed(String),
 }
 
-fn enum_str<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_owned))
-        .unwrap_or_default()
-}
-
-fn enum_parse<T: serde::de::DeserializeOwned>(text: &str) -> rusqlite::Result<T> {
-    serde_json::from_value(serde_json::Value::String(text.to_owned())).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
+use crate::util::{enum_parse, enum_str};
 
 const LABEL_COLS: &str = "label_id, name, kind, color_background, color_text, list_visibility, \
                           message_visibility, tag, folder_id, sync";
@@ -270,9 +259,7 @@ pub(crate) fn gmail_info_in(conn: &Connection, id: &MessageId) -> Result<Option<
              FROM gmail_messages g JOIN messages m ON m.id = g.message_id
              WHERE g.message_id = ?1",
         )?
-        .query_row([id.as_str()], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
+        .query_row([id.as_str()], |r| r.try_into())
         .optional()?;
     row.map(|(gmail_id, thread_id, labels, category)| {
         Ok(GmailMessageInfo {
@@ -320,17 +307,22 @@ impl Store {
         })
     }
 
-    /// A message's server thread id (schema v15).
-    pub fn message_remote_thread_id(&self, id: &MessageId) -> Result<Option<String>> {
+    /// A text column of a message ([`Error::NotFound`] for an unknown one).
+    fn message_text_column(&self, id: &MessageId, column: &str) -> Result<Option<String>> {
         self.with_conn(|conn| {
             conn.query_row(
-                "SELECT remote_thread_id FROM messages WHERE id = ?1",
+                &format!("SELECT {column} FROM messages WHERE id = ?1"),
                 [id.as_str()],
                 |r| r.get::<_, Option<String>>(0),
             )
             .optional()?
             .ok_or_else(|| Error::not_found("message", id))
         })
+    }
+
+    /// A message's server thread id (schema v15).
+    pub fn message_remote_thread_id(&self, id: &MessageId) -> Result<Option<String>> {
+        self.message_text_column(id, "remote_thread_id")
     }
 
     /// The message with this remote id in an account.
@@ -353,15 +345,7 @@ impl Store {
 
     /// A message's remote id.
     pub fn message_remote_id(&self, id: &MessageId) -> Result<Option<String>> {
-        self.with_conn(|conn| {
-            conn.query_row(
-                "SELECT remote_id FROM messages WHERE id = ?1",
-                [id.as_str()],
-                |r| r.get::<_, Option<String>>(0),
-            )
-            .optional()?
-            .ok_or_else(|| Error::not_found("message", id))
-        })
+        self.message_text_column(id, "remote_id")
     }
 
     // --- Sync state --------------------------------------------------------
@@ -500,18 +484,16 @@ impl Store {
     /// label ids), for [`nail_api::Request::ListGmailLabels`].
     pub fn list_gmail_labels(&self, account: &AccountId) -> Result<Vec<GmailLabel>> {
         let records = self.gmail_labels(account)?;
-        let counts: std::collections::HashMap<String, (u32, u32)> = self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(
+        let counts = self.with_conn(|conn| {
+            crate::util::counts_by_key(
+                conn,
                 "SELECT j.value, COUNT(*), SUM(m.seen = 0)
                  FROM gmail_messages g
                  JOIN messages m ON m.id = g.message_id, json_each(g.label_ids) j
                  WHERE g.account_id = ?1
                  GROUP BY j.value",
-            )?;
-            let rows = stmt.query_map([account.as_str()], |r| {
-                Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?)))
-            })?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
+                account,
+            )
         })?;
         Ok(records
             .into_iter()
@@ -786,63 +768,26 @@ pub(crate) fn set_gmail_message_in(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::StoredMessage;
+    use crate::test_store::{add_tagged, store_with};
     use nail_api::gmail::GmailFolder;
-    use nail_api::{Account, AccountKind, Flags, Folder, MessageSummary};
+    use nail_api::{AccountKind, Folder, testing};
 
     fn account() -> AccountId {
         AccountId::new("gm")
     }
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: account(),
-                name: "Gmail".into(),
-                email: "ada@gmail.example".into(),
-                kind: AccountKind::Gmail,
-            })
-            .unwrap();
-        for folder in [GmailFolder::Inbox, GmailFolder::Archive] {
-            store
-                .upsert_folder(&Folder {
-                    id: format!("gm-{}", folder.path()).into(),
-                    account_id: account(),
-                    parent_id: None,
-                    name: folder.path().into(),
-                    path: folder.path().into(),
-                    role: folder.role(),
-                    unread: 0,
-                    total: 0,
-                })
-                .unwrap();
-        }
-        for (id, seen, tags) in [("m1", false, vec!["Work"]), ("m2", true, vec!["Work"])] {
-            store
-                .upsert_message(&StoredMessage::new(MessageSummary {
-                    id: id.into(),
-                    folder_id: "gm-INBOX".into(),
-                    account_id: account(),
-                    subject: id.into(),
-                    from: None,
-                    to: vec![],
-                    date: "2026-10-01T10:00:00Z".into(),
-                    flags: Flags {
-                        seen,
-                        ..Flags::default()
-                    },
-                    has_attachments: false,
-                    preview: String::new(),
-                    thread_id: None,
-                    tags: tags.into_iter().map(str::to_owned).collect(),
-                    duplicates: vec![],
-                    headers_only: false,
-                    gmail: None,
-                    exchange: None,
-                }))
-                .unwrap();
-        }
+        let folders: Vec<Folder> = [GmailFolder::Inbox, GmailFolder::Archive]
+            .into_iter()
+            .map(|f| testing::folder(&format!("gm-{}", f.path()), "gm", f.path(), f.role()))
+            .collect();
+        let store = store_with(&testing::account("gm", AccountKind::Gmail), &folders);
+        add_tagged(
+            &store,
+            "gm",
+            "gm-INBOX",
+            &[("m1", false, &["Work"]), ("m2", true, &["Work"])],
+        );
         store
     }
 

@@ -58,10 +58,7 @@ impl HostAllowlist {
     /// `port`, for `scheme` (`http` / `https`). On the scheme's default
     /// port the bare name is accepted too (browsers omit it).
     pub(crate) fn with_names(scheme: &'static str, names: &[String], port: u16) -> Self {
-        let default_port = match scheme {
-            "https" => 443,
-            _ => 80,
-        };
+        let default_port = nail_api::hosts::web_port(scheme == "https");
         let mut authorities = Vec::new();
         for name in LOOPBACK_NAMES
             .iter()

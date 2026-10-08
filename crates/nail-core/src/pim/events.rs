@@ -11,8 +11,8 @@ use nail_ical::write::WriteOptions;
 use nail_store::pim::{PimItem, PimWrite};
 
 use super::{
-    Expander, blob_bytes, event_issues, forbidden, invalid, new_id, new_uuid, not_found, op_ids,
-    parse_instant, request_zone, task_issues,
+    Expander, blob_bytes, check, event_issues, forbidden, invalid, new_id, new_uuid, not_found,
+    op_ids, parse_instant, request_zone, task_issues,
 };
 use crate::error::Result;
 use crate::service::Service;
@@ -160,11 +160,9 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
             op_ids: service.delete_task(task_id, with_subtasks).await?,
         },
         other => {
-            return Err(ApiError::internal(format!(
-                "{} routed to PIM events",
-                crate::service::request_name(&other)
-            ))
-            .into());
+            return Err(
+                ApiError::internal(format!("{} routed to PIM events", other.wire_type())).into(),
+            );
         }
     })
 }
@@ -186,6 +184,22 @@ fn range(from: &str, to: &str) -> Result<(i64, i64)> {
 }
 
 impl Service {
+    /// Runs `write` with the options of an item written now (embedded
+    /// photos / attachments from the blob store, `related_to`).
+    fn with_write_options<R>(
+        &self,
+        related_to: Option<&str>,
+        write: impl FnOnce(&WriteOptions<'_>) -> R,
+    ) -> R {
+        let blobs = self.blobs().clone();
+        let lookup = move |sha: &str| blob_bytes(&blobs, sha);
+        write(&WriteOptions {
+            now: self.pim_utc_now(),
+            blobs: Some(&lookup),
+            related_to,
+        })
+    }
+
     /// Writes an event with `nail-ical` (patching `original`).
     pub(crate) fn event_text(
         &self,
@@ -193,14 +207,9 @@ impl Service {
         original: Option<&str>,
         related_to: Option<&str>,
     ) -> String {
-        let blobs = self.blobs().clone();
-        let lookup = move |sha: &str| blob_bytes(&blobs, sha);
-        let options = WriteOptions {
-            now: self.pim_utc_now(),
-            blobs: Some(&lookup),
-            related_to,
-        };
-        nail_ical::write::write_event(event, original, &options)
+        self.with_write_options(related_to, |options| {
+            nail_ical::write::write_event(event, original, options)
+        })
     }
 
     /// Writes a task with `nail-ical` (patching `original`).
@@ -210,14 +219,28 @@ impl Service {
         parent_uid: Option<&str>,
         original: Option<&str>,
     ) -> String {
-        let blobs = self.blobs().clone();
-        let lookup = move |sha: &str| blob_bytes(&blobs, sha);
-        let options = WriteOptions {
-            now: self.pim_utc_now(),
-            blobs: Some(&lookup),
-            related_to: None,
+        self.with_write_options(None, |options| {
+            nail_ical::write::write_task(task, parent_uid, original, options)
+        })
+    }
+
+    /// An event the user may change, and the scope an edit of it has (a
+    /// single event is always edited as a whole).
+    async fn editable_event(
+        &self,
+        id: &EventId,
+        scope: EditScope,
+    ) -> Result<(CalendarEvent, EditScope)> {
+        let event = self.event(id).await?;
+        if event.read_only {
+            return Err(forbidden(format!("event {id} is read-only")));
+        }
+        let scope = if event.is_recurring() {
+            scope
+        } else {
+            EditScope::All
         };
-        nail_ical::write::write_task(task, parent_uid, original, &options)
+        Ok((event, scope))
     }
 
     pub(crate) async fn event(&self, id: &EventId) -> Result<CalendarEvent> {
@@ -371,10 +394,7 @@ impl Service {
         recurrence: Option<Recurrence>,
     ) -> Result<(CalendarEvent, Vec<nail_api::OpId>)> {
         let recurrence = recurrence.filter(|r| !r.is_empty());
-        let issues = event_issues(&fields, recurrence.as_ref());
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&event_issues(&fields, recurrence.as_ref()))?;
         let calendar = self
             .writable_calendar(&calendar_id, nail_api::pim::CalendarComponent::Event)
             .await?;
@@ -410,26 +430,15 @@ impl Service {
         recurrence: Option<Recurrence>,
     ) -> Result<(CalendarEvent, Option<CalendarEvent>, Vec<nail_api::OpId>)> {
         let recurrence = recurrence.filter(|r| !r.is_empty());
-        let mut event = self.event(&id).await?;
-        if event.read_only {
-            return Err(forbidden(format!("event {id} is read-only")));
-        }
-        let scope = if event.is_recurring() {
-            scope
-        } else {
-            EditScope::All
-        };
-        let issues = event_issues(
+        let (mut event, scope) = self.editable_event(&id, scope).await?;
+        check(&event_issues(
             &fields,
             if scope == EditScope::This {
                 None
             } else {
                 recurrence.as_ref()
             },
-        );
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        ))?;
         if scope.needs_occurrence() && recurrence_id.is_none() {
             return Err(invalid(&[PimIssue::InvalidScope]));
         }
@@ -520,15 +529,7 @@ impl Service {
         scope: EditScope,
         recurrence_id: Option<PimTime>,
     ) -> Result<Vec<nail_api::OpId>> {
-        let mut event = self.event(&id).await?;
-        if event.read_only {
-            return Err(forbidden(format!("event {id} is read-only")));
-        }
-        let scope = if event.is_recurring() {
-            scope
-        } else {
-            EditScope::All
-        };
+        let (mut event, scope) = self.editable_event(&id, scope).await?;
         let item = PimItemRef::Event {
             event_id: id.clone(),
         };
@@ -649,11 +650,7 @@ impl Service {
         fields: TaskFields,
         recurrence: Option<Recurrence>,
     ) -> Result<(Task, Vec<nail_api::OpId>)> {
-        let recurrence = recurrence.filter(|r| !r.is_empty());
-        let issues = task_issues(&fields, recurrence.as_ref());
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        let recurrence = checked_task(&fields, recurrence)?;
         self.writable_calendar(&calendar_id, nail_api::pim::CalendarComponent::Task)
             .await?;
         let parent_uid = self
@@ -702,11 +699,7 @@ impl Service {
         fields: TaskFields,
         recurrence: Option<Recurrence>,
     ) -> Result<(Task, Vec<nail_api::OpId>)> {
-        let recurrence = recurrence.filter(|r| !r.is_empty());
-        let issues = task_issues(&fields, recurrence.as_ref());
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        let recurrence = checked_task(&fields, recurrence)?;
         let mut task = self.task(&id).await?;
         if task.read_only {
             return Err(forbidden(format!("task {id} is read-only")));
@@ -852,6 +845,13 @@ fn apply_all(event: &mut CalendarEvent, fields: EventFields, recurrence: Option<
         event.overrides.clear();
     }
     event.fields = fields;
+}
+
+/// A task's recurrence (an empty rule = none), after checking the task.
+fn checked_task(fields: &TaskFields, recurrence: Option<Recurrence>) -> Result<Option<Recurrence>> {
+    let recurrence = recurrence.filter(|r| !r.is_empty());
+    check(&task_issues(fields, recurrence.as_ref()))?;
+    Ok(recurrence)
 }
 
 #[cfg(test)]

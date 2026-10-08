@@ -563,16 +563,12 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         // Hashing, TOTP and pairing codes (nail-remote-auth); from the
         // desktop, so without a remote actor.
-        request @ (Request::SetRemotePassword { .. }
-        | Request::StartTotpEnrollment { .. }
-        | Request::ConfirmTotpEnrollment { .. }
-        | Request::DisableTotp { .. }
-        | Request::CreatePairingCode { .. }) => {
+        request @ nail_api::remote_auth_requests!() => {
             Ok(service.remote_auth().handle_admin(request, None).await?)
         }
         other => Err(ApiError::internal(format!(
             "{} is not a remote-UI request",
-            crate::service::request_name(&other)
+            other.wire_type()
         ))
         .into()),
     }

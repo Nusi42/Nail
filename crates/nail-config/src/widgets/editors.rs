@@ -24,23 +24,15 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::testing::parses;
+
     #[test]
-    fn editor_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::widgets::find(spec.kind).is_some(), "{}", spec.kind);
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            layout-editor-settings
-            toolbar-editor-settings
-            theme-editor id=\"editor\"
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-        let bad = "layout \"x\" extends=\"default\" {\n    window \"main\" {\n        theme-editor theme=\"frost\"\n    }\n}\n";
-        assert!(crate::parse_layout(bad, "layout.kdl").is_err());
+    fn editor_widgets_parse() {
+        assert!(parses(&[
+            "layout-editor-settings",
+            "toolbar-editor-settings",
+            "theme-editor id=\"editor\"",
+        ]));
+        assert!(!parses(&["theme-editor theme=\"frost\""]));
     }
 }

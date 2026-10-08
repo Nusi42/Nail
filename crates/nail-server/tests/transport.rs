@@ -5,14 +5,14 @@
 
 #![cfg(test)]
 
+mod common;
+
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use chrono::Utc;
-use nail_api::engine::MemorySecretStore;
-use nail_core::demo::seed_demo;
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
 use nail_proxy::testing::{Reply, ScriptedResolver, Upstream};
 use nail_proxy::{Fetcher, Proxy, ProxyKey, Signer};
 use nail_server::cert::{self, ServerIdentity};
@@ -22,32 +22,12 @@ use nail_server::{
 };
 use pretty_assertions::assert_eq;
 use rustls::pki_types::ServerName;
-use tempfile::TempDir;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use common::{Fixture, Http, service};
+
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfake";
-
-struct Fixture {
-    service: Service,
-    _data: TempDir,
-    _config: TempDir,
-}
-
-fn service() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.secrets = Some(Arc::new(MemorySecretStore::new()));
-    let service = Service::open(options).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
-}
 
 fn loopback() -> ServerOptions {
     ServerOptions {
@@ -70,6 +50,18 @@ fn identity() -> ServerIdentity {
     cert::generate_self_signed(&names, Utc::now()).unwrap()
 }
 
+/// Connects to `addr` as `nail.test` over `version`, pinning `identity`.
+async fn connect_tls(
+    addr: SocketAddr,
+    identity: &ServerIdentity,
+    version: &'static rustls::SupportedProtocolVersion,
+) -> std::io::Result<tokio_rustls::client::TlsStream<TcpStream>> {
+    let tcp = TcpStream::connect(addr).await?;
+    pinned_client(identity, &[version])
+        .connect(ServerName::try_from("nail.test").unwrap(), tcp)
+        .await
+}
+
 /// A client that pins exactly `identity`'s certificate.
 fn pinned_client(
     identity: &ServerIdentity,
@@ -83,48 +75,6 @@ fn pinned_client(
         .with_root_certificates(roots)
         .with_no_client_auth();
     tokio_rustls::TlsConnector::from(Arc::new(config))
-}
-
-/// A parsed HTTP/1.1 response.
-#[derive(Debug)]
-struct Http {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
-}
-
-impl Http {
-    fn header(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, v)| v.as_str())
-    }
-}
-
-fn decode_chunked(mut data: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    loop {
-        let Some(end) = data.windows(2).position(|w| w == b"\r\n") else {
-            return out;
-        };
-        let size = usize::from_str_radix(
-            std::str::from_utf8(&data[..end])
-                .unwrap()
-                .split(';')
-                .next()
-                .unwrap()
-                .trim(),
-            16,
-        )
-        .unwrap();
-        if size == 0 {
-            return out;
-        }
-        let start = end + 2;
-        out.extend_from_slice(&data[start..start + size]);
-        data = &data[start + size + 2..];
-    }
 }
 
 async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(
@@ -149,36 +99,7 @@ async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(
         .await
         .expect("response within 10 s"),
     );
-    let split = raw
-        .windows(4)
-        .position(|w| w == b"\r\n\r\n")
-        .expect("a response head");
-    let head = String::from_utf8_lossy(&raw[..split]).into_owned();
-    let mut lines = head.split("\r\n");
-    let status = lines
-        .next()
-        .unwrap()
-        .split(' ')
-        .nth(1)
-        .unwrap()
-        .parse()
-        .unwrap();
-    let headers: Vec<(String, String)> = lines
-        .filter_map(|l| l.split_once(':'))
-        .map(|(n, v)| (n.trim().to_ascii_lowercase(), v.trim().to_owned()))
-        .collect();
-    let mut body = raw[split + 4..].to_vec();
-    if headers
-        .iter()
-        .any(|(n, v)| n == "transfer-encoding" && v.contains("chunked"))
-    {
-        body = decode_chunked(&body);
-    }
-    Http {
-        status,
-        headers,
-        body,
-    }
+    Http::parse(&raw)
 }
 
 /// `GET path` over plain TCP with `Host: 127.0.0.1:<port>` plus `extra`.
@@ -213,9 +134,7 @@ async fn serves_https_over_tls13_and_tls12_with_a_pinned_certificate() {
     assert!(server.url().starts_with("https://127.0.0.1:"));
 
     // TLS 1.3.
-    let tcp = TcpStream::connect(addr).await.unwrap();
-    let tls = pinned_client(&id, &[&rustls::version::TLS13])
-        .connect(ServerName::try_from("nail.test").unwrap(), tcp)
+    let tls = connect_tls(addr, &id, &rustls::version::TLS13)
         .await
         .unwrap();
     let (_, conn) = tls.get_ref();
@@ -236,9 +155,7 @@ async fn serves_https_over_tls13_and_tls12_with_a_pinned_certificate() {
     assert!(csp.contains("upgrade-insecure-requests"));
 
     // TLS 1.2: only forward-secret AEAD suites are negotiated.
-    let tcp = TcpStream::connect(addr).await.unwrap();
-    let tls = pinned_client(&id, &[&rustls::version::TLS12])
-        .connect(ServerName::try_from("nail.test").unwrap(), tcp)
+    let tls = connect_tls(addr, &id, &rustls::version::TLS12)
         .await
         .unwrap();
     let (_, conn) = tls.get_ref();
@@ -254,9 +171,7 @@ async fn serves_https_over_tls13_and_tls12_with_a_pinned_certificate() {
     );
 
     // The WebSocket upgrade works over TLS (and is Origin-checked).
-    let tcp = TcpStream::connect(addr).await.unwrap();
-    let tls = pinned_client(&id, &[&rustls::version::TLS13])
-        .connect(ServerName::try_from("nail.test").unwrap(), tcp)
+    let tls = connect_tls(addr, &id, &rustls::version::TLS13)
         .await
         .unwrap();
     let origin = format!("https://nail.test:{}", addr.port());
@@ -276,10 +191,8 @@ async fn serves_https_over_tls13_and_tls12_with_a_pinned_certificate() {
 
     // A client that does not trust the certificate fails the handshake.
     let other = identity();
-    let tcp = TcpStream::connect(addr).await.unwrap();
     assert!(
-        pinned_client(&other, &[&rustls::version::TLS13])
-            .connect(ServerName::try_from("nail.test").unwrap(), tcp)
+        connect_tls(addr, &other, &rustls::version::TLS13)
             .await
             .is_err()
     );

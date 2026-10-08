@@ -38,6 +38,7 @@ use nail_api::{
     MessageSummary,
 };
 
+pub use markdown::markdown_options;
 pub use message_file::{
     MAX_MESSAGE_FILE, MessageFile, MessageFileError, check_message_bytes, read_message_file,
 };

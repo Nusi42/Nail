@@ -374,46 +374,8 @@ impl Env<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::mailbox;
     use nail_api::rules::FolderRef;
-
-    fn mailbox() -> StaticMailbox {
-        let folder = |id: &str, account: &str, path: &str, role| FolderInfo {
-            id: id.into(),
-            account_id: account.into(),
-            path: path.into(),
-            name: path.rsplit('/').next().unwrap_or(path).into(),
-            role,
-        };
-        StaticMailbox {
-            accounts: vec![
-                AccountInfo {
-                    id: "work".into(),
-                    name: "Work".into(),
-                    email: "me@work.example".into(),
-                    members: vec![],
-                },
-                AccountInfo {
-                    id: "home".into(),
-                    name: "Home".into(),
-                    email: "me@home.example".into(),
-                    members: vec![],
-                },
-                AccountInfo {
-                    id: "everything".into(),
-                    name: "Everything".into(),
-                    email: String::new(),
-                    members: vec!["work".into(), "home".into()],
-                },
-            ],
-            folders: vec![
-                folder("w-in", "work", "INBOX", FolderRole::Inbox),
-                folder("w-arch", "work", "Archive", FolderRole::Archive),
-                folder("w-rust", "work", "Lists/Rust", FolderRole::Other),
-                folder("h-in", "home", "INBOX", FolderRole::Inbox),
-                folder("h-read", "home", "Reading", FolderRole::Other),
-            ],
-        }
-    }
 
     #[test]
     fn accounts_match_directly_through_virtual_accounts_and_all() {
@@ -452,7 +414,7 @@ mod tests {
         let id = |r: Option<FolderInfo>| r.map(|f| f.id.to_string());
         assert_eq!(
             id(env.resolve_folder(&role(FolderRole::Archive, None), &work)),
-            Some("w-arch".into())
+            Some("w-archive".into())
         );
         assert_eq!(
             id(env.resolve_folder(&role(FolderRole::Archive, Some("home")), &work)),
@@ -468,15 +430,15 @@ mod tests {
         );
         assert_eq!(
             id(env.resolve_folder(&path("Inbox", None), &work)),
-            Some("w-in".into())
+            Some("w-inbox".into())
         );
         assert_eq!(
             id(env.resolve_folder(&path("Reading", Some("home")), &work)),
-            Some("h-read".into())
+            Some("h-reading".into())
         );
         assert_eq!(
             id(env.resolve_folder(&path("Reading", Some("everything")), &"home".into())),
-            Some("h-read".into())
+            Some("h-reading".into())
         );
         assert_eq!(id(env.resolve_folder(&path("Nope", None), &work)), None);
     }

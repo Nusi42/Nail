@@ -28,15 +28,14 @@ use nail_api::mail_actions::{
     MailActionKind, MailActionResult, MailTargetResolution,
 };
 use nail_api::{
-    AccountId, ApiError, ErrorCode, Event, FolderId, FolderRole, LocalizedMessage, MailAction,
-    MailBatchId, MessageId, MessageTarget, MoveTarget, OpId,
+    AccountId, ApiError, ErrorCode, Event, FolderRole, LocalizedMessage, MailAction, MailBatchId,
+    MessageId, MessageTarget, MoveTarget, OpId,
 };
 use nail_store::{
-    ConversationFolders, MailBatchPlan, MailBatchUndo, Operation, ScopeFolder, TargetMessage,
-    mail_batch_id, parse_mail_batch_id,
+    MailBatchPlan, MailBatchUndo, Operation, TargetMessage, mail_batch_id, parse_mail_batch_id,
 };
 
-use crate::conversations::FolderFilter;
+use crate::conversations::{FolderFilter, as_keep};
 use crate::error::Result;
 use crate::service::Service;
 
@@ -73,42 +72,10 @@ impl Resolved {
 }
 
 fn issue(issue: MailActionIssue, detail: &str) -> ApiError {
-    ApiError::invalid_request(detail.to_owned())
-        .with_localized(LocalizedMessage::new(issue.message_id()))
-}
-
-/// The folder role's wire name (`inbox`, `trash`, …).
-fn role_name(role: FolderRole) -> String {
-    match serde_json::to_value(role) {
-        Ok(serde_json::Value::String(s)) => s,
-        _ => String::new(),
-    }
+    ApiError::invalid_localized(detail.to_owned(), issue.message_id())
 }
 
 impl Service {
-    /// The listed folders behind a conversation target's folder, narrowed
-    /// by `filter` (as the conversation list shows them).
-    async fn target_scope(
-        &self,
-        folder: &FolderId,
-        filter: Option<&FolderFilter>,
-    ) -> Result<ConversationFolders> {
-        let resolved = self.resolve_folder(folder).await?;
-        if !resolved.is_virtual {
-            let id = folder.clone();
-            self.inner.store.call(move |s| s.get_folder(&id)).await?;
-        }
-        let mut scope = self
-            .inner
-            .store
-            .call(move |s| s.conversation_folders(&resolved.sources))
-            .await?;
-        if let Some(keep) = filter {
-            scope.retain(|f| keep(f));
-        }
-        Ok(scope)
-    }
-
     /// One message target as a [`TargetMessage`].
     async fn message_target(&self, id: &MessageId) -> Result<TargetMessage> {
         let id = id.clone();
@@ -122,7 +89,7 @@ impl Service {
                     id: summary.id,
                     account_id: summary.account_id,
                     folder_id: summary.folder_id,
-                    role: role_name(role),
+                    role: role.as_str().to_owned(),
                 })
             })
             .await?)
@@ -163,7 +130,7 @@ impl Service {
                 }
                 MessageTarget::Conversation(conversation) => {
                     let scope = match &conversation.folder_id {
-                        Some(folder) => Some(self.target_scope(folder, filter).await?),
+                        Some(folder) => Some(self.conversation_scope(folder, filter).await?),
                         None => None,
                     };
                     let (thread, own, keep) =
@@ -172,11 +139,13 @@ impl Service {
                         .inner
                         .store
                         .call(move |s| {
-                            let keep: Option<&dyn Fn(&ScopeFolder) -> bool> = match &keep {
-                                Some(k) => Some(k.as_ref()),
-                                None => None,
-                            };
-                            s.conversation_targets(&thread, scope.as_ref(), &own, keep, reach)
+                            s.conversation_targets(
+                                &thread,
+                                scope.as_ref(),
+                                &own,
+                                as_keep(keep.as_ref()),
+                                reach,
+                            )
                         })
                         .await?;
                     let reached = picked
@@ -559,7 +528,7 @@ mod tests {
         assert_eq!(remote_actor(&"s1"), "remote:s1");
         assert_eq!(agent_actor(&ActionActor::mcp_client("c1")), "mcp:c1");
         assert_eq!(agent_actor(&ActionActor::plugin("p.x")), "plugin:p.x");
-        assert_eq!(role_name(FolderRole::Trash), "trash");
-        assert_eq!(role_name(FolderRole::Archive), "archive");
+        assert_eq!(FolderRole::Trash.as_str(), "trash");
+        assert_eq!(FolderRole::Archive.as_str(), "archive");
     }
 }

@@ -4,8 +4,8 @@
 //! the selection and the overrides.
 #![cfg(test)]
 
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
 use nail_api::appearance::{
     ColorScheme, Density, SystemAppearance, ThemeKind, ThemeOverrides, ThemePreferences,
@@ -18,17 +18,13 @@ use nail_config::{
 };
 use pretty_assertions::assert_eq;
 
+use common::{wait_for, watch, write};
+
 fn user(stem: &str, text: &str) -> UserThemeText {
     UserThemeText {
         stem: stem.to_owned(),
         text: Ok(text.to_owned()),
     }
-}
-
-fn write(dir: &std::path::Path, name: &str, text: &str) {
-    let path = dir.join(name);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, text).unwrap();
 }
 
 fn builtin(id: &str) -> ResolvedTheme {
@@ -1092,22 +1088,6 @@ fn reloading_the_themes_directory() {
     assert!(manager.theme_file_errors().is_empty());
 }
 
-/// Waits for an update matching `pred`, skipping others.
-fn wait_for(
-    rx: &mpsc::Receiver<ConfigUpdate>,
-    pred: impl Fn(&ConfigUpdate) -> bool,
-) -> ConfigUpdate {
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        let left = deadline.saturating_duration_since(Instant::now());
-        match rx.recv_timeout(left) {
-            Ok(update) if pred(&update) => return update,
-            Ok(_) => {}
-            Err(e) => panic!("no matching config update: {e}"),
-        }
-    }
-}
-
 #[test]
 fn the_watcher_hot_reloads_user_themes() {
     let dir = tempfile::tempdir().unwrap();
@@ -1118,12 +1098,7 @@ fn the_watcher_hot_reloads_user_themes() {
         "theme \"Mine\" extends=\"paper\"\n",
     );
     let manager = ConfigManager::load(&config_dir);
-    let (tx, rx) = mpsc::channel();
-    let _watcher = manager
-        .watch(Duration::from_millis(50), move |update| {
-            tx.send(update).ok();
-        })
-        .unwrap();
+    let (_watcher, rx) = watch(&manager);
     assert!(config_dir.join("themes").is_dir(), "watch creates themes/");
 
     write(&config_dir, "themes/paper.kdl", PAPER);

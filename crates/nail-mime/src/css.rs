@@ -56,10 +56,7 @@ pub(crate) fn truncate(text: &str, max: usize) -> &str {
     if text.len() <= max {
         return text;
     }
-    let mut end = max;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(max);
     &text[..end]
 }
 
@@ -146,32 +143,50 @@ fn safe_prelude(prelude: &str) -> bool {
     !FORBIDDEN_PRELUDE.iter().any(|word| lower.contains(word))
 }
 
+/// The bytes of CSS text outside quoted strings from `start`, as
+/// `(index, byte)`: quotes and string contents are skipped, as is the byte
+/// after a `\` (inside strings always, outside them with `escapes`).
+pub(crate) fn outside_strings(
+    bytes: &[u8],
+    start: usize,
+    escapes: bool,
+) -> impl Iterator<Item = (usize, u8)> + '_ {
+    let mut quote: Option<u8> = None;
+    let mut i = start;
+    std::iter::from_fn(move || {
+        while i < bytes.len() {
+            let (at, b) = (i, bytes[i]);
+            i += 1;
+            match quote {
+                Some(q) => {
+                    if b == b'\\' {
+                        i += 1;
+                    } else if b == q {
+                        quote = None;
+                    }
+                }
+                None => match b {
+                    b'"' | b'\'' => quote = Some(b),
+                    b'\\' if escapes => i += 1,
+                    _ => return Some((at, b)),
+                },
+            }
+        }
+        None
+    })
+}
+
 /// The first `{`, `;` or `}` at or after `pos` outside strings and
 /// parentheses, with the byte found.
 fn scan(bytes: &[u8], pos: usize) -> Option<(usize, u8)> {
-    let mut quote: Option<u8> = None;
     let mut parens = 0usize;
-    let mut i = pos;
-    while i < bytes.len() {
-        let b = bytes[i];
-        match quote {
-            Some(q) => {
-                if b == b'\\' {
-                    i += 1;
-                } else if b == q {
-                    quote = None;
-                }
-            }
-            None => match b {
-                b'"' | b'\'' => quote = Some(b),
-                b'\\' => i += 1,
-                b'(' => parens += 1,
-                b')' => parens = parens.saturating_sub(1),
-                b'{' | b';' | b'}' if parens == 0 => return Some((i, b)),
-                _ => {}
-            },
+    for (i, b) in outside_strings(bytes, pos, true) {
+        match b {
+            b'(' => parens += 1,
+            b')' => parens = parens.saturating_sub(1),
+            b'{' | b';' | b'}' if parens == 0 => return Some((i, b)),
+            _ => {}
         }
-        i += 1;
     }
     None
 }
@@ -179,33 +194,18 @@ fn scan(bytes: &[u8], pos: usize) -> Option<(usize, u8)> {
 /// The index of the `}` closing the block whose content starts at `start`
 /// (the end of the text for an unterminated block, as CSS reads it).
 fn block_end(bytes: &[u8], start: usize) -> usize {
-    let mut quote: Option<u8> = None;
     let mut depth = 1usize;
-    let mut i = start;
-    while i < bytes.len() {
-        let b = bytes[i];
-        match quote {
-            Some(q) => {
-                if b == b'\\' {
-                    i += 1;
-                } else if b == q {
-                    quote = None;
+    for (i, b) in outside_strings(bytes, start, true) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i;
                 }
             }
-            None => match b {
-                b'"' | b'\'' => quote = Some(b),
-                b'\\' => i += 1,
-                b'{' => depth += 1,
-                b'}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return i;
-                    }
-                }
-                _ => {}
-            },
+            _ => {}
         }
-        i += 1;
     }
     bytes.len()
 }
@@ -215,6 +215,18 @@ mod tests {
     use super::*;
     use crate::sanitize::{Context, InlineImages};
     use std::sync::Arc;
+
+    #[test]
+    fn scanning_skips_strings_and_escapes() {
+        let text = br#"a"x;\"y;"\;b;c"#;
+        let seen: Vec<u8> = outside_strings(text, 0, true).map(|(_, b)| b).collect();
+        assert_eq!(seen, b"ab;c");
+        let raw: Vec<u8> = outside_strings(text, 0, false).map(|(_, b)| b).collect();
+        assert_eq!(raw, br"a\;b;c");
+        assert_eq!(scan(b"x(;);{", 0), Some((4, b';')));
+        assert_eq!(block_end(b"a{b}c}d", 0), 5);
+        assert_eq!(block_end(b"a{b", 0), 3);
+    }
 
     fn sheet(css: &str) -> (String, Arc<Context>) {
         let ctx = Arc::new(Context::document(None, InlineImages::default()));

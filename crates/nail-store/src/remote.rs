@@ -112,18 +112,7 @@ fn opt_rfc3339(secs: Option<i64>) -> Option<String> {
     secs.map(rfc3339)
 }
 
-fn enum_str<T: serde::Serialize>(value: T) -> Result<String> {
-    match serde_json::to_value(value)? {
-        serde_json::Value::String(s) => Ok(s),
-        other => Err(Error::InvalidData(format!("not a string enum: {other}"))),
-    }
-}
-
-fn enum_from<T: serde::de::DeserializeOwned>(idx: usize, s: String) -> rusqlite::Result<T> {
-    serde_json::from_value(serde_json::Value::String(s)).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
+use crate::util::{enum_from, enum_name as enum_str};
 
 fn grant_from(idx: usize, text: &str) -> rusqlite::Result<RemoteGrant> {
     serde_json::from_str(text).map_err(|e| {
@@ -279,6 +268,14 @@ pub struct RemoteAuditRecord {
 }
 
 impl RemoteAuditRecord {
+    /// Records who acted: the session's user and device, and the session.
+    pub fn set_session(&mut self, session: &RemoteSession) {
+        self.user_id = Some(session.user_id.clone());
+        self.user_name = Some(session.user_name.clone());
+        self.device_id = Some(session.device_id.clone());
+        self.session_id = Some(session.id.clone());
+    }
+
     /// An entry with only kind, outcome and time set.
     pub fn new(at: i64, kind: RemoteAuditKind, outcome: RemoteAuditOutcome) -> Self {
         Self {
@@ -570,6 +567,17 @@ fn check_hash(hash: &str) -> Result<()> {
 // ---------------------------------------------------------------------------
 // Users and credentials
 // ---------------------------------------------------------------------------
+
+/// The user a passkey belongs to.
+fn passkey_user(tx: &Transaction<'_>, n: i64, id: &PasskeyId) -> Result<i64> {
+    tx.query_row(
+        "SELECT user_id FROM remote_passkeys WHERE id = ?1",
+        [n],
+        |r| r.get(0),
+    )
+    .optional()?
+    .ok_or_else(|| Error::not_found("passkey", id))
+}
 
 impl Store {
     /// Adds a user without credentials at `at` (Unix seconds). Fails with
@@ -893,14 +901,7 @@ impl Store {
     pub fn rename_passkey(&self, id: &PasskeyId, name: &str) -> Result<RemoteUser> {
         let n = parse_passkey(id)?;
         self.with_tx(|tx| {
-            let user: i64 = tx
-                .query_row(
-                    "SELECT user_id FROM remote_passkeys WHERE id = ?1",
-                    [n],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("passkey", id))?;
+            let user = passkey_user(tx, n, id)?;
             tx.execute(
                 "UPDATE remote_passkeys SET name = ?2 WHERE id = ?1",
                 params![n, name.trim()],
@@ -913,14 +914,7 @@ impl Store {
     pub fn delete_passkey(&self, id: &PasskeyId) -> Result<RemoteUser> {
         let n = parse_passkey(id)?;
         self.with_tx(|tx| {
-            let user: i64 = tx
-                .query_row(
-                    "SELECT user_id FROM remote_passkeys WHERE id = ?1",
-                    [n],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("passkey", id))?;
+            let user = passkey_user(tx, n, id)?;
             tx.execute("DELETE FROM remote_passkeys WHERE id = ?1", [n])?;
             user_in(tx, user)
         })

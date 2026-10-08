@@ -25,26 +25,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn remote_widgets_are_unique_and_kebab_case() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(spec.kind.starts_with("remote-"), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-    }
+    use crate::widgets::testing::{assert_prefixed, parses};
 
     #[test]
-    fn remote_widgets_are_registered() {
-        let kinds = super::WIDGETS
-            .iter()
-            .map(|w| ["            ", w.kind, "\n"].concat())
-            .collect::<String>();
-        let text = format!(
-            "layout \"x\" extends=\"default\" {{\n    window \"main\" {{\n        stack {{\n{kinds}        }}\n    }}\n}}\n"
-        );
-        crate::parse_layout(&text, "layout.kdl").unwrap();
-        let bad = text.replace("remote-audit", "remote-audit bogus=#true");
-        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
+    fn remote_widgets_parse() {
+        assert_prefixed(super::WIDGETS, &["remote-"]);
+        let kinds: Vec<&str> = super::WIDGETS.iter().map(|w| w.kind).collect();
+        assert!(parses(&kinds));
+        assert!(!parses(&["remote-audit bogus=#true"]));
     }
 }

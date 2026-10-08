@@ -943,16 +943,26 @@ pub(crate) async fn grant(
     scopes: &[McpScope],
     accounts: &[&str],
 ) {
+    set_grant(
+        store,
+        client,
+        McpGrant {
+            scopes: scopes.to_vec(),
+            accounts: accounts.iter().map(|a| AccountId::new(*a)).collect(),
+            ..McpGrant::default()
+        },
+    )
+    .await;
+}
+
+/// Replaces the client's grant (through the admin requests).
+pub(crate) async fn set_grant(store: &Store, client: &nail_api::McpClientId, grant: McpGrant) {
     nail_mcp::admin::handle(
         store,
         None,
         Request::UpdateMcpGrants {
             client_id: client.clone(),
-            grant: McpGrant {
-                scopes: scopes.to_vec(),
-                accounts: accounts.iter().map(|a| AccountId::new(*a)).collect(),
-                ..McpGrant::default()
-            },
+            grant,
         },
         |_| {},
     )
@@ -978,7 +988,8 @@ impl ClientHandler for Recorder {
     }
 }
 
-fn transport(url: &str, token: &str) -> StreamableHttpClientTransport<reqwest::Client> {
+/// An rmcp client transport to `url` with the client token.
+pub(crate) fn transport(url: &str, token: &str) -> StreamableHttpClientTransport<reqwest::Client> {
     StreamableHttpClientTransport::with_client(
         nail_mcp::bridge::loopback_http_client().unwrap(),
         StreamableHttpClientTransportConfig::with_uri(url.to_owned()).auth_header(token.to_owned()),
@@ -1004,4 +1015,34 @@ pub(crate) async fn connect_fails(url: &str, token: &str) -> bool {
         .serve(transport(url, token))
         .await
         .is_err()
+}
+
+/// Calls the tool `name` with `args` (a JSON object).
+pub(crate) async fn call<H: ClientHandler>(
+    client: &RunningService<RoleClient, H>,
+    name: &'static str,
+    args: serde_json::Value,
+) -> rmcp::model::CallToolResult {
+    let params = rmcp::model::CallToolRequestParams::new(name)
+        .with_arguments(serde_json::from_value(args).unwrap());
+    client.call_tool(params).await.unwrap()
+}
+
+/// The oldest pending confirmation, once it shows up (within 5 s).
+pub(crate) async fn pending(store: &Store) -> nail_api::agents::Confirmation {
+    for _ in 0..250 {
+        let list = store
+            .list_confirmations(
+                nail_api::agents::ConfirmationFilter::Pending,
+                None,
+                None,
+                10,
+            )
+            .unwrap();
+        if let Some(first) = list.into_iter().next() {
+            return first;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("no pending confirmation");
 }

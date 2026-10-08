@@ -25,7 +25,7 @@ use serde_json::Value;
 use crate::error::{Error, Result};
 use crate::store::Store;
 
-const RFC3339: &str = "'%Y-%m-%dT%H:%M:%SZ'";
+use crate::util::SQL_RFC3339 as RFC3339;
 
 /// An installed plug-in as stored.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,11 +82,7 @@ pub struct PluginLogLine<'a> {
     pub localized: Option<&'a LocalizedMessage>,
 }
 
-fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
+use nail_util::time::unix_now as now;
 
 fn json_col<T: serde::de::DeserializeOwned>(idx: usize, text: &str) -> rusqlite::Result<T> {
     serde_json::from_str(text).map_err(|e| {
@@ -231,10 +227,7 @@ fn cut(text: &str, max: usize) -> &str {
     if text.len() <= max {
         return text;
     }
-    let mut end = max;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(max);
     &text[..end]
 }
 
@@ -916,11 +909,11 @@ mod tests {
     #[test]
     fn storage_and_logs_are_sealed_at_rest() {
         use crate::seal::SealMode;
-        use crate::seal::tests::XorCipher;
+        use crate::seal::tests::XOR;
         let store = Store::open_in_memory().unwrap();
         install(&store, &manifest(&json!(["storage"])), &[]);
         store
-            .set_cipher(Some(std::sync::Arc::new(XorCipher)), SealMode::Seal)
+            .set_cipher(Some(std::sync::Arc::new(XOR)), SealMode::Seal)
             .unwrap();
         store
             .plugin_storage_set(&id(), "k", &json!("Meeting with Sam"))

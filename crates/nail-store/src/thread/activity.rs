@@ -159,21 +159,40 @@ macro_rules! refresh_row {
     };
 }
 
+/// The order-key update of `thread_activity` rows up to the Sent folders'
+/// account (`sent_order_update!()`, the account expression, then
+/// `sent_order_where!()` and the rows' condition).
+macro_rules! sent_order_update {
+    () => {
+        "UPDATE thread_activity SET last_date = MAX(folder_last, COALESCE((
+                 SELECT MAX(s.date_sort) FROM messages s
+                  WHERE s.thread_id = thread_activity.thread_id
+                    AND s.folder_id IN (SELECT sf.id FROM folders sf
+                                         WHERE sf.role = 'sent' AND sf.account_id ="
+    };
+}
+
+/// See `sent_order_update!`.
+macro_rules! sent_order_where {
+    () => {
+        "
+             ), 0))
+             WHERE "
+    };
+}
+
 /// When `$r`'s folder is a Sent folder: recomputes the order key of the
 /// thread's rows in every folder of that account.
 macro_rules! refresh_sent {
     ($r:literal) => {
         concat!(
-            "UPDATE thread_activity SET last_date = MAX(folder_last, COALESCE((
-                 SELECT MAX(s.date_sort) FROM messages s
-                  WHERE s.thread_id = thread_activity.thread_id
-                    AND s.folder_id IN (SELECT sf.id FROM folders sf
-                                         WHERE sf.role = 'sent' AND sf.account_id =
+            sent_order_update!(),
+            "
                                                (SELECT account_id FROM folders WHERE id = ",
             $r,
-            ".folder_id))
-             ), 0))
-             WHERE thread_id = ",
+            ".folder_id))",
+            sent_order_where!(),
+            "thread_id = ",
             $r,
             ".thread_id
                AND folder_id IN (SELECT id FROM folders WHERE account_id =
@@ -189,15 +208,12 @@ macro_rules! refresh_sent {
 macro_rules! refresh_account {
     ($a:literal) => {
         concat!(
-            "UPDATE thread_activity SET last_date = MAX(folder_last, COALESCE((
-                 SELECT MAX(s.date_sort) FROM messages s
-                  WHERE s.thread_id = thread_activity.thread_id
-                    AND s.folder_id IN (SELECT sf.id FROM folders sf
-                                         WHERE sf.role = 'sent' AND sf.account_id = ",
+            sent_order_update!(),
+            " ",
             $a,
-            ")
-             ), 0))
-             WHERE folder_id IN (SELECT id FROM folders WHERE account_id = ",
+            ")",
+            sent_order_where!(),
+            "folder_id IN (SELECT id FROM folders WHERE account_id = ",
             $a,
             ");"
         )

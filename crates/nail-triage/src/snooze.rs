@@ -370,11 +370,7 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
     /// Forgets snoozes of messages that are gone (deleted elsewhere),
     /// without writes. Returns the forgotten entries.
     pub fn forget(&mut self, messages: &[MessageId]) -> Result<Vec<SnoozeEntry>, S::Error> {
-        let known: Vec<MessageId> = messages
-            .iter()
-            .filter(|id| self.entries.contains_key(*id))
-            .cloned()
-            .collect();
+        let known = crate::known_keys(&self.entries, messages);
         if known.is_empty() {
             return Ok(Vec::new());
         }
@@ -527,7 +523,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
 
-    const T0: i64 = 1_790_000_000;
+    use nail_api::testing::T0;
 
     fn req(id: &str, until: i64) -> SnoozeRequest {
         SnoozeRequest {

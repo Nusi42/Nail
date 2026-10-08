@@ -18,7 +18,7 @@ use nail_api::{
 use nail_store::Store;
 use nail_store::pim::{COLLECTED_BOOK_ID, COLLECTED_BOOK_NAME_ID, PimOperation, PimSourceRecord};
 
-use super::{forbidden, invalid, new_id, not_found, op_ids};
+use super::{check, forbidden, new_id, not_found, op_ids};
 use crate::accounts::edit_error;
 use crate::error::Result;
 use crate::service::Service;
@@ -114,11 +114,9 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
             Response::Done
         }
         other => {
-            return Err(ApiError::internal(format!(
-                "{} routed to PIM sources",
-                crate::service::request_name(&other)
-            ))
-            .into());
+            return Err(
+                ApiError::internal(format!("{} routed to PIM sources", other.wire_type())).into(),
+            );
         }
     })
 }
@@ -350,30 +348,61 @@ impl Service {
         )
     }
 
+    /// Wakes the source's engine when operations were queued for it.
+    /// Saves a collection change and, when `queue`, queues `op` for the
+    /// server and wakes the source's engine.
+    async fn write_collection(
+        &self,
+        source: PimSourceId,
+        queue: bool,
+        op: PimOperation,
+        save: impl FnOnce(&Store) -> nail_store::Result<()> + Send + 'static,
+    ) -> Result<Vec<nail_store::pim::PimOpId>> {
+        let key = source.clone();
+        let ops = self
+            .inner
+            .store
+            .call(move |s| {
+                save(s)?;
+                Ok(if queue {
+                    vec![s.enqueue_pim_op(&key, &op)?]
+                } else {
+                    Vec::new()
+                })
+            })
+            .await?;
+        self.wake_for(&ops, &source);
+        Ok(ops)
+    }
+
+    /// Saves changed collection settings; a server-side change (`queue`)
+    /// is queued for the server.
+    async fn update_collection(
+        &self,
+        source: &PimSourceId,
+        queue: bool,
+        collection: &impl std::fmt::Display,
+        save: impl FnOnce(&Store) -> nail_store::Result<()> + Send + 'static,
+    ) -> Result<Vec<nail_store::pim::PimOpId>> {
+        let op = PimOperation::UpdateCollection {
+            collection_id: collection.to_string(),
+        };
+        self.write_collection(source.clone(), queue, op, save).await
+    }
+
+    fn wake_for<T>(&self, ops: &[T], source: &PimSourceId) {
+        if !ops.is_empty() {
+            self.wake_pim_source(source);
+        }
+    }
+
     async fn store_pim_secret(&self, config: &PimSourceConfig, secret: &SecretValue) -> Result<()> {
         let Some(reference) = Self::pim_secret_ref(config) else {
             return Ok(());
         };
-        match secret {
-            SecretValue::Password { password } => {
-                let store = Arc::clone(&self.inner.secrets);
-                let password = password.clone();
-                tokio::task::spawn_blocking(move || store.set(&reference, &password)).await??;
-            }
-            SecretValue::OAuth2 { flow_id } => {
-                let (_, tokens) = self.inner.flows.peek(flow_id)?;
-                self.inner
-                    .tokens
-                    .manager()
-                    .store(&reference, &tokens)
-                    .await?;
-                drop(self.inner.flows.take(flow_id));
-            }
-            SecretValue::ClientCertificate { .. } => {
-                return Err(
-                    ApiError::unsupported("client certificates are not supported yet").into(),
-                );
-            }
+        self.store_secret(reference, secret).await?;
+        if let SecretValue::OAuth2 { flow_id } = secret {
+            drop(self.inner.flows.take(flow_id));
         }
         Ok(())
     }
@@ -421,11 +450,11 @@ impl Service {
         if let Some(account) = config.account()
             && current.account(account).is_none()
         {
-            return Err(ApiError::invalid_request(format!("no account {account}"))
-                .with_localized(LocalizedMessage::new(
-                    PimSourceIssue::MissingAuth.message_id(),
-                ))
-                .into());
+            return Err(ApiError::invalid_localized(
+                format!("no account {account}"),
+                PimSourceIssue::MissingAuth.message_id(),
+            )
+            .into());
         }
         let id = config.id.clone();
         let saved = config.clone();
@@ -608,10 +637,7 @@ impl Service {
         settings: CalendarSettings,
         mut components: Vec<CalendarComponent>,
     ) -> Result<(Calendar, Vec<nail_api::OpId>)> {
-        let issues = settings.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&settings.issues())?;
         components.sort();
         components.dedup();
         if components.is_empty() {
@@ -632,26 +658,15 @@ impl Service {
             exchange: None,
         };
         let saved = calendar.clone();
+        let collection_id = saved.id.0.clone();
         let ops = self
-            .inner
-            .store
-            .call(move |s| {
-                s.save_calendar(&saved, None)?;
-                if kind == PimSourceKind::Caldav {
-                    Ok(vec![s.enqueue_pim_op(
-                        &saved.source_id,
-                        &PimOperation::CreateCollection {
-                            collection_id: saved.id.0.clone(),
-                        },
-                    )?])
-                } else {
-                    Ok(Vec::new())
-                }
-            })
+            .write_collection(
+                source.clone(),
+                kind == PimSourceKind::Caldav,
+                PimOperation::CreateCollection { collection_id },
+                move |s| s.save_calendar(&saved, None),
+            )
             .await?;
-        if !ops.is_empty() {
-            self.wake_pim_source(&source);
-        }
         self.broadcast(Event::CalendarsChanged);
         Ok((self.calendar(&calendar.id).await?, op_ids(&ops)))
     }
@@ -661,38 +676,18 @@ impl Service {
         id: CalendarId,
         settings: CalendarSettings,
     ) -> Result<(Calendar, Vec<nail_api::OpId>)> {
-        let issues = settings.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&settings.issues())?;
         let before = self.calendar(&id).await?;
-        let kind = self.source_kind(&before.source_id)?;
-        let server_change = kind == PimSourceKind::Caldav
+        let server_change = self.source_kind(&before.source_id)? == PimSourceKind::Caldav
             && !before.read_only
             && (before.settings.name != settings.name || before.settings.color != settings.color);
         let reminders_changed = before.settings.reminders != settings.reminders;
         let key = id.clone();
-        let source = before.source_id.clone();
         let ops = self
-            .inner
-            .store
-            .call(move |s| {
-                s.update_calendar_settings(&key, &settings)?;
-                if server_change {
-                    Ok(vec![s.enqueue_pim_op(
-                        &source,
-                        &PimOperation::UpdateCollection {
-                            collection_id: key.0.clone(),
-                        },
-                    )?])
-                } else {
-                    Ok(Vec::new())
-                }
+            .update_collection(&before.source_id, server_change, &id, move |s| {
+                s.update_calendar_settings(&key, &settings)
             })
             .await?;
-        if !ops.is_empty() {
-            self.wake_pim_source(&before.source_id);
-        }
         if reminders_changed {
             self.replan_all_reminders().await;
         }
@@ -713,10 +708,7 @@ impl Service {
         source: PimSourceId,
         settings: AddressBookSettings,
     ) -> Result<(AddressBook, Vec<nail_api::OpId>)> {
-        let issues = settings.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&settings.issues())?;
         let kind = self.source_kind(&source)?;
         if !matches!(kind, PimSourceKind::Local | PimSourceKind::Carddav) {
             return Err(ApiError::invalid_request("this source cannot hold address books").into());
@@ -731,26 +723,15 @@ impl Service {
             exchange: None,
         };
         let saved = book.clone();
+        let collection_id = saved.id.0.clone();
         let ops = self
-            .inner
-            .store
-            .call(move |s| {
-                s.save_address_book(&saved, None)?;
-                if kind == PimSourceKind::Carddav {
-                    Ok(vec![s.enqueue_pim_op(
-                        &saved.source_id,
-                        &PimOperation::CreateCollection {
-                            collection_id: saved.id.0.clone(),
-                        },
-                    )?])
-                } else {
-                    Ok(Vec::new())
-                }
-            })
+            .write_collection(
+                source.clone(),
+                kind == PimSourceKind::Carddav,
+                PimOperation::CreateCollection { collection_id },
+                move |s| s.save_address_book(&saved, None),
+            )
             .await?;
-        if !ops.is_empty() {
-            self.wake_pim_source(&source);
-        }
         self.broadcast(Event::AddressBooksChanged);
         Ok((self.address_book(&book.id).await?, op_ids(&ops)))
     }
@@ -760,37 +741,17 @@ impl Service {
         id: AddressBookId,
         settings: AddressBookSettings,
     ) -> Result<(AddressBook, Vec<nail_api::OpId>)> {
-        let issues = settings.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&settings.issues())?;
         let before = self.address_book(&id).await?;
-        let kind = self.source_kind(&before.source_id)?;
-        let server_change = kind == PimSourceKind::Carddav
+        let server_change = self.source_kind(&before.source_id)? == PimSourceKind::Carddav
             && !before.read_only
             && before.settings.name != settings.name;
         let key = id.clone();
-        let source = before.source_id.clone();
         let ops = self
-            .inner
-            .store
-            .call(move |s| {
-                s.update_address_book_settings(&key, &settings)?;
-                if server_change {
-                    Ok(vec![s.enqueue_pim_op(
-                        &source,
-                        &PimOperation::UpdateCollection {
-                            collection_id: key.0.clone(),
-                        },
-                    )?])
-                } else {
-                    Ok(Vec::new())
-                }
+            .update_collection(&before.source_id, server_change, &id, move |s| {
+                s.update_address_book_settings(&key, &settings)
             })
             .await?;
-        if !ops.is_empty() {
-            self.wake_pim_source(&before.source_id);
-        }
         self.pim_events([
             Event::AddressBooksChanged,
             Event::ContactsChanged {
@@ -836,9 +797,7 @@ impl Service {
                 Ok(ops)
             })
             .await?;
-        if !ops.is_empty() {
-            self.wake_pim_source(&source);
-        }
+        self.wake_for(&ops, &source);
         self.pim_index_remove_collection(&id);
         self.replan_all_reminders().await;
         if calendar {

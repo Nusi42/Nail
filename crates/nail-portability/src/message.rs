@@ -182,7 +182,7 @@ pub fn push_keyword(keywords: &mut Vec<String>, keyword: &str) {
         && !keyword.starts_with('\\')
         && keyword
             .bytes()
-            .all(|b| b > b' ' && b < 127 && !b"(){%*\"\\]".contains(&b));
+            .all(|b| b.is_ascii_graphic() && !b"(){%*\"\\]".contains(&b));
     if valid && !keywords.iter().any(|k| k.eq_ignore_ascii_case(keyword)) {
         keywords.push(keyword.to_owned());
     }

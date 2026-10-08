@@ -77,7 +77,6 @@ pub fn check_ui_state_write(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use serde_json::json;
 
     #[test]
@@ -135,10 +134,6 @@ mod tests {
         // Replacing or removing an existing key is fine at the limit.
         assert_eq!(check_ui_state_write(&state, "k.k0", Some(&json!(2))), None);
         assert_eq!(check_ui_state_write(&state, "new.key", None), None);
-        assert_labels(
-            UiStateIssue::ALL,
-            UiStateIssue::as_str,
-            UiStateIssue::message_id,
-        );
+        assert_wire_labels!(UiStateIssue);
     }
 }

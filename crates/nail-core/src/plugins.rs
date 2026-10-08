@@ -235,13 +235,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             // Review M4a: what it asked for while enabled is not approvable
             // any more (its policies stay for when it is enabled again).
-            service
-                .cancel_confirmations_of(&nail_api::agents::ActionActor::Plugin {
-                    plugin_id: plugin_id.clone(),
-                })
-                .await;
-            service.broadcast(Event::PluginsChanged);
-            plugin_response(service, plugin_id).await?
+            restricted(service, plugin_id).await?
         }
         Request::UninstallPlugin { plugin_id } => {
             let id = plugin_id.clone();
@@ -280,13 +274,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 host.update_grants(&plugin_id, &grants);
             }
             // Review M4a: pending writes were checked under the old grants.
-            service
-                .cancel_confirmations_of(&nail_api::agents::ActionActor::Plugin {
-                    plugin_id: plugin_id.clone(),
-                })
-                .await;
-            service.broadcast(Event::PluginsChanged);
-            plugin_response(service, plugin_id).await?
+            restricted(service, plugin_id).await?
         }
         Request::ListPluginLogs {
             plugin_id,
@@ -448,7 +436,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} is not a plug-in request",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -527,6 +515,19 @@ async fn parse_package(bytes: Vec<u8>) -> Result<PluginPackage> {
             .await?
             .map_err(|e| e.to_api_error())?,
     )
+}
+
+/// After a plug-in lost rights: its waiting confirmations are cancelled
+/// (they were asked under the old rights), the change is broadcast, the
+/// plug-in as it is now answered.
+async fn restricted(service: &Service, plugin_id: PluginId) -> Result<Response> {
+    service
+        .cancel_confirmations_of(&nail_api::agents::ActionActor::Plugin {
+            plugin_id: plugin_id.clone(),
+        })
+        .await;
+    service.broadcast(Event::PluginsChanged);
+    plugin_response(service, plugin_id).await
 }
 
 async fn plugin_response(service: &Service, id: PluginId) -> Result<Response> {

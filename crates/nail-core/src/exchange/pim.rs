@@ -21,7 +21,6 @@
 //!   UTC wall times (EWS wants Windows zone ids).
 
 use std::collections::HashSet;
-use std::future::Future;
 
 use nail_api::exchange::engine::{
     ExchangeEngine, ExchangePimWrite, ExchangePimWriteOutcome, MeetingSend, PimDeltaOutcome,
@@ -47,18 +46,13 @@ use nail_exchange::mapping::events::WriteContext;
 use nail_exchange::mapping::tasks::TaskWriteContext;
 use nail_store::ReplayPolicy;
 use nail_store::exchange::ExchangePimCollectionRecord;
-use nail_store::pim::{
-    PimItem, PimOperation, PimReplayOutcome, PimReplayer, QueuedPimOp, ServerApply, ServerRemove,
-};
+use nail_store::pim::{PimItem, PimOperation, PimReplayOutcome, QueuedPimOp};
 
 use super::sync::Listing;
 use crate::error::{CoreError, Result};
 use crate::pim::derived_id;
-use crate::pim::engine::SyncChanges;
+use crate::pim::engine::{SyncChanges, pim_replayer, replayed_object};
 use crate::service::Service;
-
-/// Most pages of one collection in one pass.
-const MAX_PAGES: u32 = 1_000;
 
 /// The id of an Exchange collection.
 fn collection_id(
@@ -464,7 +458,7 @@ async fn sync_collection(
     let mut pages = 0u32;
     loop {
         pages += 1;
-        if pages > MAX_PAGES {
+        if pages > super::MAX_PAGES {
             // Goes on in the next pass; a partial listing is never merged.
             break;
         }
@@ -525,12 +519,7 @@ async fn sync_collection(
                 let mut gone = Vec::new();
                 for (item, raw, href, etag) in &stored {
                     match s.apply_server_item(item, raw, Some(href), etag.as_deref(), now) {
-                        Ok(
-                            result @ (ServerApply::Inserted(_)
-                            | ServerApply::Updated(_)
-                            | ServerApply::Conflict(_)),
-                        ) => applied.push(result.item().clone()),
-                        Ok(_) => {}
+                        Ok(result) => applied.extend(result.shown_item().cloned()),
                         Err(err) => tracing::warn!(%href, %err, "cannot store an Exchange item"),
                     }
                 }
@@ -543,20 +532,15 @@ async fn sync_collection(
                     if let Some((parent, _)) = href.split_once('#')
                         && parents.iter().any(|p| p == parent)
                         && !hrefs.contains(&href)
-                        && let ServerRemove::Removed(i) | ServerRemove::KeptAsConflict(i) =
-                            s.remove_server_item(&k, Some(&href), None)?
                     {
-                        gone.push(i);
+                        gone.extend(s.remove_server_item(&k, Some(&href), None)?.item());
                     }
                 }
                 for remote in &removed {
                     for object in s.server_objects(&k)? {
                         let Some(href) = object.href else { continue };
-                        if (href == *remote || href.starts_with(&format!("{remote}#")))
-                            && let ServerRemove::Removed(i) | ServerRemove::KeptAsConflict(i) =
-                                s.remove_server_item(&k, Some(&href), None)?
-                        {
-                            gone.push(i);
+                        if href == *remote || href.starts_with(&format!("{remote}#")) {
+                            gone.extend(s.remove_server_item(&k, Some(&href), None)?.item());
                         }
                     }
                 }
@@ -572,12 +556,10 @@ async fn sync_collection(
                             let listed = s.exchange_listed(&k)?;
                             for object in s.server_objects(&k)? {
                                 let Some(href) = object.href else { continue };
-                                if !listed.contains(&href)
-                                    && let ServerRemove::Removed(i)
-                                    | ServerRemove::KeptAsConflict(i) =
-                                        s.remove_server_item(&k, Some(&href), None)?
-                                {
-                                    gone.push(i);
+                                if !listed.contains(&href) {
+                                    gone.extend(
+                                        s.remove_server_item(&k, Some(&href), None)?.item(),
+                                    );
                                 }
                             }
                             s.clear_exchange_listed(&k)?;
@@ -901,11 +883,7 @@ impl ExchangeReplayer<'_> {
         match &op.operation {
             PimOperation::Put { object_id } => {
                 let id = *object_id;
-                let Some(object) = store
-                    .call(move |s| s.pim_object_by_id(id))
-                    .await
-                    .map_err(|e| e.to_string())?
-                else {
+                let Some(object) = replayed_object(store, id).await? else {
                     return Ok(done(None, None));
                 };
                 let Some(collection) = self.collection(&object.collection_id).cloned() else {
@@ -985,10 +963,7 @@ impl ExchangeReplayer<'_> {
                 let mut href = href.clone();
                 let mut raw = None;
                 if let Some(id) = *object_id
-                    && let Some(object) = store
-                        .call(move |s| s.pim_object_by_id(id))
-                        .await
-                        .map_err(|e| e.to_string())?
+                    && let Some(object) = replayed_object(store, id).await?
                 {
                     if href.is_none() {
                         href.clone_from(&object.href);
@@ -1343,17 +1318,7 @@ impl ExchangeReplayer<'_> {
     }
 }
 
-impl PimReplayer for ExchangeReplayer<'_> {
-    fn replay(&self, op: &QueuedPimOp) -> impl Future<Output = PimReplayOutcome> + Send {
-        let op = op.clone();
-        async move {
-            match self.run(&op).await {
-                Ok(outcome) => outcome,
-                Err(err) => PimReplayOutcome::Retry(err),
-            }
-        }
-    }
-}
+pim_replayer!(ExchangeReplayer<'_>);
 
 #[cfg(test)]
 mod tests {

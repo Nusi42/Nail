@@ -20,35 +20,12 @@ use crate::sink::{
     SourceCollection, SourceFolder,
 };
 
-const PASSPHRASE: &str = "correct horse battery staple";
+use crate::testing::MemoryPim;
+
+use crate::testing::PASSPHRASE;
 
 fn now() -> DateTime<Utc> {
     DateTime::from_timestamp(1_790_848_800, 0).unwrap()
-}
-
-#[derive(Clone, Default)]
-struct MemoryPim(Vec<(ExportCollection, Vec<String>)>);
-
-impl PimExportSource for MemoryPim {
-    fn collections(&mut self) -> std::result::Result<Vec<ExportCollection>, SinkError> {
-        Ok(self.0.iter().map(|(c, _)| c.clone()).collect())
-    }
-    fn items(
-        &mut self,
-        collection: &ExportCollection,
-        visit: &mut dyn FnMut(std::result::Result<String, SinkError>) -> Visit,
-    ) -> std::result::Result<(), SinkError> {
-        for item in &self
-            .0
-            .iter()
-            .find(|(c, _)| c.key == collection.key)
-            .unwrap()
-            .1
-        {
-            visit(Ok(item.clone()));
-        }
-        Ok(())
-    }
 }
 
 /// The core's data as a backup sees it.
@@ -113,32 +90,6 @@ impl BackupSource for Source {
     }
 }
 
-impl MailExportSource for &mut MemoryMail {
-    fn folders(&mut self) -> std::result::Result<Vec<ExportFolder>, SinkError> {
-        (**self).folders()
-    }
-    fn messages(
-        &mut self,
-        folder: &ExportFolder,
-        visit: &mut dyn FnMut(std::result::Result<crate::sink::ExportMessage, SinkError>) -> Visit,
-    ) -> std::result::Result<(), SinkError> {
-        (**self).messages(folder, visit)
-    }
-}
-
-impl PimExportSource for &mut MemoryPim {
-    fn collections(&mut self) -> std::result::Result<Vec<ExportCollection>, SinkError> {
-        (**self).collections()
-    }
-    fn items(
-        &mut self,
-        collection: &ExportCollection,
-        visit: &mut dyn FnMut(std::result::Result<String, SinkError>) -> Visit,
-    ) -> std::result::Result<(), SinkError> {
-        (**self).items(collection, visit)
-    }
-}
-
 const EVENT: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:e1\r\nDTSTAMP:20260101T000000Z\r\nDTSTART:20261001T100000Z\r\nSUMMARY:Dinner\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 const CARD: &str = "BEGIN:VCARD\r\nVERSION:4.0\r\nUID:c1\r\nFN:Ada Lovelace\r\nEMAIL:ada@example.org\r\nEND:VCARD\r\n";
 
@@ -192,7 +143,7 @@ fn source() -> Source {
     Source {
         files,
         mail,
-        calendars: MemoryPim(vec![(
+        calendars: MemoryPim::new(vec![(
             ExportCollection {
                 key: "cal-1".into(),
                 name: "Family".into(),
@@ -200,7 +151,7 @@ fn source() -> Source {
             },
             vec![EVENT.into()],
         )]),
-        books: MemoryPim(vec![
+        books: MemoryPim::new(vec![
             (
                 ExportCollection {
                     key: "book-1".into(),
@@ -685,6 +636,23 @@ fn cancelled_backups_leave_nothing() {
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 
+/// Writes an archive by hand with the same layers as a backup: the
+/// manifest, then `files` (whatever the manifest says about them).
+fn write_by_hand(path: &Path, manifest: &BackupManifest, files: &[(&str, &[u8])]) {
+    let file = File::create(path).unwrap();
+    let encrypting =
+        crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests()).unwrap();
+    let mut zip = ZipWriter::new_stream(encrypting);
+    let options = SimpleFileOptions::default();
+    zip.start_file(BACKUP_MANIFEST_ENTRY, options).unwrap();
+    serde_json::to_writer(&mut zip, manifest).unwrap();
+    for (name, bytes) in files {
+        zip.start_file(*name, options).unwrap();
+        zip.write_all(bytes).unwrap();
+    }
+    zip.finish().unwrap().into_inner().finish().unwrap();
+}
+
 #[test]
 fn verification_finds_damaged_and_missing_entries() {
     // An archive whose manifest lists a wrong hash and an entry that is
@@ -717,19 +685,7 @@ fn verification_finds_damaged_and_missing_entries() {
         accounts: vec![],
         plugins: vec![],
     };
-    {
-        let file = File::create(&path).unwrap();
-        let encrypting =
-            crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests())
-                .unwrap();
-        let mut zip = ZipWriter::new_stream(encrypting);
-        let options = SimpleFileOptions::default();
-        zip.start_file(BACKUP_MANIFEST_ENTRY, options).unwrap();
-        serde_json::to_writer(&mut zip, &manifest).unwrap();
-        zip.start_file("config/theme.kdl", options).unwrap();
-        zip.write_all(b"hello").unwrap();
-        zip.finish().unwrap().into_inner().finish().unwrap();
-    }
+    write_by_hand(&path, &manifest, &[("config/theme.kdl", b"hello")]);
     let mut archive = BackupArchive::open(&path, PASSPHRASE).unwrap();
     let mut job = ctx(JobKind::VerifyBackup);
     archive.verify(&mut job).unwrap();
@@ -775,19 +731,7 @@ fn oversized_in_memory_entries_are_refused_unread() {
         accounts: vec![],
         plugins: vec![],
     };
-    {
-        let file = File::create(&path).unwrap();
-        let encrypting =
-            crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests())
-                .unwrap();
-        let mut zip = ZipWriter::new_stream(encrypting);
-        let options = SimpleFileOptions::default();
-        zip.start_file(BACKUP_MANIFEST_ENTRY, options).unwrap();
-        serde_json::to_writer(&mut zip, &manifest).unwrap();
-        zip.start_file("keys/keyring.json", options).unwrap();
-        zip.write_all(&content).unwrap();
-        zip.finish().unwrap().into_inner().finish().unwrap();
-    }
+    write_by_hand(&path, &manifest, &[("keys/keyring.json", &content)]);
     let mut archive = BackupArchive::open(&path, PASSPHRASE).unwrap();
     let mut target = Target::default();
     let plan = archive.plan(&manifest.contents, &mut target).unwrap();

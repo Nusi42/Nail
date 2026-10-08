@@ -5,30 +5,32 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared fixtures")]
+mod common;
+
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::engine::MemorySecretStore;
 use nail_api::remote::{
     AuthResponse, RemoteAccessPreset, RemoteUiSettings, RemoteUiState, RemoteUiStatus,
 };
 use nail_api::{Request, Response};
-use nail_core::demo::{demo_options, seed_demo};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
 use nail_server::{RemoteUiHost, RemoteUiOptions, cert};
 use pretty_assertions::assert_eq;
 use rustls::pki_types::ServerName;
-use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+use common::Http;
+use nail_core::testing::TempService;
 
 struct Fixture {
     service: Service,
     _host: RemoteUiHost,
-    _data: TempDir,
-    _config: TempDir,
+    _temp: TempService,
 }
 
 fn start() -> Fixture {
@@ -36,27 +38,19 @@ fn start() -> Fixture {
 }
 
 fn start_with(before: impl FnOnce(&Service)) -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    options.secrets = Some(Arc::new(MemorySecretStore::new()));
-    let service = Service::open(demo_options(options)).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    before(&service);
+    let temp = TempService::seeded();
+    before(&temp.service);
     let host = RemoteUiHost::start(
-        service.clone(),
+        temp.service.clone(),
         RemoteUiOptions {
             ui_dir: None,
             computer_name: Some("testpc".into()),
         },
     );
     Fixture {
-        service,
+        service: temp.service.clone(),
         _host: host,
-        _data: data,
-        _config: config,
+        _temp: temp,
     }
 }
 
@@ -87,21 +81,6 @@ async fn wait_for(service: &Service, state: RemoteUiState) -> RemoteUiStatus {
         "remote UI never reached {state:?}: {:?}",
         status(service).await
     );
-}
-
-struct Http {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
-}
-
-impl Http {
-    fn header(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, v)| v.as_str())
-    }
 }
 
 /// One HTTPS request to `127.0.0.1:port` pinned to the stored certificate.
@@ -142,26 +121,7 @@ async fn https(
     tls.write_all(request.as_bytes()).await.unwrap();
     let mut raw = Vec::new();
     drop(tokio::time::timeout(Duration::from_secs(10), tls.read_to_end(&mut raw)).await);
-    let split = raw.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
-    let head = String::from_utf8_lossy(&raw[..split]).into_owned();
-    let mut lines = head.split("\r\n");
-    let status = lines
-        .next()
-        .unwrap()
-        .split(' ')
-        .nth(1)
-        .unwrap()
-        .parse()
-        .unwrap();
-    let headers = lines
-        .filter_map(|l| l.split_once(':'))
-        .map(|(n, v)| (n.trim().to_ascii_lowercase(), v.trim().to_owned()))
-        .collect();
-    Http {
-        status,
-        headers,
-        body: raw[split + 4..].to_vec(),
-    }
+    Http::parse(&raw)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

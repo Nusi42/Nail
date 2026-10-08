@@ -53,8 +53,8 @@ use crate::service::{Inner, Service, lock};
 const MAX_SEARCH: u32 = 500;
 
 /// Most index hits one `nail.mail.search` looks at per account while it
-/// leaves out encrypted messages.
-const MAX_SEARCH_SCAN: u32 = 5000;
+/// leaves out encrypted messages (a restricted search).
+const MAX_SEARCH_SCAN: u32 = nail_api::search::RESTRICTED_SCAN;
 
 /// Log lines waiting for the writer; more are dropped and counted.
 const LOG_QUEUE: usize = 4096;
@@ -635,6 +635,24 @@ impl CoreServices {
             .map(|inner| Service { inner })
             .ok_or_else(|| ApiError::new(ErrorCode::Unavailable, "Nail is shutting down"))
     }
+
+    /// The calendars `keep` accepts, as plug-in collections.
+    fn calendars_where(
+        &self,
+        keep: fn(&nail_api::pim::Calendar) -> bool,
+    ) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let calendars = match service?
+                .handle(Request::ListCalendars { source_id: None })
+                .await
+            {
+                Response::Calendars { calendars } => calendars,
+                other => return Err(answer_error(other)),
+            };
+            Ok(collections(calendars.into_iter().filter(&keep)))
+        })
+    }
 }
 
 /// Queues a log line for the writer without blocking; a full queue drops
@@ -741,10 +759,8 @@ impl PluginServices for CoreServices {
             let service = service?;
             service
                 .blocking(move |s| {
-                    let stored = match s.store().get_message(&id) {
-                        Ok(stored) => stored,
-                        Err(e) if e.is_not_found() => return Ok(None),
-                        Err(e) => return Err(e.into()),
+                    let Some(stored) = s.store().find_message(&id)? else {
+                        return Ok(None);
                     };
                     let encrypted = s.message_is_encrypted(&id)?;
                     let mut message = plugin_message(&stored.summary, encrypted);
@@ -1240,21 +1256,7 @@ impl PluginServices for CoreServices {
     }
 
     fn calendars(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
-        let service = self.service();
-        Box::pin(async move {
-            let calendars = match service?
-                .handle(Request::ListCalendars { source_id: None })
-                .await
-            {
-                Response::Calendars { calendars } => calendars,
-                other => return Err(answer_error(other)),
-            };
-            Ok(collections(
-                calendars
-                    .into_iter()
-                    .filter(nail_api::pim::Calendar::has_events),
-            ))
-        })
+        self.calendars_where(nail_api::pim::Calendar::has_events)
     }
 
     fn address_books(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
@@ -1285,21 +1287,7 @@ impl PluginServices for CoreServices {
     }
 
     fn task_lists(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
-        let service = self.service();
-        Box::pin(async move {
-            let calendars = match service?
-                .handle(Request::ListCalendars { source_id: None })
-                .await
-            {
-                Response::Calendars { calendars } => calendars,
-                other => return Err(answer_error(other)),
-            };
-            Ok(collections(
-                calendars
-                    .into_iter()
-                    .filter(nail_api::pim::Calendar::has_tasks),
-            ))
-        })
+        self.calendars_where(nail_api::pim::Calendar::has_tasks)
     }
 
     fn find_contacts(

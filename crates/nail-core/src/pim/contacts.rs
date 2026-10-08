@@ -12,7 +12,7 @@ use nail_api::{AddressBookId, ApiError, ContactGroupId, ContactId, ErrorCode, Re
 use nail_ical::vcard::{CardWriteOptions, GroupCard, GroupStyle, uid_key};
 use nail_store::pim::PimItem;
 
-use super::{blob_bytes, forbidden, invalid, new_id, new_uuid, not_found, op_ids};
+use super::{blob_bytes, check, forbidden, invalid, new_id, new_uuid, not_found, op_ids};
 use crate::error::Result;
 use crate::service::Service;
 
@@ -234,7 +234,7 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} routed to PIM contacts",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -315,10 +315,7 @@ impl Service {
         book_id: AddressBookId,
         mut fields: ContactFields,
     ) -> Result<(Contact, Vec<nail_api::OpId>)> {
-        let issues = fields.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&fields.issues())?;
         let book = self.writable_book(&book_id).await?;
         self.store_photo(&mut fields).await?;
         let kind = self
@@ -360,10 +357,7 @@ impl Service {
         id: ContactId,
         mut fields: ContactFields,
     ) -> Result<(Contact, Vec<nail_api::OpId>)> {
-        let issues = fields.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&fields.issues())?;
         let mut contact = self.contact(&id).await?;
         if contact.read_only {
             return Err(forbidden(format!("contact {id} is read-only")));
@@ -421,10 +415,7 @@ impl Service {
         others: Vec<ContactId>,
         mut fields: ContactFields,
     ) -> Result<(Contact, Vec<nail_api::OpId>)> {
-        let issues = fields.issues();
-        if !issues.is_empty() {
-            return Err(invalid(&issues));
-        }
+        check(&fields.issues())?;
         if others.is_empty() || others.contains(&primary_id) {
             return Err(
                 ApiError::invalid_request("merge needs other contacts than the primary").into(),

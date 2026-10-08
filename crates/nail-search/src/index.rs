@@ -26,63 +26,33 @@
 //!   the opt-in is withdrawn ([`SearchIndex::remove_decrypted`]; policy in
 //!   [`crate::IndexPolicy`]).
 
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::path::Path;
 
 use nail_api::{AccountId, MessageId};
+use tantivy::Term;
 use tantivy::collector::TopDocs;
-use tantivy::directory::Directory;
 use tantivy::query::{
     AllQuery, BooleanQuery, BoostQuery, EmptyQuery, Occur, PhraseQuery, Query, TermQuery,
 };
-use tantivy::schema::{
-    Field, IndexRecordOption, STORED, STRING, Schema, TantivyDocument, TextFieldIndexing,
-    TextOptions, Value,
-};
-use tantivy::tokenizer::{
-    AsciiFoldingFilter, LowerCaser, RemoveLongFilter, SimpleTokenizer, TextAnalyzer,
-};
-use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, Term};
+use tantivy::schema::{Field, IndexRecordOption, STORED, STRING, Schema, TantivyDocument, Value};
 
 use crate::document::IndexDocument;
-use crate::error::{Error, Result};
+pub use crate::engine::{CommitPolicy, DirectoryWrapper, VERSION_FILE_NAME};
+use crate::engine::{Engine, IndexKind, text_options, tokens};
+use crate::error::Result;
 use crate::query::TextField;
 
 /// Conventional name of the index directory inside the data directory.
 pub const INDEX_DIR_NAME: &str = "search";
 
-/// Bump when the schema or tokenization changes; older indexes are rebuilt.
-/// v2 (M2a): the `decrypted_in` marker field.
-const SCHEMA_VERSION: u32 = 2;
-/// The schema version file in the index directory (plain; `nail-vault`
-/// leaves it unencrypted).
-pub const VERSION_FILE_NAME: &str = "nail-search-version";
-const VERSION_FILE: &str = VERSION_FILE_NAME;
-
-/// Wraps the on-disk index directory, e.g. in `nail-vault`'s encrypting
-/// directory.
-pub type DirectoryWrapper = Arc<dyn Fn(Box<dyn Directory>) -> Box<dyn Directory> + Send + Sync>;
-pub(crate) const TOKENIZER: &str = "nail";
-const WRITER_MEMORY: usize = 50_000_000;
-
-/// When staged changes are committed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CommitPolicy {
-    /// Commit once this many changes are staged.
-    pub max_pending: usize,
-    /// Commit once the oldest staged change is this old.
-    pub max_delay: Duration,
-}
-
-impl Default for CommitPolicy {
-    fn default() -> Self {
-        Self {
-            max_pending: 1_000,
-            max_delay: Duration::from_secs(2),
-        }
-    }
-}
+/// The mail index. Bump the version when the schema or tokenization
+/// changes; older indexes are rebuilt. v2 (M2a): the `decrypted_in` marker
+/// field.
+const KIND: IndexKind = IndexKind {
+    label: "search index",
+    schema_version: 2,
+    writer_memory: 50_000_000,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct Fields {
@@ -121,11 +91,7 @@ impl Fields {
 
 fn schema() -> (Schema, Fields) {
     let mut b = Schema::builder();
-    let text = TextOptions::default().set_indexing_options(
-        TextFieldIndexing::default()
-            .set_tokenizer(TOKENIZER)
-            .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-    );
+    let text = text_options();
     let fields = Fields {
         id: b.add_text_field("id", STRING | STORED),
         account: b.add_text_field("account", STRING),
@@ -140,158 +106,24 @@ fn schema() -> (Schema, Fields) {
     (b.build(), fields)
 }
 
-pub(crate) fn analyzer() -> TextAnalyzer {
-    TextAnalyzer::builder(SimpleTokenizer::default())
-        .filter(RemoveLongFilter::limit(64))
-        .filter(LowerCaser)
-        .filter(AsciiFoldingFilter)
-        .build()
-}
-
-#[derive(Debug, Default)]
-struct Batch {
-    pending: usize,
-    since: Option<Instant>,
-}
-
 /// The full-text index (one document per message, batched commits). `Send + Sync`; all
 /// methods block (run them on a blocking thread from async code).
 pub struct SearchIndex {
-    reader: IndexReader,
-    writer: Mutex<IndexWriter>,
+    engine: Engine,
     fields: Fields,
-    batch: Mutex<Batch>,
-    policy: CommitPolicy,
-    rebuilt: bool,
-    path: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for SearchIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SearchIndex")
-            .field("path", &self.path)
-            .field("policy", &self.policy)
+            .field("path", &self.engine.path())
+            .field("policy", &self.engine.policy())
             .finish_non_exhaustive()
     }
 }
 
 impl SearchIndex {
-    /// An index in memory (tests, demos).
-    pub fn open_in_ram(policy: CommitPolicy) -> Result<Self> {
-        let (schema, fields) = schema();
-        Self::init(&Index::create_in_ram(schema), fields, policy, false, None)
-    }
-
-    /// Opens (or creates) the index in `dir`. An index of another schema
-    /// version, or one that cannot be opened, is deleted and recreated
-    /// empty ([`SearchIndex::was_rebuilt`]).
-    pub fn open(dir: impl AsRef<Path>, policy: CommitPolicy) -> Result<Self> {
-        Self::open_with(dir, policy, None)
-    }
-
-    /// Like [`SearchIndex::open`], with the directory wrapped by `wrapper`
-    /// (encryption at rest). An index the wrapper cannot read is rebuilt.
-    pub fn open_with(
-        dir: impl AsRef<Path>,
-        policy: CommitPolicy,
-        wrapper: Option<&DirectoryWrapper>,
-    ) -> Result<Self> {
-        let dir = dir.as_ref();
-        let version_file = dir.join(VERSION_FILE);
-        let current = std::fs::read_to_string(&version_file)
-            .ok()
-            .and_then(|v| v.trim().parse::<u32>().ok());
-        let mut rebuilt = false;
-        if dir.exists() && current != Some(SCHEMA_VERSION) {
-            tracing::info!(
-                ?dir,
-                ?current,
-                "search index has another version; rebuilding"
-            );
-            std::fs::remove_dir_all(dir)?;
-            rebuilt = true;
-        }
-        std::fs::create_dir_all(dir)?;
-        let (schema, fields) = schema();
-        let index = match Self::open_dir(dir, &schema, wrapper) {
-            Ok(index) => index,
-            Err(err) => {
-                tracing::warn!(?dir, %err, "search index unreadable; rebuilding");
-                std::fs::remove_dir_all(dir)?;
-                std::fs::create_dir_all(dir)?;
-                rebuilt = true;
-                Self::open_dir(dir, &schema, wrapper)?
-            }
-        };
-        std::fs::write(&version_file, SCHEMA_VERSION.to_string())?;
-        Self::init(&index, fields, policy, rebuilt, Some(dir.to_owned()))
-    }
-
-    fn open_dir(dir: &Path, schema: &Schema, wrapper: Option<&DirectoryWrapper>) -> Result<Index> {
-        let directory: Box<dyn Directory> = Box::new(
-            tantivy::directory::MmapDirectory::open(dir)
-                .map_err(|e| Error::Index(e.to_string()))?,
-        );
-        let directory = match wrapper {
-            Some(wrap) => wrap(directory),
-            None => directory,
-        };
-        Ok(Index::open_or_create(directory, schema.clone())?)
-    }
-
-    fn init(
-        index: &Index,
-        fields: Fields,
-        policy: CommitPolicy,
-        rebuilt: bool,
-        path: Option<PathBuf>,
-    ) -> Result<Self> {
-        index.tokenizers().register(TOKENIZER, analyzer());
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()?;
-        let writer = index.writer_with_num_threads(1, WRITER_MEMORY)?;
-        Ok(Self {
-            reader,
-            writer: Mutex::new(writer),
-            fields,
-            batch: Mutex::new(Batch::default()),
-            policy,
-            rebuilt,
-            path,
-        })
-    }
-
-    /// Whether [`SearchIndex::open`] had to recreate the index (the caller
-    /// should reindex every message).
-    pub fn was_rebuilt(&self) -> bool {
-        self.rebuilt
-    }
-
-    fn writer(&self) -> std::sync::MutexGuard<'_, IndexWriter> {
-        self.writer.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn staged(&self, n: usize) -> Result<()> {
-        let due = {
-            let mut batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-            batch.pending += n;
-            batch.since.get_or_insert_with(Instant::now);
-            self.is_due(&batch)
-        };
-        if due {
-            self.commit()?;
-        }
-        Ok(())
-    }
-
-    fn is_due(&self, batch: &Batch) -> bool {
-        batch.pending >= self.policy.max_pending
-            || batch
-                .since
-                .is_some_and(|t| t.elapsed() >= self.policy.max_delay)
-    }
+    index_api!();
 
     /// Adds (or replaces) documents.
     pub fn add(&self, docs: &[IndexDocument]) -> Result<()> {
@@ -299,7 +131,7 @@ impl SearchIndex {
             return Ok(());
         }
         {
-            let writer = self.writer();
+            let writer = self.engine.writer();
             for doc in docs {
                 writer.delete_term(Term::from_field_text(
                     self.fields.id,
@@ -308,7 +140,7 @@ impl SearchIndex {
                 writer.add_document(self.to_tantivy(doc))?;
             }
         }
-        self.staged(docs.len())
+        self.engine.staged(docs.len())
     }
 
     /// Removes documents (unknown ids are ignored).
@@ -317,30 +149,31 @@ impl SearchIndex {
             return Ok(());
         }
         {
-            let writer = self.writer();
+            let writer = self.engine.writer();
             for id in ids {
                 writer.delete_term(Term::from_field_text(self.fields.id, id.as_str()));
             }
         }
-        self.staged(ids.len())
+        self.engine.staged(ids.len())
     }
 
     /// Removes every document of an account.
     pub fn remove_account(&self, account: &AccountId) -> Result<()> {
-        self.writer()
+        self.engine
+            .writer()
             .delete_term(Term::from_field_text(self.fields.account, account.as_str()));
-        self.staged(1)
+        self.engine.staged(1)
     }
 
     /// Removes the documents of an account that were built from decrypted
     /// content (the opt-in was withdrawn); the caller re-adds those
     /// messages without their decrypted content.
     pub fn remove_decrypted(&self, account: &AccountId) -> Result<()> {
-        self.writer().delete_term(Term::from_field_text(
+        self.engine.writer().delete_term(Term::from_field_text(
             self.fields.decrypted_in,
             account.as_str(),
         ));
-        self.staged(1)
+        self.engine.staged(1)
     }
 
     /// Ids of an account's documents built from decrypted content.
@@ -352,53 +185,9 @@ impl SearchIndex {
         Ok(self.run(&query)?.into_iter().map(|(id, _)| id).collect())
     }
 
-    /// Removes every document (before a full reindex).
-    pub fn clear(&self) -> Result<()> {
-        self.writer().delete_all_documents()?;
-        self.staged(1)
-    }
-
-    /// Commits staged changes now and makes them searchable.
-    pub fn commit(&self) -> Result<()> {
-        let mut batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-        self.writer().commit()?;
-        self.reader.reload()?;
-        *batch = Batch::default();
-        Ok(())
-    }
-
-    /// Commits when the batch is due by the policy (call from a timer).
-    /// Returns whether it committed.
-    pub fn commit_if_due(&self) -> Result<bool> {
-        let due = {
-            let batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-            batch.pending > 0 && self.is_due(&batch)
-        };
-        if due {
-            self.commit()?;
-        }
-        Ok(due)
-    }
-
     /// Number of staged, uncommitted changes.
     pub fn pending(&self) -> usize {
-        self.batch
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .pending
-    }
-
-    fn commit_pending(&self) -> Result<()> {
-        if self.pending() > 0 {
-            self.commit()?;
-        }
-        Ok(())
-    }
-
-    /// Number of searchable documents (after committing staged changes).
-    pub fn doc_count(&self) -> Result<u64> {
-        self.commit_pending()?;
-        Ok(self.reader.searcher().num_docs())
+        self.engine.pending()
     }
 
     fn to_tantivy(&self, doc: &IndexDocument) -> TantivyDocument {
@@ -420,22 +209,11 @@ impl SearchIndex {
         out
     }
 
-    /// Tokens of `text` as the index sees them.
-    fn tokens(text: &str) -> Vec<String> {
-        let mut analyzer = analyzer();
-        let mut stream = analyzer.token_stream(text);
-        let mut out = Vec::new();
-        while let Some(token) = stream.next() {
-            out.push(token.text.clone());
-        }
-        out
-    }
-
     /// The Tantivy query for one text term: every token must appear (as a
     /// phrase when there are several) in one of the field's index fields.
     /// `None` when the text has no searchable tokens.
     pub(crate) fn text_query(&self, field: TextField, text: &str) -> Option<Box<dyn Query>> {
-        let tokens = Self::tokens(text);
+        let tokens = tokens(text);
         if tokens.is_empty() {
             return None;
         }
@@ -472,8 +250,7 @@ impl SearchIndex {
 
     /// Runs a Tantivy query; returns every matching message with its score.
     pub(crate) fn run(&self, query: &dyn Query) -> Result<Vec<(MessageId, f32)>> {
-        self.commit_pending()?;
-        let searcher = self.reader.searcher();
+        let searcher = self.engine.searcher()?;
         let total = usize::try_from(searcher.num_docs()).unwrap_or(usize::MAX);
         if total == 0 {
             return Ok(Vec::new());
@@ -523,6 +300,8 @@ impl SearchIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::time::Duration;
 
     fn doc(id: &str, subject: &str, body: &str) -> IndexDocument {
         IndexDocument {
@@ -659,14 +438,9 @@ mod tests {
 
     #[test]
     fn wrapper_is_used_for_the_on_disk_directory() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::atomic::Ordering;
         let dir = tempfile::tempdir().unwrap();
-        let calls = Arc::new(AtomicUsize::new(0));
-        let counter = Arc::clone(&calls);
-        let wrapper: DirectoryWrapper = Arc::new(move |inner| {
-            counter.fetch_add(1, Ordering::SeqCst);
-            inner
-        });
+        let (wrapper, calls) = crate::engine::counting_wrapper();
         let index =
             SearchIndex::open_with(dir.path(), CommitPolicy::default(), Some(&wrapper)).unwrap();
         index.add(&[doc("m1", "hello", "world")]).unwrap();
@@ -728,7 +502,7 @@ mod tests {
                 ["m1"]
             );
         }
-        std::fs::write(path.join(VERSION_FILE), "0").unwrap();
+        std::fs::write(path.join(VERSION_FILE_NAME), "0").unwrap();
         let index = SearchIndex::open(&path, CommitPolicy::default()).unwrap();
         assert!(index.was_rebuilt());
         assert_eq!(index.doc_count().unwrap(), 0);

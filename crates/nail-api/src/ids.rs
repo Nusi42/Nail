@@ -7,6 +7,38 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+/// Longest name of a configuration node the user names (accounts, virtual
+/// accounts, rules, PIM sources).
+pub const MAX_CONFIG_ID_LEN: usize = 64;
+
+/// Whether `id` is a valid configuration name: 1 to [`MAX_CONFIG_ID_LEN`]
+/// characters from `a-z 0-9 - _ .`, starting with a letter or digit.
+pub fn is_config_id(id: &str) -> bool {
+    id.len() <= MAX_CONFIG_ID_LEN
+        && id
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.'))
+}
+
+/// The first of `base`, `base-2`, `base-3`, … that `taken` does not hold.
+pub fn first_free_id(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_owned();
+    }
+    let mut n: u64 = 2;
+    loop {
+        let id = format!("{base}-{n}");
+        if !taken(&id) {
+            return id;
+        }
+        n += 1;
+    }
+}
+
 macro_rules! string_id {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
@@ -292,6 +324,26 @@ mod tests {
         assert_eq!(
             serde_json::to_value(OpId::new("op-7")).unwrap(),
             serde_json::json!("op-7")
+        );
+    }
+
+    #[test]
+    fn config_ids() {
+        for ok in ["a", "work", "0x", "a.b_c-d", &"a".repeat(64)] {
+            assert!(is_config_id(ok), "{ok}");
+        }
+        for bad in ["", "-a", ".a", "_a", "Work", "a b", "ä", &"a".repeat(65)] {
+            assert!(!is_config_id(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn free_ids() {
+        assert_eq!(first_free_id("work", |_| false), "work");
+        assert_eq!(first_free_id("work", |id| id == "work"), "work-2");
+        assert_eq!(
+            first_free_id("work", |id| ["work", "work-2", "work-3"].contains(&id)),
+            "work-4"
         );
     }
 }

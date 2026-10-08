@@ -349,28 +349,17 @@ fn triggers_match_the_backfill_after_random_writes() {
 
 fn summary(id: &str, account: &str, folder: &str, day: usize, seen: bool) -> MessageSummary {
     MessageSummary {
-        id: id.into(),
-        folder_id: folder.into(),
-        account_id: account.into(),
         subject: format!("{account} subject {id}"),
         from: Some(Address {
             name: None,
             email: format!("{id}@example.org"),
         }),
-        to: Vec::new(),
         date: format!("2026-01-{:02}T{:02}:00:00Z", 1 + day / 24, day % 24),
         flags: Flags {
             seen,
             ..Flags::default()
         },
-        has_attachments: false,
-        preview: String::new(),
-        thread_id: None,
-        tags: Vec::new(),
-        duplicates: Vec::new(),
-        headers_only: false,
-        gmail: None,
-        exchange: None,
+        ..nail_api::testing::summary(id, account, folder)
     }
 }
 

@@ -6,13 +6,15 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::desktop_service;
+use nail_core::testing::error_of;
+
 use std::sync::{Arc, Mutex};
 
 use nail_api::backup::BackupContents;
-use nail_api::desktop::{
-    DefaultAppsStatus, DesktopHost, DesktopNotifier, DesktopSettings, HostUpdateState, InstallKind,
-    InstallationInfo, PathPick, PathPickKind, UpdateSettings, WindowsArch,
-};
+use nail_api::desktop::{DesktopHost, DesktopNotifier, PathPick, PathPickKind};
 use nail_api::engine::BoxFuture;
 use nail_api::palette::MAX_RECENT_ACTIONS;
 use nail_api::portability::{ImportFormat, ImportSource};
@@ -31,47 +33,7 @@ struct FakeHost {
 
 impl DesktopHost for FakeHost {
     fn attach(&self, _notify: DesktopNotifier) {}
-    fn installation(&self) -> InstallationInfo {
-        InstallationInfo {
-            version: "1.0.0".into(),
-            kind: InstallKind::Development,
-            scope: None,
-            architecture: WindowsArch::X64,
-            install_dir: None,
-            updates_disabled: None,
-            forced_channel: None,
-            mapi_installed: false,
-            webview_version: None,
-        }
-    }
-    fn update_state(&self) -> HostUpdateState {
-        HostUpdateState::default()
-    }
-    fn apply_update_settings(&self, _settings: &UpdateSettings) {}
-    fn check_for_updates(&self) -> Result<(), ApiError> {
-        Ok(())
-    }
-    fn download_update(&self) -> Result<(), ApiError> {
-        Ok(())
-    }
-    fn install_update(&self) -> Result<(), ApiError> {
-        Ok(())
-    }
-    fn start_with_windows(&self) -> Option<bool> {
-        None
-    }
-    fn apply_desktop_settings(&self, _settings: &DesktopSettings) -> Result<(), ApiError> {
-        Ok(())
-    }
-    fn dev_endpoint_url(&self) -> Option<String> {
-        None
-    }
-    fn default_apps(&self) -> DefaultAppsStatus {
-        DefaultAppsStatus::unregistered()
-    }
-    fn open_default_apps_settings(&self) -> Result<(), ApiError> {
-        Ok(())
-    }
+    nail_api::inert_desktop_host!();
     fn pick_path<'a>(
         &'a self,
         pick: &'a PathPick,
@@ -102,29 +64,9 @@ impl DesktopHost for FakeHost {
     }
 }
 
-fn open(host: Option<Arc<FakeHost>>) -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    (service, data, config)
-}
-
-fn error_of(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("error expected, got {other:?}"),
-    }
-}
-
 #[tokio::test]
 async fn recent_actions_are_stored_capped_and_validated() {
-    let (service, data, config) = open(None);
+    let (service, data, config) = desktop_service::<FakeHost>(None);
     let Response::RecentActions { recent } = service.handle(Request::GetRecentActions).await else {
         panic!("recent actions expected");
     };
@@ -187,7 +129,7 @@ async fn recent_actions_are_stored_capped_and_validated() {
 #[tokio::test]
 async fn print_jobs_round_trip_and_pdfs_go_through_the_host() {
     let host = Arc::new(FakeHost::default());
-    let (service, _d, _c) = open(Some(host.clone()));
+    let (service, _d, _c) = desktop_service(Some(host.clone()));
     let Response::PrintJob { job } = service
         .handle(Request::CreatePrintJob {
             target: PrintTarget::Agenda {
@@ -298,7 +240,7 @@ async fn print_jobs_round_trip_and_pdfs_go_through_the_host() {
 
 #[tokio::test]
 async fn without_the_desktop_pdfs_and_file_dialogs_are_unsupported() {
-    let (service, _d, _c) = open(None);
+    let (service, _d, _c) = desktop_service::<FakeHost>(None);
     let Response::PrintJob { job } = service
         .handle(Request::CreatePrintJob {
             target: PrintTarget::Message {
@@ -336,7 +278,7 @@ async fn without_the_desktop_pdfs_and_file_dialogs_are_unsupported() {
 
 #[tokio::test]
 async fn file_dialogs_go_through_the_host() {
-    let (service, _d, _c) = open(Some(Arc::new(FakeHost::default())));
+    let (service, _d, _c) = desktop_service(Some(Arc::new(FakeHost::default())));
     let folder = PathPick {
         kind: PathPickKind::OpenFolder,
         title_id: "portability-pick-maildir".into(),
@@ -363,7 +305,7 @@ async fn file_dialogs_go_through_the_host() {
 
 #[tokio::test]
 async fn smartcard_settings_are_validated_and_stored() {
-    let (service, _d, _c) = open(None);
+    let (service, _d, _c) = desktop_service::<FakeHost>(None);
     assert_eq!(
         service.handle(Request::GetSmartcardSettings).await,
         Response::SmartcardSettings {
@@ -412,7 +354,7 @@ async fn smartcard_settings_are_validated_and_stored() {
 /// now (the details are in `m4c_portability.rs` / `m4c_vault.rs`).
 #[tokio::test(flavor = "multi_thread")]
 async fn the_m4c_requests_are_served() {
-    let (service, _d, _c) = open(None);
+    let (service, _d, _c) = desktop_service::<FakeHost>(None);
     let Response::ImportSources { .. } = service.handle(Request::FindImportSources).await else {
         panic!("import sources expected");
     };

@@ -22,6 +22,8 @@ schemars = { workspace = true, optional = true }
 # Derive `schemars::JsonSchema` for the MCP tool and prompt arguments
 # (`mcp::tools`, `mcp::prompts`); enabled by nail-mcp.
 json-schema = ["dep:schemars"]
+# Sample contract values for other crates' tests (`nail_api::testing`).
+testing = []
 
 [dev-dependencies]
 tempfile.workspace = true

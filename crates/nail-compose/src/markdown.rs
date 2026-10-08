@@ -32,13 +32,7 @@ fn adapter(theme: &str) -> Arc<SyntectAdapter> {
 }
 
 fn options(hardbreaks: bool) -> comrak::Options<'static> {
-    let mut options = comrak::Options::default();
-    options.extension.strikethrough = true;
-    options.extension.table = true;
-    options.extension.autolink = true;
-    options.extension.tasklist = true;
-    options.extension.footnotes = true;
-    options.render.r#unsafe = true;
+    let mut options = nail_mime::markdown_options(true);
     options.render.hardbreaks = hardbreaks;
     options
 }

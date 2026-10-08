@@ -25,6 +25,7 @@
 
 use nail_api::mcp::McpScope;
 use nail_api::remote_content::RemoteContentScope;
+use nail_api::search::RESTRICTED_SCAN;
 use nail_api::{
     AccountId, ApiError, Draft, DraftId, ErrorCode, Event, FolderId, IdentityId, MailAction,
     MessageId, MessageSummary, MessageTarget, MoveTarget, OpId, OutboxId, Request, Response,
@@ -42,30 +43,31 @@ use crate::conversations::FolderFilter;
 use crate::error::Result;
 use crate::service::{MAX_PAGE_SIZE, Service};
 
+/// Keeps a thread's granted messages; whether any went. A thread with
+/// none granted is refused.
+fn narrowed<T>(
+    thread: &nail_api::ThreadId,
+    messages: &mut Vec<T>,
+    keep: impl FnMut(&T) -> bool,
+) -> Result<bool> {
+    let before = messages.len();
+    messages.retain(keep);
+    if messages.is_empty() {
+        return Err(forbidden(format!("thread {thread} is not granted")).into());
+    }
+    Ok(messages.len() != before)
+}
+
 fn forbidden(message: String) -> ApiError {
     ApiError::new(ErrorCode::Forbidden, message)
 }
 
-/// Hits a restricted search looks at, at most (like MCP's).
-const RESTRICTED_SCAN: u32 = 5000;
 /// Hits fetched per page of a restricted search.
 const SCAN_PAGE: u32 = 200;
 
 /// Whether the grant covers everything: every account, no excluded folder.
 fn full(access: &Access) -> bool {
     access.all_accounts() && !access.excludes_folders()
-}
-
-/// The message a draft quotes, forwards or redirects, if any.
-fn draft_original(draft: &Draft) -> Option<MessageId> {
-    draft
-        .context
-        .as_ref()
-        .map(|c| c.message_id.clone())
-        .or_else(|| match &draft.automatic {
-            Some(nail_api::AutomaticMail::Redirect { message_id }) => Some(message_id.clone()),
-            _ => None,
-        })
 }
 
 fn message_allowed(access: &Access, message: &MessageSummary) -> bool {
@@ -102,11 +104,7 @@ impl Service {
         let access = self.remote_access(ctx);
         self.check_remote_request(&access, &request).await?;
         let response = match request {
-            request @ (Request::SetRemotePassword { .. }
-            | Request::StartTotpEnrollment { .. }
-            | Request::ConfirmTotpEnrollment { .. }
-            | Request::DisableTotp { .. }
-            | Request::CreatePairingCode { .. }) => {
+            request @ nail_api::remote_auth_requests!() => {
                 self.remote_auth().handle_admin(request, Some(ctx)).await?
             }
             Request::GetMessage { id } => {
@@ -325,125 +323,11 @@ impl Service {
             // Administration (`admin` and a fresh login, checked by
             // `authorize`), self-service on the session's own user, or
             // desktop-only (refused by `authorize`).
-            Request::DiscoverAccount { .. }
-            | Request::TestAccount { .. }
-            | Request::StartOAuth { .. }
-            | Request::CancelOAuth { .. }
-            | Request::GetAccountsConfig
-            | Request::AddAccount { .. }
-            | Request::UpdateAccount { .. }
-            | Request::RemoveAccount { .. }
-            | Request::AddVirtualAccount { .. }
-            | Request::UpdateVirtualAccount { .. }
-            | Request::RemoveVirtualAccount { .. }
-            | Request::ListMcpClients
-            | Request::CreateMcpClient { .. }
-            | Request::UpdateMcpGrants { .. }
-            | Request::RevokeMcpClient { .. }
-            | Request::ListMcpAudit { .. }
-            | Request::GetMcpServerInfo
-            | Request::ReportUiContext { .. }
-            | Request::UpdateLayout { .. }
-            | Request::SetTheme { .. }
-            | Request::SetThemePreferences { .. }
-            | Request::UndoEdit { .. }
-            | Request::RedoEdit { .. }
-            | Request::EditTheme { .. }
-            | Request::DuplicateTheme { .. }
-            | Request::RenameTheme { .. }
-            | Request::DeleteTheme { .. }
-            | Request::PreviewConfigMerge { .. }
-            | Request::ResolveConfigMerge { .. }
-            | Request::ApplyConfigMerge { .. }
-            | Request::ListConfigBackups { .. }
-            | Request::RevertConfig { .. }
-            | Request::OpenConfigFile { .. }
-            | Request::ImportKeys { .. }
-            | Request::ImportPkcs12 { .. }
-            | Request::GenerateKey { .. }
-            | Request::DeleteKey { .. }
-            | Request::SetKeyTrust { .. }
-            | Request::ListWindowsCertificates { .. }
-            | Request::ImportWindowsCertificate { .. }
-            | Request::SendAutocryptSetup { .. }
-            | Request::ImportAutocryptSetup { .. }
-            | Request::UpdateSecuritySettings { .. }
-            | Request::SuggestAuthservId { .. }
-            | Request::SetVaultEncryption { .. }
-            | Request::GetRemoteUiSettings
-            | Request::UpdateRemoteUiSettings { .. }
-            | Request::RegenerateRemoteCertificate
-            | Request::ListRemoteUsers
-            | Request::CreateRemoteUser { .. }
-            | Request::UpdateRemoteUser { .. }
-            | Request::DeleteRemoteUser { .. }
-            | Request::SetRemotePassword { .. }
-            | Request::StartTotpEnrollment { .. }
-            | Request::ConfirmTotpEnrollment { .. }
-            | Request::DisableTotp { .. }
-            | Request::UnlockRemoteUser { .. }
-            | Request::RenamePasskey { .. }
-            | Request::DeletePasskey { .. }
-            | Request::ListRemoteDevices { .. }
-            | Request::UpdateRemoteDevice { .. }
-            | Request::RevokeRemoteDevice { .. }
-            | Request::ListRemoteSessions { .. }
-            | Request::RevokeRemoteSession { .. }
-            | Request::RevokeAllRemoteSessions { .. }
-            | Request::CreatePairingCode { .. }
-            | Request::ListPairingCodes
-            | Request::CancelPairingCode { .. }
-            | Request::ListRemoteAudit { .. }
-            | Request::TakeLaunchRequests
-            | Request::ListPopOuts
-            | Request::PopOutWindow { .. }
-            | Request::ReturnPopOut { .. }
-            | Request::ClosePopOut { .. }
-            | Request::FocusPopOut { .. }
-            | Request::ImportMessageFile { .. }
-            | Request::GetInstallation
-            | Request::GetUpdateStatus
-            | Request::SetUpdateSettings { .. }
-            | Request::CheckForUpdates
-            | Request::DownloadUpdate
-            | Request::InstallUpdate
-            | Request::GetDesktopSettings
-            | Request::SetDesktopSettings { .. }
-            | Request::GetDefaultApps
-            | Request::OpenDefaultAppsSettings
-            | Request::GetFirstRun
-            | Request::CompleteFirstRun
-            | Request::FindImportSources
-            | Request::PreviewImport { .. }
-            | Request::StartImport { .. }
-            | Request::StartExport { .. }
-            | Request::CreateBackup { .. }
-            | Request::InspectBackup { .. }
-            | Request::VerifyBackup { .. }
-            | Request::PreviewRestore { .. }
-            | Request::StartRestore { .. }
-            | Request::ListPortabilityJobs
-            | Request::GetPortabilityJob { .. }
-            | Request::CancelPortabilityJob { .. }
-            | Request::CreateRecoveryKey { .. }
-            | Request::VerifyRecoveryKey { .. }
-            | Request::RestoreVaultKey { .. }
-            | Request::RemoveRecoveryKey
-            | Request::GetSmartcardSettings
-            | Request::SetSmartcardSettings { .. }
-            | Request::ListSmartcards
-            | Request::UseSmartcardKey { .. }
-            | Request::AnswerPinPrompt { .. }
-            | Request::SavePrintPdf { .. }
-            | Request::PreviewDiagnostics { .. }
-            | Request::CreateDiagnosticsBundle { .. }
-            | Request::PickPath { .. }
-            | Request::SaveAttachment { .. }
-            | Request::SyncSieve { .. }
-            | Request::UpdateNotificationSettings { .. }
-            | Request::SetFolderSyncPolicy { .. }
-            | Request::GetMcpSettings
-            | Request::UpdateMcpSettings { .. } => {
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            nail_api::remote_admin_requests!() | nail_api::desktop_requests!() | nail_api::portability_requests!() | nail_api::config_merge_requests!() | Request::DiscoverAccount { .. } | Request::TestAccount { .. } | Request::StartOAuth { .. } | Request::CancelOAuth { .. } | Request::GetAccountsConfig | Request::AddAccount { .. } | Request::UpdateAccount { .. } | Request::RemoveAccount { .. } | Request::AddVirtualAccount { .. } | Request::UpdateVirtualAccount { .. } | Request::RemoveVirtualAccount { .. } | Request::ListMcpClients | Request::CreateMcpClient { .. } | Request::UpdateMcpGrants { .. } | Request::RevokeMcpClient { .. } | Request::ListMcpAudit { .. } | Request::GetMcpServerInfo | Request::ReportUiContext { .. } | Request::UpdateLayout { .. } | Request::SetTheme { .. } | Request::SetThemePreferences { .. } | Request::UndoEdit { .. } | Request::RedoEdit { .. } | Request::EditTheme { .. } | Request::DuplicateTheme { .. } | Request::RenameTheme { .. } | Request::DeleteTheme { .. } | Request::ImportKeys { .. } | Request::ImportPkcs12 { .. } | Request::GenerateKey { .. } | Request::DeleteKey { .. } | Request::SetKeyTrust { .. } | Request::ListWindowsCertificates { .. } | Request::ImportWindowsCertificate { .. } | Request::SendAutocryptSetup { .. } | Request::ImportAutocryptSetup { .. } | Request::UpdateSecuritySettings { .. } | Request::SuggestAuthservId { .. } | Request::SetVaultEncryption { .. } | Request::TakeLaunchRequests | Request::ListPopOuts | Request::PopOutWindow { .. } | Request::ReturnPopOut { .. } | Request::ClosePopOut { .. } | Request::FocusPopOut { .. } | Request::ImportMessageFile { .. } | Request::CreateRecoveryKey { .. } | Request::VerifyRecoveryKey { .. } | Request::RestoreVaultKey { .. } | Request::RemoveRecoveryKey | Request::GetSmartcardSettings | Request::SetSmartcardSettings { .. } | Request::ListSmartcards | Request::UseSmartcardKey { .. } | Request::AnswerPinPrompt { .. } | Request::SavePrintPdf { .. } | Request::PreviewDiagnostics { .. } | Request::CreateDiagnosticsBundle { .. } | Request::PickPath { .. } | Request::SaveAttachment { .. } | Request::SyncSieve { .. } | Request::UpdateNotificationSettings { .. } | Request::SetFolderSyncPolicy { .. } | Request::GetMcpSettings | Request::UpdateMcpSettings { .. } => {
                 // Defence in depth: this arm relies on `authorize`; if a
                 // request here were ever made a plain scope request, it
                 // would need its own target check instead.
@@ -451,7 +335,7 @@ impl Service {
                     Needs::Admin | Needs::AdminOrOwn(_) | Needs::DesktopOnly => Ok(()),
                     _ => Err(forbidden(format!(
                         "{} is not available remotely",
-                        crate::service::request_name(request)
+                        request.wire_type()
                     ))
                     .into()),
                 }
@@ -570,7 +454,7 @@ impl Service {
             // readable (encrypted gate included).
             Request::SaveDraft { draft } => {
                 self.check_identity(access, &draft.identity_id)?;
-                if let Some(original) = draft_original(draft) {
+                if let Some(original) = draft.original_message() {
                     self.check_readable(access, &original).await?;
                 }
                 if let Some(id) = &draft.id
@@ -610,7 +494,7 @@ impl Service {
             },
             Request::ConvertDraft { draft, .. } => {
                 self.check_identity(access, &draft.identity_id)?;
-                if let Some(original) = draft_original(draft) {
+                if let Some(original) = draft.original_message() {
                     self.check_readable(access, &original).await?;
                 }
                 Ok(())
@@ -684,16 +568,11 @@ impl Service {
             // using one needs a grant for every account; the list is
             // narrowed to nothing instead. Packages and folders on the
             // desktop's disk are never read for a remote session.
-            Request::ListPlugins
-            | Request::EnablePlugin { .. }
-            | Request::DisablePlugin { .. }
-            | Request::UninstallPlugin { .. }
-            | Request::UpdatePluginGrants { .. }
-            | Request::ListPluginLogs { .. }
-            | Request::ClearPluginLogs { .. }
-            | Request::GetPluginSettings { .. }
-            | Request::UpdatePluginSettings { .. }
-            | Request::PreviewPluginPlacements { .. } => Ok(()),
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            nail_api::plugin_admin_requests!() | Request::ListPlugins => Ok(()),
             Request::GetPlugin { .. }
             | Request::RunPluginCommand { .. }
             | Request::RespondPluginDialog { .. }
@@ -726,54 +605,11 @@ impl Service {
                     .into()),
                 }
             }
-            Request::ListPimSources
-            | Request::AddPimSource { .. }
-            | Request::UpdatePimSource { .. }
-            | Request::RemovePimSource { .. }
-            | Request::TestPimSource { .. }
-            | Request::SyncPimSources { .. }
-            | Request::ListCalendars { .. }
-            | Request::CreateCalendar { .. }
-            | Request::UpdateCalendar { .. }
-            | Request::DeleteCalendar { .. }
-            | Request::ListEventInstances { .. }
-            | Request::GetEvent { .. }
-            | Request::CreateEvent { .. }
-            | Request::UpdateEvent { .. }
-            | Request::DeleteEvent { .. }
-            | Request::MoveEvent { .. }
-            | Request::FindFreeTime { .. }
-            | Request::ListAddressBooks { .. }
-            | Request::CreateAddressBook { .. }
-            | Request::UpdateAddressBook { .. }
-            | Request::DeleteAddressBook { .. }
-            | Request::ListContacts { .. }
-            | Request::GetContact { .. }
-            | Request::CreateContact { .. }
-            | Request::UpdateContact { .. }
-            | Request::DeleteContacts { .. }
-            | Request::MoveContact { .. }
-            | Request::SearchContacts { .. }
-            | Request::FindDuplicateContacts { .. }
-            | Request::MergeContacts { .. }
-            | Request::UnlinkContact { .. }
-            | Request::GetContactPhoto { .. }
-            | Request::ListContactGroups { .. }
-            | Request::CreateContactGroup { .. }
-            | Request::UpdateContactGroup { .. }
-            | Request::DeleteContactGroup { .. }
-            | Request::ListTasks { .. }
-            | Request::GetTask { .. }
-            | Request::CreateTask { .. }
-            | Request::UpdateTask { .. }
-            | Request::CompleteTask { .. }
-            | Request::MoveTask { .. }
-            | Request::DeleteTask { .. }
-            | Request::SearchPim { .. }
-            | Request::ResolvePimConflict { .. }
-            | Request::ListReminders { .. }
-            | Request::SnoozeReminders { .. }
-            | Request::DismissReminders { .. } => check_full_pim(access),
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            nail_api::pim_source_requests!() | nail_api::pim_event_task_requests!() | nail_api::pim_contact_requests!() | Request::SearchPim { .. } | Request::ListReminders { .. } | Request::SnoozeReminders { .. } | Request::DismissReminders { .. } => check_full_pim(access),
 
             // M3b scheduling (ADR 0065): invitations touch the calendars
             // (full grant, like PIM, which also covers every identity's
@@ -1085,7 +921,7 @@ impl Service {
             None if access.all_accounts() => {}
             _ => return Ok(false),
         }
-        let Some(original) = draft_original(draft) else {
+        let Some(original) = draft.original_message() else {
             return Ok(true);
         };
         match self.find_message(&original).await? {
@@ -1301,12 +1137,7 @@ impl Service {
                 mut thread,
                 mut messages,
             } => {
-                let before = messages.len();
-                messages.retain(keep);
-                if messages.is_empty() {
-                    return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
-                }
-                if messages.len() != before
+                if narrowed(&thread.id, &mut messages, keep)?
                     && let Some(row) = self.thread_row(&thread.id, &messages).await?
                 {
                     *thread = row;
@@ -1317,12 +1148,7 @@ impl Service {
                 mut thread,
                 mut messages,
             } => {
-                let before = messages.len();
-                messages.retain(|m| keep(&m.message));
-                if messages.is_empty() {
-                    return Err(forbidden(format!("thread {} is not granted", thread.id)).into());
-                }
-                if messages.len() != before
+                if narrowed(&thread.id, &mut messages, |m| keep(&m.message))?
                     && let Some(row) = self.conversation_row(&thread.id, &messages).await?
                 {
                     *thread = row;

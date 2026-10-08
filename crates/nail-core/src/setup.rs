@@ -61,20 +61,9 @@ pub(crate) fn normalize_account(config: &mut AccountConfig) {
     }
     config.email = config.email.trim().to_owned();
     if config.identities.is_empty() {
-        config.identities.push(Identity {
-            id: IdentityId::new(config.email.clone()),
-            account_id: config.id.clone(),
-            email: config.email.clone(),
-            name: None,
-            reply_to: None,
-            bcc: Vec::new(),
-            signature: None,
-            composer_mode: None,
-            posting: None,
-            mail_style: None,
-            crypto: None,
-            send_as: None,
-        });
+        config
+            .identities
+            .push(Identity::new(config.id.clone(), config.email.clone()));
     }
     for identity in &mut config.identities {
         identity.account_id = config.id.clone();
@@ -96,6 +85,23 @@ fn test_result(result: std::result::Result<Vec<String>, EngineError>) -> Endpoin
             localized: err.localized.map(|l| *l),
         },
     }
+}
+
+/// An account id derived from `hint` that no account or virtual account
+/// has.
+fn free_account_id(current: &AccountsConfig, hint: &str) -> AccountId {
+    nail_config::derive_account_id(hint, |id| {
+        current.accounts.iter().any(|a| a.id.as_str() == id)
+            || current.virtual_accounts.iter().any(|v| v.id.as_str() == id)
+    })
+}
+
+/// `conflict` when an account or virtual account is called `id`.
+fn check_name_free(current: &AccountsConfig, id: &AccountId) -> Result<()> {
+    if current.account(id).is_some() || current.virtual_account(id).is_some() {
+        return Err(ApiError::new(ErrorCode::Conflict, format!("the name {id} is taken")).into());
+    }
+    Ok(())
 }
 
 impl Service {
@@ -377,26 +383,7 @@ impl Service {
             let Some(reference) = endpoint.auth.secret_ref(&account.id) else {
                 continue;
             };
-            match &input.value {
-                SecretValue::Password { password } => {
-                    let store = Arc::clone(&self.inner.secrets);
-                    let password = password.clone();
-                    tokio::task::spawn_blocking(move || store.set(&reference, &password)).await??;
-                }
-                SecretValue::OAuth2 { flow_id } => {
-                    let (_, tokens) = self.inner.flows.peek(flow_id)?;
-                    self.inner
-                        .tokens
-                        .manager()
-                        .store(&reference, &tokens)
-                        .await?;
-                }
-                SecretValue::ClientCertificate { .. } => {
-                    return Err(
-                        ApiError::unsupported("client certificates are not supported yet").into(),
-                    );
-                }
-            }
+            self.store_secret(reference, &input.value).await?;
         }
         // Claim the sign-ins that were used.
         for input in secrets {
@@ -422,18 +409,9 @@ impl Service {
                 } else {
                     config.email.clone()
                 };
-                config.id = nail_config::derive_account_id(&hint, |id| {
-                    current.accounts.iter().any(|a| a.id.as_str() == id)
-                        || current.virtual_accounts.iter().any(|v| v.id.as_str() == id)
-                });
-            } else if current.account(&config.id).is_some()
-                || current.virtual_account(&config.id).is_some()
-            {
-                return Err(ApiError::new(
-                    ErrorCode::Conflict,
-                    format!("the name {} is taken", config.id),
-                )
-                .into());
+                config.id = free_account_id(&current, &hint);
+            } else {
+                check_name_free(&current, &config.id)?;
             }
         } else if current.account(&config.id).is_none() {
             return Err(ApiError::not_found(format!("account {}", config.id)).into());
@@ -458,15 +436,39 @@ impl Service {
         Ok(saved_account)
     }
 
+    /// Stores a sign-in under `reference`: a password in the keychain, the
+    /// tokens of a finished OAuth flow (the flow is claimed by the caller).
+    pub(crate) async fn store_secret(
+        &self,
+        reference: nail_api::SecretRef,
+        value: &SecretValue,
+    ) -> Result<()> {
+        match value {
+            SecretValue::Password { password } => {
+                let store = Arc::clone(&self.inner.secrets);
+                let password = password.clone();
+                tokio::task::spawn_blocking(move || store.set(&reference, &password)).await??;
+            }
+            SecretValue::OAuth2 { flow_id } => {
+                let (_, tokens) = self.inner.flows.peek(flow_id)?;
+                self.inner
+                    .tokens
+                    .manager()
+                    .store(&reference, &tokens)
+                    .await?;
+            }
+            SecretValue::ClientCertificate { .. } => {
+                return Err(
+                    ApiError::unsupported("client certificates are not supported yet").into(),
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// `RemoveAccount`.
     pub(crate) async fn remove_account(&self, id: &AccountId) -> Result<()> {
-        let config = self
-            .inner
-            .accounts
-            .config()
-            .account(id)
-            .cloned()
-            .ok_or_else(|| ApiError::not_found(format!("account {id}")))?;
+        let config = self.account_config(id)?;
         // Nail's Sieve script leaves the server while the login still
         // exists (M2c review fix).
         self.remove_sieve_before_delete(&config).await;
@@ -599,18 +601,9 @@ impl Service {
         let current = self.inner.accounts.config();
         if add {
             if config.id.as_str().is_empty() {
-                config.id = nail_config::derive_account_id(&config.name, |id| {
-                    current.accounts.iter().any(|a| a.id.as_str() == id)
-                        || current.virtual_accounts.iter().any(|v| v.id.as_str() == id)
-                });
-            } else if current.account(&config.id).is_some()
-                || current.virtual_account(&config.id).is_some()
-            {
-                return Err(ApiError::new(
-                    ErrorCode::Conflict,
-                    format!("the name {} is taken", config.id),
-                )
-                .into());
+                config.id = free_account_id(&current, &config.name);
+            } else {
+                check_name_free(&current, &config.id)?;
             }
         } else if current.virtual_account(&config.id).is_none() {
             return Err(ApiError::not_found(format!("virtual account {}", config.id)).into());

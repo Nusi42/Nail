@@ -134,13 +134,7 @@ fn unexpected(response: Response) -> ApiError {
             message,
             localized,
         },
-        other => ApiError::internal(format!(
-            "unexpected response {}",
-            serde_json::to_value(&other)
-                .ok()
-                .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_owned))
-                .unwrap_or_default()
-        )),
+        other => ApiError::internal(format!("unexpected response {}", other.wire_type())),
     }
 }
 

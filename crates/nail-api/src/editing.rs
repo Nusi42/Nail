@@ -449,18 +449,11 @@ impl EditHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use serde_json::json;
 
     #[test]
     fn labels() {
-        assert_labels(
-            HistoryScope::ALL,
-            HistoryScope::as_str,
-            HistoryScope::message_id,
-        );
-        assert_labels(EditKind::ALL, EditKind::as_str, EditKind::message_id);
-        assert_labels(EditIssue::ALL, EditIssue::as_str, EditIssue::message_id);
+        assert_wire_labels!(HistoryScope, EditKind, EditIssue);
         assert_eq!(EditIssue::Conflict.message_id(), "edit-issue-conflict");
     }
 

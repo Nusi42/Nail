@@ -5,47 +5,30 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{body, remote_session, request};
+use nail_core::testing::TempService;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use nail_api::engine::{MemorySecretStore, SecretStore};
 use nail_api::mcp::McpScope;
 use nail_api::remote::{
-    AuthRequest, AuthResponse, DEVICE_COOKIE, RemoteAccessPreset, RemoteGrant, RemoteUiSettings,
-    RemoteUiState, RemoteUiStatus, SESSION_COOKIE,
+    RemoteAccessPreset, RemoteGrant, RemoteUiSettings, RemoteUiState, RemoteUiStatus,
 };
 use nail_api::remote_content::{PROXY_URL_SCHEME, RemoteContentScope};
-use nail_api::{
-    AccountId, ErrorCode, MessageBody, MessageId, MessageSummary, Request, Response, UiContext,
-};
+use nail_api::{AccountId, ErrorCode, MessageId, MessageSummary, Request, Response, UiContext};
 use nail_core::demo::{DEMO_ACCOUNT_ID, demo_options, seed_demo};
 use nail_core::{RemoteUiCommand, Service, ServiceOptions};
-use nail_remote_auth::{ClientMeta, Cookies, RemoteSessionCtx};
+use nail_remote_auth::RemoteSessionCtx;
 use pretty_assertions::assert_eq;
 
-struct Fixture {
-    service: Service,
-    _data: tempfile::TempDir,
-    _config: tempfile::TempDir,
-}
+type Fixture = TempService;
 
 fn setup() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(demo_options(options)).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
-}
-
-async fn request(f: &Fixture, request: Request) -> Response {
-    f.service.handle(request).await
+    TempService::seeded()
 }
 
 fn error_code(response: &Response) -> Option<ErrorCode> {
@@ -67,17 +50,10 @@ fn demo_messages(f: &Fixture) -> Vec<MessageSummary> {
     all
 }
 
-async fn body(f: &Fixture, id: &MessageId) -> MessageBody {
-    match request(f, Request::GetMessage { id: id.clone() }).await {
-        Response::Message { message } => *message,
-        other => panic!("{other:?}"),
-    }
-}
-
 /// The demo message with blocked remote content (the garden newsletter).
 async fn remote_message(f: &Fixture) -> MessageSummary {
     for message in demo_messages(f) {
-        if body(f, &message.id).await.remote_content.is_some() {
+        if body(&f.service, &message.id).await.remote_content.is_some() {
             return message;
         }
     }
@@ -95,11 +71,40 @@ fn proxy_tokens(html: &str) -> Vec<String> {
         .collect()
 }
 
+/// A read-only session over everything and one whose grant names another
+/// account only.
+async fn reader_and_narrow(f: &Fixture) -> (RemoteSessionCtx, RemoteSessionCtx) {
+    let reader = remote_session(&f.service, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f.service, "narrow", elsewhere(&[])).await;
+    (reader, narrow)
+}
+
+/// A full session with administration.
+async fn admin_session(f: &Fixture) -> RemoteSessionCtx {
+    let mut grant = RemoteAccessPreset::Full.grant();
+    grant.admin = true;
+    remote_session(&f.service, "admin", grant).await
+}
+
+/// `event` reaches the reader's socket, not the narrow one's.
+async fn reaches_reader_only(
+    service: &Service,
+    reader: &RemoteSessionCtx,
+    narrow: &RemoteSessionCtx,
+    event: nail_api::Event,
+) {
+    assert_eq!(service.remote_event(narrow, event.clone()).await, None);
+    assert_eq!(
+        service.remote_event(reader, event.clone()).await,
+        Some(event)
+    );
+}
+
 #[tokio::test]
 async fn remote_content_is_blocked_until_allowed_then_proxied() {
     let f = setup();
     let message = remote_message(&f).await;
-    let blocked = body(&f, &message.id).await;
+    let blocked = body(&f.service, &message.id).await;
     let info = blocked.remote_content.clone().unwrap();
     assert!(info.resources > 0);
     assert_eq!(info.allowed_by, None);
@@ -111,7 +116,7 @@ async fn remote_content_is_blocked_until_allowed_then_proxied() {
     assert!(!html.contains("src=\"http"));
 
     let allowed = request(
-        &f,
+        &f.service,
         Request::AllowRemoteContent {
             message_id: message.id.clone(),
             scope: RemoteContentScope::Sender,
@@ -122,7 +127,7 @@ async fn remote_content_is_blocked_until_allowed_then_proxied() {
         matches!(allowed, Response::RemoteContentAllowed { .. }),
         "{allowed:?}"
     );
-    let shown = body(&f, &message.id).await;
+    let shown = body(&f.service, &message.id).await;
     let info = shown.remote_content.clone().unwrap();
     assert_eq!(info.allowed_by, Some(RemoteContentScope::Sender));
     assert!(!shown.remote_content_blocked);
@@ -145,7 +150,7 @@ async fn remote_content_is_blocked_until_allowed_then_proxied() {
 
     // Removing the entry stops tokens already handed out.
     request(
-        &f,
+        &f.service,
         Request::RemoveRemoteContentAllow {
             scope: RemoteContentScope::Sender,
             value: sender,
@@ -153,7 +158,7 @@ async fn remote_content_is_blocked_until_allowed_then_proxied() {
     )
     .await;
     assert_eq!(proxy.serve(&tokens[0]).await.unwrap_err().status(), 403);
-    let again = body(&f, &message.id).await;
+    let again = body(&f.service, &message.id).await;
     assert!(again.remote_content_blocked);
     assert_eq!(again.remote_content.unwrap().allowed_by, None);
 }
@@ -163,7 +168,7 @@ async fn stale_message_allows_are_purged_with_the_history() {
     let f = setup();
     let message = remote_message(&f).await;
     request(
-        &f,
+        &f.service,
         Request::AllowRemoteContent {
             message_id: message.id.clone(),
             scope: RemoteContentScope::Message,
@@ -180,77 +185,11 @@ async fn stale_message_allows_are_purged_with_the_history() {
     assert_eq!(left[0].value, message.id.as_str());
 }
 
-/// A user with `grant` and a browser paired to them: the remote session.
-async fn remote_session(f: &Fixture, name: &str, grant: RemoteGrant) -> RemoteSessionCtx {
-    let user = match request(
-        f,
-        Request::CreateRemoteUser {
-            name: name.into(),
-            display_name: None,
-            grant: grant.clone(),
-        },
-    )
-    .await
-    {
-        Response::RemoteUserSaved { user } => user,
-        other => panic!("{other:?}"),
-    };
-    let code = match request(
-        f,
-        Request::CreatePairingCode {
-            user_id: user.id.clone(),
-            device_name: Some("Phone".into()),
-            grant: None,
-            ttl_minutes: None,
-        },
-    )
-    .await
-    {
-        Response::PairingCodeCreated { code, .. } => code,
-        other => panic!("{other:?}"),
-    };
-    let auth = f.service.remote_auth();
-    let client = ClientMeta {
-        ip: Some("192.168.1.20".parse().unwrap()),
-        user_agent: Some("Test".into()),
-    };
-    let anonymous = Cookies::default();
-    let csrf = auth.csrf_token(&anonymous);
-    let reply = auth
-        .handle_auth(
-            AuthRequest::Pair {
-                code,
-                device_name: "Phone".into(),
-            },
-            &anonymous,
-            &client,
-            Some(&csrf),
-        )
-        .await;
-    assert!(
-        matches!(reply.response, AuthResponse::LoggedIn { .. }),
-        "{:?}",
-        reply.response
-    );
-    let mut cookies = Cookies::default();
-    for set in &reply.cookies {
-        let (pair, _) = set.split_once(';').unwrap_or((set, ""));
-        let (name, value) = pair.split_once('=').unwrap();
-        let value = Some(zeroize::Zeroizing::new(value.to_owned()));
-        match name {
-            SESSION_COOKIE => cookies.session = value,
-            DEVICE_COOKIE => cookies.device = value,
-            other => panic!("{other}"),
-        }
-    }
-    auth.resolve(&cookies, &client).unwrap().ctx
-}
-
 #[tokio::test]
 async fn admin_requests_are_served_by_remote_auth() {
     let f = setup();
     let user = match request(
-        &f,
+        &f.service,
         Request::CreateRemoteUser {
             name: "ada".into(),
             display_name: None,
@@ -263,7 +202,7 @@ async fn admin_requests_are_served_by_remote_auth() {
         other => panic!("{other:?}"),
     };
     let saved = request(
-        &f,
+        &f.service,
         Request::SetRemotePassword {
             user_id: user.id.clone(),
             password: Some("a long enough password".into()),
@@ -275,7 +214,7 @@ async fn admin_requests_are_served_by_remote_auth() {
         other => panic!("{other:?}"),
     }
     let short = request(
-        &f,
+        &f.service,
         Request::SetRemotePassword {
             user_id: user.id.clone(),
             password: Some("short".into()),
@@ -284,7 +223,7 @@ async fn admin_requests_are_served_by_remote_auth() {
     .await;
     assert_eq!(error_code(&short), Some(ErrorCode::InvalidRequest));
     let enrollment = request(
-        &f,
+        &f.service,
         Request::StartTotpEnrollment {
             user_id: user.id.clone(),
         },
@@ -295,7 +234,7 @@ async fn admin_requests_are_served_by_remote_auth() {
         "{enrollment:?}"
     );
     match request(
-        &f,
+        &f.service,
         Request::CreatePairingCode {
             user_id: user.id.clone(),
             device_name: None,
@@ -320,7 +259,7 @@ async fn admin_requests_are_served_by_remote_auth() {
 #[tokio::test]
 async fn remote_sessions_are_authorized_and_narrowed() {
     let f = setup();
-    let ctx = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let ctx = remote_session(&f.service, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
     let service = &f.service;
     let message = remote_message(&f).await;
 
@@ -383,7 +322,7 @@ async fn remote_sessions_are_authorized_and_narrowed() {
     let mut narrow = RemoteAccessPreset::ReadOnly.grant();
     narrow.mail.all_accounts = false;
     narrow.mail.accounts = vec![AccountId::new("somewhere-else")];
-    let narrow = remote_session(&f, "narrow", narrow).await;
+    let narrow = remote_session(&f.service, "narrow", narrow).await;
     match service.handle_remote(&narrow, Request::ListAccounts).await {
         Response::Accounts { accounts } => assert_eq!(accounts, vec![]),
         other => panic!("{other:?}"),
@@ -424,7 +363,7 @@ async fn admin_sessions_change_credentials_as_themselves() {
     let f = setup();
     let mut grant = RemoteAccessPreset::Full.grant();
     grant.admin = true;
-    let admin = remote_session(&f, "admin", grant).await;
+    let admin = remote_session(&f.service, "admin", grant).await;
     // Paired just now: counts as a fresh login.
     let users = f
         .service
@@ -453,7 +392,7 @@ async fn admin_sessions_change_credentials_as_themselves() {
 async fn the_remote_ui_host_receives_settings_and_reports_status() {
     let f = setup();
     // Without a host: stored, stopped; no certificate to make.
-    let regenerate = request(&f, Request::RegenerateRemoteCertificate).await;
+    let regenerate = request(&f.service, Request::RegenerateRemoteCertificate).await;
     assert_eq!(error_code(&regenerate), Some(ErrorCode::Unsupported));
 
     let mut commands = f.service.attach_remote_ui();
@@ -464,7 +403,7 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
         ..RemoteUiSettings::default()
     };
     match request(
-        &f,
+        &f.service,
         Request::UpdateRemoteUiSettings {
             settings: settings.clone(),
         },
@@ -500,7 +439,7 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
     assert_eq!(changed.state, RemoteUiState::Running);
 
     // Remote readers now get the sandbox document's address.
-    let ctx = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let ctx = remote_session(&f.service, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
     let message = remote_message(&f).await;
     match f
         .service
@@ -529,7 +468,7 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
         other => panic!("{other:?}"),
     }
     // The desktop's own reader keeps rendering the HTML itself.
-    assert_eq!(body(&f, &message.id).await.render_url, None);
+    assert_eq!(body(&f.service, &message.id).await.render_url, None);
 
     // Certificate regeneration is the host's.
     let service = f.service.clone();
@@ -543,7 +482,7 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
 
     // Internet mode stays locked.
     let internet = request(
-        &f,
+        &f.service,
         Request::UpdateRemoteUiSettings {
             settings: RemoteUiSettings {
                 internet_mode: true,
@@ -627,34 +566,26 @@ fn mark_encrypted(f: &Fixture, id: &MessageId) {
 /// The demo data with an `accounts.kdl` naming the demo account, so it
 /// has an identity to compose with (no servers are contacted).
 fn setup_with_identity() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            "account \"{DEMO_ACCOUNT_ID}\" email=\"ada@demo.example\" name=\"Demo\" {{
+    let temp = TempService::quiet_with(
+        &[(
+            "accounts.kdl",
+            &format!(
+                "account \"{DEMO_ACCOUNT_ID}\" email=\"ada@demo.example\" name=\"Demo\" {{
                  imap host=\"127.0.0.1\" port=1 tls=\"plaintext\"
                  smtp host=\"127.0.0.1\" port=1 tls=\"plaintext\"
                  identity \"ada@demo.example\" name=\"Ada\"
 }}
 "
-        ),
-    )
-    .unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(demo_options(options)).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
+            ),
+        )],
+        |_| {},
+    );
+    seed_demo(temp.service.store(), temp.service.blobs()).unwrap();
+    temp
 }
 
 async fn demo_identity(f: &Fixture) -> nail_api::IdentityId {
-    match request(f, Request::ListIdentities { account_id: None }).await {
+    match request(&f.service, Request::ListIdentities { account_id: None }).await {
         Response::Identities { identities } => identities[0].id.clone(),
         other => panic!("{other:?}"),
     }
@@ -709,7 +640,7 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
     let identity = demo_identity(&f).await;
     // A reply draft made on the desktop quotes the decrypted text.
     let Response::DraftSaved { draft_id } = request(
-        &f,
+        &f.service,
         Request::SaveDraft {
             draft: reply_draft(identity.clone(), &secret),
         },
@@ -719,7 +650,12 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
         panic!("draft not saved")
     };
 
-    let plain = remote_session(&f, "plain", grant_with(RemoteAccessPreset::Full, &[])).await;
+    let plain = remote_session(
+        &f.service,
+        "plain",
+        grant_with(RemoteAccessPreset::Full, &[]),
+    )
+    .await;
     // Forwarding (or replying to) the encrypted message would copy its
     // decrypted body and attachments into the answer.
     for mode in [
@@ -784,7 +720,7 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
 
     // With the `encrypted` scope the draft is there.
     let trusted = remote_session(
-        &f,
+        &f.service,
         "trusted",
         grant_with(RemoteAccessPreset::Full, &[McpScope::Encrypted]),
     )
@@ -810,7 +746,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
     let identity = demo_identity(&f).await;
     // Desktop state the narrow session must not see.
     let Response::DraftSaved { draft_id } = request(
-        &f,
+        &f.service,
         Request::SaveDraft {
             draft: reply_draft(identity.clone(), &message.id),
         },
@@ -820,7 +756,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
         panic!("draft not saved")
     };
     request(
-        &f,
+        &f.service,
         Request::AllowRemoteContent {
             message_id: message.id.clone(),
             scope: RemoteContentScope::Message,
@@ -828,7 +764,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
     )
     .await;
 
-    let narrow = remote_session(&f, "narrow", elsewhere(&[McpScope::Encrypted])).await;
+    let narrow = remote_session(&f.service, "narrow", elsewhere(&[McpScope::Encrypted])).await;
     let mut own_draft = reply_draft(identity.clone(), &message.id);
     own_draft.context = None;
     let mut forbidden = vec![
@@ -938,7 +874,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
     }
     // The UI context names nothing outside the grant.
     request(
-        &f,
+        &f.service,
         Request::ReportUiContext {
             context: UiContext {
                 account_id: Some(message.account_id.clone()),
@@ -953,7 +889,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
     )
     .await;
     let watcher = remote_session(
-        &f,
+        &f.service,
         "watcher",
         elsewhere(&[McpScope::Context, McpScope::Encrypted]),
     )
@@ -965,7 +901,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
 
     // The same requests with a full grant go through.
     let full = remote_session(
-        &f,
+        &f.service,
         "full",
         grant_with(
             RemoteAccessPreset::Full,
@@ -998,14 +934,7 @@ async fn remote_search_hides_encrypted_mail_while_the_index_holds_decrypted_text
     let secret = messages[0].clone();
     mark_encrypted(&f, &secret.id);
     let query = |text: &str| Request::Search {
-        query: nail_api::SearchQuery {
-            text: text.into(),
-            account_id: None,
-            folder_id: None,
-            offset: 0,
-            limit: 50,
-            sort: nail_api::search::SearchSort::default(),
-        },
+        query: nail_api::SearchQuery::new(text, 50),
     };
     let ids = |response: Response| match response {
         Response::SearchResults { hits, total, .. } => {
@@ -1015,9 +944,9 @@ async fn remote_search_hides_encrypted_mail_while_the_index_holds_decrypted_text
         other => panic!("{other:?}"),
     };
     let text = format!("from:{}", secret.from.clone().unwrap().email);
-    let plain = remote_session(&f, "plain", RemoteAccessPreset::ReadOnly.grant()).await;
+    let plain = remote_session(&f.service, "plain", RemoteAccessPreset::ReadOnly.grant()).await;
     let trusted = remote_session(
-        &f,
+        &f.service,
         "trusted",
         grant_with(RemoteAccessPreset::ReadOnly, &[McpScope::Encrypted]),
     )
@@ -1040,7 +969,7 @@ async fn remote_search_hides_encrypted_mail_while_the_index_holds_decrypted_text
     assert!(ids(service.handle_remote(&trusted, query(&text)).await).contains(&secret.id));
 
     // A narrowed grant pages over what it may see only.
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let narrow = remote_session(&f.service, "narrow", elsewhere(&[])).await;
     match service.handle_remote(&narrow, query("")).await {
         Response::SearchResults { total, hits, .. } => {
             assert_eq!((total, hits.len()), (0, 0));
@@ -1054,11 +983,8 @@ async fn remote_sockets_get_only_the_events_their_grant_covers() {
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].clone();
-    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
-    let mut admin_grant = RemoteAccessPreset::Full.grant();
-    admin_grant.admin = true;
-    let admin = remote_session(&f, "admin", admin_grant).await;
+    let (reader, narrow) = reader_and_narrow(&f).await;
+    let admin = admin_session(&f).await;
 
     let alert = nail_api::Event::RemoteSecurityAlert {
         alert: nail_api::remote::RemoteAlert::Lockout {
@@ -1195,8 +1121,13 @@ async fn m2c_requests_respect_the_grant() {
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].id.clone();
-    let full = remote_session(&f, "full", grant_with(RemoteAccessPreset::Full, &[])).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let full = remote_session(
+        &f.service,
+        "full",
+        grant_with(RemoteAccessPreset::Full, &[]),
+    )
+    .await;
+    let narrow = remote_session(&f.service, "narrow", elsewhere(&[])).await;
 
     // Rule placements span every account.
     let status = Request::GetSieveStatus { account_id: None };
@@ -1271,7 +1202,7 @@ async fn m2c_requests_respect_the_grant() {
         ..Default::default()
     };
     assert!(matches!(
-        request(&f, Request::UpdateNotificationSettings { settings }).await,
+        request(&f.service, Request::UpdateNotificationSettings { settings }).await,
         Response::NotificationSettings { .. }
     ));
     match service
@@ -1299,7 +1230,7 @@ async fn remote_content_can_be_loaded_once() {
     let f = setup();
     let message = remote_message(&f).await;
     let allowed = request(
-        &f,
+        &f.service,
         Request::AllowRemoteContent {
             message_id: message.id.clone(),
             scope: RemoteContentScope::Once,
@@ -1310,7 +1241,7 @@ async fn remote_content_can_be_loaded_once() {
         panic!("{allowed:?}")
     };
     assert_eq!(entry.scope, RemoteContentScope::Once);
-    let shown = body(&f, &message.id).await;
+    let shown = body(&f.service, &message.id).await;
     assert_eq!(
         shown.remote_content.unwrap().allowed_by,
         Some(RemoteContentScope::Once)
@@ -1330,14 +1261,14 @@ async fn remote_content_can_be_loaded_once() {
         "not remembered"
     );
     request(
-        &f,
+        &f.service,
         Request::RemoveRemoteContentAllow {
             scope: RemoteContentScope::Once,
             value: message.id.to_string(),
         },
     )
     .await;
-    assert!(body(&f, &message.id).await.remote_content_blocked);
+    assert!(body(&f.service, &message.id).await.remote_content_blocked);
     assert_eq!(proxy.serve(&tokens[0]).await.unwrap_err().status(), 403);
 }
 
@@ -1382,7 +1313,7 @@ async fn the_remote_audit_log_follows_its_retention_setting() {
         ..RemoteUiSettings::default()
     };
     assert!(matches!(
-        request(&f, Request::UpdateRemoteUiSettings { settings }).await,
+        request(&f.service, Request::UpdateRemoteUiSettings { settings }).await,
         Response::RemoteUi { .. }
     ));
     f.service.purge_history(now).await.unwrap();
@@ -1392,7 +1323,11 @@ async fn the_remote_audit_log_follows_its_retention_setting() {
         ..RemoteUiSettings::default()
     };
     assert!(matches!(
-        request(&f, Request::UpdateRemoteUiSettings { settings: invalid }).await,
+        request(
+            &f.service,
+            Request::UpdateRemoteUiSettings { settings: invalid }
+        )
+        .await,
         Response::Error { .. }
     ));
 }
@@ -1431,7 +1366,7 @@ async fn plugins_need_full_grants_remotely() {
     let mut narrow = RemoteAccessPreset::ReadOnly.grant();
     narrow.mail.all_accounts = false;
     narrow.mail.accounts = vec![AccountId::new(DEMO_ACCOUNT_ID)];
-    let narrow = remote_session(&f, "narrow", narrow).await;
+    let narrow = remote_session(&f.service, "narrow", narrow).await;
     assert_eq!(
         service.handle_remote(&narrow, Request::ListPlugins).await,
         Response::Plugins { plugins: vec![] }
@@ -1450,7 +1385,7 @@ async fn plugins_need_full_grants_remotely() {
         );
     }
 
-    let full = remote_session(&f, "full", RemoteAccessPreset::ReadOnly.grant()).await;
+    let full = remote_session(&f.service, "full", RemoteAccessPreset::ReadOnly.grant()).await;
     match service.handle_remote(&full, Request::ListPlugins).await {
         Response::Plugins { plugins } => assert_eq!(plugins.len(), 1),
         other => panic!("{other:?}"),
@@ -1493,12 +1428,11 @@ async fn plugins_need_full_grants_remotely() {
 /// reminder notifications go to full grants only.
 #[tokio::test]
 async fn remote_pim_needs_a_full_grant() {
-    use nail_api::pim::{PimImportSource, PimTime};
+    use nail_api::pim::PimImportSource;
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].clone();
-    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let (reader, narrow) = reader_and_narrow(&f).await;
 
     let list = || Request::ListEventInstances {
         from: "2026-10-01T00:00:00Z".into(),
@@ -1562,11 +1496,7 @@ async fn remote_pim_needs_a_full_grant() {
     let changed = nail_api::Event::EventsChanged {
         calendar_ids: vec!["c1".into()],
     };
-    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
-    assert_eq!(
-        service.remote_event(&reader, changed.clone()).await,
-        Some(changed)
-    );
+    reaches_reader_only(service, &reader, &narrow, changed).await;
     let reminder = nail_api::Event::NotificationRequested {
         notification: nail_api::triage::MailNotification {
             id: "reminder:r1".into(),
@@ -1586,22 +1516,7 @@ async fn remote_pim_needs_a_full_grant() {
         Some(reminder)
     );
     let due = nail_api::Event::ReminderDue {
-        reminder: Box::new(nail_api::pim::Reminder {
-            id: "r1".into(),
-            target: nail_api::pim::ReminderTarget::Event {
-                event_id: "ev1".into(),
-                recurrence_id: Some(PimTime::utc("2026-10-01T09:00:00")),
-            },
-            calendar_id: "c1".into(),
-            title: "Standup".into(),
-            location: None,
-            description: None,
-            starts_at: None,
-            all_day: false,
-            fire_at: "2026-10-01T08:45:00Z".into(),
-            state: nail_api::pim::ReminderState::Fired,
-            snoozed_until: None,
-        }),
+        reminder: Box::new(nail_api::testing::reminder("r1")),
     };
     assert_eq!(service.remote_event(&narrow, due).await, None);
 }
@@ -1615,8 +1530,7 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].clone();
-    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let (reader, narrow) = reader_and_narrow(&f).await;
 
     let card = Request::GetInvitation {
         message_id: message.id.clone(),
@@ -1691,11 +1605,7 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
     let changed = nail_api::Event::GmailLabelsChanged {
         account_id: message.account_id.clone(),
     };
-    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
-    assert_eq!(
-        service.remote_event(&reader, changed.clone()).await,
-        Some(changed)
-    );
+    reaches_reader_only(service, &reader, &narrow, changed).await;
 }
 
 #[tokio::test]
@@ -1706,8 +1616,8 @@ async fn remote_scheduling_mail_needs_the_send_scope() {
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].clone();
-    let no_send = remote_session(&f, "no-send", RemoteAccessPreset::NoSend.grant()).await;
-    let full = remote_session(&f, "full", RemoteAccessPreset::Full.grant()).await;
+    let no_send = remote_session(&f.service, "no-send", RemoteAccessPreset::NoSend.grant()).await;
+    let full = remote_session(&f.service, "full", RemoteAccessPreset::Full.grant()).await;
     let event = InvitationTarget::Event {
         event_id: "no-such-event".into(),
         recurrence_id: None,
@@ -1804,9 +1714,8 @@ async fn remote_exchange_requests_follow_grants() {
     let f = setup();
     let service = &f.service;
     let message = demo_messages(&f)[0].clone();
-    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
-    let full = remote_session(&f, "full", RemoteAccessPreset::Full.grant()).await;
+    let (reader, narrow) = reader_and_narrow(&f).await;
+    let full = remote_session(&f.service, "full", RemoteAccessPreset::Full.grant()).await;
     let status = Request::GetExchangeStatus {
         account_id: message.account_id.clone(),
     };
@@ -1860,11 +1769,7 @@ async fn remote_exchange_requests_follow_grants() {
         account_id: message.account_id.clone(),
         areas: vec![ExchangeArea::Categories],
     };
-    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
-    assert_eq!(
-        service.remote_event(&reader, changed.clone()).await,
-        Some(changed)
-    );
+    reaches_reader_only(service, &reader, &narrow, changed).await;
 }
 
 /// M4a contract (ADR 0079): confirmations and policies are administration
@@ -1875,11 +1780,8 @@ async fn remote_agent_requests_follow_grants() {
     use nail_api::agents::{ActionActor, ConfirmationFilter};
     let f = setup();
     let service = &f.service;
-    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
-    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
-    let mut admin_grant = RemoteAccessPreset::Full.grant();
-    admin_grant.admin = true;
-    let admin = remote_session(&f, "admin", admin_grant).await;
+    let (reader, narrow) = reader_and_narrow(&f).await;
+    let admin = admin_session(&f).await;
     let list = Request::ListConfirmations {
         filter: ConfirmationFilter::Pending,
         actor: None,
@@ -1947,14 +1849,14 @@ async fn remote_sessions_follow_their_own_browser_appearance() {
 
     let f = setup();
     let service = &f.service;
-    let dark = remote_session(&f, "dark", RemoteAccessPreset::ReadOnly.grant()).await;
-    let other = remote_session(&f, "other", RemoteAccessPreset::ReadOnly.grant()).await;
+    let dark = remote_session(&f.service, "dark", RemoteAccessPreset::ReadOnly.grant()).await;
+    let other = remote_session(&f.service, "other", RemoteAccessPreset::ReadOnly.grant()).await;
 
     // Seeded runs see a light host OS: Follow Windows shows Frost.
-    let host = themes(request(&f, Request::ListThemes).await);
+    let host = themes(request(&f.service, Request::ListThemes).await);
     assert_eq!(host.active, "frost");
     assert_eq!(host.system, Some(SystemAppearance::LIGHT));
-    let host_theme = theme(request(&f, Request::GetConfig).await);
+    let host_theme = theme(request(&f.service, Request::GetConfig).await);
 
     // A session that has not reported sees the host's theme, but no OS
     // state of its own (so its UI reports at start).
@@ -1978,8 +1880,11 @@ async fn remote_sessions_follow_their_own_browser_appearance() {
     assert_ne!(dark_theme, host_theme);
 
     // The host and the other session are unchanged.
-    assert_eq!(themes(request(&f, Request::ListThemes).await), host);
-    assert_eq!(theme(request(&f, Request::GetConfig).await), host_theme);
+    assert_eq!(themes(request(&f.service, Request::ListThemes).await), host);
+    assert_eq!(
+        theme(request(&f.service, Request::GetConfig).await),
+        host_theme
+    );
     let theirs = themes(service.handle_remote(&other, Request::ListThemes).await);
     assert_eq!(theirs.active, "frost");
     assert_eq!(

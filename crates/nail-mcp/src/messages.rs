@@ -237,9 +237,8 @@ mod tests {
     /// Every `mcp-core-*` id built here has an English text in core.ftl.
     #[test]
     fn every_message_id_is_in_the_catalog() {
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let missing = nail_config::l10n::missing_message_ids(
-            &src,
+        nail_config::l10n::assert_message_ids_in_catalog(
+            env!("CARGO_MANIFEST_DIR"),
             &[
                 "mcp-core-",
                 "error-",
@@ -249,7 +248,6 @@ mod tests {
                 "action-field-",
             ],
         );
-        assert!(missing.is_empty(), "{missing:#?}");
         let english = nail_config::l10n::english(&start_error(
             4799,
             &std::io::Error::from(std::io::ErrorKind::AddrInUse),

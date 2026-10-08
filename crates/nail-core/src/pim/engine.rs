@@ -18,7 +18,6 @@
 //! `auth-error`, `error`).
 
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,10 +38,7 @@ use nail_dav::{
 };
 use nail_ical::vcard::ParsedCards;
 use nail_ical::{ParseOptions, ParsedCalendar};
-use nail_store::pim::{
-    CollectionSync, PimItem, PimOperation, PimReplayOutcome, PimReplayer, QueuedPimOp, ServerApply,
-    ServerRemove,
-};
+use nail_store::pim::{CollectionSync, PimItem, PimOperation, PimReplayOutcome, QueuedPimOp};
 use nail_store::{BlobStore, ReplayPolicy};
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
@@ -245,18 +241,8 @@ pub(crate) fn parse_item(
         .into_iter()
         .next()
         .ok_or_else(|| ApiError::invalid_request("the stored copy cannot be read"))?;
-    let id = match item {
-        PimItemRef::Event { event_id } => event_id.as_str(),
-        PimItemRef::Task { task_id } => task_id.as_str(),
-        PimItemRef::Contact { contact_id } => contact_id.as_str(),
-        PimItemRef::ContactGroup { group_id } => group_id.as_str(),
-    };
-    match &mut parsed {
-        PimItem::Event(e) => e.id = id.into(),
-        PimItem::Task { task, .. } => task.id = id.into(),
-        PimItem::Contact(c) => c.id = id.into(),
-        PimItem::Group { group, .. } => group.id = id.into(),
-    }
+    let id = item.id();
+    parsed.set_id(id);
     Ok(parsed)
 }
 
@@ -785,12 +771,7 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
         .collect();
     changes.removed = removed
         .into_iter()
-        .filter_map(|r| match r {
-            ServerRemove::Removed(i) | ServerRemove::KeptAsConflict(i) => {
-                Some((i, calendar_id.0.clone()))
-            }
-            ServerRemove::Missing => None,
-        })
+        .filter_map(|r| r.item().map(|i| (i, calendar_id.0.clone())))
         .collect();
     Ok(changes)
 }
@@ -973,6 +954,20 @@ impl StoredScheduling {
     }
 }
 
+/// What the last sync of a DAV source discovered (`None` = nothing stored
+/// or unreadable).
+async fn stored_discovery(service: &Service, source: &PimSourceId) -> Option<StoredDiscovery> {
+    let id = source.clone();
+    service
+        .inner
+        .store
+        .call(move |s| Ok(s.pim_source(&id)?.and_then(|r| r.discovery)))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok())
+}
+
 /// The scheduling information of a CalDAV source, as stored by its last
 /// sync (`None` = not a CalDAV source, not discovered yet, or no
 /// scheduling).
@@ -980,15 +975,7 @@ pub(crate) async fn source_scheduling(
     service: &Service,
     source: &PimSourceId,
 ) -> Option<nail_dav::SchedulingInfo> {
-    let id = source.clone();
-    let stored: StoredDiscovery = service
-        .inner
-        .store
-        .call(move |s| Ok(s.pim_source(&id)?.and_then(|r| r.discovery)))
-        .await
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_value(v).ok())?;
+    let stored = stored_discovery(service, source).await?;
     let scheduling = stored.scheduling?;
     (scheduling.inbox.is_some() || scheduling.outbox.is_some())
         .then(|| scheduling.info(&stored.principal))
@@ -1010,16 +997,9 @@ pub(crate) async fn scheduling_unknown(service: &Service, source: &PimSourceId) 
     if !is_caldav {
         return false;
     }
-    let id = source.clone();
-    let stored: Option<StoredDiscovery> = service
-        .inner
-        .store
-        .call(move |s| Ok(s.pim_source(&id)?.and_then(|r| r.discovery)))
+    stored_discovery(service, source)
         .await
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_value(v).ok());
-    stored.is_none_or(|d| d.scheduling.is_none())
+        .is_none_or(|d| d.scheduling.is_none())
 }
 
 /// An event's text with its organizer and every attendee marked
@@ -1431,12 +1411,7 @@ async fn sync_dav_collection(
                         object.etag.as_deref(),
                         now,
                     ) {
-                        Ok(
-                            result @ (ServerApply::Inserted(_)
-                            | ServerApply::Updated(_)
-                            | ServerApply::Conflict(_)),
-                        ) => applied.push(result.item().clone()),
-                        Ok(_) => {}
+                        Ok(result) => applied.extend(result.shown_item().cloned()),
                         Err(err) => {
                             tracing::warn!(href = %object.href, %err, "cannot store a DAV item");
                         }
@@ -1444,10 +1419,7 @@ async fn sync_dav_collection(
                 }
             }
             for href in &outcome.removed {
-                match s.remove_server_item(&key, Some(href), None)? {
-                    ServerRemove::Removed(i) | ServerRemove::KeptAsConflict(i) => removed.push(i),
-                    ServerRemove::Missing => {}
-                }
+                removed.extend(s.remove_server_item(&key, Some(href), None)?.item());
             }
             let mut sync = s.collection_sync(&key)?;
             sync.sync_token.clone_from(&outcome.state.sync_token);
@@ -1569,11 +1541,7 @@ impl DavReplayer {
         match &op.operation {
             PimOperation::Put { object_id } => {
                 let id = *object_id;
-                let Some(object) = store
-                    .call(move |s| s.pim_object_by_id(id))
-                    .await
-                    .map_err(|e| e.to_string())?
-                else {
+                let Some(object) = replayed_object(store, id).await? else {
                     return Ok(PimReplayOutcome::Done {
                         href: None,
                         etag: None,
@@ -1614,10 +1582,7 @@ impl DavReplayer {
                 let mut etag = etag.clone();
                 if href.is_none()
                     && let Some(id) = *object_id
-                    && let Some(object) = store
-                        .call(move |s| s.pim_object_by_id(id))
-                        .await
-                        .map_err(|e| e.to_string())?
+                    && let Some(object) = replayed_object(store, id).await?
                 {
                     href = object.href;
                     etag = object.etag;
@@ -1774,16 +1739,34 @@ impl DavReplayer {
     }
 }
 
-impl PimReplayer for DavReplayer {
-    fn replay(&self, op: &QueuedPimOp) -> impl Future<Output = PimReplayOutcome> + Send {
-        let op = op.clone();
-        async move {
-            match self.run(&op).await {
-                Ok(outcome) => outcome,
-                Err(err) => PimReplayOutcome::Retry(err),
+/// Implements [`PimReplayer`] for a type with an
+/// `async fn run(&self, &QueuedPimOp) -> Result<PimReplayOutcome, String>`.
+macro_rules! pim_replayer {
+    ($replayer:ty) => {
+        impl nail_store::pim::PimReplayer for $replayer {
+            fn replay(
+                &self,
+                op: &nail_store::pim::QueuedPimOp,
+            ) -> impl std::future::Future<Output = nail_store::pim::PimReplayOutcome> + Send {
+                let op = op.clone();
+                async move { nail_store::pim::PimReplayOutcome::of(self.run(&op).await) }
             }
         }
-    }
+    };
+}
+pub(crate) use pim_replayer;
+
+pim_replayer!(DavReplayer);
+
+/// The stored object a queued write names, read for its replay.
+pub(crate) async fn replayed_object(
+    store: &nail_store::Store,
+    id: i64,
+) -> std::result::Result<Option<nail_store::pim::PimObject>, String> {
+    store
+        .call(move |s| s.pim_object_by_id(id))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

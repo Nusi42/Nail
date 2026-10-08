@@ -4,6 +4,7 @@
 //! multi-item request).
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use std::future::Future;

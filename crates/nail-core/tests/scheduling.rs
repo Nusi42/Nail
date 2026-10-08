@@ -8,7 +8,10 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{Multi, eventually, messages_in, ok, until_some};
+
 use std::time::Duration;
 
 use nail_api::pim::PimTime;
@@ -19,112 +22,22 @@ use nail_api::scheduling::{
     SchedulingTransport,
 };
 use nail_api::{AccountId, FolderRole, MessageSummary, Request, Response};
-use nail_core::demo::{
-    DemoMulti, MULTI_DAV_OTHER_EMAIL, MULTI_WORK_EMAIL, MULTI_WORK_ID, start_demo_multi,
-};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
+use nail_core::demo::{MULTI_DAV_OTHER_EMAIL, MULTI_WORK_EMAIL, MULTI_WORK_ID, start_demo_multi};
 use serde_json::json;
-use tempfile::TempDir;
 
-const TIMEOUT: Duration = Duration::from_secs(30);
-
-struct Fixture {
-    service: Service,
-    demo: DemoMulti,
-    _dirs: (TempDir, TempDir),
-}
+type Fixture = Multi;
 
 async fn setup() -> Fixture {
-    let demo = start_demo_multi().await.unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    let f = Fixture {
-        service,
-        demo,
-        _dirs: (data_dir, config_dir),
-    };
+    let f = Multi::start().await;
     eventually("the work inbox synced", || async {
-        inbox(&f).await.len() >= 15
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .len()
+            >= 15
     })
     .await;
     f
-}
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-/// Polls until `check` yields a value.
-async fn until_some<T, F, Fut>(what: &str, mut check: F) -> T
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Option<T>>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if let Some(value) = check().await {
-            return value;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-async fn ok(service: &Service, request: Request) -> Response {
-    let response = service.handle(request).await;
-    if let Response::Error { message, .. } = &response {
-        panic!("request failed: {message}");
-    }
-    response
-}
-
-async fn inbox(f: &Fixture) -> Vec<MessageSummary> {
-    let Response::Folders { folders } = ok(
-        &f.service,
-        Request::ListFolders {
-            account_id: AccountId::new(MULTI_WORK_ID),
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
-    let Some(inbox) = folders.into_iter().find(|f| f.role == FolderRole::Inbox) else {
-        return Vec::new();
-    };
-    match ok(
-        &f.service,
-        Request::ListMessages {
-            folder_id: inbox.id,
-            offset: 0,
-            limit: 500,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("{other:?}"),
-    }
 }
 
 /// Delivers a mail to the work inbox and waits until Nail has it.
@@ -133,7 +46,10 @@ async fn deliver(f: &Fixture, raw: &str, subject: &str) -> MessageSummary {
         .control("imap-deliver", &json!({ "raw": raw }))
         .unwrap();
     until_some(&format!("{subject:?} arrives"), || async {
-        inbox(f).await.into_iter().find(|m| m.subject == subject)
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .into_iter()
+            .find(|m| m.subject == subject)
     })
     .await
 }
@@ -167,18 +83,6 @@ fn scheduled(response: Response) -> SchedulingResult {
         Response::Scheduled { result } => *result,
         other => panic!("{other:?}"),
     }
-}
-
-/// What the mock SMTP server received (raw texts).
-fn smtp(f: &Fixture) -> Vec<String> {
-    f.demo
-        .control("smtp-messages", &json!({}))
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| m["data"].as_str().unwrap_or_default().to_owned())
-        .collect()
 }
 
 /// The parts of an iMIP mail ([`imip`]).
@@ -306,7 +210,7 @@ async fn invitations_are_added_answered_updated_and_cancelled() {
         Some(ParticipationStatus::Accepted)
     );
     eventually("the REPLY reaches the SMTP server", || async {
-        smtp(&f).iter().any(|m| {
+        f.smtp_data().iter().any(|m| {
             m.contains("METHOD:REPLY")
                 && m.contains("PARTSTAT=ACCEPTED")
                 && m.contains("See you there")
@@ -393,54 +297,15 @@ async fn spoofed_invitations_are_never_applied() {
 async fn organizers_invite_record_replies_and_answer_counters() {
     let f = setup().await;
     // A meeting in the local calendar: the organizer is filled in.
-    let Response::Calendars { calendars } =
-        ok(&f.service, Request::ListCalendars { source_id: None }).await
-    else {
-        panic!()
-    };
-    let local = calendars
-        .iter()
-        .find(|c| c.source_id.as_str() == "local" && !c.read_only)
-        .unwrap();
-    let mut fields = EventFields::new(
-        "Design review",
-        PimTime::utc("2026-10-08T13:00:00"),
-        PimTime::utc("2026-10-08T14:00:00"),
-    );
-    let mut grace = Attendee::new("grace@example.org");
-    grace.name = Some("Grace Hopper".into());
-    fields.attendees = vec![grace];
-    let Response::EventSaved { event, .. } = ok(
-        &f.service,
-        Request::CreateEvent {
-            calendar_id: local.id.clone(),
-            fields: Box::new(fields),
-            recurrence: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
+    let event = organized(&f, "Design review").await;
     assert_eq!(
         event.fields.organizer.as_ref().map(|o| o.email.as_str()),
         Some(MULTI_WORK_EMAIL)
     );
-    let result = scheduled(
-        ok(
-            &f.service,
-            Request::SendInvitations {
-                event_id: event.id.clone(),
-                recurrence_id: None,
-                attendees: Vec::new(),
-                comment: None,
-            },
-        )
-        .await,
-    );
+    let result = invite_all(&f.service, &event.id).await;
     assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
     eventually("the REQUEST reaches the SMTP server", || async {
-        smtp(&f).iter().any(|m| {
+        f.smtp_data().iter().any(|m| {
             m.contains("METHOD:REQUEST")
                 && m.contains(&format!("UID:{}", event.uid))
                 && m.contains("invite.ics")
@@ -506,7 +371,7 @@ async fn organizers_invite_record_replies_and_answer_counters() {
     assert!(moved.sequence >= 1);
     assert_eq!(result.sent[0].method, ItipMethod::Request);
     eventually("the updated REQUEST goes out", || async {
-        smtp(&f)
+        f.smtp_data()
             .iter()
             .any(|m| m.contains("METHOD:REQUEST") && m.contains("DTSTART:20261008T150000Z"))
     })
@@ -528,7 +393,7 @@ async fn organizers_invite_record_replies_and_answer_counters() {
     );
     assert_eq!(result.removed_event_id, Some(event.id.clone()));
     eventually("the CANCEL goes out", || async {
-        smtp(&f)
+        f.smtp_data()
             .iter()
             .any(|m| m.contains("METHOD:CANCEL") && m.contains(&event.uid))
     })
@@ -623,48 +488,10 @@ async fn a_server_that_schedules_delivers_and_nail_mails_nothing() {
     let demo = start_demo_multi().await.unwrap();
     // RFC 6638: the mock server schedules itself (calendar-auto-schedule).
     demo.dav.set_auto_schedule(true);
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    let f = Fixture {
-        service,
-        demo,
-        _dirs: (data_dir, config_dir),
-    };
+    let f = Multi::with(demo, |_, _| {});
     // The CalDAV calendar, once discovered (with its scheduling).
-    let calendar = until_some("the CalDAV calendar", || async {
-        let Response::Calendars { calendars } = f
-            .service
-            .handle(Request::ListCalendars { source_id: None })
-            .await
-        else {
-            return None;
-        };
-        calendars
-            .into_iter()
-            .find(|c| c.source_id.as_str() == "work-calendars" && !c.read_only)
-    })
-    .await;
-    let mut fields = EventFields::new(
-        "Server-scheduled",
-        PimTime::utc("2026-10-09T09:00:00"),
-        PimTime::utc("2026-10-09T10:00:00"),
-    );
-    fields.attendees = vec![Attendee::new(MULTI_DAV_OTHER_EMAIL)];
-    let Response::EventSaved { event, .. } = ok(
-        &f.service,
-        Request::CreateEvent {
-            calendar_id: calendar.id.clone(),
-            fields: Box::new(fields),
-            recurrence: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
+    let calendar = caldav_calendar(&f.service).await;
+    let event = meeting_with_bob(&f, &calendar, "Server-scheduled").await;
     // Writing the event made the server deliver the REQUEST to bob.
     eventually("the server delivers the REQUEST", || async {
         f.demo
@@ -674,24 +501,13 @@ async fn a_server_that_schedules_delivers_and_nail_mails_nothing() {
             .any(|m| m.method == "REQUEST" && m.uid == event.uid && m.to == MULTI_DAV_OTHER_EMAIL)
     })
     .await;
-    let result = scheduled(
-        ok(
-            &f.service,
-            Request::SendInvitations {
-                event_id: event.id.clone(),
-                recurrence_id: None,
-                attendees: Vec::new(),
-                comment: None,
-            },
-        )
-        .await,
-    );
+    let result = invite_all(&f.service, &event.id).await;
     assert_eq!(result.sent.len(), 1);
     assert_eq!(result.sent[0].transport, SchedulingTransport::Server);
     assert_eq!(result.sent[0].outbox_id, None);
     // Never both: no iMIP mail for this event.
     tokio::time::sleep(Duration::from_secs(1)).await;
-    assert!(!smtp(&f).iter().any(|m| m.contains(&event.uid)));
+    assert!(!f.smtp_data().iter().any(|m| m.contains(&event.uid)));
 }
 
 /// Delivers Grace's invitation `uid` and waits until it is in the calendar
@@ -709,6 +525,75 @@ async fn invited(f: &Fixture, uid: &str, title: &str) -> (MessageSummary, Invita
     })
     .await;
     (message, card)
+}
+
+/// A meeting on 2026-10-09 09:00 UTC in `calendar` with the DAV server's
+/// other principal invited.
+async fn meeting_with_bob(
+    f: &Fixture,
+    calendar: &nail_api::pim::Calendar,
+    title: &str,
+) -> CalendarEvent {
+    let mut fields = EventFields::new(
+        title,
+        PimTime::utc("2026-10-09T09:00:00"),
+        PimTime::utc("2026-10-09T10:00:00"),
+    );
+    fields.attendees = vec![Attendee::new(MULTI_DAV_OTHER_EMAIL)];
+    create_event(&f.service, &calendar.id, fields).await
+}
+
+/// Creates an event (no recurrence) in `calendar`.
+async fn create_event(
+    service: &Service,
+    calendar: &nail_api::CalendarId,
+    fields: EventFields,
+) -> CalendarEvent {
+    let Response::EventSaved { event, .. } = ok(
+        service,
+        Request::CreateEvent {
+            calendar_id: calendar.clone(),
+            fields: Box::new(fields),
+            recurrence: None,
+        },
+    )
+    .await
+    else {
+        panic!("event expected")
+    };
+    *event
+}
+
+/// Sends the invitations of `event` to every attendee.
+async fn invite_all(service: &Service, event: &nail_api::EventId) -> SchedulingResult {
+    scheduled(
+        ok(
+            service,
+            Request::SendInvitations {
+                event_id: event.clone(),
+                recurrence_id: None,
+                attendees: Vec::new(),
+                comment: None,
+            },
+        )
+        .await,
+    )
+}
+
+/// The writable mock CalDAV calendar, once discovered.
+async fn caldav_calendar(service: &Service) -> nail_api::pim::Calendar {
+    until_some("the CalDAV calendar", || async {
+        let Response::Calendars { calendars } = service
+            .handle(Request::ListCalendars { source_id: None })
+            .await
+        else {
+            return None;
+        };
+        calendars
+            .into_iter()
+            .find(|c| c.source_id.as_str() == "work-calendars" && !c.read_only)
+    })
+    .await
 }
 
 /// A meeting the user organizes in the local calendar, with Grace invited.
@@ -730,19 +615,7 @@ async fn organized(f: &Fixture, title: &str) -> CalendarEvent {
     let mut grace = Attendee::new("grace@example.org");
     grace.name = Some("Grace Hopper".into());
     fields.attendees = vec![grace];
-    let Response::EventSaved { event, .. } = ok(
-        &f.service,
-        Request::CreateEvent {
-            calendar_id: local.id.clone(),
-            fields: Box::new(fields),
-            recurrence: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
-    *event
+    create_event(&f.service, &local.id, fields).await
 }
 
 async fn get_event(f: &Fixture, id: &nail_api::EventId) -> CalendarEvent {
@@ -925,18 +798,7 @@ async fn replies_from_uninvited_people_are_not_recorded() {
     assert_eq!(emails, ["grace@example.org"]);
     let c = card(&f, &crasher).await;
     assert!(c.issues.contains(&ItipIssue::UninvitedAttendee), "{c:?}");
-    let result = scheduled(
-        ok(
-            &f.service,
-            Request::SendInvitations {
-                event_id: event.id.clone(),
-                recurrence_id: None,
-                attendees: Vec::new(),
-                comment: None,
-            },
-        )
-        .await,
-    );
+    let result = invite_all(&f.service, &event.id).await;
     assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
 }
 
@@ -967,7 +829,7 @@ async fn attendees_propose_refresh_and_forward() {
     assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
     assert!(result.sent[0].outbox_id.is_some());
     eventually("the COUNTER reaches the SMTP server", || async {
-        smtp(&f).iter().any(|m| {
+        f.smtp_data().iter().any(|m| {
             m.contains("METHOD:COUNTER")
                 && m.contains(&format!("UID:{uid}"))
                 && m.contains("DTSTART:20261005T150000Z")
@@ -996,7 +858,7 @@ async fn attendees_propose_refresh_and_forward() {
     assert_eq!(result.sent[0].method, ItipMethod::Refresh);
     assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
     eventually("the REFRESH reaches the SMTP server", || async {
-        smtp(&f)
+        f.smtp_data()
             .iter()
             .any(|m| m.contains("METHOD:REFRESH") && m.contains(&format!("UID:{uid}")))
     })
@@ -1020,7 +882,7 @@ async fn attendees_propose_refresh_and_forward() {
     assert_eq!(result.sent[0].method, ItipMethod::Request);
     assert_eq!(result.sent[0].recipients, ["dan@example.org"]);
     eventually("the forwarded REQUEST reaches the SMTP server", || async {
-        smtp(&f).iter().any(|m| {
+        f.smtp_data().iter().any(|m| {
             m.contains("METHOD:REQUEST")
                 && m.contains(&format!("UID:{uid}"))
                 && m.contains("dan@example.org")
@@ -1075,7 +937,7 @@ async fn declined_counters_tell_the_attendee_and_keep_the_time() {
     assert_eq!(result.sent[0].method, ItipMethod::DeclineCounter);
     assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
     eventually("the DECLINECOUNTER reaches the SMTP server", || async {
-        smtp(&f).iter().any(|m| {
+        f.smtp_data().iter().any(|m| {
             m.contains("METHOD:DECLINECOUNTER")
                 && m.contains(&format!("UID:{}", event.uid))
                 && m.contains("The room is booked")
@@ -1154,62 +1016,13 @@ async fn unknown_server_scheduling_never_delivers_twice() {
     for _ in 0..2000 {
         demo.dav.fail_next("OPTIONS", 500);
     }
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    let f = Fixture {
-        service,
-        demo,
-        _dirs: (data_dir, config_dir),
-    };
-    let calendar = until_some("the CalDAV calendar", || async {
-        let Response::Calendars { calendars } = f
-            .service
-            .handle(Request::ListCalendars { source_id: None })
-            .await
-        else {
-            return None;
-        };
-        calendars
-            .into_iter()
-            .find(|c| c.source_id.as_str() == "work-calendars" && !c.read_only)
-    })
-    .await;
-    let mut fields = EventFields::new(
-        "Unknown scheduling",
-        PimTime::utc("2026-10-09T09:00:00"),
-        PimTime::utc("2026-10-09T10:00:00"),
-    );
-    fields.attendees = vec![Attendee::new(MULTI_DAV_OTHER_EMAIL)];
-    let Response::EventSaved { event, .. } = ok(
-        &f.service,
-        Request::CreateEvent {
-            calendar_id: calendar.id.clone(),
-            fields: Box::new(fields),
-            recurrence: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
-    let result = scheduled(
-        ok(
-            &f.service,
-            Request::SendInvitations {
-                event_id: event.id.clone(),
-                recurrence_id: None,
-                attendees: Vec::new(),
-                comment: None,
-            },
-        )
-        .await,
-    );
+    let f = Multi::with(demo, |_, _| {});
+    let calendar = caldav_calendar(&f.service).await;
+    let event = meeting_with_bob(&f, &calendar, "Unknown scheduling").await;
+    let result = invite_all(&f.service, &event.id).await;
     assert_eq!(result.sent[0].transport, SchedulingTransport::Imip);
     eventually("the REQUEST is mailed", || async {
-        smtp(&f)
+        f.smtp_data()
             .iter()
             .any(|m| m.contains("METHOD:REQUEST") && m.contains(&event.uid))
     })

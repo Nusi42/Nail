@@ -22,26 +22,20 @@
 //! * Changes are staged and committed by the [`CommitPolicy`] (searches
 //!   commit first, so they always see them).
 
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
-use std::time::Instant;
+use std::path::Path;
 
 use nail_api::pim::contact::ContactMatchField;
 use nail_api::pim::{
     CalendarEvent, Contact, ContactGroup, EventFields, PimItemKind, PimItemRef, Task,
 };
 use nail_api::{AddressBookId, ContactId};
+use tantivy::Term;
 use tantivy::collector::TopDocs;
-use tantivy::directory::Directory;
 use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, TermQuery};
-use tantivy::schema::{
-    Field, IndexRecordOption, STORED, STRING, Schema, TantivyDocument, TextFieldIndexing,
-    TextOptions, Value,
-};
-use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, Term};
+use tantivy::schema::{Field, IndexRecordOption, STORED, STRING, Schema, TantivyDocument, Value};
 
-use crate::error::{Error, Result};
-use crate::index::{CommitPolicy, DirectoryWrapper, TOKENIZER, VERSION_FILE_NAME, analyzer};
+use crate::engine::{CommitPolicy, DirectoryWrapper, Engine, IndexKind, text_options, tokens};
+use crate::error::Result;
 
 /// The item kinds PIM search covers.
 pub const PIM_KINDS: [PimItemKind; 3] =
@@ -50,9 +44,13 @@ pub const PIM_KINDS: [PimItemKind; 3] =
 /// Conventional name of the PIM index directory inside the data directory.
 pub const PIM_INDEX_DIR_NAME: &str = "search-pim";
 
-/// Bump when the schema or tokenization changes; older indexes are rebuilt.
-const SCHEMA_VERSION: u32 = 1;
-const WRITER_MEMORY: usize = 15_000_000;
+/// The PIM index. Bump the version when the schema or tokenization
+/// changes; older indexes are rebuilt.
+const KIND: IndexKind = IndexKind {
+    label: "PIM index",
+    schema_version: 1,
+    writer_memory: 15_000_000,
+};
 
 /// What one item contributes to the index.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,40 +252,30 @@ impl PimDocument {
     }
 }
 
+/// The kind names of the index keys (`<kind>:<id>`).
+const KIND_NAMES: [(PimItemKind, &str); 4] = [
+    (PimItemKind::Event, "event"),
+    (PimItemKind::Task, "task"),
+    (PimItemKind::Contact, "contact"),
+    (PimItemKind::ContactGroup, "group"),
+];
+
 fn kind_str(kind: PimItemKind) -> &'static str {
-    match kind {
-        PimItemKind::Event => "event",
-        PimItemKind::Task => "task",
-        PimItemKind::Contact => "contact",
-        PimItemKind::ContactGroup => "group",
-    }
+    KIND_NAMES
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map_or("", |(_, name)| name)
 }
 
 fn item_key(item: &PimItemRef) -> String {
-    let id = match item {
-        PimItemRef::Event { event_id } => event_id.as_str(),
-        PimItemRef::Task { task_id } => task_id.as_str(),
-        PimItemRef::Contact { contact_id } => contact_id.as_str(),
-        PimItemRef::ContactGroup { group_id } => group_id.as_str(),
-    };
+    let id = item.id();
     format!("{}:{id}", kind_str(item.kind()))
 }
 
 fn item_of_key(key: &str) -> Option<PimItemRef> {
-    let (kind, id) = key.split_once(':')?;
-    Some(match kind {
-        "event" => PimItemRef::Event {
-            event_id: id.into(),
-        },
-        "task" => PimItemRef::Task { task_id: id.into() },
-        "contact" => PimItemRef::Contact {
-            contact_id: id.into(),
-        },
-        "group" => PimItemRef::ContactGroup {
-            group_id: id.into(),
-        },
-        _ => return None,
-    })
+    let (name, id) = key.split_once(':')?;
+    let (kind, _) = KIND_NAMES.iter().find(|(_, n)| *n == name)?;
+    Some(PimItemRef::new(*kind, id))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -318,11 +306,7 @@ impl Fields {
 
 fn schema() -> (Schema, Fields) {
     let mut b = Schema::builder();
-    let text = TextOptions::default().set_indexing_options(
-        TextFieldIndexing::default()
-            .set_tokenizer(TOKENIZER)
-            .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-    );
+    let text = text_options();
     let fields = Fields {
         key: b.add_text_field("key", STRING | STORED),
         kind: b.add_text_field("kind", STRING),
@@ -337,149 +321,23 @@ fn schema() -> (Schema, Fields) {
     (b.build(), fields)
 }
 
-/// Tokens of `text` as the index sees them.
-fn tokens(text: &str) -> Vec<String> {
-    let mut analyzer = analyzer();
-    let mut stream = analyzer.token_stream(text);
-    let mut out = Vec::new();
-    while let Some(token) = stream.next() {
-        out.push(token.text.clone());
-    }
-    out
-}
-
-#[derive(Debug, Default)]
-struct Batch {
-    pending: usize,
-    since: Option<Instant>,
-}
-
 /// The PIM search index. `Send + Sync`; methods block (use a blocking
 /// thread from async code).
 pub struct PimIndex {
-    reader: IndexReader,
-    writer: Mutex<IndexWriter>,
+    engine: Engine,
     fields: Fields,
-    batch: Mutex<Batch>,
-    policy: CommitPolicy,
-    rebuilt: bool,
-    path: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for PimIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PimIndex")
-            .field("path", &self.path)
+            .field("path", &self.engine.path())
             .finish_non_exhaustive()
     }
 }
 
 impl PimIndex {
-    /// An index in memory (tests, demos, a locked vault).
-    pub fn open_in_ram(policy: CommitPolicy) -> Result<Self> {
-        let (schema, fields) = schema();
-        Self::init(&Index::create_in_ram(schema), fields, policy, false, None)
-    }
-
-    /// Opens (or creates) the index in `dir`; one of another schema
-    /// version, or one that cannot be opened, is recreated empty.
-    pub fn open(dir: impl AsRef<Path>, policy: CommitPolicy) -> Result<Self> {
-        Self::open_with(dir, policy, None)
-    }
-
-    /// Like [`PimIndex::open`] with the on-disk directory wrapped
-    /// (encryption at rest, as the mail index).
-    pub fn open_with(
-        dir: impl AsRef<Path>,
-        policy: CommitPolicy,
-        wrapper: Option<&DirectoryWrapper>,
-    ) -> Result<Self> {
-        let dir = dir.as_ref();
-        let version_file = dir.join(VERSION_FILE_NAME);
-        let current = std::fs::read_to_string(&version_file)
-            .ok()
-            .and_then(|v| v.trim().parse::<u32>().ok());
-        let mut rebuilt = false;
-        if dir.exists() && current != Some(SCHEMA_VERSION) {
-            tracing::info!(?dir, ?current, "PIM index has another version; rebuilding");
-            std::fs::remove_dir_all(dir)?;
-            rebuilt = true;
-        }
-        std::fs::create_dir_all(dir)?;
-        let (schema, fields) = schema();
-        let open = |wrapper: Option<&DirectoryWrapper>| -> Result<Index> {
-            let directory: Box<dyn Directory> = Box::new(
-                tantivy::directory::MmapDirectory::open(dir)
-                    .map_err(|e| Error::Index(e.to_string()))?,
-            );
-            let directory = match wrapper {
-                Some(wrap) => wrap(directory),
-                None => directory,
-            };
-            Ok(Index::open_or_create(directory, schema.clone())?)
-        };
-        let index = match open(wrapper) {
-            Ok(index) => index,
-            Err(err) => {
-                tracing::warn!(?dir, %err, "PIM index unreadable; rebuilding");
-                std::fs::remove_dir_all(dir)?;
-                std::fs::create_dir_all(dir)?;
-                rebuilt = true;
-                open(wrapper)?
-            }
-        };
-        std::fs::write(&version_file, SCHEMA_VERSION.to_string())?;
-        Self::init(&index, fields, policy, rebuilt, Some(dir.to_owned()))
-    }
-
-    fn init(
-        index: &Index,
-        fields: Fields,
-        policy: CommitPolicy,
-        rebuilt: bool,
-        path: Option<PathBuf>,
-    ) -> Result<Self> {
-        index.tokenizers().register(TOKENIZER, analyzer());
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()?;
-        let writer = index.writer_with_num_threads(1, WRITER_MEMORY)?;
-        Ok(Self {
-            reader,
-            writer: Mutex::new(writer),
-            fields,
-            batch: Mutex::new(Batch::default()),
-            policy,
-            rebuilt,
-            path,
-        })
-    }
-
-    /// Whether opening recreated the index (the caller reindexes).
-    pub fn was_rebuilt(&self) -> bool {
-        self.rebuilt
-    }
-
-    fn writer(&self) -> std::sync::MutexGuard<'_, IndexWriter> {
-        self.writer.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn staged(&self, n: usize) -> Result<()> {
-        let due = {
-            let mut batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-            batch.pending += n;
-            batch.since.get_or_insert_with(Instant::now);
-            batch.pending >= self.policy.max_pending
-                || batch
-                    .since
-                    .is_some_and(|t| t.elapsed() >= self.policy.max_delay)
-        };
-        if due {
-            self.commit()?;
-        }
-        Ok(())
-    }
+    index_api!();
 
     /// Adds (or replaces) documents.
     pub fn add(&self, docs: &[PimDocument]) -> Result<()> {
@@ -487,7 +345,7 @@ impl PimIndex {
             return Ok(());
         }
         {
-            let writer = self.writer();
+            let writer = self.engine.writer();
             let f = &self.fields;
             for doc in docs {
                 let key = item_key(&doc.item);
@@ -511,7 +369,7 @@ impl PimIndex {
                 writer.add_document(out)?;
             }
         }
-        self.staged(docs.len())
+        self.engine.staged(docs.len())
     }
 
     /// Removes items (unknown ones are ignored).
@@ -520,69 +378,20 @@ impl PimIndex {
             return Ok(());
         }
         {
-            let writer = self.writer();
+            let writer = self.engine.writer();
             for item in items {
                 writer.delete_term(Term::from_field_text(self.fields.key, &item_key(item)));
             }
         }
-        self.staged(items.len())
+        self.engine.staged(items.len())
     }
 
     /// Removes every item of a calendar or address book.
     pub fn remove_collection(&self, collection_id: &str) -> Result<()> {
-        self.writer()
+        self.engine
+            .writer()
             .delete_term(Term::from_field_text(self.fields.collection, collection_id));
-        self.staged(1)
-    }
-
-    /// Removes everything (before a full reindex).
-    pub fn clear(&self) -> Result<()> {
-        self.writer().delete_all_documents()?;
-        self.staged(1)
-    }
-
-    /// Commits staged changes now.
-    pub fn commit(&self) -> Result<()> {
-        let mut batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-        self.writer().commit()?;
-        self.reader.reload()?;
-        *batch = Batch::default();
-        Ok(())
-    }
-
-    /// Commits when due by the policy (call from a timer). Returns whether
-    /// it committed.
-    pub fn commit_if_due(&self) -> Result<bool> {
-        let due = {
-            let batch = self.batch.lock().unwrap_or_else(PoisonError::into_inner);
-            batch.pending > 0
-                && (batch.pending >= self.policy.max_pending
-                    || batch
-                        .since
-                        .is_some_and(|t| t.elapsed() >= self.policy.max_delay))
-        };
-        if due {
-            self.commit()?;
-        }
-        Ok(due)
-    }
-
-    fn commit_pending(&self) -> Result<()> {
-        let pending = self
-            .batch
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .pending;
-        if pending > 0 {
-            self.commit()?;
-        }
-        Ok(())
-    }
-
-    /// Number of searchable documents.
-    pub fn doc_count(&self) -> Result<u64> {
-        self.commit_pending()?;
-        Ok(self.reader.searcher().num_docs())
+        self.engine.staged(1)
     }
 
     /// The query for free text; `None` without searchable words.
@@ -701,8 +510,7 @@ impl PimIndex {
                 Self::any_term(self.fields.collection, collections),
             ));
         }
-        self.commit_pending()?;
-        let searcher = self.reader.searcher();
+        let searcher = self.engine.searcher()?;
         let hits = searcher.search(
             &BooleanQuery::new(clauses),
             &TopDocs::with_limit(limit).order_by_score(),
@@ -792,7 +600,8 @@ pub fn contact_match(contact: &Contact, query: &str) -> (ContactMatchField, Opti
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+
+    use crate::engine::VERSION_FILE_NAME;
 
     use nail_api::pim::contact::{ContactName, ContactOrg, VCardVersion};
     use nail_api::pim::{
@@ -1100,15 +909,10 @@ mod tests {
 
     #[test]
     fn on_disk_with_a_wrapper_and_rebuilds() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::atomic::Ordering;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(PIM_INDEX_DIR_NAME);
-        let calls = Arc::new(AtomicUsize::new(0));
-        let counter = Arc::clone(&calls);
-        let wrapper: DirectoryWrapper = Arc::new(move |inner| {
-            counter.fetch_add(1, Ordering::SeqCst);
-            inner
-        });
+        let (wrapper, calls) = crate::engine::counting_wrapper();
         {
             let index =
                 PimIndex::open_with(&path, CommitPolicy::default(), Some(&wrapper)).unwrap();

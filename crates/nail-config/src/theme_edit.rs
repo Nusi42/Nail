@@ -39,14 +39,15 @@ use nail_api::{ApiError, ConfigFile, ErrorCode, LocalizedMessage};
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
-use crate::accounts::write::quote;
 use crate::appearance_edit::ThemeEditor;
 use crate::backup;
 use crate::edit_history::FileChange;
 use crate::kdl_edit::{
-    Style, append_rendered, ensure_multiline, first_arg, remove_node, remove_prop,
+    Style, append_rendered, block_of, ensure_multiline, first_arg, remove_node, remove_prop,
     replace_rendered, set_arg, set_first_arg, set_prop, str_prop,
 };
+use crate::kdl_util::children;
+use crate::kdl_write::quote;
 use crate::manager::{ConfigManager, ConfigUpdate};
 use crate::theme::{DEFAULT_BASE, ThemeFile};
 use crate::themes::{
@@ -174,21 +175,6 @@ fn is_named(node: &KdlNode, name: &str) -> bool {
     node.name().value() == name
 }
 
-fn nodes(node: &KdlNode) -> &[KdlNode] {
-    node.children().map_or(&[][..], KdlDocument::nodes)
-}
-
-/// The children of a node, creating an empty block when it has none.
-fn block_of(node: &mut KdlNode) -> &mut KdlDocument {
-    if node.children().is_none()
-        && let Some(format) = node.format_mut()
-        && format.before_children.is_empty()
-    {
-        " ".clone_into(&mut format.before_children);
-    }
-    node.ensure_children()
-}
-
 /// Removes the nodes at `indexes` (ascending) from a block at `depth`.
 fn remove_all(block: &mut KdlDocument, indexes: &[usize], depth: usize, style: &Style) {
     if indexes.is_empty() {
@@ -249,17 +235,17 @@ fn token_sites(body: &KdlDocument, category: &str, name: &str, mode: Option<&str
     };
     for (b, block) in body.nodes().iter().enumerate() {
         if is_named(block, "tokens") {
-            for (t, token) in nodes(block).iter().enumerate() {
+            for (t, token) in children(block).iter().enumerate() {
                 if is_token(token) {
                     sites.lines.push((b, t));
                 }
             }
         } else if is_named(block, "modes") {
-            for (m, mode_block) in nodes(block).iter().enumerate() {
+            for (m, mode_block) in children(block).iter().enumerate() {
                 if mode.is_some_and(|mode| !is_named(mode_block, mode)) {
                     continue;
                 }
-                for (t, token) in nodes(mode_block).iter().enumerate() {
+                for (t, token) in children(mode_block).iter().enumerate() {
                     if is_token(token) {
                         sites.mode_lines.push((b, m, t));
                     }
@@ -320,7 +306,7 @@ impl ThemeEditor {
             if let Some(&(parts, index)) = rules.last() {
                 let depth = if parts.is_some() { 3 } else { 2 };
                 let rule = rule_mut(body, parts, index);
-                let existing = nodes(rule).iter().rposition(|d| is_named(d, property));
+                let existing = children(rule).iter().rposition(|d| is_named(d, property));
                 match existing {
                     Some(d) => replace_line(block_of(rule), d, &line, depth, &style),
                     None => append_line(rule, &line, depth, &style),
@@ -409,7 +395,7 @@ fn append_mode_line(body: &mut KdlDocument, mode: &str, line: &str, style: &Styl
         return;
     };
     let modes = &mut body.nodes_mut()[b];
-    match nodes(modes).iter().rposition(|n| is_named(n, mode)) {
+    match children(modes).iter().rposition(|n| is_named(n, mode)) {
         Some(m) => append_line(&mut block_of(modes).nodes_mut()[m], line, 3, style),
         None => append_rendered(block_of(modes), 2, &block_text(mode, line, 2, style), style),
     }
@@ -464,7 +450,7 @@ fn part_sites(body: &KdlDocument, selector: &str) -> Vec<(Option<usize>, usize)>
         if is_rule(node) {
             sites.push((None, b));
         } else if is_named(node, "parts") {
-            for (i, rule) in nodes(node).iter().enumerate() {
+            for (i, rule) in children(node).iter().enumerate() {
                 if is_rule(rule) {
                     sites.push((Some(b), i));
                 }

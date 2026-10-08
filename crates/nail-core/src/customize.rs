@@ -10,16 +10,9 @@
 
 use nail_api::editing::HistoryScope;
 use nail_api::{ApiError, ConfigFile, Request, Response};
-use nail_config::ConfigUpdate;
 
 use crate::error::Result;
 use crate::service::Service;
-
-fn broadcast(service: &Service, updates: &[ConfigUpdate]) {
-    for update in updates {
-        service.broadcast(update.to_event());
-    }
-}
 
 /// The undo history of a theme / layout write (M5d).
 fn broadcast_file_history(service: &Service, file: ConfigFile) {
@@ -32,10 +25,7 @@ fn broadcast_file_history(service: &Service, file: ConfigFile) {
 
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
-    let config = service.config().clone();
-    // The config manager does blocking file I/O.
-    let service = service.clone();
-    tokio::task::spawn_blocking(move || handle_blocking(&service, &config, request)).await?
+    crate::editing::on_config(service, request, handle_blocking).await
 }
 
 fn handle_blocking(
@@ -49,7 +39,7 @@ fn handle_blocking(
             base_revision,
         } => {
             let updates = config.update_layout_checked(&patches, base_revision.as_deref())?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             crate::editing::broadcast_history(service, HistoryScope::Layout);
             Response::Done
         }
@@ -75,7 +65,7 @@ fn handle_blocking(
             default,
         } => {
             let (backup, updates) = config.apply_merge(file, &incoming, &choices, default)?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_file_history(service, file);
             Response::ConfigMergeApplied { backup }
         }
@@ -84,7 +74,7 @@ fn handle_blocking(
         },
         Request::RevertConfig { file, backup_id } => {
             let updates = config.revert(file, backup_id.as_ref())?;
-            broadcast(service, &updates);
+            service.broadcast_config(&updates);
             broadcast_file_history(service, file);
             if file == ConfigFile::Accounts {
                 // Without a watcher (tests, `--no-watch`) apply it here.
@@ -111,7 +101,7 @@ fn handle_blocking(
         other => {
             return Err(ApiError::internal(format!(
                 "{} routed to the customization module",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }

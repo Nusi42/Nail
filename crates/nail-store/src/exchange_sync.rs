@@ -51,6 +51,17 @@ pub struct QueuedMeetingAnswer {
     pub send: bool,
 }
 
+/// The message ids the statement's first column holds.
+fn message_ids(
+    stmt: &mut rusqlite::Statement<'_>,
+    params: impl rusqlite::Params,
+) -> Result<Vec<MessageId>> {
+    let ids = stmt
+        .query_map(params, |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(ids.into_iter().map(MessageId).collect())
+}
+
 impl Store {
     // --- Full listings ----------------------------------------------------------
 
@@ -191,14 +202,7 @@ impl Store {
                 "SELECT message_id FROM exchange_removed
                  WHERE account_id = ?1 AND mailbox = ?2 ORDER BY message_id",
             )?;
-            let rows = stmt.query_map(params![account.as_str(), mailbox_key(mailbox)], |r| {
-                r.get::<_, String>(0)
-            })?;
-            Ok(rows
-                .collect::<rusqlite::Result<Vec<_>>>()?
-                .into_iter()
-                .map(MessageId)
-                .collect())
+            message_ids(&mut stmt, params![account.as_str(), mailbox_key(mailbox)])
         })
     }
 
@@ -220,15 +224,10 @@ impl Store {
                  WHERE r.account_id = ?1 AND r.mailbox = ?2 AND m.message_id = ?3
                  ORDER BY r.removed_at, r.message_id",
             )?;
-            let rows = stmt
-                .query_map(params![account.as_str(), mailbox_key(mailbox), mid], |r| {
-                    r.get::<_, String>(0)
-                })?;
-            Ok(rows
-                .collect::<rusqlite::Result<Vec<_>>>()?
-                .into_iter()
-                .map(MessageId)
-                .collect())
+            message_ids(
+                &mut stmt,
+                params![account.as_str(), mailbox_key(mailbox), mid],
+            )
         })
     }
 
@@ -277,6 +276,29 @@ impl Store {
         })
     }
 
+    /// Stores the answer the server has for a meeting; `also` sets further
+    /// columns of an existing row (`, column = value…`).
+    fn upsert_synced_answer(
+        &self,
+        collection_id: &str,
+        uid: &str,
+        status: Option<&str>,
+        also: &str,
+    ) -> Result<()> {
+        self.with_conn(|conn| {
+            conn.execute(
+                &format!(
+                    "INSERT INTO exchange_meeting_answers (collection_id, uid, synced_status)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT (collection_id, uid) DO UPDATE SET
+                         synced_status = excluded.synced_status{also}"
+                ),
+                params![collection_id, uid, status],
+            )?;
+            Ok(())
+        })
+    }
+
     /// Records the own answer the server reported for a meeting.
     pub fn set_exchange_synced_answer(
         &self,
@@ -284,15 +306,7 @@ impl Store {
         uid: &str,
         status: Option<&str>,
     ) -> Result<()> {
-        self.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO exchange_meeting_answers (collection_id, uid, synced_status)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT (collection_id, uid) DO UPDATE SET synced_status = excluded.synced_status",
-                params![collection_id, uid, status],
-            )?;
-            Ok(())
-        })
+        self.upsert_synced_answer(collection_id, uid, status, "")
     }
 
     /// Queues an answer from Nail: the next replay of the meeting answers
@@ -323,17 +337,12 @@ impl Store {
         uid: &str,
         status: Option<&str>,
     ) -> Result<()> {
-        self.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO exchange_meeting_answers (collection_id, uid, synced_status)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT (collection_id, uid) DO UPDATE SET
-                     synced_status = excluded.synced_status, queued = 0, send = 1,
-                     comment = NULL",
-                params![collection_id, uid, status],
-            )?;
-            Ok(())
-        })
+        self.upsert_synced_answer(
+            collection_id,
+            uid,
+            status,
+            ", queued = 0, send = 1, comment = NULL",
+        )
     }
 
     /// Drops a queued answer (it could not be stored).
@@ -352,58 +361,20 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::StoredMessage;
     use crate::exchange::ExchangePimCollectionRecord;
+    use crate::test_store::{add, exchange_store};
+    use nail_api::CalendarId;
     use nail_api::pim::{Calendar, CalendarComponent, CalendarSettings};
-    use nail_api::{Account, AccountKind, CalendarId, Flags, Folder, MessageSummary};
+    use nail_api::testing;
 
     fn account() -> AccountId {
         AccountId::new("work")
     }
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: account(),
-                name: "Work".into(),
-                email: "ada@contoso.example".into(),
-                kind: AccountKind::Exchange,
-            })
-            .unwrap();
-        store
-            .upsert_folder(&Folder {
-                id: "x-inbox".into(),
-                account_id: account(),
-                parent_id: None,
-                name: "Inbox".into(),
-                path: "Inbox".into(),
-                role: nail_api::FolderRole::Inbox,
-                unread: 0,
-                total: 0,
-            })
-            .unwrap();
+        let store = exchange_store();
         for id in ["m1", "m2", "m3"] {
-            store
-                .upsert_message(&StoredMessage::new(MessageSummary {
-                    id: id.into(),
-                    folder_id: "x-inbox".into(),
-                    account_id: account(),
-                    subject: id.into(),
-                    from: None,
-                    to: vec![],
-                    date: "2026-10-01T10:00:00Z".into(),
-                    flags: Flags::default(),
-                    has_attachments: false,
-                    preview: String::new(),
-                    thread_id: None,
-                    tags: vec![],
-                    duplicates: vec![],
-                    headers_only: false,
-                    gmail: None,
-                    exchange: None,
-                }))
-                .unwrap();
+            add(&store, testing::summary(id, "work", "x-inbox"));
         }
         store
             .set_message_remote_id(&"m1".into(), Some("R1"))

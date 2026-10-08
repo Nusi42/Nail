@@ -1,6 +1,9 @@
 //! `accounts.kdl`: Gmail API accounts (`gmail` node, M3b, ADR 0065).
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
 use nail_api::accounts::{AuthConfig, IncomingServer, MailProtocol, TlsMode, default_port};
 use nail_api::domain::AccountKind;
 use nail_api::gmail::{GMAIL_API_HOST, GmailOptions};
@@ -110,10 +113,7 @@ fn gmail_rules_are_checked() {
 #[test]
 fn gmail_accounts_are_written_and_round_trip() {
     let config = parse_accounts(GMAIL, "accounts.kdl").unwrap();
-    let mut d = AccountsDocument::empty("accounts.kdl");
-    d.set_config(config.clone()).unwrap();
-    assert!(d.text().contains("gmail host="), "{}", d.text());
-    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+    common::assert_renders(&config, "gmail host=");
 
     // Editing keeps the hand-written file minimal (default host / port /
     // tls are not added).

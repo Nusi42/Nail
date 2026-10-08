@@ -89,7 +89,7 @@ config-gmail-no-smtp = a `gmail` account sends through the Gmail API; remove the
 config-gmail-plaintext-needs-loopback = `tls="plaintext"` is only allowed for local test servers (localhost)
 config-exchange-graph-needs-oauth2 = an `exchange` account with engine="graph" signs in with `auth "oauth2"` provider="microsoft"
 config-exchange-unsupported-auth = an `exchange` account with engine="ews" signs in with `auth "windows"`, `auth "password"` (Basic over TLS) or `auth "oauth2"`
-config-exchange-plaintext-needs-loopback = `tls="plaintext"` is only allowed for local test servers (localhost)
+config-exchange-plaintext-needs-loopback = { config-gmail-plaintext-needs-loopback }
 config-exchange-starttls = Exchange speaks HTTPS: use tls="implicit" (or "plaintext" for local test servers)
 config-exchange-ews-only-option = `url` and `streaming` only apply with engine="ews"
 config-exchange-invalid-url = `url` must be an https:// address of the EWS endpoint, found { $found }
@@ -115,7 +115,7 @@ config-virtual-needs-members = virtual account "{ $name }" needs `members "<acco
 config-pim-source-duplicate = a calendar or contact source named "{ $name }" is already defined
 config-pim-source-reserved = "{ $name }" is reserved for the built-in local calendars and address books
 config-pim-source-invalid = invalid source name "{ $name }": use 1 to 64 lowercase letters, digits, `-`, `_` or `.`, starting with a letter or digit
-config-pim-account-unknown = unknown account "{ $name }"
+config-pim-account-unknown = { config-member-unknown }
 config-pim-needs-url = calendar subscription "{ $name }" needs url="…"
 config-pim-needs-url-or-account = "{ $name }" needs url="…" or account="…" (to use that account's login and find its server)
 config-pim-needs-auth = "{ $name }" has no account="…", so it needs an `auth` node

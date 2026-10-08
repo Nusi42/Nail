@@ -75,6 +75,16 @@ pub enum FolderRole {
     Other,
 }
 
+wire_names!(FolderRole {
+    Inbox = "inbox",
+    Sent = "sent",
+    Drafts = "drafts",
+    Archive = "archive",
+    Junk = "junk",
+    Trash = "trash",
+    Other = "other",
+});
+
 /// A folder (mailbox) of an account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Folder {
@@ -106,6 +116,26 @@ pub struct Address {
     pub name: Option<String>,
     /// The address itself, e.g. "ada@example.org".
     pub email: String,
+}
+
+impl Address {
+    /// Addresses as one line, `Ada <ada@x.org>, bob@y.org`.
+    pub fn list_text(list: &[Address]) -> String {
+        list.iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+/// `Name <email>`, or the bare address without a (non-blank) name.
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.name.as_deref().map(str::trim) {
+            Some(name) if !name.is_empty() => write!(f, "{name} <{}>", self.email),
+            _ => f.write_str(&self.email),
+        }
+    }
 }
 
 /// Standard IMAP system flags of a message.

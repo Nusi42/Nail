@@ -245,9 +245,7 @@ async fn guessing_from_many_addresses_pauses_pairing() {
 
 #[tokio::test]
 async fn pairing_again_replaces_the_browsers_session() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, ada, mut browser) = Harness::with_ada().await;
     let first = browser.resolve(&h).unwrap().session.id;
     let code = h.code(&ada, None);
     let second = logged_in(&browser.pair(&h, &code, "Phone 2").await);

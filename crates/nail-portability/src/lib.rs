@@ -37,6 +37,8 @@ pub mod mbox;
 pub mod message;
 pub mod pim;
 pub mod sink;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod thunderbird;
 
 pub use error::{PortabilityError, Result, SinkError};

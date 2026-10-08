@@ -6,98 +6,38 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{
+    Multi, TIMEOUT, archive_and_flag, eventually, folder, folders, messages, save_rule,
+    update_account,
+};
+use nail_api::Folder;
+
 use std::time::Duration;
 
-use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextMatch, TextOp};
+use nail_api::rules::{Rule, RuleTrigger};
 use nail_api::sieve::{RulePlacement, SieveState, VacationSettings};
 use nail_api::triage::{
     JunkSettings, JunkSource, NotificationKind, NotificationSettings, QuietHours,
 };
 use nail_api::{
-    AccountId, Event, Folder, FolderId, FolderRole, MessageId, MessageSummary, Request, Response,
+    AccountId, Event, FolderId, FolderRole, MessageId, MessageSummary, Request, Response,
     SearchQuery,
 };
-use nail_core::demo::{DemoMulti, MULTI_HEADERS_ONLY_FOLDER, MULTI_WORK_ID, start_demo_multi};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
+use nail_core::demo::{MULTI_HEADERS_ONLY_FOLDER, MULTI_WORK_ID, start_demo_multi};
 use serde_json::json;
-use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
-
-struct Fixture {
-    service: Service,
-    demo: DemoMulti,
-    config_dir_guard: TempDir,
-    data_dir_guard: TempDir,
-}
+type Fixture = Multi;
 
 async fn setup() -> Fixture {
-    let demo = start_demo_multi().await.unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    Fixture {
-        service,
-        demo,
-        config_dir_guard: config_dir,
-        data_dir_guard: data_dir,
-    }
-}
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
-async fn folders(service: &Service) -> Vec<Folder> {
-    match service
-        .handle(Request::ListFolders {
-            account_id: AccountId::new(MULTI_WORK_ID),
-        })
-        .await
-    {
-        Response::Folders { folders } => folders,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn folder(service: &Service, role: FolderRole) -> Option<Folder> {
-    folders(service).await.into_iter().find(|f| f.role == role)
-}
-
-async fn messages(service: &Service, folder: &FolderId) -> Vec<MessageSummary> {
-    match service
-        .handle(Request::ListMessages {
-            folder_id: folder.clone(),
-            offset: 0,
-            limit: 500,
-        })
-        .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
+    Multi::start().await
 }
 
 async fn in_folder(service: &Service, role: FolderRole, subject: &str) -> Option<MessageSummary> {
-    let folder = folder(service, role).await?;
+    let folder = folder(service, MULTI_WORK_ID, role).await?;
     messages(service, &folder.id)
         .await
         .into_iter()
@@ -106,7 +46,7 @@ async fn in_folder(service: &Service, role: FolderRole, subject: &str) -> Option
 
 async fn synced(f: &Fixture) {
     eventually("the work account synced", || async {
-        match folder(&f.service, FolderRole::Inbox).await {
+        match folder(&f.service, MULTI_WORK_ID, FolderRole::Inbox).await {
             Some(inbox) => messages(&f.service, &inbox.id).await.len() >= 15,
             None => false,
         }
@@ -138,32 +78,12 @@ async fn sieve_status(service: &Service) -> nail_api::sieve::SieveAccountStatus 
 }
 
 fn subject_rule(name: &str, subject: &str) -> Rule {
-    Rule {
-        id: "".into(),
-        name: name.into(),
-        enabled: true,
-        triggers: vec![RuleTrigger::Arrival, RuleTrigger::Manual],
-        scope: Vec::new(),
-        conditions: Condition::All {
-            conditions: vec![Condition::Subject {
-                matches: TextMatch {
-                    op: TextOp::Contains,
-                    value: subject.into(),
-                    case_sensitive: false,
-                },
-            }],
-        },
-        actions: vec![
-            RuleAction::Move {
-                folder: FolderRef::Role {
-                    role: FolderRole::Archive,
-                    account_id: None,
-                },
-            },
-            RuleAction::Flag { flagged: true },
-        ],
-        source: None,
-    }
+    common::subject_rule(
+        name,
+        vec![RuleTrigger::Arrival, RuleTrigger::Manual],
+        subject,
+        archive_and_flag(),
+    )
 }
 
 async fn next_notification(
@@ -184,21 +104,32 @@ async fn next_notification(
 /// Turns the demo account's ManageSieve on or off (demo-multi starts with
 /// it off: the mock server stores scripts but does not run them).
 async fn set_sieve(service: &Service, enabled: bool) {
-    let Response::AccountsConfig { config } = service.handle(Request::GetAccountsConfig).await
-    else {
-        panic!("no config")
-    };
-    let mut work = config.account(&MULTI_WORK_ID.into()).unwrap().clone();
-    work.sieve.as_mut().unwrap().enabled = Some(enabled);
-    assert!(matches!(
-        service
-            .handle(Request::UpdateAccount {
-                config: Box::new(work),
-                secrets: vec![],
-            })
-            .await,
-        Response::AccountSaved { .. }
-    ));
+    update_account(service, MULTI_WORK_ID, |work| {
+        work.sieve.as_mut().unwrap().enabled = Some(enabled);
+    })
+    .await;
+}
+
+/// Saves the rule "Invoices" and waits until it runs on the server.
+async fn invoices_on_the_server(f: &Fixture) -> Rule {
+    let rule = save_rule(&f.service, subject_rule("Invoices", "old invoice")).await;
+    eventually("the rule runs on the server", || async {
+        let status = sieve_status(&f.service).await;
+        status.state == SieveState::InSync
+            && status
+                .rules
+                .iter()
+                .any(|r| r.rule_id == rule.id && r.placement == RulePlacement::Server)
+    })
+    .await;
+    rule
+}
+
+/// The work account's inbox.
+async fn work_inbox(f: &Fixture) -> Folder {
+    folder(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+        .await
+        .unwrap()
 }
 
 #[tokio::test]
@@ -216,25 +147,7 @@ async fn rules_and_vacation_run_on_the_sieve_server() {
     })
     .await;
 
-    let Response::RuleSaved { rule } = f
-        .service
-        .handle(Request::SaveRule {
-            rule: Box::new(subject_rule("Invoices", "old invoice")),
-            position: None,
-        })
-        .await
-    else {
-        panic!("rule not saved")
-    };
-    eventually("the rule runs on the server", || async {
-        let status = sieve_status(&f.service).await;
-        status.state == SieveState::InSync
-            && status
-                .rules
-                .iter()
-                .any(|r| r.rule_id == rule.id && r.placement == RulePlacement::Server)
-    })
-    .await;
+    let rule = invoices_on_the_server(&f).await;
     let script = f.demo.sieve.script("nail").unwrap();
     assert!(script.contains("old invoice"), "{script}");
     assert!(script.contains("fileinto"), "{script}");
@@ -325,24 +238,6 @@ async fn rules_and_vacation_run_on_the_sieve_server() {
     f.service.shutdown().await;
 }
 
-async fn update_work(service: &Service, change: impl FnOnce(&mut nail_api::AccountConfig)) {
-    let Response::AccountsConfig { config } = service.handle(Request::GetAccountsConfig).await
-    else {
-        panic!("no config")
-    };
-    let mut work = config.account(&MULTI_WORK_ID.into()).unwrap().clone();
-    change(&mut work);
-    assert!(matches!(
-        service
-            .handle(Request::UpdateAccount {
-                config: Box::new(work),
-                secrets: vec![],
-            })
-            .await,
-        Response::AccountSaved { .. }
-    ));
-}
-
 async fn set_vacation(service: &Service, body: Option<&str>) {
     let settings = VacationSettings {
         enabled: body.is_some(),
@@ -370,25 +265,7 @@ async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
     let f = setup().await;
     synced(&f).await;
     set_sieve(&f.service, true).await;
-    let Response::RuleSaved { rule } = f
-        .service
-        .handle(Request::SaveRule {
-            rule: Box::new(subject_rule("Invoices", "old invoice")),
-            position: None,
-        })
-        .await
-    else {
-        panic!("rule not saved")
-    };
-    eventually("the rule runs on the server", || async {
-        let status = sieve_status(&f.service).await;
-        status.state == SieveState::InSync
-            && status
-                .rules
-                .iter()
-                .any(|r| r.rule_id == rule.id && r.placement == RulePlacement::Server)
-    })
-    .await;
+    invoices_on_the_server(&f).await;
 
     // Uploads fail from now on; the uploaded script stays active.
     f.demo
@@ -419,7 +296,7 @@ async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
 
     // A new script name: the old script goes, the new one is active and
     // never includes the old one.
-    update_work(&f.service, |w| {
+    update_account(&f.service, MULTI_WORK_ID, |w| {
         w.sieve.as_mut().unwrap().script_name = Some("nail-renamed".into());
     })
     .await;
@@ -432,7 +309,7 @@ async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
     assert!(!script.contains("\"nail\""), "{script}");
 
     // Removing the node switches off under the recorded name.
-    update_work(&f.service, |w| w.sieve = None).await;
+    update_account(&f.service, MULTI_WORK_ID, |w| w.sieve = None).await;
     eventually("the renamed script is removed", || async {
         f.demo.sieve.script("nail-renamed").is_none()
     })
@@ -440,7 +317,7 @@ async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
     assert_eq!(f.demo.sieve.active(), None);
 
     // Deleting the account removes its script too.
-    update_work(&f.service, |w| {
+    update_account(&f.service, MULTI_WORK_ID, |w| {
         w.sieve = Some(nail_api::sieve::ManageSieveConfig {
             port: Some(f.demo.sieve.port()),
             host: Some("127.0.0.1".into()),
@@ -572,12 +449,9 @@ async fn marking_junk_trains_and_similar_mail_lands_in_junk() {
 async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
     let f = setup().await;
     synced(&f).await;
-    let inbox = folder(&f.service, FolderRole::Inbox).await.unwrap();
+    let inbox = work_inbox(&f).await;
     let message = messages(&f.service, &inbox.id).await.remove(0);
-    let now = nail_triage::Clock::unix(&*f.demo.clock);
-    let until = chrono::DateTime::from_timestamp(now + 3600, 0)
-        .unwrap()
-        .to_rfc3339();
+    let until = f.in_an_hour();
     let mut events = f.service.subscribe();
     assert!(matches!(
         f.service
@@ -597,7 +471,7 @@ async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
         "hidden at once"
     );
     assert!(
-        !folders(&f.service)
+        !folders(&f.service, MULTI_WORK_ID)
             .await
             .iter()
             .any(|f| f.path == "Snoozed"),
@@ -655,7 +529,7 @@ async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
     };
     assert!(snoozed.is_empty(), "{snoozed:?}");
     // A wake time in the past is refused with its text.
-    let past = chrono::DateTime::from_timestamp(now - 60, 0)
+    let past = chrono::DateTime::from_timestamp(nail_triage::Clock::unix(&*f.demo.clock) - 60, 0)
         .unwrap()
         .to_rfc3339();
     let Response::Error { localized, .. } = f
@@ -683,8 +557,8 @@ async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
 async fn snoozes_survive_a_restart_and_notify_per_folder() {
     let f = setup().await;
     synced(&f).await;
-    let inbox = folder(&f.service, FolderRole::Inbox).await.unwrap();
-    let lists = folders(&f.service)
+    let inbox = work_inbox(&f).await;
+    let lists = folders(&f.service, MULTI_WORK_ID)
         .await
         .into_iter()
         .find(|x| x.path == MULTI_HEADERS_ONLY_FOLDER)
@@ -695,10 +569,7 @@ async fn snoozes_survive_a_restart_and_notify_per_folder() {
     })
     .await;
     let b = messages(&f.service, &lists.id).await.remove(0);
-    let now = nail_triage::Clock::unix(&*f.demo.clock);
-    let until = chrono::DateTime::from_timestamp(now + 3600, 0)
-        .unwrap()
-        .to_rfc3339();
+    let until = f.in_an_hour();
     assert!(matches!(
         f.service
             .handle(Request::SnoozeMessages {
@@ -713,11 +584,7 @@ async fn snoozes_survive_a_restart_and_notify_per_folder() {
 
     // Nail is not running when the wake time passes.
     f.demo.clock.advance(7200);
-    let options = f.demo.service_options(ServiceOptions::new(
-        f.data_dir_guard.path(),
-        f.config_dir_guard.path(),
-    ));
-    let service = Service::open(options).unwrap();
+    let service = Service::open(f.options()).unwrap();
     let mut events = service.subscribe();
     eventually("both came back after the restart", || async {
         messages(&service, &inbox.id)
@@ -774,24 +641,12 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
         }),
     )
     .unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let open = |demo: &DemoMulti, data: &TempDir, config: &TempDir| {
-        Service::open(demo.service_options(ServiceOptions::new(data.path(), config.path())))
-            .unwrap()
-    };
-    let f = Fixture {
-        service: open(&demo, &data_dir, &config_dir),
-        demo,
-        config_dir_guard: config_dir,
-        data_dir_guard: data_dir,
-    };
+    let f = Multi::with(demo, |_, _| {});
     synced(&f).await;
     eventually(
         "the user's Snoozed folder is listed with its mail",
         || async {
-            match folders(&f.service)
+            match folders(&f.service, MULTI_WORK_ID)
                 .await
                 .into_iter()
                 .find(|x| x.path == "Snoozed")
@@ -806,12 +661,9 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
     )
     .await;
 
-    let inbox = folder(&f.service, FolderRole::Inbox).await.unwrap();
+    let inbox = work_inbox(&f).await;
     let message = messages(&f.service, &inbox.id).await.remove(0);
-    let now = nail_triage::Clock::unix(&*f.demo.clock);
-    let until = chrono::DateTime::from_timestamp(now + 3600, 0)
-        .unwrap()
-        .to_rfc3339();
+    let until = f.in_an_hour();
     assert!(matches!(
         f.service
             .handle(Request::SnoozeMessages {
@@ -822,7 +674,7 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
             .await,
         Response::Queued { .. }
     ));
-    let listed = folders(&f.service).await;
+    let listed = folders(&f.service, MULTI_WORK_ID).await;
     assert!(listed.iter().any(|x| x.path == "Snoozed"), "still visible");
     assert!(!listed.iter().any(|x| x.path == "Nail Snoozed"), "hidden");
     eventually(
@@ -880,7 +732,7 @@ async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
     .await;
     f.service.shutdown().await;
 
-    let service = open(&f.demo, &f.data_dir_guard, &f.config_dir_guard);
+    let service = Service::open(f.options()).unwrap();
     eventually("the stranded mail is back in the Inbox", || async {
         messages(&service, &inbox.id)
             .await
@@ -1061,7 +913,7 @@ async fn headers_only_mail_is_found_on_the_server_and_fetched_on_open() {
     let f = setup().await;
     synced(&f).await;
     eventually("the headers-only folder is synced", || async {
-        match folders(&f.service)
+        match folders(&f.service, MULTI_WORK_ID)
             .await
             .into_iter()
             .find(|f| f.path == MULTI_HEADERS_ONLY_FOLDER)
@@ -1071,7 +923,7 @@ async fn headers_only_mail_is_found_on_the_server_and_fetched_on_open() {
         }
     })
     .await;
-    let newsletters = folders(&f.service)
+    let newsletters = folders(&f.service, MULTI_WORK_ID)
         .await
         .into_iter()
         .find(|f| f.path == MULTI_HEADERS_ONLY_FOLDER)
@@ -1083,14 +935,7 @@ async fn headers_only_mail_is_found_on_the_server_and_fetched_on_open() {
     let Response::SearchResults { hits, server, .. } = f
         .service
         .handle(Request::Search {
-            query: SearchQuery {
-                text: "platypus".into(),
-                account_id: None,
-                folder_id: None,
-                offset: 0,
-                limit: 50,
-                sort: nail_api::search::SearchSort::default(),
-            },
+            query: SearchQuery::new("platypus", 50),
         })
         .await
     else {

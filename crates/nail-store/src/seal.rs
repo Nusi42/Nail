@@ -535,34 +535,8 @@ fn prefix_len() -> i64 {
 pub(crate) mod tests {
     use super::*;
 
-    /// A reversible test cipher: magic + context length + context + bytes
-    /// XOR 0x5A. Not encryption; enough to test the plumbing.
-    #[derive(Debug)]
-    pub(crate) struct XorCipher;
-
-    impl DataCipher for XorCipher {
-        fn seal(&self, context: &[u8], plain: &[u8]) -> std::result::Result<Vec<u8>, CipherError> {
-            let mut out = SEALED_MAGIC.to_vec();
-            out.push(u8::try_from(context.len()).unwrap());
-            out.extend_from_slice(context);
-            out.extend(plain.iter().map(|b| b ^ 0x5A));
-            Ok(out)
-        }
-
-        fn open(&self, context: &[u8], sealed: &[u8]) -> std::result::Result<Vec<u8>, CipherError> {
-            let rest = sealed
-                .strip_prefix(&SEALED_MAGIC)
-                .ok_or_else(|| CipherError::Failed("magic".into()))?;
-            let (&len, rest) = rest
-                .split_first()
-                .ok_or_else(|| CipherError::Failed("short".into()))?;
-            let (ctx, body) = rest.split_at(usize::from(len));
-            if ctx != context {
-                return Err(CipherError::Failed("context".into()));
-            }
-            Ok(body.iter().map(|b| b ^ 0x5A).collect())
-        }
-    }
+    /// The unit tests' cipher.
+    pub(crate) const XOR: crate::testing::XorCipher = crate::testing::XorCipher(0x5A);
 
     #[test]
     fn field_round_trip_and_context_binding() {
@@ -571,7 +545,7 @@ pub(crate) mod tests {
             slot.seal_field("messages.preview", "x"),
             Err(CipherError::Locked(_))
         ));
-        slot.set(Some(Arc::new(XorCipher)), SealMode::Seal);
+        slot.set(Some(Arc::new(XOR)), SealMode::Seal);
         let sealed = slot.seal_field("messages.preview", "Hello Sam").unwrap();
         assert!(is_sealed_field(&sealed));
         assert!(!sealed.contains("Hello"));

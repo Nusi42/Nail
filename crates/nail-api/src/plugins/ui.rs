@@ -51,6 +51,33 @@ pub const MAX_UI_ITEMS: usize = 500;
 /// it can carry scripts and remote references.
 pub const IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
 
+/// The fields of a text field ([`PluginUiNode::Input`],
+/// [`PluginUiNode::Textarea`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginTextField {
+    /// Value id (unique in the tree).
+    pub id: String,
+    /// The label.
+    pub label: String,
+    /// Initial value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default: Option<String>,
+    /// Placeholder text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub placeholder: Option<String>,
+    /// Whether a value is needed to submit with a primary button.
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub required: bool,
+    /// Longest value (characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_length: Option<u32>,
+}
+
 /// A node of a plug-in UI tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(
@@ -76,57 +103,23 @@ pub enum PluginUiNode {
     },
     /// A one-line text field.
     Input {
-        /// Value id (unique in the tree).
-        id: String,
-        /// The label.
-        label: String,
-        /// Initial value.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        default: Option<String>,
-        /// Placeholder text.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        placeholder: Option<String>,
-        /// Whether a value is needed to submit with a primary button.
-        #[serde(default)]
-        #[ts(optional, as = "Option<bool>")]
-        required: bool,
         /// The kind of text.
         #[serde(default)]
         #[ts(optional, as = "Option<PluginInputKind>")]
         kind: PluginInputKind,
-        /// Longest value (characters).
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        max_length: Option<u32>,
+        /// What every text field has (on the wire beside `kind`).
+        #[serde(flatten)]
+        field: PluginTextField,
     },
     /// A multi-line text field.
     Textarea {
-        /// Value id.
-        id: String,
-        /// The label.
-        label: String,
-        /// Initial value.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        default: Option<String>,
-        /// Placeholder text.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        placeholder: Option<String>,
-        /// Whether a value is needed.
-        #[serde(default)]
-        #[ts(optional, as = "Option<bool>")]
-        required: bool,
         /// Visible rows.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         rows: Option<u32>,
-        /// Longest value (characters).
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        max_length: Option<u32>,
+        /// What every text field has (on the wire beside `rows`).
+        #[serde(flatten)]
+        field: PluginTextField,
     },
     /// A choice from a list.
     Select {
@@ -421,9 +414,8 @@ impl PluginUiNode {
     /// The node's value id, if it reports a value or sends actions.
     pub fn id(&self) -> Option<&str> {
         match self {
-            Self::Input { id, .. }
-            | Self::Textarea { id, .. }
-            | Self::Select { id, .. }
+            Self::Input { field, .. } | Self::Textarea { field, .. } => Some(&field.id),
+            Self::Select { id, .. }
             | Self::Checkbox { id, .. }
             | Self::Date { id, .. }
             | Self::ContactPicker { id, .. }
@@ -662,24 +654,13 @@ impl Validator {
             PluginUiNode::Text { value, .. } | PluginUiNode::Markdown { value } => {
                 self.text(path, &[value]);
             }
-            PluginUiNode::Input {
-                label,
-                default,
-                placeholder,
-                ..
-            }
-            | PluginUiNode::Textarea {
-                label,
-                default,
-                placeholder,
-                ..
-            } => {
+            PluginUiNode::Input { field, .. } | PluginUiNode::Textarea { field, .. } => {
                 self.text(
                     path,
                     &[
-                        label,
-                        default.as_deref().unwrap_or_default(),
-                        placeholder.as_deref().unwrap_or_default(),
+                        &field.label,
+                        field.default.as_deref().unwrap_or_default(),
+                        field.placeholder.as_deref().unwrap_or_default(),
                     ],
                 );
             }
@@ -837,13 +818,15 @@ mod tests {
     #[test]
     fn json_shape_is_stable() {
         let node = PluginUiNode::Input {
-            id: "title".into(),
-            label: "Title".into(),
-            default: None,
-            placeholder: Some("…".into()),
-            required: true,
             kind: PluginInputKind::Email,
-            max_length: Some(80),
+            field: PluginTextField {
+                id: "title".into(),
+                label: "Title".into(),
+                default: None,
+                placeholder: Some("…".into()),
+                required: true,
+                max_length: Some(80),
+            },
         };
         assert_eq!(
             serde_json::to_value(&node).unwrap(),
@@ -851,6 +834,16 @@ mod tests {
                 "type": "input", "id": "title", "label": "Title",
                 "placeholder": "…", "required": true, "kind": "email", "maxLength": 80
             })
+        );
+        assert_eq!(
+            serde_json::from_value::<PluginUiNode>(serde_json::to_value(&node).unwrap()).unwrap(),
+            node
+        );
+        let area = parse(json!({"type": "textarea", "id": "notes", "label": "Notes", "rows": 3}));
+        assert_eq!(area.id(), Some("notes"));
+        assert_eq!(
+            serde_json::to_value(&area).unwrap(),
+            json!({"type": "textarea", "id": "notes", "label": "Notes", "rows": 3, "required": false})
         );
         let list = parse(json!({
             "type": "message-list", "id": "hits", "messageIds": ["m1"], "selectable": true

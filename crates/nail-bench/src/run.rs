@@ -221,14 +221,7 @@ async fn thread_page(
 async fn search(service: &Service, text: &str) -> Result<u32, BenchError> {
     match service
         .handle(Request::Search {
-            query: SearchQuery {
-                text: text.to_owned(),
-                account_id: None,
-                folder_id: None,
-                offset: 0,
-                limit: 50,
-                sort: nail_api::search::SearchSort::default(),
-            },
+            query: SearchQuery::new(text, 50),
         })
         .await
     {

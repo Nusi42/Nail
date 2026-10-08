@@ -330,11 +330,7 @@ pub struct ReminderEntry {
 impl ReminderEntry {
     /// When the scheduler acts on it (`None`: fired or dismissed).
     pub fn due_at(&self) -> Option<i64> {
-        match self.state {
-            ReminderState::Pending => Some(self.fire_at),
-            ReminderState::Snoozed => Some(self.snoozed_until.unwrap_or(self.fire_at)),
-            ReminderState::Fired | ReminderState::Dismissed => None,
-        }
+        self.state.due_at(self.fire_at, self.snoozed_until)
     }
 }
 
@@ -586,11 +582,7 @@ impl<S: ReminderStore, C: Clock> ReminderScheduler<S, C> {
         if until - now > MAX_REMINDER_SNOOZE_SECS {
             return Err(ReminderError::TooFar);
         }
-        let known: Vec<ReminderId> = ids
-            .iter()
-            .filter(|id| self.entries.contains_key(*id))
-            .cloned()
-            .collect();
+        let known = crate::known_keys(&self.entries, ids);
         if known.is_empty() {
             return Ok(Vec::new());
         }
@@ -618,11 +610,7 @@ impl<S: ReminderStore, C: Clock> ReminderScheduler<S, C> {
     /// Dismisses reminders. Unknown ids are ignored.
     pub fn dismiss(&mut self, ids: &[ReminderId]) -> Result<Vec<ReminderOp>, S::Error> {
         let now = self.clock.unix();
-        let known: Vec<ReminderId> = ids
-            .iter()
-            .filter(|id| self.entries.contains_key(*id))
-            .cloned()
-            .collect();
+        let known = crate::known_keys(&self.entries, ids);
         if known.is_empty() {
             return Ok(Vec::new());
         }
@@ -1287,9 +1275,10 @@ mod tests {
         assert_eq!(s.store().0.all()[0].state, ReminderState::Fired);
     }
 
-    #[test]
-    fn notifications() {
-        let reminder = Reminder {
+    /// A fired reminder of task `t` ("Pay the bill" at the bank, due
+    /// 2026-10-05 10:00 UTC).
+    fn bill() -> Reminder {
+        Reminder {
             id: "r1".into(),
             target: nail_api::pim::ReminderTarget::Task {
                 task_id: "t".into(),
@@ -1303,7 +1292,12 @@ mod tests {
             fire_at: "2026-10-05T09:00:00Z".into(),
             state: ReminderState::Fired,
             snoozed_until: None,
-        };
+        }
+    }
+
+    #[test]
+    fn notifications() {
+        let reminder = bill();
         let when = when_text(at("2026-10-05T10:00:00Z"), false, &berlin());
         assert_eq!(when, "2026-10-05 12:00");
         assert_eq!(
@@ -1370,19 +1364,9 @@ mod tests {
     #[test]
     fn summary_notification() {
         let reminder = Reminder {
-            id: "r1".into(),
-            target: nail_api::pim::ReminderTarget::Task {
-                task_id: "t".into(),
-            },
-            calendar_id: "c".into(),
-            title: "Pay the bill".into(),
             location: None,
-            description: None,
             starts_at: None,
-            all_day: false,
-            fire_at: "2026-10-05T09:00:00Z".into(),
-            state: ReminderState::Fired,
-            snoozed_until: None,
+            ..bill()
         };
         let n = reminders_summary_notification(&reminder, 7, false);
         assert_eq!(n.id, "reminders:r1");

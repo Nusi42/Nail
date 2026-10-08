@@ -39,6 +39,8 @@ zeroize.workspace = true
 subtle = "2.6.1"
 
 [dev-dependencies]
+# Sample contract values and test instants (`nail_api::testing`).
+nail-api = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 tower.workspace = true
 # Software authenticator for the passkey tests (BSD-3-Clause; already in

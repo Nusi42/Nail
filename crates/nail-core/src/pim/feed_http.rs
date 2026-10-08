@@ -18,15 +18,16 @@
 //! 5. no cookies, no `Referer`, no system proxy; the whole fetch is bounded
 //!    by [`FEED_TIMEOUT`].
 
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use nail_api::{ApiError, ErrorCode};
 use nail_proxy::{Resolver, is_public_ip};
-use url::{Host, Url};
+use url::Url;
 
-use crate::plugin_http::{RefuseResolver, canonical};
+use crate::pinned_http::{
+    check_peer, hop_host, is_loopback_host, network, redirect_target, refused, resolve_public,
+};
 
 /// Redirects followed per fetch (the same limit as every HTTP client).
 pub(crate) use nail_net::http::MAX_REDIRECTS;
@@ -66,30 +67,9 @@ pub(crate) enum FeedResponse {
     },
 }
 
-fn network(message: impl Into<String>) -> ApiError {
-    ApiError::new(ErrorCode::Network, message)
-}
-
-fn refused(message: impl Into<String>) -> ApiError {
-    ApiError::new(ErrorCode::Forbidden, message)
-}
-
-fn is_loopback_host(host: &Host<&str>) -> bool {
-    match host {
-        Host::Domain(name) => name.eq_ignore_ascii_case("localhost"),
-        Host::Ipv4(ip) => ip.is_loopback(),
-        Host::Ipv6(ip) => ip.is_loopback(),
-    }
-}
-
 /// The URL rules of one hop.
 pub(crate) fn check_hop(url: &Url, allow_loopback: bool) -> Result<(), ApiError> {
-    let Some(host) = url.host() else {
-        return Err(refused(format!("{url} has no host")));
-    };
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(refused("feed URLs with credentials are refused"));
-    }
+    let host = hop_host(url, "feed URLs")?;
     let loopback = is_loopback_host(&host);
     if loopback && !allow_loopback {
         return Err(refused(format!(
@@ -145,14 +125,7 @@ async fn fetch_inner(
                 return Err(network("the feed redirects too often"));
             }
             redirects += 1;
-            let location = location
-                .to_str()
-                .map_err(|_| network("the feed sent an invalid redirect"))?;
-            let mut next = url
-                .join(location)
-                .map_err(|_| network("the feed sent an invalid redirect"))?;
-            next.set_fragment(None);
-            url = next;
+            url = redirect_target(&url, location, "the feed sent an invalid redirect")?;
             continue;
         }
         return read(response, request.max_bytes).await;
@@ -170,46 +143,28 @@ async fn hop(
     let port = url
         .port_or_known_default()
         .ok_or_else(|| refused(format!("{url} has no port")))?;
-    let mut builder = reqwest::Client::builder()
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .referer(false)
-        .pool_max_idle_per_host(0)
-        .user_agent(concat!("Nail/", env!("CARGO_PKG_VERSION")))
-        .timeout(FEED_TIMEOUT)
-        .dns_resolver(Arc::new(RefuseResolver))
-        .tls_backend_preconfigured(tls.clone());
-    let allowed: Vec<IpAddr> = match url.host() {
-        Some(Host::Domain(name)) => {
-            let addrs: Vec<IpAddr> = if name.eq_ignore_ascii_case("localhost") {
+    let builder = nail_proxy::pinned_builder(
+        tls,
+        concat!("Nail/", env!("CARGO_PKG_VERSION")),
+        FEED_TIMEOUT,
+    );
+    let (builder, allowed) = nail_proxy::pin_host(
+        builder,
+        url,
+        port,
+        async |name: &str| {
+            if name.eq_ignore_ascii_case("localhost") {
                 // Allowed only under the test exception (checked above).
-                vec![IpAddr::from([127, 0, 0, 1])]
+                Ok(vec![IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)])
             } else {
-                let addrs = resolver
-                    .lookup(name)
-                    .await
-                    .map_err(|e| network(format!("cannot resolve {name}: {e}")))?;
-                if addrs.is_empty() {
-                    return Err(network(format!("cannot resolve {name}")));
-                }
-                if let Some(bad) = addrs.iter().find(|ip| !is_public_ip(**ip)) {
-                    return Err(refused(format!(
-                        "{name} resolves to the private or local address {bad}"
-                    )));
-                }
-                addrs
-            };
-            let pinned: Vec<SocketAddr> =
-                addrs.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
-            builder = builder.resolve_to_addrs(name, &pinned);
-            addrs
-        }
-        Some(Host::Ipv4(ip)) => vec![IpAddr::V4(ip)],
-        Some(Host::Ipv6(ip)) => vec![IpAddr::V6(ip)],
-        None => return Err(refused(format!("{url} has no host"))),
-    };
+                resolve_public(resolver, name).await
+            }
+        },
+        || refused(format!("{url} has no host")),
+    )
+    .await?;
     for ip in &allowed {
-        let local_ok = request.allow_loopback && canonical(*ip).is_loopback();
+        let local_ok = request.allow_loopback && nail_proxy::canonical(*ip).is_loopback();
         if !is_public_ip(*ip) && !local_ok {
             return Err(refused(format!("{ip} is a private or local address")));
         }
@@ -235,12 +190,7 @@ async fn hop(
             network(format!("cannot fetch the feed: {e}"))
         }
     })?;
-    if let Some(peer) = response.remote_addr() {
-        let ip = canonical(peer.ip());
-        if !allowed.iter().any(|a| canonical(*a) == ip) {
-            return Err(refused(format!("connected to an unchecked address {ip}")));
-        }
-    }
+    check_peer(&response, &allowed)?;
     Ok(response)
 }
 
@@ -263,13 +213,6 @@ async fn read(mut response: reqwest::Response, max: usize) -> Result<FeedRespons
         };
         return Err(ApiError::new(code, format!("the feed answered {status}")));
     }
-    let too_large = || ApiError::new(ErrorCode::TooLarge, "the feed is too large");
-    if response
-        .content_length()
-        .is_some_and(|len| len > u64::try_from(max).unwrap_or(u64::MAX))
-    {
-        return Err(too_large());
-    }
     let header = |name: reqwest::header::HeaderName| {
         response
             .headers()
@@ -279,17 +222,14 @@ async fn read(mut response: reqwest::Response, max: usize) -> Result<FeedRespons
     };
     let etag = header(reqwest::header::ETAG);
     let last_modified = header(reqwest::header::LAST_MODIFIED);
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    let bytes = nail_proxy::read_limited(&mut response, u64::try_from(max).unwrap_or(u64::MAX))
         .await
-        .map_err(|e| network(format!("cannot read the feed: {e}")))?
-    {
-        if bytes.len().saturating_add(chunk.len()) > max {
-            return Err(too_large());
-        }
-        bytes.extend_from_slice(&chunk);
-    }
+        .map_err(|e| match e {
+            nail_proxy::BodyError::TooLarge => {
+                ApiError::new(ErrorCode::TooLarge, "the feed is too large")
+            }
+            nail_proxy::BodyError::Network(e) => network(format!("cannot read the feed: {e}")),
+        })?;
     Ok(FeedResponse::Fetched {
         bytes,
         etag,

@@ -250,10 +250,8 @@ async fn row_location(
     service
         .store()
         .call(move |s| {
-            let m = match s.get_message(&id) {
-                Ok(m) => m,
-                Err(err) if err.is_not_found() => return Ok(None),
-                Err(err) => return Err(err),
+            let Some(m) = s.find_message(&id)? else {
+                return Ok(None);
             };
             let folder = s.get_folder(&m.summary.folder_id)?;
             let uid_validity = match m.uid {
@@ -375,6 +373,91 @@ async fn not_on_server(
     Ok(None)
 }
 
+/// The results of a group so far: one slot per operation.
+pub(crate) type GroupSlots = Vec<Option<Result<(), EngineError>>>;
+
+/// Empty slots for a group of `n` operations.
+pub(crate) fn group_slots(n: usize) -> GroupSlots {
+    vec![None; n]
+}
+
+/// A group's results: an operation without one had nothing to do.
+pub(crate) fn group_results(slots: GroupSlots) -> Vec<Result<(), EngineError>> {
+    slots.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+}
+
+/// How an API engine (Gmail, Exchange) replays one operation of a group
+/// (P3).
+pub(crate) enum Grouped<W> {
+    /// Its write goes with the others.
+    Write(W),
+    /// Nothing to do (the message never reached the server).
+    Nothing,
+    /// On its own (e.g. a move into another account).
+    Alone,
+}
+
+/// Sorts a group in order: operations with nothing to do are done, the
+/// ones that go alone run now (`run`), errors are recorded; returns the
+/// writes to send together with their operations' indexes.
+pub(crate) async fn sort_group<'a, W, G, R>(
+    ops: &'a [QueuedOp],
+    slots: &mut GroupSlots,
+    group: impl Fn(&'a QueuedOp) -> G,
+    run: impl Fn(&'a QueuedOp) -> R,
+) -> Vec<(usize, W)>
+where
+    G: Future<Output = Result<Grouped<W>, EngineError>>,
+    R: Future<Output = Result<(), EngineError>>,
+{
+    let mut writes = Vec::new();
+    for (index, op) in ops.iter().enumerate() {
+        match group(op).await {
+            Ok(Grouped::Write(write)) => writes.push((index, write)),
+            Ok(Grouped::Nothing) => slots[index] = Some(Ok(())),
+            Ok(Grouped::Alone) => slots[index] = Some(run(op).await),
+            Err(err) => slots[index] = Some(Err(err)),
+        }
+    }
+    writes
+}
+
+/// The remote id an operation recorded for its message, else what
+/// `fallback` finds (the row's).
+pub(crate) async fn recorded_or(
+    source: Option<&MessageSource>,
+    fallback: impl Future<Output = Result<Option<String>, EngineError>>,
+) -> Result<Option<String>, EngineError> {
+    match source.and_then(|s| s.remote_id.clone()) {
+        Some(remote) => Ok(Some(remote)),
+        None => fallback.await,
+    }
+}
+
+/// The raw bytes and flags of a stored message for an API engine's
+/// append; `None` when the row or its blob is gone.
+pub(crate) async fn stored_raw(
+    service: &Service,
+    message: &MessageId,
+) -> Result<Option<(Vec<u8>, nail_api::Flags)>, EngineError> {
+    let id = message.clone();
+    let blobs = service.blobs().clone();
+    service
+        .store()
+        .call(move |s| {
+            let Some(m) = s.find_message(&id)? else {
+                return Ok(None);
+            };
+            let raw = match m.blob_hash {
+                Some(hash) => blobs.get(&hash).ok(),
+                None => None,
+            };
+            Ok(raw.map(|raw| (raw, m.summary.flags)))
+        })
+        .await
+        .map_err(store_error)
+}
+
 /// The raw bytes and flags of a local message, for `APPEND`; `None` when
 /// the row is gone.
 async fn raw_message(
@@ -386,10 +469,8 @@ async fn raw_message(
     let found = service
         .store()
         .call(move |s| {
-            let m = match s.get_message(&id) {
-                Ok(m) => m,
-                Err(err) if err.is_not_found() => return Ok(None),
-                Err(err) => return Err(err),
+            let Some(m) = s.find_message(&id)? else {
+                return Ok(None);
             };
             let raw = match &m.blob_hash {
                 Some(hash) if blobs.contains(hash) => blobs.get(hash)?,
@@ -598,6 +679,28 @@ impl ImapExecutor<'_> {
         }
     }
 
+    /// Creates the hidden Snoozed folder (M2c) on the server when `target`
+    /// is it: the first move into it creates it.
+    async fn ensure_snoozed_folder(&self, target: &Folder) -> Result<(), EngineError> {
+        let snoozed = {
+            let target = target.clone();
+            self.service
+                .store()
+                .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &target)))
+                .await
+                .unwrap_or(false)
+        };
+        if !snoozed {
+            return Ok(());
+        }
+        match self.client.lock().await.create_folder(&target.path).await {
+            Ok(()) => tracing::info!(folder = %target.path, "created the Snoozed folder"),
+            Err(err) if err.code() == ErrorCode::Conflict => {}
+            Err(err) => return Err(err.into()),
+        }
+        Ok(())
+    }
+
     async fn update_flags(
         &self,
         op: &QueuedOp,
@@ -614,18 +717,10 @@ impl ImapExecutor<'_> {
         let Some((uid, _)) = self.resolve(op, &folder, &source).await? else {
             return Ok(());
         };
-        let api_change = nail_api::FlagChange {
-            seen: change.seen,
-            flagged: change.flagged,
-            answered: change.answered,
-            draft: change.draft,
-            add_tags: change.add_tags.clone(),
-            remove_tags: change.remove_tags.clone(),
-        };
         self.client
             .lock()
             .await
-            .apply_flag_change(&folder.path, &[uid], &api_change)
+            .apply_flag_change(&folder.path, &[uid], change)
             .await?;
         Ok(())
     }
@@ -644,24 +739,7 @@ impl ImapExecutor<'_> {
         };
         let target = folder(self.service, target_id).await?;
         if target.account_id == from.account_id {
-            let snoozed = {
-                let target = target.clone();
-                self.service
-                    .store()
-                    .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &target)))
-                    .await
-                    .unwrap_or(false)
-            };
-            if snoozed {
-                // The hidden Snoozed folder (M2c) is created by the first
-                // move into it.
-                let created = self.client.lock().await.create_folder(&target.path).await;
-                match created {
-                    Ok(()) => tracing::info!(folder = %target.path, "created the Snoozed folder"),
-                    Err(err) if err.code() == ErrorCode::Conflict => {}
-                    Err(err) => return Err(err.into()),
-                }
-            }
+            self.ensure_snoozed_folder(&target).await?;
             let result = self
                 .client
                 .lock()
@@ -789,7 +867,7 @@ impl ImapExecutor<'_> {
         ops: &[QueuedOp],
         change: &nail_store::FlagChange,
     ) -> Vec<Result<(), EngineError>> {
-        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut out = group_slots(ops.len());
         let mut by_folder: Vec<(Folder, Vec<(usize, u32)>)> = Vec::new();
         for (index, op) in ops.iter().enumerate() {
             let located = match server_location(self.service, op).await {
@@ -811,21 +889,13 @@ impl ImapExecutor<'_> {
                 Err(err) => out[index] = Some(Err(err)),
             }
         }
-        let api_change = nail_api::FlagChange {
-            seen: change.seen,
-            flagged: change.flagged,
-            answered: change.answered,
-            draft: change.draft,
-            add_tags: change.add_tags.clone(),
-            remove_tags: change.remove_tags.clone(),
-        };
         for (folder, members) in by_folder {
             let uids: Vec<u32> = members.iter().map(|(_, uid)| *uid).collect();
             let result = self
                 .client
                 .lock()
                 .await
-                .apply_flag_change(&folder.path, &uids, &api_change)
+                .apply_flag_change(&folder.path, &uids, change)
                 .await
                 .map(drop)
                 .map_err(EngineError::from);
@@ -833,7 +903,7 @@ impl ImapExecutor<'_> {
                 out[index] = Some(result.clone());
             }
         }
-        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+        group_results(out)
     }
 
     /// Moves of a group within the account (deletes to Trash too): one
@@ -858,26 +928,10 @@ impl ImapExecutor<'_> {
             // Into another account: copy by copy.
             return one_by_one(self, ops).await;
         }
-        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut out = group_slots(ops.len());
         let found = self.resolve_all(ops, &from, &mut out).await;
         if !found.is_empty() {
-            let snoozed = {
-                let target = target.clone();
-                self.service
-                    .store()
-                    .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &target)))
-                    .await
-                    .unwrap_or(false)
-            };
-            let mut result: Result<(), EngineError> = Ok(());
-            if snoozed {
-                let created = self.client.lock().await.create_folder(&target.path).await;
-                match created {
-                    Ok(()) => tracing::info!(folder = %target.path, "created the Snoozed folder"),
-                    Err(err) if err.code() == ErrorCode::Conflict => {}
-                    Err(err) => result = Err(err.into()),
-                }
-            }
+            let mut result = self.ensure_snoozed_folder(&target).await;
             if result.is_ok() {
                 let uids: Vec<u32> = found.iter().map(|(_, uid, _)| *uid).collect();
                 let moved = self
@@ -912,7 +966,7 @@ impl ImapExecutor<'_> {
                 out[*index] = Some(result.clone());
             }
         }
-        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+        group_results(out)
     }
 
     /// Permanent deletes of a group: one `\Deleted` + expunge of the set.
@@ -925,7 +979,7 @@ impl ImapExecutor<'_> {
             Ok(from) => from,
             Err(err) => return vec![Err(err); ops.len()],
         };
-        let mut out: Vec<Option<Result<(), EngineError>>> = vec![None; ops.len()];
+        let mut out = group_slots(ops.len());
         let found = self.resolve_all(ops, &from, &mut out).await;
         if !found.is_empty() {
             let uids: Vec<u32> = found.iter().map(|(_, uid, _)| *uid).collect();
@@ -941,7 +995,7 @@ impl ImapExecutor<'_> {
                 out[*index] = Some(result.clone());
             }
         }
-        out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+        group_results(out)
     }
 }
 

@@ -19,19 +19,17 @@
 //! * new nodes are appended after their predecessor in the desired order,
 //!   using the file's indentation and line endings.
 
-use std::collections::HashMap;
-use std::fmt::Write as _;
-
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 use nail_api::accounts::{
     AccountConfig, AccountsConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMatch, FolderPolicy,
-    IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, QuotePosting,
+    IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, QuotePosting, SaslMechanism,
     ServerEndpoint, SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
 use nail_api::pim::{PimSourceConfig, PimSourceSettings};
 use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 
-use super::read::{mechanism_name, role_name};
+pub(crate) use crate::kdl_write::detect_indent;
+use crate::kdl_write::{Line, same_node, split_leading, uses_crlf};
 
 /// Renders a complete file in the canonical layout.
 pub(crate) fn render(config: &AccountsConfig, indent: &str) -> String {
@@ -54,113 +52,6 @@ pub(crate) fn render(config: &AccountsConfig, indent: &str) -> String {
     blocks.join("\n")
 }
 
-/// Quotes a string as a KDL v2 quoted string.
-pub(crate) fn quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c.is_control()
-                || matches!(
-                    c,
-                    '\u{200E}'
-                        | '\u{200F}'
-                        | '\u{202A}'..='\u{202E}'
-                        | '\u{2066}'..='\u{2069}'
-                        | '\u{FEFF}'
-                ) =>
-            {
-                let _ = write!(out, "\\u{{{:x}}}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// Accumulates one node line: `name arg… key=value…`.
-struct Line(String);
-
-impl Line {
-    fn new(name: &str) -> Self {
-        Self(name.to_owned())
-    }
-
-    fn arg(mut self, value: &str) -> Self {
-        self.0.push(' ');
-        self.0.push_str(&quote(value));
-        self
-    }
-
-    fn raw_arg(mut self, value: &str) -> Self {
-        self.0.push(' ');
-        self.0.push_str(value);
-        self
-    }
-
-    fn prop(mut self, key: &str, value: &str) -> Self {
-        let _ = write!(self.0, " {key}={}", quote(value));
-        self
-    }
-
-    fn prop_opt(self, key: &str, value: Option<&str>) -> Self {
-        match value {
-            Some(v) => self.prop(key, v),
-            None => self,
-        }
-    }
-
-    fn num(mut self, key: &str, value: impl std::fmt::Display) -> Self {
-        let _ = write!(self.0, " {key}={value}");
-        self
-    }
-
-    fn num_opt(self, key: &str, value: Option<u32>) -> Self {
-        match value {
-            Some(v) => self.num(key, v),
-            None => self,
-        }
-    }
-
-    fn bool_opt(mut self, key: &str, value: Option<bool>) -> Self {
-        if let Some(b) = value {
-            let _ = write!(self.0, " {key}=#{b}");
-        }
-        self
-    }
-
-    /// Finishes the node at `depth` with the given (already indented)
-    /// children lines, or as a leaf when there are none.
-    fn finish(self, depth: usize, indent: &str, children: &[String]) -> String {
-        let pad = indent.repeat(depth);
-        if children.is_empty() {
-            format!("{pad}{}\n", self.0)
-        } else {
-            let mut out = format!("{pad}{} {{\n", self.0);
-            for child in children {
-                out.push_str(child);
-            }
-            out.push_str(&pad);
-            out.push_str("}\n");
-            out
-        }
-    }
-}
-
-fn tls_name(tls: TlsMode) -> &'static str {
-    match tls {
-        TlsMode::Implicit => "implicit",
-        TlsMode::Starttls => "starttls",
-        TlsMode::Plaintext => "plaintext",
-    }
-}
-
 fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
     let line = match auth {
         AuthConfig::Password {
@@ -171,7 +62,7 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
             .arg("password")
             .prop("username", username)
             .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str))
-            .prop_opt("mechanism", mechanism.map(mechanism_name)),
+            .prop_opt("mechanism", mechanism.map(SaslMechanism::as_str)),
         AuthConfig::OAuth2 {
             username,
             provider,
@@ -182,7 +73,7 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
             .prop("provider", provider)
             .prop("username", username)
             .prop_opt("secret", secret.as_ref().map(nail_api::SecretRef::as_str))
-            .prop_opt("mechanism", mechanism.map(mechanism_name)),
+            .prop_opt("mechanism", mechanism.map(SaslMechanism::as_str)),
         AuthConfig::ClientCertificate { username, secret } => Line::new("auth")
             .arg("client-certificate")
             .prop_opt("username", username.as_deref())
@@ -207,8 +98,8 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
 fn endpoint_line(name: &str, server: &ServerEndpoint) -> Line {
     Line::new(name)
         .prop("host", &server.host)
-        .num("port", server.port)
-        .prop("tls", tls_name(server.tls))
+        .raw_prop("port", server.port)
+        .prop("tls", server.tls.as_str())
 }
 
 fn render_account(account: &AccountConfig, indent: &str) -> String {
@@ -242,8 +133,8 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
             let line = Line::new("exchange")
                 .prop("engine", options.engine.as_str())
                 .prop("host", &server.host)
-                .num("port", server.port)
-                .prop("tls", tls_name(server.tls))
+                .raw_prop("port", server.port)
+                .prop("tls", server.tls.as_str())
                 .prop_opt("url", options.url.as_deref())
                 .num_opt("poll-interval", options.poll_interval_secs)
                 .num_opt("max-poll-interval", options.max_poll_interval_secs)
@@ -323,7 +214,7 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
             .bool_opt("enabled", sieve.enabled)
             .prop_opt("host", sieve.host.as_deref())
             .num_opt("port", sieve.port.map(u32::from))
-            .prop_opt("tls", sieve.tls.map(tls_name))
+            .prop_opt("tls", sieve.tls.map(TlsMode::as_str))
             .prop_opt("script", sieve.script_name.as_deref());
         children.push(line.finish(1, indent, &[]));
     }
@@ -382,7 +273,7 @@ fn body_props(line: Line, bodies: Option<BodyPolicy>) -> Line {
         None => line,
         Some(BodyPolicy::Full) => line.prop("bodies", "full"),
         Some(BodyPolicy::HeadersOnly) => line.prop("bodies", "headers-only"),
-        Some(BodyPolicy::Recent { days }) => line.prop("bodies", "recent").num("days", days),
+        Some(BodyPolicy::Recent { days }) => line.prop("bodies", "recent").raw_prop("days", days),
     }
 }
 
@@ -393,7 +284,7 @@ fn render_sync(sync: &SyncPolicy, indent: &str) -> String {
         .map(|rule: &FolderPolicy| {
             let line = match &rule.folder {
                 FolderMatch::Path(path) => Line::new("folder").prop("path", path),
-                FolderMatch::Role(role) => Line::new("folder").prop("role", role_name(*role)),
+                FolderMatch::Role(role) => Line::new("folder").prop("role", role.as_str()),
             };
             body_props(line, rule.bodies)
                 .bool_opt("enabled", rule.enabled)
@@ -522,31 +413,12 @@ fn render_pim_source(source: &PimSourceConfig, indent: &str) -> String {
 /// Renders a single undo-send node (used when the file gains one).
 pub(crate) fn render_undo(secs: u32) -> String {
     Line::new("undo-send-delay")
-        .raw_arg(&secs.to_string())
+        .raw_arg(secs)
         .finish(0, "", &[])
 }
 
 // ---------------------------------------------------------------------------
 // Reconciling
-
-/// The indentation unit of a file: the leading whitespace of its first
-/// indented line, else four spaces.
-pub(crate) fn detect_indent(text: &str) -> String {
-    for line in text.lines() {
-        let ws: String = line
-            .chars()
-            .take_while(|c| *c == ' ' || *c == '\t')
-            .collect();
-        if !ws.is_empty() && line.len() > ws.len() && !line[ws.len()..].starts_with("//") {
-            return ws;
-        }
-    }
-    "    ".to_owned()
-}
-
-pub(crate) fn uses_crlf(text: &str) -> bool {
-    text.contains("\r\n")
-}
 
 /// Which top-level node a key names, for the semantic equality check.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -622,33 +494,6 @@ fn child_key(node: &KdlNode) -> String {
     key
 }
 
-/// Structural equality ignoring formatting: name, type, arguments in order,
-/// properties as a map (last one wins, as in KDL), children in order.
-fn node_eq(a: &KdlNode, b: &KdlNode) -> bool {
-    fn props(n: &KdlNode) -> HashMap<&str, &KdlValue> {
-        n.entries()
-            .iter()
-            .filter_map(|e| e.name().map(|k| (k.value(), e.value())))
-            .collect()
-    }
-    fn args(n: &KdlNode) -> Vec<&KdlValue> {
-        n.entries()
-            .iter()
-            .filter(|e| e.name().is_none())
-            .map(KdlEntry::value)
-            .collect()
-    }
-    fn kids(n: &KdlNode) -> &[KdlNode] {
-        n.children().map_or(&[], KdlDocument::nodes)
-    }
-    a.name().value() == b.name().value()
-        && a.ty().map(kdl::KdlIdentifier::value) == b.ty().map(kdl::KdlIdentifier::value)
-        && args(a) == args(b)
-        && props(a) == props(b)
-        && kids(a).len() == kids(b).len()
-        && kids(a).iter().zip(kids(b)).all(|(x, y)| node_eq(x, y))
-}
-
 /// Moves the line break that follows `{` from the first child's leading
 /// whitespace into the children document's own leading format, so that
 /// every child's leading is just "(blank lines / comments) + indentation".
@@ -677,27 +522,6 @@ fn hoist(doc: &mut KdlDocument, top_level: bool) {
             hoist(children, false);
         }
     }
-}
-
-/// Splits a removed node's leading text into the part that stays in the
-/// file (everything up to the last blank line) and the part that goes with
-/// the node (the comment block directly above it).
-pub(crate) fn split_leading(leading: &str) -> (&str, &str) {
-    let bytes = leading.as_bytes();
-    let mut keep_until = 0;
-    let mut line_start = 0;
-    for (i, &b) in bytes.iter().enumerate() {
-        if b == b'\n' {
-            let line = &leading[line_start..i];
-            if line.trim().is_empty() && i > 0 && line_start > 0 {
-                // A whitespace-only line that is preceded by another line
-                // break: a blank line. Keep everything up to it.
-                keep_until = i + 1;
-            }
-            line_start = i + 1;
-        }
-    }
-    leading.split_at(keep_until)
 }
 
 struct Ctx<'a> {
@@ -891,7 +715,7 @@ fn reconcile_entries(old: &mut KdlNode, new: &KdlNode, ctx: &Ctx<'_>) {
 }
 
 fn reconcile_node(old: &mut KdlNode, new: &KdlNode, ctx: &Ctx<'_>) {
-    if node_eq(old, new) {
+    if same_node(old, new) {
         return;
     }
     let account_ctx;
@@ -1134,53 +958,6 @@ pub(crate) fn update_text(old_text: &str, old: &AccountsConfig, new: &AccountsCo
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn quoting_escapes_what_kdl_needs() {
-        assert_eq!(quote("plain"), "\"plain\"");
-        assert_eq!(quote("a \"b\" \\ c"), "\"a \\\"b\\\" \\\\ c\"");
-        assert_eq!(quote("line\nnext\ttab"), "\"line\\nnext\\ttab\"");
-        assert_eq!(quote("\u{feff}x\u{7}"), "\"\\u{feff}x\\u{7}\"");
-        for s in ["a\"b", "x\\y", "l1\nl2", "\u{202e}rtl", "tab\t", "é😀"] {
-            let doc = KdlDocument::parse_v2(&format!("n {}", quote(s))).unwrap();
-            assert_eq!(doc.nodes()[0].entries()[0].value().as_string(), Some(s));
-        }
-    }
-
-    #[test]
-    fn leading_split_keeps_paragraphs_above_a_blank_line() {
-        assert_eq!(split_leading(""), ("", ""));
-        assert_eq!(split_leading("    "), ("", "    "));
-        assert_eq!(
-            split_leading("// header\n\n// about x\n"),
-            ("// header\n\n", "// about x\n")
-        );
-        assert_eq!(
-            split_leading("    // about x\n    "),
-            ("", "    // about x\n    ")
-        );
-        assert_eq!(
-            split_leading("\n    // a\n\n    // b\n    "),
-            ("\n    // a\n\n", "    // b\n    ")
-        );
-    }
-
-    #[test]
-    fn indentation_is_detected() {
-        assert_eq!(detect_indent("a {\n  b\n}\n"), "  ");
-        assert_eq!(detect_indent("a {\n\tb\n}\n"), "\t");
-        assert_eq!(detect_indent("a\n"), "    ");
-        assert_eq!(detect_indent("a {\n // x\n    b\n}\n"), "    ");
-    }
-
-    #[test]
-    fn structural_equality_ignores_formatting() {
-        let a = KdlDocument::parse_v2("n 1 x=\"a\"   y=2 {\n  c\n}\n").unwrap();
-        let b = KdlDocument::parse_v2("n   1 y=2 x=a { c; }").unwrap();
-        assert!(node_eq(&a.nodes()[0], &b.nodes()[0]));
-        let c = KdlDocument::parse_v2("n 1 x=\"a\" y=3 { c }").unwrap();
-        assert!(!node_eq(&a.nodes()[0], &c.nodes()[0]));
-    }
 
     #[test]
     fn child_keys() {

@@ -83,50 +83,9 @@ impl PimCtl {
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     service.ensure_local_pim().await?;
     match request {
-        Request::ListPimSources
-        | Request::AddPimSource { .. }
-        | Request::UpdatePimSource { .. }
-        | Request::RemovePimSource { .. }
-        | Request::TestPimSource { .. }
-        | Request::SyncPimSources { .. }
-        | Request::ListCalendars { .. }
-        | Request::CreateCalendar { .. }
-        | Request::UpdateCalendar { .. }
-        | Request::DeleteCalendar { .. }
-        | Request::ListAddressBooks { .. }
-        | Request::CreateAddressBook { .. }
-        | Request::UpdateAddressBook { .. }
-        | Request::DeleteAddressBook { .. }
-        | Request::ResolvePimConflict { .. } => sources::handle(service, request).await,
-        Request::ListEventInstances { .. }
-        | Request::GetEvent { .. }
-        | Request::CreateEvent { .. }
-        | Request::UpdateEvent { .. }
-        | Request::DeleteEvent { .. }
-        | Request::MoveEvent { .. }
-        | Request::FindFreeTime { .. }
-        | Request::ListTasks { .. }
-        | Request::GetTask { .. }
-        | Request::CreateTask { .. }
-        | Request::UpdateTask { .. }
-        | Request::CompleteTask { .. }
-        | Request::MoveTask { .. }
-        | Request::DeleteTask { .. } => events::handle(service, request).await,
-        Request::ListContacts { .. }
-        | Request::GetContact { .. }
-        | Request::CreateContact { .. }
-        | Request::UpdateContact { .. }
-        | Request::DeleteContacts { .. }
-        | Request::MoveContact { .. }
-        | Request::SearchContacts { .. }
-        | Request::FindDuplicateContacts { .. }
-        | Request::MergeContacts { .. }
-        | Request::UnlinkContact { .. }
-        | Request::GetContactPhoto { .. }
-        | Request::ListContactGroups { .. }
-        | Request::CreateContactGroup { .. }
-        | Request::UpdateContactGroup { .. }
-        | Request::DeleteContactGroup { .. } => contacts::handle(service, request).await,
+        nail_api::pim_source_requests!() => sources::handle(service, request).await,
+        nail_api::pim_event_task_requests!() => events::handle(service, request).await,
+        nail_api::pim_contact_requests!() => contacts::handle(service, request).await,
         Request::SearchPim {
             query,
             kinds,
@@ -141,11 +100,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::ListReminders { .. }
         | Request::SnoozeReminders { .. }
         | Request::DismissReminders { .. } => reminders::handle(service, request).await,
-        other => Err(ApiError::internal(format!(
-            "{} routed to the PIM module",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => Err(
+            ApiError::internal(format!("{} routed to the PIM module", other.wire_type())).into(),
+        ),
     }
 }
 
@@ -198,6 +155,15 @@ pub(crate) fn invalid(issues: &[PimIssue]) -> CoreError {
         error = error.with_localized(LocalizedMessage::new(first.message_id()));
     }
     error.into()
+}
+
+/// `Ok` without issues, else [`invalid`].
+pub(crate) fn check(issues: &[PimIssue]) -> Result<()> {
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(invalid(issues))
+    }
 }
 
 /// `forbidden` (read-only calendars, subscriptions, the Collected book).

@@ -32,20 +32,9 @@ fn parse_client_id(id: &McpClientId) -> Result<i64> {
         .ok_or_else(|| Error::not_found("MCP client", id))
 }
 
-fn enum_str<T: serde::Serialize>(value: T) -> Result<String> {
-    match serde_json::to_value(value)? {
-        serde_json::Value::String(s) => Ok(s),
-        other => Err(Error::InvalidData(format!("not a string enum: {other}"))),
-    }
-}
+use crate::util::{enum_from, enum_name as enum_str};
 
-fn enum_from<T: serde::de::DeserializeOwned>(idx: usize, s: String) -> rusqlite::Result<T> {
-    serde_json::from_value(serde_json::Value::String(s)).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
-
-const RFC3339: &str = "'%Y-%m-%dT%H:%M:%SZ'";
+use crate::util::SQL_RFC3339 as RFC3339;
 
 fn client_cols() -> String {
     format!(
@@ -154,6 +143,15 @@ pub struct McpAuditRecord {
     pub detail: Option<String>,
 }
 
+/// A client that is not revoked ([`Error::Conflict`] for a revoked one).
+fn active_client_in_tx(tx: &Transaction<'_>, n: i64, id: &McpClientId) -> Result<McpClient> {
+    let client = client_in_tx(tx, n)?;
+    if client.revoked_at.is_some() {
+        return Err(Error::Conflict(format!("MCP client {id} is revoked")));
+    }
+    Ok(client)
+}
+
 impl Store {
     /// Registers a client with the hash of its token ([`hash_mcp_token`])
     /// and the token's last characters for display, at `at` (Unix
@@ -229,10 +227,7 @@ impl Store {
     pub fn update_mcp_grant(&self, id: &McpClientId, grant: &McpGrant) -> Result<McpClient> {
         let n = parse_client_id(id)?;
         self.with_tx(|tx| {
-            let client = client_in_tx(tx, n)?;
-            if client.revoked_at.is_some() {
-                return Err(Error::Conflict(format!("MCP client {id} is revoked")));
-            }
+            active_client_in_tx(tx, n, id)?;
             write_grant(tx, n, grant)?;
             client_in_tx(tx, n)
         })
@@ -254,10 +249,7 @@ impl Store {
         }
         let n = parse_client_id(id)?;
         self.with_tx(|tx| {
-            let client = client_in_tx(tx, n)?;
-            if client.revoked_at.is_some() {
-                return Err(Error::Conflict(format!("MCP client {id} is revoked")));
-            }
+            active_client_in_tx(tx, n, id)?;
             tx.execute(
                 "UPDATE mcp_clients SET rate_limits = ?2 WHERE id = ?1",
                 params![n, serde_json::to_string(limits)?],

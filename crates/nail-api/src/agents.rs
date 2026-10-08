@@ -314,6 +314,26 @@ pub struct ActionAttribution {
     pub on_behalf_of: Option<McpClientRef>,
 }
 
+impl ActionAttribution {
+    /// `actor` named `name`, acting for itself.
+    pub fn new(actor: ActionActor, name: impl Into<String>) -> Self {
+        Self {
+            actor,
+            name: name.into(),
+            on_behalf_of: None,
+        }
+    }
+}
+
+/// The summary of sending a message: "`actor` wants to send `subject` to
+/// `count` recipients" (`confirmation-summary-send`).
+pub fn send_summary(actor: &str, subject: &str, count: usize) -> LocalizedMessage {
+    LocalizedMessage::new("confirmation-summary-send")
+        .arg("actor", actor)
+        .arg("subject", subject)
+        .arg("count", count)
+}
+
 /// An actor's policy for one kind ([`crate::Response::ActionPolicies`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ActionPolicy {
@@ -862,11 +882,7 @@ mod tests {
             label: "x".repeat(MAX_CONFIRMATION_TEXT + 10),
         };
         let mut new = NewConfirmation {
-            requested_by: ActionAttribution {
-                actor: ActionActor::mcp_client("c1"),
-                name: "Claude".into(),
-                on_behalf_of: None,
-            },
+            requested_by: ActionAttribution::new(ActionActor::mcp_client("c1"), "Claude"),
             kind: ActionKind::Trash,
             operation: "delete_messages".into(),
             summary: LocalizedMessage::new("confirmation-summary-trash").arg("count", 60),

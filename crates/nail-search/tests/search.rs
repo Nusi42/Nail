@@ -12,7 +12,7 @@ use nail_store::{MessageMeta, Store, StoredMessage, SyncedMessage};
 use pretty_assertions::assert_eq;
 
 /// 2026-09-29T12:00:00Z
-const NOW: i64 = 1_790_683_200;
+use nail_api::testing::TUESDAY_NOON as NOW;
 
 struct Fixture {
     store: Store,

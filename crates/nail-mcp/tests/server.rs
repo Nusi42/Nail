@@ -11,13 +11,15 @@ mod common;
 
 use std::time::Duration;
 
-use common::{FakeData, connect, connect_fails, create_client, grant, start, start_with, summary};
+use common::{
+    FakeData, call as tool, connect, connect_fails, create_client, grant, set_grant, start,
+    start_with, summary,
+};
 use nail_api::mcp::{McpCallKind, McpOutcome, McpScope};
 use nail_api::{Event, UiContext};
 use rmcp::model::ClientConfig;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ReadResourceRequestParams, ResourceContents,
-    SubscribeRequestParams,
+    CallToolRequestParams, ReadResourceRequestParams, ResourceContents, SubscribeRequestParams,
 };
 use rmcp::service::{RunningService, ServiceError};
 use rmcp::{ClientHandler, RoleClient};
@@ -32,6 +34,20 @@ async fn read<H: ClientHandler>(
         .await?;
     assert_eq!(result.contents.len(), 1);
     Ok(result.contents.remove(0))
+}
+
+/// Sets the UI context and reads it as the client (`get_ui_context`).
+async fn context_data<H: ClientHandler>(
+    data: &FakeData,
+    client: &RunningService<RoleClient, H>,
+    context: UiContext,
+) -> Value {
+    data.set_context(context);
+    tool(client, "get_ui_context", json!({}))
+        .await
+        .structured_content
+        .unwrap()["data"]
+        .clone()
 }
 
 fn text(contents: &ResourceContents) -> Value {
@@ -53,16 +69,6 @@ fn denied(err: &ServiceError) -> String {
         }
         other => panic!("MCP error expected: {other:?}"),
     }
-}
-
-async fn tool<H: ClientHandler>(
-    client: &RunningService<RoleClient, H>,
-    name: &'static str,
-    args: Value,
-) -> CallToolResult {
-    let params =
-        CallToolRequestParams::new(name).with_arguments(serde_json::from_value(args).unwrap());
-    client.call_tool(params).await.unwrap()
 }
 
 #[tokio::test]
@@ -341,22 +347,17 @@ async fn tools_filter_by_grant_and_mark_content() {
     assert_eq!(result.is_error, Some(true));
 
     // Folder exclusions hide a folder of a granted account.
-    nail_mcp::admin::handle(
+    set_grant(
         &env.store,
-        None,
-        nail_api::Request::UpdateMcpGrants {
-            client_id: id.clone(),
-            grant: nail_api::McpGrant {
-                scopes: vec![McpScope::Read],
-                accounts: vec!["both".into()],
-                excluded_folders: vec!["work-hr".into()],
-                ..Default::default()
-            },
+        &id,
+        nail_api::McpGrant {
+            scopes: vec![McpScope::Read],
+            accounts: vec!["both".into()],
+            excluded_folders: vec!["work-hr".into()],
+            ..Default::default()
         },
-        |_| {},
     )
-    .await
-    .unwrap();
+    .await;
     let result = tool(&client, "list_folders", json!({"account_id": "work"})).await;
     let folders = result.structured_content.unwrap();
     assert_eq!(
@@ -435,36 +436,36 @@ async fn ui_context_needs_its_own_grant_and_shows_the_indicator() {
     );
 
     // Where the user is, only as far as the grant covers it.
-    env.data.set_context(UiContext {
-        account_id: Some("home".into()),
-        folder_id: Some("home-inbox".into()),
-        thread_id: Some("t3".into()),
-        draft_id: Some("draft-home".into()),
-        ..UiContext::default()
-    });
-    let data = tool(&client, "get_ui_context", json!({}))
-        .await
-        .structured_content
-        .unwrap()["data"]
-        .clone();
+    let data = context_data(
+        &env.data,
+        &client,
+        UiContext {
+            account_id: Some("home".into()),
+            folder_id: Some("home-inbox".into()),
+            thread_id: Some("t3".into()),
+            draft_id: Some("draft-home".into()),
+            ..UiContext::default()
+        },
+    )
+    .await;
     assert_eq!(data["account_id"], Value::Null);
     assert_eq!(data["folder_id"], Value::Null);
     assert_eq!(data["thread_id"], json!("t3"), "t3 is in work");
     // A draft from a non-granted account, or quoting a message outside the
     // grant, is named, not shown.
     assert_eq!(data["draft"], json!({"id": "draft-home", "hidden": true}));
-    env.data.set_context(UiContext {
-        account_id: Some("work".into()),
-        folder_id: Some("work-inbox".into()),
-        thread_id: Some("t2-unknown".into()),
-        draft_id: Some("draft-reply-m2".into()),
-        ..UiContext::default()
-    });
-    let data = tool(&client, "get_ui_context", json!({}))
-        .await
-        .structured_content
-        .unwrap()["data"]
-        .clone();
+    let data = context_data(
+        &env.data,
+        &client,
+        UiContext {
+            account_id: Some("work".into()),
+            folder_id: Some("work-inbox".into()),
+            thread_id: Some("t2-unknown".into()),
+            draft_id: Some("draft-reply-m2".into()),
+            ..UiContext::default()
+        },
+    )
+    .await;
     assert_eq!(data["account_id"], json!("work"));
     assert_eq!(data["folder_id"], json!("work-inbox"));
     assert_eq!(data["thread_id"], Value::Null);
@@ -788,22 +789,17 @@ async fn restricted_searches_reveal_nothing_about_hidden_mail() {
     for data in [with_hidden_mail(), without_hidden_mail()] {
         let env = start_with(data).await;
         let (id, token) = create_client(&env.store, "search").await;
-        nail_mcp::admin::handle(
+        set_grant(
             &env.store,
-            None,
-            nail_api::Request::UpdateMcpGrants {
-                client_id: id.clone(),
-                grant: nail_api::McpGrant {
-                    scopes: vec![McpScope::Read],
-                    accounts: vec!["work".into()],
-                    excluded_folders: vec!["work-hr".into()],
-                    ..Default::default()
-                },
+            &id,
+            nail_api::McpGrant {
+                scopes: vec![McpScope::Read],
+                accounts: vec!["work".into()],
+                excluded_folders: vec!["work-hr".into()],
+                ..Default::default()
             },
-            |_| {},
         )
-        .await
-        .unwrap();
+        .await;
         let (client, _) = connect(env.server.url(), &token).await;
         let mut pages = Vec::new();
         for args in [

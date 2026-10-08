@@ -496,6 +496,31 @@ pub struct AdaptivePoll {
 }
 
 impl AdaptivePoll {
+    /// Default shortest interval of an API account's `poll-interval=`
+    /// (Gmail, Exchange).
+    pub const DEFAULT_MIN_SECS: u32 = 30;
+    /// Default longest interval (`max-poll-interval=`).
+    pub const DEFAULT_MAX_SECS: u32 = 300;
+    /// Smallest accepted `poll-interval=` / `max-poll-interval=` (quota and
+    /// throttling friendly).
+    pub const LOWEST_SECS: u32 = 10;
+
+    /// The effective (minimum, maximum) polling interval in seconds of an API
+    /// account's configured intervals; the maximum is never below the
+    /// minimum.
+    pub fn range(
+        poll_interval_secs: Option<u32>,
+        max_poll_interval_secs: Option<u32>,
+    ) -> (u32, u32) {
+        let min = poll_interval_secs
+            .unwrap_or(Self::DEFAULT_MIN_SECS)
+            .max(Self::LOWEST_SECS);
+        let max = max_poll_interval_secs
+            .unwrap_or(Self::DEFAULT_MAX_SECS)
+            .max(min);
+        (min, max)
+    }
+
     /// Polling between `min_secs` (at least 1) and `max_secs` (at least
     /// `min_secs`).
     pub fn new(min_secs: u32, max_secs: u32) -> Self {

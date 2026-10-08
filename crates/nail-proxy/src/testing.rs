@@ -134,40 +134,36 @@ impl Upstream {
 
     /// Starts on `addr` (e.g. `[::1]:0`).
     pub async fn start_on(addr: SocketAddr) -> io::Result<Self> {
-        let listener = TcpListener::bind(addr).await?;
-        let addr = listener.local_addr()?;
-        let state = Arc::new(State::default());
-        let task = {
-            let state = Arc::clone(&state);
-            tokio::spawn(async move {
-                while let Ok((stream, _)) = listener.accept().await {
-                    state.connections.fetch_add(1, Ordering::SeqCst);
-                    let state = Arc::clone(&state);
-                    tokio::spawn(async move {
-                        drop(serve_inner(stream, &state).await);
-                    });
-                }
-            })
-        };
-        Ok(Self { addr, state, task })
+        Self::listen(TcpListener::bind(addr).await?, None)
     }
 
     /// Starts an HTTPS upstream on a free port of `127.0.0.1` with `tls`.
     pub async fn start_tls(tls: Arc<rustls::ServerConfig>) -> io::Result<Self> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+        Self::listen(
+            TcpListener::bind(("127.0.0.1", 0)).await?,
+            Some(tokio_rustls::TlsAcceptor::from(tls)),
+        )
+    }
+
+    /// Serves every connection to `listener`, through `tls` when given.
+    fn listen(listener: TcpListener, tls: Option<tokio_rustls::TlsAcceptor>) -> io::Result<Self> {
         let addr = listener.local_addr()?;
         let state = Arc::new(State::default());
-        let acceptor = tokio_rustls::TlsAcceptor::from(tls);
         let task = {
             let state = Arc::clone(&state);
             tokio::spawn(async move {
                 while let Ok((stream, _)) = listener.accept().await {
                     state.connections.fetch_add(1, Ordering::SeqCst);
                     let state = Arc::clone(&state);
-                    let acceptor = acceptor.clone();
+                    let tls = tls.clone();
                     tokio::spawn(async move {
-                        if let Ok(stream) = acceptor.accept(stream).await {
-                            drop(serve_inner(stream, &state).await);
+                        match tls {
+                            None => drop(serve_inner(stream, &state).await),
+                            Some(acceptor) => {
+                                if let Ok(stream) = acceptor.accept(stream).await {
+                                    drop(serve_inner(stream, &state).await);
+                                }
+                            }
                         }
                     });
                 }

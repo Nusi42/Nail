@@ -370,25 +370,11 @@ pub fn is_local_network(text: &str) -> bool {
     }
 }
 
-/// A conservative DNS host name check (LDH labels, 1–63 characters, not
-/// all digits at the end so IP addresses are rejected).
+/// A conservative DNS host name check ([`crate::hosts::is_dns_name`]); a
+/// trailing dot is allowed.
 fn is_dns_name(name: &str) -> bool {
     let name = name.strip_suffix('.').unwrap_or(name);
-    if name.is_empty() || name.len() > 253 || name.parse::<IpAddr>().is_ok() {
-        return false;
-    }
-    let labels: Vec<&str> = name.split('.').collect();
-    let label_ok = |l: &&str| {
-        !l.is_empty()
-            && l.len() <= 63
-            && !l.starts_with('-')
-            && !l.ends_with('-')
-            && l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-    };
-    labels.iter().all(label_ok)
-        && !labels
-            .last()
-            .is_some_and(|l| l.chars().all(|c| c.is_ascii_digit()))
+    name.parse::<IpAddr>().is_err() && crate::hosts::is_dns_name(name)
 }
 
 /// Why internet mode is locked.

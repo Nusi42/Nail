@@ -357,24 +357,10 @@ pub fn is_domain_pattern(pattern: &str) -> bool {
         Some(host) => (true, host),
         None => (false, pattern),
     };
-    if host.is_empty() || host.len() > 253 {
-        return false;
-    }
-    let labels: Vec<&str> = host.split('.').collect();
-    let label_ok = |l: &&str| {
-        !l.is_empty()
-            && l.len() <= 63
-            && l.bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-            && !l.starts_with('-')
-            && !l.ends_with('-')
-    };
-    // `*.com` would cover a whole top-level domain.
-    labels.iter().all(label_ok)
-        && (!wildcard || labels.len() >= 2)
-        && !labels
-            .last()
-            .is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit()))
+    // Lowercase only; `*.com` would cover a whole top-level domain.
+    crate::hosts::is_dns_name(host)
+        && !host.bytes().any(|b| b.is_ascii_uppercase())
+        && (!wildcard || host.contains('.'))
 }
 
 /// A granted permission.

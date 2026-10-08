@@ -95,12 +95,12 @@ Value in dialog results and UI actions: string.
 
 | Member | Type | Description |
 | --- | --- | --- |
+| `kind?` | `PluginInputKind` | The kind of text. |
 | `id` | `string` | Value id (unique in the tree). |
 | `label` | `string` | The label. |
 | `default?` | `string` | Initial value. |
 | `placeholder?` | `string` | Placeholder text. |
 | `required?` | `boolean` | Whether a value is needed to submit with a primary button. |
-| `kind?` | `PluginInputKind` | The kind of text. |
 | `maxLength?` | `number` | Longest value (characters). |
 
 ### `<textarea>`
@@ -111,12 +111,12 @@ Value in dialog results and UI actions: string.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `id` | `string` | Value id. |
+| `rows?` | `number` | Visible rows. |
+| `id` | `string` | Value id (unique in the tree). |
 | `label` | `string` | The label. |
 | `default?` | `string` | Initial value. |
 | `placeholder?` | `string` | Placeholder text. |
-| `required?` | `boolean` | Whether a value is needed. |
-| `rows?` | `number` | Visible rows. |
+| `required?` | `boolean` | Whether a value is needed to submit with a primary button. |
 | `maxLength?` | `number` | Longest value (characters). |
 
 ### `<select>`

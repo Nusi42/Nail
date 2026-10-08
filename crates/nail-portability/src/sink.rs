@@ -243,6 +243,36 @@ pub trait PimExportSource {
     ) -> Result<(), SinkError>;
 }
 
+/// A source lent out by mutable reference is a source too.
+impl<T: MailExportSource + ?Sized> MailExportSource for &mut T {
+    fn folders(&mut self) -> Result<Vec<ExportFolder>, SinkError> {
+        (**self).folders()
+    }
+
+    fn messages(
+        &mut self,
+        folder: &ExportFolder,
+        visit: &mut dyn FnMut(Result<ExportMessage, SinkError>) -> Visit,
+    ) -> Result<(), SinkError> {
+        (**self).messages(folder, visit)
+    }
+}
+
+/// A source lent out by mutable reference is a source too.
+impl<T: PimExportSource + ?Sized> PimExportSource for &mut T {
+    fn collections(&mut self) -> Result<Vec<ExportCollection>, SinkError> {
+        (**self).collections()
+    }
+
+    fn items(
+        &mut self,
+        collection: &ExportCollection,
+        visit: &mut dyn FnMut(Result<String, SinkError>) -> Visit,
+    ) -> Result<(), SinkError> {
+        (**self).items(collection, visit)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

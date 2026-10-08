@@ -59,6 +59,7 @@ mod edit_history;
 mod error;
 mod kdl_edit;
 mod kdl_util;
+mod kdl_write;
 pub mod l10n;
 mod layout;
 mod layout_edit;
@@ -83,9 +84,9 @@ use std::sync::OnceLock;
 use nail_api::{ResolvedLayout, ResolvedTheme};
 
 pub use accounts::{
-    ACCOUNTS_FILE, AccountsDocument, MAX_ACCOUNT_ID_LEN, MAX_UNDO_SEND_SECS,
-    MIN_POLL_INTERVAL_SECS, accounts_schema, derive_account_id, is_valid_account_id,
-    is_valid_identity_pattern, load_accounts, parse_accounts, parse_accounts_all,
+    ACCOUNTS_FILE, AccountsDocument, MAX_UNDO_SEND_SECS, MIN_POLL_INTERVAL_SECS, accounts_schema,
+    derive_account_id, is_valid_account_id, is_valid_identity_pattern, load_accounts,
+    parse_accounts, parse_accounts_all,
 };
 pub use appearance_edit::{apply_theme_preferences, apply_theme_selection};
 pub use backup::{BACKUP_DIR, KEEP as BACKUPS_KEPT};

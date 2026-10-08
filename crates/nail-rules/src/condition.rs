@@ -254,11 +254,7 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
 /// The results for `method` in the topmost `Authentication-Results` header
 /// (the one the receiving server added; lower ones may come from anyone).
 pub(crate) fn auth_results(message: &dyn MessageView, method: AuthMethod) -> Vec<String> {
-    let key = match method {
-        AuthMethod::Dkim => "dkim",
-        AuthMethod::Spf => "spf",
-        AuthMethod::Dmarc => "dmarc",
-    };
+    let key = method.as_str();
     let Some(header) = message
         .header_values("Authentication-Results")
         .into_iter()
@@ -283,18 +279,6 @@ pub(crate) fn auth_results(message: &dyn MessageView, method: AuthMethod) -> Vec
             Some(result.to_lowercase())
         })
         .collect()
-}
-
-fn result_name(result: AuthResult) -> &'static str {
-    match result {
-        AuthResult::Pass => "pass",
-        AuthResult::Fail => "fail",
-        AuthResult::Softfail => "softfail",
-        AuthResult::Neutral => "neutral",
-        AuthResult::None => "none",
-        AuthResult::Temperror => "temperror",
-        AuthResult::Permerror => "permerror",
-    }
 }
 
 /// `Some(value)`: matched on that value; `None`: did not match. The flag is
@@ -407,7 +391,7 @@ fn leaf(node: &Node, message: &dyn MessageView, env: &Env<'_>) -> Decision {
         }
         Node::Auth(method, result) => {
             let results = auth_results(message, *method);
-            let wanted = result_name(*result);
+            let wanted = result.as_str();
             let ok = if results.is_empty() {
                 *result == AuthResult::None
             } else {

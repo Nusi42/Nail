@@ -44,6 +44,8 @@ chrono-tz.workspace = true
 getrandom = "0.3.4"
 
 [dev-dependencies]
+# Sample contract values (`nail_api::testing`).
+nail-api = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
 

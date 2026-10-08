@@ -811,7 +811,7 @@ pub fn utc_seconds(text: &str) -> Option<i64> {
     let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (hh, mm, ss) = (num(11..13)?, num(14..16)?, num(17..19)?);
     let days = nail_util::time::days_from_civil(y, u32::try_from(m).ok()?, u32::try_from(d).ok()?);
-    Some(days * 86_400 + hh * 3600 + mm * 60 + ss)
+    Some(days * nail_util::time::SECS_PER_DAY + hh * 3600 + mm * 60 + ss)
 }
 
 /// Recipients of a forwarded invitation must be addresses.

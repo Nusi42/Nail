@@ -468,7 +468,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} routed to the rules module",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -1095,6 +1095,18 @@ pub(crate) fn queue_for_rules(store: &Store, ids: &[MessageId]) -> nail_store::R
 /// A message's rule view as the trait object the rule engine takes.
 fn as_view(data: &MessageData) -> &dyn nail_rules::MessageView {
     data
+}
+
+/// Queues newly arrived messages for the arrival rules (a failure is
+/// logged: the messages are stored either way).
+pub(crate) async fn queue_arrivals(service: &Service, ids: Vec<MessageId>) {
+    if let Err(err) = service
+        .store()
+        .call(move |s| queue_for_rules(s, &ids))
+        .await
+    {
+        tracing::warn!(%err, "cannot queue new mail for the rules");
+    }
 }
 
 #[cfg(test)]

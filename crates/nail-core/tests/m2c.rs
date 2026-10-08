@@ -5,7 +5,10 @@
 
 #![cfg(test)]
 
-use std::time::Duration;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::next_event_except;
+use nail_core::testing::{TempService, error_of};
 
 use nail_api::accounts::{BodyPolicy, FolderMatch};
 use nail_api::sieve::{SieveState, VacationSettings};
@@ -13,10 +16,9 @@ use nail_api::triage::{JunkSettings, NotificationKind, NotificationSettings, Qui
 use nail_api::{
     AccountId, ErrorCode, Event, Folder, FolderRole, McpSettings, MessageId, Request, Response,
 };
+use nail_core::Service;
 use nail_core::demo::{DEMO_ACCOUNT_ID, seed_demo};
-use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
-use tempfile::TempDir;
 use tokio::sync::broadcast;
 
 /// A disabled IMAP account with ManageSieve (no engine runs, nothing
@@ -30,53 +32,26 @@ account "home" email="ada@home.example" enabled=#false {
 }
 "#;
 
-struct Fixture {
-    service: Service,
-    config_dir: TempDir,
-    _data_dir: TempDir,
-}
+type Fixture = TempService;
 
 fn open() -> Fixture {
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    std::fs::write(config_dir.path().join("accounts.kdl"), ACCOUNTS).unwrap();
-    let mut options =
-        nail_core::demo::demo_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    options.watch_config = false;
-    let service = Service::open(options).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        config_dir,
-        _data_dir: data_dir,
-    }
+    // Engines on: the account is switched off, its state still counts.
+    let temp = TempService::quiet_with(&[("accounts.kdl", ACCOUNTS)], |o| o.start_engines = true);
+    seed_demo(temp.service.store(), temp.service.blobs()).unwrap();
+    temp
 }
 
 fn work() -> AccountId {
     "work".into()
 }
 
-fn error(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("expected an error, got {other:?}"),
-    }
-}
-
 /// The next event, skipping the progress of queued writes (local replays
 /// of marks and snoozes finish asynchronously).
 async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    loop {
-        let event = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .expect("no event within 10 s")
-            .unwrap();
-        if !matches!(event, Event::OpStatus { .. } | Event::MailChanged { .. }) {
-            return event;
-        }
-    }
+    next_event_except(rx, |e| {
+        matches!(e, Event::OpStatus { .. } | Event::MailChanged { .. })
+    })
+    .await
 }
 
 async fn demo_message(service: &Service) -> MessageId {
@@ -133,7 +108,7 @@ async fn sieve_status_and_vacation() {
         ..VacationSettings::default()
     };
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::UpdateVacation {
                 account_id: work(),
                 settings: empty,
@@ -189,10 +164,10 @@ async fn sieve_status_and_vacation() {
             account_id: "home".into(),
         },
     ] {
-        assert_eq!(error(s.handle(request).await).0, ErrorCode::Unsupported);
+        assert_eq!(error_of(s.handle(request).await).0, ErrorCode::Unsupported);
     }
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::GetSieveStatus {
                 account_id: Some("nobody".into())
             })
@@ -237,7 +212,7 @@ async fn junk_snooze_and_notifications() {
         Event::JunkStatusChanged { account_id: work() }
     );
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::UpdateJunkSettings {
                 account_id: work(),
                 settings: JunkSettings { threshold: 5, ..on },
@@ -300,7 +275,7 @@ async fn junk_snooze_and_notifications() {
         Response::Queued { .. }
     ));
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::MarkJunk {
                 message_ids: vec!["gone".into()],
                 junk: false,
@@ -407,11 +382,11 @@ async fn folder_sync_policies_write_accounts_kdl() {
         policy.rule.map(|r| r.folder),
         Some(FolderMatch::Path("INBOX".into()))
     );
-    let kdl = std::fs::read_to_string(fx.config_dir.path().join("accounts.kdl")).unwrap();
+    let kdl = std::fs::read_to_string(fx.config.path().join("accounts.kdl")).unwrap();
     assert!(kdl.contains("headers-only"), "{kdl}");
     assert!(kdl.contains("sieve script=\"nail\""), "{kdl}");
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::SetFolderSyncPolicy {
                 folder_id: inbox.id.clone(),
                 bodies: Some(BodyPolicy::Recent { days: 0 }),
@@ -482,7 +457,7 @@ async fn mcp_settings_and_rules_from_messages() {
         Response::McpSettings { settings, .. } if settings == fixed
     ));
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::UpdateMcpSettings {
                 settings: McpSettings { port: Some(80) }
             })
@@ -506,7 +481,7 @@ async fn mcp_settings_and_rules_from_messages() {
     assert_eq!(rule.id.as_str().len(), 0);
     assert!(!rule.name.is_empty(), "{:?}", rule.name);
     assert_eq!(
-        error(
+        error_of(
             s.handle(Request::RuleFromMessage {
                 message_id: "gone".into()
             })

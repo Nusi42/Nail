@@ -97,6 +97,16 @@ impl Client {
         request
     }
 
+    /// Pairs this browser as "Phone" with `code`.
+    async fn pair(&mut self, app: &Router, code: &str) -> Response<Body> {
+        let request = self.request(
+            "POST",
+            AUTH_PATH,
+            Some(serde_json::json!({"type": "Pair", "code": code, "device_name": "Phone"})),
+        );
+        self.send(app, request).await
+    }
+
     async fn send(&mut self, app: &Router, request: Request<Body>) -> Response<Body> {
         let response = app.clone().oneshot(request).await.unwrap();
         self.keep(&response);
@@ -129,21 +139,23 @@ async fn text(response: Response<Body>) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
-#[tokio::test]
-async fn pairing_over_http_sets_hardened_cookies() {
+/// A harness with its app, a pairing code for `ada` and a client that has
+/// its CSRF token.
+async fn pairing_client() -> (Harness, Router, String, Client) {
     let h = Harness::new();
     let app = app(&h);
     let ada = h.user("ada", false).await;
     let code = h.code(&ada, None);
     let mut client = Client::new("192.0.2.10:50000");
     client.fetch_csrf(&app).await;
+    (h, app, code, client)
+}
 
-    let request = client.request(
-        "POST",
-        AUTH_PATH,
-        Some(serde_json::json!({"type": "Pair", "code": code, "device_name": "Phone"})),
-    );
-    let response = client.send(&app, request).await;
+#[tokio::test]
+async fn pairing_over_http_sets_hardened_cookies() {
+    let (h, app, code, mut client) = pairing_client().await;
+
+    let response = client.pair(&app, &code).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["cache-control"], "no-store");
     let set_cookies: Vec<String> = response
@@ -335,19 +347,9 @@ async fn protected_routes_need_a_session_and_csrf_for_writes() {
 
 #[tokio::test]
 async fn full_login_flow_over_http() {
-    let h = Harness::new();
-    let app = app(&h);
-    let ada = h.user("ada", false).await;
-    let code = h.code(&ada, None);
-    let mut client = Client::new("192.0.2.10:50000");
-    client.fetch_csrf(&app).await;
+    let (_h, app, code, mut client) = pairing_client().await;
     let stale = client.csrf.clone();
-    let request = client.request(
-        "POST",
-        AUTH_PATH,
-        Some(serde_json::json!({"type": "Pair", "code": code, "device_name": "Phone"})),
-    );
-    let response = client.send(&app, request).await;
+    let response = client.pair(&app, &code).await;
     // The CSRF binding moved to the new device; the response carries the
     // new token.
     let fresh = response.headers()[CSRF_HEADER].to_str().unwrap().to_owned();

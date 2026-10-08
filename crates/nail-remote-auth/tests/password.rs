@@ -214,12 +214,18 @@ fn enroll_totp(h: &Harness, user: &nail_api::remote::RemoteUser) -> Vec<u8> {
     secret
 }
 
-#[tokio::test]
-async fn totp_is_required_and_each_code_works_once() {
+/// A harness with `ada`, her TOTP secret and a paired, logged-out browser.
+async fn totp_user() -> (Harness, Vec<u8>, Browser) {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
     let secret = enroll_totp(&h, &ada);
-    let mut browser = logged_out_paired(&h, &ada).await;
+    let browser = logged_out_paired(&h, &ada).await;
+    (h, secret, browser)
+}
+
+#[tokio::test]
+async fn totp_is_required_and_each_code_works_once() {
+    let (h, secret, mut browser) = totp_user().await;
 
     let reply = browser.password(&h, "ada", PASSWORD, None).await;
     assert_eq!(reply.response, AuthResponse::TotpRequired);
@@ -236,9 +242,7 @@ async fn totp_is_required_and_each_code_works_once() {
         .await;
     h.clock.advance(1);
     let reply = browser.password(&h, "ada", PASSWORD, Some(&code)).await;
-    assert_eq!(failure(&reply).0, AuthFailure::InvalidCredentials);
-    let audit = h.store.list_remote_audit(None, None, 1).unwrap();
-    assert_eq!(audit[0].detail.as_deref(), Some("TOTP code used before"));
+    h.assert_refused(&reply, "TOTP code used before");
 
     // A code of an older step than the last accepted one fails too.
     let old = totp::code_at(&secret, h.now() - 31).unwrap();
@@ -261,10 +265,7 @@ async fn totp_is_required_and_each_code_works_once() {
 
 #[tokio::test]
 async fn totp_tolerates_one_step_of_clock_skew() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let secret = enroll_totp(&h, &ada);
-    let mut browser = logged_out_paired(&h, &ada).await;
+    let (h, secret, mut browser) = totp_user().await;
 
     // The phone runs 30 s ahead: its code is for the next step.
     h.clock.advance(60);
@@ -299,9 +300,7 @@ async fn totp_tolerates_one_step_of_clock_skew() {
 
 #[tokio::test]
 async fn reauthentication_with_the_password() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let settings = h.auth.settings();
     let ctx = browser.resolve(&h).unwrap();
     assert!(ctx.is_fresh(h.now()));

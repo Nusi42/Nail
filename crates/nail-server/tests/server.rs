@@ -3,6 +3,9 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared fixtures")]
+mod common;
+
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -11,8 +14,7 @@ use axum::http::{Request as HttpRequest, StatusCode, header};
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::BodyExt;
 use nail_api::{Event, Request, Response, RpcRequest, ServerMessage};
-use nail_core::demo::seed_demo;
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
 use nail_server::{Server, ServerError, ServerOptions, router};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -22,29 +24,11 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tower::ServiceExt;
 
+use common::{Fixture, service};
+
 use nail_testkit::TEST_TIMEOUT as TIMEOUT;
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
-struct Fixture {
-    service: Service,
-    _data: TempDir,
-    config: TempDir,
-}
-
-fn service() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    let service = Service::open(options).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        config,
-    }
-}
 
 async fn start(service: &Service) -> Server {
     Server::bind(
@@ -63,6 +47,19 @@ async fn connect(server: &Server) -> Socket {
     let url = format!("ws://{}/api/ws", server.local_addr());
     let (socket, _) = tokio_tungstenite::connect_async(url).await.unwrap();
     socket
+}
+
+/// A started server with one connected socket.
+async fn start_connected(service: &Service) -> (Server, Socket) {
+    let server = start(service).await;
+    let socket = connect(&server).await;
+    (server, socket)
+}
+
+/// One `Ping` round trip (id 1): the connection is fully set up.
+async fn ready(socket: &mut Socket) {
+    send(socket, 1, Request::Ping).await;
+    response(socket, 1).await;
 }
 
 async fn send(socket: &mut Socket, id: u64, request: Request) {
@@ -95,8 +92,7 @@ async fn response(socket: &mut Socket, id: u64) -> Response {
 #[tokio::test]
 async fn websocket_round_trip() {
     let f = service();
-    let server = start(&f.service).await;
-    let mut socket = connect(&server).await;
+    let (server, mut socket) = start_connected(&f.service).await;
 
     send(&mut socket, 1, Request::Ping).await;
     assert!(matches!(
@@ -133,8 +129,7 @@ async fn websocket_round_trip() {
 #[tokio::test]
 async fn concurrent_requests_are_correlated_by_id() {
     let f = service();
-    let server = start(&f.service).await;
-    let mut socket = connect(&server).await;
+    let (_server, mut socket) = start_connected(&f.service).await;
     for id in 10..20 {
         send(&mut socket, id, Request::Ping).await;
     }
@@ -152,8 +147,7 @@ async fn concurrent_requests_are_correlated_by_id() {
 #[tokio::test]
 async fn malformed_frames_get_an_error_when_the_id_is_readable() {
     let f = service();
-    let server = start(&f.service).await;
-    let mut socket = connect(&server).await;
+    let (_server, mut socket) = start_connected(&f.service).await;
     socket
         .send(Message::Text(
             r#"{"id": 5, "request": {"type": "Nope"}}"#.into(),
@@ -204,16 +198,8 @@ async fn events_are_pushed_to_every_client() {
 
 #[tokio::test]
 async fn config_errors_are_sent_on_connect() {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("layout.kdl"),
-        "layout \"x\" {\n  window\n",
-    )
-    .unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    let service = Service::open(options).unwrap();
+    let temp = Fixture::quiet_with(&[("layout.kdl", "layout \"x\" {\n  window\n")], |_| {});
+    let service = temp.service.clone();
     let server = start(&service).await;
     let mut socket = connect(&server).await;
     match receive(&mut socket).await {
@@ -228,10 +214,8 @@ async fn config_errors_are_sent_on_connect() {
 async fn config_file_changes_reach_the_socket() {
     let f = service();
     f.service.watch_config().unwrap();
-    let server = start(&f.service).await;
-    let mut socket = connect(&server).await;
-    send(&mut socket, 1, Request::Ping).await;
-    response(&mut socket, 1).await;
+    let (_server, mut socket) = start_connected(&f.service).await;
+    ready(&mut socket).await;
 
     std::fs::write(
         f.config.path().join("theme.kdl"),
@@ -479,10 +463,8 @@ async fn serves_blobs_by_hash() {
 #[tokio::test]
 async fn a_lagging_client_is_resynced() {
     let f = service();
-    let server = start(&f.service).await;
-    let mut socket = connect(&server).await;
-    send(&mut socket, 1, Request::Ping).await;
-    response(&mut socket, 1).await;
+    let (_server, mut socket) = start_connected(&f.service).await;
+    ready(&mut socket).await;
 
     // The test runtime is single-threaded: nothing is forwarded while this
     // loop runs, so the connection's receiver overflows.

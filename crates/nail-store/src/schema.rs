@@ -4,168 +4,27 @@
 //! migration runs in its own `IMMEDIATE` transaction together with the row
 //! that records it in `schema_version`, so a crash leaves the database at
 //! a whole version. Migrations are append-only: never edit a released one,
-//! add a new one instead.
+//! add a new one instead. The SQL of each released step is its own file in
+//! `src/migrations/` (`vNN.sql`, embedded byte for byte).
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::error::{Error, Result};
 
 /// Schema v1: accounts, folders, messages and the operation queue.
-const V1: &str = r"
-CREATE TABLE accounts (
-    id    TEXT PRIMARY KEY NOT NULL,
-    name  TEXT NOT NULL,
-    email TEXT NOT NULL,
-    kind  TEXT NOT NULL
-);
-
-CREATE TABLE folders (
-    id            TEXT PRIMARY KEY NOT NULL,
-    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    parent_id     TEXT REFERENCES folders(id) ON DELETE SET NULL,
-    name          TEXT NOT NULL,
-    path          TEXT NOT NULL,
-    role          TEXT NOT NULL DEFAULT 'other',
-    uidvalidity   INTEGER,
-    uidnext       INTEGER,
-    highestmodseq INTEGER,
-    UNIQUE (account_id, path)
-);
-CREATE INDEX folders_parent ON folders(parent_id);
-
-CREATE TABLE messages (
-    id              TEXT PRIMARY KEY NOT NULL,
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    folder_id       TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-    uid             INTEGER,
-    subject         TEXT NOT NULL DEFAULT '',
-    from_name       TEXT,
-    from_email      TEXT,
-    to_json         TEXT NOT NULL DEFAULT '[]',
-    date            TEXT NOT NULL,
-    -- Unix seconds (UTC) parsed from `date`; 0 when unparsable. Sort key.
-    date_sort       INTEGER NOT NULL DEFAULT 0,
-    seen            INTEGER NOT NULL DEFAULT 0,
-    flagged         INTEGER NOT NULL DEFAULT 0,
-    answered        INTEGER NOT NULL DEFAULT 0,
-    draft           INTEGER NOT NULL DEFAULT 0,
-    has_attachments INTEGER NOT NULL DEFAULT 0,
-    preview         TEXT NOT NULL DEFAULT '',
-    blob_hash       TEXT,
-    thread_key      TEXT
-);
-CREATE UNIQUE INDEX messages_folder_uid ON messages(folder_id, uid) WHERE uid IS NOT NULL;
-CREATE INDEX messages_folder_date ON messages(folder_id, date_sort DESC, id DESC);
-CREATE INDEX messages_folder_unread ON messages(folder_id) WHERE seen = 0;
-CREATE INDEX messages_account ON messages(account_id);
-CREATE INDEX messages_thread ON messages(thread_key) WHERE thread_key IS NOT NULL;
-CREATE INDEX messages_blob ON messages(blob_hash) WHERE blob_hash IS NOT NULL;
-
-CREATE TABLE op_queue (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    kind       TEXT NOT NULL,
-    payload    TEXT NOT NULL,
-    state      TEXT NOT NULL DEFAULT 'pending'
-               CHECK (state IN ('pending', 'in_flight', 'done', 'failed')),
-    attempts   INTEGER NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE INDEX op_queue_state ON op_queue(state, id);
-";
+const V1: &str = include_str!("migrations/v01.sql");
 
 /// Schema v2 (M1a): threading headers and thread ids, tags, message size,
 /// per-message operation index, drafts and the outbox. Identities and
 /// virtual accounts are **not** stored: `accounts.kdl` is their only source
 /// of truth (ADR 0012). `folders.highestmodseq` exists since v1.
-const V2: &str = r"
--- Message-ID without angle brackets; NULL when the message has none.
-ALTER TABLE messages ADD COLUMN message_id TEXT;
-ALTER TABLE messages ADD COLUMN in_reply_to_json TEXT NOT NULL DEFAULT '[]';
-ALTER TABLE messages ADD COLUMN references_json TEXT NOT NULL DEFAULT '[]';
-ALTER TABLE messages ADD COLUMN thread_id TEXT;
--- Normalized subject (prefixes stripped, lowercase) for the subject fallback.
-ALTER TABLE messages ADD COLUMN subject_key TEXT NOT NULL DEFAULT '';
--- Whether the subject carried a reply / forward prefix.
-ALTER TABLE messages ADD COLUMN subject_is_reply INTEGER NOT NULL DEFAULT 0;
--- Size of the raw message in bytes; NULL while unknown.
-ALTER TABLE messages ADD COLUMN size INTEGER;
-CREATE INDEX messages_message_id ON messages(message_id) WHERE message_id IS NOT NULL;
-CREATE INDEX messages_thread_id ON messages(thread_id, date_sort);
-CREATE INDEX messages_subject_key ON messages(subject_key, date_sort) WHERE subject_key <> '';
-CREATE INDEX messages_date ON messages(date_sort DESC, id DESC);
-
--- Tags (IMAP keywords), one row per tag.
-CREATE TABLE message_tags (
-    message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    tag        TEXT NOT NULL,
-    PRIMARY KEY (message_id, tag)
-) WITHOUT ROWID;
-CREATE INDEX message_tags_tag ON message_tags(tag COLLATE NOCASE);
-
--- Every Message-ID seen (own ids and referenced ones, even when that
--- message is not stored) mapped to its thread: the incremental JWZ state.
-CREATE TABLE thread_refs (
-    msgid     TEXT PRIMARY KEY NOT NULL,
-    thread_id TEXT NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX thread_refs_thread ON thread_refs(thread_id);
-
--- Operation queue: the message an operation is about (sync merge) and
--- per-account passes.
-ALTER TABLE op_queue ADD COLUMN message_id TEXT;
-UPDATE op_queue SET message_id = json_extract(payload, '$.message_id');
-CREATE INDEX op_queue_message ON op_queue(message_id, state) WHERE message_id IS NOT NULL;
-CREATE INDEX op_queue_account ON op_queue(account_id, state, id);
-
-CREATE TABLE drafts (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    identity_id TEXT NOT NULL,
-    payload     TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-
-CREATE TABLE outbox (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    draft_id        INTEGER NOT NULL,
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    identity_id     TEXT NOT NULL,
-    subject         TEXT NOT NULL DEFAULT '',
-    recipients_json TEXT NOT NULL DEFAULT '[]',
-    -- Unix seconds (UTC).
-    send_at         INTEGER NOT NULL,
-    state           TEXT NOT NULL DEFAULT 'scheduled'
-                    CHECK (state IN ('scheduled', 'sending', 'sent', 'failed', 'cancelled')),
-    attempts        INTEGER NOT NULL DEFAULT 0,
-    error           TEXT,
-    message         TEXT,
-    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE INDEX outbox_due ON outbox(state, send_at);
-CREATE INDEX outbox_draft ON outbox(draft_id);
-";
+const V2: &str = include_str!("migrations/v02.sql");
 
 /// Schema v3 (M1a WP14): POP3 bookkeeping. POP3 has no folders or numeric
 /// UIDs on the server; the core remembers which `UIDL`s it downloaded (and
 /// when), which local message each became, and whether the user deleted
 /// that local copy, for the leave-on-server policies.
-const V3: &str = r"
-CREATE TABLE pop3_uids (
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    uidl            TEXT NOT NULL,
-    -- The local message; NULL once it was deleted locally.
-    message_id      TEXT,
-    -- Unix seconds (UTC) of the download.
-    downloaded_at   INTEGER NOT NULL,
-    deleted_locally INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (account_id, uidl)
-) WITHOUT ROWID;
-CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT NULL;
-";
+const V3: &str = include_str!("migrations/v03.sql");
 
 /// Schema v4 (M1b WP20, ADR 0022): rich drafts, collected addresses,
 /// rule runs, MCP clients and saved searches.
@@ -179,132 +38,7 @@ CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT 
 ///   with every queued action and its inverse (undo as one unit), and the
 ///   messages waiting for arrival rules.
 /// * MCP clients are stored with a SHA-256 hash of their token only.
-const V4: &str = r"
-ALTER TABLE drafts ADD COLUMN mode TEXT NOT NULL DEFAULT 'plain'
-    CHECK (mode IN ('plain', 'html', 'markdown'));
-ALTER TABLE drafts ADD COLUMN context_mode TEXT
-    CHECK (context_mode IN ('reply', 'reply-all', 'forward'));
-ALTER TABLE drafts ADD COLUMN context_message_id TEXT;
--- The copy in the server's Drafts folder (autosave); NULL until uploaded.
-ALTER TABLE drafts ADD COLUMN server_folder_id TEXT;
-ALTER TABLE drafts ADD COLUMN server_uid INTEGER;
--- Message-ID header of the uploaded copy (to find it again after UIDVALIDITY changes).
-ALTER TABLE drafts ADD COLUMN server_message_id TEXT;
-CREATE INDEX drafts_context ON drafts(context_message_id) WHERE context_message_id IS NOT NULL;
-
-CREATE TABLE draft_attachments (
-    draft_id   INTEGER NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
-    position   INTEGER NOT NULL,
-    filename   TEXT NOT NULL,
-    mime       TEXT NOT NULL,
-    size       INTEGER NOT NULL,
-    blob_hash  TEXT NOT NULL,
-    content_id TEXT,
-    PRIMARY KEY (draft_id, position)
-) WITHOUT ROWID;
-CREATE INDEX draft_attachments_blob ON draft_attachments(blob_hash);
-
--- Addresses seen in sent and received mail, for autocomplete.
-CREATE TABLE collected_addresses (
-    email     TEXT PRIMARY KEY NOT NULL COLLATE NOCASE,
-    name      TEXT,
-    use_count INTEGER NOT NULL DEFAULT 0,
-    -- Unix seconds (UTC).
-    last_used INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX collected_addresses_rank ON collected_addresses(use_count DESC, last_used DESC);
-
-CREATE TABLE rule_state (
-    rule_id     TEXT PRIMARY KEY NOT NULL,
-    -- Unix seconds (UTC).
-    last_run_at INTEGER,
-    next_run_at INTEGER,
-    run_count   INTEGER NOT NULL DEFAULT 0
-) WITHOUT ROWID;
-
-CREATE TABLE rule_runs (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    rule_id     TEXT NOT NULL,
-    rule_name   TEXT NOT NULL,
-    cause       TEXT NOT NULL CHECK (cause IN ('arrival', 'on-send', 'schedule', 'manual')),
-    state       TEXT NOT NULL DEFAULT 'running'
-                CHECK (state IN ('running', 'done', 'failed', 'undone')),
-    -- Unix seconds (UTC).
-    started_at  INTEGER NOT NULL,
-    finished_at INTEGER,
-    matched     INTEGER NOT NULL DEFAULT 0,
-    message     TEXT
-);
-CREATE INDEX rule_runs_rule ON rule_runs(rule_id, id DESC);
-
--- Every action a run took, with the queued operation and its inverse.
-CREATE TABLE rule_run_actions (
-    run_id     INTEGER NOT NULL REFERENCES rule_runs(id) ON DELETE CASCADE,
-    seq        INTEGER NOT NULL,
-    message_id TEXT NOT NULL,
-    -- op_queue id; NULL for actions without a queued operation (notify, stop).
-    op_id      INTEGER,
-    -- nail_api::rules::RuleAction JSON.
-    action     TEXT NOT NULL,
-    -- nail_store::Operation JSON that undoes it; NULL = cannot be undone.
-    undo       TEXT,
-    PRIMARY KEY (run_id, seq)
-) WITHOUT ROWID;
-
--- New messages waiting for the arrival rules (survives a restart).
-CREATE TABLE rule_inbox (
-    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    -- Unix seconds (UTC).
-    queued_at  INTEGER NOT NULL
-) WITHOUT ROWID;
-
-CREATE TABLE mcp_clients (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    name                    TEXT NOT NULL,
-    -- Lowercase hex SHA-256 of the bearer token; the token itself is never stored.
-    token_hash              TEXT NOT NULL UNIQUE,
-    token_hint              TEXT NOT NULL,
-    -- Unix seconds (UTC).
-    created_at              INTEGER NOT NULL,
-    last_used_at            INTEGER,
-    revoked_at              INTEGER,
-    all_accounts            INTEGER NOT NULL DEFAULT 0,
-    skip_draft_confirmation INTEGER NOT NULL DEFAULT 0
-);
-CREATE UNIQUE INDEX mcp_clients_active_name ON mcp_clients(name) WHERE revoked_at IS NULL;
-
--- Grant rows: scopes, accounts and excluded folders.
-CREATE TABLE mcp_grants (
-    client_id INTEGER NOT NULL REFERENCES mcp_clients(id) ON DELETE CASCADE,
-    kind      TEXT NOT NULL CHECK (kind IN ('scope', 'account', 'exclude-folder')),
-    value     TEXT NOT NULL,
-    PRIMARY KEY (client_id, kind, value)
-) WITHOUT ROWID;
-
-CREATE TABLE mcp_audit (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id   INTEGER REFERENCES mcp_clients(id) ON DELETE SET NULL,
-    client_name TEXT NOT NULL,
-    -- Unix seconds (UTC).
-    at          INTEGER NOT NULL,
-    kind        TEXT NOT NULL,
-    name        TEXT NOT NULL,
-    outcome     TEXT NOT NULL,
-    detail      TEXT
-);
-CREATE INDEX mcp_audit_client ON mcp_audit(client_id, id DESC);
-
-CREATE TABLE saved_searches (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT NOT NULL,
-    query      TEXT NOT NULL,
-    -- No foreign keys: may name virtual accounts / folders.
-    account_id TEXT,
-    folder_id  TEXT,
-    sort       TEXT NOT NULL DEFAULT 'date' CHECK (sort IN ('date', 'relevance')),
-    position   INTEGER NOT NULL
-);
-";
+const V4: &str = include_str!("migrations/v04.sql");
 
 /// Schema v5 (M2a WP30, ADR 0029): the keyring, Autocrypt peer state,
 /// trust decisions, encryption-at-rest state, cached message security and
@@ -327,114 +61,7 @@ CREATE TABLE saved_searches (
 ///   content), for list badges and rule conditions.
 /// * `app_settings` holds small JSON settings such as
 ///   [`nail_api::security::SecuritySettings`].
-const V5: &str = r"
-CREATE TABLE crypto_keys (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
-    -- OpenPGP: primary key fingerprint; S/MIME: SHA-256 of the DER
-    -- certificate. Uppercase hex.
-    fingerprint       TEXT NOT NULL,
-    -- JSON array of user ids (OpenPGP) or the subject (S/MIME), primary first.
-    user_ids          TEXT NOT NULL DEFAULT '[]',
-    algorithm         TEXT NOT NULL,
-    -- Unix seconds (UTC).
-    created_at        INTEGER NOT NULL,
-    expires_at        INTEGER,
-    revoked           INTEGER NOT NULL DEFAULT 0,
-    can_sign          INTEGER NOT NULL DEFAULT 0,
-    can_encrypt       INTEGER NOT NULL DEFAULT 0,
-    source            TEXT NOT NULL CHECK (source IN ('generated', 'imported', 'pkcs12',
-                          'windows-store', 'autocrypt', 'autocrypt-gossip', 'setup-message',
-                          'wkd', 'keyserver', 'message')),
-    -- Transferable public key (binary packets) or DER certificate.
-    public_data       BLOB NOT NULL,
-    -- NULL = no secret part (a correspondent's key).
-    secret_storage    TEXT CHECK (secret_storage IN ('keychain', 'passphrase', 'windows-store')),
-    -- Encrypted secret material; NULL for 'windows-store'.
-    secret_data       BLOB,
-    -- Keychain reference (`keychain:…`) of the wrapping key, or the
-    -- Windows store thumbprint.
-    secret_ref        TEXT,
-    -- S/MIME only.
-    issuer            TEXT,
-    serial            TEXT,
-    imported_at       INTEGER NOT NULL,
-    updated_at        INTEGER NOT NULL,
-    UNIQUE (technology, fingerprint),
-    CHECK (secret_storage IS NOT NULL OR (secret_data IS NULL AND secret_ref IS NULL))
-);
-
-CREATE TABLE crypto_key_emails (
-    key_id INTEGER NOT NULL REFERENCES crypto_keys(id) ON DELETE CASCADE,
-    email  TEXT NOT NULL COLLATE NOCASE,
-    PRIMARY KEY (key_id, email)
-) WITHOUT ROWID;
-CREATE INDEX crypto_key_emails_email ON crypto_key_emails(email);
-
-CREATE TABLE crypto_trust (
-    technology  TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
-    fingerprint TEXT NOT NULL,
-    decision    TEXT NOT NULL CHECK (decision IN ('verified', 'rejected')),
-    -- Unix seconds (UTC).
-    decided_at  INTEGER NOT NULL,
-    PRIMARY KEY (technology, fingerprint)
-) WITHOUT ROWID;
-
--- Autocrypt Level 1 peer state. No foreign key on account_id: peers of a
--- removed account are removed by the core with the account.
-CREATE TABLE autocrypt_peers (
-    account_id          TEXT NOT NULL,
-    email               TEXT NOT NULL COLLATE NOCASE,
-    -- Unix seconds (UTC) of the newest message seen from the peer.
-    last_seen           INTEGER NOT NULL,
-    -- Date of the newest message with an Autocrypt header.
-    autocrypt_timestamp INTEGER,
-    -- Fingerprint of the key from that header (a crypto_keys row).
-    key_fingerprint     TEXT,
-    prefer_encrypt      TEXT NOT NULL DEFAULT 'nopreference'
-                        CHECK (prefer_encrypt IN ('mutual', 'nopreference')),
-    gossip_timestamp    INTEGER,
-    gossip_fingerprint  TEXT,
-    PRIMARY KEY (account_id, email)
-) WITHOUT ROWID;
-
-CREATE TABLE vault_state (
-    id          INTEGER PRIMARY KEY CHECK (id = 1),
-    state       TEXT NOT NULL DEFAULT 'plain'
-                CHECK (state IN ('plain', 'encrypting', 'encrypted', 'decrypting')),
-    phase       TEXT CHECK (phase IN ('database', 'blobs', 'index')),
-    done        INTEGER NOT NULL DEFAULT 0,
-    total       INTEGER NOT NULL DEFAULT 0,
-    -- Keychain reference of the data key.
-    key_ref     TEXT,
-    -- A value encrypted with the data key, to detect a wrong key.
-    key_check   BLOB,
-    -- Unix seconds (UTC).
-    started_at  INTEGER,
-    finished_at INTEGER,
-    -- Last migration error (English diagnostic), NULL when none.
-    error       TEXT
-);
-INSERT INTO vault_state (id) VALUES (1);
-
-CREATE TABLE message_security (
-    message_id   TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    signed       INTEGER NOT NULL DEFAULT 0,
-    encrypted    INTEGER NOT NULL DEFAULT 0,
-    -- nail_api::security::SecurityStatus JSON; NULL = neither.
-    status       TEXT,
-    -- nail_api::security::AuthResults JSON; NULL = none trusted.
-    auth_results TEXT,
-    -- Unix seconds (UTC).
-    checked_at   INTEGER NOT NULL
-) WITHOUT ROWID;
-
-CREATE TABLE app_settings (
-    key   TEXT PRIMARY KEY NOT NULL,
-    -- JSON.
-    value TEXT NOT NULL
-) WITHOUT ROWID;
-";
+const V5: &str = include_str!("migrations/v05.sql");
 
 /// Schema v6 (M2b WP40, ADR 0036): the remote UI and remote content.
 ///
@@ -459,140 +86,7 @@ CREATE TABLE app_settings (
 /// * `remote_content_allow` — remote-content allow-lists (per message,
 ///   sender, domain). Message entries have no foreign key (ids are
 ///   strings, also of virtual messages); the core removes stale ones.
-const V6: &str = r"
-CREATE TABLE remote_users (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    name           TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    display_name   TEXT,
-    -- Argon2id PHC string; NULL = no password.
-    password_hash  TEXT CHECK (password_hash IS NULL OR substr(password_hash, 1, 10) = '$argon2id$'),
-    -- Keychain reference of the TOTP secret; NULL = no TOTP.
-    totp_ref       TEXT CHECK (totp_ref IS NULL OR substr(totp_ref, 1, 9) = 'keychain:'),
-    -- Last accepted TOTP time step (a code is accepted once).
-    totp_last_step INTEGER,
-    -- nail_api::remote::RemoteGrant JSON: the most devices and sessions get.
-    grant_json     TEXT NOT NULL DEFAULT '{}',
-    disabled       INTEGER NOT NULL DEFAULT 0,
-    -- Unix seconds (UTC).
-    created_at     INTEGER NOT NULL,
-    updated_at     INTEGER NOT NULL,
-    last_login_at  INTEGER,
-    locked_until   INTEGER
-);
-
-CREATE TABLE remote_devices (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      INTEGER NOT NULL REFERENCES remote_users(id) ON DELETE CASCADE,
-    name         TEXT NOT NULL,
-    -- SHA-256 (hex) of the device cookie's secret.
-    secret_hash  TEXT NOT NULL UNIQUE,
-    grant_json   TEXT NOT NULL DEFAULT '{}',
-    -- Unix seconds (UTC).
-    paired_at    INTEGER NOT NULL,
-    last_seen_at INTEGER,
-    user_agent   TEXT,
-    last_ip      TEXT,
-    revoked_at   INTEGER
-);
-CREATE INDEX remote_devices_user ON remote_devices(user_id);
-
-CREATE TABLE remote_passkeys (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id       INTEGER NOT NULL REFERENCES remote_users(id) ON DELETE CASCADE,
-    -- WebAuthn credential id (public).
-    credential_id BLOB NOT NULL UNIQUE,
-    name          TEXT NOT NULL,
-    -- The WebAuthn library's serialized credential (public key, algorithm,
-    -- signature counter, flags); no secret.
-    credential    TEXT NOT NULL,
-    device_id     INTEGER REFERENCES remote_devices(id) ON DELETE SET NULL,
-    -- Unix seconds (UTC).
-    created_at    INTEGER NOT NULL,
-    last_used_at  INTEGER
-);
-CREATE INDEX remote_passkeys_user ON remote_passkeys(user_id);
-
-CREATE TABLE remote_sessions (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id              INTEGER NOT NULL REFERENCES remote_users(id) ON DELETE CASCADE,
-    device_id            INTEGER NOT NULL REFERENCES remote_devices(id) ON DELETE CASCADE,
-    -- SHA-256 (hex) of the session token.
-    token_hash           TEXT NOT NULL UNIQUE,
-    -- The token before the last rotation, accepted until previous_valid_until.
-    previous_token_hash  TEXT UNIQUE,
-    previous_valid_until INTEGER,
-    auth_method          TEXT NOT NULL
-                         CHECK (auth_method IN ('passkey', 'password', 'password-totp', 'pairing')),
-    grant_json           TEXT NOT NULL DEFAULT '{}',
-    -- Unix seconds (UTC).
-    created_at           INTEGER NOT NULL,
-    last_seen_at         INTEGER NOT NULL,
-    expires_at           INTEGER NOT NULL,
-    rotated_at           INTEGER NOT NULL,
-    reauth_at            INTEGER,
-    ip                   TEXT,
-    user_agent           TEXT,
-    ended_at             INTEGER,
-    end_reason           TEXT CHECK (end_reason IN ('logout', 'revoked', 'expired',
-                             'device-revoked', 'user-changed'))
-);
-CREATE INDEX remote_sessions_user ON remote_sessions(user_id, id DESC);
-CREATE INDEX remote_sessions_device ON remote_sessions(device_id);
-
-CREATE TABLE remote_pairing_codes (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      INTEGER NOT NULL REFERENCES remote_users(id) ON DELETE CASCADE,
-    -- SHA-256 (hex) of the normalized code.
-    code_hash    TEXT NOT NULL UNIQUE,
-    device_name  TEXT,
-    grant_json   TEXT NOT NULL DEFAULT '{}',
-    -- Unix seconds (UTC).
-    created_at   INTEGER NOT NULL,
-    expires_at   INTEGER NOT NULL,
-    used_at      INTEGER,
-    cancelled_at INTEGER,
-    device_id    INTEGER REFERENCES remote_devices(id) ON DELETE SET NULL
-);
-
--- Failed-login counters: key 'ip:<address>' or 'user:<lowercase name>'.
-CREATE TABLE remote_throttle (
-    key              TEXT PRIMARY KEY NOT NULL,
-    failures         INTEGER NOT NULL DEFAULT 0,
-    -- Unix seconds (UTC).
-    first_failure_at INTEGER NOT NULL,
-    last_failure_at  INTEGER NOT NULL,
-    locked_until     INTEGER
-) WITHOUT ROWID;
-
-CREATE TABLE remote_audit (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Unix seconds (UTC).
-    at         INTEGER NOT NULL,
-    kind       TEXT NOT NULL,
-    outcome    TEXT NOT NULL,
-    user_id    INTEGER REFERENCES remote_users(id) ON DELETE SET NULL,
-    user_name  TEXT,
-    device_id  INTEGER REFERENCES remote_devices(id) ON DELETE SET NULL,
-    session_id INTEGER REFERENCES remote_sessions(id) ON DELETE SET NULL,
-    ip         TEXT,
-    user_agent TEXT,
-    method     TEXT,
-    name       TEXT,
-    error      TEXT,
-    detail     TEXT
-);
-CREATE INDEX remote_audit_user ON remote_audit(user_id, id DESC);
-
-CREATE TABLE remote_content_allow (
-    scope      TEXT NOT NULL CHECK (scope IN ('message', 'sender', 'domain')),
-    -- Message id, lowercase address or lowercase domain.
-    value      TEXT NOT NULL,
-    label      TEXT,
-    -- Unix seconds (UTC).
-    created_at INTEGER NOT NULL,
-    PRIMARY KEY (scope, value)
-) WITHOUT ROWID;
-";
+const V6: &str = include_str!("migrations/v06.sql");
 
 /// Schema v7 (M2c WP50, ADR 0043): sync policies, snooze, the junk
 /// classifier, notification overrides and the Sieve state.
@@ -616,86 +110,7 @@ CREATE TABLE remote_content_allow (
 /// * `sieve_state` — per account: hash and time of the uploaded script,
 ///   the server's extensions and other scripts, the vacation settings and
 ///   the last error.
-const V7: &str = r"
-ALTER TABLE messages ADD COLUMN body_state TEXT NOT NULL DEFAULT 'synced'
-    CHECK (body_state IN ('synced', 'headers-only', 'on-demand'));
-CREATE INDEX messages_headers_only ON messages(folder_id) WHERE body_state = 'headers-only';
-
-CREATE TABLE snoozed_messages (
-    message_id     TEXT PRIMARY KEY NOT NULL,
-    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- Unix seconds (UTC).
-    until          INTEGER NOT NULL,
-    wake_folder_id TEXT NOT NULL,
-    snoozed_at     INTEGER NOT NULL,
-    -- Message-ID header (without angle brackets), to find the message again.
-    rfc_message_id TEXT
-) WITHOUT ROWID;
-CREATE INDEX snoozed_until ON snoozed_messages(until);
-
-CREATE TABLE junk_settings (
-    account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- JSON (nail_api::triage::JunkSettings).
-    settings   TEXT NOT NULL
-) WITHOUT ROWID;
-
-CREATE TABLE junk_tokens (
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- 16 hex characters: the first 64 bits of SHA-256 of the token.
-    token      TEXT NOT NULL CHECK (length(token) = 16),
-    junk       INTEGER NOT NULL DEFAULT 0 CHECK (junk >= 0),
-    ham        INTEGER NOT NULL DEFAULT 0 CHECK (ham >= 0),
-    PRIMARY KEY (account_id, token)
-) WITHOUT ROWID;
-
-CREATE TABLE junk_training (
-    account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- Message-ID header, or `local:<message id>` when there is none.
-    message_key TEXT NOT NULL,
-    junk        INTEGER NOT NULL CHECK (junk IN (0, 1)),
-    -- The hashed tokens it was trained with (JSON array), to untrain it.
-    tokens      TEXT NOT NULL DEFAULT '[]',
-    trained_at  INTEGER NOT NULL,
-    PRIMARY KEY (account_id, message_key)
-) WITHOUT ROWID;
-
-CREATE TABLE junk_verdicts (
-    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    junk       INTEGER NOT NULL CHECK (junk IN (0, 1)),
-    score      INTEGER CHECK (score IS NULL OR (score >= 0 AND score <= 100)),
-    source     TEXT NOT NULL CHECK (source IN ('server', 'classifier', 'user')),
-    decided_at INTEGER NOT NULL
-) WITHOUT ROWID;
-
-CREATE TABLE notify_overrides (
-    scope     TEXT NOT NULL CHECK (scope IN ('account', 'folder')),
-    target_id TEXT NOT NULL,
-    notify    INTEGER NOT NULL CHECK (notify IN (0, 1)),
-    position  INTEGER NOT NULL,
-    PRIMARY KEY (scope, target_id)
-) WITHOUT ROWID;
-CREATE TRIGGER notify_overrides_account AFTER DELETE ON accounts BEGIN
-    DELETE FROM notify_overrides WHERE scope = 'account' AND target_id = OLD.id;
-END;
-CREATE TRIGGER notify_overrides_folder AFTER DELETE ON folders BEGIN
-    DELETE FROM notify_overrides WHERE scope = 'folder' AND target_id = OLD.id;
-END;
-
-CREATE TABLE sieve_state (
-    account_id    TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- SHA-256 (hex) of the uploaded script; NULL = never uploaded.
-    script_hash   TEXT CHECK (script_hash IS NULL OR length(script_hash) = 64),
-    -- Unix seconds (UTC).
-    uploaded_at   INTEGER,
-    -- JSON arrays of the server's Sieve extensions and other scripts.
-    extensions    TEXT NOT NULL DEFAULT '[]',
-    other_scripts TEXT NOT NULL DEFAULT '[]',
-    -- JSON (nail_api::sieve::VacationSettings); NULL = the defaults.
-    vacation      TEXT,
-    -- JSON (nail_api::ApiError) of the last failure; NULL = none.
-    last_error    TEXT
-) WITHOUT ROWID;
-";
+const V7: &str = include_str!("migrations/v07.sql");
 
 /// Schema v8 (M2c review fixes, ADR 0049):
 ///
@@ -712,23 +127,7 @@ CREATE TABLE sieve_state (
 ///   hidden Snoozed folder). A user folder that happens to be called
 ///   `Snoozed` is not marked and stays visible. Removed with the folder.
 ///   Existing top-level `Snoozed` folders holding snoozed mail are marked.
-const V8: &str = r"
-ALTER TABLE sieve_state ADD COLUMN location TEXT;
-ALTER TABLE sieve_state ADD COLUMN server_rules TEXT NOT NULL DEFAULT '[]';
-
-CREATE TABLE folder_marks (
-    folder_id  TEXT PRIMARY KEY NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    kind       TEXT NOT NULL CHECK (kind IN ('snoozed')),
-    UNIQUE (account_id, kind)
-) WITHOUT ROWID;
-
-INSERT OR IGNORE INTO folder_marks (folder_id, account_id, kind)
-    SELECT f.id, f.account_id, 'snoozed' FROM folders f
-    WHERE f.parent_id IS NULL AND f.path = 'Snoozed'
-      AND EXISTS (SELECT 1 FROM messages m JOIN snoozed_messages s ON s.message_id = m.id
-                  WHERE m.folder_id = f.id);
-";
+const V8: &str = include_str!("migrations/v08.sql");
 
 /// Schema v9 (M2d, ADR 0050): the plug-in preview.
 ///
@@ -747,62 +146,7 @@ INSERT OR IGNORE INTO folder_marks (folder_id, account_id, kind)
 ///   the message is sealed at rest (it may quote mail).
 ///
 /// Everything of a plug-in goes with it (`ON DELETE CASCADE`).
-const V9: &str = r"
-CREATE TABLE plugins (
-    id             TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 64),
-    version        TEXT NOT NULL,
-    -- JSON (nail_api::plugins::PluginManifest), as in the package.
-    manifest       TEXT NOT NULL,
-    source_kind    TEXT NOT NULL CHECK (source_kind IN ('file', 'url', 'dev')),
-    -- Path, URL or folder.
-    source         TEXT NOT NULL,
-    package_sha256 TEXT CHECK (package_sha256 IS NULL OR length(package_sha256) = 64),
-    enabled        INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
-    -- JSON object: setting key -> value (only values the user changed).
-    settings       TEXT NOT NULL DEFAULT '{}',
-    storage_quota  INTEGER NOT NULL CHECK (storage_quota >= 0),
-    -- Unix seconds (UTC).
-    installed_at   INTEGER NOT NULL,
-    updated_at     INTEGER NOT NULL,
-    -- JSON (nail_api::ApiError) of what stopped it last; NULL = nothing.
-    last_error     TEXT
-) WITHOUT ROWID;
-
-CREATE TABLE plugin_grants (
-    plugin_id  TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    -- Permission name (nail_api::plugins::PluginPermission).
-    permission TEXT NOT NULL,
-    -- JSON array of account ids; NULL = every account.
-    accounts   TEXT,
-    granted_at INTEGER NOT NULL,
-    PRIMARY KEY (plugin_id, permission)
-) WITHOUT ROWID;
-
-CREATE TABLE plugin_storage (
-    id         INTEGER PRIMARY KEY,
-    plugin_id  TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    key        TEXT NOT NULL CHECK (length(key) BETWEEN 1 AND 256),
-    -- JSON value; sealed at rest.
-    value      TEXT NOT NULL,
-    size       INTEGER NOT NULL CHECK (size >= 0),
-    updated_at INTEGER NOT NULL,
-    UNIQUE (plugin_id, key)
-);
-
-CREATE TABLE plugin_logs (
-    seq       INTEGER PRIMARY KEY AUTOINCREMENT,
-    plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    -- Unix milliseconds (UTC).
-    at        INTEGER NOT NULL,
-    level     TEXT NOT NULL CHECK (level IN ('debug', 'info', 'warn', 'error')),
-    source    TEXT NOT NULL CHECK (source IN ('plugin', 'host', 'api')),
-    -- Sealed at rest.
-    message   TEXT NOT NULL,
-    -- JSON (nail_api::LocalizedMessage) for host lines; NULL otherwise.
-    localized TEXT
-);
-CREATE INDEX plugin_logs_by_plugin ON plugin_logs(plugin_id, seq);
-";
+const V9: &str = include_str!("migrations/v09.sql");
 
 /// Schema v10 (M3a, ADR 0058): calendars, contacts and tasks.
 ///
@@ -835,220 +179,7 @@ CREATE INDEX plugin_logs_by_plugin ON plugin_logs(plugin_id, seq);
 /// * `pim_ops` — the PIM operation queue (like `op_queue`, per source).
 ///
 /// Everything of a source goes with it (`ON DELETE CASCADE`).
-const V10: &str = r"
-CREATE TABLE pim_sources (
-    id           TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 64),
-    kind         TEXT NOT NULL CHECK (kind IN ('local', 'ics', 'caldav', 'carddav')),
-    -- JSON: discovered endpoints (principal, home sets, capabilities).
-    discovery    TEXT,
-    state        TEXT NOT NULL DEFAULT 'idle'
-                 CHECK (state IN ('idle', 'syncing', 'offline', 'auth-error', 'error', 'disabled')),
-    -- Unix seconds (UTC).
-    last_sync_at INTEGER,
-    -- JSON (nail_api::ApiError) of the last failure; NULL = none.
-    last_error   TEXT,
-    created_at   INTEGER NOT NULL
-) WITHOUT ROWID;
-INSERT INTO pim_sources (id, kind, created_at)
-    VALUES ('local', 'local', CAST(strftime('%s', 'now') AS INTEGER));
-
-CREATE TABLE pim_collections (
-    id            TEXT PRIMARY KEY NOT NULL,
-    source_id     TEXT NOT NULL REFERENCES pim_sources(id) ON DELETE CASCADE,
-    kind          TEXT NOT NULL CHECK (kind IN ('calendar', 'address-book')),
-    -- Collection URL (DAV) or feed URL (ICS); NULL for local collections.
-    href          TEXT,
-    -- JSON (nail_api CalendarSettings / AddressBookSettings).
-    settings      TEXT NOT NULL,
-    -- JSON array of nail_api CalendarComponent; '[]' for address books.
-    components    TEXT NOT NULL DEFAULT '[]',
-    read_only     INTEGER NOT NULL DEFAULT 0 CHECK (read_only IN (0, 1)),
-    timezone      TEXT,
-    role          TEXT CHECK (role IS NULL OR role IN ('collected')),
-    ctag          TEXT,
-    sync_token    TEXT,
-    etag          TEXT,
-    last_modified TEXT,
-    last_sync_at  INTEGER,
-    UNIQUE (source_id, href)
-) WITHOUT ROWID;
-CREATE INDEX pim_collections_source ON pim_collections(source_id, kind);
-CREATE UNIQUE INDEX pim_collections_role ON pim_collections(role) WHERE role IS NOT NULL;
-
-CREATE TABLE pim_objects (
-    id            INTEGER PRIMARY KEY,
-    collection_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    uid           TEXT NOT NULL,
-    -- Resource URL on the server; NULL until uploaded (and for local / ICS).
-    href          TEXT,
-    etag          TEXT,
-    kind          TEXT NOT NULL CHECK (kind IN ('event', 'task', 'contact', 'group')),
-    -- The iCalendar / vCard text; sealed at rest.
-    raw           TEXT NOT NULL,
-    sync          TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending', 'conflict')),
-    -- The local version kept after a conflict (the server's won); sealed.
-    conflict_raw  TEXT,
-    -- Deleted locally, the server delete is queued.
-    deleted       INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
-    -- Unix seconds (UTC).
-    updated_at    INTEGER NOT NULL,
-    UNIQUE (collection_id, uid)
-);
-CREATE INDEX pim_objects_href ON pim_objects(collection_id, href) WHERE href IS NOT NULL;
-CREATE INDEX pim_objects_unsynced ON pim_objects(collection_id) WHERE sync <> 'synced';
-
-CREATE TABLE pim_events (
-    id          TEXT PRIMARY KEY NOT NULL,
-    object_id   INTEGER NOT NULL UNIQUE REFERENCES pim_objects(id) ON DELETE CASCADE,
-    calendar_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    uid         TEXT NOT NULL,
-    title       TEXT NOT NULL DEFAULT '',
-    -- Unix seconds of the first start and the last end (NULL = recurs
-    -- forever); dates and floating times as UTC wall time.
-    first_start INTEGER NOT NULL,
-    last_end    INTEGER,
-    recurring   INTEGER NOT NULL DEFAULT 0 CHECK (recurring IN (0, 1)),
-    -- JSON (nail_api CalendarEvent); sealed at rest.
-    data        TEXT NOT NULL,
-    updated_at  INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX pim_events_calendar ON pim_events(calendar_id, first_start);
-
-CREATE TABLE pim_event_instances (
-    event_id      TEXT NOT NULL REFERENCES pim_events(id) ON DELETE CASCADE,
-    calendar_id   TEXT NOT NULL,
-    -- The occurrence's recurrence id (nail_api PimTime as JSON); '' for a
-    -- single event.
-    recurrence_id TEXT NOT NULL,
-    -- Unix seconds (UTC); dates and floating times as UTC wall time.
-    start_at      INTEGER NOT NULL,
-    end_at        INTEGER NOT NULL,
-    floating      INTEGER NOT NULL DEFAULT 0 CHECK (floating IN (0, 1)),
-    all_day       INTEGER NOT NULL DEFAULT 0 CHECK (all_day IN (0, 1)),
-    overridden    INTEGER NOT NULL DEFAULT 0 CHECK (overridden IN (0, 1)),
-    cancelled     INTEGER NOT NULL DEFAULT 0 CHECK (cancelled IN (0, 1)),
-    busy          INTEGER NOT NULL DEFAULT 1 CHECK (busy IN (0, 1)),
-    PRIMARY KEY (event_id, recurrence_id)
-) WITHOUT ROWID;
-CREATE INDEX pim_event_instances_range ON pim_event_instances(start_at, end_at);
-CREATE INDEX pim_event_instances_calendar ON pim_event_instances(calendar_id, start_at);
-
-CREATE TABLE pim_instance_windows (
-    event_id       TEXT PRIMARY KEY NOT NULL REFERENCES pim_events(id) ON DELETE CASCADE,
-    -- Unix seconds: the expanded range [from, until).
-    expanded_from  INTEGER NOT NULL,
-    expanded_until INTEGER NOT NULL,
-    CHECK (expanded_from <= expanded_until)
-) WITHOUT ROWID;
-
-CREATE TABLE pim_contacts (
-    id              TEXT PRIMARY KEY NOT NULL,
-    object_id       INTEGER NOT NULL UNIQUE REFERENCES pim_objects(id) ON DELETE CASCADE,
-    address_book_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    uid             TEXT NOT NULL,
-    kind            TEXT NOT NULL DEFAULT 'individual'
-                    CHECK (kind IN ('individual', 'organization', 'location', 'group')),
-    display_name    TEXT NOT NULL DEFAULT '',
-    -- Lowercase, family name first.
-    sort_name       TEXT NOT NULL DEFAULT '',
-    -- SHA-256 (hex) of the photo in the blob store.
-    photo_sha256    TEXT CHECK (photo_sha256 IS NULL OR length(photo_sha256) = 64),
-    -- JSON (nail_api ContactFields, or the group name and members); sealed.
-    data            TEXT NOT NULL,
-    updated_at      INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX pim_contacts_book ON pim_contacts(address_book_id, kind, sort_name);
-
-CREATE TABLE pim_contact_emails (
-    contact_id TEXT NOT NULL REFERENCES pim_contacts(id) ON DELETE CASCADE,
-    -- Lowercase.
-    email      TEXT NOT NULL,
-    preferred  INTEGER NOT NULL DEFAULT 0 CHECK (preferred IN (0, 1)),
-    PRIMARY KEY (contact_id, email)
-) WITHOUT ROWID;
-CREATE INDEX pim_contact_emails_email ON pim_contact_emails(email);
-
-CREATE TABLE pim_contact_links (
-    contact_id TEXT PRIMARY KEY NOT NULL REFERENCES pim_contacts(id) ON DELETE CASCADE,
-    -- The merged person's primary contact.
-    primary_id TEXT NOT NULL REFERENCES pim_contacts(id) ON DELETE CASCADE,
-    CHECK (contact_id <> primary_id)
-) WITHOUT ROWID;
-CREATE INDEX pim_contact_links_primary ON pim_contact_links(primary_id);
-
-CREATE TABLE pim_group_members (
-    group_id TEXT NOT NULL REFERENCES pim_contacts(id) ON DELETE CASCADE,
-    -- The member's vCard UID (as in MEMBER, e.g. urn:uuid:…) or a
-    -- mailto: address.
-    member   TEXT NOT NULL,
-    PRIMARY KEY (group_id, member)
-) WITHOUT ROWID;
-
-CREATE TABLE pim_tasks (
-    id           TEXT PRIMARY KEY NOT NULL,
-    object_id    INTEGER NOT NULL UNIQUE REFERENCES pim_objects(id) ON DELETE CASCADE,
-    calendar_id  TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    uid          TEXT NOT NULL,
-    -- UID of the parent task (RELATED-TO;RELTYPE=PARENT).
-    parent_uid   TEXT,
-    title        TEXT NOT NULL DEFAULT '',
-    status       TEXT NOT NULL DEFAULT 'needs-action'
-                 CHECK (status IN ('needs-action', 'in-process', 'completed', 'cancelled')),
-    priority     INTEGER CHECK (priority IS NULL OR priority BETWEEN 0 AND 9),
-    -- Unix seconds; dates and floating times as UTC wall time.
-    due_at       INTEGER,
-    start_at     INTEGER,
-    completed_at INTEGER,
-    sort_order   INTEGER,
-    -- JSON (nail_api Task); sealed at rest.
-    data         TEXT NOT NULL,
-    updated_at   INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX pim_tasks_list ON pim_tasks(calendar_id, status, due_at);
-CREATE INDEX pim_tasks_parent ON pim_tasks(calendar_id, parent_uid) WHERE parent_uid IS NOT NULL;
-
-CREATE TABLE pim_reminders (
-    id            TEXT PRIMARY KEY NOT NULL,
-    item_kind     TEXT NOT NULL CHECK (item_kind IN ('event', 'task')),
-    item_id       TEXT NOT NULL,
-    -- The occurrence (as in pim_event_instances); '' for single items.
-    recurrence_id TEXT NOT NULL DEFAULT '',
-    -- The alarm's UID, else its position in the item.
-    alarm_key     TEXT NOT NULL,
-    -- Unix seconds (UTC).
-    fire_at       INTEGER NOT NULL,
-    state         TEXT NOT NULL DEFAULT 'pending'
-                  CHECK (state IN ('pending', 'fired', 'snoozed', 'dismissed')),
-    snoozed_until INTEGER,
-    updated_at    INTEGER NOT NULL,
-    UNIQUE (item_kind, item_id, recurrence_id, alarm_key)
-) WITHOUT ROWID;
-CREATE INDEX pim_reminders_due ON pim_reminders(state, fire_at);
-
-CREATE TRIGGER pim_events_drop_reminders AFTER DELETE ON pim_events BEGIN
-    DELETE FROM pim_reminders WHERE item_kind = 'event' AND item_id = OLD.id;
-END;
-CREATE TRIGGER pim_tasks_drop_reminders AFTER DELETE ON pim_tasks BEGIN
-    DELETE FROM pim_reminders WHERE item_kind = 'task' AND item_id = OLD.id;
-END;
-
-CREATE TABLE pim_ops (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_id  TEXT NOT NULL REFERENCES pim_sources(id) ON DELETE CASCADE,
-    object_id  INTEGER REFERENCES pim_objects(id) ON DELETE SET NULL,
-    kind       TEXT NOT NULL,
-    -- JSON: what to replay (target URL, If-Match ETag, collection, …);
-    -- item content is read from pim_objects when replaying.
-    payload    TEXT NOT NULL,
-    state      TEXT NOT NULL DEFAULT 'pending'
-               CHECK (state IN ('pending', 'in_flight', 'done', 'failed')),
-    attempts   INTEGER NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE INDEX pim_ops_state ON pim_ops(source_id, state, id);
-";
+const V10: &str = include_str!("migrations/v10.sql");
 
 /// Schema v11 (M3b, ADR 0065): scheduling state and Gmail accounts.
 ///
@@ -1071,131 +202,7 @@ CREATE INDEX pim_ops_state ON pim_ops(source_id, state, id);
 ///   stored Gmail message.
 /// * `gmail_label_ops` — the label operation queue (create / update /
 ///   delete), per account.
-const V11: &str = r"
-ALTER TABLE messages ADD COLUMN remote_id TEXT;
-CREATE UNIQUE INDEX messages_remote_id ON messages(account_id, remote_id)
-    WHERE remote_id IS NOT NULL;
-
-CREATE TABLE itip_state (
-    uid           TEXT NOT NULL,
-    -- The occurrence (nail_api PimTime as JSON); '' = the whole event.
-    recurrence_id TEXT NOT NULL DEFAULT '',
-    -- Lowercase email address.
-    address       TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN ('organizer', 'attendee')),
-    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
-    -- RFC 3339 UTC.
-    dtstamp       TEXT,
-    -- nail_api ParticipationStatus (kebab-case); NULL for the organizer.
-    partstat      TEXT,
-    -- The message last applied for this address (no FK: kept after the
-    -- message is deleted).
-    message_id    TEXT,
-    -- Unix seconds.
-    updated_at    INTEGER NOT NULL,
-    PRIMARY KEY (uid, recurrence_id, address)
-) WITHOUT ROWID;
-
-CREATE TABLE itip_messages (
-    message_id    TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- nail_api ItipMethod (kebab-case).
-    method        TEXT NOT NULL,
-    uid           TEXT NOT NULL,
-    recurrence_id TEXT NOT NULL DEFAULT '',
-    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
-    dtstamp       TEXT,
-    -- Lowercase address of the organizer / attendee it came from.
-    sender        TEXT,
-    state         TEXT NOT NULL DEFAULT 'new'
-                  CHECK (state IN ('new', 'applied', 'outdated', 'ignored', 'failed')),
-    -- The user's event it was applied to (no FK: events come and go).
-    event_id      TEXT,
-    processed_at  INTEGER
-) WITHOUT ROWID;
-CREATE INDEX itip_messages_uid ON itip_messages(uid, recurrence_id);
-
-CREATE TABLE itip_sent (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    identity_id   TEXT NOT NULL,
-    method        TEXT NOT NULL,
-    uid           TEXT NOT NULL,
-    recurrence_id TEXT NOT NULL DEFAULT '',
-    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
-    dtstamp       TEXT NOT NULL,
-    partstat      TEXT,
-    -- JSON array of addresses.
-    recipients    TEXT NOT NULL DEFAULT '[]',
-    transport     TEXT NOT NULL CHECK (transport IN ('imip', 'server')),
-    -- The outbox entry of an iMIP mail (nail_api OutboxId).
-    outbox_id     TEXT,
-    created_at    INTEGER NOT NULL
-);
-CREATE INDEX itip_sent_uid ON itip_sent(uid, recurrence_id);
-
-CREATE TABLE gmail_sync (
-    account_id           TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- The last historyId whose changes are all stored; NULL = full sync.
-    history_id           INTEGER,
-    -- An interrupted full sync: the next page token and the historyId
-    -- taken when it started.
-    full_sync_page       TEXT,
-    full_sync_history_id INTEGER,
-    -- Unix seconds.
-    last_sync_at         INTEGER
-) WITHOUT ROWID;
-
-CREATE TABLE gmail_labels (
-    account_id         TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    label_id           TEXT NOT NULL,
-    name               TEXT NOT NULL,
-    kind               TEXT NOT NULL CHECK (kind IN ('system', 'user')),
-    color_background   TEXT,
-    color_text         TEXT,
-    list_visibility    TEXT NOT NULL DEFAULT 'show'
-                       CHECK (list_visibility IN ('show', 'show-if-unread', 'hide')),
-    message_visibility TEXT NOT NULL DEFAULT 'show'
-                       CHECK (message_visibility IN ('show', 'hide')),
-    -- The Nail tag of a user label (its name).
-    tag                TEXT,
-    -- The folder of a system label shown as a folder.
-    folder_id          TEXT REFERENCES folders(id) ON DELETE SET NULL,
-    sync               TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
-    PRIMARY KEY (account_id, label_id)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX gmail_labels_tag ON gmail_labels(account_id, tag) WHERE tag IS NOT NULL;
-
-CREATE TABLE gmail_messages (
-    message_id      TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    gmail_thread_id TEXT NOT NULL,
-    -- JSON array of label ids.
-    label_ids       TEXT NOT NULL DEFAULT '[]',
-    category        TEXT CHECK (category IS NULL
-                    OR category IN ('primary', 'social', 'promotions', 'updates', 'forums'))
-) WITHOUT ROWID;
-CREATE INDEX gmail_messages_thread ON gmail_messages(account_id, gmail_thread_id);
-CREATE INDEX gmail_messages_category ON gmail_messages(account_id, category)
-    WHERE category IS NOT NULL;
-
-CREATE TABLE gmail_label_ops (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- The label (a local-… id until a create is replayed).
-    label_id   TEXT NOT NULL,
-    kind       TEXT NOT NULL CHECK (kind IN ('create', 'update', 'delete')),
-    -- JSON (nail_api GmailLabelSettings) for create / update.
-    payload    TEXT,
-    state      TEXT NOT NULL DEFAULT 'pending'
-               CHECK (state IN ('pending', 'done', 'failed')),
-    attempts   INTEGER NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
-";
+const V11: &str = include_str!("migrations/v11.sql");
 
 /// Schema v12 (M3c, ADR 0072): Exchange accounts.
 ///
@@ -1229,195 +236,7 @@ CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
 /// * `exchange_rooms` — cached room lists and rooms.
 /// * `exchange_ops` — the Exchange operation queue (categories, automatic
 ///   replies, inbox rules, Focused Inbox); payloads sealed.
-const V12: &str = r"
-CREATE TABLE pim_sources_v12 (
-    id           TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 128),
-    kind         TEXT NOT NULL
-                 CHECK (kind IN ('local', 'ics', 'caldav', 'carddav', 'exchange')),
-    -- The Exchange account of an `exchange` source.
-    account_id   TEXT REFERENCES accounts(id) ON DELETE CASCADE,
-    discovery    TEXT,
-    state        TEXT NOT NULL DEFAULT 'idle'
-                 CHECK (state IN ('idle', 'syncing', 'offline', 'auth-error', 'error', 'disabled')),
-    last_sync_at INTEGER,
-    last_error   TEXT,
-    created_at   INTEGER NOT NULL,
-    CHECK ((kind = 'exchange') = (account_id IS NOT NULL))
-) WITHOUT ROWID;
-INSERT INTO pim_sources_v12 (id, kind, discovery, state, last_sync_at, last_error, created_at)
-    SELECT id, kind, discovery, state, last_sync_at, last_error, created_at FROM pim_sources;
-DROP TABLE pim_sources;
-ALTER TABLE pim_sources_v12 RENAME TO pim_sources;
-CREATE UNIQUE INDEX pim_sources_account ON pim_sources(account_id) WHERE account_id IS NOT NULL;
-
-CREATE TABLE exchange_sync (
-    account_id      TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    engine          TEXT NOT NULL CHECK (engine IN ('graph', 'ews')),
-    server_version  TEXT,
-    -- EWS streaming subscription (resumable with its watermark).
-    subscription_id TEXT,
-    watermark       TEXT,
-    -- Unix seconds.
-    throttled_until INTEGER,
-    rules_state     TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (rules_state IN ('disabled', 'pending', 'syncing', 'in-sync', 'failed')),
-    rules_synced_at INTEGER,
-    -- JSON (nail_api::ApiError) of the last rules failure.
-    rules_error     TEXT,
-    last_sync_at    INTEGER
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_mailbox_sync (
-    account_id       TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- Lowercase address; '' = the account's own mailbox.
-    mailbox          TEXT NOT NULL DEFAULT '',
-    hierarchy_cursor TEXT,
-    last_sync_at     INTEGER,
-    PRIMARY KEY (account_id, mailbox)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_folders (
-    folder_id        TEXT PRIMARY KEY NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-    account_id       TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    mailbox          TEXT NOT NULL DEFAULT '',
-    remote_id        TEXT NOT NULL,
-    change_key       TEXT,
-    parent_remote_id TEXT,
-    -- nail_api ExchangeWellKnownFolder (kebab-case).
-    well_known       TEXT,
-    -- Items cursor; NULL = a full sync is needed.
-    cursor           TEXT,
-    -- An interrupted first sync (Graph next link / EWS state mid-pass).
-    full_sync_page   TEXT,
-    last_sync_at     INTEGER,
-    UNIQUE (account_id, mailbox, remote_id)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_items (
-    message_id      TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    mailbox         TEXT NOT NULL DEFAULT '',
-    change_key      TEXT,
-    conversation_id TEXT,
-    inference       TEXT CHECK (inference IS NULL OR inference IN ('focused', 'other'))
-) WITHOUT ROWID;
-CREATE INDEX exchange_items_inference ON exchange_items(account_id, inference)
-    WHERE inference IS NOT NULL;
-CREATE INDEX exchange_items_conversation ON exchange_items(account_id, conversation_id)
-    WHERE conversation_id IS NOT NULL;
-
-CREATE TABLE exchange_pim_collections (
-    collection_id TEXT PRIMARY KEY NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    mailbox       TEXT NOT NULL DEFAULT '',
-    remote_id     TEXT NOT NULL,
-    change_key    TEXT,
-    role          TEXT CHECK (role IS NULL OR role IN
-                  ('default-calendar', 'default-contacts', 'default-tasks', 'flagged-emails')),
-    todo          INTEGER NOT NULL DEFAULT 0 CHECK (todo IN (0, 1)),
-    cursor        TEXT,
-    last_sync_at  INTEGER,
-    UNIQUE (account_id, mailbox, remote_id)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_pim_items (
-    object_id     INTEGER PRIMARY KEY REFERENCES pim_objects(id) ON DELETE CASCADE,
-    collection_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    remote_id     TEXT NOT NULL,
-    change_key    TEXT,
-    UNIQUE (collection_id, remote_id)
-);
-
-CREATE TABLE exchange_mailboxes (
-    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- Lowercase.
-    address        TEXT NOT NULL,
-    name           TEXT,
-    kind           TEXT NOT NULL CHECK (kind IN ('shared', 'delegate')),
-    origin         TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('user', 'automapped')),
-    mail           INTEGER NOT NULL DEFAULT 1 CHECK (mail IN (0, 1)),
-    calendar       INTEGER NOT NULL DEFAULT 1 CHECK (calendar IN (0, 1)),
-    contacts       INTEGER NOT NULL DEFAULT 0 CHECK (contacts IN (0, 1)),
-    tasks          INTEGER NOT NULL DEFAULT 0 CHECK (tasks IN (0, 1)),
-    -- An automapped mailbox the user removed.
-    hidden         INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
-    state          TEXT NOT NULL DEFAULT 'pending'
-                   CHECK (state IN ('pending', 'synced', 'access-denied', 'not-found', 'error')),
-    root_folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
-    -- JSON (nail_api::ApiError) of the last failure.
-    last_error     TEXT,
-    created_at     INTEGER NOT NULL,
-    PRIMARY KEY (account_id, address)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_categories (
-    account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    category_id TEXT NOT NULL,
-    -- Also the Nail tag.
-    name        TEXT NOT NULL,
-    -- nail_api CategoryColor (`none`, `preset0` … `preset24`).
-    color       TEXT NOT NULL DEFAULT 'none',
-    sync        TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
-    PRIMARY KEY (account_id, category_id)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX exchange_categories_name
-    ON exchange_categories(account_id, name COLLATE NOCASE);
-
-CREATE TABLE exchange_automatic_replies (
-    account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- JSON (nail_api AutomaticRepliesSettings); sealed at rest.
-    settings   TEXT NOT NULL,
-    sync       TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
-    -- Unix seconds of the last read from the server.
-    fetched_at INTEGER
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_rules (
-    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    server_rule_id TEXT NOT NULL,
-    -- The Nail rule it was placed from (rules.kdl id); NULL = the user's.
-    rule_id        TEXT,
-    -- Digest of the placed Nail rule (placed again when it changes).
-    digest         TEXT,
-    sequence       INTEGER NOT NULL DEFAULT 0,
-    -- JSON (nail_api ExchangeInboxRule).
-    data           TEXT NOT NULL,
-    PRIMARY KEY (account_id, server_rule_id)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX exchange_rules_rule ON exchange_rules(account_id, rule_id)
-    WHERE rule_id IS NOT NULL;
-
-CREATE TABLE exchange_rooms (
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    kind       TEXT NOT NULL CHECK (kind IN ('room-list', 'room')),
-    -- The room list a room was listed from; '' = all rooms / the lists.
-    room_list  TEXT NOT NULL DEFAULT '',
-    address    TEXT NOT NULL,
-    -- JSON (nail_api RoomList / Room).
-    data       TEXT NOT NULL,
-    fetched_at INTEGER NOT NULL,
-    PRIMARY KEY (account_id, kind, room_list, address)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_ops (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    kind       TEXT NOT NULL CHECK (kind IN ('create-category', 'update-category',
-               'delete-category', 'set-automatic-replies', 'set-rule-enabled', 'delete-rule',
-               'classify')),
-    -- The category / server rule id, or NULL.
-    target     TEXT,
-    -- JSON (nail_store::exchange::ExchangeOp); sealed at rest.
-    payload    TEXT NOT NULL,
-    state      TEXT NOT NULL DEFAULT 'pending'
-               CHECK (state IN ('pending', 'done', 'failed')),
-    attempts   INTEGER NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
-";
+const V12: &str = include_str!("migrations/v12.sql");
 
 /// Schema v13 (M3c review fixes, ADR 0078): resumable Exchange listings,
 /// moves seen from other clients, meeting answers.
@@ -1436,40 +255,7 @@ CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
 /// * `exchange_meeting_answers` — per meeting the user was invited to: the
 ///   own answer as last synced, and an answer queued from Nail with its
 ///   comment (sealed) and whether the organizer is told.
-const V13: &str = r"
-ALTER TABLE exchange_pim_collections ADD COLUMN full_sync_page TEXT;
-
-CREATE TABLE exchange_listed (
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- A mail folder id or a PIM collection id.
-    scope      TEXT NOT NULL,
-    remote_id  TEXT NOT NULL,
-    PRIMARY KEY (scope, remote_id)
-) WITHOUT ROWID;
-
-CREATE TABLE exchange_removed (
-    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    -- Lowercase address; '' = the account's own mailbox.
-    mailbox    TEXT NOT NULL DEFAULT '',
-    removed_at INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX exchange_removed_mailbox ON exchange_removed(account_id, mailbox);
-
-CREATE TABLE exchange_meeting_answers (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    collection_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
-    uid           TEXT NOT NULL,
-    -- nail_api ParticipationStatus (kebab-case) as the server last reported it.
-    synced_status TEXT,
-    -- An answer queued from Nail (RespondToInvitation).
-    queued        INTEGER NOT NULL DEFAULT 0 CHECK (queued IN (0, 1)),
-    send          INTEGER NOT NULL DEFAULT 1 CHECK (send IN (0, 1)),
-    -- The answer's comment; sealed at rest.
-    comment       TEXT,
-    UNIQUE (collection_id, uid)
-);
-";
+const V13: &str = include_str!("migrations/v13.sql");
 
 /// Schema v14 (M4a, ADR 0079): writes by MCP clients and plug-ins.
 ///
@@ -1493,101 +279,7 @@ CREATE TABLE exchange_meeting_answers (
 ///   `plugin_hook_stats` — per hook: calls, failures, time-outs, vetoes,
 ///   time; `plugin_cpu` — CPU time per plug-in and minute for the hourly
 ///   quota. All go with their plug-in.
-const V14: &str = r"
-CREATE TABLE confirmations (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    actor_kind      TEXT NOT NULL CHECK (actor_kind IN ('mcp-client', 'plugin')),
-    actor_id        TEXT NOT NULL,
-    actor_name      TEXT NOT NULL,
-    -- A plug-in serving an MCP tool call: the client.
-    via_client_id   TEXT,
-    via_client_name TEXT,
-    -- nail_api::agents::ActionKind.
-    kind            TEXT NOT NULL CHECK (kind IN ('organize', 'trash', 'permanent-delete',
-                        'draft', 'send', 'calendar', 'invite', 'contact', 'task',
-                        'pim-delete', 'rule')),
-    operation       TEXT NOT NULL,
-    -- JSON {summary, targets, more_targets, changes, account_ids}; sealed.
-    view            TEXT NOT NULL,
-    -- JSON of what to run once approved; sealed. NULL once decided.
-    payload         TEXT,
-    idempotency_key TEXT,
-    state           TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'approved',
-                        'denied', 'expired', 'cancelled', 'failed')),
-    -- Unix seconds (UTC).
-    created_at      INTEGER NOT NULL,
-    expires_at      INTEGER NOT NULL,
-    decided_at      INTEGER,
-    decided_via     TEXT CHECK (decided_via IN ('nail', 'elicitation', 'system')),
-    -- JSON (nail_api::LocalizedMessage) for state 'failed'.
-    error           TEXT
-);
-CREATE INDEX confirmations_pending ON confirmations(expires_at) WHERE state = 'pending';
-CREATE INDEX confirmations_actor ON confirmations(actor_kind, actor_id, id DESC);
-CREATE UNIQUE INDEX confirmations_idempotency
-    ON confirmations(actor_kind, actor_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
-
-CREATE TABLE action_policies (
-    actor_kind TEXT NOT NULL CHECK (actor_kind IN ('mcp-client', 'plugin')),
-    actor_id   TEXT NOT NULL,
-    kind       TEXT NOT NULL,
-    mode       TEXT NOT NULL CHECK (mode IN ('ask', 'allow')),
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (actor_kind, actor_id, kind),
-    CHECK (NOT (mode = 'allow' AND kind IN ('trash', 'permanent-delete', 'pim-delete')))
-) WITHOUT ROWID;
-
--- JSON (nail_api::mcp::McpRateLimits); NULL = the defaults.
-ALTER TABLE mcp_clients ADD COLUMN rate_limits TEXT;
-
-CREATE TABLE mcp_idempotency (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id  INTEGER NOT NULL REFERENCES mcp_clients(id) ON DELETE CASCADE,
-    key        TEXT NOT NULL CHECK (length(key) BETWEEN 1 AND 128),
-    tool       TEXT NOT NULL,
-    -- JSON (the tool's structured result); sealed.
-    result     TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    UNIQUE (client_id, key)
-);
-CREATE INDEX mcp_idempotency_age ON mcp_idempotency(created_at);
-
-CREATE TABLE plugin_jobs (
-    plugin_id     TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    job           TEXT NOT NULL,
-    -- Unix seconds (UTC).
-    last_run_at   INTEGER,
-    next_run_at   INTEGER,
-    last_outcome  TEXT CHECK (last_outcome IN ('ok', 'error', 'timeout', 'cpu-quota', 'overlap')),
-    last_error    TEXT,
-    run_count     INTEGER NOT NULL DEFAULT 0,
-    failure_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (plugin_id, job)
-) WITHOUT ROWID;
-
-CREATE TABLE plugin_hook_stats (
-    plugin_id  TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    hook       TEXT NOT NULL CHECK (hook IN ('arrival', 'beforeSend', 'open')),
-    calls      INTEGER NOT NULL DEFAULT 0,
-    failures   INTEGER NOT NULL DEFAULT 0,
-    timeouts   INTEGER NOT NULL DEFAULT 0,
-    vetoes     INTEGER NOT NULL DEFAULT 0,
-    total_ms   INTEGER NOT NULL DEFAULT 0,
-    max_ms     INTEGER NOT NULL DEFAULT 0,
-    last_error TEXT,
-    -- Unix seconds (UTC).
-    last_at    INTEGER,
-    PRIMARY KEY (plugin_id, hook)
-) WITHOUT ROWID;
-
-CREATE TABLE plugin_cpu (
-    plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
-    -- Unix minute (seconds / 60).
-    minute    INTEGER NOT NULL,
-    cpu_ms    INTEGER NOT NULL CHECK (cpu_ms >= 0),
-    PRIMARY KEY (plugin_id, minute)
-) WITHOUT ROWID;
-";
+const V14: &str = include_str!("migrations/v14.sql");
 
 /// Schema v15 (M4c, ADR 0094): smartcard keys and server threads.
 ///
@@ -1600,50 +292,7 @@ CREATE TABLE plugin_cpu (
 ///   (Gmail `threadId`, Graph / EWS conversation id); messages sharing one
 ///   share a Nail thread (`thread_refs` key `remote-thread:<account>:<id>`,
 ///   `Store::set_message_remote_thread_id`).
-const V15: &str = r"
-CREATE TABLE crypto_keys_v15 (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
-    fingerprint       TEXT NOT NULL,
-    user_ids          TEXT NOT NULL DEFAULT '[]',
-    algorithm         TEXT NOT NULL,
-    created_at        INTEGER NOT NULL,
-    expires_at        INTEGER,
-    revoked           INTEGER NOT NULL DEFAULT 0,
-    can_sign          INTEGER NOT NULL DEFAULT 0,
-    can_encrypt       INTEGER NOT NULL DEFAULT 0,
-    source            TEXT NOT NULL CHECK (source IN ('generated', 'imported', 'pkcs12',
-                          'windows-store', 'autocrypt', 'autocrypt-gossip', 'setup-message',
-                          'wkd', 'keyserver', 'message', 'smartcard')),
-    public_data       BLOB NOT NULL,
-    secret_storage    TEXT CHECK (secret_storage IN ('keychain', 'passphrase', 'windows-store',
-                          'smartcard')),
-    -- Encrypted secret material; NULL for 'windows-store' and 'smartcard'.
-    secret_data       BLOB,
-    -- Keychain reference, Windows store thumbprint, or (smartcard) the
-    -- JSON of the SmartcardKeyRef.
-    secret_ref        TEXT,
-    issuer            TEXT,
-    serial            TEXT,
-    imported_at       INTEGER NOT NULL,
-    updated_at        INTEGER NOT NULL,
-    UNIQUE (technology, fingerprint),
-    CHECK (secret_storage IS NOT NULL OR (secret_data IS NULL AND secret_ref IS NULL))
-);
-INSERT INTO crypto_keys_v15 (id, technology, fingerprint, user_ids, algorithm, created_at,
-    expires_at, revoked, can_sign, can_encrypt, source, public_data, secret_storage,
-    secret_data, secret_ref, issuer, serial, imported_at, updated_at)
-SELECT id, technology, fingerprint, user_ids, algorithm, created_at,
-    expires_at, revoked, can_sign, can_encrypt, source, public_data, secret_storage,
-    secret_data, secret_ref, issuer, serial, imported_at, updated_at
-FROM crypto_keys;
-DROP TABLE crypto_keys;
-ALTER TABLE crypto_keys_v15 RENAME TO crypto_keys;
-
-ALTER TABLE messages ADD COLUMN remote_thread_id TEXT;
-CREATE INDEX messages_remote_thread ON messages(account_id, remote_thread_id)
-    WHERE remote_thread_id IS NOT NULL;
-";
+const V15: &str = include_str!("migrations/v15.sql");
 
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
@@ -1664,9 +313,7 @@ pub(crate) struct Migration {
 ///   a conversation list groups a folder by thread, counts its threads and
 ///   joins the Sent folders' messages of the listed threads from this index
 ///   alone (no row reads; `thread::activity::GROUPING_PAGE_SQL`).
-const V16: &str = r"
-CREATE INDEX messages_folder_thread ON messages(folder_id, thread_id, date_sort);
-";
+const V16: &str = include_str!("migrations/v16.sql");
 
 /// Schema v17 (P3 contract, ADR 0164): conversation speed and conversation
 /// actions.
@@ -1683,64 +330,7 @@ CREATE INDEX messages_folder_thread ON messages(folder_id, thread_id, date_sort)
 /// * `mail_batches` / `mail_batch_ops` — a mail action's queued operations
 ///   with their inverses: undo as one unit (`UndoMailAction`), like a rule
 ///   run's actions; WP-actions-core writes and reads them.
-const V17: &str = r"
-CREATE TABLE thread_activity (
-    folder_id     TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-    thread_id     TEXT NOT NULL,
-    -- Unix seconds (UTC): the newest date_sort of the thread in this folder.
-    folder_last   INTEGER NOT NULL,
-    -- Unix seconds (UTC): MAX(folder_last, the newest date_sort of the
-    -- thread in the Sent folders of the folder's account). Order key.
-    last_date     INTEGER NOT NULL,
-    -- The thread's messages in this folder (every stored copy).
-    message_count INTEGER NOT NULL CHECK (message_count > 0),
-    PRIMARY KEY (folder_id, thread_id)
-) WITHOUT ROWID;
-CREATE INDEX thread_activity_order ON thread_activity(folder_id, last_date DESC, thread_id DESC);
-CREATE INDEX thread_activity_thread ON thread_activity(thread_id);
-
-INSERT INTO thread_activity (folder_id, thread_id, folder_last, last_date, message_count)
-SELECT g.folder_id, g.thread_id, g.folder_last,
-       MAX(g.folder_last, COALESCE((
-           SELECT MAX(s.date_sort) FROM messages s
-            WHERE s.thread_id = g.thread_id
-              AND s.folder_id IN (SELECT sf.id FROM folders sf
-                                   WHERE sf.account_id = g.account_id AND sf.role = 'sent')
-       ), 0)),
-       g.message_count
-  FROM (SELECT m.folder_id, m.thread_id, f.account_id,
-               MAX(m.date_sort) AS folder_last, COUNT(*) AS message_count
-          FROM messages m JOIN folders f ON f.id = m.folder_id
-         WHERE m.thread_id IS NOT NULL AND f.role <> 'drafts'
-         GROUP BY m.folder_id, m.thread_id) g;
-
-CREATE TABLE mail_batches (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Who acted: 'user', 'remote:<session id>', 'mcp:<client id>',
-    -- 'plugin:<plug-in id>' (undo is the actor's).
-    actor         TEXT NOT NULL,
-    -- nail_api::mail_actions::MailActionKind wire name.
-    kind          TEXT NOT NULL,
-    state         TEXT NOT NULL DEFAULT 'done' CHECK (state IN ('done', 'undone')),
-    -- Unix seconds (UTC).
-    created_at    INTEGER NOT NULL,
-    message_count INTEGER NOT NULL,
-    conversations INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX mail_batches_created ON mail_batches(created_at);
-
--- Every queued operation of a batch with its inverse.
-CREATE TABLE mail_batch_ops (
-    batch_id   INTEGER NOT NULL REFERENCES mail_batches(id) ON DELETE CASCADE,
-    seq        INTEGER NOT NULL,
-    message_id TEXT NOT NULL,
-    -- op_queue id.
-    op_id      INTEGER,
-    -- nail_store::Operation JSON that undoes it; NULL = cannot be undone.
-    undo       TEXT,
-    PRIMARY KEY (batch_id, seq)
-) WITHOUT ROWID;
-";
+const V17: &str = include_str!("migrations/v17.sql");
 
 impl Migration {
     pub(crate) const fn sql(sql: &'static str) -> Self {
@@ -2215,17 +805,18 @@ mod tests {
         assert_eq!(rules, "[]");
     }
 
+    /// A Gmail account `g` with its inbox `fi` and one message `m`.
+    const GMAIL_MESSAGE: &str = "
+        INSERT INTO accounts (id, name, email, kind) VALUES ('g', 'G', 'g@x', 'gmail');
+        INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'g', 'Inbox', 'INBOX');
+        INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'g', 'fi', 'x');";
+
     #[test]
     fn v11_adds_remote_ids_scheduling_and_gmail_tables() {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.pragma_update(None, "foreign_keys", true).unwrap();
         migrate_to_version(&mut conn, 10).unwrap();
-        conn.execute_batch(
-            "INSERT INTO accounts (id, name, email, kind) VALUES ('g', 'G', 'g@x', 'gmail');
-             INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'g', 'Inbox', 'INBOX');
-             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'g', 'fi', 'x');",
-        )
-        .unwrap();
+        conn.execute_batch(GMAIL_MESSAGE).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
         conn.execute_batch(
             "UPDATE messages SET remote_id = '18c0' WHERE id = 'm';
@@ -2452,12 +1043,10 @@ mod tests {
                  public_data, secret_storage, secret_data, secret_ref, imported_at, updated_at)
                  VALUES (7, 'openpgp', 'AB', 'Ed25519', 1, 'generated', x'01', 'keychain',
                          x'02', 'keychain:nail/openpgp/AB', 1, 1);
-             INSERT INTO crypto_key_emails (key_id, email) VALUES (7, 'ada@x');
-             INSERT INTO accounts (id, name, email, kind) VALUES ('g', 'G', 'g@x', 'gmail');
-             INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'g', 'Inbox', 'INBOX');
-             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'g', 'fi', 'x');",
+             INSERT INTO crypto_key_emails (key_id, email) VALUES (7, 'ada@x');",
         )
         .unwrap();
+        conn.execute_batch(GMAIL_MESSAGE).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
         let (fpr, email): (String, String) = conn
             .query_row(
@@ -2493,5 +1082,38 @@ mod tests {
             [],
         )
         .unwrap();
+    }
+
+    /// Released migrations are append-only: their SQL (the files in
+    /// `src/migrations/` and the v18 triggers built by macros) stays byte
+    /// for byte what shipped.
+    #[test]
+    fn released_migrations_are_unchanged() {
+        use sha2::Digest;
+        let released = [
+            "e6a6d76fde728f69397905b223cc68848f45cac336149df03e2b3ea64178df9f",
+            "c35316951c134dacfd40bc0900e42ebcec222abcaa323b7b4ba04b623987e6d2",
+            "e23956510d2a52058b2447d9da4cb5e1611a7d6ffb19323a84a9fd14024216b4",
+            "ac2536f7825325b47fafe81c3919cda1f36e9aa926cc6cc21f0a5daf79591c49",
+            "f761be55ced7c21ba7146c2cf0b692b600474eb858f77880928ab8be9df01cbb",
+            "f3760de16d67473bab9d8492c74020d91416b032e5e27c1d0af28dbb09d24a79",
+            "cc4af4bd907bb7243c188607d89846f4c537e32311995da34c1f0e1ffdb591cf",
+            "ad2a6d9396e7c7c2278b446337d8fdcdfc2c20eccb049434e85888d7d642f3c5",
+            "911270c297b706a0e3e730049df9fa9fb4044e75d511d374a91d32773e24bba8",
+            "fb6c8d1aa231036248f80600eaf6e4a8cb46d9a025c6aa4ad676c84a71ff6785",
+            "6a03f6e4b89719c370973eceea05c4a247492074c30e241df4169a592fcb9661",
+            "db483759084c27f32db335cc5cbaaae5fc643486d8eab0786959af88d3a33103",
+            "ad8e8c62cd552bfc2d30fa5c927e053da8ad9789f6d286a8423b50db9093ce06",
+            "b9e4f17d5f5edc255819d2a4e3e05bbb61994da19c062f94ae7e15546e49f4e4",
+            "bf4c5ee11e64ebdc5174091d0805dc776b756b76eaa673807190cad854b4b8f5",
+            "a9de603450510614947961a91cdc9a0b18b657416e832908cc395c8d9c281bbc",
+            "9b55836401c702f283ebf299bcf49eccb329c94ff3c37c57da939ba4906101ef",
+            "91907f9094c4674f5d4a72eb0bbb3df765d320b4c50d0ba49afbf137a0953fc7",
+        ];
+        assert!(MIGRATIONS.len() >= released.len());
+        for (n, (m, want)) in MIGRATIONS.iter().zip(released).enumerate() {
+            let got = hex::encode(sha2::Sha256::digest(m.sql.as_bytes()));
+            assert_eq!(got, want, "migration to v{} changed", n + 1);
+        }
     }
 }

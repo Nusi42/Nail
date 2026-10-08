@@ -5,8 +5,12 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{assert_nothing_to_place, next_event};
+use nail_core::testing::{TempService, error_of};
+
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use nail_api::plugins::admin::PluginRunState;
 use nail_api::plugins::{
@@ -14,30 +18,14 @@ use nail_api::plugins::{
     PluginPackageSource, PluginPermission,
 };
 use nail_api::{ApiError, ErrorCode, Event, PluginId, Request, Response, UiContext};
-use nail_core::{Service, ServiceOptions};
 use nail_store::{PluginInstall, PluginLogLine};
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use tokio::sync::broadcast;
 
-struct Fixture {
-    service: Service,
-    _data: tempfile::TempDir,
-    _config: tempfile::TempDir,
-}
+type Fixture = TempService;
 
 fn setup() -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
+    TempService::quiet()
 }
 
 fn manifest() -> PluginManifest {
@@ -76,22 +64,6 @@ fn install(f: &Fixture) {
             enabled: false,
         })
         .unwrap();
-}
-
-fn error(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("expected an error, got {other:?}"),
-    }
-}
-
-async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(10), rx.recv())
-        .await
-        .expect("no event within 10 s")
-        .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -168,7 +140,7 @@ async fn plugins_are_listed_enabled_and_uninstalled() {
     );
     assert_eq!(next_event(&mut events).await, Event::PluginsChanged);
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::GetPlugin { plugin_id: id() })
                 .await
@@ -177,7 +149,7 @@ async fn plugins_are_listed_enabled_and_uninstalled() {
         ErrorCode::NotFound
     );
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::EnablePlugin { plugin_id: id() })
                 .await
@@ -216,7 +188,7 @@ async fn grants_must_be_declared() {
             grants: vec![PluginGrant::all(PluginPermission::Notifications)],
         })
         .await;
-    assert_eq!(error(undeclared).0, ErrorCode::InvalidRequest);
+    assert_eq!(error_of(undeclared).0, ErrorCode::InvalidRequest);
 }
 
 #[tokio::test]
@@ -251,7 +223,7 @@ async fn settings_are_validated() {
         })
         .await;
     assert_eq!(
-        error(bad),
+        error_of(bad),
         (
             ErrorCode::InvalidRequest,
             Some("plugin-settings-invalid".to_owned())
@@ -310,7 +282,7 @@ async fn logs_are_listed_and_cleared() {
         Response::Done
     );
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::ListPluginLogs {
                     plugin_id: Some(PluginId::new("nope")),
@@ -388,23 +360,11 @@ async fn host_requests_without_a_running_plugin() {
         ),
     ] {
         assert_eq!(
-            error(f.service.handle(request.clone()).await).0,
+            error_of(f.service.handle(request.clone()).await).0,
             code,
             "{request:?}"
         );
     }
     // Nothing to place: an empty proposal.
-    match f
-        .service
-        .handle(Request::PreviewPluginPlacements { plugin_id: id() })
-        .await
-    {
-        Response::PluginPlacements {
-            incoming, preview, ..
-        } => {
-            assert_eq!(incoming, "");
-            assert!(preview.sections.is_empty(), "{:?}", preview.sections);
-        }
-        other => panic!("{other:?}"),
-    }
+    assert_nothing_to_place(&f.service, &id()).await;
 }

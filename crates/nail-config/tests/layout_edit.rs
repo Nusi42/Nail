@@ -5,7 +5,8 @@
 //! them after an intended change (and review the diff).
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
 use nail_api::editing::{
     DockSide, EditKind, HistoryScope, LayoutPlacement, NewWidget, ToolbarArea, ToolbarSlot,
@@ -19,27 +20,10 @@ use nail_config::{
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
-fn golden(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/layout_edit")
-        .join(format!("{name}.kdl"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_GOLDEN=1)", path.display()))
-        .replace("\r\n", "\n");
-    assert_eq!(expected, actual, "golden file {}", path.display());
-}
+use common::{apply, at, strip_sources};
 
-fn at(window: &str, breakpoint: u32, path: &[u32]) -> LayoutNodeRef {
-    LayoutNodeRef {
-        window: window.into(),
-        breakpoint,
-        path: path.to_vec(),
-    }
+fn golden(name: &str, actual: &str) {
+    common::golden("layout_edit", name, actual);
 }
 
 fn mail(path: &[u32]) -> LayoutNodeRef {
@@ -52,13 +36,6 @@ fn into(parent: LayoutNodeRef, index: u32) -> LayoutPlacement {
 
 fn beside(target: LayoutNodeRef, side: DockSide) -> LayoutPlacement {
     LayoutPlacement::Beside { target, side }
-}
-
-fn apply(text: Option<&str>, patches: &[LayoutPatch]) -> String {
-    let out = apply_layout_patches(text, patches, "layout.kdl")
-        .unwrap_or_else(|e| panic!("patch failed: {e}"));
-    parse_layout_all(&out, "layout.kdl").unwrap_or_else(|e| panic!("invalid result: {e:?}"));
-    out
 }
 
 fn resolved(text: &str) -> ResolvedLayout {
@@ -915,17 +892,6 @@ fn resetting_a_window_of_a_full_file_writes_the_default_back_in_place() {
     );
 }
 
-fn strip_sources(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(map) => {
-            map.remove("source");
-            map.values_mut().for_each(strip_sources);
-        }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(strip_sources),
-        _ => {}
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Toolbars
 
@@ -968,22 +934,19 @@ fn toolbar_items_move_between_the_bar_and_more() {
     };
     assert_eq!(
         menu,
-        &[nail_api::MenuItem::Action {
-            action: "mail.forward".into(),
-            args: vec![],
-            label: None,
-            icon: None,
-        }]
+        &[nail_api::MenuItem::Action(nail_api::ActionItem::new(
+            "mail.forward"
+        ))]
     );
-    let ToolbarItem::Action { label, .. } = &items[1] else {
+    let ToolbarItem::Action { item, .. } = &items[1] else {
         panic!("expected archive");
     };
-    assert_eq!(label.as_deref(), Some("Archive it"));
+    assert_eq!(item.label.as_deref(), Some("Archive it"));
 }
 
 fn item_name(item: &ToolbarItem) -> String {
     match item {
-        ToolbarItem::Action { action, .. } => action.clone(),
+        ToolbarItem::Action { item, .. } => item.action.clone(),
         ToolbarItem::More { .. } => "more".into(),
         ToolbarItem::Spacer => "spacer".into(),
         ToolbarItem::Separator => "separator".into(),
@@ -1003,10 +966,10 @@ fn toolbar_items_are_added_and_removed() {
             LayoutPatch::AddToolbarItem {
                 toolbar: "reader".into(),
                 item: ToolbarItem::Action {
-                    action: "mail.move".into(),
-                    args: vec![],
-                    label: None,
-                    icon: Some("folder-input".into()),
+                    item: nail_api::ActionItem {
+                        icon: Some("folder-input".into()),
+                        ..nail_api::ActionItem::new("mail.move")
+                    },
                     rank: Some(2),
                     display: None,
                 },

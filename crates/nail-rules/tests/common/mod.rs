@@ -2,53 +2,14 @@
 //! folders, and a builder for messages.
 
 use nail_api::rules::Rule;
-use nail_api::{Address, Flags, FolderRole};
-use nail_rules::{AccountInfo, Attachment, Env, FolderInfo, MessageData, StaticMailbox};
+use nail_api::{Address, Flags};
+use nail_rules::{Attachment, Env, MessageData, StaticMailbox};
 
 /// 2026-09-29T12:00:00Z.
-pub(crate) const NOW: i64 = 1_790_683_200;
+pub(crate) use nail_api::testing::TUESDAY_NOON as NOW;
 pub(crate) use nail_util::time::SECS_PER_DAY as DAY;
 
-pub(crate) fn mailbox() -> StaticMailbox {
-    let folder = |id: &str, account: &str, path: &str, role| FolderInfo {
-        id: id.into(),
-        account_id: account.into(),
-        path: path.into(),
-        name: path.rsplit('/').next().unwrap_or(path).into(),
-        role,
-    };
-    StaticMailbox {
-        accounts: vec![
-            AccountInfo {
-                id: "work".into(),
-                name: "Work".into(),
-                email: "me@work.example".into(),
-                members: vec![],
-            },
-            AccountInfo {
-                id: "home".into(),
-                name: "Home".into(),
-                email: "me@home.example".into(),
-                members: vec![],
-            },
-            AccountInfo {
-                id: "everything".into(),
-                name: "Everything".into(),
-                email: String::new(),
-                members: vec!["work".into(), "home".into()],
-            },
-        ],
-        folders: vec![
-            folder("w-inbox", "work", "INBOX", FolderRole::Inbox),
-            folder("w-archive", "work", "Archive", FolderRole::Archive),
-            folder("w-trash", "work", "Trash", FolderRole::Trash),
-            folder("w-reading", "work", "Reading", FolderRole::Other),
-            folder("w-rust", "work", "Lists/Rust", FolderRole::Other),
-            folder("h-inbox", "home", "INBOX", FolderRole::Inbox),
-            folder("h-reading", "home", "Reading", FolderRole::Other),
-        ],
-    }
-}
+pub(crate) use nail_rules::testing::mailbox;
 
 pub(crate) fn env(mailbox: &StaticMailbox) -> Env<'_> {
     Env {

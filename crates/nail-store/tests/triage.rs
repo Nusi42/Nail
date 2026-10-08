@@ -3,6 +3,7 @@
 //! location and server rules, folder marks, atomic snooze wake.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use common::{folder, message, seeded_store};
@@ -20,7 +21,7 @@ use nail_store::{
 };
 use pretty_assertions::assert_eq;
 
-const T0: i64 = 1_790_000_000;
+use nail_api::testing::T0;
 
 fn a1() -> AccountId {
     "a1".into()

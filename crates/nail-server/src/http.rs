@@ -348,11 +348,8 @@ mod tests {
     use tower::ServiceExt;
 
     fn service() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let mut options = nail_core::ServiceOptions::new(data.path(), config.path());
-        options.watch_config = false;
-        (Service::open(options).unwrap(), data, config)
+        let t = nail_core::testing::TempService::quiet();
+        (t.service, t.data, t.config)
     }
 
     async fn status(router: Router, path: &str) -> (StatusCode, Vec<u8>) {

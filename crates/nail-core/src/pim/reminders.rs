@@ -21,7 +21,7 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 use nail_api::pim::calendar::{AlarmTrigger, EventStatus, Frequency};
 use nail_api::pim::{Alarm, CalendarEvent, PimItemRef, ReminderState, Task};
-use nail_api::{ApiError, Event, EventId, LocalizedMessage, ReminderId, Request, Response, TaskId};
+use nail_api::{ApiError, Event, EventId, ReminderId, Request, Response, TaskId};
 use nail_store::Store;
 use nail_store::pim::{PlannedReminder, ReminderItemKind, ReminderRecord};
 use nail_triage::Clock;
@@ -226,9 +226,11 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
                             .snooze(&reminder_ids, until)
                             .map_err(|err| match err {
                                 ReminderError::Store(e) => e.into(),
-                                other => ApiError::invalid_request(other.to_string())
-                                    .with_localized(LocalizedMessage::new(other.message_id()))
-                                    .into(),
+                                other => ApiError::invalid_localized(
+                                    other.to_string(),
+                                    other.message_id(),
+                                )
+                                .into(),
                             })
                     })
                 })
@@ -252,12 +254,19 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             Ok(Response::Done)
         }
-        other => Err(ApiError::internal(format!(
-            "{} routed to reminders",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("{} routed to reminders", other.wire_type())).into())
+        }
     }
+}
+
+/// The window reminders are planned for around `now`: the catch-up time
+/// before it and [`PLAN_DAYS`] after it.
+fn plan_window(now: i64) -> (i64, i64) {
+    (
+        now - CATCH_UP_SECS,
+        now + PLAN_DAYS * nail_util::time::SECS_PER_DAY,
+    )
 }
 
 impl Service {
@@ -284,7 +293,7 @@ impl Service {
         let result = self
             .blocking(move |s| {
                 let now = s.pim_now();
-                let (from, until) = (now - CATCH_UP_SECS, now + PLAN_DAYS * 86_400);
+                let (from, until) = plan_window(now);
                 let local = local_zone();
                 let store = s.store();
                 let (key, plan) = match &item {
@@ -351,7 +360,7 @@ impl Service {
         let result = self
             .blocking(|s| {
                 let now = s.pim_now();
-                let (from, until) = (now - CATCH_UP_SECS, now + PLAN_DAYS * 86_400);
+                let (from, until) = plan_window(now);
                 let local = local_zone();
                 let store = s.store();
                 let calendars = store.calendars(None)?;
@@ -584,11 +593,7 @@ pub(super) async fn run(service: Service) {
             service.replan_all_reminders().await;
             planned_at = now;
         }
-        let wait = service.next_reminder().map_or(cap, |at| {
-            let secs = (at - service.pim_now()).max(0);
-            std::time::Duration::from_secs(u64::try_from(secs).unwrap_or(0))
-                .clamp(std::time::Duration::from_millis(50), cap)
-        });
+        let wait = crate::clock::timer_wait(service.next_reminder(), service.pim_now(), cap);
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = service.inner.pim.reminder_wake.notified() => {}
@@ -705,15 +710,14 @@ mod tests {
         };
         let window = (at("2026-10-05T00:00:00Z"), at("2026-10-06T00:00:00Z"));
         let budget = nail_ical::expand::ScanBudget::default();
-        assert_eq!(
-            plan_event(&event, Tz::UTC, window.0, window.1, &budget).len(),
-            0
-        );
-        event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Minutely)));
-        assert_eq!(
-            plan_event(&event, Tz::UTC, window.0, window.1, &budget).len(),
-            0
-        );
+        for frequency in [Frequency::Secondly, Frequency::Minutely] {
+            event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(frequency)));
+            assert_eq!(
+                plan_event(&event, Tz::UTC, window.0, window.1, &budget).len(),
+                0,
+                "{frequency:?}"
+            );
+        }
         event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Hourly)));
         let plan = plan_event(&event, Tz::UTC, window.0, window.1, &budget);
         assert_eq!(plan.len(), 15);

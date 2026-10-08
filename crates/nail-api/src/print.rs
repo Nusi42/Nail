@@ -102,36 +102,8 @@ labeled_enum! {
 
 /// Days since 1970-01-01 of a `YYYY-MM-DD` date (proleptic Gregorian).
 fn day_number(date: &str) -> Option<i64> {
-    let b = date.as_bytes();
-    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
-        return None;
-    }
-    let num = |r: std::ops::Range<usize>| date.get(r)?.parse::<i64>().ok();
-    let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
-    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let days_in = [
-        31,
-        if leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let max_day = usize::try_from(m - 1).ok().and_then(|i| days_in.get(i))?;
-    if d < 1 || d > *max_day {
-        return None;
-    }
-    Some(nail_util::time::days_from_civil(
-        y,
-        u32::try_from(m).ok()?,
-        u32::try_from(d).ok()?,
-    ))
+    let (y, m, d) = nail_util::time::parse_iso_date(date)?;
+    Some(nail_util::time::days_from_civil(y, m, d))
 }
 
 impl PrintTarget {
@@ -271,32 +243,17 @@ pub struct PdfFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(
-            AgendaLayout::ALL,
-            AgendaLayout::as_str,
-            AgendaLayout::message_id,
-        );
-        assert_labels(
-            PrintTargetIssue::ALL,
-            PrintTargetIssue::as_str,
-            PrintTargetIssue::message_id,
-        );
-        assert_labels(PageSize::ALL, PageSize::as_str, PageSize::message_id);
-        assert_labels(
-            PageOrientation::ALL,
-            PageOrientation::as_str,
-            PageOrientation::message_id,
-        );
-        assert_labels(
-            HeaderDetail::ALL,
-            HeaderDetail::as_str,
-            HeaderDetail::message_id,
+        assert_wire_labels!(
+            AgendaLayout,
+            PrintTargetIssue,
+            PageSize,
+            PageOrientation,
+            HeaderDetail
         );
     }
 

@@ -3,7 +3,7 @@
 //! shared by the desktop and the local web UI.
 
 use nail_api::palette::{RECENT_ACTIONS_KEY, RecentActions};
-use nail_api::{ApiError, LocalizedMessage, Request, Response};
+use nail_api::{ApiError, Request, Response};
 
 use crate::error::Result;
 use crate::service::Service;
@@ -34,17 +34,17 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             let mut recent = load(service).await?;
             let now = crate::rules::rfc3339(crate::engine::unix_now());
             if !recent.record(&action_id, &now) {
-                return Err(ApiError::invalid_request("not an action id")
-                    .with_localized(LocalizedMessage::new("palette-invalid-action"))
-                    .into());
+                return Err(ApiError::invalid_localized(
+                    "not an action id",
+                    "palette-invalid-action",
+                )
+                .into());
             }
             save(service, recent).await
         }
         Request::ClearRecentActions => save(service, RecentActions::default()).await,
-        other => Err(ApiError::internal(format!(
-            "not a palette request: {}",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("not a palette request: {}", other.wire_type())).into())
+        }
     }
 }

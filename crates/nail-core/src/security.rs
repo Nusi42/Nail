@@ -296,7 +296,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         other => Err(ApiError::internal(format!(
             "{} is not a security request",
-            crate::service::request_name(&other)
+            other.wire_type()
         ))
         .into()),
     }

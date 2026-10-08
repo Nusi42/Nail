@@ -20,6 +20,8 @@ tracing.workspace = true
 tantivy.workspace = true
 
 [dev-dependencies]
+# Sample contract values and test instants (`nail_api::testing`).
+nail-api = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 pretty_assertions.workspace = true
 proptest = "1.11"

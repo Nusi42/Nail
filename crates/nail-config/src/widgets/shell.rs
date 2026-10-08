@@ -61,13 +61,4 @@ mod tests {
         let wire: Vec<&str> = ListFilter::ALL.iter().map(|f| f.as_str()).collect();
         assert_eq!(wire, super::LIST_FILTERS);
     }
-
-    #[test]
-    fn shell_widgets_are_typed() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-            assert!(spec.options.is_some(), "{} has typed options", spec.kind);
-        }
-    }
 }

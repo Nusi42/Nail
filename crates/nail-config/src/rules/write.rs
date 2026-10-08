@@ -22,10 +22,7 @@
 //! back to the canonical form of the whole file should it ever not mean
 //! the desired rules.
 
-use std::collections::HashMap;
-use std::fmt::Write as _;
-
-use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
+use kdl::{KdlDocument, KdlNode};
 use nail_api::rules::{
     Comparison, Condition, DateComparison, FolderRef, Rule, RuleAction, RuleScope, RuleTrigger,
     TextMatch,
@@ -35,76 +32,14 @@ use super::read::{
     ADDRESS_FIELDS, AUTH_METHODS, AUTH_RESULTS, FLAGS, ROLES, SIMPLE_TRIGGERS, TEXT_OPS, name_of,
 };
 use super::{normalize_rule, rule_id_base, same_rule};
+use crate::kdl_util::children;
+pub(crate) use crate::kdl_write::detect_indent;
+use crate::kdl_write::{Line, same_header, same_node};
 
 // ---------------------------------------------------------------------------
 // Canonical rendering
 
-/// Quotes a string as a KDL v2 quoted string.
-pub(crate) fn quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c.is_control()
-                || matches!(
-                    c,
-                    '\u{200E}'
-                        | '\u{200F}'
-                        | '\u{202A}'..='\u{202E}'
-                        | '\u{2066}'..='\u{2069}'
-                        | '\u{FEFF}'
-                ) =>
-            {
-                let _ = write!(out, "\\u{{{:x}}}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// One node line: `name arg… key=value…`.
-struct Line(String);
-
 impl Line {
-    fn new(name: &str) -> Self {
-        Self(name.to_owned())
-    }
-
-    fn arg(mut self, value: &str) -> Self {
-        self.0.push(' ');
-        self.0.push_str(&quote(value));
-        self
-    }
-
-    fn raw_arg(mut self, value: impl std::fmt::Display) -> Self {
-        let _ = write!(self.0, " {value}");
-        self
-    }
-
-    fn prop(mut self, key: &str, value: &str) -> Self {
-        let _ = write!(self.0, " {key}={}", quote(value));
-        self
-    }
-
-    fn prop_opt(self, key: &str, value: Option<&str>) -> Self {
-        match value {
-            Some(v) => self.prop(key, v),
-            None => self,
-        }
-    }
-
-    fn raw_prop(mut self, key: &str, value: impl std::fmt::Display) -> Self {
-        let _ = write!(self.0, " {key}={value}");
-        self
-    }
-
     fn text_match(self, m: &TextMatch) -> Self {
         let line = self.prop(name_of(TEXT_OPS, &m.op), &m.value);
         if m.case_sensitive {
@@ -116,23 +51,6 @@ impl Line {
 
     fn account(self, account: Option<&nail_api::AccountId>) -> Self {
         self.prop_opt("account", account.map(nail_api::AccountId::as_str))
-    }
-
-    /// The node at `depth`, with a children block when `children` is not
-    /// empty (each child already rendered, ending with a newline).
-    fn finish(self, depth: usize, indent: &str, children: &[String]) -> String {
-        let pad = indent.repeat(depth);
-        if children.is_empty() {
-            format!("{pad}{}\n", self.0)
-        } else {
-            let mut out = format!("{pad}{} {{\n", self.0);
-            for child in children {
-                out.push_str(child);
-            }
-            out.push_str(&pad);
-            out.push_str("}\n");
-            out
-        }
     }
 }
 
@@ -411,21 +329,6 @@ pub(crate) fn render_all(rules: &[Rule], indent: &str) -> String {
 // ---------------------------------------------------------------------------
 // Lexical helpers
 
-/// The indentation unit of a file: the leading whitespace of its first
-/// indented line, else four spaces.
-pub(crate) fn detect_indent(text: &str) -> String {
-    for line in text.lines() {
-        let ws: String = line
-            .chars()
-            .take_while(|c| *c == ' ' || *c == '\t')
-            .collect();
-        if !ws.is_empty() && line.len() > ws.len() && !line[ws.len()..].starts_with("//") {
-            return ws;
-        }
-    }
-    "    ".to_owned()
-}
-
 /// Where a node is in its text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Extent {
@@ -629,39 +532,6 @@ fn past_newline(text: &str, pos: usize) -> usize {
 // ---------------------------------------------------------------------------
 // Structural comparison
 
-fn props_map(n: &KdlNode) -> HashMap<&str, &KdlValue> {
-    n.entries()
-        .iter()
-        .filter_map(|e| e.name().map(|k| (k.value(), e.value())))
-        .collect()
-}
-
-fn arg_values(n: &KdlNode) -> Vec<&KdlValue> {
-    n.entries()
-        .iter()
-        .filter(|e| e.name().is_none())
-        .map(KdlEntry::value)
-        .collect()
-}
-
-fn kids(n: &KdlNode) -> &[KdlNode] {
-    n.children().map_or(&[], KdlDocument::nodes)
-}
-
-/// Same name, arguments and properties (ignoring formatting).
-fn header_eq(a: &KdlNode, b: &KdlNode) -> bool {
-    a.name().value() == b.name().value()
-        && arg_values(a) == arg_values(b)
-        && props_map(a) == props_map(b)
-}
-
-/// Structural equality ignoring formatting.
-fn node_eq(a: &KdlNode, b: &KdlNode) -> bool {
-    header_eq(a, b)
-        && kids(a).len() == kids(b).len()
-        && kids(a).iter().zip(kids(b)).all(|(x, y)| node_eq(x, y))
-}
-
 /// What identifies a child among its siblings when it changed: its name
 /// and first argument.
 fn match_key(n: &KdlNode) -> (String, Option<String>) {
@@ -709,19 +579,19 @@ fn merge_node(
     depth: usize,
     indent: &str,
 ) -> String {
-    if node_eq(old, new) {
+    if same_node(old, new) {
         return old_side.node_text(old).to_owned();
     }
-    let header = if header_eq(old, new) {
+    let header = if same_header(old, new) {
         old_side.header_text(old)
     } else {
         new_side.header_text(new)
     };
-    let new_kids = kids(new);
+    let new_kids = children(new);
     if new_kids.is_empty() {
         return header.to_owned();
     }
-    let old_kids = kids(old);
+    let old_kids = children(old);
     let old_extent = old_side.extent(old);
     let text = old_side.text;
     // Each old child: its leading text (line break, blank lines, comments
@@ -753,7 +623,7 @@ fn merge_node(
     let mut used = vec![false; old_kids.len()];
     let mut out = format!("{header} {{{opening}");
     for child in new_kids {
-        let exact = (0..old_kids.len()).find(|&i| !used[i] && node_eq(&old_kids[i], child));
+        let exact = (0..old_kids.len()).find(|&i| !used[i] && same_node(&old_kids[i], child));
         let similar = exact.or_else(|| {
             (0..old_kids.len()).find(|&i| !used[i] && match_key(&old_kids[i]) == match_key(child))
         });
@@ -1015,18 +885,5 @@ mod tests {
         );
         assert_eq!(line_start("  x", 2), 0);
         assert_eq!(line_start("a x", 2), 2);
-    }
-
-    #[test]
-    fn quoting() {
-        assert_eq!(quote("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\"");
-        assert_eq!(quote("\u{202E}"), "\"\\u{202e}\"");
-    }
-
-    #[test]
-    fn indentation() {
-        assert_eq!(detect_indent("a {\n\tb\n}"), "\t");
-        assert_eq!(detect_indent("a {\n  // x\n  b\n}"), "  ");
-        assert_eq!(detect_indent(""), "    ");
     }
 }

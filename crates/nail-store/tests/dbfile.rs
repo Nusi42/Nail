@@ -9,13 +9,10 @@ mod common;
 use std::path::Path;
 use std::sync::Arc;
 
-use common::{account, folder, message};
-use nail_api::FolderRole;
+use common::{add_inbox, file_store, message};
 use nail_store::dbfile::{REWRITE_SUFFIX, rewrite_temp_path};
-use nail_store::{
-    CipherError, DataCipher, DatabaseKey, Error, FileEncryption, SEALED_MAGIC, SealMode, Store,
-    file_encryption,
-};
+use nail_store::testing::XorCipher;
+use nail_store::{DatabaseKey, Error, FileEncryption, SealMode, Store, file_encryption};
 
 const SECRET: &str = "Quarterly figures for the harbour project";
 
@@ -24,10 +21,7 @@ fn key(byte: u8) -> DatabaseKey {
 }
 
 fn seed(store: &Store) {
-    store.upsert_account(&account("a1")).unwrap();
-    store
-        .upsert_folder(&folder("inbox", "a1", "INBOX", None, FolderRole::Inbox))
-        .unwrap();
+    add_inbox(store, "a1", "inbox");
     let mut m = message("m1", "a1", "inbox", "2026-09-01T10:00:00Z");
     m.summary.subject = SECRET.into();
     store.upsert_message(&m).unwrap();
@@ -194,30 +188,11 @@ fn a_crash_after_the_swap_opens_the_new_file_by_its_header() {
 
 #[test]
 fn rewriting_keeps_sealed_columns_working() {
-    #[derive(Debug)]
-    struct Xor;
-    impl DataCipher for Xor {
-        fn seal(&self, context: &[u8], plain: &[u8]) -> Result<Vec<u8>, CipherError> {
-            let mut out = SEALED_MAGIC.to_vec();
-            out.push(u8::try_from(context.len()).unwrap());
-            out.extend_from_slice(context);
-            out.extend(plain.iter().map(|b| b ^ 0x33));
-            Ok(out)
-        }
-        fn open(&self, context: &[u8], sealed: &[u8]) -> Result<Vec<u8>, CipherError> {
-            let rest = sealed.strip_prefix(&SEALED_MAGIC).unwrap();
-            let (&len, rest) = rest.split_first().unwrap();
-            let (_, body) = rest.split_at(usize::from(len));
-            let _ = context;
-            Ok(body.iter().map(|b| b ^ 0x33).collect())
-        }
-    }
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("nail.sqlite3");
-    let store = Store::open(&path).unwrap();
+    let (_, store) = file_store(dir.path());
     seed(&store);
     store
-        .set_cipher(Some(Arc::new(Xor)), SealMode::Seal)
+        .set_cipher(Some(Arc::new(XorCipher(0x33))), SealMode::Seal)
         .unwrap();
     store.rewrite_file(Some(&key(5))).unwrap();
     // The SQL functions are registered on the new connection.

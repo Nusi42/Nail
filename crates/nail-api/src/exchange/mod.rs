@@ -196,13 +196,6 @@ pub struct ExchangeOptions {
 }
 
 impl ExchangeOptions {
-    /// Default of [`Self::poll_interval_secs`].
-    pub const DEFAULT_POLL_INTERVAL_SECS: u32 = 30;
-    /// Default of [`Self::max_poll_interval_secs`].
-    pub const DEFAULT_MAX_POLL_INTERVAL_SECS: u32 = 300;
-    /// Smallest accepted [`Self::poll_interval_secs`] (throttling friendly).
-    pub const MIN_POLL_INTERVAL_SECS: u32 = 10;
-
     /// Options for an engine with every default.
     pub fn for_engine(engine: ExchangeEngine) -> Self {
         Self {
@@ -213,15 +206,7 @@ impl ExchangeOptions {
 
     /// The effective (minimum, maximum) polling interval in seconds.
     pub fn poll_range(&self) -> (u32, u32) {
-        let min = self
-            .poll_interval_secs
-            .unwrap_or(Self::DEFAULT_POLL_INTERVAL_SECS)
-            .max(Self::MIN_POLL_INTERVAL_SECS);
-        let max = self
-            .max_poll_interval_secs
-            .unwrap_or(Self::DEFAULT_MAX_POLL_INTERVAL_SECS)
-            .max(min);
-        (min, max)
+        crate::engine::AdaptivePoll::range(self.poll_interval_secs, self.max_poll_interval_secs)
     }
 
     /// Whether EWS streaming notifications are used.
@@ -291,8 +276,8 @@ impl ExchangeOptions {
         let host = self
             .url
             .as_deref()
-            .and_then(url_host)
-            .unwrap_or(server.host.as_str())
+            .and_then(crate::hosts::url_host)
+            .unwrap_or_else(|| server.host.clone())
             .to_ascii_lowercase();
         if self.engine == ExchangeEngine::Ews && is_exchange_online_host(&host) {
             out.push(ExchangeWarning::EwsRetiredOnline);
@@ -303,7 +288,7 @@ impl ExchangeOptions {
 
 fn base_url(host: &str, port: u16, tls: bool, path: &str) -> String {
     let scheme = if tls { "https" } else { "http" };
-    let default_port = if tls { 443 } else { 80 };
+    let default_port = crate::hosts::web_port(tls);
     if port == default_port {
         format!("{scheme}://{host}{path}")
     } else {
@@ -311,21 +296,7 @@ fn base_url(host: &str, port: u16, tls: bool, path: &str) -> String {
     }
 }
 
-fn url_host(url: &str) -> Option<&str> {
-    let rest = url.split_once("://")?.1;
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    Some(host.split(':').next().unwrap_or(host))
-}
-
-/// Whether `host` is a loopback name or address (test servers).
-pub fn is_loopback_host(host: &str) -> bool {
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback())
-}
+pub use crate::hosts::is_loopback_host;
 
 /// Whether `host` is Exchange Online (`outlook.office365.com`,
 /// `outlook.office.com`, `*.outlook.com`).
@@ -522,11 +493,10 @@ impl ExchangeWellKnownFolder {
         Self::Tasks,
     ];
 
-    /// The Graph well-known folder name (`/me/mailFolders/{name}`), for
-    /// mail folders; `None` for PIM folders (Graph has their own
-    /// endpoints).
-    pub fn graph_name(self) -> Option<&'static str> {
-        Some(match self {
+    /// The well-known name both APIs use (Graph's `/me/mailFolders/{name}`,
+    /// EWS's `DistinguishedFolderId`).
+    fn well_known_name(self) -> &'static str {
+        match self {
             Self::Root => "msgfolderroot",
             Self::Inbox => "inbox",
             Self::SentItems => "sentitems",
@@ -535,25 +505,23 @@ impl ExchangeWellKnownFolder {
             Self::JunkEmail => "junkemail",
             Self::Archive => "archive",
             Self::Outbox => "outbox",
-            Self::Calendar | Self::Contacts | Self::Tasks => return None,
-        })
+            Self::Calendar => "calendar",
+            Self::Contacts => "contacts",
+            Self::Tasks => "tasks",
+        }
+    }
+
+    /// The Graph well-known folder name (`/me/mailFolders/{name}`), for
+    /// mail folders; `None` for PIM folders (Graph has their own
+    /// endpoints).
+    pub fn graph_name(self) -> Option<&'static str> {
+        (!matches!(self, Self::Calendar | Self::Contacts | Self::Tasks))
+            .then(|| self.well_known_name())
     }
 
     /// The EWS `DistinguishedFolderId`, where EWS has one.
     pub fn ews_name(self) -> Option<&'static str> {
-        Some(match self {
-            Self::Root => "msgfolderroot",
-            Self::Inbox => "inbox",
-            Self::SentItems => "sentitems",
-            Self::Drafts => "drafts",
-            Self::DeletedItems => "deleteditems",
-            Self::JunkEmail => "junkemail",
-            Self::Outbox => "outbox",
-            Self::Calendar => "calendar",
-            Self::Contacts => "contacts",
-            Self::Tasks => "tasks",
-            Self::Archive => return None,
-        })
+        (self != Self::Archive).then(|| self.well_known_name())
     }
 
     /// The well-known folder of a Graph / EWS name (case-insensitive).

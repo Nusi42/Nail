@@ -239,16 +239,9 @@ impl ThemeFile {
     /// error of the file in file order: a bad item is recorded and skipped,
     /// and reading goes on with the next one.
     pub fn parse_all(text: &str, file: &str) -> Result<Self, Vec<ConfigError>> {
-        let src = Source::new(file, text);
-        let doc = src.parse_all()?;
-        let root = single_root(&src, &doc, "theme").map_err(|e| vec![e])?;
-        let errors = Errors::default();
-        let theme = ThemeReader {
-            src: &src,
-            errors: &errors,
-        }
-        .theme(root);
-        errors.finish(theme)
+        read_root_file(text, file, "theme", |src, errors, root| {
+            ThemeReader { src, errors }.theme(root)
+        })
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
@@ -282,6 +275,39 @@ impl ThemeFile {
         self.raw_css.extend(overlay.raw_css);
         self.appearance = overlay.appearance;
         self
+    }
+}
+
+/// Reads a whole file whose single top-level node is called `root` with
+/// `read`, reporting every error of the file in file order.
+pub(crate) fn read_root_file<T>(
+    text: &str,
+    file: &str,
+    root: &str,
+    read: impl FnOnce(&Source<'_>, &Errors, &KdlNode) -> T,
+) -> Result<T, Vec<ConfigError>> {
+    let src = Source::new(file, text);
+    let doc = src.parse_all()?;
+    let node = single_root(&src, &doc, root).map_err(|e| vec![e])?;
+    let errors = Errors::default();
+    let value = read(&src, &errors, node);
+    errors.finish(value)
+}
+
+/// The name argument of a file's root node (`theme "x" …`): at most one
+/// argument and only the properties `props`; a missing name is recorded
+/// and read as empty.
+pub(crate) fn root_name(
+    src: &Source<'_>,
+    e: &Errors,
+    node: &KdlNode,
+    props: &[&str],
+) -> Located<String> {
+    e.ok(check_props(src, node, props));
+    e.ok(check_max_args(src, node, 1));
+    match e.ok(arg_str(src, node, 0)) {
+        Some((name, entry)) => src.located(entry, name.to_owned()),
+        None => Located::new(String::new(), src.node_loc(node)),
     }
 }
 
@@ -354,12 +380,7 @@ impl ThemeReader<'_, '_> {
     fn theme(&self, node: &KdlNode) -> ThemeFile {
         let src = self.src;
         let e = self.errors;
-        e.ok(check_props(src, node, &["extends", "mode"]));
-        e.ok(check_max_args(src, node, 1));
-        let name = match e.ok(arg_str(src, node, 0)) {
-            Some((name, entry)) => src.located(entry, name.to_owned()),
-            None => Located::new(String::new(), src.node_loc(node)),
-        };
+        let name = root_name(src, e, node, &["extends", "mode"]);
         let mode = e
             .ok(prop_str(src, node, "mode"))
             .flatten()

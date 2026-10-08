@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, PoisonError};
 
-use nail_api::{AccountId, Flags, FolderId, FolderRole, MessageId};
+use nail_api::{AccountId, FolderId, FolderRole, MessageId};
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde::{Deserialize, Serialize};
 
@@ -58,79 +58,26 @@ impl std::fmt::Display for OpId {
     }
 }
 
-/// A change to some flags and tags; `None` / empty leaves a value as it is.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct FlagChange {
-    /// New `\Seen` state.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub seen: Option<bool>,
-    /// New `\Flagged` state.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub flagged: Option<bool>,
-    /// New `\Answered` state.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub answered: Option<bool>,
-    /// New `\Draft` state.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub draft: Option<bool>,
-    /// Tags (IMAP keywords) to add.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub add_tags: Vec<String>,
-    /// Tags to remove.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remove_tags: Vec<String>,
-}
+/// A change to some flags and tags: the contract type, stored compactly
+/// ([`compact_flag_change`]).
+pub use nail_api::FlagChange;
 
-impl FlagChange {
-    /// Returns `flags` with this change applied.
-    pub fn apply_to(&self, flags: Flags) -> Flags {
-        Flags {
-            seen: self.seen.unwrap_or(flags.seen),
-            flagged: self.flagged.unwrap_or(flags.flagged),
-            answered: self.answered.unwrap_or(flags.answered),
-            draft: self.draft.unwrap_or(flags.draft),
+/// The stored form of a [`FlagChange`]: unset flags and empty tag lists are
+/// left out (old payloads without tags still parse: every field defaults).
+mod compact_flag_change {
+    use super::FlagChange;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub(super) fn serialize<S: Serializer>(change: &FlagChange, s: S) -> Result<S::Ok, S::Error> {
+        let mut value = serde_json::to_value(change).map_err(serde::ser::Error::custom)?;
+        if let serde_json::Value::Object(fields) = &mut value {
+            fields.retain(|_, v| !(v.is_null() || v.as_array().is_some_and(Vec::is_empty)));
         }
+        value.serialize(s)
     }
 
-    /// Applies the tag part: removes `remove_tags`, then adds `add_tags`
-    /// (no duplicates). The result is sorted.
-    pub fn apply_tags(&self, tags: &mut Vec<String>) {
-        tags.retain(|t| !self.remove_tags.contains(t));
-        for tag in &self.add_tags {
-            if !tag.is_empty() && !tags.contains(tag) {
-                tags.push(tag.clone());
-            }
-        }
-        tags.sort();
-    }
-
-    /// Whether the change sets nothing.
-    pub fn is_empty(&self) -> bool {
-        self.seen.is_none()
-            && self.flagged.is_none()
-            && self.answered.is_none()
-            && self.draft.is_none()
-            && self.add_tags.is_empty()
-            && self.remove_tags.is_empty()
-    }
-
-    /// Whether the change touches tags.
-    pub fn changes_tags(&self) -> bool {
-        !self.add_tags.is_empty() || !self.remove_tags.is_empty()
-    }
-}
-
-impl From<nail_api::FlagChange> for FlagChange {
-    fn from(c: nail_api::FlagChange) -> Self {
-        Self {
-            seen: c.seen,
-            flagged: c.flagged,
-            answered: c.answered,
-            draft: c.draft,
-            add_tags: c.add_tags,
-            remove_tags: c.remove_tags,
-        }
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<FlagChange, D::Error> {
+        FlagChange::deserialize(d)
     }
 }
 
@@ -175,6 +122,7 @@ pub enum Operation {
         /// The message.
         message_id: MessageId,
         /// The flags to change.
+        #[serde(with = "compact_flag_change")]
         change: FlagChange,
     },
     /// Move one message to another folder. Within an account the server
@@ -495,7 +443,7 @@ pub enum OpState {
 }
 
 impl OpState {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::InFlight => "in_flight",
@@ -504,7 +452,7 @@ impl OpState {
         }
     }
 
-    fn parse(s: &str) -> Option<Self> {
+    pub(crate) fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "pending" => Self::Pending,
             "in_flight" => Self::InFlight,
@@ -607,16 +555,64 @@ impl Default for ReplayPolicy {
     }
 }
 
-/// Summary of a [`Store::replay_account`] / [`Store::replay_pending`] pass.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReplayReport {
+/// Summary of a replay pass ([`Store::replay_account`] /
+/// [`Store::replay_pending`]; the PIM queue's with [`crate::pim::PimOpId`]s).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayReport<Id = OpId> {
     /// Operations that were replayed successfully.
-    pub done: Vec<OpId>,
-    /// Operations that failed permanently in this pass.
-    pub failed: Vec<OpId>,
-    /// Operations that asked to be retried; each ended its account's pass
-    /// (at most one per account).
-    pub deferred: Vec<OpId>,
+    pub done: Vec<Id>,
+    /// Operations that failed permanently in this pass (including
+    /// conflicts).
+    pub failed: Vec<Id>,
+    /// Operations that asked to be retried; each ended its account's
+    /// (source's) pass, so at most one per account.
+    pub deferred: Vec<Id>,
+}
+
+impl<Id> Default for ReplayReport<Id> {
+    fn default() -> Self {
+        Self {
+            done: Vec::new(),
+            failed: Vec::new(),
+            deferred: Vec::new(),
+        }
+    }
+}
+
+impl<Id> ReplayReport<Id> {
+    /// The reports of passes that ran concurrently, as one; when a pass
+    /// failed, the first error (the others still ran to the end).
+    pub(crate) fn merge(results: impl IntoIterator<Item = Result<Self>>) -> Result<Self> {
+        let mut report = Self::default();
+        let mut first_error = None;
+        for result in results {
+            match result {
+                Ok(r) => {
+                    report.done.extend(r.done);
+                    report.failed.extend(r.failed);
+                    report.deferred.extend(r.deferred);
+                }
+                Err(err) => {
+                    first_error.get_or_insert(err);
+                }
+            }
+        }
+        match first_error {
+            Some(err) => Err(err),
+            None => Ok(report),
+        }
+    }
+}
+
+/// `(id, payload)` of the queued operations a `SELECT id, payload …`
+/// finds.
+fn op_payloads(
+    tx: &Transaction<'_>,
+    select: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<(i64, String)>> {
+    let mut stmt = tx.prepare_cached(select)?;
+    crate::util::collect_rows(&mut stmt, params)
 }
 
 const OP_COLS: &str =
@@ -648,6 +644,25 @@ fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedOp> {
 }
 
 /// Applies `operation` locally and queues it, inside `tx`.
+/// Enqueues the inverse of an earlier change (undo of a mail batch or a
+/// rule run) in a savepoint; `None` (nothing changed) when it no longer
+/// applies: its message or folder is gone, or it conflicts.
+pub(crate) fn enqueue_if_applies(tx: &Transaction<'_>, op: &Operation) -> Result<Option<Enqueued>> {
+    tx.execute_batch("SAVEPOINT undo_op")?;
+    match enqueue_in_tx(tx, op) {
+        Ok(enqueued) => {
+            tx.execute_batch("RELEASE undo_op")?;
+            Ok(Some(enqueued))
+        }
+        Err(err @ (Error::NotFound { .. } | Error::Conflict(_) | Error::InvalidData(_))) => {
+            tx.execute_batch("ROLLBACK TO undo_op; RELEASE undo_op")?;
+            tracing::debug!(%err, "an inverse no longer applies; skipped");
+            Ok(None)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 pub(crate) fn enqueue_in_tx(tx: &Transaction<'_>, operation: &Operation) -> Result<Enqueued> {
     let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
     tx.execute(
@@ -677,7 +692,7 @@ fn op_in_tx(tx: &Transaction<'_>, id: OpId) -> Result<QueuedOp> {
     .ok_or_else(|| Error::not_found("operation", id))
 }
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+use crate::util::SQL_NOW as NOW;
 
 impl Store {
     /// Applies `operation` locally and queues it for replay, atomically.
@@ -769,17 +784,13 @@ impl Store {
         uid_validity: Option<u32>,
     ) -> Result<usize> {
         self.with_tx(|tx| {
-            let rows = {
-                let mut stmt = tx.prepare_cached(
-                    "SELECT id, payload FROM op_queue
-                     WHERE message_id = ?1 AND id > ?2 AND state IN ('pending', 'in_flight')
-                     ORDER BY id",
-                )?;
-                stmt.query_map(params![message.as_str(), after.0], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-                })?
-                .collect::<rusqlite::Result<Vec<_>>>()?
-            };
+            let rows = op_payloads(
+                tx,
+                "SELECT id, payload FROM op_queue
+                 WHERE message_id = ?1 AND id > ?2 AND state IN ('pending', 'in_flight')
+                 ORDER BY id",
+                params![message.as_str(), after.0],
+            )?;
             let mut updated = 0;
             for (id, payload) in rows {
                 let mut operation: Operation = serde_json::from_str(&payload)?;
@@ -819,17 +830,13 @@ impl Store {
             return Ok(0);
         }
         self.with_tx(|tx| {
-            let rows = {
-                let mut stmt = tx.prepare_cached(
-                    "SELECT id, payload FROM op_queue
-                     WHERE message_id = ?1 AND state IN ('pending', 'in_flight')
-                     ORDER BY id",
-                )?;
-                stmt.query_map(params![message.as_str()], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-                })?
-                .collect::<rusqlite::Result<Vec<_>>>()?
-            };
+            let rows = op_payloads(
+                tx,
+                "SELECT id, payload FROM op_queue
+                 WHERE message_id = ?1 AND state IN ('pending', 'in_flight')
+                 ORDER BY id",
+                params![message.as_str()],
+            )?;
             let mut updated = 0;
             for (id, payload) in rows {
                 let mut operation: Operation = serde_json::from_str(&payload)?;
@@ -1137,25 +1144,7 @@ impl Store {
         let passes = accounts
             .iter()
             .map(|account| self.replay_account(account, replayer, policy));
-        let results = futures_util::future::join_all(passes).await;
-        let mut report = ReplayReport::default();
-        let mut first_error = None;
-        for result in results {
-            match result {
-                Ok(r) => {
-                    report.done.extend(r.done);
-                    report.failed.extend(r.failed);
-                    report.deferred.extend(r.deferred);
-                }
-                Err(err) => {
-                    first_error.get_or_insert(err);
-                }
-            }
-        }
-        match first_error {
-            Some(err) => Err(err),
-            None => Ok(report),
-        }
+        ReplayReport::merge(futures_util::future::join_all(passes).await)
     }
 }
 

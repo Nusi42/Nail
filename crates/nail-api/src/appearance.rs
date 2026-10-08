@@ -694,7 +694,6 @@ impl SystemAppearanceSource for ManualSystemAppearance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn info(id: &str, kind: ThemeKind, usable: bool) -> ThemeInfo {
@@ -724,27 +723,13 @@ mod tests {
 
     #[test]
     fn labels() {
-        assert_labels(ThemeKind::ALL, ThemeKind::as_str, ThemeKind::message_id);
-        assert_labels(
-            ThemeSource::ALL,
-            ThemeSource::as_str,
-            ThemeSource::message_id,
-        );
-        assert_labels(Density::ALL, Density::as_str, Density::message_id);
-        assert_labels(
-            ColorScheme::ALL,
-            ColorScheme::as_str,
-            ColorScheme::message_id,
-        );
-        assert_labels(
-            ThemeOverridesIssue::ALL,
-            ThemeOverridesIssue::as_str,
-            ThemeOverridesIssue::message_id,
-        );
-        assert_labels(
-            ThemeProblem::ALL,
-            ThemeProblem::as_str,
-            ThemeProblem::message_id,
+        assert_wire_labels!(
+            ThemeKind,
+            ThemeSource,
+            Density,
+            ColorScheme,
+            ThemeOverridesIssue,
+            ThemeProblem
         );
         assert_eq!(Density::default(), Density::Comfortable);
     }

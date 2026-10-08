@@ -75,11 +75,7 @@ impl ReminderRecord {
     /// When the scheduler has to act: the snooze end for snoozed ones,
     /// the fire time for pending ones; `None` otherwise.
     pub fn due_at(&self) -> Option<i64> {
-        match self.state {
-            ReminderState::Pending => Some(self.fire_at),
-            ReminderState::Snoozed => Some(self.snoozed_until.unwrap_or(self.fire_at)),
-            ReminderState::Fired | ReminderState::Dismissed => None,
-        }
+        self.state.due_at(self.fire_at, self.snoozed_until)
     }
 
     /// The contract's target.
@@ -380,12 +376,12 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use nail_api::pim::{EventOverride, PimItemKind};
+    use nail_api::pim::{EventOverride, PimItemKind, PimItemRef};
     use pretty_assertions::assert_eq;
 
     use super::*;
+    use crate::pim::PimItem;
     use crate::pim::testing::{self, raw};
-    use crate::pim::{PimItem, item_ref};
 
     fn plan(rid: Option<PimTime>, key: &str, fire_at: i64) -> PlannedReminder {
         PlannedReminder {
@@ -480,7 +476,7 @@ mod tests {
         );
         // Deleting the event drops its reminders.
         store
-            .delete_pim_item(&item_ref(PimItemKind::Event, "e"), 9)
+            .delete_pim_item(&PimItemRef::new(PimItemKind::Event, "e"), 9)
             .unwrap();
         assert_eq!(store.reminder_records(&[]).unwrap().len(), 0);
     }
