@@ -22,7 +22,6 @@ import {
   WIRE_LEVELS,
   directionId,
   entryAt,
-  exportName,
   filterEntries,
   levelId,
   protocolId,
@@ -112,24 +111,24 @@ export function ConnectionLogViewer({
     }
   };
 
-  const text = async () =>
-    (await client.request({ type: "ExportConnectionLog", scope }, "ConnectionLogExport")).text ??
-    "";
+  /** The log as the core formats it, with the file name it suggests. */
+  const exported = () =>
+    client.request({ type: "ExportConnectionLog", scope }, "ConnectionLogExport");
 
   const copy = () =>
     run(async () => {
-      await navigator.clipboard.writeText(await text());
+      await navigator.clipboard.writeText((await exported()).text ?? "");
       return { id: "connlog-viewer-copied", tone: "done" };
     });
 
   const exportLog = () =>
     run(async () => {
-      const name = exportName(scope);
+      const { text, file_name: name } = await exported();
       const outcome = await saveThroughPicker(
         client,
         { titleId: "connlog-export-title", name, filters: TEXT_FILTERS },
         (path) => client.call({ type: "ExportConnectionLog", scope, path }),
-        async () => downloadText(name, await text()),
+        () => Promise.resolve(downloadText(name, text ?? "")),
       );
       switch (outcome) {
         case "saved":

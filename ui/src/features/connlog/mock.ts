@@ -24,7 +24,9 @@ import type {
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { scopeKey } from "./model";
-import { CONNECTION_LOG_CAPACITY } from "./names";
+
+/** Entries the mock keeps per scope (the core answers its own `capacity`). */
+const MOCK_CAPACITY = 2000;
 
 /** The requests this feature answers. */
 export const CONNLOG_REQUESTS = [
@@ -97,6 +99,18 @@ function line(entry: ConnectionLogEntry): string {
   return `${entry.at} ${entry.protocol} #${String(entry.connection)} ${marker} ${entry.text}`;
 }
 
+/** The core's suggested file name (`nail_connlog::export_name`). */
+function exportName(scope: ConnectionLogScope): string {
+  const clean = (id: string) => id.slice(0, 64).replace(/[^A-Za-z0-9_-]/g, "_");
+  const stem =
+    scope.kind === "account"
+      ? `account-${clean(scope.account_id)}`
+      : scope.kind === "pim-source"
+        ? `source-${clean(scope.source_id)}`
+        : "setup";
+  return `nail-connection-log-${stem}.txt`;
+}
+
 function logOf(state: ConnlogMockState, scope: ConnectionLogScope): MockLog {
   const key = scopeKey(scope);
   let log = state.logs[key];
@@ -132,7 +146,7 @@ export function appendMockLines(
       text,
     });
   }
-  while (log.entries.length > CONNECTION_LOG_CAPACITY) {
+  while (log.entries.length > MOCK_CAPACITY) {
     log.entries.shift();
     log.dropped += 1;
   }
@@ -252,6 +266,7 @@ export function answerConnlog(core: MockCore, request: ConnlogRequest): Response
           entries: structuredClone(entries),
           last_seq: log.lastSeq,
           dropped: log.dropped,
+          capacity: MOCK_CAPACITY,
           keep_on_disk: state.settings.keep_on_disk,
         },
       };
@@ -267,7 +282,8 @@ export function answerConnlog(core: MockCore, request: ConnlogRequest): Response
       const text = logOf(state, request.scope)
         .entries.map((e) => `${line(e)}\n`)
         .join("");
-      if (request.path === undefined) return { type: "ConnectionLogExport", text };
+      const file_name = exportName(request.scope);
+      if (request.path === undefined) return { type: "ConnectionLogExport", text, file_name };
       if (!core.data.features.portability.desktop) {
         return {
           type: "Error",
@@ -277,7 +293,7 @@ export function answerConnlog(core: MockCore, request: ConnlogRequest): Response
         };
       }
       state.exports[request.path] = text;
-      return { type: "ConnectionLogExport", path: request.path };
+      return { type: "ConnectionLogExport", path: request.path, file_name };
     }
     case "GetConnectionLogSettings":
       return { type: "ConnectionLogSettings", settings: { ...state.settings } };

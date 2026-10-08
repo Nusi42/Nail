@@ -51,8 +51,8 @@ const d = (part: string) => p(`${DETAILS_PART}.${part}`);
 const a = (part: string) => p(`${ACCOUNT_PART}.${part}`);
 const l = (part: string) => p(`${APP_LOG_PART}.${part}`);
 
-/** Monospace text that keeps its spaces and breaks anywhere. */
-const CODE = `font-family: ${T.mono}; font-size: ${T.small}; white-space: pre-wrap; overflow-wrap: anywhere;`;
+/** Monospace text that keeps its spaces and breaks anywhere (spaces wrap instead of hanging past the box). */
+const CODE = `font-family: ${T.mono}; font-size: ${T.small}; white-space: break-spaces; overflow-wrap: anywhere;`;
 
 export const CONNLOG_SKIN_CSS = `${p(VIEWER_PART)}, ${p(DETAILS_PART)}, ${p(APP_LOG_PART)} {
   display: flex; flex-direction: column; gap: ${T.sm}; min-height: 0; height: 100%;

@@ -15,7 +15,7 @@ import type {
   WireProtocol,
 } from "../../api/generated";
 import { isWindowInstance, parseWindowId, windowId } from "../../state/windows";
-import { CONNECTION_LOG_CAPACITY, CONNECTION_LOG_KIND } from "./names";
+import { CONNECTION_LOG_KIND } from "./names";
 
 /**
  * Every value of the contract's enums, in the contract's order. The
@@ -137,7 +137,7 @@ export function scopeOfViewerWindow(id: string): ConnectionLogScope | null {
  * What the viewer holds after fetching `page` (the entries after the last
  * one held): new entries appended, entries the core dropped (or cleared)
  * removed — positions `1..=dropped` are gone —, at most
- * {@link CONNECTION_LOG_CAPACITY}.
+ * the core's `capacity`.
  */
 export function mergeLog(
   held: readonly ConnectionLogEntry[],
@@ -147,9 +147,7 @@ export function mergeLog(
   const merged = [...held, ...page.entries.filter((e) => e.seq > last)].filter(
     (e) => e.seq > page.dropped,
   );
-  return merged.length > CONNECTION_LOG_CAPACITY
-    ? merged.slice(merged.length - CONNECTION_LOG_CAPACITY)
-    : merged;
+  return merged.length > page.capacity ? merged.slice(merged.length - page.capacity) : merged;
 }
 
 /** The viewer's filters. */
@@ -198,15 +196,4 @@ export function entryAt(
     else break;
   }
   return found;
-}
-
-/** The file name a log is saved under (`nail-connection-log-work.txt`). */
-export function exportName(scope: ConnectionLogScope): string {
-  const id =
-    scope.kind === "account"
-      ? scope.account_id
-      : scope.kind === "pim-source"
-        ? scope.source_id
-        : "setup";
-  return `nail-connection-log-${id.replace(/[^A-Za-z0-9_-]/g, "_")}.txt`;
 }

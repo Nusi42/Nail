@@ -522,13 +522,14 @@ How it works:
 
 ### Visual regression (M5a, ADR 0106)
 
-Screenshots of 24 screens (the main window with the rail and a message,
+Screenshots of 26 screens (the main window with the rail and a message,
 the reader's More menu, the composer, the settings page, the calendar views,
 Contacts and Tasks, a context menu, an HTML message, attachment cards before
 and after saving, the Move dialog, a modal confirmation, and — M5d —
 customize-layout mode, the toolbar customizer, Settings → Appearance and the
 theme editor, and — P2 — a conversation in the card feed and the
-expandable conversation list; `e2e/visual/screens.ts`) for every built-in theme
+expandable conversation list, and — ADR 0190 — the connection log and the error
+details window; `e2e/visual/screens.ts`) for every built-in theme
 (Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.

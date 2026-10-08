@@ -585,10 +585,13 @@ export const SCREENS: readonly Screen[] = [
       await errorDetailsWindow(page).locator('[data-part="window.close"]').click();
       await allowAllFolders(page, server);
     },
-    mask: (page) => [
-      errorDetailsWindow(page).locator('[data-field="at"]'),
-      errorDetailsWindow(page).locator('[data-field="command"]'),
-    ],
+    // The rows are `display: contents`: mask their values (time, command tag).
+    mask: (page) =>
+      ["at", "command", "server"].map((field) =>
+        errorDetailsWindow(page).locator(
+          `[data-field="${field}"] [data-part="error-details.value"]`,
+        ),
+      ),
   },
 ];
 

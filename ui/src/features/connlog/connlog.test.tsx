@@ -21,14 +21,12 @@ import {
   ALL_ENTRIES,
   WIRE_PROTOCOLS,
   entryAt,
-  exportName,
   filterEntries,
   mergeLog,
   protocolsIn,
   scopeOfViewerWindow,
   viewerWindowOf,
 } from "./model";
-import { CONNECTION_LOG_CAPACITY } from "./names";
 import { handleConnlogEvent } from "./queries";
 import { connlogStoreFor, openConnectionLog, openErrorDetails } from "./store";
 
@@ -47,8 +45,13 @@ function entry(seq: number, extra: Partial<ConnectionLogEntry> = {}): Connection
   };
 }
 
-function page(entries: ConnectionLogEntry[], lastSeq: number, dropped = 0): ConnectionLog {
-  return { scope: WORK, entries, last_seq: lastSeq, dropped, keep_on_disk: false };
+function page(
+  entries: ConnectionLogEntry[],
+  lastSeq: number,
+  dropped = 0,
+  capacity = 2000,
+): ConnectionLog {
+  return { scope: WORK, entries, last_seq: lastSeq, dropped, capacity, keep_on_disk: false };
 }
 
 /** Routes the mock core's events to the feature like `App.tsx` does. */
@@ -81,9 +84,9 @@ describe("connection log model", () => {
     const held = [entry(1), entry(2)];
     expect(mergeLog(held, page([entry(2), entry(3)], 3)).map((e) => e.seq)).toEqual([1, 2, 3]);
     expect(mergeLog(held, page([], 2, 2))).toEqual([]);
-    const many = Array.from({ length: CONNECTION_LOG_CAPACITY + 5 }, (_, i) => entry(i + 1));
-    const merged = mergeLog([], page(many, many.length));
-    expect(merged).toHaveLength(CONNECTION_LOG_CAPACITY);
+    const many = Array.from({ length: 15 }, (_, i) => entry(i + 1));
+    const merged = mergeLog([], page(many, many.length, 0, 10));
+    expect(merged).toHaveLength(10);
     expect(merged[0]?.seq).toBe(6);
   });
 
@@ -114,7 +117,6 @@ describe("connection log model", () => {
       kind: "setup",
     });
     expect(viewerWindowOf({ kind: "account", account_id: "a b" })).toBeNull();
-    expect(exportName({ kind: "account", account_id: "a/b" })).toBe("nail-connection-log-a_b.txt");
   });
 });
 
@@ -216,7 +218,7 @@ describe("connection log viewer", () => {
       expect(within(viewer).getByRole("status")).toHaveTextContent("The connection log was saved.");
     });
     const [path, text] = must(Object.entries(env.transport.data.features.connlog.exports)[0]);
-    expect(path).toMatch(/nail-connection-log-acc-work\.txt$/);
+    expect(path).toMatch(/nail-connection-log-account-acc-work\.txt$/);
     expect(text).toContain("<redacted>");
     // Clear.
     await user.click(within(viewer).getByRole("button", { name: "Clear" }));

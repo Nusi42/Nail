@@ -870,7 +870,7 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
-npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 24 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 26 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
 npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
@@ -914,7 +914,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `ui/src/features/customization/editorModel.ts` `KEY_CONTEXTS` with a `customize-keys-context-*` label.
 - The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
-- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.
+- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`) and, redacted, to `<data-dir>/logs/app.log` (ADR 0190; the desktop app too). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.
 - M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
 - Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
 - Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets` (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine timing for tests: `EngineTiming::fast()`.
@@ -1212,7 +1212,7 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   (`layout-editor-settings`, `toolbar-editor-settings`) and → Appearance, right-click on a toolbar. Theme ids from
   names: NFKD without combining marks, `theme-` before a non-letter start, ≤ 60 chars — core and UI alike. A first
   `UpdateLayout` creates `layout.kdl`, so undoing it removes the file. E2E: `m5d.spec.ts`; the a11y window sweep
-  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 then; P2 adds `conversation`, `conversation-expanded`: 24).
+  covers the editors; visual screens `layout-editor`, `toolbar-customizer`, `appearance`, `theme-editor` (22 then; P2 adds `conversation`, `conversation-expanded`: 24; ADR 0190 `connection-log`, `error-details`: 26).
 - P1 contract (ADR 0139): HTML mail broke because nail-mime's sanitizer drops `<style>` / `<head>` / `class` / body
   attributes and nobody resolves `cid:` (the srcdoc frame also inherits the page CSP, which has no `cid:`); the
   responsive standard (8 viewport sizes, windows at min-size and resized; no clipped text, overlaps, page scroll) is

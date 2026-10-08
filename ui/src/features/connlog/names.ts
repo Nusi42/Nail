@@ -1,8 +1,7 @@
 /**
  * Names of the connection log feature (ADR 0190): window kinds (titles
- * `window-<kind>` in `connlog.ftl`), root parts and limits mirrored from
- * `nail_api::connlog` (pinned by `connlog.test.tsx` against the generated
- * contract where it can be).
+ * `window-<kind>` in `connlog.ftl`) and root parts. Limits and file names
+ * come from the core (`ConnectionLog.capacity`, `ConnectionLogExport.file_name`).
  */
 
 /** The connection log viewer: `connection-log:<scope instance>`. */
@@ -13,9 +12,6 @@ export const ERROR_DETAILS_KIND = "error-details";
 
 /** The application log's recent lines (Settings → Diagnostics). */
 export const APP_LOG_KIND = "application-log";
-
-/** `nail_api::connlog::CONNECTION_LOG_CAPACITY`: entries kept per scope. */
-export const CONNECTION_LOG_CAPACITY = 2000;
 
 /** Root part of the viewer. */
 export const VIEWER_PART = "connection-log";

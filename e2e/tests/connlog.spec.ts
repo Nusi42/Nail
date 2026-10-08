@@ -41,14 +41,13 @@ test("the connection log shows the protocol, never credentials or content", asyn
   await showView(page, "Mail");
   const viewer = await openWorkLog(page);
   const list = viewer.getByRole("list", { name: "Recorded lines" });
-  await expect(list).toContainText(/LOGIN .*<redacted>/);
+  await expect(list).toContainText(/(LOGIN|AUTHENTICATE PLAIN) .*<redacted>/);
   await expect(list).toContainText(/(SELECT|EXAMINE) "?INBOX"?/);
   await expect(list).toContainText(/FETCH .*\{\d+ bytes\}/);
-  // The demo account's password (`MULTI_WORK_PASSWORD`) is never shown, its
-  // address only masked.
+  // The demo account's password (`MULTI_WORK_PASSWORD`) and address are
+  // never shown (the user name goes inside the redacted sign-in).
   await expect(list).not.toContainText("work-secret");
   await expect(list).not.toContainText("ada@work.example");
-  await expect(list).toContainText("a***@work.example");
 
   const subjects = (await control<MockMessage[]>(server, "imap-messages", { account: "work" }))
     .map((m) => m.subject)
@@ -61,11 +60,11 @@ test("the connection log shows the protocol, never credentials or content", asyn
   const download = page.waitForEvent("download");
   await viewer.getByRole("button", { name: "Export…" }).click();
   const file = await download;
-  expect(file.suggestedFilename()).toBe("nail-connection-log-work.txt");
+  expect(file.suggestedFilename()).toBe("nail-connection-log-account-work.txt");
   const chunks: Buffer[] = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
   const text = Buffer.concat(chunks).toString("utf8");
-  expect(text).toMatch(/ imap #\d+ C: A\d+ LOGIN .*<redacted>/);
+  expect(text).toMatch(/ imap #\d+ C: A\d+ (LOGIN|AUTHENTICATE PLAIN) .*<redacted>/);
   expect(text).not.toContain("work-secret");
   for (const subject of subjects) expect(text, subject).not.toContain(subject);
 });
@@ -103,5 +102,7 @@ test("keeping the connection log on disk is off by default", async ({ page }) =>
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await settings.getByRole("button", { name: "Show recent lines" }).click();
   const appLog = page.locator('[data-part="window"][data-window="application-log"]');
-  await expect(appLog.getByLabel("Recent application log lines")).toBeVisible();
+  // `nail serve` writes `<data-dir>/logs/app.log` (the e2e harness logs only
+  // errors, so the recent lines may be empty).
+  await expect(appLog.getByText(/^Written to .*app\.log$/)).toBeVisible();
 });
