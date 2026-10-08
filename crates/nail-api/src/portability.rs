@@ -796,44 +796,21 @@ pub struct JobStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(
-            ImportFormat::ALL,
-            ImportFormat::as_str,
-            ImportFormat::message_id,
-        );
-        assert_labels(
-            ExportFormat::ALL,
-            ExportFormat::as_str,
-            ExportFormat::message_id,
-        );
-        assert_labels(
-            MboxVariant::ALL,
-            MboxVariant::as_str,
-            MboxVariant::message_id,
-        );
-        assert_labels(
-            ImportCollectionKind::ALL,
-            ImportCollectionKind::as_str,
-            ImportCollectionKind::message_id,
-        );
-        assert_labels(JobKind::ALL, JobKind::as_str, JobKind::message_id);
-        assert_labels(JobPhase::ALL, JobPhase::as_str, JobPhase::message_id);
-        assert_labels(JobState::ALL, JobState::as_str, JobState::message_id);
-        assert_labels(
-            IssueSeverity::ALL,
-            IssueSeverity::as_str,
-            IssueSeverity::message_id,
-        );
-        assert_labels(
-            PortabilityIssueCode::ALL,
-            PortabilityIssueCode::as_str,
-            PortabilityIssueCode::message_id,
+        assert_wire_labels!(
+            ImportFormat,
+            ExportFormat,
+            MboxVariant,
+            ImportCollectionKind,
+            JobKind,
+            JobPhase,
+            JobState,
+            IssueSeverity,
+            PortabilityIssueCode
         );
         assert_eq!(
             PortabilityIssueCode::FilterNotExpressible.message_id(),

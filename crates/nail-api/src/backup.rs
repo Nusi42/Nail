@@ -311,23 +311,12 @@ pub struct RestoreReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(BackupItem::ALL, BackupItem::as_str, BackupItem::message_id);
-        assert_labels(
-            BackupIssue::ALL,
-            BackupIssue::as_str,
-            BackupIssue::message_id,
-        );
-        assert_labels(
-            RestoreEffect::ALL,
-            RestoreEffect::as_str,
-            RestoreEffect::message_id,
-        );
+        assert_wire_labels!(BackupItem, BackupIssue, RestoreEffect);
         assert_eq!(BackupItem::PimLocal.message_id(), "backup-item-pim-local");
     }
 

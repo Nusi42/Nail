@@ -10,6 +10,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{assert_nothing_to_place, install_package};
+use nail_core::testing::{error_of, quiet_options};
+
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -26,8 +31,8 @@ use nail_api::{
     ConfigFile, ErrorCode, Event, FolderRole, MessageArg, MessageId, PluginId, Request, Response,
     ToolbarItem, UiContext,
 };
-use nail_core::demo::{demo_options, seed_demo};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
+use nail_core::demo::seed_demo;
 use nail_plugins::package::build_package;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
@@ -39,18 +44,11 @@ struct Fixture {
     files: tempfile::TempDir,
 }
 
-fn options(data: &Path, config: &Path) -> ServiceOptions {
-    let mut options = ServiceOptions::new(data, config);
-    options.watch_config = false;
-    options.start_engines = false;
-    demo_options(options)
-}
-
 fn setup() -> Fixture {
     let data = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     let files = tempfile::tempdir().unwrap();
-    let service = Service::open(options(data.path(), config.path())).unwrap();
+    let service = Service::open(quiet_options(data.path(), config.path())).unwrap();
     seed_demo(service.store(), service.blobs()).unwrap();
     Fixture {
         service,
@@ -132,15 +130,6 @@ fn write(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
 
 fn all(permissions: &[PluginPermission]) -> Vec<PluginGrant> {
     permissions.iter().cloned().map(PluginGrant::all).collect()
-}
-
-fn error(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("expected an error, got {other:?}"),
-    }
 }
 
 fn plugin(response: Response) -> PluginInfo {
@@ -236,33 +225,7 @@ fn selection(ids: &[MessageId]) -> UiContext {
 async fn install(f: &Fixture, id: &str, permissions: &[&str], js: &str) -> PluginInfo {
     let bytes = package(id, "1.0.0", permissions, js);
     let path = write(f.files.path(), &format!("{id}.nailplugin"), &bytes);
-    let source = PluginPackageSource::File {
-        path: path.display().to_string(),
-    };
-    let sha = match f
-        .service
-        .handle(Request::PreviewPluginInstall {
-            source: source.clone(),
-        })
-        .await
-    {
-        Response::PluginInstallPreview { preview } => preview.package_sha256,
-        other => panic!("{other:?}"),
-    };
-    let grants = permissions
-        .iter()
-        .map(|p| PluginGrant::all(PluginPermission::parse(p).unwrap()))
-        .collect();
-    plugin(
-        f.service
-            .handle(Request::InstallPlugin {
-                source,
-                package_sha256: sha,
-                grants,
-                enable: true,
-            })
-            .await,
-    )
+    plugin(install_package(&f.service, &path, permissions).await)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -294,7 +257,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     assert_eq!(preview.installed_version, None);
 
     // Another package than the previewed one is refused.
-    let changed = error(
+    let changed = error_of(
         f.service
             .handle(Request::InstallPlugin {
                 source: source.clone(),
@@ -321,7 +284,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
             enable: true,
         })
         .await;
-    assert_eq!(error(undeclared).0, ErrorCode::InvalidRequest);
+    assert_eq!(error_of(undeclared).0, ErrorCode::InvalidRequest);
     assert!(!f.data.path().join("plugins/follow-up.nailplugin").exists());
 
     let mut events = f.service.subscribe();
@@ -406,7 +369,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     .await;
     // A dialog is answered once.
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::RespondPluginDialog {
                     dialog_id: dialog.dialog_id.clone(),
@@ -436,7 +399,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     }
     // Unknown commands and panels.
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::RunPluginCommand {
                     command: "plugin.follow-up.nope".into(),
@@ -497,27 +460,15 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     let reader = &layout.toolbars["reader"];
     let at = reader
         .iter()
-        .position(|i| matches!(i, ToolbarItem::Action { action, .. } if action == "mail.forward"))
+        .position(
+            |i| matches!(i, ToolbarItem::Action { item, .. } if item.action == "mail.forward"),
+        )
         .unwrap();
     assert!(matches!(
         &reader[at + 1],
-        ToolbarItem::Action { action, .. } if action == "plugin.follow-up.follow-up"
+        ToolbarItem::Action { item, .. } if item.action == "plugin.follow-up.follow-up"
     ));
-    match f
-        .service
-        .handle(Request::PreviewPluginPlacements {
-            plugin_id: id.clone(),
-        })
-        .await
-    {
-        Response::PluginPlacements {
-            incoming, preview, ..
-        } => {
-            assert_eq!(incoming, "");
-            assert!(preview.sections.is_empty(), "{:?}", preview.sections);
-        }
-        other => panic!("{other:?}"),
-    }
+    assert_nothing_to_place(&f.service, &id).await;
 
     // Disabled: commands are unavailable; enabled again it runs.
     let disabled = plugin(
@@ -529,7 +480,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     );
     assert_eq!(disabled.state, PluginRunState::Disabled);
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::RunPluginCommand {
                     command: "plugin.follow-up.follow-up".into(),
@@ -562,7 +513,7 @@ async fn a_package_is_previewed_installed_run_placed_and_uninstalled() {
     );
     assert!(!f.data.path().join("plugins/follow-up.nailplugin").exists());
     assert_eq!(
-        error(f.service.handle(Request::GetPlugin { plugin_id: id }).await).0,
+        error_of(f.service.handle(Request::GetPlugin { plugin_id: id }).await).0,
         ErrorCode::NotFound
     );
 }
@@ -737,7 +688,7 @@ async fn dev_folders_load_and_reload() {
     std::fs::write(folder.join("locales/en.ftl"), EN_FTL).unwrap();
 
     assert_eq!(
-        error(
+        error_of(
             f.service
                 .handle(Request::LoadDevPlugin {
                     folder: "relative/folder".into(),
@@ -934,7 +885,7 @@ async fn enabled_plugins_start_with_the_core_and_tampered_packages_are_refused()
     bytes.extend_from_slice(b"extra");
     std::fs::write(&path, bytes).unwrap();
 
-    let mut opts = options(data.path(), config.path());
+    let mut opts = quiet_options(data.path(), config.path());
     opts.start_engines = true;
     let service = Service::open(opts).unwrap();
     let f = Fixture {

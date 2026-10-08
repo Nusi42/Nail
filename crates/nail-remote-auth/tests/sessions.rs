@@ -80,9 +80,7 @@ async fn a_session_needs_its_own_device_cookie() {
 
 #[tokio::test]
 async fn tokens_rotate_and_the_old_one_has_a_grace_period() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let original = browser.clone();
     let policy = h.auth.policy().clone();
 
@@ -127,9 +125,7 @@ async fn tokens_rotate_and_the_old_one_has_a_grace_period() {
 
 #[tokio::test]
 async fn idle_sessions_end() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let settings = h.auth.settings();
     let idle = i64::from(settings.session_idle_minutes) * 60;
     let id = browser.resolve(&h).unwrap().session.id;
@@ -152,9 +148,7 @@ async fn idle_sessions_end() {
 
 #[tokio::test]
 async fn sessions_have_an_absolute_limit() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let max = i64::from(h.auth.settings().session_max_hours) * 3600;
     let mut elapsed = 0;
     while elapsed + 600 < max {
@@ -170,9 +164,7 @@ async fn sessions_have_an_absolute_limit() {
 
 #[tokio::test]
 async fn sweep_ends_idle_sessions_and_announces_them() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let id = browser.resolve(&h).unwrap().session.id;
     h.events();
     assert_eq!(h.auth.sweep().len(), 0);
@@ -191,10 +183,7 @@ async fn sweep_ends_idle_sessions_and_announces_them() {
 async fn revoking_a_device_or_session_logs_the_browser_out() {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
-    let mut phone = h.paired(&ada, "192.0.2.10").await;
-    let mut laptop = h.paired(&ada, "192.0.2.11").await;
-    let phone_ctx = phone.resolve(&h).unwrap();
-    let laptop_ctx = laptop.resolve(&h).unwrap();
+    let ((mut phone, phone_ctx), (mut laptop, laptop_ctx)) = h.two_sessions(&ada).await;
 
     h.store
         .end_remote_session(&laptop_ctx.session.id, SessionEndReason::Revoked, h.now())
@@ -219,9 +208,7 @@ async fn revoking_a_device_or_session_logs_the_browser_out() {
 
 #[tokio::test]
 async fn logout_ends_the_session_and_clears_the_cookie() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let before = browser.clone();
     let id = browser.resolve(&h).unwrap().session.id;
     h.events();
@@ -250,9 +237,7 @@ async fn logout_ends_the_session_and_clears_the_cookie() {
 
 #[tokio::test]
 async fn refresh_keeps_a_websocket_session_alive_and_notices_its_end() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, ada, mut browser) = Harness::with_ada().await;
     let ctx = browser.resolve(&h).unwrap();
     let idle = i64::from(h.auth.settings().session_idle_minutes) * 60;
     let mut ctx = ctx;
@@ -277,9 +262,7 @@ async fn refresh_keeps_a_websocket_session_alive_and_notices_its_end() {
 
 #[tokio::test]
 async fn sessions_record_activity_and_the_client() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     h.clock.advance(120);
     browser.client.ip = Some("192.0.2.99".parse().unwrap());
     let ctx = browser.resolve(&h).unwrap();

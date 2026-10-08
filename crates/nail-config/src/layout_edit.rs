@@ -36,17 +36,17 @@
 
 use std::collections::HashMap;
 
-use kdl::{KdlDocument, KdlNode, KdlValue};
+use kdl::{KdlNode, KdlValue};
 use nail_api::editing::{EditIssue, LayoutPlacement, NewWidget, ToolbarArea, ToolbarSlot};
 use nail_api::plugins::PLUGIN_PANEL_WIDGET;
 use nail_api::{LayoutNodeRef, LocalizedMessage, Orientation, PresetNode, ToolbarItem};
 
-use crate::accounts::write::quote;
 use crate::kdl_edit::{
-    Style, detach, ensure_multiline, extracted, first_arg, json_text, parse_one, parse_rendered,
-    put, reindent, remove_prop, replace_with, set_prop, str_prop,
+    Style, block_of, detach, ensure_multiline, extracted, first_arg, json_text, parse_one,
+    parse_rendered, put, reindent, remove_prop, replace_with, set_prop, str_prop,
 };
-use crate::kdl_util::is_kebab;
+use crate::kdl_util::{children, is_kebab};
+use crate::kdl_write::quote;
 use crate::l10n::msg;
 use crate::write_back::{EditError, LayoutEditor, Site};
 use crate::{default_layout, render, widgets};
@@ -108,38 +108,16 @@ fn child_count(node: &KdlNode) -> usize {
     node.children().map_or(0, |c| c.nodes().len())
 }
 
-fn kids(node: &KdlNode) -> &[KdlNode] {
-    node.children().map_or(&[][..], KdlDocument::nodes)
-}
-
 /// A split's orientation (argument or `orientation=`; horizontal by default).
 fn orientation_of(node: &KdlNode) -> Orientation {
     match first_arg(node).or_else(|| str_prop(node, "orientation")) {
-        Some("vertical") => Orientation::Vertical,
-        _ => Orientation::Horizontal,
-    }
-}
-
-fn orientation_name(orientation: Orientation) -> &'static str {
-    match orientation {
-        Orientation::Horizontal => "horizontal",
-        Orientation::Vertical => "vertical",
+        Some(text) => Orientation::parse(text).unwrap_or_default(),
+        None => Orientation::Horizontal,
     }
 }
 
 fn to_index(value: u32) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
-}
-
-/// The children of a node, creating an empty block (` {}`) when it has none.
-fn block_of(node: &mut KdlNode) -> &mut KdlDocument {
-    if node.children().is_none()
-        && let Some(format) = node.format_mut()
-        && format.before_children.is_empty()
-    {
-        " ".clone_into(&mut format.before_children);
-    }
-    node.ensure_children()
 }
 
 /// A whitespace-separated list property, split (`None` when absent).
@@ -320,7 +298,9 @@ impl Tree<'_> {
                 return Err(not_found(node));
             }
             let index = to_index(step);
-            current = kids(current).get(index).ok_or_else(|| not_found(node))?;
+            current = children(current)
+                .get(index)
+                .ok_or_else(|| not_found(node))?;
             path.push(index);
         }
         Ok(path)
@@ -358,7 +338,7 @@ impl Tree<'_> {
                 out.push(id.to_owned());
             }
             if is_container(node) {
-                for child in kids(node) {
+                for child in children(node) {
                     collect(child, out);
                 }
             }
@@ -564,7 +544,7 @@ impl Tree<'_> {
                 let style = self.style.clone();
                 let header = format!(
                     "split {} sizes=\"1fr 1fr\"",
-                    quote(orientation_name(side.orientation()))
+                    quote(Orientation::as_str(side.orientation()))
                 );
                 let parent_block = block_of(self.at(parent)?);
                 let wrapped = detach(parent_block, t_index, depth, &style);
@@ -592,7 +572,7 @@ fn find_node(node: &KdlNode, path: &mut Vec<usize>, hit: &dyn Fn(&KdlNode) -> bo
     if !is_container(node) {
         return false;
     }
-    for (i, child) in kids(node).iter().enumerate() {
+    for (i, child) in children(node).iter().enumerate() {
         path.push(i);
         if find_node(child, path, hit) {
             return true;
@@ -1030,7 +1010,7 @@ fn default_limits(
         if !is_container(node) && node.name().value() != "window" {
             return;
         }
-        for (index, child) in kids(node).iter().enumerate() {
+        for (index, child) in children(node).iter().enumerate() {
             if let Some(id) = str_prop(child, "id")
                 && wanted.contains(&id)
                 && let Some(found) = limits_in(node, index)
@@ -1046,7 +1026,7 @@ fn default_limits(
         match top.name().value() {
             "window" => walk(top, &wanted, &mut out),
             "breakpoint" => {
-                for window in kids(top) {
+                for window in children(top) {
                     walk(window, &wanted, &mut out);
                 }
             }
@@ -1076,7 +1056,7 @@ fn build_preset(
             sizes,
             children,
         } => {
-            let split = format!("split {}", quote(orientation_name(*orientation)));
+            let split = format!("split {}", quote(Orientation::as_str(*orientation)));
             let mut header = with_sizes(with_id(split, id), sizes);
             let kind = ListKind::Split(*orientation);
             for &(key, default) in LIMIT_LISTS {
@@ -1204,7 +1184,7 @@ fn is_more(node: &KdlNode) -> bool {
 
 /// The child indexes of the bar's items (every child but `more`).
 fn bar_items(toolbar: &KdlNode) -> Vec<usize> {
-    kids(toolbar)
+    children(toolbar)
         .iter()
         .enumerate()
         .filter(|(_, n)| !is_more(n))
@@ -1213,7 +1193,7 @@ fn bar_items(toolbar: &KdlNode) -> Vec<usize> {
 }
 
 fn more_index(toolbar: &KdlNode) -> Option<usize> {
-    kids(toolbar).iter().position(is_more)
+    children(toolbar).iter().position(is_more)
 }
 
 /// Whether an item node can go into an area: no spacer in "More", no menu
@@ -1229,8 +1209,8 @@ fn fits(node: &KdlNode, area: ToolbarArea) -> bool {
 fn item_at(toolbar: &KdlNode, slot: ToolbarSlot) -> Option<&KdlNode> {
     let index = to_index(slot.index);
     match slot.area {
-        ToolbarArea::Bar => kids(toolbar).get(*bar_items(toolbar).get(index)?),
-        ToolbarArea::More => kids(&kids(toolbar)[more_index(toolbar)?]).get(index),
+        ToolbarArea::Bar => children(toolbar).get(*bar_items(toolbar).get(index)?),
+        ToolbarArea::More => children(&children(toolbar)[more_index(toolbar)?]).get(index),
     }
 }
 

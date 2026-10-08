@@ -33,25 +33,12 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn security_widgets_are_unique_and_kebab_case() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-    }
+    use crate::widgets::testing::parses;
 
     #[test]
-    fn security_widgets_are_registered() {
-        let kinds = super::WIDGETS
-            .iter()
-            .map(|w| ["            ", w.kind, "\n"].concat())
-            .collect::<String>();
-        let text = format!(
-            "layout \"x\" extends=\"default\" {{\n    window \"main\" {{\n        stack {{\n{kinds}        }}\n    }}\n}}\n"
-        );
-        crate::parse_layout(&text, "layout.kdl").unwrap();
-        let bad = text.replace("security-keys", "security-keys bogus=#true");
-        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
+    fn security_widgets_parse() {
+        let kinds: Vec<&str> = super::WIDGETS.iter().map(|w| w.kind).collect();
+        assert!(parses(&kinds));
+        assert!(!parses(&["security-keys bogus=#true"]));
     }
 }

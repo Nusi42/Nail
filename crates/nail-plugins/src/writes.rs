@@ -515,30 +515,20 @@ fn edit_scope(value: Option<&str>) -> Result<McpEditScope, ApiError> {
     })
 }
 
+/// Every field is optional (`#[serde(default)]` on the struct).
 #[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 struct EventChanges {
-    #[serde(default)]
     occurrence: Option<String>,
-    #[serde(default)]
     scope: Option<String>,
-    #[serde(default)]
     title: Option<String>,
-    #[serde(default)]
     start: Option<String>,
-    #[serde(default)]
     end: Option<String>,
-    #[serde(default)]
     tz: Option<String>,
-    #[serde(default)]
     location: Option<String>,
-    #[serde(default)]
     description: Option<String>,
-    #[serde(default)]
     add_attendees: Vec<String>,
-    #[serde(default)]
     remove_attendees: Vec<String>,
-    #[serde(default)]
     send_updates: bool,
 }
 

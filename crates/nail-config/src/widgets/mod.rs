@@ -123,6 +123,45 @@ pub(crate) fn kinds() -> impl Iterator<Item = &'static str> {
     all().map(|w| w.kind)
 }
 
+/// Test support for the widget tables' tests.
+#[cfg(test)]
+pub(crate) mod testing {
+    /// A layout whose window `main` holds `widgets` (one KDL line each) in
+    /// a stack.
+    pub(crate) fn layout_with(widgets: &[&str]) -> String {
+        let body: String = widgets
+            .iter()
+            .map(|w| ["            ", w, "\n"].concat())
+            .collect();
+        format!(
+            "layout \"x\" extends=\"default\" {{\n    window \"main\" {{\n        stack {{\n{body}        }}\n    }}\n}}\n"
+        )
+    }
+
+    /// Whether [`layout_with`] parses (widget kinds and options checked).
+    pub(crate) fn parses(widgets: &[&str]) -> bool {
+        crate::parse_layout(&layout_with(widgets), "layout.kdl").is_ok()
+    }
+
+    /// Every kind of `table` starts with one of `prefixes`.
+    pub(crate) fn assert_prefixed(table: &[super::WidgetSpec], prefixes: &[&str]) {
+        for spec in table {
+            assert!(
+                prefixes.iter().any(|p| spec.kind.starts_with(p)),
+                "{}",
+                spec.kind
+            );
+        }
+    }
+
+    #[test]
+    fn layouts_hold_the_widgets() {
+        assert!(parses(&["message-list", "message-view"]));
+        assert!(!parses(&["no-such-widget"]));
+        assert!(layout_with(&["a", "b x=1"]).contains("            b x=1\n"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

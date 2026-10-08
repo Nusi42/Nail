@@ -105,42 +105,14 @@ row_id!(
 
 /// RFC 3339 (UTC, seconds) of Unix seconds.
 pub(crate) fn rfc3339(secs: i64) -> String {
-    let days = secs.div_euclid(86_400);
-    let rem = secs.rem_euclid(86_400);
-    // Civil date from days since 1970-01-01 (H. Hinnant's algorithm).
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
-        rem / 3_600,
-        rem % 3_600 / 60,
-        rem % 60
-    )
+    nail_util::time::rfc3339_utc(secs)
 }
 
 fn opt_rfc3339(secs: Option<i64>) -> Option<String> {
     secs.map(rfc3339)
 }
 
-fn enum_str<T: serde::Serialize>(value: T) -> Result<String> {
-    match serde_json::to_value(value)? {
-        serde_json::Value::String(s) => Ok(s),
-        other => Err(Error::InvalidData(format!("not a string enum: {other}"))),
-    }
-}
-
-fn enum_from<T: serde::de::DeserializeOwned>(idx: usize, s: String) -> rusqlite::Result<T> {
-    serde_json::from_value(serde_json::Value::String(s)).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
+use crate::util::{enum_from, enum_name as enum_str};
 
 fn grant_from(idx: usize, text: &str) -> rusqlite::Result<RemoteGrant> {
     serde_json::from_str(text).map_err(|e| {
@@ -296,6 +268,14 @@ pub struct RemoteAuditRecord {
 }
 
 impl RemoteAuditRecord {
+    /// Records who acted: the session's user and device, and the session.
+    pub fn set_session(&mut self, session: &RemoteSession) {
+        self.user_id = Some(session.user_id.clone());
+        self.user_name = Some(session.user_name.clone());
+        self.device_id = Some(session.device_id.clone());
+        self.session_id = Some(session.id.clone());
+    }
+
     /// An entry with only kind, outcome and time set.
     pub fn new(at: i64, kind: RemoteAuditKind, outcome: RemoteAuditOutcome) -> Self {
         Self {
@@ -587,6 +567,17 @@ fn check_hash(hash: &str) -> Result<()> {
 // ---------------------------------------------------------------------------
 // Users and credentials
 // ---------------------------------------------------------------------------
+
+/// The user a passkey belongs to.
+fn passkey_user(tx: &Transaction<'_>, n: i64, id: &PasskeyId) -> Result<i64> {
+    tx.query_row(
+        "SELECT user_id FROM remote_passkeys WHERE id = ?1",
+        [n],
+        |r| r.get(0),
+    )
+    .optional()?
+    .ok_or_else(|| Error::not_found("passkey", id))
+}
 
 impl Store {
     /// Adds a user without credentials at `at` (Unix seconds). Fails with
@@ -910,14 +901,7 @@ impl Store {
     pub fn rename_passkey(&self, id: &PasskeyId, name: &str) -> Result<RemoteUser> {
         let n = parse_passkey(id)?;
         self.with_tx(|tx| {
-            let user: i64 = tx
-                .query_row(
-                    "SELECT user_id FROM remote_passkeys WHERE id = ?1",
-                    [n],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("passkey", id))?;
+            let user = passkey_user(tx, n, id)?;
             tx.execute(
                 "UPDATE remote_passkeys SET name = ?2 WHERE id = ?1",
                 params![n, name.trim()],
@@ -930,14 +914,7 @@ impl Store {
     pub fn delete_passkey(&self, id: &PasskeyId) -> Result<RemoteUser> {
         let n = parse_passkey(id)?;
         self.with_tx(|tx| {
-            let user: i64 = tx
-                .query_row(
-                    "SELECT user_id FROM remote_passkeys WHERE id = ?1",
-                    [n],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("passkey", id))?;
+            let user = passkey_user(tx, n, id)?;
             tx.execute("DELETE FROM remote_passkeys WHERE id = ?1", [n])?;
             user_in(tx, user)
         })

@@ -11,16 +11,12 @@ use nail_api::accounts::{AuthConfig, IncomingServer, OutgoingServer, TlsMode};
 use nail_api::domain::FolderRole;
 use nail_api::portability::{
     ImportCollectionKind, ImportFormat, ImportOptions, ImportSource, IssueSeverity, JobKind,
-    JobReport, JobState, LOCAL_FOLDERS_ACCOUNT_ID, PortabilityIssueCode,
+    JobReport, LOCAL_FOLDERS_ACCOUNT_ID, PortabilityIssueCode,
 };
 use nail_api::rules::{Condition, FolderRef, RuleAction, RuleTrigger};
-use nail_ical::vcard::{ParsedContact, ParsedGroup};
-use nail_ical::{ParsedEvent, ParsedTask};
 use nail_portability::job::finish_report;
-use nail_portability::sink::{
-    DuplicateKey, ImportedMessage, MailImportSink, PimImportSink, SourceCollection, SourceFolder,
-};
-use nail_portability::{JobContext, SinkError, import, thunderbird};
+use nail_portability::testing::MemorySink;
+use nail_portability::{JobContext, import, thunderbird};
 use pretty_assertions::assert_eq;
 use rusqlite::Connection;
 
@@ -180,52 +176,6 @@ fn the_fixture_address_books_are_current() {
 // ---------------------------------------------------------------------------
 // The core's side, in memory
 
-#[derive(Default)]
-struct Store {
-    folders: Vec<SourceFolder>,
-    messages: Vec<(String, ImportedMessage)>,
-    pim: Vec<(String, String)>,
-}
-
-impl MailImportSink for Store {
-    fn ensure_folder(&mut self, folder: &SourceFolder) -> Result<(), SinkError> {
-        if !self.folders.iter().any(|f| f.path == folder.path) {
-            self.folders.push(folder.clone());
-        }
-        Ok(())
-    }
-    fn contains(&mut self, folder: &SourceFolder, key: &DuplicateKey) -> Result<bool, SinkError> {
-        Ok(self
-            .messages
-            .iter()
-            .any(|(f, m)| *f == folder.path && m.key == *key))
-    }
-    fn append(&mut self, folder: &SourceFolder, message: ImportedMessage) -> Result<(), SinkError> {
-        self.messages.push((folder.path.clone(), message));
-        Ok(())
-    }
-}
-
-impl PimImportSink for Store {
-    fn event(&mut self, c: &SourceCollection, e: ParsedEvent) -> Result<(), SinkError> {
-        self.pim.push((c.name.clone(), e.fields.title));
-        Ok(())
-    }
-    fn task(&mut self, c: &SourceCollection, t: ParsedTask) -> Result<(), SinkError> {
-        self.pim.push((c.name.clone(), t.fields.title));
-        Ok(())
-    }
-    fn contact(&mut self, c: &SourceCollection, p: ParsedContact) -> Result<(), SinkError> {
-        self.pim.push((c.name.clone(), p.fields.display_name));
-        Ok(())
-    }
-    fn group(&mut self, c: &SourceCollection, g: ParsedGroup) -> Result<(), SinkError> {
-        self.pim
-            .push((c.name.clone(), format!("group {}", g.group.name)));
-        Ok(())
-    }
-}
-
 fn source() -> ImportSource {
     ImportSource {
         format: ImportFormat::ThunderbirdProfile,
@@ -381,7 +331,7 @@ fn the_preview_lists_folders_books_accounts_and_filters() {
 
 #[test]
 fn importing_the_profile() {
-    let mut store = Store::default();
+    let mut store = MemorySink::default();
     let mut ctx = JobContext::silent(JobReport::started(
         "j1".into(),
         JobKind::Import,
@@ -391,21 +341,18 @@ fn importing_the_profile() {
         &source(),
         &ImportOptions::default(),
         &mut store,
-        &mut Store::default(),
+        &mut MemorySink::default(),
         &mut ctx,
     );
     // The PIM items go to the second store; count them through the report.
     let mut report = ctx.into_report();
     finish_report(&mut report, &result, "2026-10-02T10:00:05Z");
     result.unwrap();
-    assert_eq!(report.state, JobState::CompletedWithIssues);
-    assert_eq!(report.counts.messages, 4);
-    assert_eq!(report.counts.contacts, 4);
-    assert_eq!(report.counts.groups, 2);
+    nail_portability::testing::assert_thunderbird_fixture_imported(&report);
     assert_eq!(report.counts.accounts, 2);
     assert_eq!(report.counts.rules, 4);
 
-    let paths: Vec<&str> = store.messages.iter().map(|(p, _)| p.as_str()).collect();
+    let paths: Vec<&str> = store.appended.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(
         paths,
         vec![
@@ -422,7 +369,7 @@ fn importing_the_profile() {
         .unwrap();
     assert_eq!(inbox.role, FolderRole::Inbox);
     assert_eq!(inbox.parent.as_deref(), Some("Local Folders"));
-    let (_, engine) = &store.messages[2];
+    let (_, engine) = &store.appended[2];
     assert!(engine.flags.seen && engine.flags.flagged && !engine.flags.answered);
     assert_eq!(engine.keywords, vec!["$label1"]);
     assert_eq!(
@@ -430,9 +377,9 @@ fn importing_the_profile() {
         Some("engine-1@example.org")
     );
     assert!(String::from_utf8_lossy(&engine.raw).contains("\nFrom the drawings it should work."));
-    let (_, greetings) = &store.messages[3];
+    let (_, greetings) = &store.appended[3];
     assert!(!greetings.flags.seen);
-    let (_, pop) = &store.messages[0];
+    let (_, pop) = &store.appended[0];
     assert!(pop.flags.seen && pop.flags.answered);
 
     // The deleted-but-not-compacted message is reported, not imported.
@@ -455,7 +402,7 @@ fn importing_the_profile() {
 
 #[test]
 fn the_address_books_are_imported() {
-    let mut books = Store::default();
+    let mut books = MemorySink::default();
     let mut ctx = JobContext::silent(JobReport::started("j1".into(), JobKind::Import, "t"));
     let options = ImportOptions {
         folders: Some(vec![]),
@@ -464,7 +411,7 @@ fn the_address_books_are_imported() {
     import::run(
         &source(),
         &options,
-        &mut Store::default(),
+        &mut MemorySink::default(),
         &mut books,
         &mut ctx,
     )
@@ -485,8 +432,8 @@ fn the_address_books_are_imported() {
 
 #[test]
 fn a_chosen_folder_and_a_chosen_book() {
-    let mut store = Store::default();
-    let mut books = Store::default();
+    let mut store = MemorySink::default();
+    let mut books = MemorySink::default();
     let mut ctx = JobContext::silent(JobReport::started("j1".into(), JobKind::Import, "t"));
     let options = ImportOptions {
         folders: Some(vec!["Local Folders/Archives".into()]),
@@ -504,7 +451,7 @@ fn a_chosen_folder_and_a_chosen_book() {
             "Local Folders/Archives/2024"
         ]
     );
-    assert_eq!(store.messages.len(), 1);
-    assert!(!store.messages[0].1.flags.seen, "flags dropped");
+    assert_eq!(store.appended.len(), 1);
+    assert!(!store.appended[0].1.flags.seen, "flags dropped");
     assert_eq!(books.pim.len(), 2);
 }

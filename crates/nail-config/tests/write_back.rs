@@ -4,41 +4,18 @@
 //! them after an intended change (and review the diff).
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
-use nail_api::{LayoutNodeRef, LayoutPatch, ToolbarItem};
+use nail_api::{LayoutPatch, ToolbarItem};
 use nail_config::{EditError, apply_layout_patches, default_layout, parse_layout_all};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
+use common::{apply, at, strip_sources};
+
 fn golden(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/write_back")
-        .join(format!("{name}.kdl"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_GOLDEN=1)", path.display()))
-        .replace("\r\n", "\n");
-    assert_eq!(expected, actual, "golden file {}", path.display());
-}
-
-fn at(window: &str, breakpoint: u32, path: &[u32]) -> LayoutNodeRef {
-    LayoutNodeRef {
-        window: window.into(),
-        breakpoint,
-        path: path.to_vec(),
-    }
-}
-
-fn apply(text: Option<&str>, patches: &[LayoutPatch]) -> String {
-    let out = apply_layout_patches(text, patches, "layout.kdl")
-        .unwrap_or_else(|e| panic!("patch failed: {e}"));
-    parse_layout_all(&out, "layout.kdl").unwrap_or_else(|e| panic!("invalid result: {e:?}"));
-    out
+    common::golden("write_back", name, actual);
 }
 
 const COMMENTED: &str = r#"// My layout: only what differs from the default.
@@ -113,17 +90,6 @@ fn a_window_from_the_defaults_is_copied_before_it_changes() {
     assert_eq!(ours, theirs);
 }
 
-fn strip_sources(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(map) => {
-            map.remove("source");
-            map.values_mut().for_each(strip_sources);
-        }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(strip_sources),
-        _ => {}
-    }
-}
-
 #[test]
 fn the_narrow_breakpoint_is_addressed_by_index() {
     let out = apply(
@@ -179,10 +145,7 @@ fn column_order_is_written_to_the_list_widget() {
 #[test]
 fn toolbar_order_keeps_item_comments() {
     let item = |a: &str| ToolbarItem::Action {
-        action: a.into(),
-        args: vec![],
-        label: None,
-        icon: None,
+        item: nail_api::ActionItem::new(a),
         rank: None,
         display: None,
     };
@@ -213,10 +176,11 @@ fn a_toolbar_from_the_defaults_is_added() {
         &[LayoutPatch::ToolbarOrder {
             toolbar: "main".into(),
             items: vec![ToolbarItem::Action {
-                action: "mail.compose".into(),
-                args: vec![],
-                label: Some("@mail.action.compose".into()),
-                icon: Some("compose".into()),
+                item: nail_api::ActionItem {
+                    label: Some("@mail.action.compose".into()),
+                    icon: Some("compose".into()),
+                    ..nail_api::ActionItem::new("mail.compose")
+                },
                 rank: None,
                 display: None,
             }],

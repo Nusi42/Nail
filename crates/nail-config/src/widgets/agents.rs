@@ -28,34 +28,14 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn agents_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            confirmation-indicator hide-when-empty=#false
-            confirmation-center show-history=#true
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-    }
+    use crate::widgets::testing::parses;
 
     #[test]
-    fn unknown_options_are_refused() {
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            confirmation-center show-counts=#true
-        }
-    }
-}
-";
-        assert!(crate::parse_layout(text, "layout.kdl").is_err());
+    fn agents_widgets_parse() {
+        assert!(parses(&[
+            "confirmation-indicator hide-when-empty=#false",
+            "confirmation-center show-history=#true",
+        ]));
+        assert!(!parses(&["confirmation-center show-counts=#true"]));
     }
 }

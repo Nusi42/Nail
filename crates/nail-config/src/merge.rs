@@ -37,6 +37,7 @@ use crate::error::ConfigError;
 use crate::kdl_edit::{
     Style, first_arg, remove_node, remove_prop, replace_rendered, set_first_arg, set_prop,
 };
+use crate::kdl_write::quote;
 use crate::l10n::msg;
 use crate::plugins::InstalledPlugins;
 use crate::render;
@@ -278,10 +279,6 @@ fn mode_name(mode: crate::theme::ModeSetting) -> &'static str {
         ModeSetting::Dark => "dark",
         ModeSetting::HighContrast => "high-contrast",
     }
-}
-
-fn quote(s: &str) -> String {
-    crate::accounts::write::quote(s)
 }
 
 /// Part rules grouped by selector (later declarations win).
@@ -869,7 +866,7 @@ fn toolbar_actions(items: &[ToolbarItem]) -> Vec<String> {
     let mut out = Vec::new();
     for item in items {
         match item {
-            ToolbarItem::Action { action, .. } => out.push(action.clone()),
+            ToolbarItem::Action { item, .. } => out.push(item.action.clone()),
             ToolbarItem::More { items, .. } => out.extend(menu_actions(items)),
             ToolbarItem::Spacer | ToolbarItem::Separator => {}
         }
@@ -881,7 +878,7 @@ fn menu_actions(items: &[MenuItem]) -> Vec<String> {
     let mut out = Vec::new();
     for item in items {
         match item {
-            MenuItem::Action { action, .. } => out.push(action.clone()),
+            MenuItem::Action(item) => out.push(item.action.clone()),
             MenuItem::Submenu { items, .. } => out.extend(menu_actions(items)),
             MenuItem::Separator | MenuItem::Header { .. } => {}
         }

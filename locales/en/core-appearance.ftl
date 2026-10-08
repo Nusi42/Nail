@@ -30,8 +30,8 @@ density-compact = Compact
 
 ## The operating system's colour scheme (ColorScheme)
 
-color-scheme-light = Light
-color-scheme-dark = Dark
+color-scheme-light = { theme-kind-light }
+color-scheme-dark = { theme-kind-dark }
 
 ## Override issues (ThemeOverridesIssue; optional arguments $min, $max)
 

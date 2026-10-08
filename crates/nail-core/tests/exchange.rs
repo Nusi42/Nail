@@ -10,27 +10,32 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{
+    api_service, by_subject, eventually, folder_at, folders, messages, messages_in, mock_oauth,
+    oauth_provider, ok, online, send_now, until_some,
+};
+use nail_core::testing::TempService;
+
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::accounts::{SecretKind, SecretRef};
-use nail_api::engine::{MemorySecretStore, SecretStore};
+use nail_api::accounts::SecretKind;
 use nail_api::exchange::oof::{AutomaticRepliesStatus, ExternalAudience};
 use nail_api::exchange::{
     AutomaticRepliesSettings, CategoryColor, ExchangeCategorySettings, ExchangeMailboxSettings,
     ExchangeMailboxState, InferenceClassification,
 };
 use nail_api::{
-    AccountId, AccountState, Address, Draft, Event, FlagChange, FolderRole, MessageSummary,
-    MoveTarget, Request, Response, SearchQuery,
+    AccountId, Address, Draft, Event, FlagChange, FolderRole, MessageSummary, MoveTarget, Request,
+    Response, SearchQuery,
 };
-use nail_core::{EngineTiming, Service, ServiceOptions};
+use nail_core::Service;
 use nail_proto_ews::testing::{MockAuth, MockEwsServer};
 use nail_proto_graph::testing::{InjectedError, MockGraphServer};
-use nail_testkit_net::{MockOAuthConfig, MockOAuthServer};
+use nail_testkit_net::MockOAuthServer;
 
-const TIMEOUT: Duration = Duration::from_secs(30);
 const GRAPH: &str = "contoso";
 const EWS: &str = "corp";
 
@@ -39,7 +44,7 @@ struct Env {
     graph: MockGraphServer,
     ews: Option<MockEwsServer>,
     _oauth: MockOAuthServer,
-    _dirs: (tempfile::TempDir, tempfile::TempDir),
+    _temp: TempService,
 }
 
 async fn setup(with_ews: bool, extra: &str) -> Env {
@@ -53,10 +58,7 @@ async fn setup_with(
     prepare: impl FnOnce(&MockGraphServer, Option<&MockEwsServer>),
 ) -> Env {
     let graph = MockGraphServer::start_demo().await.unwrap();
-    let oauth = MockOAuthServer::start(MockOAuthConfig::default())
-        .await
-        .unwrap();
-    oauth.add_refresh_token("refresh-ex", "ada@contoso.example", "graph");
+    let oauth = mock_oauth(&[("refresh-ex", "ada@contoso.example", "graph")]).await;
     let ews = if with_ews {
         Some(
             MockEwsServer::start_with(MockAuth::Basic {
@@ -70,8 +72,6 @@ async fn setup_with(
         None
     };
     prepare(&graph, ews.as_ref());
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
     let ews_node = ews.as_ref().map_or_else(String::new, |ews| {
         format!(
             r#"account "{EWS}" email="ada@corp.example" name="Corp" {{
@@ -84,163 +84,133 @@ async fn setup_with(
             url = ews.url()
         )
     });
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            r#"oauth-provider "mockms" client-id="nail-test-client" auth-url="{auth}" token-url="{token}" {{
-    scopes "graph"
-}}
-account "{GRAPH}" email="ada@contoso.example" name="Contoso" {{
+    let temp = api_service(
+        &format!(
+            r#"{provider}account "{GRAPH}" email="ada@contoso.example" name="Contoso" {{
     exchange host="127.0.0.1" port={port} tls="plaintext" poll-interval=10 max-poll-interval=10 {{
         auth "oauth2" provider="mockms"
     }}
     identity "ada@contoso.example" name="Ada Lovelace"
 }}
 {ews_node}{extra}"#,
-            auth = oauth.authorize_url(),
-            token = oauth.token_url(),
+            provider = oauth_provider("mockms", &oauth, "graph"),
             port = graph.addr().port(),
         ),
-    )
-    .unwrap();
-    let secrets = Arc::new(MemorySecretStore::new());
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(GRAPH), SecretKind::OAuth2),
-            "refresh-ex",
-        )
-        .unwrap();
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(EWS), SecretKind::Password),
-            "ews-secret",
-        )
-        .unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.secrets = Some(secrets);
-    options.timing = EngineTiming::fast();
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+        &[
+            (GRAPH, SecretKind::OAuth2, "refresh-ex"),
+            (EWS, SecretKind::Password, "ews-secret"),
+        ],
+    );
     Env {
-        service,
+        service: temp.service.clone(),
         graph,
         ews,
         _oauth: oauth,
-        _dirs: (data, config),
+        _temp: temp,
     }
 }
 
-async fn request(service: &Service, request: Request) -> Response {
-    let response = service.handle(request).await;
-    if let Response::Error { message, .. } = &response {
-        panic!("request failed: {message}");
-    }
-    response
+async fn folder_messages(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSummary> {
+    messages(service, &folder.id).await
 }
 
-async fn folders(service: &Service, account: &str) -> Vec<nail_api::Folder> {
-    match request(
+/// Waits for the Graph account's first inbox listing.
+async fn graph_synced(service: &Service) {
+    eventually("the Graph inbox", || async {
+        messages_in(service, GRAPH, FolderRole::Inbox).await.len() == 2
+    })
+    .await;
+}
+
+/// Waits for the EWS account's first inbox listing.
+async fn ews_synced(service: &Service) {
+    eventually("the EWS inbox", || async {
+        messages_in(service, EWS, FolderRole::Inbox).await.len() >= 3
+    })
+    .await;
+}
+
+/// The id of the mock tenant's folder `name` (own mailbox).
+fn remote_folder(graph: &MockGraphServer, name: &str) -> String {
+    graph.with_mailbox(None, |m, _| {
+        m.folders
+            .values()
+            .find(|f| f.name == name)
+            .map(|f| f.id.clone())
+            .unwrap()
+    })
+}
+
+/// Turns on the automatic replies of `account` ("Out until Monday.").
+async fn out_until_monday(service: &Service, account: AccountId) {
+    ok(
         service,
-        Request::ListFolders {
-            account_id: AccountId::new(account),
+        Request::SetAutomaticReplies {
+            account_id: account,
+            settings: AutomaticRepliesSettings {
+                status: AutomaticRepliesStatus::AlwaysEnabled,
+                start: None,
+                end: None,
+                internal_reply: "Out until Monday.".into(),
+                external_reply: "Out until Monday.".into(),
+                external_audience: ExternalAudience::All,
+            },
         },
     )
-    .await
+    .await;
+}
+
+/// The October 2026 instances of `calendars` (`None` = every calendar),
+/// in `tz`.
+async fn october(
+    service: &Service,
+    calendars: Option<Vec<nail_api::CalendarId>>,
+    tz: &str,
+) -> Vec<nail_api::pim::calendar::EventInstance> {
+    match service
+        .handle(Request::ListEventInstances {
+            calendar_ids: calendars,
+            from: "2026-10-01T00:00:00Z".into(),
+            to: "2026-10-31T00:00:00Z".into(),
+            tz: tz.into(),
+        })
+        .await
     {
-        Response::Folders { folders, .. } => folders,
-        other => panic!("unexpected {other:?}"),
+        Response::EventInstances { instances, .. } => instances,
+        _ => Vec::new(),
     }
 }
 
-async fn folder_at(service: &Service, account: &str, path: &str) -> Option<nail_api::Folder> {
-    folders(service, account)
+/// The invitation "Architecture review" in the calendar, once it is there.
+async fn architecture_review(service: &Service) -> Option<nail_api::pim::calendar::EventInstance> {
+    october(service, None, "UTC")
         .await
         .into_iter()
-        .find(|f| f.path == path)
-}
-
-async fn messages_in(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSummary> {
-    match request(
-        service,
-        Request::ListMessages {
-            folder_id: folder.id.clone(),
-            offset: 0,
-            limit: 100,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn inbox(service: &Service, account: &str) -> Vec<MessageSummary> {
-    let Some(folder) = folders(service, account)
-        .await
-        .into_iter()
-        .find(|f| f.role == FolderRole::Inbox)
-    else {
-        return Vec::new();
-    };
-    messages_in(service, &folder).await
-}
-
-/// Waits until `check` holds (polling the core).
-async fn until<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-/// Whether the account finished a sync pass: messages show up while the
-/// first pass still lists them (their Exchange data a moment later), so
-/// their count alone does not say the pass is done (WP175).
-async fn online(service: &Service, account: &str) -> bool {
-    match service.handle(Request::ListAccountStatuses).await {
-        Response::AccountStatuses { statuses } => statuses
-            .iter()
-            .any(|s| s.account_id.as_str() == account && s.state == AccountState::Online),
-        _ => false,
-    }
-}
-
-fn subject_of<'a>(list: &'a [MessageSummary], subject: &str) -> &'a MessageSummary {
-    list.iter()
-        .find(|m| m.subject == subject)
-        .unwrap_or_else(|| panic!("no message {subject:?}"))
+        .find(|i| i.title == "Architecture review")
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
     let env = setup(false, "").await;
     let service = &env.service;
-    until("the first Graph sync", || async {
-        online(service, GRAPH).await && inbox(service, GRAPH).await.len() == 2
+    eventually("the first Graph sync", || async {
+        online(service, GRAPH).await
+            && messages_in(service, GRAPH, FolderRole::Inbox).await.len() == 2
     })
     .await;
-    let list = inbox(service, GRAPH).await;
-    let review = subject_of(&list, "Engine review on Monday");
+    let list = messages_in(service, GRAPH, FolderRole::Inbox).await;
+    let review = by_subject(&list, "Engine review on Monday");
     assert!(review.flags.flagged && !review.flags.seen);
     assert_eq!(review.tags, ["Red category"]);
     let info = review.exchange.as_ref().expect("Exchange data");
     assert_eq!(info.inference, Some(InferenceClassification::Focused));
-    let news = subject_of(&list, "Fabrikam newsletter, October");
+    let news = by_subject(&list, "Fabrikam newsletter, October");
     assert_eq!(
         news.exchange.as_ref().unwrap().inference,
         Some(InferenceClassification::Other)
     );
     // The folder tree (paths from the parents) and roles.
-    until("the subfolders", || async {
+    eventually("the subfolders", || async {
         folder_at(service, GRAPH, "Inbox/Receipts").await.is_some()
             && folder_at(service, GRAPH, "Projects/Engine").await.is_some()
     })
@@ -250,19 +220,12 @@ async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
         .into_iter()
         .find(|f| f.role == FolderRole::Sent)
         .expect("Sent Items");
-    assert_eq!(messages_in(service, &sent).await.len(), 1);
+    assert_eq!(folder_messages(service, &sent).await.len(), 1);
     // `focus:` searches.
-    let Response::SearchResults { hits, .. } = request(
+    let Response::SearchResults { hits, .. } = ok(
         service,
         Request::Search {
-            query: SearchQuery {
-                text: "focus:other".into(),
-                account_id: None,
-                folder_id: None,
-                offset: 0,
-                limit: 50,
-                sort: nail_api::search::SearchSort::default(),
-            },
+            query: SearchQuery::new("focus:other", 50),
         },
     )
     .await
@@ -272,7 +235,7 @@ async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].message.subject, "Fabrikam newsletter, October");
     // Status.
-    let Response::ExchangeStatus { status } = request(
+    let Response::ExchangeStatus { status } = ok(
         service,
         Request::GetExchangeStatus {
             account_id: AccountId::new(GRAPH),
@@ -291,15 +254,12 @@ async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
 async fn writes_replay_against_graph() {
     let env = setup(false, "").await;
     let service = &env.service;
-    until("the Graph inbox", || async {
-        inbox(service, GRAPH).await.len() == 2
-    })
-    .await;
-    let list = inbox(service, GRAPH).await;
-    let news = subject_of(&list, "Fabrikam newsletter, October").clone();
-    let review = subject_of(&list, "Engine review on Monday").clone();
+    graph_synced(service).await;
+    let list = messages_in(service, GRAPH, FolderRole::Inbox).await;
+    let news = by_subject(&list, "Fabrikam newsletter, October").clone();
+    let review = by_subject(&list, "Engine review on Monday").clone();
     // Flag + a tag (= a category).
-    request(
+    ok(
         service,
         Request::UpdateFlags {
             message_ids: vec![news.id.clone()],
@@ -312,7 +272,7 @@ async fn writes_replay_against_graph() {
     )
     .await;
     let inbox_id = env.graph.folder_id(None, "inbox");
-    until("the flag on the server", || async {
+    eventually("the flag on the server", || async {
         env.graph.messages_in(None, &inbox_id).iter().any(|m| {
             m.raw.windows(9).any(|w| w == b"Fabrikam ")
                 && m.flag == "flagged"
@@ -322,7 +282,7 @@ async fn writes_replay_against_graph() {
     .await;
     // Move to Receipts: the server's new id is kept.
     let receipts = folder_at(service, GRAPH, "Inbox/Receipts").await.unwrap();
-    request(
+    ok(
         service,
         Request::MoveMessages {
             message_ids: vec![review.id.clone()],
@@ -330,29 +290,23 @@ async fn writes_replay_against_graph() {
         },
     )
     .await;
-    let receipts_remote = env.graph.with_mailbox(None, |m, _| {
-        m.folders
-            .values()
-            .find(|f| f.name == "Receipts")
-            .map(|f| f.id.clone())
-            .unwrap()
-    });
-    until("the move on the server", || async {
+    let receipts_remote = remote_folder(&env.graph, "Receipts");
+    eventually("the move on the server", || async {
         env.graph
             .messages_in(None, &receipts_remote)
             .iter()
             .any(|m| String::from_utf8_lossy(&m.raw).contains("Engine review on Monday"))
     })
     .await;
-    until("the moved message stays put", || async {
-        messages_in(service, &receipts)
+    eventually("the moved message stays put", || async {
+        folder_messages(service, &receipts)
             .await
             .iter()
             .any(|m| m.subject == "Engine review on Monday")
     })
     .await;
     // Focused Inbox through the Exchange queue.
-    request(
+    ok(
         service,
         Request::ClassifyFocused {
             message_ids: vec![news.id.clone()],
@@ -361,7 +315,7 @@ async fn writes_replay_against_graph() {
         },
     )
     .await;
-    until("the classification on the server", || async {
+    eventually("the classification on the server", || async {
         env.graph.messages_in(None, &inbox_id).iter().any(|m| {
             String::from_utf8_lossy(&m.raw).contains("Fabrikam newsletter")
                 && m.inference == "focused"
@@ -375,14 +329,14 @@ async fn categories_automatic_replies_and_rooms() {
     let env = setup(false, "").await;
     let service = &env.service;
     let account = || AccountId::new(GRAPH);
-    until("the categories", || async {
+    eventually("the categories", || async {
         matches!(
             service.handle(Request::ListExchangeCategories { account_id: account() }).await,
             Response::ExchangeCategories { categories, .. } if categories.len() == 3
         )
     })
     .await;
-    let Response::ExchangeCategorySaved { category, .. } = request(
+    let Response::ExchangeCategorySaved { category, .. } = ok(
         service,
         Request::CreateExchangeCategory {
             account_id: account(),
@@ -397,7 +351,7 @@ async fn categories_automatic_replies_and_rooms() {
         panic!()
     };
     assert!(category.id.as_str().starts_with("local-"));
-    until("the category on the server", || async {
+    eventually("the category on the server", || async {
         env.graph.with_mailbox(None, |m, _| {
             m.categories.iter().any(|c| c["displayName"] == "Blue")
         })
@@ -419,14 +373,14 @@ async fn categories_automatic_replies_and_rooms() {
     ));
 
     // Automatic replies: read from the server, then changed.
-    until("the automatic replies", || async {
+    eventually("the automatic replies", || async {
         matches!(
             service.handle(Request::GetAutomaticReplies { account_id: account() }).await,
             Response::AutomaticReplies { replies, .. } if replies.fetched_at.is_some()
         )
     })
     .await;
-    let Response::AutomaticReplies { replies, .. } = request(
+    let Response::AutomaticReplies { replies, .. } = ok(
         service,
         Request::GetAutomaticReplies {
             account_id: account(),
@@ -438,22 +392,8 @@ async fn categories_automatic_replies_and_rooms() {
     };
     assert_eq!(replies.settings.status, AutomaticRepliesStatus::Scheduled);
     assert!(replies.settings.internal_reply.contains("conference"));
-    request(
-        service,
-        Request::SetAutomaticReplies {
-            account_id: account(),
-            settings: AutomaticRepliesSettings {
-                status: AutomaticRepliesStatus::AlwaysEnabled,
-                start: None,
-                end: None,
-                internal_reply: "Out until Monday.".into(),
-                external_reply: "Out until Monday.".into(),
-                external_audience: ExternalAudience::All,
-            },
-        },
-    )
-    .await;
-    until("the automatic replies on the server", || async {
+    out_until_monday(service, account()).await;
+    eventually("the automatic replies on the server", || async {
         env.graph.with_mailbox(None, |m, _| {
             m.automatic_replies["status"] == "alwaysEnabled"
                 && m.automatic_replies["internalReplyMessage"]
@@ -463,7 +403,7 @@ async fn categories_automatic_replies_and_rooms() {
     })
     .await;
     // The generic vacation reply shows the same.
-    let Response::Vacation { settings, .. } = request(
+    let Response::Vacation { settings, .. } = ok(
         service,
         Request::GetVacation {
             account_id: account(),
@@ -476,7 +416,7 @@ async fn categories_automatic_replies_and_rooms() {
     assert!(settings.enabled && settings.body.contains("Out until Monday."));
 
     // Rooms with availability.
-    let Response::RoomLists { lists, .. } = request(
+    let Response::RoomLists { lists, .. } = ok(
         service,
         Request::ListRoomLists {
             account_id: account(),
@@ -488,7 +428,7 @@ async fn categories_automatic_replies_and_rooms() {
         panic!()
     };
     assert_eq!(lists.len(), 2);
-    let Response::Rooms { rooms, .. } = request(
+    let Response::Rooms { rooms, .. } = ok(
         service,
         Request::FindRooms {
             account_id: account(),
@@ -542,11 +482,8 @@ async fn shared_mailboxes_sending_and_free_busy() {
     let env = setup(false, "").await;
     let service = &env.service;
     let account = || AccountId::new(GRAPH);
-    until("the Graph inbox", || async {
-        inbox(service, GRAPH).await.len() == 2
-    })
-    .await;
-    let Response::ExchangeMailboxSaved { mailbox } = request(
+    graph_synced(service).await;
+    let Response::ExchangeMailboxSaved { mailbox } = ok(
         service,
         Request::AddExchangeMailbox {
             account_id: account(),
@@ -558,7 +495,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
         panic!()
     };
     assert_eq!(mailbox.state, ExchangeMailboxState::Pending);
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(account()),
@@ -567,7 +504,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
     .await;
     // The mailbox is `Synced` once all of its folders are (its messages
     // show up while that still runs).
-    until("the shared mailbox", || async {
+    eventually("the shared mailbox", || async {
         let synced = matches!(
             service.handle(Request::ListExchangeMailboxes { account_id: account() }).await,
             Response::ExchangeMailboxes { mailboxes, .. }
@@ -575,7 +512,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
         );
         synced
             && match folder_at(service, GRAPH, "@support@contoso.example/Inbox").await {
-                Some(f) => messages_in(service, &f)
+                Some(f) => folder_messages(service, &f)
                     .await
                     .iter()
                     .any(|m| m.subject == "Ticket 4711: login fails"),
@@ -583,7 +520,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
             }
     })
     .await;
-    let Response::ExchangeMailboxes { mailboxes, .. } = request(
+    let Response::ExchangeMailboxes { mailboxes, .. } = ok(
         service,
         Request::ListExchangeMailboxes {
             account_id: account(),
@@ -596,7 +533,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
     assert_eq!(mailboxes[0].state, ExchangeMailboxState::Synced);
     assert!(mailboxes[0].root_folder_id.is_some());
     // A mailbox the user may not open.
-    request(
+    ok(
         service,
         Request::AddExchangeMailbox {
             account_id: account(),
@@ -604,14 +541,14 @@ async fn shared_mailboxes_sending_and_free_busy() {
         },
     )
     .await;
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(account()),
         },
     )
     .await;
-    until("the denied mailbox", || async {
+    eventually("the denied mailbox", || async {
         matches!(
             service.handle(Request::ListExchangeMailboxes { account_id: account() }).await,
             Response::ExchangeMailboxes { mailboxes, .. }
@@ -620,7 +557,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
     })
     .await;
     // Removing a mailbox removes its folders.
-    request(
+    ok(
         service,
         Request::RemoveExchangeMailbox {
             account_id: account(),
@@ -642,22 +579,8 @@ async fn shared_mailboxes_sending_and_free_busy() {
     }];
     draft.subject = "Sent with Graph".into();
     draft.text = "Hello Bob".into();
-    let Response::DraftSaved { draft_id } = request(service, Request::SaveDraft { draft }).await
-    else {
-        panic!()
-    };
-    request(
-        service,
-        Request::SendDraft {
-            draft_id,
-            delay_secs: Some(0),
-            send_at: None,
-            crypto: None,
-            expected_revision: None,
-        },
-    )
-    .await;
-    until("the mail on Graph", || async {
+    send_now(service, draft).await;
+    eventually("the mail on Graph", || async {
         env.graph
             .sent()
             .iter()
@@ -666,7 +589,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
     .await;
 
     // Free/busy of a colleague through Graph.
-    let Response::FreeBusy { result } = request(
+    let Response::FreeBusy { result } = ok(
         service,
         Request::QueryFreeBusy {
             attendees: vec!["bob@contoso.example".into()],
@@ -709,7 +632,7 @@ async fn calendars_contacts_and_to_do() {
             _ => Vec::new(),
         }
     };
-    until("the Exchange calendars and To Do lists", || async {
+    eventually("the Exchange calendars and To Do lists", || async {
         calendars().await.len() >= 4
     })
     .await;
@@ -727,20 +650,15 @@ async fn calendars_contacts_and_to_do() {
         .expect("the To Do list")
         .clone();
     assert!(todo.exchange.as_ref().unwrap().todo);
-    until("the events", || async {
+    eventually("the events", || async {
         matches!(
-            service.handle(Request::ListEventInstances {
-                calendar_ids: Some(vec![calendar.id.clone()]),
-                from: "2026-10-01T00:00:00Z".into(),
-                to: "2026-10-31T00:00:00Z".into(),
-                tz: "Europe/Berlin".into(),
-            }).await,
-            Response::EventInstances { instances, .. } if instances.iter().any(|i| i.title == "Dentist")
+            october(service, Some(vec![calendar.id.clone()]), "Europe/Berlin").await,
+            instances if instances.iter().any(|i| i.title == "Dentist")
         )
     })
     .await;
     // To Do with its checklist as subtasks.
-    until("the To Do tasks", || async {
+    eventually("the To Do tasks", || async {
         match service
             .handle(Request::ListTasks {
                 calendar_ids: Some(vec![todo.id.clone()]),
@@ -761,7 +679,7 @@ async fn calendars_contacts_and_to_do() {
         nail_api::pim::PimTime::zoned("2026-10-12T10:00:00", "Europe/Berlin"),
         nail_api::pim::PimTime::zoned("2026-10-12T11:00:00", "Europe/Berlin"),
     );
-    request(
+    ok(
         service,
         Request::CreateEvent {
             calendar_id: calendar.id.clone(),
@@ -770,7 +688,7 @@ async fn calendars_contacts_and_to_do() {
         },
     )
     .await;
-    until("the event on Graph", || async {
+    eventually("the event on Graph", || async {
         env.graph
             .events()
             .iter()
@@ -778,7 +696,7 @@ async fn calendars_contacts_and_to_do() {
     })
     .await;
     // Contacts.
-    until("the contacts", || async {
+    eventually("the contacts", || async {
         match service
             .handle(Request::ListContacts {
                 address_book_ids: None,
@@ -801,11 +719,8 @@ async fn calendars_contacts_and_to_do() {
 async fn an_ews_account_syncs_streams_and_tests() {
     let env = setup(true, "").await;
     let service = &env.service;
-    until("the EWS inbox", || async {
-        inbox(service, EWS).await.len() >= 3
-    })
-    .await;
-    let Response::ExchangeStatus { status } = request(
+    ews_synced(service).await;
+    let Response::ExchangeStatus { status } = ok(
         service,
         Request::GetExchangeStatus {
             account_id: AccountId::new(EWS),
@@ -830,20 +745,20 @@ async fn an_ews_account_syncs_streams_and_tests() {
         b"From: Grace <grace@corp.example>\r\nTo: ada@corp.example\r\nSubject: Streaming works\r\nMessage-ID: <stream@corp.example>\r\n\r\nHi\r\n",
         false,
     );
-    until("the streamed message", || async {
-        inbox(service, EWS)
+    eventually("the streamed message", || async {
+        messages_in(service, EWS, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.subject == "Streaming works")
     })
     .await;
     // Flags replay on EWS.
-    let message = inbox(service, EWS)
+    let message = messages_in(service, EWS, FolderRole::Inbox)
         .await
         .into_iter()
         .find(|m| m.subject == "Streaming works")
         .unwrap();
-    request(
+    ok(
         service,
         Request::UpdateFlags {
             message_ids: vec![message.id.clone()],
@@ -854,20 +769,20 @@ async fn an_ews_account_syncs_streams_and_tests() {
         },
     )
     .await;
-    until("the read flag on EWS", || async {
+    eventually("the read flag on EWS", || async {
         ews.items_in(&inbox_id).iter().any(|i| {
             i.text("Subject") == Some("Streaming works") && i.text("IsRead") == Some("true")
         })
     })
     .await;
     // TestAccount with the stored password.
-    let config = match request(service, Request::GetAccountsConfig).await {
+    let config = match ok(service, Request::GetAccountsConfig).await {
         Response::AccountsConfig { config } => {
             config.account(&AccountId::new(EWS)).cloned().unwrap()
         }
         other => panic!("unexpected {other:?}"),
     };
-    let Response::AccountTested { result } = request(
+    let Response::AccountTested { result } = ok(
         service,
         Request::TestAccount {
             config: Box::new(config),
@@ -912,7 +827,7 @@ async fn a_new_streaming_subscription_is_followed_by_a_sync() {
         });
         (ops, subscribe, synced, streaming)
     };
-    until("a sync after the subscription, then streaming", || async {
+    eventually("a sync after the subscription, then streaming", || async {
         order().3.is_some()
     })
     .await;
@@ -936,7 +851,7 @@ async fn a_new_streaming_subscription_is_followed_by_a_sync() {
 #[tokio::test(flavor = "multi_thread")]
 async fn engines_report_online() {
     let env = setup(false, "").await;
-    until("online", || online(&env.service, GRAPH)).await;
+    eventually("online", || online(&env.service, GRAPH)).await;
 }
 
 fn receipts_rule() -> nail_api::rules::Rule {
@@ -973,11 +888,11 @@ async fn nail_rules_are_placed_as_inbox_rules() {
     let env = setup(false, "").await;
     let service = &env.service;
     let account = || AccountId::new(GRAPH);
-    until("the subfolders", || async {
+    eventually("the subfolders", || async {
         folder_at(service, GRAPH, "Inbox/Receipts").await.is_some()
     })
     .await;
-    request(
+    ok(
         service,
         Request::SaveRule {
             rule: Box::new(receipts_rule()),
@@ -985,15 +900,9 @@ async fn nail_rules_are_placed_as_inbox_rules() {
         },
     )
     .await;
-    let receipts_remote = env.graph.with_mailbox(None, |m, _| {
-        m.folders
-            .values()
-            .find(|f| f.name == "Receipts")
-            .map(|f| f.id.clone())
-            .unwrap()
-    });
+    let receipts_remote = remote_folder(&env.graph, "Receipts");
     // Written as an inbox rule (the folder as Graph's id).
-    until("the inbox rule on the server", || async {
+    eventually("the inbox rule on the server", || async {
         env.graph.with_mailbox(None, |m, _| {
             m.rules.iter().any(|r| {
                 r["displayName"] == "Receipts"
@@ -1002,7 +911,7 @@ async fn nail_rules_are_placed_as_inbox_rules() {
         })
     })
     .await;
-    until("the placement", || async {
+    eventually("the placement", || async {
         match service
             .handle(Request::GetExchangeRules {
                 account_id: account(),
@@ -1016,7 +925,7 @@ async fn nail_rules_are_placed_as_inbox_rules() {
         }
     })
     .await;
-    let Response::ExchangeRules { status } = request(
+    let Response::ExchangeRules { status } = ok(
         service,
         Request::GetExchangeRules {
             account_id: account(),
@@ -1049,7 +958,7 @@ async fn nail_rules_are_placed_as_inbox_rules() {
         .unwrap()
         .id
         .clone();
-    request(
+    ok(
         service,
         Request::SetExchangeInboxRuleEnabled {
             account_id: account(),
@@ -1058,7 +967,7 @@ async fn nail_rules_are_placed_as_inbox_rules() {
         },
     )
     .await;
-    until("the rule switched off", || async {
+    eventually("the rule switched off", || async {
         env.graph.with_mailbox(None, |m, _| {
             m.rules
                 .iter()
@@ -1067,17 +976,17 @@ async fn nail_rules_are_placed_as_inbox_rules() {
     })
     .await;
     // Deleting the Nail rule removes its inbox rule.
-    let Response::Rules { rules } = request(service, Request::ListRules).await else {
+    let Response::Rules { rules } = ok(service, Request::ListRules).await else {
         panic!()
     };
-    request(
+    ok(
         service,
         Request::DeleteRule {
             rule_id: rules[0].id.clone(),
         },
     )
     .await;
-    until("the inbox rule removed", || async {
+    eventually("the inbox rule removed", || async {
         env.graph.with_mailbox(None, |m, _| {
             !m.rules.iter().any(|r| r["displayName"] == "Receipts")
         })
@@ -1090,28 +999,9 @@ async fn invitations_are_answered_through_the_meeting_api() {
     use nail_api::scheduling::{InvitationResponse, InvitationTarget};
     let env = setup(false, "").await;
     let service = &env.service;
-    let review = || async {
-        match service
-            .handle(Request::ListEventInstances {
-                calendar_ids: None,
-                from: "2026-10-01T00:00:00Z".into(),
-                to: "2026-10-31T00:00:00Z".into(),
-                tz: "UTC".into(),
-            })
-            .await
-        {
-            Response::EventInstances { instances, .. } => instances
-                .into_iter()
-                .find(|i| i.title == "Architecture review"),
-            _ => None,
-        }
-    };
-    until("the invitation in the calendar", || async {
-        review().await.is_some()
-    })
-    .await;
-    let event = review().await.unwrap();
-    request(
+    let review = || architecture_review(service);
+    let event = until_some("the invitation in the calendar", review).await;
+    ok(
         service,
         Request::RespondToInvitation {
             target: InvitationTarget::Event {
@@ -1125,7 +1015,7 @@ async fn invitations_are_answered_through_the_meeting_api() {
         },
     )
     .await;
-    until("the answer on Graph", || async {
+    eventually("the answer on Graph", || async {
         env.graph
             .meeting_actions()
             .iter()
@@ -1141,7 +1031,7 @@ async fn invitations_are_answered_through_the_meeting_api() {
 
 /// Every message of a folder (no page limit).
 async fn all_in(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSummary> {
-    match request(
+    match ok(
         service,
         Request::ListMessages {
             folder_id: folder.id.clone(),
@@ -1213,7 +1103,7 @@ async fn an_interrupted_first_listing_is_not_new_mail() {
             .into_iter()
             .find(|f| f.role == FolderRole::Inbox)
     };
-    until("the whole inbox", || async {
+    eventually("the whole inbox", || async {
         match inbox_folder().await {
             Some(f) => all_in(service, &f).await.len() == BULK + 2,
             None => false,
@@ -1246,7 +1136,7 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
     })
     .await;
     let service = &env.service;
-    until("the bulk folder", || async {
+    eventually("the bulk folder", || async {
         match folder_at(service, GRAPH, "Bulk").await {
             Some(f) => all_in(service, &f).await.len() == BULK,
             None => false,
@@ -1273,7 +1163,7 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
     env.graph.delete_message(None, &gone.id);
     env.graph.expire_deltas(None);
     env.graph.inject(InjectedError::status(400).on(".500"));
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(AccountId::new(GRAPH)),
@@ -1281,7 +1171,7 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
     )
     .await;
     let fewest = Arc::new(std::sync::atomic::AtomicUsize::new(usize::MAX));
-    until("the deleted message gone", || {
+    eventually("the deleted message gone", || {
         let fewest = fewest.clone();
         let bulk = bulk.clone();
         async move {
@@ -1313,13 +1203,14 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
 async fn a_message_moved_by_another_client_keeps_its_local_state() {
     let env = setup(false, "").await;
     let service = &env.service;
-    until("the Graph inbox", || async {
-        inbox(service, GRAPH).await.len() == 2
-    })
-    .await;
-    let news = subject_of(&inbox(service, GRAPH).await, "Fabrikam newsletter, October").clone();
+    graph_synced(service).await;
+    let news = by_subject(
+        &messages_in(service, GRAPH, FolderRole::Inbox).await,
+        "Fabrikam newsletter, October",
+    )
+    .clone();
     // A Nail-only tag (not a category).
-    request(
+    ok(
         service,
         Request::UpdateFlags {
             message_ids: vec![news.id.clone()],
@@ -1340,16 +1231,10 @@ async fn a_message_moved_by_another_client_keeps_its_local_state() {
         .find(|m| String::from_utf8_lossy(&m.raw).contains("Fabrikam newsletter"))
         .unwrap()
         .id;
-    let receipts_remote = env.graph.with_mailbox(None, |m, _| {
-        m.folders
-            .values()
-            .find(|f| f.name == "Receipts")
-            .map(|f| f.id.clone())
-            .unwrap()
-    });
+    let receipts_remote = remote_folder(&env.graph, "Receipts");
     let moved = env.graph.move_message(None, &remote, &receipts_remote);
     assert_eq!(moved, remote, "the client asked for immutable ids");
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(AccountId::new(GRAPH)),
@@ -1357,18 +1242,18 @@ async fn a_message_moved_by_another_client_keeps_its_local_state() {
     )
     .await;
     let receipts = folder_at(service, GRAPH, "Inbox/Receipts").await.unwrap();
-    until("the message in Receipts", || async {
-        messages_in(service, &receipts)
+    eventually("the message in Receipts", || async {
+        folder_messages(service, &receipts)
             .await
             .iter()
             .any(|m| m.id == news.id)
     })
     .await;
-    let list = messages_in(service, &receipts).await;
+    let list = folder_messages(service, &receipts).await;
     let kept = list.iter().find(|m| m.id == news.id).unwrap();
     assert!(kept.tags.contains(&"$later".to_owned()), "{:?}", kept.tags);
     assert!(
-        !inbox(service, GRAPH)
+        !messages_in(service, GRAPH, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.subject == news.subject)
@@ -1382,12 +1267,13 @@ async fn an_ews_message_moved_elsewhere_is_moved_not_downloaded_again() {
     let env = setup(true, "").await;
     let service = &env.service;
     let ews = env.ews.as_ref().unwrap();
-    until("the EWS inbox", || async {
-        inbox(service, EWS).await.len() >= 3
-    })
-    .await;
-    let lunch = subject_of(&inbox(service, EWS).await, "Lunch on Friday?").clone();
-    request(
+    ews_synced(service).await;
+    let lunch = by_subject(
+        &messages_in(service, EWS, FolderRole::Inbox).await,
+        "Lunch on Friday?",
+    )
+    .clone();
+    ok(
         service,
         Request::UpdateFlags {
             message_ids: vec![lunch.id.clone()],
@@ -1410,7 +1296,7 @@ async fn an_ews_message_moved_elsewhere_is_moved_not_downloaded_again() {
     let new_id = ews.move_item(&item.id, &receipts_remote);
     assert_ne!(new_id, item.id);
     // Streaming may not be subscribed yet: a pass of every folder.
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(AccountId::new(EWS)),
@@ -1418,20 +1304,20 @@ async fn an_ews_message_moved_elsewhere_is_moved_not_downloaded_again() {
     )
     .await;
     let receipts = folder_at(service, EWS, "Inbox/Receipts").await.unwrap();
-    until("the message in Receipts", || async {
-        messages_in(service, &receipts)
+    eventually("the message in Receipts", || async {
+        folder_messages(service, &receipts)
             .await
             .iter()
             .any(|m| m.subject == "Lunch on Friday?")
     })
     .await;
     // Still the same message (no second download), with its tag.
-    let list = messages_in(service, &receipts).await;
-    let moved = subject_of(&list, "Lunch on Friday?");
+    let list = folder_messages(service, &receipts).await;
+    let moved = by_subject(&list, "Lunch on Friday?");
     assert_eq!(moved.id, lunch.id);
     assert!(moved.tags.contains(&"$later".to_owned()));
-    until("gone from the inbox", || async {
-        !inbox(service, EWS)
+    eventually("gone from the inbox", || async {
+        !messages_in(service, EWS, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.subject == "Lunch on Friday?")
@@ -1446,11 +1332,8 @@ async fn a_failing_streaming_subscription_does_not_loop_passes() {
     let env = setup(true, "").await;
     let service = &env.service;
     let ews = env.ews.as_ref().unwrap();
-    until("the EWS inbox", || async {
-        inbox(service, EWS).await.len() >= 3
-    })
-    .await;
-    until("streaming", || async { !ews.subscriptions().is_empty() }).await;
+    ews_synced(service).await;
+    eventually("streaming", || async { !ews.subscriptions().is_empty() }).await;
     // Every stream is refused from now on (a proxy that does not allow it).
     ews.inject(
         nail_proto_ews::testing::InjectedFault::code(
@@ -1476,28 +1359,9 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
     use nail_api::scheduling::{InvitationResponse, InvitationTarget};
     let env = setup(false, "").await;
     let service = &env.service;
-    let review = || async {
-        match service
-            .handle(Request::ListEventInstances {
-                calendar_ids: None,
-                from: "2026-10-01T00:00:00Z".into(),
-                to: "2026-10-31T00:00:00Z".into(),
-                tz: "UTC".into(),
-            })
-            .await
-        {
-            Response::EventInstances { instances, .. } => instances
-                .into_iter()
-                .find(|i| i.title == "Architecture review"),
-            _ => None,
-        }
-    };
-    until("the invitation in the calendar", || async {
-        review().await.is_some()
-    })
-    .await;
-    let instance = review().await.unwrap();
-    request(
+    let review = || architecture_review(service);
+    let instance = until_some("the invitation in the calendar", review).await;
+    ok(
         service,
         Request::RespondToInvitation {
             target: InvitationTarget::Event {
@@ -1511,7 +1375,7 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
         },
     )
     .await;
-    until("the answer on Graph", || async {
+    eventually("the answer on Graph", || async {
         env.graph
             .meeting_actions()
             .iter()
@@ -1528,7 +1392,7 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
     assert_eq!(action.body["sendResponse"], false);
     // A local edit of the own copy (categories) is an update, not a
     // second answer.
-    let Response::PimEvent { event, .. } = request(
+    let Response::PimEvent { event, .. } = ok(
         service,
         Request::GetEvent {
             event_id: instance.event_id.clone(),
@@ -1540,7 +1404,7 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
     };
     let mut fields = event.fields.clone();
     fields.categories.push("Work".into());
-    request(
+    ok(
         service,
         Request::UpdateEvent {
             event_id: instance.event_id.clone(),
@@ -1551,7 +1415,7 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
         },
     )
     .await;
-    until("the update on Graph", || async {
+    eventually("the update on Graph", || async {
         env.graph
             .requests()
             .iter()
@@ -1582,16 +1446,13 @@ async fn ews_writes_sending_settings_and_pim() {
     let service = &env.service;
     let ews = env.ews.as_ref().unwrap();
     let account = || AccountId::new(EWS);
-    until("the EWS inbox", || async {
-        inbox(service, EWS).await.len() >= 3
-    })
-    .await;
-    let list = inbox(service, EWS).await;
-    let numbers = subject_of(&list, "Quarterly numbers").clone();
-    let password = subject_of(&list, "Password expires in 7 days").clone();
+    ews_synced(service).await;
+    let list = messages_in(service, EWS, FolderRole::Inbox).await;
+    let numbers = by_subject(&list, "Quarterly numbers").clone();
+    let password = by_subject(&list, "Password expires in 7 days").clone();
 
     // A category (tag) and a move replay through EWS.
-    request(
+    ok(
         service,
         Request::UpdateFlags {
             message_ids: vec![password.id.clone()],
@@ -1603,7 +1464,7 @@ async fn ews_writes_sending_settings_and_pim() {
     )
     .await;
     let inbox_id = ews.folder_id(None, "inbox").unwrap();
-    until("the category on EWS", || async {
+    eventually("the category on EWS", || async {
         ews.items_in(&inbox_id).iter().any(|i| {
             i.text("Subject") == Some("Password expires in 7 days")
                 && i.props
@@ -1613,7 +1474,7 @@ async fn ews_writes_sending_settings_and_pim() {
     })
     .await;
     let archive = folder_at(service, EWS, "Archive").await.unwrap();
-    request(
+    ok(
         service,
         Request::MoveMessages {
             message_ids: vec![numbers.id.clone()],
@@ -1622,14 +1483,14 @@ async fn ews_writes_sending_settings_and_pim() {
     )
     .await;
     let archive_remote = ews.folder_named(None, "Archive").unwrap();
-    until("the move on EWS", || async {
+    eventually("the move on EWS", || async {
         ews.items_in(&archive_remote)
             .iter()
             .any(|i| i.text("Subject") == Some("Quarterly numbers"))
     })
     .await;
-    until("the moved message stays put", || async {
-        messages_in(service, &archive)
+    eventually("the moved message stays put", || async {
+        folder_messages(service, &archive)
             .await
             .iter()
             .any(|m| m.id == numbers.id)
@@ -1644,22 +1505,8 @@ async fn ews_writes_sending_settings_and_pim() {
     }];
     draft.subject = "Sent with EWS".into();
     draft.text = "Hello Bob".into();
-    let Response::DraftSaved { draft_id } = request(service, Request::SaveDraft { draft }).await
-    else {
-        panic!()
-    };
-    request(
-        service,
-        Request::SendDraft {
-            draft_id,
-            delay_secs: Some(0),
-            send_at: None,
-            crypto: None,
-            expected_revision: None,
-        },
-    )
-    .await;
-    until("the mail on EWS", || async {
+    send_now(service, draft).await;
+    eventually("the mail on EWS", || async {
         ews.sent()
             .iter()
             .any(|s| String::from_utf8_lossy(&s.raw).contains("Sent with EWS") && s.saved)
@@ -1667,22 +1514,8 @@ async fn ews_writes_sending_settings_and_pim() {
     .await;
 
     // Automatic replies.
-    request(
-        service,
-        Request::SetAutomaticReplies {
-            account_id: account(),
-            settings: AutomaticRepliesSettings {
-                status: AutomaticRepliesStatus::AlwaysEnabled,
-                start: None,
-                end: None,
-                internal_reply: "Out until Monday.".into(),
-                external_reply: "Out until Monday.".into(),
-                external_audience: ExternalAudience::All,
-            },
-        },
-    )
-    .await;
-    until("the automatic replies on EWS", || async {
+    out_until_monday(service, account()).await;
+    eventually("the automatic replies on EWS", || async {
         let oof = ews.oof();
         oof.state == "Enabled" && oof.internal.contains("Out until Monday.")
     })
@@ -1693,7 +1526,7 @@ async fn ews_writes_sending_settings_and_pim() {
     rule.scope = vec![nail_api::rules::RuleScope::Account {
         account_id: account(),
     }];
-    request(
+    ok(
         service,
         Request::SaveRule {
             rule: Box::new(rule),
@@ -1702,7 +1535,7 @@ async fn ews_writes_sending_settings_and_pim() {
     )
     .await;
     let receipts_remote = ews.folder_named(None, "Receipts").unwrap();
-    until("the inbox rule on EWS", || async {
+    eventually("the inbox rule on EWS", || async {
         ews.rules().iter().any(|r| {
             r.child_text("DisplayName") == Some("Receipts")
                 && r.child("Actions")
@@ -1715,7 +1548,7 @@ async fn ews_writes_sending_settings_and_pim() {
     .await;
 
     // Rooms and free/busy through GetUserAvailability.
-    let Response::Rooms { rooms, .. } = request(
+    let Response::Rooms { rooms, .. } = ok(
         service,
         Request::FindRooms {
             account_id: account(),
@@ -1731,7 +1564,7 @@ async fn ews_writes_sending_settings_and_pim() {
         panic!()
     };
     assert_eq!(rooms.len(), 2, "{rooms:?}");
-    let Response::FreeBusy { result } = request(
+    let Response::FreeBusy { result } = ok(
         service,
         Request::QueryFreeBusy {
             attendees: vec!["carol@corp.example".into()],
@@ -1769,29 +1602,16 @@ async fn ews_writes_sending_settings_and_pim() {
             _ => None,
         }
     };
-    until("the EWS calendar", || async { calendar().await.is_some() }).await;
+    eventually("the EWS calendar", || async { calendar().await.is_some() }).await;
     let calendar = calendar().await.unwrap();
-    let board = || async {
-        match service
-            .handle(Request::ListEventInstances {
-                calendar_ids: Some(vec![calendar.id.clone()]),
-                from: "2026-10-01T00:00:00Z".into(),
-                to: "2026-10-31T00:00:00Z".into(),
-                tz: "Europe/Berlin".into(),
-            })
-            .await
-        {
-            Response::EventInstances { instances, .. } => instances,
-            _ => Vec::new(),
-        }
-    };
-    until("the EWS events", || async {
+    let board = || october(service, Some(vec![calendar.id.clone()]), "Europe/Berlin");
+    eventually("the EWS events", || async {
         let list = board().await;
         list.iter().any(|i| i.title == "Team sync")
             && list.iter().any(|i| i.title == "Board review")
     })
     .await;
-    until("the EWS contacts and tasks", || async {
+    eventually("the EWS contacts and tasks", || async {
         let contacts = matches!(
             service.handle(Request::ListContacts {
                 address_book_ids: None,
@@ -1817,7 +1637,7 @@ async fn ews_writes_sending_settings_and_pim() {
     );
     let mut weekly = nail_api::pim::RecurrenceRule::new(nail_api::pim::calendar::Frequency::Weekly);
     weekly.end = nail_api::pim::RecurrenceEnd::Count { count: 10 };
-    request(
+    ok(
         service,
         Request::CreateEvent {
             calendar_id: calendar.id.clone(),
@@ -1827,7 +1647,7 @@ async fn ews_writes_sending_settings_and_pim() {
     )
     .await;
     let calendar_remote = ews.folder_id(None, "calendar").unwrap();
-    until("the series on EWS", || async {
+    eventually("the series on EWS", || async {
         ews.items_in(&calendar_remote)
             .iter()
             .any(|i| i.text("Subject") == Some("Weekly planning"))
@@ -1858,7 +1678,7 @@ async fn ews_writes_sending_settings_and_pim() {
         .into_iter()
         .find(|i| i.title == "Board review")
         .unwrap();
-    request(
+    ok(
         service,
         Request::RespondToInvitation {
             target: nail_api::scheduling::InvitationTarget::Event {
@@ -1872,7 +1692,7 @@ async fn ews_writes_sending_settings_and_pim() {
         },
     )
     .await;
-    until("the answer on EWS", || async {
+    eventually("the answer on EWS", || async {
         ews.meeting_messages().iter().any(|m| {
             m.kind == "Tentative"
                 && m.subject.contains("Board review")
@@ -1889,12 +1709,13 @@ async fn ews_writes_sending_settings_and_pim() {
 async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
     let env = setup(true, "").await;
     let service = &env.service;
-    until("both inboxes", || async {
-        inbox(service, GRAPH).await.len() == 2 && inbox(service, EWS).await.len() >= 3
+    eventually("both inboxes", || async {
+        messages_in(service, GRAPH, FolderRole::Inbox).await.len() == 2
+            && messages_in(service, EWS, FolderRole::Inbox).await.len() >= 3
     })
     .await;
     let apply = |targets: Vec<nail_api::MessageTarget>, action: nail_api::MailAction| async move {
-        match request(service, Request::ApplyMailAction { targets, action }).await {
+        match ok(service, Request::ApplyMailAction { targets, action }).await {
             Response::MailActionQueued { result } => result,
             other => panic!("unexpected {other:?}"),
         }
@@ -1907,24 +1728,18 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
 
     // Graph: both inbox messages into Receipts as parts of one $batch.
     let receipts = folder_at(service, GRAPH, "Inbox/Receipts").await.unwrap();
-    let receipts_remote = env.graph.with_mailbox(None, |m, _| {
-        m.folders
-            .values()
-            .find(|f| f.name == "Receipts")
-            .map(|f| f.id.clone())
-            .unwrap()
-    });
+    let receipts_remote = remote_folder(&env.graph, "Receipts");
     let inbox_remote = env.graph.folder_id(None, "inbox");
     env.graph.clear_requests();
     let moved = apply(
-        targets(&inbox(service, GRAPH).await),
+        targets(&messages_in(service, GRAPH, FolderRole::Inbox).await),
         nail_api::MailAction::Move {
             target: MoveTarget::FolderId(receipts.id.clone()),
         },
     )
     .await;
     assert_eq!(moved.message_ids.len(), 2);
-    until("both moved on Graph", || async {
+    eventually("both moved on Graph", || async {
         env.graph.messages_in(None, &inbox_remote).is_empty()
             && env.graph.messages_in(None, &receipts_remote).len() >= 2
     })
@@ -1936,14 +1751,14 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
         .filter(|r| r.in_batch && r.path.ends_with("/move"))
         .count();
     assert_eq!(parts, 2, "{:?}", env.graph.requests());
-    request(
+    ok(
         service,
         Request::UndoMailAction {
             batch_id: moved.batch_id.unwrap(),
         },
     )
     .await;
-    until("both back in the Graph inbox", || async {
+    eventually("both back in the Graph inbox", || async {
         env.graph.messages_in(None, &inbox_remote).len() == 2
     })
     .await;
@@ -1952,7 +1767,7 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
     // its undo.
     let ews = env.ews.as_ref().unwrap();
     let ews_inbox = ews.folder_id(None, "inbox").unwrap();
-    let list = inbox(service, EWS).await;
+    let list = messages_in(service, EWS, FolderRole::Inbox).await;
     let unread: Vec<MessageSummary> = list.iter().filter(|m| !m.flags.seen).cloned().collect();
     assert!(unread.len() >= 2, "{list:?}");
     let read_on_server = || {
@@ -1968,7 +1783,7 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
         nail_api::MailAction::MarkRead { read: true },
     )
     .await;
-    until("read on EWS", || async {
+    eventually("read on EWS", || async {
         read_on_server() == read_before + unread.len()
     })
     .await;
@@ -1978,14 +1793,14 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
         .filter(|o| *o == "UpdateItem")
         .count();
     assert_eq!(updates, 1, "{:?}", ews.operations());
-    request(
+    ok(
         service,
         Request::UndoMailAction {
             batch_id: marked.batch_id.unwrap(),
         },
     )
     .await;
-    until("unread again on EWS", || async {
+    eventually("unread again on EWS", || async {
         read_on_server() == read_before
     })
     .await;
@@ -1999,15 +1814,16 @@ async fn mail_actions_go_out_as_graph_batches_and_ews_multi_item_requests() {
 async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
     let env = setup(true, "").await;
     let service = &env.service;
-    until("the EWS inbox", || async {
-        inbox(service, EWS).await.len() >= 3
-    })
-    .await;
+    ews_synced(service).await;
     let ews = env.ews.as_ref().unwrap();
     let inbox_remote = ews.folder_id(None, "inbox").unwrap();
     let archive = folder_at(service, EWS, "Archive").await.unwrap();
     let archive_remote = ews.folder_named(None, "Archive").unwrap();
-    let message = inbox(service, EWS).await.into_iter().next().unwrap();
+    let message = messages_in(service, EWS, FolderRole::Inbox)
+        .await
+        .into_iter()
+        .next()
+        .unwrap();
     let subject = message.subject.clone();
     let on_server = |folder: &str| {
         ews.items_in(folder)
@@ -2021,7 +1837,7 @@ async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
         Some("MoveItem"),
         1500,
     ));
-    let moved = match request(
+    let moved = match ok(
         service,
         Request::ApplyMailAction {
             targets: vec![nail_api::MessageTarget::message(message.id.clone())],
@@ -2035,14 +1851,14 @@ async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
         Response::MailActionQueued { result } => result,
         other => panic!("unexpected {other:?}"),
     };
-    request(
+    ok(
         service,
         Request::UndoMailAction {
             batch_id: moved.batch_id.unwrap(),
         },
     )
     .await;
-    until("the forward move and its undo replayed", || async {
+    eventually("the forward move and its undo replayed", || async {
         ews.operations().iter().filter(|o| *o == "MoveItem").count() >= 2
             && service.store().pending_op_count().unwrap() == 0
     })
@@ -2050,7 +1866,7 @@ async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
     assert!(on_server(&inbox_remote), "back in the inbox on the server");
     assert!(!on_server(&archive_remote));
     assert!(
-        inbox(service, EWS)
+        messages_in(service, EWS, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.subject == subject),

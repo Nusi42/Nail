@@ -70,6 +70,21 @@ impl AuthReply {
     }
 }
 
+/// A passkey challenge for a stored ceremony; `RateLimited` when there
+/// was no room for another ceremony.
+fn challenge_reply(stored: Option<String>, options: serde_json::Value) -> AuthReply {
+    match stored {
+        Some(challenge_id) => AuthReply::new(AuthResponse::PasskeyChallenge {
+            challenge_id,
+            options,
+        }),
+        None => AuthReply::new(AuthResponse::Failed {
+            reason: AuthFailure::RateLimited,
+            retry_after_secs: Some(30),
+        }),
+    }
+}
+
 /// `Failed` for a closed gate.
 fn gate_reply(gate: Gate) -> Option<AuthReply> {
     match gate {
@@ -144,6 +159,25 @@ struct Failure<'a> {
 }
 
 impl RemoteAuth {
+    /// The reply when one of the throttle `keys` is closed at `now` (an
+    /// unreadable throttle counts as closed).
+    fn throttled(&self, keys: &[String], now: i64) -> Option<AuthReply> {
+        match self.policy().throttle.check(self.store(), keys, now) {
+            Ok(gate) => gate_reply(gate),
+            Err(e) => {
+                tracing::warn!("throttle unreadable: {e}");
+                Some(AuthReply::failed(AuthFailure::RateLimited))
+            }
+        }
+    }
+
+    /// Forgets the failures counted under `keys` (after a success).
+    fn clear_throttle(&self, keys: &[String]) {
+        if let Err(e) = self.policy().throttle.clear(self.store(), keys) {
+            tracing::warn!("could not clear the throttle: {e}");
+        }
+    }
+
     /// Whether the `Origin` of a login request is acceptable: one of the
     /// configured origins, or (none configured) the request's own `Host`.
     /// A missing `Origin` is refused (browsers send it on every `POST`).
@@ -324,10 +358,7 @@ impl RemoteAuth {
                     RemoteAuditOutcome::Success,
                     client,
                     |r| {
-                        r.user_id = Some(user.id.clone());
-                        r.user_name = Some(user.name.clone());
-                        r.device_id = Some(device.id.clone());
-                        r.session_id = Some(session.id.clone());
+                        r.set_session(&session);
                         r.method = Some(method);
                     },
                 );
@@ -358,10 +389,7 @@ impl RemoteAuth {
             RemoteAuditOutcome::Success,
             client,
             |r| {
-                r.user_id = Some(session.user_id.clone());
-                r.user_name = Some(session.user_name.clone());
-                r.device_id = Some(session.device_id.clone());
-                r.session_id = Some(session.id.clone());
+                r.set_session(session);
                 r.method = Some(method);
             },
         );
@@ -456,16 +484,8 @@ impl RemoteAuth {
     ) -> AuthReply {
         let now = self.now();
         let keys = vec![ip_key(client.ip), GLOBAL_PAIRING_KEY.to_owned()];
-        match self.policy().throttle.check(self.store(), &keys, now) {
-            Ok(gate) => {
-                if let Some(reply) = gate_reply(gate) {
-                    return reply;
-                }
-            }
-            Err(e) => {
-                tracing::warn!("throttle unreadable: {e}");
-                return AuthReply::failed(AuthFailure::RateLimited);
-            }
+        if let Some(reply) = self.throttled(&keys, now) {
+            return reply;
         }
         // Check the name before the code is spent.
         let Ok(browser_name) = clean_label(device_name) else {
@@ -533,10 +553,7 @@ impl RemoteAuth {
                 RemoteAuditOutcome::Success,
                 client,
                 |r| {
-                    r.user_id = Some(user.id.clone());
-                    r.user_name = Some(user.name.clone());
-                    r.device_id = Some(device.id.clone());
-                    r.session_id = Some(session.id.clone());
+                    r.set_session(&session);
                     r.method = Some(RemoteAuthMethod::Pairing);
                     r.name = Some(device.name.clone());
                 },
@@ -583,16 +600,8 @@ impl RemoteAuth {
             Ok(asker) => asker,
             Err(reason) => return AuthReply::failed(reason),
         };
-        match self.policy().throttle.check(self.store(), &keys, now) {
-            Ok(gate) => {
-                if let Some(reply) = gate_reply(gate) {
-                    return reply;
-                }
-            }
-            Err(e) => {
-                tracing::warn!("throttle unreadable: {e}");
-                return AuthReply::failed(AuthFailure::RateLimited);
-            }
+        if let Some(reply) = self.throttled(&keys, now) {
+            return reply;
         }
         let user = self.store().remote_user_by_name(tried).ok().flatten();
         if let Some(reply) = user.as_ref().and_then(|u| self.user_locked(u)) {
@@ -674,9 +683,7 @@ impl RemoteAuth {
                 RemoteAuthMethod::PasswordTotp
             }
         };
-        if let Err(e) = self.policy().throttle.clear(self.store(), &keys) {
-            tracing::warn!("could not clear the throttle: {e}");
-        }
+        self.clear_throttle(&keys);
         match asker {
             Asker::Device(device) => self.finish_login(found, &device, method, cookies, client),
             Asker::Session(resolved) => self.finish_reauth(&resolved, method, client),
@@ -732,16 +739,7 @@ impl RemoteAuth {
             session,
             device,
         });
-        match stored {
-            Some(challenge_id) => AuthReply::new(AuthResponse::PasskeyChallenge {
-                challenge_id,
-                options,
-            }),
-            None => AuthReply::new(AuthResponse::Failed {
-                reason: AuthFailure::RateLimited,
-                retry_after_secs: Some(30),
-            }),
-        }
+        challenge_reply(stored, options)
     }
 
     fn passkey_finish(
@@ -863,9 +861,7 @@ impl RemoteAuth {
             return AuthReply::failed(AuthFailure::Disabled);
         }
         let keys = [ip_keys[0].clone(), user_key(&user.name)];
-        if let Err(e) = self.policy().throttle.clear(self.store(), &keys) {
-            tracing::warn!("could not clear the throttle: {e}");
-        }
+        self.clear_throttle(&keys);
         match asker {
             Asker::Device(device) => {
                 self.finish_login(&user, &device, RemoteAuthMethod::Passkey, cookies, client)
@@ -934,16 +930,7 @@ impl RemoteAuth {
             session: Some(session.id.clone()),
             device: Some(resolved.ctx.device.id.clone()),
         });
-        let reply = match stored {
-            Some(challenge_id) => AuthReply::new(AuthResponse::PasskeyChallenge {
-                challenge_id,
-                options,
-            }),
-            None => AuthReply::new(AuthResponse::Failed {
-                reason: AuthFailure::RateLimited,
-                retry_after_secs: Some(30),
-            }),
-        };
+        let reply = challenge_reply(stored, options);
         reply.with_cookie(resolved.set_cookie)
     }
 
@@ -980,10 +967,7 @@ impl RemoteAuth {
                 RemoteAuditOutcome::Failure,
                 client,
                 |r| {
-                    r.user_id = Some(session.user_id.clone());
-                    r.user_name = Some(session.user_name.clone());
-                    r.device_id = Some(session.device_id.clone());
-                    r.session_id = Some(session.id.clone());
+                    r.set_session(session);
                     r.name = Some(name.clone());
                     r.error = Some(ErrorCode::AuthFailed);
                     r.detail = Some(detail);
@@ -1014,10 +998,7 @@ impl RemoteAuth {
                     RemoteAuditOutcome::Success,
                     client,
                     |r| {
-                        r.user_id = Some(session.user_id.clone());
-                        r.user_name = Some(session.user_name.clone());
-                        r.device_id = Some(session.device_id.clone());
-                        r.session_id = Some(session.id.clone());
+                        r.set_session(session);
                         r.name = Some(name.clone());
                         r.detail = Some(format!("registered {}", stored.passkey.id));
                     },
@@ -1051,10 +1032,7 @@ impl RemoteAuth {
                 RemoteAuditOutcome::Success,
                 client,
                 |r| {
-                    r.user_id = Some(session.user_id.clone());
-                    r.user_name = Some(session.user_name.clone());
-                    r.device_id = Some(session.device_id.clone());
-                    r.session_id = Some(session.id.clone());
+                    r.set_session(&session);
                 },
             );
         }

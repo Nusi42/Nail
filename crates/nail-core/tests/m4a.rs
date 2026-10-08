@@ -6,26 +6,20 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use nail_core::testing::{TempService, error_of};
+
 use nail_api::agents::{
-    ActionActor, ActionAttribution, ActionKind, ActionPolicyMode, ActionTarget, ActionTargetKind,
-    ConfirmationDecision, ConfirmationFilter, ConfirmationState, NewConfirmation,
+    ActionActor, ActionAttribution, ActionKind, ActionPolicyMode, ConfirmationDecision,
+    ConfirmationFilter, ConfirmationState, NewConfirmation,
 };
 use nail_api::mcp::{McpGrant, McpRateLimits};
 use nail_api::plugins::{PluginActionTarget, PluginManifest, PluginPackageSource};
 use nail_api::{ErrorCode, Event, LocalizedMessage, Request, Response};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
 use nail_store::PluginInstall;
 use serde_json::json;
-
-fn setup() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    (service, data, config)
-}
 
 async fn create_client(service: &Service) -> nail_api::McpClientId {
     let Response::McpClientCreated { client, .. } = service
@@ -40,22 +34,19 @@ async fn create_client(service: &Service) -> nail_api::McpClientId {
     client.id
 }
 
-fn error_of(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("error expected, got {other:?}"),
-    }
+/// A new MCP client "Agent" and its actor.
+async fn client_actor(service: &Service) -> (nail_api::McpClientId, ActionActor) {
+    let client = create_client(service).await;
+    let actor = ActionActor::McpClient {
+        client_id: client.clone(),
+    };
+    (client, actor)
 }
 
 #[tokio::test]
 async fn confirmations_are_listed_and_decided() {
-    let (service, _data, _config) = setup();
-    let client = create_client(&service).await;
-    let actor = ActionActor::McpClient {
-        client_id: client.clone(),
-    };
+    let (service, _data, _config) = TempService::quiet().into_parts();
+    let (_client, actor) = client_actor(&service).await;
     let mut events = service.subscribe();
 
     let empty = service
@@ -76,27 +67,8 @@ async fn confirmations_are_listed_and_decided() {
     // A requester (WP101 / WP102) stores a pending confirmation.
     let now = chrono::Utc::now().timestamp();
     let new = |kind: ActionKind| NewConfirmation {
-        requested_by: ActionAttribution {
-            actor: actor.clone(),
-            name: "Agent".into(),
-            on_behalf_of: None,
-        },
         kind,
-        operation: "send_message".into(),
-        summary: LocalizedMessage::new("confirmation-summary-send")
-            .arg("actor", "Agent")
-            .arg("subject", "Hi")
-            .arg("count", 1),
-        targets: vec![ActionTarget {
-            kind: ActionTargetKind::Draft,
-            id: "d1".into(),
-            label: "Hi".into(),
-        }],
-        changes: vec![],
-        account_ids: vec!["work".into()],
-        payload: json!({"draft_id": "d1"}),
-        idempotency_key: None,
-        timeout_secs: 300,
+        ..nail_api::testing::send_confirmation(ActionAttribution::new(actor.clone(), "Agent"))
     };
     let send = service
         .store()
@@ -222,11 +194,8 @@ async fn confirmations_are_listed_and_decided() {
 
 #[tokio::test]
 async fn policies_and_rate_limits() {
-    let (service, _data, _config) = setup();
-    let client = create_client(&service).await;
-    let actor = ActionActor::McpClient {
-        client_id: client.clone(),
-    };
+    let (service, _data, _config) = TempService::quiet().into_parts();
+    let (client, actor) = client_actor(&service).await;
     let refused = service
         .handle(Request::SetActionPolicy {
             actor: actor.clone(),
@@ -296,7 +265,7 @@ async fn policies_and_rate_limits() {
 
 #[tokio::test]
 async fn plugin_activity_and_host_requests() {
-    let (service, _data, _config) = setup();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let manifest = PluginManifest::parse(
         json!({
             "id": "digest", "name": "Digest", "version": "1.0.0", "apiVersion": "1",
@@ -391,11 +360,7 @@ async fn plugin_activity_and_host_requests() {
 
 fn pending(actor: &ActionActor) -> NewConfirmation {
     NewConfirmation {
-        requested_by: ActionAttribution {
-            actor: actor.clone(),
-            name: "Someone".into(),
-            on_behalf_of: None,
-        },
+        requested_by: ActionAttribution::new(actor.clone(), "Someone"),
         kind: ActionKind::Send,
         operation: "send_message".into(),
         summary: LocalizedMessage::new("confirmation-summary-send"),
@@ -420,7 +385,7 @@ fn state_of(service: &Service, actor: &ActionActor) -> ConfirmationState {
 /// starting Nail cancels them (approving one would run nothing).
 #[tokio::test]
 async fn starting_cancels_confirmations_of_an_earlier_run() {
-    let (service, _data, _config) = setup();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let client = create_client(&service).await;
     let actor = ActionActor::mcp_client(client);
     let now = chrono::Utc::now().timestamp();
@@ -438,7 +403,7 @@ async fn starting_cancels_confirmations_of_an_earlier_run() {
 /// the plug-in cancels them.
 #[tokio::test]
 async fn grant_changes_and_disabling_cancel_pending_confirmations() {
-    let (service, _data, _config) = setup();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let now = chrono::Utc::now().timestamp();
     let client = create_client(&service).await;
     let client_actor = ActionActor::mcp_client(client.clone());

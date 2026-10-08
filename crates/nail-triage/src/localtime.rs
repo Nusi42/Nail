@@ -74,6 +74,13 @@ pub(crate) mod testzone {
         Offset, TimeZone, Weekday,
     };
 
+    /// `y-mo-d h:mi:00` as a wall-clock time.
+    pub(crate) fn dt(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> NaiveDateTime {
+        NaiveDate::from_ymd_opt(y, mo, d)
+            .and_then(|day| day.and_hms_opt(h, mi, 0))
+            .unwrap_or_else(|| panic!("invalid date {y}-{mo}-{d} {h}:{mi}"))
+    }
+
     /// DST rules.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub(crate) enum Rule {
@@ -215,17 +222,10 @@ pub(crate) mod testzone {
 
 #[cfg(test)]
 mod tests {
-    use super::testzone::{BERLIN, NEW_YORK};
+    use super::testzone::{BERLIN, NEW_YORK, dt};
     use super::*;
     use chrono::{FixedOffset, Timelike, Utc};
     use pretty_assertions::assert_eq;
-
-    fn dt(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, mo, d)
-            .unwrap()
-            .and_hms_opt(h, mi, 0)
-            .unwrap()
-    }
 
     fn t(h: u32, m: u32) -> NaiveTime {
         NaiveTime::from_hms_opt(h, m, 0).unwrap()

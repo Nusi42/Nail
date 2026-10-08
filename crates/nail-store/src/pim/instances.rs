@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use chrono_tz::Tz;
 use nail_api::pim::calendar::{EventStatus, Transparency};
-use nail_api::pim::{CalendarEvent, EventFields, EventInstance, PimTime};
+use nail_api::pim::{Calendar, CalendarEvent, EventFields, EventInstance, PimTime};
 use nail_api::{CalendarId, EventId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
@@ -292,6 +292,14 @@ fn write_filled(tx: &Transaction<'_>, event_id: &str, filled: &Filled) -> Result
     set_window(tx, event_id, filled.covered.0, filled.covered.1)
 }
 
+/// SQL text parameters of `values`.
+fn text_args(values: &[&str]) -> Vec<rusqlite::types::Value> {
+    values
+        .iter()
+        .map(|v| rusqlite::types::Value::Text((*v).to_owned()))
+        .collect()
+}
+
 impl Store {
     /// Drops cached instances (they are expanded again on the next query).
     /// Returns how many series were dropped.
@@ -346,15 +354,55 @@ impl Store {
     /// The calendars a query covers: the given ones, or every visible one
     /// holding events.
     fn event_calendars(&self, calendars: Option<&[CalendarId]>) -> Result<Vec<String>> {
+        self.visible_calendars(calendars, Calendar::has_events)
+    }
+
+    /// The given calendars, or every visible one that `holds` (events,
+    /// tasks).
+    pub(crate) fn visible_calendars(
+        &self,
+        calendars: Option<&[CalendarId]>,
+        holds: fn(&Calendar) -> bool,
+    ) -> Result<Vec<String>> {
         Ok(match calendars {
             Some(ids) => ids.iter().map(|c| c.0.clone()).collect(),
             None => self
                 .calendars(None)?
                 .into_iter()
-                .filter(|c| c.settings.visible && c.has_events())
+                .filter(|c| c.settings.visible && holds(c))
                 .map(|c| c.id.0)
                 .collect(),
         })
+    }
+
+    /// The events with these ids, by id.
+    fn events_by_id(&self, ids: &[&str]) -> Result<HashMap<String, CalendarEvent>> {
+        Ok(self
+            .with_conn(|conn| load_events(conn, &in_list("e.id", ids.len(), 1), ids))?
+            .into_iter()
+            .map(|e| (e.id.0.clone(), e))
+            .collect())
+    }
+
+    /// The cached occurrences of `[from, to)` in the calendars (expanding
+    /// what the cache lacks), dates and floating times placed in
+    /// `viewer_tz`.
+    fn cached_rows(
+        &self,
+        from: i64,
+        to: i64,
+        calendars: Option<&[CalendarId]>,
+        viewer_tz: &str,
+        expander: &dyn InstanceExpander,
+    ) -> Result<Vec<CachedRow>> {
+        let tz = parse_zone(viewer_tz)
+            .ok_or_else(|| Error::InvalidData(format!("unknown time zone {viewer_tz:?}")))?;
+        let calendars = self.event_calendars(calendars)?;
+        if calendars.is_empty() || to <= from {
+            return Ok(Vec::new());
+        }
+        self.ensure_instances(&calendars, from, to, expander)?;
+        self.instance_rows(&calendars, from, to, tz)
     }
 
     /// Makes sure the cache covers `[from, to)` (Unix seconds, widened for
@@ -384,10 +432,7 @@ impl Store {
                 n1 = refs.len() + 1,
                 n2 = refs.len() + 2,
             ))?;
-            let mut args: Vec<rusqlite::types::Value> = refs
-                .iter()
-                .map(|r| rusqlite::types::Value::Text((*r).to_owned()))
-                .collect();
+            let mut args = text_args(&refs);
             args.push(need_until.into());
             args.push(need_from.into());
             let rows = stmt.query_map(rusqlite::params_from_iter(args), |r| {
@@ -402,11 +447,7 @@ impl Store {
             return Ok(());
         }
         let ids: Vec<&str> = missing.iter().map(|(id, ..)| id.as_str()).collect();
-        let events: HashMap<String, CalendarEvent> = self
-            .with_conn(|conn| load_events(conn, &in_list("e.id", ids.len(), 1), &ids))?
-            .into_iter()
-            .map(|e| (e.id.0.clone(), e))
-            .collect();
+        let events = self.events_by_id(&ids)?;
         // Expand without holding the connection (other store users go on);
         // the results are written afterwards in one short transaction.
         let mut filled: Vec<(&str, Filled)> = Vec::new();
@@ -457,14 +498,7 @@ impl Store {
         viewer_tz: &str,
         expander: &dyn InstanceExpander,
     ) -> Result<Vec<EventInstance>> {
-        let tz = parse_zone(viewer_tz)
-            .ok_or_else(|| Error::InvalidData(format!("unknown time zone {viewer_tz:?}")))?;
-        let calendars = self.event_calendars(calendars)?;
-        if calendars.is_empty() || to <= from {
-            return Ok(Vec::new());
-        }
-        self.ensure_instances(&calendars, from, to, expander)?;
-        let rows = self.instance_rows(&calendars, from, to, tz)?;
+        let rows = self.cached_rows(from, to, calendars, viewer_tz, expander)?;
         let ids: Vec<&str> = {
             let mut ids: Vec<&str> = rows.iter().map(|r| r.event_id.as_str()).collect();
             ids.sort_unstable();
@@ -474,11 +508,7 @@ impl Store {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
-        let events: HashMap<String, CalendarEvent> = self
-            .with_conn(|conn| load_events(conn, &in_list("e.id", ids.len(), 1), &ids))?
-            .into_iter()
-            .map(|e| (e.id.0.clone(), e))
-            .collect();
+        let events = self.events_by_id(&ids)?;
         let mut out: Vec<(i64, EventInstance)> = Vec::with_capacity(rows.len());
         for row in rows {
             let Some(event) = events.get(&row.event_id) else {
@@ -543,15 +573,8 @@ impl Store {
         viewer_tz: &str,
         expander: &dyn InstanceExpander,
     ) -> Result<Vec<(i64, i64)>> {
-        let tz = parse_zone(viewer_tz)
-            .ok_or_else(|| Error::InvalidData(format!("unknown time zone {viewer_tz:?}")))?;
-        let calendars = self.event_calendars(calendars)?;
-        if calendars.is_empty() || to <= from {
-            return Ok(Vec::new());
-        }
-        self.ensure_instances(&calendars, from, to, expander)?;
         let mut intervals: Vec<(i64, i64)> = self
-            .instance_rows(&calendars, from, to, tz)?
+            .cached_rows(from, to, calendars, viewer_tz, expander)?
             .into_iter()
             .filter(|r| r.busy)
             .map(|r| (r.placed_start.max(from), r.placed_end.min(to)))
@@ -587,10 +610,7 @@ impl Store {
                 n + 1,
                 n + 2
             ))?;
-            let mut args: Vec<rusqlite::types::Value> = refs
-                .iter()
-                .map(|r| rusqlite::types::Value::Text((*r).to_owned()))
-                .collect();
+            let mut args = text_args(&refs);
             args.push((to + FLOATING_SLACK).into());
             args.push((from - FLOATING_SLACK).into());
             let rows = stmt.query_map(rusqlite::params_from_iter(args), |r| {
@@ -936,19 +956,22 @@ mod tests {
         );
     }
 
+    /// The number of occurrences on 2026-10-01 (UTC) in every calendar.
+    fn day_instances(store: &Store, expander: &TestExpander) -> usize {
+        let range = (at("2026-10-01T00:00:00Z"), at("2026-10-02T00:00:00Z"));
+        store
+            .list_event_instances(range.0, range.1, None, "UTC", expander)
+            .unwrap()
+            .len()
+    }
+
     #[test]
     fn hidden_calendars_and_ranges() {
         let store = testing::store();
         save(&store, &testing::event("e", "uid-e", "Visible"));
         let expander = TestExpander::default();
         let range = (at("2026-10-01T00:00:00Z"), at("2026-10-02T00:00:00Z"));
-        assert_eq!(
-            store
-                .list_event_instances(range.0, range.1, None, "UTC", &expander)
-                .unwrap()
-                .len(),
-            1
-        );
+        assert_eq!(day_instances(&store, &expander), 1);
         let mut settings = store.calendar(&CAL.into()).unwrap().unwrap().settings;
         settings.visible = false;
         store
@@ -1058,13 +1081,7 @@ mod tests {
         save(&store, &e);
         let expander = TestExpander::default();
         let range = (at("2026-10-01T00:00:00Z"), at("2026-10-02T00:00:00Z"));
-        assert_eq!(
-            store
-                .list_event_instances(range.0, range.1, None, "UTC", &expander)
-                .unwrap()
-                .len(),
-            1
-        );
+        assert_eq!(day_instances(&store, &expander), 1);
         store
             .delete_pim_item(&PimItem::Event(e).item_ref(), 2)
             .unwrap();

@@ -14,7 +14,7 @@ use nail_api::triage::{
     NotificationSettings,
 };
 use nail_api::{AccountId, ApiError, FolderId, MessageId, RuleId};
-use rusqlite::{OptionalExtension, Row, params};
+use rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -227,7 +227,7 @@ pub fn check_stored_notification_settings(
 /// their tokens, only the newest [`JUNK_TRAINING_ROWS`] are remembered,
 /// and above [`JUNK_TOKEN_LIMIT`] distinct tokens the ones seen in a
 /// single message go. The counts of the other tokens stay.
-fn bound_junk_storage(tx: &rusqlite::Transaction<'_>, account: &AccountId) -> Result<()> {
+fn bound_junk_storage(tx: &Transaction<'_>, account: &AccountId) -> Result<()> {
     tx.execute(
         "UPDATE junk_training SET tokens = '[]'
          WHERE account_id = ?1 AND tokens <> '[]' AND message_key NOT IN (
@@ -253,6 +253,68 @@ fn bound_junk_storage(tx: &rusqlite::Transaction<'_>, account: &AccountId) -> Re
             [account.as_str()],
         )?;
     }
+    Ok(())
+}
+
+/// Removes the snoozes of `messages`; returns the removed records.
+fn remove_snoozes(tx: &Transaction<'_>, messages: &[MessageId]) -> Result<Vec<SnoozeRecord>> {
+    let mut out = Vec::new();
+    for id in messages {
+        if let Some(record) = tx
+            .query_row(
+                &format!("SELECT {SNOOZE_COLS} FROM snoozed_messages WHERE message_id = ?1"),
+                [id.as_str()],
+                snooze_from_row,
+            )
+            .optional()?
+        {
+            tx.execute(
+                "DELETE FROM snoozed_messages WHERE message_id = ?1",
+                [id.as_str()],
+            )?;
+            out.push(record);
+        }
+    }
+    Ok(out)
+}
+
+/// How a message was trained: `(junk, hashed tokens as JSON)`.
+fn junk_training_of(
+    tx: &Transaction<'_>,
+    account: &AccountId,
+    message_key: &str,
+) -> Result<Option<(bool, String)>> {
+    Ok(tx
+        .query_row(
+            "SELECT junk, tokens FROM junk_training
+             WHERE account_id = ?1 AND message_key = ?2",
+            params![account.as_str(), message_key],
+            |r| r.try_into(),
+        )
+        .optional()?)
+}
+
+/// Lowers each of a trained message's tokens (JSON list) by one in its
+/// class (never below zero) and drops tokens left at 0 / 0.
+fn forget_tokens(
+    tx: &Transaction<'_>,
+    account: &AccountId,
+    was_junk: bool,
+    tokens: &str,
+) -> Result<()> {
+    let old: Vec<String> = serde_json::from_str(tokens)?;
+    let column = if was_junk { "junk" } else { "ham" };
+    let mut stmt = tx.prepare_cached(&format!(
+        "UPDATE junk_tokens SET {column} = MAX({column} - 1, 0)
+         WHERE account_id = ?1 AND token = ?2"
+    ))?;
+    for token in old.iter().filter(|t| is_token_hash(t)) {
+        stmt.execute(params![account.as_str(), token])?;
+    }
+    tx.execute(
+        "DELETE FROM junk_tokens WHERE account_id = ?1 AND junk = 0 AND ham = 0",
+        [account.as_str()],
+    )?;
     Ok(())
 }
 
@@ -364,25 +426,7 @@ impl Store {
     /// Removes snoozes (woken or cancelled). Returns the removed records.
     pub fn unsnooze(&self, messages: &[MessageId]) -> Result<Vec<SnoozeRecord>> {
         self.with_tx(|tx| {
-            let mut out = Vec::new();
-            for id in messages {
-                if let Some(record) = tx
-                    .query_row(
-                        &format!(
-                            "SELECT {SNOOZE_COLS} FROM snoozed_messages WHERE message_id = ?1"
-                        ),
-                        [id.as_str()],
-                        snooze_from_row,
-                    )
-                    .optional()?
-                {
-                    tx.execute(
-                        "DELETE FROM snoozed_messages WHERE message_id = ?1",
-                        [id.as_str()],
-                    )?;
-                    out.push(record);
-                }
-            }
+            let out = remove_snoozes(tx, messages)?;
             Ok(out)
         })
     }
@@ -429,25 +473,7 @@ impl Store {
         operations: &[crate::queue::Operation],
     ) -> Result<(Vec<SnoozeRecord>, Vec<crate::queue::Enqueued>)> {
         self.with_tx(|tx| {
-            let mut removed = Vec::new();
-            for id in messages {
-                if let Some(record) = tx
-                    .query_row(
-                        &format!(
-                            "SELECT {SNOOZE_COLS} FROM snoozed_messages WHERE message_id = ?1"
-                        ),
-                        [id.as_str()],
-                        snooze_from_row,
-                    )
-                    .optional()?
-                {
-                    tx.execute(
-                        "DELETE FROM snoozed_messages WHERE message_id = ?1",
-                        [id.as_str()],
-                    )?;
-                    removed.push(record);
-                }
-            }
+            let removed = remove_snoozes(tx, messages)?;
             let queued = operations
                 .iter()
                 .map(|op| crate::queue::enqueue_in_tx(tx, op))
@@ -614,33 +640,14 @@ impl Store {
         hashed.sort_unstable();
         hashed.dedup();
         self.with_tx(|tx| {
-            let previous: Option<(bool, String)> = tx
-                .query_row(
-                    "SELECT junk, tokens FROM junk_training
-                     WHERE account_id = ?1 AND message_key = ?2",
-                    params![account.as_str(), message_key],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
+            let previous = junk_training_of(tx, account, message_key)?;
             let outcome = match &previous {
                 Some((was, _)) if *was == junk => return Ok(TrainOutcome::Unchanged),
                 Some(_) => TrainOutcome::Retrained,
                 None => TrainOutcome::Trained,
             };
             if let Some((was_junk, old)) = previous {
-                let old: Vec<String> = serde_json::from_str(&old)?;
-                let column = if was_junk { "junk" } else { "ham" };
-                let mut stmt = tx.prepare_cached(&format!(
-                    "UPDATE junk_tokens SET {column} = MAX({column} - 1, 0)
-                     WHERE account_id = ?1 AND token = ?2"
-                ))?;
-                for token in old.iter().filter(|t| is_token_hash(t)) {
-                    stmt.execute(params![account.as_str(), token])?;
-                }
-                tx.execute(
-                    "DELETE FROM junk_tokens WHERE account_id = ?1 AND junk = 0 AND ham = 0",
-                    [account.as_str()],
-                )?;
+                forget_tokens(tx, account, was_junk, &old)?;
             }
             let (junk_inc, ham_inc) = if junk { (1, 0) } else { (0, 1) };
             let mut stmt = tx.prepare_cached(
@@ -675,30 +682,11 @@ impl Store {
     /// at 0 / 0, in one transaction. Returns whether it was trained.
     pub fn untrain_junk(&self, account: &AccountId, message_key: &str) -> Result<bool> {
         self.with_tx(|tx| {
-            let previous: Option<(bool, String)> = tx
-                .query_row(
-                    "SELECT junk, tokens FROM junk_training
-                     WHERE account_id = ?1 AND message_key = ?2",
-                    params![account.as_str(), message_key],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
+            let previous = junk_training_of(tx, account, message_key)?;
             let Some((was_junk, old)) = previous else {
                 return Ok(false);
             };
-            let old: Vec<String> = serde_json::from_str(&old)?;
-            let column = if was_junk { "junk" } else { "ham" };
-            let mut stmt = tx.prepare_cached(&format!(
-                "UPDATE junk_tokens SET {column} = MAX({column} - 1, 0)
-                 WHERE account_id = ?1 AND token = ?2"
-            ))?;
-            for token in old.iter().filter(|t| is_token_hash(t)) {
-                stmt.execute(params![account.as_str(), token])?;
-            }
-            tx.execute(
-                "DELETE FROM junk_tokens WHERE account_id = ?1 AND junk = 0 AND ham = 0",
-                [account.as_str()],
-            )?;
+            forget_tokens(tx, account, was_junk, &old)?;
             tx.execute(
                 "DELETE FROM junk_training WHERE account_id = ?1 AND message_key = ?2",
                 params![account.as_str(), message_key],
@@ -943,7 +931,7 @@ impl Store {
         })
     }
 
-    fn ensure_sieve_row(tx: &rusqlite::Transaction<'_>, account: &AccountId) -> Result<()> {
+    fn ensure_sieve_row(tx: &Transaction<'_>, account: &AccountId) -> Result<()> {
         let exists: bool = tx.query_row(
             "SELECT EXISTS (SELECT 1 FROM accounts WHERE id = ?1)",
             [account.as_str()],

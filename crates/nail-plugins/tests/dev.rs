@@ -99,6 +99,15 @@ async fn until<T>(
     }
 }
 
+/// A temporary folder holding plug-in version 0.1.0 (`one`) in
+/// `<dir>/plugin`.
+fn plugin_folder() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("plugin");
+    write_plugin(&folder, "0.1.0", &version_js("one"));
+    (dir, folder)
+}
+
 /// The real watcher: file changes reload the plug-in. Every wait is on the
 /// host's reload notices or its state (no fixed sleeps, no short bounds).
 #[tokio::test(flavor = "multi_thread")]
@@ -107,9 +116,7 @@ async fn dev_folders_load_log_api_calls_and_hot_reload() {
     let host = patient_host(&fake);
     let mut logs = host.subscribe_logs();
     let mut reloads = host.subscribe_reloads();
-    let dir = tempfile::tempdir().unwrap();
-    let folder = dir.path().join("plugin");
-    write_plugin(&folder, "0.1.0", &version_js("one"));
+    let (_dir, folder) = plugin_folder();
 
     let manifest = host
         .load_dev(
@@ -206,9 +213,7 @@ async fn dev_reloads_through_the_api_run_one_at_a_time() {
     let fake = Fake::new();
     let host = patient_host(&fake);
     let mut reloads = host.subscribe_reloads();
-    let dir = tempfile::tempdir().unwrap();
-    let folder = dir.path().join("plugin");
-    write_plugin(&folder, "0.1.0", &version_js("one"));
+    let (_dir, folder) = plugin_folder();
     host.load_dev(
         &folder,
         all_grants(&manifest("devplug", &["storage"])),
@@ -263,8 +268,7 @@ async fn dev_reloads_through_the_api_run_one_at_a_time() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dev_loading_reports_folder_and_manifest_problems() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (_, host) = fake_host();
     let dir = tempfile::tempdir().unwrap();
     let err = host
         .load_dev(&dir.path().join("missing"), vec![], BTreeMap::new())

@@ -284,7 +284,7 @@ impl Gate {
             .host_str()
             .ok_or_else(|| invalid("the URL has no host"))?
             .to_owned();
-        let loopback = is_loopback(&host);
+        let loopback = nail_api::hosts::is_loopback_host(&host);
         match url.scheme() {
             "https" => {}
             "http" if loopback => {}
@@ -403,14 +403,6 @@ pub fn host_allowed(patterns: &[String], host: &str) -> bool {
     patterns
         .iter()
         .any(|p| PluginPermission::Network(p.clone()).allows_host(host))
-}
-
-fn is_loopback(host: &str) -> bool {
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback())
 }
 
 #[cfg(test)]

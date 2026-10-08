@@ -55,6 +55,7 @@ mod outbox;
 mod palette;
 pub mod paths;
 mod pim;
+mod pinned_http;
 mod pipeline;
 mod plugin_host;
 mod plugin_http;
@@ -78,6 +79,8 @@ mod snooze;
 mod strings;
 mod sync;
 mod sync_policy;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 mod triage;
 mod ui_state;
 mod vault;

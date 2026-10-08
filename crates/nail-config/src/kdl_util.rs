@@ -346,6 +346,41 @@ pub(crate) fn prop_str<'n>(
     }
 }
 
+/// Refuses an id (`entry` holds it) that is not kebab-case.
+fn check_kebab_id(src: &Source<'_>, entry: &KdlEntry, id: &str) -> Result<(), ConfigError> {
+    if is_kebab(id) {
+        Ok(())
+    } else {
+        Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)))
+    }
+}
+
+/// Reads the required kebab-case id argument at `index`.
+pub(crate) fn kebab_arg<'n>(
+    src: &Source<'_>,
+    node: &'n KdlNode,
+    index: usize,
+) -> Result<(&'n str, &'n KdlEntry), ConfigError> {
+    let (id, entry) = arg_str(src, node, index)?;
+    check_kebab_id(src, entry, id)?;
+    Ok((id, entry))
+}
+
+/// Reads an optional kebab-case id property.
+pub(crate) fn kebab_prop(
+    src: &Source<'_>,
+    node: &KdlNode,
+    key: &str,
+) -> Result<Option<String>, ConfigError> {
+    match prop_str(src, node, key)? {
+        None => Ok(None),
+        Some((id, entry)) => {
+            check_kebab_id(src, entry, id)?;
+            Ok(Some(id.to_owned()))
+        }
+    }
+}
+
 /// Reads an optional non-negative integer property.
 pub(crate) fn prop_u32(
     src: &Source<'_>,

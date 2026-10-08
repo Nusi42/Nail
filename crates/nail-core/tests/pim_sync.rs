@@ -5,7 +5,11 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{ok, until_some};
+use nail_core::testing::{TempService, error_of, plain_options};
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,20 +19,16 @@ use nail_api::pim::{
 };
 use nail_api::triage::NotificationKind;
 use nail_api::{CalendarId, ErrorCode, Event, Request, Response, SecretRef};
-use nail_core::{AdjustableClock, EngineTiming, Service, ServiceOptions};
+use nail_core::{AdjustableClock, EngineTiming, Service};
 use nail_testkit_net::{MockDavConfig, MockDavServer, MockHttpServer, MockResponse};
 
 struct Fixture {
     service: Service,
-    _data: tempfile::TempDir,
-    _config: tempfile::TempDir,
+    _temp: TempService,
     clock: Arc<AdjustableClock>,
 }
 
 fn start(accounts_kdl: &str, secrets: &[(&str, &str)]) -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(config.path().join("accounts.kdl"), accounts_kdl).unwrap();
     let store = Arc::new(MemorySecretStore::new());
     for (reference, value) in secrets {
         store
@@ -36,43 +36,19 @@ fn start(accounts_kdl: &str, secrets: &[(&str, &str)]) -> Fixture {
             .unwrap();
     }
     let clock = Arc::new(AdjustableClock::new());
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = true;
-    options.secrets = Some(store);
-    let mut timing = EngineTiming::fast();
-    timing.poll_override = Some(Duration::from_secs(30));
-    options.timing = timing;
-    options.clock = Some(clock.clone());
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+    let temp = TempService::quiet_with(&[("accounts.kdl", accounts_kdl)], |options| {
+        options.start_engines = true;
+        options.secrets = Some(store);
+        let mut timing = EngineTiming::fast();
+        timing.poll_override = Some(Duration::from_secs(30));
+        options.timing = timing;
+        options.clock = Some(clock.clone());
+    });
     Fixture {
-        service,
-        _data: data,
-        _config: config,
+        service: temp.service.clone(),
+        _temp: temp,
         clock,
     }
-}
-
-async fn ok(service: &Service, request: Request) -> Response {
-    match service.handle(request).await {
-        Response::Error { code, message, .. } => panic!("{code:?}: {message}"),
-        other => other,
-    }
-}
-
-/// Polls `check` until it returns `Some` (at most 20 s).
-async fn eventually<T, F, Fut>(what: &str, mut check: F) -> T
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Option<T>>,
-{
-    for _ in 0..200 {
-        if let Some(found) = check().await {
-            return found;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    panic!("timed out waiting for {what}");
 }
 
 async fn calendars(service: &Service, source: &str) -> Vec<nail_api::pim::Calendar> {
@@ -106,6 +82,69 @@ async fn instances(service: &Service, calendar: &CalendarId) -> Vec<EventInstanc
     }
 }
 
+/// Creating an event in `calendar` is refused (a read-only calendar).
+async fn refuses_events(service: &Service, calendar: &CalendarId) {
+    let refused = service
+        .handle(Request::CreateEvent {
+            calendar_id: calendar.clone(),
+            fields: Box::new(EventFields::new(
+                "Mine",
+                PimTime::date("2026-10-09"),
+                PimTime::date("2026-10-10"),
+            )),
+            recurrence: None,
+        })
+        .await;
+    assert_eq!(error_of(&refused).0, ErrorCode::Forbidden, "{refused:?}");
+}
+
+/// A mock HTTP server serving the holidays feed with `headers`.
+async fn holidays_server(headers: Vec<(String, String)>) -> MockHttpServer {
+    let http = MockHttpServer::start().await.unwrap();
+    http.get(
+        None,
+        "/holidays.ics",
+        MockResponse {
+            status: 200,
+            content_type: "text/calendar".into(),
+            body: FEED.as_bytes().to_vec(),
+            headers,
+            delay: None,
+        },
+    );
+    http
+}
+
+/// The calendar of the subscription "town", once it is there.
+async fn town_calendar(service: &Service) -> nail_api::pim::Calendar {
+    until_some("the feed's calendar", || async {
+        calendars(service, "town").await.into_iter().next()
+    })
+    .await
+}
+
+/// A service without sources whose clock stands an hour before
+/// 2026-10-05 09:00 UTC (returned), and its local calendar.
+async fn reminder_fixture() -> (Fixture, i64, CalendarId) {
+    let f = start("", &[]);
+    let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
+        .unwrap()
+        .timestamp();
+    f.clock.set(start_at - 3600);
+    let Response::Calendars { calendars } =
+        ok(&f.service, Request::ListCalendars { source_id: None }).await
+    else {
+        panic!("calendars expected")
+    };
+    let calendar = calendars
+        .iter()
+        .find(|c| c.has_events())
+        .unwrap()
+        .id
+        .clone();
+    (f, start_at, calendar)
+}
+
 const SERVER_EVENT: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Other//EN\r\n\
 BEGIN:VEVENT\r\nUID:server-1@other\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261008T140000Z\r\n\
 DTEND:20261008T150000Z\r\nSUMMARY:From another client\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -129,7 +168,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
     );
     let service = &f.service;
     // Discovery found the seeded calendars (the holidays one read-only).
-    let found = eventually("the DAV calendars", || async {
+    let found = until_some("the DAV calendars", || async {
         let list = calendars(service, "dav").await;
         (list.len() >= 3).then_some(list)
     })
@@ -163,7 +202,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
     };
     assert_eq!(op_ids.len(), 1);
     let path = dav.calendar_path("personal");
-    eventually("the upload", || async {
+    until_some("the upload", || async {
         let collection = dav.collection(&path)?;
         collection
             .objects
@@ -172,7 +211,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
             .then_some(())
     })
     .await;
-    eventually("the synced state", || async {
+    until_some("the synced state", || async {
         let Response::PimEvent { event: e } = ok(
             service,
             Request::GetEvent {
@@ -189,7 +228,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
     // Another client's change shows after the next sync.
     dav.put_object(&path, "server-1.ics", SERVER_EVENT).unwrap();
     ok(service, Request::SyncPimSources { source_id: None }).await;
-    eventually("the server's event", || async {
+    until_some("the server's event", || async {
         instances(service, &personal.id)
             .await
             .iter()
@@ -199,23 +238,9 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
     .await;
     // The read-only calendar refuses writes.
     let holidays = found.iter().find(|c| c.read_only).unwrap();
-    match service
-        .handle(Request::CreateEvent {
-            calendar_id: holidays.id.clone(),
-            fields: Box::new(EventFields::new(
-                "No",
-                PimTime::date("2026-10-09"),
-                PimTime::date("2026-10-10"),
-            )),
-            recurrence: None,
-        })
-        .await
-    {
-        Response::Error { code, .. } => assert_eq!(code, ErrorCode::Forbidden),
-        other => panic!("{other:?}"),
-    }
+    refuses_events(service, &holidays.id).await;
     // CardDAV: a contact is uploaded as vCard.
-    let book = eventually("the address book", || async {
+    let book = until_some("the address book", || async {
         let Response::AddressBooks { address_books } = ok(
             service,
             Request::ListAddressBooks {
@@ -240,7 +265,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
     )
     .await;
     let book_path = dav.address_book_path("contacts");
-    eventually("the vCard upload", || async {
+    until_some("the vCard upload", || async {
         dav.collection(&book_path)?
             .objects
             .values()
@@ -258,7 +283,7 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
         },
     )
     .await;
-    eventually("the server delete", || async {
+    until_some("the server delete", || async {
         (!dav
             .collection(&path)?
             .objects
@@ -292,7 +317,7 @@ async fn wrong_password_is_an_auth_error() {
     );
     let f = start(&kdl, &[("keychain:nail/pim/dav/password", "wrong")]);
     let service = &f.service;
-    eventually("the auth error", || async {
+    until_some("the auth error", || async {
         let Response::PimSources { sources } = ok(service, Request::ListPimSources).await else {
             return None;
         };
@@ -309,52 +334,24 @@ DTEND;VALUE=DATE:20261004\r\nSUMMARY:Unity Day\r\nEND:VEVENT\r\nEND:VCALENDAR\r\
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ics_subscriptions_are_read_only() {
-    let http = MockHttpServer::start().await.unwrap();
-    http.get(
-        None,
-        "/holidays.ics",
-        MockResponse {
-            status: 200,
-            content_type: "text/calendar".into(),
-            body: FEED.as_bytes().to_vec(),
-            headers: vec![("ETag".into(), "\"v1\"".into())],
-            delay: None,
-        },
-    );
+    let http = holidays_server(vec![("ETag".into(), "\"v1\"".into())]).await;
     let kdl = format!(
         "calendar-subscription \"town\" url=\"{}/holidays.ics\" color=\"#cc3333\"\n",
         http.base_url()
     );
     let f = start(&kdl, &[]);
     let service = &f.service;
-    let calendar = eventually("the feed's calendar", || async {
-        calendars(service, "town").await.into_iter().next()
-    })
-    .await;
+    let calendar = town_calendar(service).await;
     assert!(calendar.read_only);
     assert_eq!(calendar.settings.color.as_deref(), Some("#cc3333"));
-    let list = eventually("the feed's events", || async {
+    let list = until_some("the feed's events", || async {
         let list = instances(service, &calendar.id).await;
         (!list.is_empty()).then_some(list)
     })
     .await;
     assert_eq!(list[0].title, "Unity Day");
     assert!(list[0].all_day && list[0].read_only);
-    match service
-        .handle(Request::CreateEvent {
-            calendar_id: calendar.id.clone(),
-            fields: Box::new(EventFields::new(
-                "Mine",
-                PimTime::date("2026-10-09"),
-                PimTime::date("2026-10-10"),
-            )),
-            recurrence: None,
-        })
-        .await
-    {
-        Response::Error { code, .. } => assert_eq!(code, ErrorCode::Forbidden),
-        other => panic!("{other:?}"),
-    }
+    refuses_events(service, &calendar.id).await;
     // The feed's ETag is kept for the next, conditional fetch.
     let sync = service
         .store()
@@ -362,7 +359,7 @@ async fn ics_subscriptions_are_read_only() {
         .unwrap();
     assert_eq!(sync.etag.as_deref(), Some("\"v1\""));
     ok(service, Request::SyncPimSources { source_id: None }).await;
-    eventually("a second fetch", || async {
+    until_some("a second fetch", || async {
         (http.requests().len() >= 2).then_some(())
     })
     .await;
@@ -371,23 +368,8 @@ async fn ics_subscriptions_are_read_only() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn reminders_fire_at_the_clock_time() {
-    let f = start("", &[]);
+    let (f, start_at, calendar) = reminder_fixture().await;
     let service = &f.service;
-    let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
-        .unwrap()
-        .timestamp();
-    f.clock.set(start_at - 3600);
-    let Response::Calendars { calendars } =
-        ok(service, Request::ListCalendars { source_id: None }).await
-    else {
-        panic!()
-    };
-    let calendar = calendars
-        .iter()
-        .find(|c| c.has_events())
-        .unwrap()
-        .id
-        .clone();
     let mut events = service.subscribe();
     let mut fields = EventFields::new(
         "Dentist",
@@ -478,23 +460,8 @@ async fn reminders_fire_at_the_clock_time() {
 /// summary notification.
 #[tokio::test(flavor = "multi_thread")]
 async fn reminder_floods_are_bounded() {
-    let f = start("", &[]);
+    let (f, start_at, calendar) = reminder_fixture().await;
     let service = &f.service;
-    let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
-        .unwrap()
-        .timestamp();
-    f.clock.set(start_at - 3600);
-    let Response::Calendars { calendars } =
-        ok(service, Request::ListCalendars { source_id: None }).await
-    else {
-        panic!()
-    };
-    let calendar = calendars
-        .iter()
-        .find(|c| c.has_events())
-        .unwrap()
-        .id
-        .clone();
     let create = |title: &str, rule: Option<&str>, alarm: Alarm| {
         let mut fields = EventFields::new(
             title,
@@ -530,7 +497,7 @@ async fn reminder_floods_are_bounded() {
     ok(service, create("Nagging", None, repeating)).await;
     // Only the next MAX_AHEAD_PER_ITEM of the nagging alarm are planned,
     // none of the series repeating every second.
-    let planned = eventually("the planned reminders", || async {
+    let planned = until_some("the planned reminders", || async {
         let records = service.store().reminder_records(&[]).unwrap();
         (!records.is_empty()).then_some(records)
     })
@@ -602,11 +569,8 @@ async fn changed_subscriptions_take_effect() {
     let kdl = format!("calendar-subscription \"town\" url=\"{url}\"\n");
     let f = start(&kdl, &[]);
     let service = &f.service;
-    let calendar = eventually("the feed's calendar", || async {
-        calendars(service, "town").await.into_iter().next()
-    })
-    .await;
-    let list = eventually("the feed's events", || async {
+    let calendar = town_calendar(service).await;
+    let list = until_some("the feed's events", || async {
         let list = instances(service, &calendar.id).await;
         (!list.is_empty()).then_some(list)
     })
@@ -636,7 +600,7 @@ async fn changed_subscriptions_take_effect() {
         },
     )
     .await;
-    let calendar = eventually("the changed calendar", || async {
+    let calendar = until_some("the changed calendar", || async {
         calendars(service, "town")
             .await
             .into_iter()
@@ -644,7 +608,7 @@ async fn changed_subscriptions_take_effect() {
             .filter(|c| c.settings.reminders && c.settings.name == "Council")
     })
     .await;
-    let list = eventually("the feed's alarms", || async {
+    let list = until_some("the feed's alarms", || async {
         let list = instances(service, &calendar.id).await;
         list.first().is_some_and(|i| i.has_alarms).then_some(list)
     })
@@ -659,7 +623,7 @@ async fn changed_subscriptions_take_effect() {
     );
     // Unchanged: conditional again.
     ok(service, Request::SyncPimSources { source_id: None }).await;
-    let requests = eventually("a conditional fetch", || async {
+    let requests = until_some("a conditional fetch", || async {
         let requests = upstream.requests();
         (requests.len() > first_requests + 1).then_some(requests)
     })
@@ -676,36 +640,20 @@ async fn changed_subscriptions_take_effect() {
 /// local services).
 #[tokio::test(flavor = "multi_thread")]
 async fn loopback_subscriptions_are_refused_in_real_runs() {
-    let http = MockHttpServer::start().await.unwrap();
-    http.get(
-        None,
-        "/holidays.ics",
-        MockResponse {
-            status: 200,
-            content_type: "text/calendar".into(),
-            body: FEED.as_bytes().to_vec(),
-            headers: Vec::new(),
-            delay: None,
-        },
+    let http = holidays_server(Vec::new()).await;
+    let kdl = format!(
+        "calendar-subscription \"town\" url=\"webcal://localhost:{}/holidays.ics\"\n",
+        http.addr().port()
     );
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            "calendar-subscription \"town\" url=\"webcal://localhost:{}/holidays.ics\"\n",
-            http.addr().port()
-        ),
-    )
-    .unwrap();
-    let mut options =
-        nail_core::demo::demo_options(ServiceOptions::new(data.path(), config.path()));
-    options.watch_config = false;
-    options.timing = EngineTiming::fast();
-    // As in a real (not seeded) run.
-    options.loopback_feeds = false;
-    let service = Service::open(options).unwrap();
-    let source = eventually("the refused subscription", || async {
+    let temp = TempService::open_with(&[("accounts.kdl", &kdl)], |data, config| {
+        let mut options = nail_core::demo::demo_options(plain_options(data, config));
+        options.timing = EngineTiming::fast();
+        // As in a real (not seeded) run.
+        options.loopback_feeds = false;
+        options
+    });
+    let service = temp.service.clone();
+    let source = until_some("the refused subscription", || async {
         let Response::PimSources { sources } = ok(&service, Request::ListPimSources).await else {
             panic!()
         };
@@ -737,14 +685,14 @@ async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
     );
     let f = start(&kdl, &[("keychain:nail/pim/dav/password", "secret")]);
     let service = &f.service;
-    let personal = eventually("the personal calendar", || async {
+    let personal = until_some("the personal calendar", || async {
         calendars(service, "dav")
             .await
             .into_iter()
             .find(|c| c.settings.name == "Personal")
     })
     .await;
-    let event_id = eventually("the server's event", || async {
+    let event_id = until_some("the server's event", || async {
         instances(service, &personal.id)
             .await
             .into_iter()
@@ -783,7 +731,7 @@ async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
     )
     .unwrap();
     edit("Our edit", get(event_id.clone()).await).await;
-    let conflicted = eventually("the conflict", || async {
+    let conflicted = until_some("the conflict", || async {
         let event = get(event_id.clone()).await;
         (event.sync == nail_api::pim::PimItemSync::Conflict).then_some(event)
     })
@@ -811,11 +759,11 @@ async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
         },
     )
     .await;
-    eventually("our version on the server", || async {
+    until_some("our version on the server", || async {
         server_text().contains("SUMMARY:Our edit").then_some(())
     })
     .await;
-    let resolved = eventually("the synced event", || async {
+    let resolved = until_some("the synced event", || async {
         let event = get(event_id.clone()).await;
         (event.sync == nail_api::pim::PimItemSync::Synced).then_some(event)
     })
@@ -830,7 +778,7 @@ async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
     )
     .unwrap();
     edit("Second edit", resolved).await;
-    eventually("the second conflict", || async {
+    until_some("the second conflict", || async {
         let event = get(event_id.clone()).await;
         (event.sync == nail_api::pim::PimItemSync::Conflict).then_some(())
     })

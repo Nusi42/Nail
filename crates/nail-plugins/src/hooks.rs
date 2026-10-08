@@ -154,6 +154,47 @@ fn answer<T: serde::de::DeserializeOwned + Default>(value: Value) -> Result<T, S
     serde_json::from_value(value).map_err(|e| format!("invalid answer: {e}"))
 }
 
+/// The hook's answer as `T` when it has one and `problems` finds none;
+/// otherwise the run is marked failed (with the problems) and `None`.
+fn checked_answer<T: serde::de::DeserializeOwned + Default>(
+    run: &mut HookRun,
+    value: Option<Value>,
+    problems: impl FnOnce(&T) -> Option<String>,
+) -> Option<T> {
+    let failed = match answer::<T>(value?) {
+        Ok(answer) => match problems(&answer) {
+            None => return Some(answer),
+            Some(problem) => problem,
+        },
+        Err(problem) => problem,
+    };
+    run.outcome = PluginHookOutcome::Failed;
+    run.error = Some(failed);
+    None
+}
+
+/// The problems of an answer as one text (`None` without any).
+fn joined(problems: &[&str]) -> Option<String> {
+    (!problems.is_empty()).then(|| problems.join(", "))
+}
+
+/// Calls a message hook (arrival, open) of a plug-in when it applies to
+/// `message`, with the message (and its body where allowed) as input.
+async fn call_message_hook(
+    inner: &Arc<Inner>,
+    plugin: &PluginId,
+    running: &Running,
+    kind: PluginHookKind,
+    message: &PluginMessage,
+    origin: Origin,
+) -> Option<(HookRun, Option<Value>)> {
+    if !inner.hook_applies(running, kind, message).await {
+        return None;
+    }
+    let input = inner.message_input(running, message).await;
+    Some(call_hook(inner, plugin, running, kind, input, origin).await)
+}
+
 impl Inner {
     /// Records a call, logs a failure (at most once a minute per plug-in
     /// and hook).
@@ -318,43 +359,52 @@ fn arrival_problems(result: &PluginArrivalResult) -> Option<String> {
     bad.then(|| "invalid action".to_owned())
 }
 
+/// Runs `hook` with the message `message_id` for every running plug-in,
+/// concurrently, and collects the answers of the hooks that ran (`None` =
+/// skipped), in the order they ended. Nothing runs for an unknown message.
+async fn message_hook_runs<T, Fut>(
+    inner: &Arc<Inner>,
+    message_id: &MessageId,
+    hook: impl Fn(Arc<Inner>, PluginId, Running, PluginMessage) -> Fut,
+) -> Vec<T>
+where
+    T: Send + 'static,
+    Fut: Future<Output = Option<T>> + Send + 'static,
+{
+    let Ok(Some(message)) = inner.services.mail_get(message_id.clone()).await else {
+        return Vec::new();
+    };
+    let mut tasks = tokio::task::JoinSet::new();
+    for (plugin, running) in inner.running_all() {
+        tasks.spawn(hook(Arc::clone(inner), plugin, running, message.clone()));
+    }
+    let mut found = Vec::new();
+    while let Some(done) = tasks.join_next().await {
+        if let Ok(Some(entry)) = done {
+            found.push(entry);
+        }
+    }
+    found
+}
+
 impl PluginHost {
     /// Runs the arrival hooks for a new message (see the module docs) and
     /// hands their actions to the core. Never fails: hooks that fail or
     /// time out are skipped and counted.
     pub async fn arrival_hooks(&self, message_id: &MessageId) -> ArrivalReport {
         let inner = Arc::clone(self.inner());
-        let Ok(Some(message)) = inner.services.mail_get(message_id.clone()).await else {
-            return ArrivalReport::default();
-        };
-        let mut tasks = tokio::task::JoinSet::new();
-        for (plugin, running) in inner.running_all() {
-            let inner = Arc::clone(&inner);
-            let message = message.clone();
-            tasks.spawn(async move {
+        let found = message_hook_runs(
+            &inner,
+            message_id,
+            |inner, plugin, running, message| async move {
                 let kind = PluginHookKind::Arrival;
-                if !inner.hook_applies(&running, kind, &message).await {
-                    return None;
-                }
-                let input = inner.message_input(&running, &message).await;
                 let (mut run, value) =
-                    call_hook(&inner, &plugin, &running, kind, input, Origin::default()).await;
-                let mut actions = Vec::new();
-                if let Some(value) = value {
-                    match answer::<PluginArrivalResult>(value) {
-                        Ok(result) => match arrival_problems(&result) {
-                            None => actions = result.actions,
-                            Some(problem) => {
-                                run.outcome = PluginHookOutcome::Failed;
-                                run.error = Some(problem);
-                            }
-                        },
-                        Err(problem) => {
-                            run.outcome = PluginHookOutcome::Failed;
-                            run.error = Some(problem);
-                        }
-                    }
-                }
+                    call_message_hook(&inner, &plugin, &running, kind, &message, Origin::default())
+                        .await?;
+                let actions =
+                    checked_answer::<PluginArrivalResult>(&mut run, value, arrival_problems)
+                        .map(|result| result.actions)
+                        .unwrap_or_default();
                 inner.finish_hook(kind, &run);
                 let submitted = if actions.is_empty() {
                     None
@@ -362,16 +412,15 @@ impl PluginHost {
                     submit_arrival(&inner, &plugin, &running, &message, actions)
                 };
                 Some((run, submitted))
-            });
-        }
+            },
+        )
+        .await;
         let mut report = ArrivalReport::default();
-        while let Some(done) = tasks.join_next().await {
-            if let Ok(Some((run, submitted))) = done {
-                if let Some(actions) = submitted {
-                    report.actions.push((run.plugin_id.clone(), actions));
-                }
-                report.runs.push(run);
+        for (run, submitted) in found {
+            if let Some(actions) = submitted {
+                report.actions.push((run.plugin_id.clone(), actions));
             }
+            report.runs.push(run);
         }
         report.runs.sort_by(|a, b| a.plugin_id.cmp(&b.plugin_id));
         report.actions.sort_by(|a, b| a.0.cmp(&b.0));
@@ -405,24 +454,11 @@ impl PluginHost {
                 let kind = PluginHookKind::BeforeSend;
                 let (mut run, value) =
                     call_hook(&inner, &plugin, &running, kind, input, Origin::default()).await;
-                let mut result = None;
-                if let Some(value) = value {
-                    match answer::<PluginBeforeSendResult>(value) {
-                        Ok(answer) if answer.problems().is_empty() => {
-                            if answer.veto.is_some() {
-                                run.outcome = PluginHookOutcome::Vetoed;
-                            }
-                            result = Some(answer);
-                        }
-                        Ok(answer) => {
-                            run.outcome = PluginHookOutcome::Failed;
-                            run.error = Some(answer.problems().join(", "));
-                        }
-                        Err(problem) => {
-                            run.outcome = PluginHookOutcome::Failed;
-                            run.error = Some(problem);
-                        }
-                    }
+                let result = checked_answer::<PluginBeforeSendResult>(&mut run, value, |a| {
+                    joined(&a.problems())
+                });
+                if result.as_ref().is_some_and(|a| a.veto.is_some()) {
+                    run.outcome = PluginHookOutcome::Vetoed;
                 }
                 inner.finish_hook(kind, &run);
                 (run, result)
@@ -469,36 +505,15 @@ impl PluginHost {
         client_id: Option<String>,
     ) -> OpenReport {
         let inner = Arc::clone(self.inner());
-        let Ok(Some(message)) = inner.services.mail_get(message_id.clone()).await else {
-            return OpenReport::default();
-        };
-        let mut tasks = tokio::task::JoinSet::new();
-        for (plugin, running) in inner.running_all() {
-            let inner = Arc::clone(&inner);
-            let message = message.clone();
+        let mut found = message_hook_runs(&inner, message_id, |inner, plugin, running, message| {
             let origin = Origin::client(client_id.clone());
-            tasks.spawn(async move {
+            async move {
                 let kind = PluginHookKind::Open;
-                if !inner.hook_applies(&running, kind, &message).await {
-                    return None;
-                }
-                let input = inner.message_input(&running, &message).await;
                 let (mut run, value) =
-                    call_hook(&inner, &plugin, &running, kind, input, origin).await;
-                let mut result = PluginOpenResult::default();
-                if let Some(value) = value {
-                    match answer::<PluginOpenResult>(value) {
-                        Ok(answer) if answer.problems().is_empty() => result = answer,
-                        Ok(answer) => {
-                            run.outcome = PluginHookOutcome::Failed;
-                            run.error = Some(answer.problems().join(", "));
-                        }
-                        Err(problem) => {
-                            run.outcome = PluginHookOutcome::Failed;
-                            run.error = Some(problem);
-                        }
-                    }
-                }
+                    call_message_hook(&inner, &plugin, &running, kind, &message, origin).await?;
+                let result =
+                    checked_answer::<PluginOpenResult>(&mut run, value, |a| joined(&a.problems()))
+                        .unwrap_or_default();
                 inner.finish_hook(kind, &run);
                 let shown: HashMap<String, Vec<String>> = result
                     .banners
@@ -512,14 +527,9 @@ impl PluginHost {
                     .collect();
                 inner.remember_banners(&plugin, &message.id, shown);
                 Some((run, result))
-            });
-        }
-        let mut found = Vec::new();
-        while let Some(done) = tasks.join_next().await {
-            if let Ok(Some(entry)) = done {
-                found.push(entry);
             }
-        }
+        })
+        .await;
         found.sort_by(|a, b| a.0.plugin_id.cmp(&b.0.plugin_id));
         let mut report = OpenReport::default();
         for (run, result) in found {
@@ -584,11 +594,10 @@ fn submit_arrival(
         return None;
     }
     let request = PluginWriteRequest {
-        attribution: nail_api::agents::ActionAttribution {
-            actor: nail_api::agents::ActionActor::plugin(plugin.clone()),
-            name: running.name.clone(),
-            on_behalf_of: None,
-        },
+        attribution: nail_api::agents::ActionAttribution::new(
+            nail_api::agents::ActionActor::plugin(plugin.clone()),
+            running.name.clone(),
+        ),
         kind: nail_api::agents::ActionKind::Organize,
         operation: "hooks.arrival".to_owned(),
         write: PluginWrite::UpdateMessages(arrival_write(&message.id, &actions)),

@@ -15,6 +15,7 @@ export type * from "./ActionAttribution";
 export type * from "./ActionAvailability";
 export type * from "./ActionChange";
 export type * from "./ActionDef";
+export type * from "./ActionItem";
 export type * from "./ActionKind";
 export type * from "./ActionPolicy";
 export type * from "./ActionPolicyIssue";

@@ -52,18 +52,6 @@ pub(crate) fn virtual_account_of(id: &FolderId) -> Option<AccountId> {
         .map(|(account, _)| AccountId::new(account))
 }
 
-fn role_key(role: FolderRole) -> &'static str {
-    match role {
-        FolderRole::Inbox => "inbox",
-        FolderRole::Sent => "sent",
-        FolderRole::Drafts => "drafts",
-        FolderRole::Archive => "archive",
-        FolderRole::Junk => "junk",
-        FolderRole::Trash => "trash",
-        FolderRole::Other => "other",
-    }
-}
-
 /// The accounts that take part in "All accounts": every enabled account
 /// from `accounts.kdl` plus local accounts the store has (e.g. demo data).
 pub(crate) fn all_members(config: &AccountsConfig, stored: &[Account]) -> Vec<AccountId> {
@@ -174,7 +162,7 @@ pub(crate) fn virtual_folders(
             let name = first.name.clone();
             used.extend(sources.iter().map(|f| f.id.clone()));
             out.push(make(
-                format!("{}/{}", va.id, role_key(role)),
+                format!("{}/{}", va.id, role.as_str()),
                 name.clone(),
                 name,
                 role,

@@ -5,31 +5,15 @@
 //! Examples containing `…` are outlines and are skipped.
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
+/// The KDL examples of a user doc, without outlines (`…`).
 fn kdl_blocks(file: &str) -> Vec<String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../userDocs/en")
-        .join(file);
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    let mut blocks = Vec::new();
-    let mut current: Option<String> = None;
-    for line in text.lines() {
-        match (&mut current, line.trim_start()) {
-            (None, "```kdl") => current = Some(String::new()),
-            (Some(block), "```") => {
-                blocks.push(std::mem::take(block));
-                current = None;
-            }
-            (Some(block), _) => {
-                block.push_str(line);
-                block.push('\n');
-            }
-            (None, _) => {}
-        }
-    }
-    assert!(current.is_none(), "unclosed code block in {file}");
-    blocks.into_iter().filter(|b| !b.contains('…')).collect()
+    common::kdl_blocks(&common::user_doc(file))
+        .into_iter()
+        .filter(|b| !b.contains('…'))
+        .collect()
 }
 
 #[test]

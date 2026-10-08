@@ -2,6 +2,9 @@
 //! format-preserving writer.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
 use nail_api::accounts::{
     AccountConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping, FolderMatch, FolderPolicy,
     FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer, MailStyleConfig,
@@ -74,20 +77,7 @@ fn endpoint(host: &str, port: u16, tls: TlsMode, auth: AuthConfig) -> ServerEndp
 }
 
 fn identity(account: &str, email: &str) -> Identity {
-    Identity {
-        id: email.into(),
-        account_id: account.into(),
-        email: email.into(),
-        name: None,
-        reply_to: None,
-        bcc: vec![],
-        signature: None,
-        composer_mode: None,
-        posting: None,
-        mail_style: None,
-        crypto: None,
-        send_as: None,
-    }
+    Identity::new(account.into(), email)
 }
 
 fn work() -> AccountConfig {
@@ -1075,14 +1065,10 @@ fn identity_crypto_settings() {
     );
 
     // Canonical rendering writes only non-defaults and round-trips.
-    let mut d = AccountsDocument::empty("accounts.kdl");
-    d.set_config(config.clone()).unwrap();
-    assert!(
-        d.text().contains("crypto technology=\"openpgp\" sign=#true encrypt=#true openpgp-key=\"0123456789ABCDEF0123456789ABCDEF01234567\" prefer-encrypt=\"mutual\" protect-headers=#false"),
-        "{}",
-        d.text()
+    common::assert_renders(
+        &config,
+        "crypto technology=\"openpgp\" sign=#true encrypt=#true openpgp-key=\"0123456789ABCDEF0123456789ABCDEF01234567\" prefer-encrypt=\"mutual\" protect-headers=#false",
     );
-    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
 
     // Editing one setting in place keeps the rest of the line.
     let mut d = doc(&text);
@@ -1154,15 +1140,10 @@ fn authserv_ids_are_read_and_written() {
         plain.accounts[0].authserv_ids
     );
 
-    let mut d = AccountsDocument::empty("accounts.kdl");
-    d.set_config(config.clone()).unwrap();
-    assert!(
-        d.text()
-            .contains("authserv-id \"mx.example.net\" \"mx2.example.net\""),
-        "{}",
-        d.text()
+    common::assert_renders(
+        &config,
+        "authserv-id \"mx.example.net\" \"mx2.example.net\"",
     );
-    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
 
     let mut d = doc(&text);
     let mut account = d.config().accounts[0].clone();
@@ -1219,16 +1200,10 @@ fn sieve_settings_are_read_and_written() {
     let plain = parse_accounts(&account_with("    imap host=\"h\""), "accounts.kdl").unwrap();
     assert_eq!(plain.accounts[0].sieve, None);
 
-    let mut d = AccountsDocument::empty("accounts.kdl");
-    d.set_config(config.clone()).unwrap();
-    assert!(
-        d.text().contains(
-            "sieve enabled=#false host=\"sieve.example.org\" port=2000 tls=\"implicit\" script=\"Nail rules\""
-        ),
-        "{}",
-        d.text()
+    common::assert_renders(
+        &config,
+        "sieve enabled=#false host=\"sieve.example.org\" port=2000 tls=\"implicit\" script=\"Nail rules\"",
     );
-    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
 
     let mut d = doc(&text);
     let mut account = d.config().accounts[0].clone();
@@ -1279,15 +1254,7 @@ fn send_as_identities_read_write_and_validate() {
         })
     );
     // The writer keeps both properties.
-    let mut d = AccountsDocument::empty("accounts.kdl");
-    d.set_config(config.clone()).unwrap();
-    assert!(
-        d.text()
-            .contains("send-as=\"on-behalf\" sender=\"a@example.org\""),
-        "{}",
-        d.text()
-    );
-    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+    common::assert_renders(&config, "send-as=\"on-behalf\" sender=\"a@example.org\"");
 
     let (_, _, message) = error(&account_with(
         "    imap host=\"h\" {\n        auth \"password\"\n    }\n    identity \"t@example.org\" send-as=\"maybe\"",

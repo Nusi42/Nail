@@ -4199,7 +4199,27 @@ impl From<ApiError> for Response {
     }
 }
 
+/// The `type` tag a value serializes with (empty when it has none).
+fn type_tag(value: &impl Serialize) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.get("type").and_then(Value::as_str).map(str::to_owned))
+        .unwrap_or_default()
+}
+
+impl Request {
+    /// The request's wire name (its `type` tag, e.g. `GetMessage`).
+    pub fn wire_type(&self) -> String {
+        type_tag(self)
+    }
+}
+
 impl Response {
+    /// The answer's wire name (its `type` tag, e.g. `Message`).
+    pub fn wire_type(&self) -> String {
+        type_tag(self)
+    }
+
     /// Converts an [`Response::Error`] into `Err(ApiError)`, anything else into `Ok`.
     pub fn into_result(self) -> Result<Self, ApiError> {
         match self {
@@ -4747,6 +4767,12 @@ impl From<Event> for ServerMessage {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wire_types_are_the_type_tags() {
+        assert_eq!(Request::GetMcpServerInfo.wire_type(), "GetMcpServerInfo");
+        assert_eq!(Response::Done.wire_type(), "Done");
+    }
+
     use super::*;
     use pretty_assertions::assert_eq;
     use serde_json::json;
@@ -5683,11 +5709,10 @@ mod tests {
         let edit = Event::ComposerEditRequested {
             draft_id: "d1".into(),
             client_id: None,
-            by: Box::new(ActionAttribution {
-                actor: ActionActor::mcp_client("c1"),
-                name: "Claude".into(),
-                on_behalf_of: None,
-            }),
+            by: Box::new(ActionAttribution::new(
+                ActionActor::mcp_client("c1"),
+                "Claude",
+            )),
             edit: ComposerEdit {
                 op: crate::plugins::ComposerEditOp::Insert,
                 text: "Hello".into(),

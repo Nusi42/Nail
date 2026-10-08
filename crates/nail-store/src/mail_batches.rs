@@ -32,7 +32,8 @@ use rusqlite::{OptionalExtension, Transaction, params};
 use crate::error::{Error, Result};
 use crate::mail::message_in_tx;
 use crate::queue::{
-    Enqueued, FlagChange, MessageSource, Operation, enqueue_in_tx, role_folder_in_tx,
+    Enqueued, FlagChange, MessageSource, Operation, enqueue_if_applies, enqueue_in_tx,
+    role_folder_in_tx,
 };
 use crate::store::Store;
 
@@ -235,15 +236,7 @@ fn batch_in_tx(tx: &Transaction<'_>, id: i64) -> Result<Option<MailBatchRecord>>
         .query_row(
             "SELECT actor, kind, state, created_at, conversations FROM mail_batches WHERE id = ?1",
             [id],
-            |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, u32>(4)?,
-                ))
-            },
+            |r| <(String, String, String, i64, u32)>::try_from(r),
         )
         .optional()?;
     let Some((actor, kind, state, created_at, conversations)) = row else {
@@ -417,20 +410,9 @@ impl Store {
                     }
                     other => other,
                 };
-                tx.execute_batch("SAVEPOINT mail_undo_op")?;
-                match enqueue_in_tx(tx, &inverse) {
-                    Ok(enqueued) => {
-                        tx.execute_batch("RELEASE mail_undo_op")?;
-                        queued.push(enqueued);
-                    }
-                    Err(
-                        err @ (Error::NotFound { .. } | Error::Conflict(_) | Error::InvalidData(_)),
-                    ) => {
-                        tx.execute_batch("ROLLBACK TO mail_undo_op; RELEASE mail_undo_op")?;
-                        tracing::debug!(%err, batch = id, "an inverse no longer applies; skipped");
-                        skipped += 1;
-                    }
-                    Err(err) => return Err(err),
+                match enqueue_if_applies(tx, &inverse)? {
+                    Some(enqueued) => queued.push(enqueued),
+                    None => skipped += 1,
                 }
             }
             tx.execute(
@@ -450,63 +432,35 @@ impl Store {
 mod tests {
     use super::*;
     use crate::queue::OpState;
-    use nail_api::{Account, AccountId, AccountKind, Flags, Folder, FolderRole, MessageSummary};
+    use crate::test_store::{add, store_with};
+    use nail_api::testing;
+    use nail_api::{AccountKind, Flags, Folder, FolderRole, MessageSummary};
 
     const NOW: i64 = 1_800_000_000;
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: "a".into(),
-                name: "A".into(),
-                email: "a@example.org".into(),
-                kind: AccountKind::Local,
-            })
-            .unwrap();
-        for (name, role) in [
+        let folders: Vec<Folder> = [
             ("INBOX", FolderRole::Inbox),
             ("Archive", FolderRole::Archive),
             ("Trash", FolderRole::Trash),
-        ] {
-            store
-                .upsert_folder(&Folder {
-                    id: FolderId(format!("a/{name}")),
-                    account_id: AccountId("a".into()),
-                    parent_id: None,
-                    name: name.into(),
-                    path: name.into(),
-                    role,
-                    unread: 0,
-                    total: 0,
-                })
-                .unwrap();
-        }
+        ]
+        .into_iter()
+        .map(|(name, role)| testing::folder(&format!("a/{name}"), "a", name, role))
+        .collect();
+        let store = store_with(&testing::account("a", AccountKind::Local), &folders);
         for n in 1..=3 {
-            let summary = MessageSummary {
-                id: MessageId(format!("m{n}")),
-                folder_id: "a/INBOX".into(),
-                account_id: "a".into(),
-                subject: format!("s{n}"),
-                from: None,
-                to: Vec::new(),
-                date: "2026-09-29T10:00:00Z".into(),
-                flags: Flags {
-                    seen: n == 1,
-                    ..Flags::default()
+            add(
+                &store,
+                MessageSummary {
+                    subject: format!("s{n}"),
+                    date: "2026-09-29T10:00:00Z".into(),
+                    flags: Flags {
+                        seen: n == 1,
+                        ..Flags::default()
+                    },
+                    ..testing::summary(&format!("m{n}"), "a", "a/INBOX")
                 },
-                has_attachments: false,
-                preview: String::new(),
-                thread_id: None,
-                tags: Vec::new(),
-                duplicates: Vec::new(),
-                headers_only: false,
-                gmail: None,
-                exchange: None,
-            };
-            store
-                .upsert_message(&crate::StoredMessage::new(summary))
-                .unwrap();
+            );
         }
         store
     }

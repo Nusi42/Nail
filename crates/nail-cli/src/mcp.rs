@@ -297,17 +297,10 @@ mod tests {
         use nail_api::agents::{ActionActor, ActionAttribution, ActionKind, ConfirmationState};
         let confirmation = Confirmation {
             id: "1".into(),
-            requested_by: ActionAttribution {
-                actor: ActionActor::mcp_client("c1"),
-                name: "Claude".into(),
-                on_behalf_of: None,
-            },
+            requested_by: ActionAttribution::new(ActionActor::mcp_client("c1"), "Claude"),
             kind: ActionKind::Send,
             operation: "send_message".into(),
-            summary: LocalizedMessage::new("confirmation-summary-send")
-                .arg("actor", "Claude")
-                .arg("subject", "Plan")
-                .arg("count", 2),
+            summary: nail_api::agents::send_summary("Claude", "Plan", 2),
             targets: vec![],
             more_targets: 0,
             changes: vec![],

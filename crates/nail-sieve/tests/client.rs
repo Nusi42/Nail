@@ -16,8 +16,8 @@ use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextM
 use nail_api::sieve::{RulePlacement, VacationSettings};
 use nail_sieve::{
     CompileOptions, FolderMap, MANAGED_MARKER, PREVIOUS_MARKER, SieveAuth, SieveConfig,
-    SieveCredentials, SieveError, SieveSession, TlsTrust, decompile, reasons, remove, to_crlf,
-    upload,
+    SieveCredentials, SieveError, SieveSession, TlsTrust, UploadReport, decompile, reasons, remove,
+    to_crlf, upload,
 };
 use nail_testkit::MockTls;
 use nail_testkit_net::{MockPop3Config, MockPop3Server, MockSieveConfig, MockSieveServer};
@@ -38,6 +38,16 @@ fn config(server: &MockSieveServer, tls: TlsMode) -> SieveConfig {
 
 fn password() -> SieveCredentials {
     SieveCredentials::password(USER, PASSWORD)
+}
+
+/// A server that also accepts the OAuth token `tok` of [`USER`].
+async fn oauth_server() -> MockSieveServer {
+    MockSieveServer::start(MockSieveConfig {
+        oauth_tokens: vec![(USER.into(), "tok".into())],
+        ..MockSieveConfig::default()
+    })
+    .await
+    .unwrap()
 }
 
 async fn plain_server(config: MockSieveConfig) -> (MockSieveServer, SieveSession) {
@@ -203,12 +213,7 @@ async fn never_falls_back_to_plaintext() {
 
 #[tokio::test]
 async fn login_failures() {
-    let server = MockSieveServer::start(MockSieveConfig {
-        oauth_tokens: vec![(USER.into(), "tok".into())],
-        ..MockSieveConfig::default()
-    })
-    .await
-    .unwrap();
+    let server = oauth_server().await;
     let plain = config(&server, TlsMode::Plaintext);
     let err = SieveSession::login(&plain, &SieveCredentials::password(USER, "wrong"))
         .await
@@ -323,12 +328,7 @@ impl AccessTokenProvider for Tokens {
 
 #[tokio::test]
 async fn sieve_auth_resolves_the_imap_login() {
-    let server = MockSieveServer::start(MockSieveConfig {
-        oauth_tokens: vec![(USER.into(), "tok".into())],
-        ..MockSieveConfig::default()
-    })
-    .await
-    .unwrap();
+    let server = oauth_server().await;
     let plain = config(&server, TlsMode::Plaintext);
     let store: Arc<dyn SecretStore> = Arc::new(MemorySecretStore::new());
     let tokens = Arc::new(Tokens::default());
@@ -431,6 +431,11 @@ fn rules() -> Vec<Rule> {
     ]
 }
 
+/// Uploads [`rules`] and the [`vacation`] reply as `name`.
+async fn upload_all(session: &mut SieveSession, name: &str) -> Result<UploadReport, SieveError> {
+    upload(session, name, &rules(), &vacation(), options(&folders())).await
+}
+
 fn vacation() -> VacationSettings {
     VacationSettings {
         enabled: true,
@@ -447,15 +452,7 @@ async fn upload_preserves_the_users_scripts() {
     server.set_script("old", "keep;", false);
 
     let folders = folders();
-    let report = upload(
-        &mut session,
-        "nail",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap();
+    let report = upload_all(&mut session, "nail").await.unwrap();
     assert!(report.activated);
     assert_eq!(report.previous_active.as_deref(), Some("roundcube"));
     assert_eq!(report.other_scripts, ["old", "roundcube"]);
@@ -511,28 +508,11 @@ async fn upload_preserves_the_users_scripts() {
 async fn a_renamed_script_never_treats_nails_old_script_as_the_users() {
     let (server, mut session) = plain_server(MockSieveConfig::default()).await;
     server.set_script("roundcube", "keep;", true);
-    let folders = folders();
-    upload(
-        &mut session,
-        "nail",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap();
+    upload_all(&mut session, "nail").await.unwrap();
     assert_eq!(server.active().as_deref(), Some("nail"));
 
     // The user picks another script name: the old Nail script is active.
-    let report = upload(
-        &mut session,
-        "nail-work",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap();
+    let report = upload_all(&mut session, "nail-work").await.unwrap();
     assert!(report.activated);
     assert_eq!(report.replaced_managed.as_deref(), Some("nail"));
     assert_eq!(report.previous_active.as_deref(), Some("roundcube"));
@@ -542,15 +522,7 @@ async fn a_renamed_script_never_treats_nails_old_script_as_the_users() {
     assert_eq!(server.active().as_deref(), Some("nail-work"));
 
     // A later upload keeps the user's script as the previous one.
-    let report = upload(
-        &mut session,
-        "nail-work",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap();
+    let report = upload_all(&mut session, "nail-work").await.unwrap();
     assert_eq!(report.previous_active.as_deref(), Some("roundcube"));
     assert_eq!(report.replaced_managed, None);
 
@@ -608,16 +580,7 @@ async fn a_recorded_previous_script_written_by_nail_is_followed() {
 async fn upload_never_overwrites_a_foreign_script_with_our_name() {
     let (server, mut session) = plain_server(MockSieveConfig::default()).await;
     server.set_script("nail", "# written by hand\nkeep;\n", false);
-    let folders = folders();
-    let err = upload(
-        &mut session,
-        "nail",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap_err();
+    let err = upload_all(&mut session, "nail").await.unwrap_err();
     assert_eq!(err, SieveError::NotManaged("nail".into()));
     assert_eq!(err.code(), ErrorCode::Conflict);
     assert_eq!(err.localized().id, reasons::ERROR_NOT_MANAGED);
@@ -641,16 +604,7 @@ async fn upload_is_capability_aware() {
     })
     .await;
     server.set_script("theirs", "keep;", true);
-    let folders = folders();
-    let report = upload(
-        &mut session,
-        "nail",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap();
+    let report = upload_all(&mut session, "nail").await.unwrap();
     // The move needs `variables`, the body test `body` (and the flag
     // `imap4flags`): both stay with Nail; the vacation reply is uploaded.
     let placements: Vec<RulePlacement> =
@@ -676,15 +630,7 @@ async fn rejected_upload_changes_nothing() {
     let (server, mut session) = plain_server(MockSieveConfig::default()).await;
     server.reject_scripts_containing("vacation", "vacation replies are disabled by policy");
     let folders = folders();
-    let err = upload(
-        &mut session,
-        "nail",
-        &rules(),
-        &vacation(),
-        options(&folders),
-    )
-    .await
-    .unwrap_err();
+    let err = upload_all(&mut session, "nail").await.unwrap_err();
     assert_eq!(
         err,
         SieveError::ScriptRejected("vacation replies are disabled by policy".into())

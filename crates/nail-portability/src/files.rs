@@ -21,6 +21,18 @@ pub fn temp_path(target: &Path) -> PathBuf {
     target.with_file_name(name)
 }
 
+/// Refuses an import source that is not a folder.
+pub(crate) fn require_folder(root: &Path) -> Result<()> {
+    if root.is_dir() {
+        Ok(())
+    } else {
+        Err(PortabilityError::InvalidSource(format!(
+            "{} is not a folder",
+            root.display()
+        )))
+    }
+}
+
 /// Whether `target` may be written: it does not exist, or `overwrite` is
 /// set and it is not a folder.
 pub fn check_target(target: &Path, overwrite: bool) -> Result<()> {

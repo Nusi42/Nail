@@ -627,10 +627,7 @@ impl RemoteAuth {
                 RemoteAuditOutcome::Denied,
                 &ctx.client,
                 |r| {
-                    r.user_id = Some(session.user_id.clone());
-                    r.user_name = Some(session.user_name.clone());
-                    r.device_id = Some(session.device_id.clone());
-                    r.session_id = Some(session.id.clone());
+                    r.set_session(session);
                     r.name = Some(required.name.to_owned());
                     r.error = Some(error.code);
                     r.detail = Some(error.message.clone());
@@ -641,10 +638,7 @@ impl RemoteAuth {
                 RemoteAuditOutcome::Success,
                 &ctx.client,
                 |r| {
-                    r.user_id = Some(session.user_id.clone());
-                    r.user_name = Some(session.user_name.clone());
-                    r.device_id = Some(session.device_id.clone());
-                    r.session_id = Some(session.id.clone());
+                    r.set_session(session);
                     r.name = Some(required.name.to_owned());
                 },
             ),

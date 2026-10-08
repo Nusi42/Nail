@@ -1,13 +1,17 @@
 //! `ConfigManager`: loading a config directory, keep-last-valid and watching.
 #![cfg(test)]
 
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
+use std::time::Duration;
 
 use nail_api::Event;
 use nail_config::{
     ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_selected_theme,
 };
+
+use common::{wait_for, watch, write};
 
 const ACCENT_THEME: &str =
     r##"theme "Mine" extends="default" { tokens { color "accent" "#ff0000"; }; }"##;
@@ -15,10 +19,6 @@ const BROKEN_THEME: &str =
     "theme \"Mine\" extends=\"default\" {\n  tokens { color \"accent\" \"$color.nope\"; }\n}";
 const NARROW_LAYOUT: &str =
     r#"layout "Mine" extends="default" { window "main" { message-list; }; }"#;
-
-fn write(dir: &std::path::Path, name: &str, text: &str) {
-    std::fs::write(dir.join(name), text).unwrap();
-}
 
 #[test]
 fn an_empty_directory_uses_the_defaults() {
@@ -146,33 +146,12 @@ fn reload_keeps_the_last_valid_configuration() {
     assert_eq!(*manager.theme(), default_selected_theme());
 }
 
-/// Waits for an update matching `pred`, skipping others.
-fn wait_for(
-    rx: &mpsc::Receiver<ConfigUpdate>,
-    pred: impl Fn(&ConfigUpdate) -> bool,
-) -> ConfigUpdate {
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        let left = deadline.saturating_duration_since(Instant::now());
-        match rx.recv_timeout(left) {
-            Ok(update) if pred(&update) => return update,
-            Ok(_) => {}
-            Err(e) => panic!("no matching config update: {e}"),
-        }
-    }
-}
-
 #[test]
 fn the_watcher_reports_changes_and_errors() {
     let dir = tempfile::tempdir().unwrap();
     let config_dir = dir.path().join("config");
     let manager = ConfigManager::load(&config_dir);
-    let (tx, rx) = mpsc::channel();
-    let watcher = manager
-        .watch(Duration::from_millis(50), move |update| {
-            tx.send(update).ok();
-        })
-        .unwrap();
+    let (watcher, rx) = watch(&manager);
     assert!(config_dir.is_dir(), "watch creates the directory");
 
     write(&config_dir, "layout.kdl", NARROW_LAYOUT);
@@ -252,12 +231,7 @@ fn deeply_nested_files_are_errors_not_crashes() {
 fn a_change_re_reports_errors_of_the_other_file() {
     let dir = tempfile::tempdir().unwrap();
     let manager = ConfigManager::load(dir.path());
-    let (tx, rx) = mpsc::channel();
-    let _watcher = manager
-        .watch(Duration::from_millis(50), move |update| {
-            tx.send(update).ok();
-        })
-        .unwrap();
+    let (_watcher, rx) = watch(&manager);
 
     write(dir.path(), "layout.kdl", "layout \"x\" {\n  window\n");
     wait_for(

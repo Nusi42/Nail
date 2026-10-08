@@ -23,22 +23,20 @@
 
 use std::sync::Arc;
 
-use nail_api::agents::{ActionActor, ActionAttribution, ConfirmationState, NewConfirmation};
+use nail_api::agents::{ActionActor, ActionAttribution, ConfirmationState};
 use nail_api::mcp::tools::{
     CreateDraftArgs, CreateEventArgs, DeleteMessagesArgs, McpWriteResult, RespondToInviteArgs,
     SendMessageArgs, UpdateDraftArgs, UpdateEventArgs, UpdateMessagesArgs, UpsertContactArgs,
     UpsertTaskArgs,
 };
 use nail_api::mcp::{McpCallKind, McpClient, McpGrant, McpOutcome, McpScope};
-use nail_api::{AccountId, ApiError, ErrorCode, LocalizedMessage};
+use nail_api::{AccountId, ApiError, ErrorCode};
 use nail_store::{McpAuditRecord, Store};
-use serde_json::Value;
 
 pub use super::pim::PimDelete;
 use super::plan::Plan;
 use super::{
-    Ctx, WriteOutcome, WriteSettings, audit_detail, audit_outcome, failure_text, mail, pim,
-    with_confirmation,
+    Ctx, WriteOutcome, WriteSettings, audit_detail, audit_outcome, mail, pim, with_confirmation,
 };
 use crate::access::Access;
 use crate::data::McpData;
@@ -243,18 +241,8 @@ impl<D: McpData> ActorWrites<D> {
             let result = outcome(shared.run_plan(&request.by, &plan).await);
             return (Some(plan), result);
         }
-        let new = NewConfirmation {
-            requested_by: request.by.clone(),
-            kind: plan.kind,
-            operation: request.operation.clone(),
-            summary: plan.summary.clone(),
-            targets: plan.targets.clone(),
-            changes: plan.changes.clone(),
-            account_ids: plan.accounts.clone(),
-            payload: serde_json::to_value(&plan.action).unwrap_or(Value::Null),
-            idempotency_key: None,
-            timeout_secs: shared.settings.confirmation_timeout_secs,
-        };
+        let new =
+            shared.new_confirmation(&plan, request.by.clone(), request.operation.clone(), None);
         let confirmation = match shared.broker.submit(new).await {
             Ok(submitted) => submitted.confirmation().clone(),
             Err(err) => return (Some(plan), Err(err)),
@@ -358,18 +346,7 @@ async fn confirmed<D: McpData>(
     let decided = shared.broker.wait(id).await?;
     match decided.state {
         ConfirmationState::Approved => {
-            let ran = shared.run_plan(by, plan).await;
-            let finished = match &ran {
-                WriteOutcome::Result(McpWriteResult::Vetoed { reasons }) => {
-                    Err(LocalizedMessage::new("mcp-tool-error-vetoed")
-                        .arg("reasons", reasons.join("; ")))
-                }
-                WriteOutcome::Result(_) => Ok(()),
-                WriteOutcome::Failed(err) => Err(failure_text(err)),
-            };
-            if let Err(err) = shared.broker.finish(id, finished).await {
-                tracing::warn!(%err, "cannot record how a confirmed write ended");
-            }
+            let ran = shared.run_approved(by, plan, id).await;
             outcome(ran).map(|r| with_confirmation(r, id))
         }
         ConfirmationState::Denied => Ok(McpWriteResult::Denied {

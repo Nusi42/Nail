@@ -48,59 +48,55 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::ReturnPopOut { window } => end_pop_out(service, &window, PopOutChange::Returned),
         Request::ClosePopOut { window } => end_pop_out(service, &window, PopOutChange::Closed),
         Request::FocusPopOut { window } => focus_pop_out(service, &window),
-        other => Err(ApiError::internal(format!(
-            "{} is not a window request",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("{} is not a window request", other.wire_type())).into())
+        }
     }
 }
 
 async fn state_request(service: &Service, request: Request) -> Result<Response> {
-    let config = service.config().clone();
-    let events = service.inner.events.clone();
-    // The config manager reads and writes a file.
-    tokio::task::spawn_blocking(move || -> Result<Response> {
-        let states = match request {
-            Request::GetWindowStates => config.window_states(),
-            Request::SetWindowState { window, state } => {
-                match config.set_window_state(&window, state) {
-                    Ok((states, changed)) => {
-                        if changed {
-                            let state = states.get(&window).copied();
-                            drop(events.send(Event::WindowStateChanged { window, state }));
-                        }
-                        states
+    crate::editing::on_config(service, request, state_blocking).await
+}
+
+fn state_blocking(service: &Service, config: &ConfigManager, request: Request) -> Result<Response> {
+    let states = match request {
+        Request::GetWindowStates => config.window_states(),
+        Request::SetWindowState { window, state } => {
+            match config.set_window_state(&window, state) {
+                Ok((states, changed)) => {
+                    if changed {
+                        let state = states.get(&window).copied();
+                        service.broadcast(Event::WindowStateChanged { window, state });
                     }
-                    Err(err) => return Err(state_error(&window, err)),
+                    states
                 }
+                Err(err) => return Err(state_error(&window, err)),
             }
-            Request::ResetWindowStates => {
-                let removed = config
-                    .reset_window_states()
-                    .map_err(|err| state_error("*", err))?;
-                for window in removed {
-                    drop(events.send(Event::WindowStateChanged {
-                        window,
-                        state: None,
-                    }));
-                }
-                config.window_states()
+        }
+        Request::ResetWindowStates => {
+            let removed = config
+                .reset_window_states()
+                .map_err(|err| state_error("*", err))?;
+            for window in removed {
+                service.broadcast(Event::WindowStateChanged {
+                    window,
+                    state: None,
+                });
             }
-            _ => unreachable!("state_request gets state requests only"),
-        };
-        Ok(Response::WindowStates { states })
-    })
-    .await?
+            config.window_states()
+        }
+        _ => unreachable!("state_request gets state requests only"),
+    };
+    Ok(Response::WindowStates { states })
 }
 
 fn state_error(window: &str, err: WindowStateError) -> crate::error::CoreError {
     match err {
-        WindowStateError::Invalid(issue) => {
-            ApiError::invalid_request(format!("window state `{window}`: {}", issue.as_str()))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
-                .into()
-        }
+        WindowStateError::Invalid(issue) => ApiError::invalid_localized(
+            format!("window state `{window}`: {}", issue.as_str()),
+            issue.message_id(),
+        )
+        .into(),
         err @ WindowStateError::Io(_) => ApiError::internal(err.to_string()).into(),
     }
 }
@@ -346,10 +342,7 @@ pub(crate) fn pop_out_reported(service: &Service, report: PopOutReport) {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use nail_api::desktop::{
-        DefaultAppsStatus, DesktopChange, DesktopNotifier, DesktopSettings, HostUpdateState,
-        InstallationInfo, UpdateSettings,
-    };
+    use nail_api::desktop::{DesktopChange, DesktopNotifier};
     use nail_api::windows::{
         PopOutChange, PopOutOpen, PopOutReport, WindowGeometry, WindowRect, WindowSize, WindowState,
     };
@@ -384,47 +377,7 @@ mod tests {
         fn attach(&self, notify: DesktopNotifier) {
             *self.notify.lock().unwrap() = Some(notify);
         }
-        fn installation(&self) -> InstallationInfo {
-            InstallationInfo {
-                version: "1.0.0".into(),
-                kind: nail_api::desktop::InstallKind::Development,
-                scope: None,
-                architecture: nail_api::desktop::WindowsArch::X64,
-                install_dir: None,
-                updates_disabled: None,
-                forced_channel: None,
-                mapi_installed: false,
-                webview_version: None,
-            }
-        }
-        fn update_state(&self) -> HostUpdateState {
-            HostUpdateState::default()
-        }
-        fn apply_update_settings(&self, _: &UpdateSettings) {}
-        fn check_for_updates(&self) -> Result<(), ApiError> {
-            Ok(())
-        }
-        fn download_update(&self) -> Result<(), ApiError> {
-            Ok(())
-        }
-        fn install_update(&self) -> Result<(), ApiError> {
-            Ok(())
-        }
-        fn start_with_windows(&self) -> Option<bool> {
-            None
-        }
-        fn apply_desktop_settings(&self, _: &DesktopSettings) -> Result<(), ApiError> {
-            Ok(())
-        }
-        fn dev_endpoint_url(&self) -> Option<String> {
-            None
-        }
-        fn default_apps(&self) -> DefaultAppsStatus {
-            DefaultAppsStatus::unregistered()
-        }
-        fn open_default_apps_settings(&self) -> Result<(), ApiError> {
-            Ok(())
-        }
+        nail_api::inert_desktop_host!();
         fn open_pop_out(&self, open: &PopOutOpen) -> Result<(), ApiError> {
             self.calls
                 .lock()
@@ -448,11 +401,10 @@ mod tests {
         data: &std::path::Path,
         host: Option<Arc<PopOutHost>>,
     ) -> Service {
-        let mut options = crate::ServiceOptions::new(data, config);
-        options.watch_config = false;
-        options.start_engines = false;
-        options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
-        Service::open(crate::demo::demo_options(options)).unwrap()
+        Service::open(crate::testing::quiet_options_with(data, config, |o| {
+            o.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
+        }))
+        .unwrap()
     }
 
     fn geometry(x: i32) -> WindowGeometry {

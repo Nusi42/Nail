@@ -124,34 +124,18 @@ pub fn reply_recipients(
     (to, cc)
 }
 
+/// [`Draft::set_body`] for a draft the composer builds: a rich body has
+/// no plain text yet.
 fn set_body(draft: &mut Draft, mode: ComposerMode, body: String) {
-    draft.mode = mode;
-    match mode {
-        ComposerMode::Plain => {
-            draft.text = body;
-            draft.html = None;
-            draft.markdown = None;
-        }
-        ComposerMode::Html => {
-            draft.text = String::new();
-            draft.html = Some(body);
-            draft.markdown = None;
-        }
-        ComposerMode::Markdown => {
-            draft.text = String::new();
-            draft.html = None;
-            draft.markdown = Some(body);
-        }
+    draft.set_body(mode, body);
+    if mode != ComposerMode::Plain {
+        draft.text = String::new();
     }
 }
 
-/// The body source of a draft in its own mode.
+/// The body source of a draft in its own mode ([`Draft::body`]).
 pub fn body_of(draft: &Draft) -> &str {
-    match draft.mode {
-        ComposerMode::Plain => &draft.text,
-        ComposerMode::Html => draft.html.as_deref().unwrap_or_default(),
-        ComposerMode::Markdown => draft.markdown.as_deref().unwrap_or_default(),
-    }
+    draft.body()
 }
 
 /// A new draft from `identity`: its mode (or `mode`), its signature and,
@@ -289,22 +273,14 @@ mod tests {
 
     fn identity(mode: Option<ComposerMode>) -> Identity {
         Identity {
-            id: "ada@work.example".into(),
-            account_id: "work".into(),
-            email: "ada@work.example".into(),
             name: Some("Ada".into()),
-            reply_to: None,
-            bcc: vec![],
             signature: Some(Signature {
                 text: Some("Ada".into()),
                 html: None,
                 markdown: Some("**Ada**".into()),
             }),
             composer_mode: mode,
-            posting: None,
-            mail_style: None,
-            crypto: None,
-            send_as: None,
+            ..Identity::new("work".into(), "ada@work.example")
         }
     }
 

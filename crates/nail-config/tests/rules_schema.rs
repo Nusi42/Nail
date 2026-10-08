@@ -2,7 +2,8 @@
 //! Regenerate with `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema`.
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -11,22 +12,7 @@ use serde_json::Value;
 fn rules_schema_snapshot() {
     let schema = nail_config::rules::rules_schema();
     assert_eq!(schema.get("title"), Some(&Value::from("Nail rules.kdl")));
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("schema")
-        .join("rules.schema.json");
-    let actual = serde_json::to_string_pretty(&schema).unwrap() + "\n";
-    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
-        std::fs::write(&path, &actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_SNAPSHOTS=1)", path.display()));
-    let expected: Value = serde_json::from_str(&expected).unwrap();
-    let actual: Value = serde_json::from_str(&actual).unwrap();
-    assert_eq!(
-        actual, expected,
-        "rules.schema.json is stale; regenerate with NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema"
-    );
+    common::schema_snapshot("rules.schema.json", &schema, "rules_schema");
 }
 
 /// Every node and property name the reader accepts is in the schema.

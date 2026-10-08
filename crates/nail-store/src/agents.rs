@@ -22,7 +22,7 @@ use serde_json::Value;
 use crate::error::{Error, Result};
 use crate::store::Store;
 
-const RFC3339: &str = "'%Y-%m-%dT%H:%M:%SZ'";
+use crate::util::SQL_RFC3339 as RFC3339;
 
 /// The sealed `view` column.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +117,35 @@ fn state_of(tx: &Transaction<'_>, n: i64) -> Result<ConfirmationState> {
         .ok_or_else(|| Error::not_found("confirmation", n))?;
     ConfirmationState::parse(&state)
         .ok_or_else(|| Error::InvalidData(format!("confirmation state {state:?}")))
+}
+
+/// Ends the confirmations `select` (a `SELECT id …` over `params`) finds:
+/// `state` (`cancelled`, `expired`) by the system at `now`, the payload
+/// dropped. Returns them; prunes the history.
+fn end_confirmations(
+    tx: &Transaction<'_>,
+    select: &str,
+    params: impl rusqlite::Params,
+    state: &str,
+    now: i64,
+) -> Result<Vec<Confirmation>> {
+    let ids: Vec<i64> = {
+        let mut stmt = tx.prepare(select)?;
+        stmt.query_map(params, |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?
+    };
+    let mut out = Vec::new();
+    for n in ids {
+        tx.execute(
+            "UPDATE confirmations SET state = ?3, decided_at = ?2,
+                 decided_via = 'system', payload = NULL
+             WHERE id = ?1",
+            params![n, now, state],
+        )?;
+        out.push(get_in_tx(tx, n)?);
+    }
+    prune(tx)?;
+    Ok(out)
 }
 
 fn prune(tx: &Transaction<'_>) -> Result<()> {
@@ -432,26 +461,14 @@ impl Store {
         now: i64,
     ) -> Result<Vec<Confirmation>> {
         self.with_tx(|tx| {
-            let ids: Vec<i64> = {
-                let mut stmt = tx.prepare(
-                    "SELECT id FROM confirmations
-                     WHERE actor_kind = ?1 AND actor_id = ?2 AND state = 'pending'",
-                )?;
-                stmt.query_map(params![actor.kind_str(), actor.id_str()], |r| r.get(0))?
-                    .collect::<rusqlite::Result<_>>()?
-            };
-            let mut out = Vec::new();
-            for n in ids {
-                tx.execute(
-                    "UPDATE confirmations SET state = 'cancelled', decided_at = ?2,
-                         decided_via = 'system', payload = NULL
-                     WHERE id = ?1",
-                    params![n, now],
-                )?;
-                out.push(get_in_tx(tx, n)?);
-            }
-            prune(tx)?;
-            Ok(out)
+            end_confirmations(
+                tx,
+                "SELECT id FROM confirmations
+                 WHERE actor_kind = ?1 AND actor_id = ?2 AND state = 'pending'",
+                params![actor.kind_str(), actor.id_str()],
+                "cancelled",
+                now,
+            )
         })
     }
 
@@ -460,24 +477,13 @@ impl Store {
     /// returns them.
     pub fn cancel_pending_confirmations(&self, now: i64) -> Result<Vec<Confirmation>> {
         self.with_tx(|tx| {
-            let ids: Vec<i64> = {
-                let mut stmt =
-                    tx.prepare("SELECT id FROM confirmations WHERE state = 'pending'")?;
-                stmt.query_map([], |r| r.get(0))?
-                    .collect::<rusqlite::Result<_>>()?
-            };
-            let mut out = Vec::new();
-            for n in ids {
-                tx.execute(
-                    "UPDATE confirmations SET state = 'cancelled', decided_at = ?2,
-                         decided_via = 'system', payload = NULL
-                     WHERE id = ?1",
-                    params![n, now],
-                )?;
-                out.push(get_in_tx(tx, n)?);
-            }
-            prune(tx)?;
-            Ok(out)
+            end_confirmations(
+                tx,
+                "SELECT id FROM confirmations WHERE state = 'pending'",
+                [],
+                "cancelled",
+                now,
+            )
         })
     }
 
@@ -485,25 +491,13 @@ impl Store {
     /// returns them.
     pub fn expire_confirmations(&self, now: i64) -> Result<Vec<Confirmation>> {
         self.with_tx(|tx| {
-            let ids: Vec<i64> = {
-                let mut stmt = tx.prepare(
-                    "SELECT id FROM confirmations WHERE state = 'pending' AND expires_at <= ?1",
-                )?;
-                stmt.query_map([now], |r| r.get(0))?
-                    .collect::<rusqlite::Result<_>>()?
-            };
-            let mut out = Vec::new();
-            for n in ids {
-                tx.execute(
-                    "UPDATE confirmations SET state = 'expired', decided_at = ?2,
-                         decided_via = 'system', payload = NULL
-                     WHERE id = ?1",
-                    params![n, now],
-                )?;
-                out.push(get_in_tx(tx, n)?);
-            }
-            prune(tx)?;
-            Ok(out)
+            end_confirmations(
+                tx,
+                "SELECT id FROM confirmations WHERE state = 'pending' AND expires_at <= ?1",
+                [now],
+                "expired",
+                now,
+            )
         })
     }
 

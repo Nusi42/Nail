@@ -128,29 +128,6 @@ fn query() -> impl Strategy<Value = Query> {
     })
 }
 
-/// What the parser produces for a query built by hand: nested ANDs / ORs
-/// flatten.
-fn normalize(q: Query) -> Query {
-    match q {
-        Query::And(items) => Query::And(flatten(items, false)),
-        Query::Or(items) => Query::Or(flatten(items, true)),
-        Query::Not(inner) => Query::Not(Box::new(normalize(*inner))),
-        other => other,
-    }
-}
-
-fn flatten(items: Vec<Query>, or: bool) -> Vec<Query> {
-    let mut out = Vec::new();
-    for item in items.into_iter().map(normalize) {
-        match item {
-            Query::Or(inner) if or => out.extend(inner),
-            Query::And(inner) if !or => out.extend(inner),
-            other => out.push(other),
-        }
-    }
-    out
-}
-
 proptest! {
     // No regression files in the repo; failures print their minimal input.
     #![proptest_config(ProptestConfig {
@@ -202,7 +179,7 @@ proptest! {
     /// Printing an AST and parsing it back gives the same AST.
     #[test]
     fn canonical_form_round_trips(q in query()) {
-        let expected = normalize(q);
+        let expected = q.flattened();
         let printed = expected.to_string();
         let parsed = parse_query(&printed)
             .map_err(|e| TestCaseError::fail(format!("{printed:?}: {e:?}")))?;
@@ -212,7 +189,7 @@ proptest! {
     /// Term spans point at the term's own text.
     #[test]
     fn spans_point_at_terms(q in query()) {
-        let printed = normalize(q).to_string();
+        let printed = q.flattened().to_string();
         let parsed = parse_query(&printed).unwrap();
         for term in parsed.terms() {
             let slice = &printed[term.span.start..term.span.end];

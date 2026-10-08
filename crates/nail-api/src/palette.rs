@@ -103,16 +103,11 @@ impl RecentActions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(
-            ActionAvailability::ALL,
-            ActionAvailability::as_str,
-            ActionAvailability::message_id,
-        );
+        assert_wire_labels!(ActionAvailability);
     }
 
     #[test]

@@ -191,22 +191,11 @@ pub struct DiagnosticsBundle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(
-            DiagnosticsItem::ALL,
-            DiagnosticsItem::as_str,
-            DiagnosticsItem::message_id,
-        );
-        assert_labels(Redaction::ALL, Redaction::as_str, Redaction::message_id);
-        assert_labels(
-            DiagnosticsIssue::ALL,
-            DiagnosticsIssue::as_str,
-            DiagnosticsIssue::message_id,
-        );
+        assert_wire_labels!(DiagnosticsItem, Redaction, DiagnosticsIssue);
     }
 
     #[test]

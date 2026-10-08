@@ -37,8 +37,6 @@ pub const DEFAULT_ICS_REFRESH_MINUTES: u32 = 360;
 pub const DEFAULT_DAV_REFRESH_MINUTES: u32 = 15;
 /// Shortest refresh / poll interval, minutes.
 pub const MIN_REFRESH_MINUTES: u32 = 5;
-/// Longest source name (`id`), like account names.
-pub const MAX_PIM_SOURCE_ID_LEN: usize = 64;
 
 /// The kind of a source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -284,15 +282,7 @@ impl PimSourceConfig {
 /// Whether `id` is a valid source name: the account-name rules (1–64
 /// characters from `a-z 0-9 - _ .`, starting with a letter or digit).
 pub fn is_valid_pim_source_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= MAX_PIM_SOURCE_ID_LEN
-        && id
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        && id
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.'))
+    crate::ids::is_config_id(id)
 }
 
 /// The `https:` URL an ICS subscription is fetched from: `webcal:` and

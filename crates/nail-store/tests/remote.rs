@@ -16,7 +16,7 @@ use nail_store::{
 };
 use pretty_assertions::assert_eq;
 
-const T0: i64 = 1_790_000_000;
+use nail_api::testing::T0;
 const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA";
 
 fn store() -> Store {

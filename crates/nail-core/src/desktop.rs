@@ -333,10 +333,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             if !allowed {
                 return Err(ApiError::new(
                     ErrorCode::Conflict,
-                    format!(
-                        "{} does not apply now",
-                        crate::service::request_name(&request)
-                    ),
+                    format!("{} does not apply now", request.wire_type()),
                 )
                 .into());
             }
@@ -384,10 +381,8 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             host(service)?.open_default_apps_settings()?;
             Ok(Response::Done)
         }
-        other => Err(ApiError::internal(format!(
-            "{} is not a desktop request",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => Err(
+            ApiError::internal(format!("{} is not a desktop request", other.wire_type())).into(),
+        ),
     }
 }

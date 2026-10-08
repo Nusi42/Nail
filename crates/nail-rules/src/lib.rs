@@ -47,6 +47,9 @@ mod suggest;
 mod text;
 mod time;
 
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
+
 pub use condition::{CompiledCondition, ConditionError, ConditionHit, ConditionPath};
 pub use engine::{
     AppliedRule, CompiledRule, Explanation, IssueLocation, MessageOutcome, RuleIssue, RuleSet,
@@ -69,8 +72,9 @@ mod catalog_tests {
     /// Every `rule-issue-*` id built here has an English text in core.ftl.
     #[test]
     fn every_message_id_is_in_the_catalog() {
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let missing = nail_config::l10n::missing_message_ids(&src, &["rule-issue-"]);
-        assert!(missing.is_empty(), "{missing:#?}");
+        nail_config::l10n::assert_message_ids_in_catalog(
+            env!("CARGO_MANIFEST_DIR"),
+            &["rule-issue-"],
+        );
     }
 }

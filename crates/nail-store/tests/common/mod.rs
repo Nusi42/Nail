@@ -3,13 +3,9 @@
 use nail_api::{Account, AccountKind, Address, Flags, Folder, FolderRole, MessageSummary};
 use nail_store::{Store, StoredMessage};
 
+/// An IMAP account `id` (`nail_api::testing::account`).
 pub(crate) fn account(id: &str) -> Account {
-    Account {
-        id: id.into(),
-        name: format!("Account {id}"),
-        email: format!("{id}@example.org"),
-        kind: AccountKind::Imap,
-    }
+    nail_api::testing::account(id, AccountKind::Imap)
 }
 
 pub(crate) fn folder(
@@ -20,14 +16,8 @@ pub(crate) fn folder(
     role: FolderRole,
 ) -> Folder {
     Folder {
-        id: id.into(),
-        account_id: account.into(),
         parent_id: parent.map(Into::into),
-        name: path.rsplit('/').next().unwrap_or(path).to_owned(),
-        path: path.to_owned(),
-        role,
-        unread: 0,
-        total: 0,
+        ..nail_api::testing::folder(id, account, path, role)
     }
 }
 
@@ -64,13 +54,12 @@ pub(crate) fn message(id: &str, account: &str, folder: &str, date: &str) -> Stor
     })
 }
 
+pub(crate) use nail_store::testing::add_inbox;
+
 /// A store with account `a1` and folders `inbox` (INBOX) and `archive`.
 pub(crate) fn seeded_store() -> Store {
     let store = Store::open_in_memory().unwrap();
-    store.upsert_account(&account("a1")).unwrap();
-    store
-        .upsert_folder(&folder("inbox", "a1", "INBOX", None, FolderRole::Inbox))
-        .unwrap();
+    add_inbox(&store, "a1", "inbox");
     store
         .upsert_folder(&folder(
             "archive",
@@ -81,4 +70,12 @@ pub(crate) fn seeded_store() -> Store {
         ))
         .unwrap();
     store
+}
+
+/// A store in `<dir>/nail.sqlite3` with account `a1` and its inbox.
+pub(crate) fn file_store(dir: &std::path::Path) -> (std::path::PathBuf, Store) {
+    let path = dir.join("nail.sqlite3");
+    let store = Store::open(&path).unwrap();
+    add_inbox(&store, "a1", "inbox");
+    (path, store)
 }

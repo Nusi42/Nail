@@ -58,20 +58,9 @@ pub fn is_managed(script: &str) -> bool {
 
 /// The previously active script recorded in Nail's script.
 pub fn recorded_previous(script: &str) -> Option<String> {
-    script.lines().find_map(|l| {
-        let rest = l.trim_end().strip_prefix(PREVIOUS_MARKER)?;
-        let inner = rest.strip_prefix('"')?.strip_suffix('"')?;
-        let mut out = String::new();
-        let mut chars = inner.chars();
-        while let Some(c) = chars.next() {
-            if c == '\\' {
-                out.extend(chars.next());
-            } else {
-                out.push(c);
-            }
-        }
-        Some(out)
-    })
+    script
+        .lines()
+        .find_map(|l| crate::writer::unquote(l.trim_end().strip_prefix(PREVIOUS_MARKER)?))
 }
 
 /// How many scripts written by Nail are followed through their recorded

@@ -5,6 +5,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::ok;
+use nail_core::testing::{TempService, error_of, quiet_options};
+
 use std::path::Path;
 use std::time::Duration;
 
@@ -16,40 +21,14 @@ use nail_api::portability::{
     PortabilityIssueCode,
 };
 use nail_api::{AccountId, ErrorCode, Event, Folder, FolderId, FolderRole, Request, Response};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
 use pretty_assertions::assert_eq;
 use tokio::sync::broadcast;
 
-const PASSPHRASE: &str = "correct horse battery staple";
+use nail_portability::testing::PASSPHRASE;
 
 fn open_at(data: &Path, config: &Path) -> Service {
-    let mut options = ServiceOptions::new(data, config);
-    options.watch_config = false;
-    options.start_engines = false;
-    Service::open(nail_core::demo::demo_options(options)).unwrap()
-}
-
-fn open() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    (open_at(data.path(), config.path()), data, config)
-}
-
-async fn ok(service: &Service, request: Request) -> Response {
-    let response = service.handle(request).await;
-    if let Response::Error { message, .. } = &response {
-        panic!("request failed: {message}");
-    }
-    response
-}
-
-fn error_of(response: Response) -> (ErrorCode, Option<String>) {
-    match response {
-        Response::Error {
-            code, localized, ..
-        } => (code, localized.map(|l| l.id)),
-        other => panic!("error expected, got {other:?}"),
-    }
+    Service::open(quiet_options(data, config)).unwrap()
 }
 
 /// Starts a job and waits for its report.
@@ -186,9 +165,37 @@ fn local_target(name: &str) -> ImportOptions {
     }
 }
 
+/// Imports the test mbox (written to `files`) into "Local Folders/`name`".
+async fn import_mbox(service: &Service, files: &Path, name: &str) -> JobReport {
+    run_job(
+        service,
+        Request::StartImport {
+            source: ImportSource {
+                format: ImportFormat::Mbox,
+                path: write_mbox(files),
+            },
+            options: local_target(name),
+        },
+    )
+    .await
+}
+
+/// Exports `folder` (without subfolders) to the mbox file `target`.
+fn export_mbox(folder: &FolderId, target: &Path) -> Request {
+    Request::StartExport {
+        source: ExportSource::Folders {
+            folder_ids: vec![folder.clone()],
+            include_subfolders: false,
+        },
+        format: ExportFormat::Mbox,
+        path: target.display().to_string(),
+        options: ExportOptions::default(),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn an_mbox_and_a_maildir_import_into_local_folders_with_flags() {
-    let (service, _data, _config) = open();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let files = tempfile::tempdir().unwrap();
     let mbox = ImportSource {
         format: ImportFormat::Mbox,
@@ -298,7 +305,7 @@ async fn an_mbox_and_a_maildir_import_into_local_folders_with_flags() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn requests_with_bad_paths_or_targets_are_refused() {
-    let (service, _data, _config) = open();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let relative = ImportSource {
         format: ImportFormat::Mbox,
         path: "relative.mbox".into(),
@@ -383,52 +390,17 @@ async fn requests_with_bad_paths_or_targets_are_refused() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_exported_to_mbox_imports_again_identically() {
-    let (service, _data, _config) = open();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let files = tempfile::tempdir().unwrap();
-    run_job(
-        &service,
-        Request::StartImport {
-            source: ImportSource {
-                format: ImportFormat::Mbox,
-                path: write_mbox(files.path()),
-            },
-            options: local_target("Source"),
-        },
-    )
-    .await;
+    import_mbox(&service, files.path(), "Source").await;
     let source = folder(&service, LOCAL_FOLDERS_ACCOUNT_ID, "Source/old").await;
     let target = files.path().join("export.mbox");
-    let export = run_job(
-        &service,
-        Request::StartExport {
-            source: ExportSource::Folders {
-                folder_ids: vec![source.id.clone()],
-                include_subfolders: false,
-            },
-            format: ExportFormat::Mbox,
-            path: target.display().to_string(),
-            options: ExportOptions::default(),
-        },
-    )
-    .await;
+    let export = run_job(&service, export_mbox(&source.id, &target)).await;
     assert_eq!(export.state, JobState::Completed, "{:?}", export.issues);
     assert_eq!(export.counts.messages, 2);
     // The target exists now: a second export is a conflict.
     assert_eq!(
-        error_of(
-            service
-                .handle(Request::StartExport {
-                    source: ExportSource::Folders {
-                        folder_ids: vec![source.id.clone()],
-                        include_subfolders: false,
-                    },
-                    format: ExportFormat::Mbox,
-                    path: target.display().to_string(),
-                    options: ExportOptions::default(),
-                })
-                .await
-        )
-        .0,
+        error_of(service.handle(export_mbox(&source.id, &target)).await).0,
         ErrorCode::Conflict
     );
     run_job(
@@ -587,7 +559,7 @@ fn copy_dir(from: &Path, to: &Path) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_thunderbird_profile_proposes_accounts_and_imports_mail_and_contacts() {
-    let (service, _data, _config) = open();
+    let (service, _data, _config) = TempService::quiet().into_parts();
     let profile = thunderbird_profile();
     let source = ImportSource {
         format: ImportFormat::ThunderbirdProfile,
@@ -614,10 +586,7 @@ async fn a_thunderbird_profile_proposes_accounts_and_imports_mail_and_contacts()
         },
     )
     .await;
-    assert_eq!(report.state, JobState::CompletedWithIssues);
-    assert_eq!(report.counts.messages, 4);
-    assert_eq!(report.counts.contacts, 4);
-    assert_eq!(report.counts.groups, 2);
+    nail_portability::testing::assert_thunderbird_fixture_imported(&report);
     assert_eq!(report.accounts.len(), 2);
     assert!(
         report
@@ -667,19 +636,9 @@ async fn write_local_pim(service: &Service) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn backup_new_data_directory_restore_round_trip() {
-    let (service, _data, config) = open();
+    let (service, _data, config) = TempService::quiet().into_parts();
     let files = tempfile::tempdir().unwrap();
-    run_job(
-        &service,
-        Request::StartImport {
-            source: ImportSource {
-                format: ImportFormat::Mbox,
-                path: write_mbox(files.path()),
-            },
-            options: local_target("Archive"),
-        },
-    )
-    .await;
+    import_mbox(&service, files.path(), "Archive").await;
     write_local_pim(&service).await;
     let theme = "theme \"Mine\" extends=\"default\" {\n    tokens {\n        color \"accent\" \"#ff0000\"\n    }\n}\n";
     std::fs::write(config.path().join("theme.kdl"), theme).unwrap();
@@ -757,7 +716,7 @@ async fn backup_new_data_directory_restore_round_trip() {
     assert_eq!(verify.state, JobState::Completed, "{:?}", verify.issues);
 
     // A wiped installation: new data and config directories.
-    let (fresh, _fresh_data, fresh_config) = open();
+    let (fresh, _fresh_data, fresh_config) = TempService::quiet().into_parts();
     let Response::RestorePlan { plan } = ok(
         &fresh,
         Request::PreviewRestore {
@@ -848,7 +807,7 @@ async fn backup_new_data_directory_restore_round_trip() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_diagnostics_bundle_holds_exactly_the_preview() {
-    let (service, _data, config) = open();
+    let (service, _data, config) = TempService::quiet().into_parts();
     std::fs::write(config.path().join("accounts.kdl"), ACCOUNTS).unwrap();
     let options = DiagnosticsOptions {
         items: vec![

@@ -2,10 +2,11 @@
 //! the subject fallback, cross-account threads and thread listings.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
-use common::{account, folder, message, seeded_store};
-use nail_api::{AccountId, Address, Flags, FolderId, FolderRole, MessageId, ThreadId};
+use common::{add_inbox, message, seeded_store};
+use nail_api::{AccountId, Address, Flags, FolderId, MessageId, ThreadId};
 use nail_store::{MessageMeta, Store, SyncedMessage};
 use pretty_assertions::assert_eq;
 
@@ -98,23 +99,26 @@ fn missing_parent_still_joins_siblings() {
         .unwrap();
     assert!(same_thread(&store, &["b", "c"]));
     // The tree has a dummy root: both at depth 0.
-    let tree = store.thread_tree(&thread(&store, "b"), None).unwrap();
-    let layout: Vec<(String, u32)> = tree
-        .iter()
-        .map(|e| (e.message.id.0.clone(), e.depth))
-        .collect();
-    assert_eq!(layout, [("b".into(), 0), ("c".into(), 0)]);
+    assert_eq!(layout(&store, "b"), [("b".into(), 0), ("c".into(), 0)]);
     // When the parent arrives later it joins too.
     store
         .merge_messages(&[mail("a", "a1", "inbox", Some("gone@x"), &[], "Lost", 1)])
         .unwrap();
     assert!(same_thread(&store, &["a", "b", "c"]));
-    let tree = store.thread_tree(&thread(&store, "a"), None).unwrap();
-    let layout: Vec<(String, u32)> = tree
+    assert_eq!(
+        layout(&store, "a"),
+        [("a".into(), 0), ("b".into(), 1), ("c".into(), 1)]
+    );
+}
+
+/// `(message, depth)` of the thread tree of `message`'s thread.
+fn layout(store: &Store, message: &str) -> Vec<(String, u32)> {
+    store
+        .thread_tree(&thread(store, message), None)
+        .unwrap()
         .iter()
         .map(|e| (e.message.id.0.clone(), e.depth))
-        .collect();
-    assert_eq!(layout, [("a".into(), 0), ("b".into(), 1), ("c".into(), 1)]);
+        .collect()
 }
 
 #[test]
@@ -139,10 +143,7 @@ fn reference_loops_do_not_break_threading() {
 #[test]
 fn duplicate_message_ids_share_a_thread_and_collapse() {
     let store = seeded_store();
-    store.upsert_account(&account("a2")).unwrap();
-    store
-        .upsert_folder(&folder("inbox2", "a2", "INBOX", None, FolderRole::Inbox))
-        .unwrap();
+    add_inbox(&store, "a2", "inbox2");
     // The same list mail in two accounts, plus a reply.
     store
         .merge_messages(&[
@@ -329,10 +330,7 @@ fn legacy_upserts_thread_by_the_m0_key_and_rethread_is_stable() {
 #[test]
 fn list_threads_summarizes_per_folder() {
     let store = seeded_store();
-    store.upsert_account(&account("a2")).unwrap();
-    store
-        .upsert_folder(&folder("inbox2", "a2", "INBOX", None, FolderRole::Inbox))
-        .unwrap();
+    add_inbox(&store, "a2", "inbox2");
     let mut first = mail("a", "a1", "inbox", Some("a@x"), &[], "Re: Plan", 1);
     first.message.summary.from = Some(Address {
         name: Some("Ada".into()),

@@ -147,41 +147,27 @@ pub enum PimReplayOutcome {
 }
 
 /// Replays PIM operations against servers (the DAV engines in the core).
+impl PimReplayOutcome {
+    /// The outcome of a replayer's run: its own answer, or a retry for a
+    /// transient failure.
+    pub fn of(run: Result<Self, String>) -> Self {
+        run.unwrap_or_else(Self::Retry)
+    }
+}
+
 pub trait PimReplayer: Send + Sync {
     /// Replays one operation; must be idempotent.
     fn replay(&self, op: &QueuedPimOp) -> impl Future<Output = PimReplayOutcome> + Send;
 }
 
-/// Summary of a replay pass.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PimReplayReport {
-    /// Replayed.
-    pub done: Vec<PimOpId>,
-    /// Failed for good (including conflicts).
-    pub failed: Vec<PimOpId>,
-    /// Asked to be retried (ends the source's pass).
-    pub deferred: Vec<PimOpId>,
-}
-
-fn state_str(state: OpState) -> &'static str {
-    match state {
-        OpState::Pending => "pending",
-        OpState::InFlight => "in_flight",
-        OpState::Done => "done",
-        OpState::Failed => "failed",
-    }
-}
+/// Summary of a PIM replay pass.
+pub type PimReplayReport = crate::queue::ReplayReport<PimOpId>;
 
 fn parse_state(text: &str) -> OpState {
-    match text {
-        "in_flight" => OpState::InFlight,
-        "done" => OpState::Done,
-        "failed" => OpState::Failed,
-        _ => OpState::Pending,
-    }
+    OpState::parse(text).unwrap_or(OpState::Pending)
 }
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+use crate::util::SQL_NOW as NOW;
 const OP_COLS: &str = "id, source_id, payload, state, attempts, last_error, created_at, updated_at";
 
 fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedPimOp> {
@@ -297,7 +283,7 @@ impl Store {
             let mut stmt = conn.prepare(&format!(
                 "SELECT {OP_COLS} FROM pim_ops WHERE ?1 IS NULL OR state = ?1 ORDER BY id"
             ))?;
-            let rows = stmt.query_map([state.map(state_str)], op_from_row)?;
+            let rows = stmt.query_map([state.map(OpState::as_str)], op_from_row)?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
@@ -398,7 +384,7 @@ impl Store {
                     "UPDATE pim_ops SET state = ?2, last_error = COALESCE(?3, last_error),
                      updated_at = {NOW} WHERE id = ?1"
                 ),
-                params![op.id.0, state_str(state), error],
+                params![op.id.0, state.as_str(), error],
             )?;
             let Some((href, etag)) = done else {
                 return Ok(());
@@ -509,24 +495,7 @@ impl Store {
         let passes = sources
             .iter()
             .map(|source| self.replay_pim_source(source, replayer, policy));
-        let mut report = PimReplayReport::default();
-        let mut first_error = None;
-        for result in futures_util::future::join_all(passes).await {
-            match result {
-                Ok(r) => {
-                    report.done.extend(r.done);
-                    report.failed.extend(r.failed);
-                    report.deferred.extend(r.deferred);
-                }
-                Err(err) => {
-                    first_error.get_or_insert(err);
-                }
-            }
-        }
-        match first_error {
-            Some(err) => Err(err),
-            None => Ok(report),
-        }
+        PimReplayReport::merge(futures_util::future::join_all(passes).await)
     }
 }
 
@@ -534,11 +503,11 @@ impl Store {
 mod tests {
     use std::sync::Mutex;
 
-    use nail_api::pim::{PimItemKind, PimItemSync};
+    use nail_api::pim::{PimItemKind, PimItemRef, PimItemSync};
 
     use super::*;
+    use crate::pim::PimItem;
     use crate::pim::testing::{self, DAV, DAV_CAL, raw};
-    use crate::pim::{PimItem, item_ref};
 
     /// Replays with scripted outcomes and records what it saw.
     struct Script {
@@ -648,7 +617,7 @@ mod tests {
         // a stays pending until the next sync decides.
         assert_eq!(
             store
-                .pim_object(&item_ref(PimItemKind::Event, "a"))
+                .pim_object(&PimItemRef::new(PimItemKind::Event, "a"))
                 .unwrap()
                 .unwrap()
                 .sync,

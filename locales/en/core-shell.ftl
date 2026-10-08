@@ -72,7 +72,7 @@ list-filter-attachments = Attachments
 ## Favorites (nail_api::views::FavoriteFolder)
 
 favorite-folder-all-inboxes = All inboxes
-favorite-folder-unread = Unread
+favorite-folder-unread = { list-filter-unread }
 favorite-folder-flagged = Flagged
 favorite-folder-snoozed = Snoozed
 favorite-folder-drafts = Drafts

@@ -241,12 +241,7 @@ impl Service {
             let id = draft_id.clone();
             self.inner.store.call(move |s| s.get_draft(&id)).await?
         };
-        if expected
-            .as_deref()
-            .is_some_and(|rev| nail_store::draft_revision(&draft) != rev)
-        {
-            return Err(nail_store::Error::DraftChanged(draft_id.to_string()).into());
-        }
+        nail_store::check_revision(&draft, expected.as_deref())?;
         let (account, identity) = self.identity(&draft.identity_id)?;
         // Sign / encrypt: the request's choice, else the draft's, else the
         // identity's defaults (ADR 0029). Checked now (`no_key`, `locked`)

@@ -28,11 +28,14 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::testing::parses;
+
     #[test]
-    fn customization_widgets_are_registered() {
-        let text = "layout \"x\" extends=\"default\" {\n    window \"main\" {\n        stack {\n            smart-folders editable=#false\n            config-errors hide-when-valid=#true\n        }\n    }\n}\n";
-        crate::parse_layout(text, "layout.kdl").unwrap();
-        let bad = text.replace("editable=#false", "editable=\"no\"");
-        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
+    fn customization_widgets_parse() {
+        assert!(parses(&[
+            "smart-folders editable=#false",
+            "config-errors hide-when-valid=#true"
+        ]));
+        assert!(!parses(&["smart-folders editable=\"no\""]));
     }
 }

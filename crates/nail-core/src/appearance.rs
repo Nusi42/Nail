@@ -109,7 +109,7 @@ fn handle_blocking(
         other => {
             return Err(ApiError::internal(format!(
                 "{} is not an appearance request",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -491,29 +491,14 @@ mod windows {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::TempService;
     use nail_api::ErrorCode;
     use nail_api::appearance::{
         ColorScheme, Density, ManualSystemAppearance, ThemeOverrides, ThemePreferences,
     };
 
-    struct Fixture {
-        service: Service,
-        config_dir: tempfile::TempDir,
-        _data: tempfile::TempDir,
-    }
-
-    fn open() -> Fixture {
-        let data = tempfile::tempdir().unwrap();
-        let config_dir = tempfile::tempdir().unwrap();
-        let mut options = crate::ServiceOptions::new(data.path(), config_dir.path());
-        options.watch_config = false;
-        options.start_engines = false;
-        let service = Service::open(crate::demo::demo_options(options)).unwrap();
-        Fixture {
-            service,
-            config_dir,
-            _data: data,
-        }
+    fn open() -> TempService {
+        TempService::quiet()
     }
 
     fn themes(response: Response) -> Appearance {
@@ -538,7 +523,7 @@ mod tests {
         assert_eq!(appearance.themes.len(), 5);
         assert_eq!(appearance.active, "frost");
 
-        let dir = f.config_dir.path().join("themes");
+        let dir = f.config.path().join("themes");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("ocean.kdl"),
@@ -570,7 +555,7 @@ mod tests {
         );
         assert_eq!(appearance.active, "nocturne");
         assert!(!appearance.settings.follow_system);
-        let text = std::fs::read_to_string(f.config_dir.path().join("theme.kdl")).unwrap();
+        let text = std::fs::read_to_string(f.config.path().join("theme.kdl")).unwrap();
         assert!(text.contains("extends=\"nocturne\""), "{text}");
         let events = drain(&mut rx);
         assert!(

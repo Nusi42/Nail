@@ -53,11 +53,11 @@ attempts: number,
  */
 error: ErrorCode | null, 
 /**
- * Diagnostic detail of the last failed attempt, else `null`.
- */
-message: string | null, 
-/**
  * The user-facing text (Fluent id + arguments) when the core has a more
  * specific one than the error class; else `null` (ADR 0043).
  */
-localized?: LocalizedMessage, };
+localized?: LocalizedMessage, 
+/**
+ * Diagnostic detail of the last failed attempt, else `null`.
+ */
+message: string | null, };

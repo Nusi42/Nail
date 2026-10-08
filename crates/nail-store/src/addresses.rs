@@ -48,8 +48,8 @@ impl Store {
         if prefix.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
-        let pattern = format!("{}%", escape_like(&prefix));
-        let word = format!("% {}%", escape_like(&prefix));
+        let pattern = format!("{}%", crate::util::escape_like(&prefix));
+        let word = format!("% {}%", crate::util::escape_like(&prefix));
         self.with_conn(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT email, name FROM collected_addresses
@@ -67,18 +67,6 @@ impl Store {
             Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
-}
-
-/// Escapes `%`, `_` and `\` for a `LIKE … ESCAPE '\'` pattern.
-fn escape_like(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        if matches!(c, '%' | '_' | '\\') {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
 }
 
 #[cfg(test)]

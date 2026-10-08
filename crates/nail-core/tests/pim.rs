@@ -5,6 +5,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::ok;
+use nail_core::testing::TempService;
+
 use nail_api::pim::calendar::Frequency;
 use nail_api::pim::import::PimImportSource;
 use nail_api::pim::{
@@ -12,24 +17,7 @@ use nail_api::pim::{
     PimTime, Recurrence, RecurrenceRule, Task, TaskFields, TaskStatus,
 };
 use nail_api::{CalendarId, ErrorCode, Request, Response};
-use nail_core::{Service, ServiceOptions};
-
-fn setup() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
-    (service, data, config)
-}
-
-async fn ok(service: &Service, request: Request) -> Response {
-    match service.handle(request).await {
-        Response::Error { code, message, .. } => panic!("{code:?}: {message}"),
-        other => other,
-    }
-}
+use nail_core::Service;
 
 async fn error(service: &Service, request: Request) -> ErrorCode {
     match service.handle(request).await {
@@ -91,9 +79,29 @@ fn saved_event(response: Response) -> (CalendarEvent, Option<CalendarEvent>) {
     }
 }
 
+/// Imports `source` where its items belong (default calendar / book).
+async fn import(
+    service: &Service,
+    source: PimImportSource,
+) -> nail_api::pim::import::PimImportResult {
+    let Response::PimImported { result } = ok(
+        service,
+        Request::ImportPim {
+            source,
+            calendar_id: None,
+            address_book_id: None,
+        },
+    )
+    .await
+    else {
+        panic!("import result expected")
+    };
+    *result
+}
+
 #[tokio::test]
 async fn local_defaults_exist() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let list = calendars(&service).await;
     assert!(list.iter().any(nail_api::Calendar::has_events), "{list:?}");
     assert!(list.iter().any(nail_api::Calendar::has_tasks));
@@ -112,7 +120,7 @@ async fn local_defaults_exist() {
 
 #[tokio::test]
 async fn recurring_events_with_every_scope() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let calendar = default_calendar(&service).await;
     let mut weekly = RecurrenceRule::new(Frequency::Weekly);
     weekly.end = nail_api::pim::RecurrenceEnd::Count { count: 4 };
@@ -264,7 +272,7 @@ async fn recurring_events_with_every_scope() {
 
 #[tokio::test]
 async fn invalid_events_are_refused() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let calendar = default_calendar(&service).await;
     let mut fields = EventFields::new(
         "Backwards",
@@ -305,7 +313,7 @@ async fn invalid_events_are_refused() {
 
 #[tokio::test]
 async fn free_time_skips_busy_events() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let calendar = default_calendar(&service).await;
     ok(
         &service,
@@ -356,7 +364,7 @@ fn saved_task(response: Response) -> Task {
 
 #[tokio::test]
 async fn tasks_with_subtasks_and_recurrence() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let list = default_list(&service).await;
     let parent = saved_task(
         ok(
@@ -483,7 +491,7 @@ fn person(name: &str, email: &str) -> ContactFields {
 
 #[tokio::test]
 async fn contacts_duplicates_merge_groups_and_autocomplete() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let Response::AddressBooks { address_books } =
         ok(&service, Request::ListAddressBooks { source_id: None }).await
     else {
@@ -611,7 +619,7 @@ async fn contacts_duplicates_merge_groups_and_autocomplete() {
 
 #[tokio::test]
 async fn imports_update_by_uid() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\n\
 BEGIN:VEVENT\r\nUID:imp-1@example.org\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261007T090000Z\r\nDTEND:20261007T100000Z\r\nSUMMARY:Imported\r\nX-CUSTOM:kept\r\nEND:VEVENT\r\n\
 BEGIN:VTODO\r\nUID:imp-2@example.org\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:Imported task\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
@@ -625,31 +633,9 @@ BEGIN:VTODO\r\nUID:imp-2@example.org\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:Impo
         panic!()
     };
     assert_eq!((preview.events, preview.tasks), (1, 1));
-    let Response::PimImported { result } = ok(
-        &service,
-        Request::ImportPim {
-            source: source(),
-            calendar_id: None,
-            address_book_id: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
+    let result = import(&service, source()).await;
     assert_eq!((result.created, result.updated), (2, 0));
-    let Response::PimImported { result } = ok(
-        &service,
-        Request::ImportPim {
-            source: source(),
-            calendar_id: None,
-            address_book_id: None,
-        },
-    )
-    .await
-    else {
-        panic!()
-    };
+    let result = import(&service, source()).await;
     assert_eq!((result.created, result.updated), (0, 2));
     let found = instances(&service, "2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z").await;
     assert_eq!(found.len(), 1);
@@ -694,7 +680,7 @@ BEGIN:VTODO\r\nUID:imp-2@example.org\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:Impo
 
 #[tokio::test]
 async fn calendars_and_address_books_are_managed() {
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let Response::CalendarSaved { calendar, op_ids } = ok(
         &service,
         Request::CreateCalendar {
@@ -775,7 +761,7 @@ async fn mcp_client(
 #[tokio::test(flavor = "multi_thread")]
 async fn mcp_clients_read_calendars_after_a_grant() {
     use nail_api::mcp::{McpGrant, McpScope};
-    let (service, _d, _c) = setup();
+    let (service, _d, _c) = TempService::quiet().into_parts();
     let calendar = default_calendar(&service).await;
     ok(
         &service,

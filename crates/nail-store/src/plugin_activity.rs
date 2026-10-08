@@ -9,7 +9,7 @@ use rusqlite::{OptionalExtension, params};
 use crate::error::{Error, Result};
 use crate::store::Store;
 
-const RFC3339: &str = "'%Y-%m-%dT%H:%M:%SZ'";
+use crate::util::SQL_RFC3339 as RFC3339;
 
 /// Longest stored error text (bytes; longer ones are cut).
 pub const MAX_ACTIVITY_ERROR: usize = 2000;
@@ -38,10 +38,7 @@ fn cut(text: &str) -> String {
     if text.len() <= MAX_ACTIVITY_ERROR {
         return text.to_owned();
     }
-    let mut end = MAX_ACTIVITY_ERROR;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(MAX_ACTIVITY_ERROR);
     text[..end].to_owned()
 }
 

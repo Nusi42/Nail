@@ -290,6 +290,12 @@ pub enum TlsMode {
     Plaintext,
 }
 
+wire_names!(TlsMode {
+    Implicit = "implicit",
+    Starttls = "starttls",
+    Plaintext = "plaintext",
+});
+
 /// A mail protocol, for port defaults and discovery results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
@@ -317,8 +323,12 @@ pub fn default_port(protocol: MailProtocol, tls: TlsMode) -> u16 {
         (MailProtocol::Pop3, _) => 110,
         (MailProtocol::Smtp, TlsMode::Implicit) => 465,
         (MailProtocol::Smtp, _) => 587,
-        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, TlsMode::Implicit) => 443,
-        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, _) => 80,
+        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, TlsMode::Implicit) => {
+            crate::hosts::HTTPS_PORT
+        }
+        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, _) => {
+            crate::hosts::HTTP_PORT
+        }
     }
 }
 
@@ -477,6 +487,19 @@ pub enum SaslMechanism {
     /// `EXTERNAL` (client certificate).
     External,
 }
+
+// The accounts.kdl names (`as_str` / `parse`); serde writes the same names
+// except `scram-sha256` for `ScramSha256` (kebab-case of the variant, kept
+// for the protocol), pinned by `wire_names_match_serde`.
+wire_names!(SaslMechanism {
+    Plain = "plain",
+    Login = "login",
+    ScramSha256 = "scram-sha-256",
+    Apop = "apop",
+    Xoauth2 = "xoauth2",
+    Oauthbearer = "oauthbearer",
+    External = "external",
+});
 
 /// Which kind of secret a [`SecretRef`] points to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -802,6 +825,28 @@ pub struct Identity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub send_as: Option<SendAs>,
+}
+
+impl Identity {
+    /// The plain identity of an address: its id is the address, every
+    /// option unset (an account's identity when `accounts.kdl` lists none).
+    pub fn new(account_id: AccountId, email: impl Into<String>) -> Self {
+        let email = email.into();
+        Self {
+            id: IdentityId::new(email.clone()),
+            account_id,
+            email,
+            name: None,
+            reply_to: None,
+            bcc: Vec::new(),
+            signature: None,
+            composer_mode: None,
+            posting: None,
+            mail_style: None,
+            crypto: None,
+            send_as: None,
+        }
+    }
 }
 
 /// How an identity sends for another mailbox (`send-as=` of an identity).
@@ -1467,6 +1512,28 @@ mod tests {
     }
 
     #[test]
+    fn wire_names_match_serde() {
+        crate::labels::assert_wire_names(TlsMode::ALL, TlsMode::as_str);
+        for &m in SaslMechanism::ALL {
+            let serde = serde_json::to_value(m).unwrap();
+            let expected = if m == SaslMechanism::ScramSha256 {
+                "scram-sha256"
+            } else {
+                m.as_str()
+            };
+            assert_eq!(serde, serde_json::json!(expected), "{m:?}");
+        }
+        crate::labels::assert_wire_names(FolderRole::ALL, FolderRole::as_str);
+        assert_eq!(TlsMode::parse("starttls"), Some(TlsMode::Starttls));
+        assert_eq!(
+            SaslMechanism::parse("scram-sha-256"),
+            Some(SaslMechanism::ScramSha256)
+        );
+        assert_eq!(FolderRole::parse("junk"), Some(FolderRole::Junk));
+        assert_eq!(FolderRole::parse("spam"), None);
+    }
+
+    #[test]
     fn ports_default_by_tls() {
         assert_eq!(default_port(MailProtocol::Imap, TlsMode::Implicit), 993);
         assert_eq!(default_port(MailProtocol::Imap, TlsMode::Starttls), 143);
@@ -1478,27 +1545,28 @@ mod tests {
 
     #[test]
     fn sync_policy_resolution() {
+        let folder = |folder, bodies, enabled, idle| FolderPolicy {
+            folder,
+            bodies,
+            enabled,
+            idle,
+        };
         let policy = SyncPolicy {
             bodies: Some(BodyPolicy::HeadersOnly),
             folders: vec![
-                FolderPolicy {
-                    folder: FolderMatch::Role(FolderRole::Inbox),
-                    bodies: Some(BodyPolicy::Full),
-                    enabled: None,
-                    idle: None,
-                },
-                FolderPolicy {
-                    folder: FolderMatch::Path("Lists/rust".into()),
-                    bodies: Some(BodyPolicy::Recent { days: 30 }),
-                    enabled: None,
-                    idle: Some(true),
-                },
-                FolderPolicy {
-                    folder: FolderMatch::Role(FolderRole::Junk),
-                    bodies: None,
-                    enabled: Some(false),
-                    idle: None,
-                },
+                folder(
+                    FolderMatch::Role(FolderRole::Inbox),
+                    Some(BodyPolicy::Full),
+                    None,
+                    None,
+                ),
+                folder(
+                    FolderMatch::Path("Lists/rust".into()),
+                    Some(BodyPolicy::Recent { days: 30 }),
+                    None,
+                    Some(true),
+                ),
+                folder(FolderMatch::Role(FolderRole::Junk), None, Some(false), None),
             ],
         };
         let inbox = policy.effective("INBOX", FolderRole::Inbox);
@@ -1547,18 +1615,8 @@ mod tests {
     fn accounts_config_lookups() {
         let mut account = sample();
         account.identities.push(Identity {
-            id: "ada@work.example".into(),
-            account_id: "work".into(),
-            email: "ada@work.example".into(),
             name: Some("Ada".into()),
-            reply_to: None,
-            bcc: vec![],
-            signature: None,
-            composer_mode: None,
-            posting: None,
-            mail_style: None,
-            crypto: None,
-            send_as: None,
+            ..Identity::new("work".into(), "ada@work.example")
         });
         let config = AccountsConfig {
             accounts: vec![account],

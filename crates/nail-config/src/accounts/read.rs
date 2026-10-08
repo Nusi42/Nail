@@ -12,8 +12,10 @@ use nail_api::accounts::{
     SaslMechanism, SecretRef, SendAs, SendAsMode, ServerEndpoint, Signature, SmtpOptions,
     SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
+use nail_api::engine::AdaptivePoll;
 use nail_api::exchange::{ExchangeConfigIssue, ExchangeEngine, ExchangeOptions, GRAPH_HOST};
 use nail_api::gmail::{GMAIL_API_HOST, GmailOptions};
+use nail_api::hosts::is_loopback_host;
 use nail_api::pim::source::{MIN_REFRESH_MINUTES, is_valid_pim_source_id};
 use nail_api::pim::{
     PimSourceConfig, PimSourceSettings, has_url_scheme, is_color, is_https_or_loopback_url,
@@ -235,6 +237,62 @@ impl Reader<'_, '_> {
         }
     }
 
+    /// Refuses a child of `parent` that is not an `expected` node.
+    fn expect_child(
+        &self,
+        child: &KdlNode,
+        parent: &str,
+        expected: &str,
+    ) -> Result<(), ConfigError> {
+        if name(child) == expected {
+            return Ok(());
+        }
+        Err(self.src.node_err(
+            child,
+            msg("config-unknown-child")
+                .arg("node", name(child))
+                .arg("parent", parent)
+                .arg("expected", expected),
+        ))
+    }
+
+    /// `host="…"`: a host name or address (no whitespace, no `/`).
+    fn host_prop(&self, node: &KdlNode) -> Result<Option<String>, ConfigError> {
+        let Some((h, entry)) = prop_str(self.src, node, "host")? else {
+            return Ok(None);
+        };
+        if h.is_empty() || h.chars().any(|c| c.is_whitespace() || c.is_control()) || h.contains('/')
+        {
+            return Err(self.src.entry_err(
+                entry,
+                msg("config-expected-host")
+                    .arg("what", "`host`")
+                    .arg("found", format!("{h:?}")),
+            ));
+        }
+        Ok(Some(h.to_owned()))
+    }
+
+    /// `tls="implicit" | "starttls" | "plaintext"`.
+    fn tls_prop(&self, node: &KdlNode) -> Result<Option<TlsMode>, ConfigError> {
+        let Some((t, entry)) = prop_str(self.src, node, "tls")? else {
+            return Ok(None);
+        };
+        TlsMode::parse(t).map(Some).ok_or_else(|| {
+            let choices: Vec<String> = TlsMode::ALL
+                .iter()
+                .map(|m| format!("{:?}", m.as_str()))
+                .collect();
+            self.src.entry_err(
+                entry,
+                msg("config-expected-one-of")
+                    .arg("what", "`tls`")
+                    .arg("choices", choices.join(", "))
+                    .arg("found", format!("{t:?}")),
+            )
+        })
+    }
+
     fn prop_u32_range(
         &self,
         node: &KdlNode,
@@ -280,7 +338,7 @@ impl Reader<'_, '_> {
         match prop_str(self.src, node, key)? {
             None => Ok(None),
             Some((text, entry)) => {
-                if is_allowed_url(text) {
+                if is_https_or_loopback_url(text) {
                     Ok(Some(text.to_owned()))
                 } else {
                     Err(self.src.entry_err(
@@ -487,20 +545,7 @@ impl Reader<'_, '_> {
             return Err(self.src.node_err(child, msg(id)));
         }
         if identities.is_empty() {
-            identities.push(Identity {
-                id: IdentityId::new(email.clone()),
-                account_id: id.clone(),
-                email: email.clone(),
-                name: None,
-                reply_to: None,
-                bcc: Vec::new(),
-                signature: None,
-                composer_mode: None,
-                posting: None,
-                mail_style: None,
-                crypto: None,
-                send_as: None,
-            });
+            identities.push(Identity::new(id.clone(), email.clone()));
         }
         let mut seen = HashSet::new();
         for (identity, child) in identities
@@ -539,38 +584,8 @@ impl Reader<'_, '_> {
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 0)?;
         check_no_children(self.src, node)?;
-        let host = match prop_str(self.src, node, "host")? {
-            None => None,
-            Some((h, entry)) => {
-                if h.is_empty()
-                    || h.chars().any(|c| c.is_whitespace() || c.is_control())
-                    || h.contains('/')
-                {
-                    return Err(self.src.entry_err(
-                        entry,
-                        msg("config-expected-host")
-                            .arg("what", "`host`")
-                            .arg("found", format!("{h:?}")),
-                    ));
-                }
-                Some(h.to_owned())
-            }
-        };
-        let tls = match prop_str(self.src, node, "tls")? {
-            None => None,
-            Some(("implicit", _)) => Some(TlsMode::Implicit),
-            Some(("starttls", _)) => Some(TlsMode::Starttls),
-            Some(("plaintext", _)) => Some(TlsMode::Plaintext),
-            Some((t, entry)) => {
-                return Err(self.src.entry_err(
-                    entry,
-                    msg("config-expected-one-of")
-                        .arg("what", "`tls`")
-                        .arg("choices", "\"implicit\", \"starttls\", \"plaintext\"")
-                        .arg("found", format!("{t:?}")),
-                ));
-            }
-        };
+        let host = self.host_prop(node)?;
+        let tls = self.tls_prop(node)?;
         let port = self
             .prop_u32_range(node, "port", 1, 65535)?
             .map(|p| u16::try_from(p).unwrap_or(u16::MAX));
@@ -673,27 +688,16 @@ impl Reader<'_, '_> {
         self.check_props(node, allowed)?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 0)?;
-        let host = match prop_str(self.src, node, "host")? {
-            Some((h, entry)) => {
-                if h.is_empty()
-                    || h.chars().any(|c| c.is_whitespace() || c.is_control())
-                    || h.contains('/')
-                {
-                    return Err(self.src.entry_err(
-                        entry,
-                        msg("config-expected-host")
-                            .arg("what", "`host`")
-                            .arg("found", format!("{h:?}")),
-                    ));
-                }
-                h.to_owned()
-            }
+        let host = match self.host_prop(node)? {
+            Some(h) => h,
             // The Gmail API has one host (M3b).
             None if protocol == MailProtocol::Gmail => GMAIL_API_HOST.to_owned(),
             // Graph has one host; EWS takes the host of its `url` (M3c).
             None if protocol == MailProtocol::Graph => GRAPH_HOST.to_owned(),
             None if protocol == MailProtocol::Ews => {
-                match prop_str(self.src, node, "url")?.and_then(|(u, _)| url_host(u)) {
+                match prop_str(self.src, node, "url")?
+                    .and_then(|(u, _)| nail_api::hosts::url_host(u))
+                {
                     Some(host) => host,
                     None => {
                         return Err(self.src.node_err(node, msg("config-exchange-needs-host")));
@@ -709,38 +713,14 @@ impl Reader<'_, '_> {
                 ));
             }
         };
-        let tls = match prop_str(self.src, node, "tls")? {
-            None => TlsMode::Implicit,
-            Some((t, entry)) => match t {
-                "implicit" => TlsMode::Implicit,
-                "starttls" => TlsMode::Starttls,
-                "plaintext" => TlsMode::Plaintext,
-                _ => {
-                    return Err(self.src.entry_err(
-                        entry,
-                        msg("config-expected-one-of")
-                            .arg("what", "`tls`")
-                            .arg("choices", "\"implicit\", \"starttls\", \"plaintext\"")
-                            .arg("found", format!("{t:?}")),
-                    ));
-                }
-            },
-        };
+        let tls = self.tls_prop(node)?.unwrap_or(TlsMode::Implicit);
         let port = match self.prop_u32_range(node, "port", 1, 65535)? {
             Some(p) => u16::try_from(p).unwrap_or(u16::MAX),
             None => default_port(protocol, tls),
         };
         let mut auth: Option<(AuthConfig, Option<String>)> = None;
         for child in children(node) {
-            if name(child) != "auth" {
-                return Err(self.src.node_err(
-                    child,
-                    msg("config-unknown-child")
-                        .arg("node", name(child))
-                        .arg("parent", name(node))
-                        .arg("expected", "auth"),
-                ));
-            }
+            self.expect_child(child, name(node), "auth")?;
             if auth.is_some() {
                 return Err(self
                     .src
@@ -790,9 +770,9 @@ impl Reader<'_, '_> {
             let Some((text, entry)) = prop_str(this.src, node, "mechanism")? else {
                 return Ok(None);
             };
-            let parsed = parse_mechanism(text).filter(|m| allowed.contains(m));
+            let parsed = SaslMechanism::parse(text).filter(|m| allowed.contains(m));
             parsed.map(Some).ok_or_else(|| {
-                let names: Vec<&str> = allowed.iter().map(|m| mechanism_name(*m)).collect();
+                let names: Vec<&str> = allowed.iter().map(|m| m.as_str()).collect();
                 this.src.entry_err(
                     entry,
                     msg("config-expected-one-of")
@@ -918,20 +898,22 @@ impl Reader<'_, '_> {
     }
 
     fn gmail_options(&self, node: &KdlNode) -> Result<GmailOptions, ConfigError> {
+        let (poll_interval_secs, max_poll_interval_secs) = self.api_poll_intervals(node)?;
         Ok(GmailOptions {
-            poll_interval_secs: self.prop_u32_range(
-                node,
-                "poll-interval",
-                GmailOptions::MIN_POLL_INTERVAL_SECS,
-                86_400,
-            )?,
-            max_poll_interval_secs: self.prop_u32_range(
-                node,
-                "max-poll-interval",
-                GmailOptions::MIN_POLL_INTERVAL_SECS,
-                86_400,
-            )?,
+            poll_interval_secs,
+            max_poll_interval_secs,
         })
+    }
+
+    /// `poll-interval=` / `max-poll-interval=` of an API account (Gmail,
+    /// Exchange; [`AdaptivePoll::range`]).
+    fn api_poll_intervals(
+        &self,
+        node: &KdlNode,
+    ) -> Result<(Option<u32>, Option<u32>), ConfigError> {
+        let interval =
+            |key: &str| self.prop_u32_range(node, key, AdaptivePoll::LOWEST_SECS, 86_400);
+        Ok((interval("poll-interval")?, interval("max-poll-interval")?))
     }
 
     /// The options of an `exchange` node (M3c; the server / auth rules
@@ -949,21 +931,12 @@ impl Reader<'_, '_> {
                 )
             })?,
         };
+        let (poll_interval_secs, max_poll_interval_secs) = self.api_poll_intervals(node)?;
         Ok(ExchangeOptions {
             engine,
             url: prop_str(self.src, node, "url")?.map(|(u, _)| u.to_owned()),
-            poll_interval_secs: self.prop_u32_range(
-                node,
-                "poll-interval",
-                ExchangeOptions::MIN_POLL_INTERVAL_SECS,
-                86_400,
-            )?,
-            max_poll_interval_secs: self.prop_u32_range(
-                node,
-                "max-poll-interval",
-                ExchangeOptions::MIN_POLL_INTERVAL_SECS,
-                86_400,
-            )?,
+            poll_interval_secs,
+            max_poll_interval_secs,
             streaming: self.prop_bool(node, "streaming")?,
             server_rules: self.prop_bool(node, "server-rules")?,
         })
@@ -1300,15 +1273,7 @@ impl Reader<'_, '_> {
         let bodies = self.body_policy(node)?;
         let mut folders = Vec::new();
         for child in children(node) {
-            if name(child) != "folder" {
-                return Err(self.src.node_err(
-                    child,
-                    msg("config-unknown-child")
-                        .arg("node", name(child))
-                        .arg("parent", "sync")
-                        .arg("expected", "folder"),
-                ));
-            }
+            self.expect_child(child, "sync", "folder")?;
             self.check_props(
                 child,
                 &["path", "role", "bodies", "days", "enabled", "idle"],
@@ -1343,15 +1308,18 @@ impl Reader<'_, '_> {
                 }
                 Ok(FolderMatch::Path(p.to_owned()))
             }
-            (None, Some((r, entry))) => parse_role(r).map(FolderMatch::Role).ok_or_else(|| {
-                self.src.entry_err(
-                    entry,
-                    msg("config-expected-one-of")
-                        .arg("what", "`role`")
-                        .arg("choices", "inbox, sent, drafts, archive, junk, trash")
-                        .arg("found", format!("{r:?}")),
-                )
-            }),
+            (None, Some((r, entry))) => FolderRole::parse(r)
+                .filter(|r| *r != FolderRole::Other)
+                .map(FolderMatch::Role)
+                .ok_or_else(|| {
+                    self.src.entry_err(
+                        entry,
+                        msg("config-expected-one-of")
+                            .arg("what", "`role`")
+                            .arg("choices", "inbox, sent, drafts, archive, junk, trash")
+                            .arg("found", format!("{r:?}")),
+                    )
+                }),
             (Some(_), Some((_, entry))) => {
                 Err(self.src.entry_err(entry, msg("config-path-or-role")))
             }
@@ -1537,15 +1505,7 @@ impl Reader<'_, '_> {
         }
         let mut sources = Vec::new();
         for child in children(node) {
-            if name(child) != "folder" {
-                return Err(self.src.node_err(
-                    child,
-                    msg("config-unknown-child")
-                        .arg("node", name(child))
-                        .arg("parent", "map")
-                        .arg("expected", "folder"),
-                ));
-            }
+            self.expect_child(child, "map", "folder")?;
             self.check_props(child, &["account", "path"])?;
             check_max_args(self.src, child, 0)?;
             check_no_children(self.src, child)?;
@@ -1622,15 +1582,7 @@ impl Reader<'_, '_> {
         }
         let mut scopes = Vec::new();
         for child in children(node) {
-            if name(child) != "scopes" {
-                return Err(self.src.node_err(
-                    child,
-                    msg("config-unknown-child")
-                        .arg("node", name(child))
-                        .arg("parent", "oauth-provider")
-                        .arg("expected", "scopes"),
-                ));
-            }
+            self.expect_child(child, "oauth-provider", "scopes")?;
             self.check_props(child, &[])?;
             check_no_children(self.src, child)?;
             for entry in args(child) {
@@ -1720,15 +1672,7 @@ impl Reader<'_, '_> {
         let mut auth = None;
         let mut provider = None;
         for child in children(node) {
-            if name(child) != "auth" {
-                return Err(self.src.node_err(
-                    child,
-                    msg("config-unknown-child")
-                        .arg("node", name(child))
-                        .arg("parent", kind)
-                        .arg("expected", "auth"),
-                ));
-            }
+            self.expect_child(child, kind, "auth")?;
             if auth.is_some() {
                 return Err(self
                     .src
@@ -1842,112 +1786,10 @@ impl Reader<'_, '_> {
     }
 }
 
-fn parse_role(text: &str) -> Option<FolderRole> {
-    Some(match text {
-        "inbox" => FolderRole::Inbox,
-        "sent" => FolderRole::Sent,
-        "drafts" => FolderRole::Drafts,
-        "archive" => FolderRole::Archive,
-        "junk" => FolderRole::Junk,
-        "trash" => FolderRole::Trash,
-        _ => return None,
-    })
-}
-
-/// The host of an `http(s)://` URL (`exchange url=…`, M3c).
-fn url_host(url: &str) -> Option<String> {
-    let rest = url.split_once("://")?.1;
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    let host = if let Some(v6) = host.strip_prefix('[') {
-        format!("[{}]", v6.split(']').next()?)
-    } else {
-        host.split(':').next()?.to_owned()
-    };
-    (!host.is_empty()).then_some(host)
-}
-
-/// Whether `host` is a loopback host (`localhost`, `127.0.0.1`, `::1`):
-/// the only hosts a `gmail` node may reach without TLS (mock servers).
-fn is_loopback_host(host: &str) -> bool {
-    matches!(
-        host.to_ascii_lowercase().as_str(),
-        "localhost" | "127.0.0.1" | "::1" | "[::1]"
-    )
-}
-
-pub(crate) fn role_name(role: FolderRole) -> &'static str {
-    match role {
-        FolderRole::Inbox => "inbox",
-        FolderRole::Sent => "sent",
-        FolderRole::Drafts => "drafts",
-        FolderRole::Archive => "archive",
-        FolderRole::Junk => "junk",
-        FolderRole::Trash => "trash",
-        FolderRole::Other => "other",
-    }
-}
-
-fn parse_mechanism(text: &str) -> Option<SaslMechanism> {
-    Some(match text {
-        "plain" => SaslMechanism::Plain,
-        "login" => SaslMechanism::Login,
-        "scram-sha-256" => SaslMechanism::ScramSha256,
-        "apop" => SaslMechanism::Apop,
-        "xoauth2" => SaslMechanism::Xoauth2,
-        "oauthbearer" => SaslMechanism::Oauthbearer,
-        "external" => SaslMechanism::External,
-        _ => return None,
-    })
-}
-
-pub(crate) fn mechanism_name(mechanism: SaslMechanism) -> &'static str {
-    match mechanism {
-        SaslMechanism::Plain => "plain",
-        SaslMechanism::Login => "login",
-        SaslMechanism::ScramSha256 => "scram-sha-256",
-        SaslMechanism::Apop => "apop",
-        SaslMechanism::Xoauth2 => "xoauth2",
-        SaslMechanism::Oauthbearer => "oauthbearer",
-        SaslMechanism::External => "external",
-    }
-}
-
-/// A light plausibility check: `local@domain` with a dot-free or dotted
-/// domain, no whitespace. Real validation happens at the server.
+/// A light plausibility check ([`nail_api::pim::is_plausible_email`]) that
+/// also refuses `<` and `>`. Real validation happens at the server.
 pub(crate) fn is_plausible_email(text: &str) -> bool {
-    let Some((local, domain)) = text.rsplit_once('@') else {
-        return false;
-    };
-    !local.is_empty()
-        && !domain.is_empty()
-        && !domain.starts_with('.')
-        && !domain.ends_with('.')
-        && !text
-            .chars()
-            .any(|c| c.is_whitespace() || c.is_control() || c == '<' || c == '>')
-}
-
-/// `https://…`, or `http://` for loopback hosts only (mock servers in tests).
-fn is_allowed_url(text: &str) -> bool {
-    if text.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return false;
-    }
-    if let Some(rest) = text.strip_prefix("https://") {
-        return !rest.is_empty() && !rest.starts_with('/');
-    }
-    if let Some(rest) = text.strip_prefix("http://") {
-        let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
-        let host = host.rsplit_once(':').map_or(host, |(h, port)| {
-            if port.chars().all(|c| c.is_ascii_digit()) {
-                h
-            } else {
-                host
-            }
-        });
-        return matches!(host, "localhost" | "127.0.0.1" | "[::1]");
-    }
-    false
+    nail_api::pim::is_plausible_email(text) && !text.contains(['<', '>'])
 }
 
 #[cfg(test)]
@@ -1963,41 +1805,5 @@ mod tests {
         assert!(!is_plausible_email("ada@"));
         assert!(!is_plausible_email("ada @example.org"));
         assert!(!is_plausible_email("ada@.org"));
-    }
-
-    #[test]
-    fn urls() {
-        assert!(is_allowed_url("https://accounts.example/o/auth"));
-        assert!(is_allowed_url("http://127.0.0.1:8080/token"));
-        assert!(is_allowed_url("http://localhost/token"));
-        assert!(!is_allowed_url("http://example.org/token"));
-        assert!(!is_allowed_url("ftp://example.org"));
-        assert!(!is_allowed_url("https://"));
-    }
-
-    #[test]
-    fn names_round_trip() {
-        for m in [
-            SaslMechanism::Plain,
-            SaslMechanism::Login,
-            SaslMechanism::ScramSha256,
-            SaslMechanism::Apop,
-            SaslMechanism::Xoauth2,
-            SaslMechanism::Oauthbearer,
-            SaslMechanism::External,
-        ] {
-            assert_eq!(parse_mechanism(mechanism_name(m)), Some(m));
-        }
-        for r in [
-            FolderRole::Inbox,
-            FolderRole::Sent,
-            FolderRole::Drafts,
-            FolderRole::Archive,
-            FolderRole::Junk,
-            FolderRole::Trash,
-        ] {
-            assert_eq!(parse_role(role_name(r)), Some(r));
-        }
-        assert_eq!(parse_role("other"), None);
     }
 }

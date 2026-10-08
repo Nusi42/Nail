@@ -3,7 +3,10 @@
 
 #![cfg(test)]
 
-use std::time::Duration;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::next_event_except;
+use nail_core::testing::{TempService, plain_options};
 
 use nail_api::{
     AccountId, ErrorCode, Event, FolderId, FolderRole, MessageId, PROTOCOL_VERSION, Request,
@@ -85,15 +88,7 @@ fn error_code(response: Response) -> ErrorCode {
 /// The next event, skipping the editors' history updates (M5d: sent after
 /// every change of the config files).
 async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    loop {
-        let event = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .expect("no event within 10 s")
-            .unwrap();
-        if !matches!(event, Event::EditHistoryChanged { .. }) {
-            return event;
-        }
-    }
+    next_event_except(rx, |e| matches!(e, Event::EditHistoryChanged { .. })).await
 }
 
 #[tokio::test]
@@ -342,12 +337,10 @@ async fn sync_now_on_a_local_account_finishes_at_once() {
 
 #[tokio::test]
 async fn invalid_config_at_start_falls_back_and_is_reported() {
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    std::fs::write(config_dir.path().join("theme.kdl"), BROKEN_THEME).unwrap();
-    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
-    options.watch_config = false;
-    let service = Service::open(options).unwrap();
+    let _data_dir = tempfile::tempdir().unwrap();
+    let _config_dir = tempfile::tempdir().unwrap();
+    let temp = TempService::open_with(&[("theme.kdl", BROKEN_THEME)], plain_options);
+    let service = temp.service.clone();
 
     let errors = service.config_error_events();
     let first: Vec<_> = errors

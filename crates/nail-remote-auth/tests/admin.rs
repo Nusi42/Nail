@@ -31,10 +31,7 @@ async fn set_password_hashes_and_ends_other_sessions() {
     assert!(hash.starts_with("$argon2id$"));
     assert!(!hash.contains(PASSWORD));
 
-    let mut phone = h.paired(&ada, "192.0.2.10").await;
-    let mut laptop = h.paired(&ada, "192.0.2.11").await;
-    let phone_ctx = phone.resolve(&h).unwrap();
-    let laptop_ctx = laptop.resolve(&h).unwrap();
+    let ((mut phone, phone_ctx), (mut laptop, laptop_ctx)) = h.two_sessions(&ada).await;
     h.events();
 
     // Changed from the phone: the laptop is logged out, the phone stays.

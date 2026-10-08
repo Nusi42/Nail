@@ -131,10 +131,7 @@ pub(crate) fn audited_path(path: &str) -> String {
     if path == MCP_PATH || path == WHOAMI_PATH || path.len() <= MAX {
         return path.to_owned();
     }
-    let mut end = MAX;
-    while !path.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = path.floor_char_boundary(MAX);
     format!("{}…", &path[..end])
 }
 

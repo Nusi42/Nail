@@ -143,6 +143,7 @@ pub mod engine;
 pub mod error;
 pub mod exchange;
 pub mod gmail;
+pub mod hosts;
 pub mod icons;
 pub mod ids;
 pub mod launch;
@@ -161,6 +162,7 @@ pub mod protocol;
 pub mod recovery;
 pub mod remote;
 pub mod remote_content;
+pub mod request_groups;
 pub mod rules;
 pub mod scheduling;
 pub mod search;
@@ -168,6 +170,8 @@ pub mod security;
 pub mod sieve;
 pub mod smartcard;
 pub mod sync;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod triage;
 pub mod ts_constants;
 pub mod ui_state;
@@ -190,9 +194,9 @@ pub use compose::{
 };
 pub use config::SourceLocation;
 pub use config::layout::{
-    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LayoutPreset,
-    MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout, SettingsGroup, SettingsSection,
-    ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
+    ActionDef, ActionItem, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode,
+    LayoutPreset, MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout, SettingsGroup,
+    SettingsSection, ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
 };
 pub use config::theme::{
     AncestorSelector, HtmlDarkMode, Icon, MessageDisplay, PartCondition, PartRule, RawCss,
@@ -278,9 +282,7 @@ pub const TS_INDEX_FILE: &str = "index.ts";
 pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     use ts_rs::TS;
 
-    let cfg = ts_rs::Config::new()
-        .with_out_dir(out_dir)
-        .with_large_int("number");
+    let cfg = ts_config(out_dir);
 
     // Roots: everything reachable from these is exported as a dependency.
     // Types clients may name directly but that are not reachable are listed too.
@@ -459,9 +461,7 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
 pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     use ts_rs::TS;
 
-    let cfg = ts_rs::Config::new()
-        .with_out_dir(out_dir)
-        .with_large_int("number");
+    let cfg = ts_config(out_dir);
     PluginManifest::export_all(&cfg)?;
     plugins::PluginManifestIssue::export_all(&cfg)?;
     PluginUiNode::export_all(&cfg)?;
@@ -489,6 +489,14 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
         .map_err(std::io::Error::other)?
         .write(out_dir)?;
     write_index(out_dir)
+}
+
+/// The ts-rs settings of both exports: files below `out_dir`, 64-bit
+/// integers as `number`.
+fn ts_config(out_dir: &Path) -> ts_rs::Config {
+    ts_rs::Config::new()
+        .with_out_dir(out_dir)
+        .with_large_int("number")
 }
 
 /// Writes `index.ts` re-exporting every generated file below `out_dir`;

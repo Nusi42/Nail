@@ -67,6 +67,11 @@ pub enum Orientation {
     Vertical,
 }
 
+wire_names!(Orientation {
+    Horizontal = "horizontal",
+    Vertical = "vertical",
+});
+
 /// A node of a window tree: a container or a widget.
 ///
 /// Serialized with a `type` tag: `"split"`, `"stack"`, `"tabs"` or `"widget"`.
@@ -331,24 +336,46 @@ impl ItemDisplay {
     }
 }
 
+/// What a toolbar button or menu item runs and how it shows
+/// ([`ToolbarItem::Action`], [`MenuItem::Action`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ActionItem {
+    /// Action id.
+    pub action: String,
+    /// Action arguments.
+    #[serde(default)]
+    pub args: Vec<Value>,
+    /// Label override, `null` = the action's label.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Icon override (a Lucide name or a theme icon, [`crate::icons`]),
+    /// `null` = the action's icon.
+    #[serde(default)]
+    pub icon: Option<String>,
+}
+
+impl ActionItem {
+    /// The action without arguments or overrides.
+    pub fn new(action: impl Into<String>) -> Self {
+        Self {
+            action: action.into(),
+            args: Vec::new(),
+            label: None,
+            icon: None,
+        }
+    }
+}
+
 /// An entry of a toolbar.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ToolbarItem {
     /// A button invoking an action.
     Action {
-        /// Action id.
-        action: String,
-        /// Action arguments.
-        #[serde(default)]
-        args: Vec<Value>,
-        /// Label override, `null` = the action's label.
-        #[serde(default)]
-        label: Option<String>,
-        /// Icon override (a Lucide name or a theme icon, [`crate::icons`]),
-        /// `null` = the action's icon.
-        #[serde(default)]
-        icon: Option<String>,
+        /// The action and its overrides (on the wire beside `rank` /
+        /// `display`).
+        #[serde(flatten)]
+        item: ActionItem,
         /// Overflow rank (M5b): when the bar is too narrow, items move into
         /// "More" highest rank first (`rank=1` stays longest); unranked
         /// items go before every ranked one, from the end of the bar
@@ -383,14 +410,50 @@ pub enum ToolbarItem {
     Separator,
 }
 
+/// Every action id that key bindings, toolbars (with their "More" menus),
+/// menus (with submenus) and rail items name, in that order, repeats kept:
+/// the actions a layout must define.
+pub fn used_actions<'a>(
+    keys: &'a [KeyBinding],
+    toolbars: impl IntoIterator<Item = &'a Vec<ToolbarItem>>,
+    menus: impl IntoIterator<Item = &'a Vec<MenuItem>>,
+    rail: &'a [RailItem],
+) -> Vec<&'a str> {
+    fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
+        for item in items {
+            match item {
+                MenuItem::Action(item) => out.push(&item.action),
+                MenuItem::Submenu { items, .. } => menu_actions(items, out),
+                MenuItem::Separator | MenuItem::Header { .. } => {}
+            }
+        }
+    }
+    let mut used: Vec<&str> = keys.iter().map(|k| k.action.as_str()).collect();
+    for items in toolbars {
+        for item in items {
+            match item {
+                ToolbarItem::Action { item, .. } => used.push(&item.action),
+                ToolbarItem::More { items, .. } => menu_actions(items, &mut used),
+                ToolbarItem::Spacer | ToolbarItem::Separator => {}
+            }
+        }
+    }
+    for items in menus {
+        menu_actions(items, &mut used);
+    }
+    for item in rail {
+        if let RailItem::Action { action, .. } = item {
+            used.push(action);
+        }
+    }
+    used
+}
+
 impl ToolbarItem {
     /// A plain action item (no overrides, rank or display).
     pub fn action(action: impl Into<String>) -> Self {
         Self::Action {
-            action: action.into(),
-            args: Vec::new(),
-            label: None,
-            icon: None,
+            item: ActionItem::new(action),
             rank: None,
             display: None,
         }
@@ -443,20 +506,7 @@ pub struct ToolbarSettings {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum MenuItem {
     /// An item invoking an action.
-    Action {
-        /// Action id.
-        action: String,
-        /// Action arguments.
-        #[serde(default)]
-        args: Vec<Value>,
-        /// Label override, `null` = the action's label.
-        #[serde(default)]
-        label: Option<String>,
-        /// Icon override (a Lucide name or a theme icon, [`crate::icons`]),
-        /// `null` = the action's icon.
-        #[serde(default)]
-        icon: Option<String>,
-    },
+    Action(ActionItem),
     /// A separator line.
     Separator,
     /// A nested menu.

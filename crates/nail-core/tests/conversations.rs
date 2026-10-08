@@ -5,57 +5,32 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{NIGHTINGALE as SUBJECT, demo_folder, remote_session};
+use nail_api::Folder;
+use nail_core::testing::TempService;
+
 use nail_api::remote::RemoteAccessPreset;
-use nail_api::remote::{AuthRequest, AuthResponse, DEVICE_COOKIE, RemoteGrant, SESSION_COOKIE};
 use nail_api::{
-    AccountId, ConversationMessage, ErrorCode, Folder, FolderId, FolderRole, Request, Response,
-    ThreadSummary,
+    ConversationMessage, ErrorCode, FolderId, FolderRole, Request, Response, ThreadSummary,
 };
-use nail_core::demo::{DEMO_ACCOUNT_ID, demo_options, seed_demo};
-use nail_core::{Service, ServiceOptions};
-use nail_remote_auth::{ClientMeta, Cookies, RemoteSessionCtx};
+use nail_core::demo::{DEMO_ACCOUNT_ID, seed_demo};
 use pretty_assertions::assert_eq;
 
 const ME: &str = "sam@nail.example";
-const SUBJECT: &str = "Project Nightingale kickoff";
 
-struct Fixture {
-    service: Service,
-    _data: tempfile::TempDir,
-    _config: tempfile::TempDir,
-}
+type Fixture = TempService;
 
 fn setup() -> Fixture {
-    setup_with(None)
+    TempService::seeded()
 }
 
 /// The demo data, optionally with an `accounts.kdl`.
-fn setup_with(accounts: Option<&str>) -> Fixture {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    if let Some(accounts) = accounts {
-        std::fs::write(config.path().join("accounts.kdl"), accounts).unwrap();
-    }
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(demo_options(options)).unwrap();
-    seed_demo(service.store(), service.blobs()).unwrap();
-    Fixture {
-        service,
-        _data: data,
-        _config: config,
-    }
-}
-
-fn folder(f: &Fixture, role: FolderRole) -> Folder {
-    f.service
-        .store()
-        .list_folders(&AccountId::new(DEMO_ACCOUNT_ID))
-        .unwrap()
-        .into_iter()
-        .find(|folder| folder.role == role)
-        .unwrap()
+fn setup_with(accounts: &str) -> Fixture {
+    let temp = TempService::quiet_with(&[("accounts.kdl", accounts)], |_| {});
+    seed_demo(temp.service.store(), temp.service.blobs()).unwrap();
+    temp
 }
 
 fn threads(response: Response) -> (u32, Vec<ThreadSummary>) {
@@ -88,11 +63,44 @@ fn from_me(messages: &[ConversationMessage]) -> Vec<bool> {
     messages.iter().map(|m| m.from_me).collect()
 }
 
+/// The inbox and its Nightingale row.
+async fn inbox_row(f: &Fixture) -> (Folder, ThreadSummary) {
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let (_, rows) = threads(f.service.handle(list(&inbox.id)).await);
+    let row = nightingale(&rows).clone();
+    (inbox, row)
+}
+
+/// The participant of `row` with this address.
+fn participant<'a>(row: &'a ThreadSummary, email: &str) -> &'a nail_api::ThreadParticipant {
+    row.participants
+        .iter()
+        .find(|p| p.address.email == email)
+        .unwrap()
+}
+
+/// The messages of `row`'s conversation as `folder` lists it.
+async fn conversation_in(
+    f: &Fixture,
+    row: &ThreadSummary,
+    folder: &Folder,
+) -> Vec<ConversationMessage> {
+    let (_, messages) = conversation(
+        f.service
+            .handle(Request::GetConversation {
+                thread_id: row.id.clone(),
+                folder_id: Some(folder.id.clone()),
+            })
+            .await,
+    );
+    messages
+}
+
 #[tokio::test]
 async fn an_inbox_row_is_the_whole_conversation_with_the_users_replies() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let sent = folder(&f, FolderRole::Sent);
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let sent = demo_folder(&f.service, FolderRole::Sent);
     let (_, rows) = threads(f.service.handle(list(&inbox.id)).await);
     let row = nightingale(&rows);
     assert_eq!(
@@ -193,78 +201,14 @@ async fn the_unified_inbox_counts_the_same_and_unknown_ids_fail() {
     );
 }
 
-/// A user with `grant` and a browser paired to them: the remote session.
-async fn remote_session(f: &Fixture, name: &str, grant: RemoteGrant) -> RemoteSessionCtx {
-    let user = match f
-        .service
-        .handle(Request::CreateRemoteUser {
-            name: name.into(),
-            display_name: None,
-            grant,
-        })
-        .await
-    {
-        Response::RemoteUserSaved { user } => user,
-        other => panic!("{other:?}"),
-    };
-    let code = match f
-        .service
-        .handle(Request::CreatePairingCode {
-            user_id: user.id.clone(),
-            device_name: Some("Phone".into()),
-            grant: None,
-            ttl_minutes: None,
-        })
-        .await
-    {
-        Response::PairingCodeCreated { code, .. } => code,
-        other => panic!("{other:?}"),
-    };
-    let auth = f.service.remote_auth();
-    let client = ClientMeta {
-        ip: Some("192.168.1.20".parse().unwrap()),
-        user_agent: Some("Test".into()),
-    };
-    let anonymous = Cookies::default();
-    let csrf = auth.csrf_token(&anonymous);
-    let reply = auth
-        .handle_auth(
-            AuthRequest::Pair {
-                code,
-                device_name: "Phone".into(),
-            },
-            &anonymous,
-            &client,
-            Some(&csrf),
-        )
-        .await;
-    assert!(
-        matches!(reply.response, AuthResponse::LoggedIn { .. }),
-        "{:?}",
-        reply.response
-    );
-    let mut cookies = Cookies::default();
-    for set in &reply.cookies {
-        let (pair, _) = set.split_once(';').unwrap_or((set, ""));
-        let (name, value) = pair.split_once('=').unwrap();
-        let value = Some(zeroize::Zeroizing::new(value.to_owned()));
-        match name {
-            SESSION_COOKIE => cookies.session = value,
-            DEVICE_COOKIE => cookies.device = value,
-            other => panic!("{other}"),
-        }
-    }
-    auth.resolve(&cookies, &client).unwrap().ctx
-}
-
 #[tokio::test]
 async fn a_grant_without_sent_sees_neither_the_replies_nor_traces_of_them() {
     let f = setup();
-    let inbox = folder(&f, FolderRole::Inbox);
-    let sent = folder(&f, FolderRole::Sent);
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let sent = demo_folder(&f.service, FolderRole::Sent);
     let mut grant = RemoteAccessPreset::ReadOnly.grant();
     grant.mail.excluded_folders = vec![sent.id.clone()];
-    let ctx = remote_session(&f, "no-sent", grant).await;
+    let ctx = remote_session(&f.service, "no-sent", grant).await;
     let service = &f.service;
 
     let (_, rows) = threads(service.handle_remote(&ctx, list(&inbox.id)).await);
@@ -354,7 +298,7 @@ async fn a_grant_without_sent_sees_neither_the_replies_nor_traces_of_them() {
     );
 
     // A full grant sees everything.
-    let full = remote_session(&f, "full", RemoteAccessPreset::ReadOnly.grant()).await;
+    let full = remote_session(&f.service, "full", RemoteAccessPreset::ReadOnly.grant()).await;
     let (_, rows) = threads(service.handle_remote(&full, list(&inbox.id)).await);
     assert_eq!(nightingale(&rows).message_count, 7);
 }
@@ -363,7 +307,7 @@ async fn a_grant_without_sent_sees_neither_the_replies_nor_traces_of_them() {
 async fn identities_from_accounts_kdl_are_me_case_insensitively() {
     // The demo account with an extra identity: Grace's address (written in
     // capitals) becomes one of the user's.
-    let f = setup_with(Some(&format!(
+    let f = setup_with(&format!(
         "account \"{DEMO_ACCOUNT_ID}\" email=\"{ME}\" name=\"Demo\" {{
              imap host=\"127.0.0.1\" port=1 tls=\"plaintext\"
              smtp host=\"127.0.0.1\" port=1 tls=\"plaintext\"
@@ -371,29 +315,16 @@ async fn identities_from_accounts_kdl_are_me_case_insensitively() {
              identity \"GRACE@navy.example\" name=\"Grace\"
 }}
 "
-    )));
-    let inbox = folder(&f, FolderRole::Inbox);
-    let (_, rows) = threads(f.service.handle(list(&inbox.id)).await);
-    let row = nightingale(&rows);
-    let grace = row
-        .participants
-        .iter()
-        .find(|p| p.address.email == "grace@navy.example")
-        .unwrap();
+    ));
+    let (inbox, row) = inbox_row(&f).await;
+    let grace = participant(&row, "grace@navy.example");
     assert!(grace.me);
     assert_eq!(
         row.latest_from.as_ref().map(|p| p.me),
         Some(true),
         "Grace wrote last"
     );
-    let (_, messages) = conversation(
-        f.service
-            .handle(Request::GetConversation {
-                thread_id: row.id.clone(),
-                folder_id: Some(inbox.id.clone()),
-            })
-            .await,
-    );
+    let messages = conversation_in(&f, &row, &inbox).await;
     let ada = messages
         .iter()
         .find(|m| {
@@ -412,7 +343,7 @@ async fn a_send_as_identity_is_a_shared_mailbox_not_me() {
     // Grace's address as a shared mailbox the user sends as (ADR 0094):
     // colleagues write from it too, so her mail stays someone else's, and
     // the row acts on her newest message, not on an older one (P2 review).
-    let f = setup_with(Some(&format!(
+    let f = setup_with(&format!(
         "account \"{DEMO_ACCOUNT_ID}\" email=\"{ME}\" name=\"Demo\" {{
              imap host=\"127.0.0.1\" port=1 tls=\"plaintext\"
              smtp host=\"127.0.0.1\" port=1 tls=\"plaintext\"
@@ -421,15 +352,9 @@ async fn a_send_as_identity_is_a_shared_mailbox_not_me() {
              identity \"ada@analytical.example\" name=\"Ada's desk\" send-as=\"on-behalf\" sender=\"{ME}\"
 }}
 "
-    )));
-    let inbox = folder(&f, FolderRole::Inbox);
-    let (_, rows) = threads(f.service.handle(list(&inbox.id)).await);
-    let row = nightingale(&rows);
-    let grace = row
-        .participants
-        .iter()
-        .find(|p| p.address.email == "grace@navy.example")
-        .unwrap();
+    ));
+    let (inbox, row) = inbox_row(&f).await;
+    let grace = participant(&row, "grace@navy.example");
     assert!(!grace.me);
     let latest = row.latest_from.as_ref().unwrap();
     assert_eq!(latest.address.email, "grace@navy.example");
@@ -439,14 +364,7 @@ async fn a_send_as_identity_is_a_shared_mailbox_not_me() {
         Some("grace@navy.example"),
         "the row acts on Grace's newest message"
     );
-    let (_, messages) = conversation(
-        f.service
-            .handle(Request::GetConversation {
-                thread_id: row.id.clone(),
-                folder_id: Some(inbox.id.clone()),
-            })
-            .await,
-    );
+    let messages = conversation_in(&f, &row, &inbox).await;
     // Only the replies from Sent are the user's; Ada's on-behalf mailbox
     // and Grace's shared one are not.
     let mine: Vec<_> = messages.iter().filter(|m| m.from_me).collect();

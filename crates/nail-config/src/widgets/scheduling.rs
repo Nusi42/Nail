@@ -36,21 +36,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::testing::parses;
+
     #[test]
-    fn scheduling_widgets_are_registered_and_parse() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
-        let text = "layout \"x\" extends=\"default\" {
-    window \"main\" {
-        stack {
-            invitation-card attendees=\"expanded\" conflicts=#true
-            freebusy-timeline hour-start=8 hour-end=18 duration=30 time-zone=\"Europe/Berlin\"
-        }
-    }
-}
-";
-        crate::parse_layout(text, "layout.kdl").unwrap();
+    fn scheduling_widgets_parse() {
+        assert!(parses(&[
+            "invitation-card attendees=\"expanded\" conflicts=#true",
+            "freebusy-timeline hour-start=8 hour-end=18 duration=30 time-zone=\"Europe/Berlin\"",
+        ]));
     }
 }

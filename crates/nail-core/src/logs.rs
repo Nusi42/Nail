@@ -52,10 +52,7 @@ fn strip_ansi(text: &str) -> String {
 
 fn cut(mut line: String) -> String {
     if line.len() > MAX_LINE_BYTES {
-        let mut end = MAX_LINE_BYTES;
-        while !line.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = line.floor_char_boundary(MAX_LINE_BYTES);
         line.truncate(end);
     }
     line

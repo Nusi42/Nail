@@ -179,6 +179,91 @@ impl Resolver for SystemResolver {
 /// override map; anything else fails (no fallback to system DNS).
 struct RefuseResolver;
 
+/// A client builder for one pinned hop (the rules of the module docs,
+/// shared with the core's feed and plug-in fetchers): `tls`, no system
+/// proxy, no redirects (each `Location` is a new, checked hop), no
+/// `Referer`, no pooled connections, `user_agent`, `timeout` for the whole
+/// request, and every DNS lookup refused: names reach only the addresses
+/// [`pin`] gives them.
+pub fn pinned_builder(
+    tls: &rustls::ClientConfig,
+    user_agent: &str,
+    timeout: Duration,
+) -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .tls_backend_preconfigured(tls.clone())
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .referer(false)
+        .timeout(timeout)
+        .pool_max_idle_per_host(0)
+        .user_agent(user_agent)
+        .dns_resolver(Arc::new(RefuseResolver))
+}
+
+/// The addresses `url`'s host stands for, the builder pinned to them on
+/// `port`: a name is looked up through `resolve`, an IP literal is itself;
+/// a URL without a host is `no_host`.
+///
+/// # Errors
+///
+/// What `resolve` returns, or `no_host`.
+pub async fn pin_host<E>(
+    builder: reqwest::ClientBuilder,
+    url: &Url,
+    port: u16,
+    resolve: impl AsyncFnOnce(&str) -> Result<Vec<IpAddr>, E>,
+    no_host: impl FnOnce() -> E,
+) -> Result<(reqwest::ClientBuilder, Vec<IpAddr>), E> {
+    Ok(match url.host() {
+        Some(Host::Domain(name)) => {
+            let addrs = resolve(name).await?;
+            let pinned: Vec<SocketAddr> =
+                addrs.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
+            (builder.resolve_to_addrs(name, &pinned), addrs)
+        }
+        Some(Host::Ipv4(ip)) => (builder, vec![IpAddr::V4(ip)]),
+        Some(Host::Ipv6(ip)) => (builder, vec![IpAddr::V6(ip)]),
+        None => return Err(no_host()),
+    })
+}
+
+/// The peer `response` came from when it is not one of the checked
+/// `allowed` addresses (IPv4-mapped IPv6 addresses compare as IPv4).
+pub fn unchecked_peer(response: &reqwest::Response, allowed: &[IpAddr]) -> Option<IpAddr> {
+    let ip = canonical(response.remote_addr()?.ip());
+    (!allowed.iter().any(|a| canonical(*a) == ip)).then_some(ip)
+}
+
+/// Why [`read_limited`] stopped.
+#[derive(Debug)]
+pub enum BodyError {
+    /// The body is (or says it is) larger than the limit.
+    TooLarge,
+    /// The connection failed while reading.
+    Network(reqwest::Error),
+}
+
+/// Reads the body of `response`, at most `max` bytes: a larger
+/// `Content-Length` is refused before reading, the stream is cut at the
+/// limit.
+pub async fn read_limited(
+    response: &mut reqwest::Response,
+    max: u64,
+) -> Result<Vec<u8>, BodyError> {
+    if response.content_length().is_some_and(|len| len > max) {
+        return Err(BodyError::TooLarge);
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(BodyError::Network)? {
+        if body.len() as u64 + chunk.len() as u64 > max {
+            return Err(BodyError::TooLarge);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
 impl reqwest::dns::Resolve for RefuseResolver {
     fn resolve(&self, _name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         Box::pin(async {
@@ -312,28 +397,16 @@ impl Fetcher {
             Err(UrlRefusal::Address(ip)) => return Err(FetchError::Blocked(ip)),
             Err(refusal) => return Err(refusal.into()),
         }
-        let mut builder = reqwest::Client::builder()
-            .tls_backend_preconfigured((*self.tls).clone())
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .referer(false)
-            .connect_timeout(self.limits.connect_timeout)
-            .timeout(self.limits.timeout)
-            .pool_max_idle_per_host(0)
-            .user_agent(USER_AGENT)
-            .dns_resolver(Arc::new(RefuseResolver));
-        let allowed: Vec<IpAddr> = match url.host() {
-            Some(Host::Domain(name)) => {
-                let addrs = self.resolve(name, port).await?;
-                let pinned: Vec<SocketAddr> =
-                    addrs.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
-                builder = builder.resolve_to_addrs(name, &pinned);
-                addrs
-            }
-            Some(Host::Ipv4(ip)) => vec![IpAddr::V4(ip)],
-            Some(Host::Ipv6(ip)) => vec![IpAddr::V6(ip)],
-            None => return Err(UrlRefusal::Invalid.into()),
-        };
+        let builder = pinned_builder(&self.tls, USER_AGENT, self.limits.timeout)
+            .connect_timeout(self.limits.connect_timeout);
+        let (builder, allowed) = pin_host(
+            builder,
+            url,
+            port,
+            async |name: &str| self.resolve(name, port).await,
+            || UrlRefusal::Invalid.into(),
+        )
+        .await?;
         let client = builder
             .build()
             .map_err(|e| FetchError::Network(e.to_string()))?;
@@ -354,9 +427,12 @@ impl Fetcher {
                 }
             })?;
         // Belt and braces: the peer must be one of the checked addresses.
+        if let Some(ip) = unchecked_peer(&response, &allowed) {
+            return Err(FetchError::Blocked(ip));
+        }
         if let Some(peer) = response.remote_addr() {
             let ip = canonical(peer.ip());
-            if !allowed.iter().any(|a| canonical(*a) == ip) || !self.address_allowed(ip, port) {
+            if !self.address_allowed(ip, port) {
                 return Err(FetchError::Blocked(ip));
             }
         }
@@ -389,23 +465,12 @@ impl Fetcher {
             .to_owned();
         let content_type = allowed_content_type(&declared)
             .ok_or_else(|| FetchError::UnsupportedType(declared.clone()))?;
-        if response
-            .content_length()
-            .is_some_and(|len| len > self.limits.max_bytes)
-        {
-            return Err(FetchError::TooLarge);
-        }
-        let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
+        let body = read_limited(&mut response, self.limits.max_bytes)
             .await
-            .map_err(|e| FetchError::Network(e.to_string()))?
-        {
-            if body.len() as u64 + chunk.len() as u64 > self.limits.max_bytes {
-                return Err(FetchError::TooLarge);
-            }
-            body.extend_from_slice(&chunk);
-        }
+            .map_err(|e| match e {
+                BodyError::TooLarge => FetchError::TooLarge,
+                BodyError::Network(e) => FetchError::Network(e.to_string()),
+            })?;
         Ok(Fetched {
             content_type,
             body,
@@ -414,8 +479,8 @@ impl Fetcher {
     }
 }
 
-/// IPv4-mapped IPv6 peers compare as IPv4.
-fn canonical(ip: IpAddr) -> IpAddr {
+/// IPv4-mapped IPv6 addresses as IPv4 (how peers are compared).
+pub fn canonical(ip: IpAddr) -> IpAddr {
     match ip {
         IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
         v4 @ IpAddr::V4(_) => v4,

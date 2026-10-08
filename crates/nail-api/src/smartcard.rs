@@ -367,37 +367,18 @@ pub fn pin_is_plausible(pin: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
     #[test]
     fn labels_match_the_wire() {
-        assert_labels(
-            SmartcardSettingsIssue::ALL,
-            SmartcardSettingsIssue::as_str,
-            SmartcardSettingsIssue::message_id,
-        );
-        assert_labels(
-            SmartcardObjectKind::ALL,
-            SmartcardObjectKind::as_str,
-            SmartcardObjectKind::message_id,
-        );
-        assert_labels(
-            SmartcardKeyUsage::ALL,
-            SmartcardKeyUsage::as_str,
-            SmartcardKeyUsage::message_id,
-        );
-        assert_labels(PinPurpose::ALL, PinPurpose::as_str, PinPurpose::message_id);
-        assert_labels(
-            PinPromptCloseReason::ALL,
-            PinPromptCloseReason::as_str,
-            PinPromptCloseReason::message_id,
-        );
-        assert_labels(
-            SmartcardError::ALL,
-            SmartcardError::as_str,
-            SmartcardError::message_id,
+        assert_wire_labels!(
+            SmartcardSettingsIssue,
+            SmartcardObjectKind,
+            SmartcardKeyUsage,
+            PinPurpose,
+            PinPromptCloseReason,
+            SmartcardError
         );
     }
 

@@ -28,6 +28,10 @@ style?: PluginTextStyle, } | { "type": "markdown",
  */
 value: string, } | { "type": "input", 
 /**
+ * The kind of text.
+ */
+kind?: PluginInputKind, 
+/**
  * Value id (unique in the tree).
  */
 id: string, 
@@ -48,15 +52,15 @@ placeholder?: string,
  */
 required?: boolean, 
 /**
- * The kind of text.
- */
-kind?: PluginInputKind, 
-/**
  * Longest value (characters).
  */
 maxLength?: number, } | { "type": "textarea", 
 /**
- * Value id.
+ * Visible rows.
+ */
+rows?: number, 
+/**
+ * Value id (unique in the tree).
  */
 id: string, 
 /**
@@ -72,13 +76,9 @@ default?: string,
  */
 placeholder?: string, 
 /**
- * Whether a value is needed.
+ * Whether a value is needed to submit with a primary button.
  */
 required?: boolean, 
-/**
- * Visible rows.
- */
-rows?: number, 
 /**
  * Longest value (characters).
  */

@@ -209,7 +209,39 @@ pub fn check_arguments(schema: &Value, args: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// A handler's answer as `T` (`what` names the call in the plug-in's log,
+/// `noun` the answer in the error).
+fn handler_answer<T: serde::de::DeserializeOwned>(
+    inner: &Arc<Inner>,
+    plugin: &PluginId,
+    what: &str,
+    value: Value,
+    noun: &str,
+) -> Result<T, ApiError> {
+    serde_json::from_value(value).map_err(|e| {
+        let error = ApiError::invalid_request(format!("the {noun} is not valid: {e}"));
+        inner.handler_failed(plugin, what, &error);
+        error
+    })
+}
+
 impl PluginHost {
+    /// Waits for a handler's answer; a handler that failed is logged in
+    /// the plug-in's log.
+    async fn wait_handler(
+        &self,
+        inner: &Arc<Inner>,
+        plugin: &PluginId,
+        what: &str,
+        rx: tokio::sync::oneshot::Receiver<Result<Value, ApiError>>,
+    ) -> Result<Value, ApiError> {
+        self.wait(rx).await.inspect_err(|e| {
+            if e.code == ErrorCode::Internal {
+                inner.handler_failed(plugin, what, e);
+            }
+        })
+    }
+
     /// Runs a composer, attachment or link action (`<plugin>.<action>`;
     /// `RunPluginAction`). Returns once the plug-in got the call; what it
     /// does arrives as events, failures are logged. `not_found` for an
@@ -385,16 +417,8 @@ impl PluginHost {
         call.origin = Origin::client(client_id);
         let rx = inner.invoke(&plugin, Some(running.generation), call)?;
         let what = format!("attachmentPreview {name}");
-        let value = self.wait(rx).await.inspect_err(|e| {
-            if e.code == ErrorCode::Internal {
-                inner.handler_failed(&plugin, &what, e);
-            }
-        })?;
-        let preview: PluginPreview = serde_json::from_value(value).map_err(|e| {
-            let error = ApiError::invalid_request(format!("the preview is not valid: {e}"));
-            inner.handler_failed(&plugin, &what, &error);
-            error
-        })?;
+        let value = self.wait_handler(&inner, &plugin, &what, rx).await?;
+        let preview: PluginPreview = handler_answer(&inner, &plugin, &what, value, "preview")?;
         match preview {
             PluginPreview::Tree { tree: nodes } => {
                 let nodes = tree::prepare_tree(&running.files, nodes).map_err(|issues| {
@@ -475,16 +499,9 @@ impl PluginHost {
         );
         let rx = inner.invoke(&plugin, Some(running.generation), call)?;
         let what = format!("markdownBlock {name}");
-        let value = self.wait(rx).await.inspect_err(|e| {
-            if e.code == ErrorCode::Internal {
-                inner.handler_failed(&plugin, &what, e);
-            }
-        })?;
-        let result: PluginMarkdownBlockResult = serde_json::from_value(value).map_err(|e| {
-            let error = ApiError::invalid_request(format!("the block is not valid: {e}"));
-            inner.handler_failed(&plugin, &what, &error);
-            error
-        })?;
+        let value = self.wait_handler(&inner, &plugin, &what, rx).await?;
+        let result: PluginMarkdownBlockResult =
+            handler_answer(&inner, &plugin, &what, value, "block")?;
         if result.html.len() > MAX_BLOCK_HTML || result.text.len() > MAX_BLOCK_TEXT {
             let error = ApiError::new(ErrorCode::TooLarge, "the rendered block is too large");
             inner.handler_failed(&plugin, &what, &error);

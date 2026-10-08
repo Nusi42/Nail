@@ -118,15 +118,20 @@ pub mod scheduling;
 mod schema;
 pub mod seal;
 pub mod store;
+#[cfg(test)]
+mod test_store;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod thread;
 mod triage;
+mod util;
 
 use std::path::Path;
 
 pub use agents::InsertedConfirmation;
 pub use blob::{BlobHash, BlobStore, RemovalMark};
 pub use bodies::{BodyFetchTarget, StoredBody};
-pub use compose::{DraftServerCopy, SendOutcome, draft_revision};
+pub use compose::{DraftServerCopy, SendOutcome, check_revision, draft_revision};
 pub use crypto::{
     AutocryptPeerRecord, KeyData, MessageSecurityRecord, SECURITY_SETTINGS_KEY, SecretKeyData,
     StoredKey, VaultRecord,

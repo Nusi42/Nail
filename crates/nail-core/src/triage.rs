@@ -10,7 +10,7 @@
 //! `snooze.rs`, the notification policy in `notify.rs` (ADR 0048).
 
 use nail_api::triage::{JunkStatus, SnoozedMessage};
-use nail_api::{AccountId, ApiError, Event, LocalizedMessage, Request, Response};
+use nail_api::{AccountId, ApiError, Event, Request, Response};
 
 use crate::error::Result;
 use crate::rules::rfc3339;
@@ -41,11 +41,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         } => {
             check_account(service, &account_id)?;
             if let Some(issue) = settings.issues().first() {
-                return Err(ApiError::invalid_request(format!(
-                    "invalid junk settings ({})",
-                    issue.message_id()
-                ))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
+                return Err(ApiError::invalid_localized(
+                    format!("invalid junk settings ({})", issue.message_id()),
+                    issue.message_id(),
+                )
                 .into());
             }
             let id = account_id.clone();
@@ -107,11 +106,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         },
         Request::UpdateNotificationSettings { settings } => {
             if let Some(issue) = settings.issues().first() {
-                return Err(ApiError::invalid_request(format!(
-                    "invalid notification settings ({})",
-                    issue.message_id()
-                ))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
+                return Err(ApiError::invalid_localized(
+                    format!("invalid notification settings ({})", issue.message_id()),
+                    issue.message_id(),
+                )
                 .into());
             }
             let saved = settings.clone();
@@ -129,7 +127,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} is not a triage request",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }

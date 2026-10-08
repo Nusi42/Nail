@@ -23,6 +23,7 @@ pub(crate) mod write;
 use std::path::Path;
 
 use nail_api::accounts::{AccountConfig, AccountsConfig, VirtualAccountConfig};
+use nail_api::ids::{MAX_CONFIG_ID_LEN, first_free_id};
 use nail_api::pim::PimSourceConfig;
 use nail_api::{AccountId, IdentityId, PimSourceId};
 
@@ -39,9 +40,6 @@ pub const MIN_POLL_INTERVAL_SECS: u32 = 30;
 
 /// Longest accepted `undo-send-delay` in seconds.
 pub const MAX_UNDO_SEND_SECS: u32 = 600;
-
-/// Longest account / virtual account name.
-pub const MAX_ACCOUNT_ID_LEN: usize = 64;
 
 /// Parses and validates `accounts.kdl`. `file` is the name used in error
 /// messages (e.g. `"accounts.kdl"`). An empty file is a valid, empty
@@ -67,15 +65,7 @@ pub fn load_accounts(dir: &Path) -> Result<AccountsConfig, ConfigError> {
 /// characters from `a-z 0-9 - _ .`, starting with a letter or digit. (The
 /// reserved name [`AccountId::ALL`] is valid here but refused by the file.)
 pub fn is_valid_account_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= MAX_ACCOUNT_ID_LEN
-        && id
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        && id
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.'))
+    nail_api::ids::is_config_id(id)
 }
 
 /// Whether `pattern` is a valid identity-rule pattern: `*@domain`,
@@ -111,23 +101,12 @@ pub fn derive_account_id(hint: &str, taken: impl Fn(&str) -> bool) -> AccountId 
         }
     }
     let slug = slug.trim_matches(['-', '.', '_']).to_owned();
-    let mut base: String = slug.chars().take(MAX_ACCOUNT_ID_LEN - 4).collect();
+    let mut base: String = slug.chars().take(MAX_CONFIG_ID_LEN - 4).collect();
     base.truncate(base.trim_end_matches(['-', '.', '_']).len());
     if base.is_empty() {
         "account".clone_into(&mut base);
     }
-    let free = |id: &str| id != AccountId::ALL && !taken(id);
-    if free(&base) {
-        return AccountId::new(base);
-    }
-    let mut n: u64 = 2;
-    loop {
-        let id = format!("{base}-{n}");
-        if free(&id) {
-            return AccountId::new(id);
-        }
-        n += 1;
-    }
+    AccountId::new(first_free_id(&base, |id| id == AccountId::ALL || taken(id)))
 }
 
 /// `accounts.kdl` as a document the UI edits.
@@ -167,9 +146,9 @@ impl AccountsDocument {
 
     /// Loads `<dir>/accounts.kdl`; a missing file gives an empty document.
     pub fn load(dir: &Path) -> Result<Self, ConfigError> {
-        match std::fs::read_to_string(dir.join(ACCOUNTS_FILE)) {
-            Ok(text) => Self::parse(&text, ACCOUNTS_FILE),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::empty(ACCOUNTS_FILE)),
+        match crate::backup::read_optional(&dir.join(ACCOUNTS_FILE)) {
+            Ok(Some(text)) => Self::parse(&text, ACCOUNTS_FILE),
+            Ok(None) => Ok(Self::empty(ACCOUNTS_FILE)),
             Err(e) => Err(ConfigError::io(ACCOUNTS_FILE, &e)),
         }
     }
@@ -177,15 +156,8 @@ impl AccountsDocument {
     /// Writes the document to `<dir>/accounts.kdl` atomically (a temporary
     /// file in the same directory, then a rename), creating `dir` if needed.
     pub fn save(&self, dir: &Path) -> Result<(), ConfigError> {
-        let io = |e: std::io::Error| ConfigError::io(&self.file, &e);
-        std::fs::create_dir_all(dir).map_err(io)?;
-        let target = dir.join(ACCOUNTS_FILE);
-        let temp = dir.join(format!(".{ACCOUNTS_FILE}.tmp"));
-        std::fs::write(&temp, self.text.as_bytes()).map_err(io)?;
-        std::fs::rename(&temp, &target).map_err(|e| {
-            crate::backup::remove_temp(&temp);
-            io(e)
-        })
+        crate::backup::write_atomic(&dir.join(ACCOUNTS_FILE), &self.text)
+            .map_err(|e| ConfigError::io(&self.file, &e))
     }
 
     /// The file text.
@@ -403,6 +375,6 @@ mod tests {
         let long = "x".repeat(100);
         let id = derive_account_id(&long, none);
         assert!(is_valid_account_id(id.as_str()));
-        assert!(id.as_str().len() <= MAX_ACCOUNT_ID_LEN - 4);
+        assert!(id.as_str().len() <= MAX_CONFIG_ID_LEN - 4);
     }
 }

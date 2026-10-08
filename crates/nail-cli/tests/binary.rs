@@ -17,6 +17,51 @@ impl Drop for Killed {
     }
 }
 
+/// A running `nail serve --seed demo --no-watch` on temporary directories
+/// with a stand-in UI; its first stdout line (the URL) already read.
+struct Serve {
+    _child: Killed,
+    url: String,
+    data: tempfile::TempDir,
+    _config: tempfile::TempDir,
+    _ui: tempfile::TempDir,
+}
+
+/// Starts `nail serve` whose UI is an `index.html` holding `ui_html`, with
+/// `extra` arguments.
+fn serve(ui_html: &str, extra: &[&str]) -> Serve {
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let ui = tempfile::tempdir().unwrap();
+    std::fs::write(ui.path().join("index.html"), ui_html).unwrap();
+    let child = Command::new(env!("CARGO_BIN_EXE_nail"))
+        .args(["serve", "--port", "0", "--seed", "demo", "--no-watch"])
+        .args(extra)
+        .arg("--data-dir")
+        .arg(data.path())
+        .arg("--config-dir")
+        .arg(config.path())
+        .arg("--ui-dir")
+        .arg(ui.path())
+        .env("NAIL_LOG", "warn")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap();
+    let mut child = Killed(child);
+    let mut url = String::new();
+    BufReader::new(child.0.stdout.take().unwrap())
+        .read_line(&mut url)
+        .unwrap();
+    Serve {
+        _child: child,
+        url: url.trim().to_owned(),
+        data,
+        _config: config,
+        _ui: ui,
+    }
+}
+
 fn http_get(addr: &str, path: &str) -> String {
     let mut stream = TcpStream::connect(addr).unwrap();
     stream
@@ -34,31 +79,9 @@ fn http_get(addr: &str, path: &str) -> String {
 
 #[test]
 fn serve_prints_its_url_and_serves_the_ui() {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let ui = tempfile::tempdir().unwrap();
-    std::fs::write(ui.path().join("index.html"), "<!doctype html>nail-test-ui").unwrap();
-
-    let child = Command::new(env!("CARGO_BIN_EXE_nail"))
-        .args(["serve", "--port", "0", "--seed", "demo", "--no-watch"])
-        .arg("--data-dir")
-        .arg(data.path())
-        .arg("--config-dir")
-        .arg(config.path())
-        .arg("--ui-dir")
-        .arg(ui.path())
-        .env("NAIL_LOG", "warn")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap();
-    let mut child = Killed(child);
-
-    let mut line = String::new();
-    BufReader::new(child.0.stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    let url = line.trim();
+    let serve = serve("<!doctype html>nail-test-ui", &[]);
+    let data = &serve.data;
+    let url = serve.url.as_str();
     let addr = url
         .strip_prefix("http://")
         .and_then(|rest| rest.strip_suffix('/'))
@@ -147,10 +170,6 @@ fn wait_lines(lines: &std::sync::mpsc::Receiver<String>, needles: &[&str]) {
 
 #[test]
 fn plugin_dev_loads_a_folder_into_serve_and_follows_reloads() {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let ui = tempfile::tempdir().unwrap();
-    std::fs::write(ui.path().join("index.html"), "<!doctype html>ui").unwrap();
     let folder = tempfile::tempdir().unwrap();
     std::fs::write(
         folder.path().join("manifest.json"),
@@ -161,33 +180,9 @@ fn plugin_dev_loads_a_folder_into_serve_and_follows_reloads() {
         |text: &str| format!("export default {{ activate() {{ nail.log.info({text:?}); }} }};");
     std::fs::write(folder.path().join("index.js"), js("hello one")).unwrap();
 
-    let serve = Command::new(env!("CARGO_BIN_EXE_nail"))
-        .args([
-            "serve",
-            "--port",
-            "0",
-            "--seed",
-            "demo",
-            "--no-watch",
-            "--no-mcp",
-        ])
-        .arg("--data-dir")
-        .arg(data.path())
-        .arg("--config-dir")
-        .arg(config.path())
-        .arg("--ui-dir")
-        .arg(ui.path())
-        .env("NAIL_LOG", "warn")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap();
-    let mut serve = Killed(serve);
-    let mut line = String::new();
-    BufReader::new(serve.0.stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    assert!(line.starts_with("http://127.0.0.1:"), "{line}");
+    let serve = serve("<!doctype html>ui", &["--no-mcp"]);
+    let data = &serve.data;
+    assert!(serve.url.starts_with("http://127.0.0.1:"), "{}", serve.url);
     // `serve` announced itself in its data directory.
     assert!(data.path().join("ui-endpoint.json").is_file());
 

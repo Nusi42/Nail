@@ -21,7 +21,7 @@ use nail_api::plugins::{
     PluginUiTarget,
 };
 use nail_api::{ErrorCode, Event, McpScope, UiContext};
-use nail_plugins::{ClientLimit, PackageFiles, PluginSpec};
+use nail_plugins::{ClientLimit, PackageFiles, PluginHost, PluginSpec};
 
 /// An MCP client that may reach everything.
 fn full() -> ClientLimit {
@@ -360,8 +360,7 @@ async fn attachment_and_link_actions_get_what_the_user_picked() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn markdown_blocks_render_sanitized_html() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (_, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.composer.registerBlock("ticket", ({ block, source, purpose }) => ({
@@ -400,8 +399,7 @@ async fn markdown_blocks_render_sanitized_html() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn mcp_tools_are_exposed_and_act_on_behalf_of_the_client() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.mcp.registerTool("find-customer", async (args) => {
@@ -646,8 +644,7 @@ async fn binary_bodies_are_limited() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn panel_actions_are_checked_against_the_rendered_tree() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = r#"
       export default { activate(ctx) {
         ctx.panels.register("side", {
@@ -667,11 +664,7 @@ async fn panel_actions_are_checked_against_the_rendered_tree() {
         panel: "panel.side".into(),
     };
     // Nothing rendered yet.
-    let err = host
-        .ui_action(&target, "save", BTreeMap::new(), Some("c".into()))
-        .await
-        .unwrap_err();
-    assert_eq!(err.code, ErrorCode::NotFound);
+    assert_no_button(&host, &target, "save").await;
     host.panel("panel.side", &UiContext::default(), Some("c".into()))
         .await
         .unwrap();
@@ -685,11 +678,7 @@ async fn panel_actions_are_checked_against_the_rendered_tree() {
         json!({"componentId": "save", "values": {"note": "hi"}})
     );
     for button in ["delete", "note"] {
-        let err = host
-            .ui_action(&target, button, BTreeMap::new(), Some("c".into()))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::NotFound, "{button}");
+        assert_no_button(&host, &target, button).await;
     }
     // After the update only its buttons count.
     wait_for("update", || {
@@ -699,14 +688,19 @@ async fn panel_actions_are_checked_against_the_rendered_tree() {
             .then_some(())
     })
     .await;
-    let err = host
-        .ui_action(&target, "save", BTreeMap::new(), Some("c".into()))
-        .await
-        .unwrap_err();
-    assert_eq!(err.code, ErrorCode::NotFound);
+    assert_no_button(&host, &target, "save").await;
     host.ui_action(&target, "undo", BTreeMap::new(), Some("c".into()))
         .await
         .unwrap();
+}
+
+/// `button` is no button of the rendered `target` (`NotFound`).
+async fn assert_no_button(host: &PluginHost, target: &PluginUiTarget, button: &str) {
+    let err = host
+        .ui_action(target, button, BTreeMap::new(), Some("c".into()))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound, "{button}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

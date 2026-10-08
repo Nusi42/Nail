@@ -367,9 +367,7 @@ pub(crate) fn exchange_info_in(
              FROM exchange_items x JOIN messages m ON m.id = x.message_id
              WHERE x.message_id = ?1",
         )?
-        .query_row([id.as_str()], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
+        .query_row([id.as_str()], |r| r.try_into())
         .optional()?;
     Ok(row.map(
         |(item_id, mailbox, conversation_id, inference)| ExchangeMessageInfo {
@@ -857,11 +855,7 @@ impl Store {
                  ORDER BY c.id",
             )?;
             let collections = stmt.query_map([account.as_str()], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                ))
+                <(String, String, String)>::try_from(r)
             })?;
             let mut by_mailbox: HashMap<String, Vec<(String, String)>> = HashMap::new();
             for row in collections {
@@ -1100,17 +1094,15 @@ impl Store {
     /// [`nail_api::Request::ListExchangeCategories`].
     pub fn list_exchange_categories(&self, account: &AccountId) -> Result<Vec<ExchangeCategory>> {
         let records = self.exchange_category_records(account)?;
-        let counts: HashMap<String, (u32, u32)> = self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(
+        let counts = self.with_conn(|conn| {
+            crate::util::counts_by_key(
+                conn,
                 "SELECT lower(t.tag), COUNT(*), SUM(m.seen = 0)
                  FROM message_tags t JOIN messages m ON m.id = t.message_id
                  WHERE m.account_id = ?1
                  GROUP BY lower(t.tag)",
-            )?;
-            let rows = stmt.query_map([account.as_str()], |r| {
-                Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?)))
-            })?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
+                account,
+            )
         })?;
         Ok(records
             .into_iter()
@@ -1159,7 +1151,7 @@ impl Store {
                 account_id: account.clone(),
                 settings: serde_json::from_str(&settings)?,
                 sync: ExchangeSync::parse(&sync),
-                fetched_at: fetched_at.and_then(rfc3339),
+                fetched_at: fetched_at.map(nail_util::time::rfc3339_utc),
             },
         })
     }
@@ -1733,10 +1725,6 @@ impl HasName for RoomList {
     }
 }
 
-fn rfc3339(secs: i64) -> Option<String> {
-    chrono::DateTime::from_timestamp(secs, 0).map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-}
-
 /// The Exchange data of a collection as [`nail_api::pim::Calendar::exchange`]
 /// carries it, from the JSON the collection queries select.
 pub(crate) fn collection_info_from_json(text: Option<String>) -> Option<ExchangeCollectionInfo> {
@@ -1817,66 +1805,25 @@ pub(crate) fn apply_remote_extras_in(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::StoredMessage;
+    use crate::test_store::{add_tagged, exchange_store};
     use nail_api::exchange::AutomaticRepliesStatus;
     use nail_api::exchange::rules::{ExchangeRuleActions, ExchangeRuleConditions};
     use nail_api::pim::{CalendarComponent, CalendarSettings};
-    use nail_api::{Account, AccountKind, Calendar, ErrorCode, Flags, Folder, MessageSummary};
+
+    use nail_api::{Calendar, ErrorCode};
 
     fn account() -> AccountId {
         AccountId::new("work")
     }
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: account(),
-                name: "Work".into(),
-                email: "ada@contoso.example".into(),
-                kind: AccountKind::Exchange,
-            })
-            .unwrap();
-        store
-            .upsert_folder(&Folder {
-                id: "x-inbox".into(),
-                account_id: account(),
-                parent_id: None,
-                name: "Inbox".into(),
-                path: "Inbox".into(),
-                role: nail_api::FolderRole::Inbox,
-                unread: 0,
-                total: 0,
-            })
-            .unwrap();
-        for (id, seen, tags) in [
-            ("m1", false, vec!["Red"]),
-            ("m2", true, vec!["red", "Blue"]),
-        ] {
-            store
-                .upsert_message(&StoredMessage::new(MessageSummary {
-                    id: id.into(),
-                    folder_id: "x-inbox".into(),
-                    account_id: account(),
-                    subject: id.into(),
-                    from: None,
-                    to: vec![],
-                    date: "2026-10-01T10:00:00Z".into(),
-                    flags: Flags {
-                        seen,
-                        ..Flags::default()
-                    },
-                    has_attachments: false,
-                    preview: String::new(),
-                    thread_id: None,
-                    tags: tags.into_iter().map(str::to_owned).collect(),
-                    duplicates: vec![],
-                    headers_only: false,
-                    gmail: None,
-                    exchange: None,
-                }))
-                .unwrap();
-        }
+        let store = exchange_store();
+        add_tagged(
+            &store,
+            "work",
+            "x-inbox",
+            &[("m1", false, &["Red"]), ("m2", true, &["red", "Blue"])],
+        );
         store
     }
 

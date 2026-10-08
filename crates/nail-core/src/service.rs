@@ -660,6 +660,13 @@ impl Service {
         self.inner.events.subscribe()
     }
 
+    /// Broadcasts the events of config writes.
+    pub(crate) fn broadcast_config(&self, updates: &[nail_config::ConfigUpdate]) {
+        for update in updates {
+            self.broadcast(update.to_event());
+        }
+    }
+
     /// Broadcasts an event to all subscribers.
     pub fn broadcast(&self, event: Event) {
         drop(self.inner.events.send(event));
@@ -873,6 +880,16 @@ impl Service {
             return Ok(vec![id.clone()]);
         }
         Err(ApiError::not_found(format!("account {id}")).into())
+    }
+
+    /// The configuration of account `id` (`not_found` without one).
+    pub(crate) fn account_config(&self, id: &AccountId) -> Result<nail_api::AccountConfig> {
+        self.inner
+            .accounts
+            .config()
+            .account(id)
+            .cloned()
+            .ok_or_else(|| ApiError::not_found(format!("account {id}")).into())
     }
 
     pub(crate) async fn stored_accounts(&self) -> Result<Vec<Account>> {
@@ -1162,20 +1179,20 @@ impl Service {
             | Request::UndoRuleRun { .. }
             | Request::RuleToText { .. }
             | Request::RuleFromText { .. }) => crate::rules::handle(self, request).await?,
-            request @ (Request::ListMcpClients
-            | Request::CreateMcpClient { .. }
-            | Request::UpdateMcpGrants { .. }
-            | Request::RevokeMcpClient { .. }
-            | Request::ListMcpAudit { .. }
-            | Request::GetMcpServerInfo
-            | Request::UpdateMcpRateLimits { .. }) => crate::mcp::handle(self, request).await?,
-            request @ (Request::UpdateLayout { .. }
-            | Request::PreviewConfigMerge { .. }
-            | Request::ResolveConfigMerge { .. }
-            | Request::ApplyConfigMerge { .. }
-            | Request::ListConfigBackups { .. }
-            | Request::RevertConfig { .. }
-            | Request::OpenConfigFile { .. }) => crate::customize::handle(self, request).await?,
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::mcp_admin_requests!()
+            | Request::GetMcpSettings
+            | Request::UpdateMcpSettings { .. }) => crate::mcp::handle(self, request).await?,
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::config_merge_requests!() | Request::UpdateLayout { .. }) => {
+                crate::customize::handle(self, request).await?
+            }
 
             // --- M2a security (ADR 0029): one arm, wired by WP35 ---
             request @ (Request::ListKeys { .. }
@@ -1200,30 +1217,11 @@ impl Service {
             | Request::SetVaultEncryption { .. }) => crate::security::handle(self, request).await?,
 
             // --- M2b remote UI and remote content (ADR 0036): one arm, wired by WP45 ---
-            request @ (Request::GetRemoteUiSettings
-            | Request::UpdateRemoteUiSettings { .. }
-            | Request::RegenerateRemoteCertificate
-            | Request::ListRemoteUsers
-            | Request::CreateRemoteUser { .. }
-            | Request::UpdateRemoteUser { .. }
-            | Request::DeleteRemoteUser { .. }
-            | Request::SetRemotePassword { .. }
-            | Request::StartTotpEnrollment { .. }
-            | Request::ConfirmTotpEnrollment { .. }
-            | Request::DisableTotp { .. }
-            | Request::UnlockRemoteUser { .. }
-            | Request::RenamePasskey { .. }
-            | Request::DeletePasskey { .. }
-            | Request::ListRemoteDevices { .. }
-            | Request::UpdateRemoteDevice { .. }
-            | Request::RevokeRemoteDevice { .. }
-            | Request::ListRemoteSessions { .. }
-            | Request::RevokeRemoteSession { .. }
-            | Request::RevokeAllRemoteSessions { .. }
-            | Request::CreatePairingCode { .. }
-            | Request::ListPairingCodes
-            | Request::CancelPairingCode { .. }
-            | Request::ListRemoteAudit { .. }
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::remote_admin_requests!()
             | Request::AllowRemoteContent { .. }
             | Request::ListRemoteContentAllows
             | Request::RemoveRemoteContentAllow { .. }) => {
@@ -1253,81 +1251,37 @@ impl Service {
             | Request::FetchMessageBodies { .. }) => {
                 crate::sync_policy::handle(self, request).await?
             }
-            request @ (Request::GetMcpSettings | Request::UpdateMcpSettings { .. }) => {
-                crate::mcp::handle(self, request).await?
-            }
             request @ Request::RuleFromMessage { .. } => {
                 crate::rules::handle(self, request).await?
             }
             // M2d plug-ins (ADR 0050): one arm, the host is wired by WP64.
-            request @ (Request::ListPlugins
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::plugin_admin_requests!()
+            | Request::ListPlugins
             | Request::GetPlugin { .. }
             | Request::PreviewPluginInstall { .. }
             | Request::InstallPlugin { .. }
             | Request::LoadDevPlugin { .. }
-            | Request::EnablePlugin { .. }
-            | Request::DisablePlugin { .. }
-            | Request::UninstallPlugin { .. }
-            | Request::UpdatePluginGrants { .. }
-            | Request::ListPluginLogs { .. }
-            | Request::ClearPluginLogs { .. }
-            | Request::GetPluginSettings { .. }
-            | Request::UpdatePluginSettings { .. }
-            | Request::PreviewPluginPlacements { .. }
             | Request::RunPluginCommand { .. }
             | Request::RespondPluginDialog { .. }
             | Request::PluginUiAction { .. }
             | Request::GetPluginPanel { .. }) => crate::plugins::handle(self, request).await?,
             // M3a PIM (ADR 0058): one arm, wired by WP75.
-            request @ (Request::ListPimSources
-            | Request::AddPimSource { .. }
-            | Request::UpdatePimSource { .. }
-            | Request::RemovePimSource { .. }
-            | Request::TestPimSource { .. }
-            | Request::SyncPimSources { .. }
-            | Request::ListCalendars { .. }
-            | Request::CreateCalendar { .. }
-            | Request::UpdateCalendar { .. }
-            | Request::DeleteCalendar { .. }
-            | Request::ListEventInstances { .. }
-            | Request::GetEvent { .. }
-            | Request::CreateEvent { .. }
-            | Request::UpdateEvent { .. }
-            | Request::DeleteEvent { .. }
-            | Request::MoveEvent { .. }
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::pim_source_requests!()
+            | nail_api::pim_event_task_requests!()
+            | nail_api::pim_contact_requests!()
             | Request::EventFromMessage { .. }
-            | Request::FindFreeTime { .. }
-            | Request::ListAddressBooks { .. }
-            | Request::CreateAddressBook { .. }
-            | Request::UpdateAddressBook { .. }
-            | Request::DeleteAddressBook { .. }
-            | Request::ListContacts { .. }
-            | Request::GetContact { .. }
-            | Request::CreateContact { .. }
-            | Request::UpdateContact { .. }
-            | Request::DeleteContacts { .. }
-            | Request::MoveContact { .. }
-            | Request::SearchContacts { .. }
-            | Request::FindDuplicateContacts { .. }
-            | Request::MergeContacts { .. }
-            | Request::UnlinkContact { .. }
-            | Request::GetContactPhoto { .. }
-            | Request::ListContactGroups { .. }
-            | Request::CreateContactGroup { .. }
-            | Request::UpdateContactGroup { .. }
-            | Request::DeleteContactGroup { .. }
-            | Request::ListTasks { .. }
-            | Request::GetTask { .. }
-            | Request::CreateTask { .. }
-            | Request::UpdateTask { .. }
-            | Request::CompleteTask { .. }
-            | Request::MoveTask { .. }
-            | Request::DeleteTask { .. }
             | Request::TaskFromMessage { .. }
             | Request::SearchPim { .. }
             | Request::PreviewPimImport { .. }
             | Request::ImportPim { .. }
-            | Request::ResolvePimConflict { .. }
             | Request::ListReminders { .. }
             | Request::SnoozeReminders { .. }
             | Request::DismissReminders { .. }) => crate::pim::handle(self, request).await?,
@@ -1385,18 +1339,9 @@ impl Service {
             | Request::OverrideSendVeto { .. }) => crate::agents::handle(self, request).await?,
             // M4b desktop requests (ADR 0087): store-backed settings plus
             // the shell's DesktopHost.
-            request @ (Request::GetInstallation
-            | Request::GetUpdateStatus
-            | Request::SetUpdateSettings { .. }
-            | Request::CheckForUpdates
-            | Request::DownloadUpdate
-            | Request::InstallUpdate
-            | Request::GetDesktopSettings
-            | Request::SetDesktopSettings { .. }
-            | Request::GetDefaultApps
-            | Request::OpenDefaultAppsSettings
-            | Request::GetFirstRun
-            | Request::CompleteFirstRun) => crate::desktop::handle(self, request).await?,
+            request @ (nail_api::desktop_requests!()) => {
+                crate::desktop::handle(self, request).await?
+            }
             // M4c (ADR 0094): the palette's recent actions and print jobs are
             // served; smartcard settings are stored; imports / exports /
             // backups / diagnostics, the recovery key and smartcard use
@@ -1417,18 +1362,11 @@ impl Service {
             | Request::VerifyRecoveryKey { .. }
             | Request::RestoreVaultKey { .. }
             | Request::RemoveRecoveryKey) => crate::smartcard::handle(self, request).await?,
-            request @ (Request::FindImportSources
-            | Request::PreviewImport { .. }
-            | Request::StartImport { .. }
-            | Request::StartExport { .. }
-            | Request::CreateBackup { .. }
-            | Request::InspectBackup { .. }
-            | Request::VerifyBackup { .. }
-            | Request::PreviewRestore { .. }
-            | Request::StartRestore { .. }
-            | Request::ListPortabilityJobs
-            | Request::GetPortabilityJob { .. }
-            | Request::CancelPortabilityJob { .. }
+            #[expect(
+                clippy::unnested_or_patterns,
+                reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"
+            )]
+            request @ (nail_api::portability_requests!()
             | Request::PreviewDiagnostics { .. }
             | Request::CreateDiagnosticsBundle { .. }
             | Request::PickPath { .. }) => crate::portability::handle(self, request).await?,
@@ -1475,12 +1413,4 @@ fn resolve_secrets(options: &ServiceOptions) -> Arc<dyn SecretStore> {
         Some(secrets) => Arc::clone(secrets),
         None => Arc::new(nail_auth::KeychainSecretStore::new()),
     }
-}
-
-/// The wire name of a request (its `type`), for messages and logs.
-pub(crate) fn request_name(request: &Request) -> String {
-    serde_json::to_value(request)
-        .ok()
-        .and_then(|v| v.get("type").and_then(|t| t.as_str().map(str::to_owned)))
-        .unwrap_or_else(|| "request".to_owned())
 }

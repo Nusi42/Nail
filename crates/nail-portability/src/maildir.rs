@@ -15,12 +15,13 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use nail_api::Flags;
-use nail_api::portability::{ItemRef, MAX_IMPORT_MESSAGE_BYTES, PortabilityIssueCode};
+use nail_api::portability::{ItemRef, PortabilityIssueCode};
 
 use crate::eml::sorted_entries;
 use crate::error::{PortabilityError, Result};
+use crate::files::require_folder;
 use crate::folder::{decode_mutf7, encode_mutf7, sanitize_folder_name, source_folder};
-use crate::import::{FolderLocation, MailFolderSource, RawMessage};
+use crate::import::{FolderLocation, MailFolderSource, RawMessage, read_message_file};
 use crate::job::JobContext;
 use crate::message::push_keyword;
 
@@ -56,12 +57,7 @@ fn real_dir(path: &Path) -> bool {
 /// Maildir++ `.A.B` folders as `A/B`, and nested `A/cur` folders; missing
 /// parents are added without messages. Parents come first.
 pub fn scan(root: &Path) -> Result<Vec<MailFolderSource>> {
-    if !root.is_dir() {
-        return Err(PortabilityError::InvalidSource(format!(
-            "{} is not a folder",
-            root.display()
-        )));
-    }
+    require_folder(root)?;
     let mut found: BTreeMap<Vec<String>, Option<PathBuf>> = BTreeMap::new();
     if is_maildir(root) {
         found.insert(vec!["Inbox".to_owned()], Some(root.to_path_buf()));
@@ -343,34 +339,9 @@ pub fn read_folder(
             index: Some(index as u64 + 1),
             ..ItemRef::default()
         };
-        let size = fs::metadata(&path).map_or(0, |m| m.len());
-        if size > MAX_IMPORT_MESSAGE_BYTES {
-            ctx.advance(0, size);
-            visit(
-                ctx,
-                RawMessage::problem(
-                    origin,
-                    PortabilityIssueCode::TooLarge,
-                    format!("{size} bytes"),
-                ),
-            )?;
+        let Some(raw) = read_message_file(&path, &origin, ctx, visit)? else {
             continue;
-        }
-        let raw = match fs::read(&path) {
-            Ok(raw) => raw,
-            Err(e) => {
-                visit(
-                    ctx,
-                    RawMessage::problem(
-                        origin,
-                        PortabilityIssueCode::UnreadableFile,
-                        e.to_string(),
-                    ),
-                )?;
-                continue;
-            }
         };
-        ctx.advance(0, raw.len() as u64);
         let (base, info) = split_info(&file_name);
         let parsed = info.map(parse_info).unwrap_or_default();
         let (message_keywords, unknown_letters) = keywords.of(base, &parsed.keyword_letters);

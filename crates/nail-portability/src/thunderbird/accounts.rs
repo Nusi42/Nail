@@ -6,7 +6,7 @@ use nail_api::accounts::{
     AccountConfig, AuthConfig, Identity, ImapOptions, IncomingServer, MailProtocol, OutgoingServer,
     Pop3Options, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode, default_port,
 };
-use nail_api::ids::{AccountId, IdentityId};
+use nail_api::ids::AccountId;
 use nail_api::portability::{
     AccountProposal, IssueSeverity, ItemIssue, ItemRef, PortabilityIssueCode,
 };
@@ -244,18 +244,11 @@ fn identity(prefs: &Prefs, key: &str) -> Option<Identity> {
         Vec::new()
     };
     Some(Identity {
-        id: IdentityId::new(email.clone()),
-        account_id: AccountId::new(""),
-        email,
         name: prefs.text(&p("fullName")),
         reply_to: prefs.text(&p("reply_to")),
         bcc,
         signature,
-        composer_mode: None,
-        posting: None,
-        mail_style: None,
-        crypto: None,
-        send_as: None,
+        ..Identity::new(AccountId::new(""), email)
     })
 }
 

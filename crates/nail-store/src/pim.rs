@@ -101,6 +101,16 @@ impl PimItem {
         }
     }
 
+    /// Sets the item's id (a parsed or imported item gets the stored one).
+    pub fn set_id(&mut self, id: &str) {
+        match self {
+            Self::Event(e) => e.id = id.into(),
+            Self::Task { task, .. } => task.id = id.into(),
+            Self::Contact(c) => c.id = id.into(),
+            Self::Group { group, .. } => group.id = id.into(),
+        }
+    }
+
     /// A group whose members are `group.member_ids` / `member_emails`.
     pub fn group(group: ContactGroup) -> Self {
         Self::Group {
@@ -151,16 +161,7 @@ impl PimItem {
 
     /// A reference to the item.
     pub fn item_ref(&self) -> PimItemRef {
-        item_ref(self.kind(), self.id())
-    }
-
-    pub(crate) fn set_id(&mut self, id: &str) {
-        match self {
-            Self::Event(e) => e.id = id.into(),
-            Self::Task { task, .. } => task.id = id.into(),
-            Self::Contact(c) => c.id = id.into(),
-            Self::Group { group, .. } => group.id = id.into(),
-        }
+        PimItemRef::new(self.kind(), self.id())
     }
 
     pub(crate) fn set_collection(&mut self, collection: &str) {
@@ -170,32 +171,6 @@ impl PimItem {
             Self::Contact(c) => c.address_book_id = collection.into(),
             Self::Group { group, .. } => group.address_book_id = collection.into(),
         }
-    }
-}
-
-/// A reference of a kind and an id.
-pub(crate) fn item_ref(kind: PimItemKind, id: &str) -> PimItemRef {
-    match kind {
-        PimItemKind::Event => PimItemRef::Event {
-            event_id: id.into(),
-        },
-        PimItemKind::Task => PimItemRef::Task { task_id: id.into() },
-        PimItemKind::Contact => PimItemRef::Contact {
-            contact_id: id.into(),
-        },
-        PimItemKind::ContactGroup => PimItemRef::ContactGroup {
-            group_id: id.into(),
-        },
-    }
-}
-
-/// The id of a reference.
-pub(crate) fn ref_id(item: &PimItemRef) -> &str {
-    match item {
-        PimItemRef::Event { event_id } => event_id.as_str(),
-        PimItemRef::Task { task_id } => task_id.as_str(),
-        PimItemRef::Contact { contact_id } => contact_id.as_str(),
-        PimItemRef::ContactGroup { group_id } => group_id.as_str(),
     }
 }
 
@@ -331,6 +306,6 @@ mod tests {
         group.set_collection("other");
         assert_eq!(group.id(), "g2");
         assert_eq!(group.collection_id(), "other");
-        assert_eq!(ref_id(&group.item_ref()), "g2");
+        assert_eq!(group.item_ref().id(), "g2");
     }
 }

@@ -8,7 +8,10 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{Multi, TIMEOUT, body, eventually, files_under, messages_in, request, update_account};
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,123 +23,32 @@ use nail_api::security::{
     SecuritySettings, SendCrypto, SignatureState, TrustDecision, TrustLevel, VaultState,
 };
 use nail_api::{
-    AccountId, Address, Draft, ErrorCode, Folder, FolderRole, MessageBody, MessageSummary, Request,
-    Response, SearchQuery,
+    AccountId, Address, Draft, ErrorCode, FolderRole, MessageSummary, Request, Response,
+    SearchQuery,
 };
-use nail_core::demo::{
-    DemoMulti, MULTI_HOME_EMAIL, MULTI_HOME_ID, MULTI_WORK_EMAIL, MULTI_WORK_ID, start_demo_multi,
-};
+use nail_core::demo::{MULTI_HOME_EMAIL, MULTI_HOME_ID, MULTI_WORK_EMAIL, MULTI_WORK_ID};
 use nail_core::{Service, ServiceOptions};
 use nail_pgp::discovery::{HttpClient, HttpResponse};
 use nail_testkit::{CryptoFixtures, crypto_fixture};
 use serde_json::json;
-use tempfile::TempDir;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
-
-struct Fixture {
-    service: Service,
-    demo: DemoMulti,
-    _config_dir: TempDir,
-    data_dir: TempDir,
-}
+type Fixture = Multi;
 
 async fn setup() -> Fixture {
-    let demo = start_demo_multi().await.unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    demo.seed_security(&service).await.unwrap();
-    let f = Fixture {
-        service,
-        demo,
-        _config_dir: config_dir,
-        data_dir,
-    };
+    let f = Multi::start().await;
+    f.demo.seed_security(&f.service).await.unwrap();
     eventually("both accounts synced", || async {
-        inbox(&f, MULTI_WORK_ID).await.len() == 15 && inbox(&f, MULTI_HOME_ID).await.len() == 3
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .len()
+            == 15
+            && messages_in(&f.service, MULTI_HOME_ID, FolderRole::Inbox)
+                .await
+                .len()
+                == 3
     })
     .await;
     f
-}
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
-async fn request(f: &Fixture, request: Request) -> Response {
-    f.service.handle(request).await
-}
-
-fn control(f: &Fixture, command: &str, args: &serde_json::Value) -> serde_json::Value {
-    f.demo.control(command, args).unwrap()
-}
-
-async fn folder(f: &Fixture, account: &str, role: FolderRole) -> Option<Folder> {
-    match request(
-        f,
-        Request::ListFolders {
-            account_id: AccountId::new(account),
-        },
-    )
-    .await
-    {
-        Response::Folders { folders } => folders.into_iter().find(|x| x.role == role),
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn list(f: &Fixture, account: &str, role: FolderRole) -> Vec<MessageSummary> {
-    let Some(folder) = folder(f, account, role).await else {
-        return Vec::new();
-    };
-    match request(
-        f,
-        Request::ListMessages {
-            folder_id: folder.id,
-            offset: 0,
-            limit: 500,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn inbox(f: &Fixture, account: &str) -> Vec<MessageSummary> {
-    list(f, account, FolderRole::Inbox).await
-}
-
-async fn body(f: &Fixture, message: &MessageSummary) -> MessageBody {
-    match request(
-        f,
-        Request::GetMessage {
-            id: message.id.clone(),
-        },
-    )
-    .await
-    {
-        Response::Message { message } => *message,
-        other => panic!("unexpected {other:?}"),
-    }
 }
 
 fn draft(to: &str, subject: &str, text: &str) -> Draft {
@@ -165,11 +77,12 @@ fn draft(to: &str, subject: &str, text: &str) -> Draft {
 
 /// Saves and sends a draft; returns the send response.
 async fn send(f: &Fixture, draft: Draft, crypto: Option<SendCrypto>) -> Response {
-    let Response::DraftSaved { draft_id } = request(f, Request::SaveDraft { draft }).await else {
+    let Response::DraftSaved { draft_id } = request(&f.service, Request::SaveDraft { draft }).await
+    else {
         panic!("draft not saved")
     };
     request(
-        f,
+        &f.service,
         Request::SendDraft {
             draft_id,
             delay_secs: Some(0),
@@ -183,7 +96,7 @@ async fn send(f: &Fixture, draft: Draft, crypto: Option<SendCrypto>) -> Response
 
 /// What the SMTP server received: `(envelope recipients, data)`.
 fn received(f: &Fixture) -> Vec<(Vec<String>, String)> {
-    control(f, "smtp-messages", &json!({}))
+    f.control("smtp-messages", &json!({}))
         .as_array()
         .unwrap()
         .iter()
@@ -212,14 +125,14 @@ async fn received_count(f: &Fixture, count: usize) -> Vec<(Vec<String>, String)>
 
 /// Delivers raw mail to the POP3 "home" account and waits for it.
 async fn deliver_home(f: &Fixture, raw: &str) -> MessageSummary {
-    let before: Vec<_> = inbox(f, MULTI_HOME_ID)
+    let before: Vec<_> = messages_in(&f.service, MULTI_HOME_ID, FolderRole::Inbox)
         .await
         .into_iter()
         .map(|m| m.id)
         .collect();
-    control(f, "pop3-deliver", &json!({ "raw": raw }));
+    f.control("pop3-deliver", &json!({ "raw": raw }));
     request(
-        f,
+        &f.service,
         Request::SyncNow {
             account_id: Some(AccountId::new(MULTI_HOME_ID)),
         },
@@ -227,7 +140,7 @@ async fn deliver_home(f: &Fixture, raw: &str) -> MessageSummary {
     .await;
     let deadline = tokio::time::Instant::now() + TIMEOUT;
     loop {
-        if let Some(new) = inbox(f, MULTI_HOME_ID)
+        if let Some(new) = messages_in(&f.service, MULTI_HOME_ID, FolderRole::Inbox)
             .await
             .into_iter()
             .find(|m| !before.contains(&m.id))
@@ -244,9 +157,9 @@ async fn deliver_home(f: &Fixture, raw: &str) -> MessageSummary {
 
 /// Delivers raw mail to the IMAP "work" account's INBOX and waits for it.
 async fn deliver_work(f: &Fixture, raw: &str, subject: &str) -> MessageSummary {
-    control(f, "imap-deliver", &json!({ "raw": raw }));
+    f.control("imap-deliver", &json!({ "raw": raw }));
     request(
-        f,
+        &f.service,
         Request::SyncNow {
             account_id: Some(AccountId::new(MULTI_WORK_ID)),
         },
@@ -255,7 +168,7 @@ async fn deliver_work(f: &Fixture, raw: &str, subject: &str) -> MessageSummary {
     let mut found = None;
     let deadline = tokio::time::Instant::now() + TIMEOUT;
     while found.is_none() {
-        found = inbox(f, MULTI_WORK_ID)
+        found = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
             .await
             .into_iter()
             .find(|m| m.subject == subject);
@@ -274,6 +187,23 @@ fn signed_encrypted() -> SendCrypto {
         encrypt: true,
         technology: None,
         protect_headers: None,
+    }
+}
+
+/// What the work identity knows about sending to alice (no lookup).
+async fn alice_keys(f: &Fixture) -> nail_api::security::RecipientKeysReport {
+    match request(
+        &f.service,
+        Request::CheckRecipientKeys {
+            identity_id: MULTI_WORK_EMAIL.into(),
+            recipients: vec!["alice@example.org".into()],
+            lookup: false,
+        },
+    )
+    .await
+    {
+        Response::RecipientKeys { report } => *report,
+        other => panic!("unexpected {other:?}"),
     }
 }
 
@@ -307,7 +237,7 @@ async fn openpgp_round_trip_with_header_protection() {
     // subject back from the protected headers.
     let message = deliver_home(&f, data).await;
     assert_eq!(message.subject, "...");
-    let shown = body(&f, &message).await;
+    let shown = body(&f.service, &message.id).await;
     let security = shown.security.clone().expect("a security status");
     assert_eq!(security.technology, CryptoTechnology::OpenPgp);
     assert_eq!(
@@ -336,11 +266,15 @@ async fn openpgp_round_trip_with_header_protection() {
 
     // The Sent copy (encrypted to the sender too) reads the same.
     eventually("the Sent copy", || async {
-        !list(&f, MULTI_WORK_ID, FolderRole::Sent).await.is_empty()
+        !messages_in(&f.service, MULTI_WORK_ID, FolderRole::Sent)
+            .await
+            .is_empty()
     })
     .await;
-    let copy = list(&f, MULTI_WORK_ID, FolderRole::Sent).await.remove(0);
-    let copy = body(&f, &copy).await;
+    let copy = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Sent)
+        .await
+        .remove(0);
+    let copy = body(&f.service, &copy.id).await;
     assert_eq!(copy.headers.subject, "Secret plans");
     assert_eq!(
         copy.security.unwrap().encryption.unwrap().state,
@@ -366,7 +300,7 @@ async fn tampered_openpgp_signature_is_invalid() {
     let data = &mail[0].1;
     assert!(data.contains("multipart/signed"), "{data}");
     let good = deliver_home(&f, data).await;
-    let shown = body(&f, &good).await;
+    let shown = body(&f.service, &good.id).await;
     assert_eq!(
         shown.security.unwrap().signatures[0].state,
         SignatureState::Valid
@@ -375,7 +309,7 @@ async fn tampered_openpgp_signature_is_invalid() {
         .replace("Pay 10 EUR", "Pay 99 EUR")
         .replace("Message-ID: <", "Message-ID: <tampered-");
     let bad = deliver_home(&f, &tampered).await;
-    let shown = body(&f, &bad).await;
+    let shown = body(&f.service, &bad.id).await;
     assert_eq!(
         shown.security.unwrap().signatures[0].state,
         SignatureState::Invalid
@@ -403,7 +337,7 @@ async fn smime_round_trip() {
     assert!(data.contains("Subject: S/MIME hello"), "{data}");
     assert!(!data.contains("Certified greetings"), "{data}");
     let message = deliver_home(&f, data).await;
-    let shown = body(&f, &message).await;
+    let shown = body(&f.service, &message.id).await;
     let security = shown.security.unwrap();
     assert_eq!(security.technology, CryptoTechnology::Smime);
     assert_eq!(
@@ -461,7 +395,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
     );
     // A passphrase key must be unlocked to sign.
     let Response::KeyGenerated { key } = request(
-        &f,
+        &f.service,
         Request::GenerateKey {
             identity_id: MULTI_HOME_EMAIL.into(),
             algorithm: nail_api::security::KeyAlgorithm::default(),
@@ -477,29 +411,13 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
     };
     assert!(key.has_secret);
     // Point the home identity at that key.
-    let Response::AccountsConfig { config } = request(&f, Request::GetAccountsConfig).await else {
-        panic!()
-    };
-    let mut account = config
-        .accounts
-        .into_iter()
-        .find(|a| a.id.as_str() == MULTI_HOME_ID)
-        .unwrap();
-    account.identities[0]
-        .crypto
-        .get_or_insert_default()
-        .openpgp_key = Some(key.fingerprint.clone());
-    assert!(matches!(
-        request(
-            &f,
-            Request::UpdateAccount {
-                config: Box::new(account),
-                secrets: vec![]
-            }
-        )
-        .await,
-        Response::AccountSaved { .. }
-    ));
+    update_account(&f.service, MULTI_HOME_ID, |account| {
+        account.identities[0]
+            .crypto
+            .get_or_insert_default()
+            .openpgp_key = Some(key.fingerprint.clone());
+    })
+    .await;
     let mut d = draft(MULTI_WORK_EMAIL, "Locked", "x");
     d.identity_id = MULTI_HOME_EMAIL.into();
     let sign = SendCrypto {
@@ -518,7 +436,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
         "{refused:?}"
     );
     let wrong = request(
-        &f,
+        &f.service,
         Request::UnlockKey {
             key_id: key.id.clone(),
             passphrase: "wrong".into(),
@@ -538,7 +456,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
     );
     assert_eq!(
         request(
-            &f,
+            &f.service,
             Request::UnlockKey {
                 key_id: key.id.clone(),
                 passphrase: "correct horse".into(),
@@ -560,21 +478,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
 #[tokio::test]
 async fn autocrypt_enables_encryption_after_one_message() {
     let f = setup().await;
-    let check = || async {
-        match request(
-            &f,
-            Request::CheckRecipientKeys {
-                identity_id: MULTI_WORK_EMAIL.into(),
-                recipients: vec!["alice@example.org".into()],
-                lookup: false,
-            },
-        )
-        .await
-        {
-            Response::RecipientKeys { report } => *report,
-            other => panic!("unexpected {other:?}"),
-        }
-    };
+    let check = || alice_keys(&f);
     let before = check().await;
     assert_eq!(before.autocrypt, AutocryptRecommendation::Disable);
     assert!(!before.suggested.encrypt);
@@ -610,7 +514,7 @@ Date: Tue, 29 Sep 2026 08:00:00 +0000\r\nMessage-ID: <auth@example.org>\r\nMIME-
 Content-Type: text/html; charset=utf-8\r\n\r\n\
 <p>Please check <a href=\"https://xn--pple-43d.com/login\">your account</a>.</p>\r\n";
     let message = deliver_work(&f, raw, "Your account").await;
-    let shown = body(&f, &message).await;
+    let shown = body(&f.service, &message.id).await;
     let auth = shown.auth_results.expect("trusted results");
     assert_eq!(auth.authserv_id, "mx.nail.example");
     assert_eq!(auth.summary(), AuthVerdict::Pass);
@@ -846,7 +750,7 @@ async fn key_requests() {
 async fn autocrypt_setup_message_is_sent_and_imported() {
     let f = setup().await;
     let Response::AutocryptSetupSent { passcode, .. } = request(
-        &f,
+        &f.service,
         Request::SendAutocryptSetup {
             identity_id: MULTI_WORK_EMAIL.into(),
         },
@@ -873,7 +777,7 @@ async fn autocrypt_setup_message_is_sent_and_imported() {
     let subject = nail_mime::parse_message(raw.as_bytes()).headers.subject;
     let message = deliver_work(&f, &raw, &subject).await;
     let wrong = request(
-        &f,
+        &f.service,
         Request::ImportAutocryptSetup {
             message_id: message.id.clone(),
             passcode: "1111-1111-1111-1111-1111-1111-1111-1111-1111".into(),
@@ -891,7 +795,7 @@ async fn autocrypt_setup_message_is_sent_and_imported() {
         "{wrong:?}"
     );
     let Response::KeysImported { result } = request(
-        &f,
+        &f.service,
         Request::ImportAutocryptSetup {
             message_id: message.id,
             passcode: code.trim().into(),
@@ -908,16 +812,9 @@ async fn autocrypt_setup_message_is_sent_and_imported() {
 
 async fn search_count(f: &Fixture, text: &str) -> u32 {
     match request(
-        f,
+        &f.service,
         Request::Search {
-            query: SearchQuery {
-                text: text.into(),
-                account_id: None,
-                folder_id: None,
-                offset: 0,
-                limit: 50,
-                sort: nail_api::search::SearchSort::default(),
-            },
+            query: SearchQuery::new(text, 50),
         },
     )
     .await
@@ -953,7 +850,7 @@ async fn decrypted_content_is_indexed_only_after_opting_in() {
 
     // Opt in for the home account: its encrypted mail is reindexed.
     let Response::SecuritySettings { .. } = request(
-        &f,
+        &f.service,
         Request::UpdateSecuritySettings {
             settings: SecuritySettings {
                 index_decrypted: vec![AccountId::new(MULTI_HOME_ID)],
@@ -971,7 +868,7 @@ async fn decrypted_content_is_indexed_only_after_opting_in() {
     .await;
     // Withdrawn again: gone from the index.
     request(
-        &f,
+        &f.service,
         Request::UpdateSecuritySettings {
             settings: SecuritySettings::default(),
         },
@@ -985,7 +882,7 @@ async fn decrypted_content_is_indexed_only_after_opting_in() {
 }
 
 async fn vault_state(f: &Fixture) -> nail_api::security::VaultStatus {
-    match request(f, Request::GetVaultStatus).await {
+    match request(&f.service, Request::GetVaultStatus).await {
         Response::VaultStatus { status } => status,
         other => panic!("unexpected {other:?}"),
     }
@@ -994,12 +891,12 @@ async fn vault_state(f: &Fixture) -> nail_api::security::VaultStatus {
 #[tokio::test]
 async fn encryption_at_rest_on_and_off_keeps_the_data() {
     let f = setup().await;
-    let message = inbox(&f, MULTI_WORK_ID)
+    let message = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
         .await
         .into_iter()
         .find(|m| m.subject.contains("Release notes"))
         .unwrap();
-    let before = body(&f, &message).await;
+    let before = body(&f.service, &message.id).await;
     assert!(search_count(&f, "unified").await > 0);
     // Blob files start with the sealed-data magic only when encrypted.
     let blobs = f.data_dir.path().join("blobs");
@@ -1013,7 +910,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
     assert!(!files.iter().any(is_sealed));
 
     let Response::VaultStatus { status } =
-        request(&f, Request::SetVaultEncryption { enabled: true }).await
+        request(&f.service, Request::SetVaultEncryption { enabled: true }).await
     else {
         panic!()
     };
@@ -1023,7 +920,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
         vault_state(&f).await.state == VaultState::Encrypted
     })
     .await;
-    assert_eq!(body(&f, &message).await, before);
+    assert_eq!(body(&f.service, &message.id).await, before);
     eventually("the index answers again", || async {
         search_count(&f, "unified").await > 0
     })
@@ -1035,7 +932,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
 
     // Accepted at once: the state says the last switch is done.
     let Response::VaultStatus { status } =
-        request(&f, Request::SetVaultEncryption { enabled: false }).await
+        request(&f.service, Request::SetVaultEncryption { enabled: false }).await
     else {
         panic!()
     };
@@ -1045,7 +942,7 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
     })
     .await;
     assert!(!walk(&blobs).iter().any(is_sealed));
-    assert_eq!(body(&f, &message).await, before);
+    assert_eq!(body(&f.service, &message.id).await, before);
     eventually("the index answers again", || async {
         search_count(&f, "unified").await > 0
     })
@@ -1057,16 +954,13 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
 /// the conversion) is a `.tmp*` file that is renamed into place or gone a
 /// moment later; it is not a blob yet.
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            out.extend(walk(&path));
-        } else if !entry.file_name().to_string_lossy().starts_with(".tmp") {
-            out.push(path);
-        }
-    }
-    out
+    files_under(dir)
+        .into_iter()
+        .filter(|p| {
+            !p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with(".tmp"))
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -1077,7 +971,7 @@ async fn mail_encrypted_to_someone_else_shows_no_key() {
             .unwrap();
     let subject = nail_mime::parse_message(raw.as_bytes()).headers.subject;
     let message = deliver_work(&f, &raw, &subject).await;
-    let shown = body(&f, &message).await;
+    let shown = body(&f.service, &message.id).await;
     // Not for us: no key.
     assert_eq!(
         shown.security.unwrap().encryption.unwrap().state,
@@ -1187,7 +1081,7 @@ async fn mcp_encrypted_gate_follows_the_reader() {
     ];
     for raw in &variants {
         let message = deliver_home(&f, raw).await;
-        let shown = body(&f, &message).await;
+        let shown = body(&f.service, &message.id).await;
         assert_eq!(
             shown
                 .security
@@ -1215,7 +1109,7 @@ async fn mcp_encrypted_gate_follows_the_reader() {
 }
 
 fn server_drafts(f: &Fixture) -> Vec<String> {
-    control(f, "imap-messages", &json!({ "mailbox": "Drafts" }))
+    f.control("imap-messages", &json!({ "mailbox": "Drafts" }))
         .as_array()
         .unwrap()
         .iter()
@@ -1224,7 +1118,8 @@ fn server_drafts(f: &Fixture) -> Vec<String> {
 }
 
 async fn save_draft(f: &Fixture, draft: Draft) -> nail_api::DraftId {
-    let Response::DraftSaved { draft_id } = request(f, Request::SaveDraft { draft }).await else {
+    let Response::DraftSaved { draft_id } = request(&f.service, Request::SaveDraft { draft }).await
+    else {
         panic!("draft not saved")
     };
     draft_id
@@ -1243,26 +1138,10 @@ async fn upload_barrier(f: &Fixture, subject: &str) {
 }
 
 async fn set_work_encrypt_default(f: &Fixture, encrypt: bool) {
-    let Response::AccountsConfig { config } = request(f, Request::GetAccountsConfig).await else {
-        panic!()
-    };
-    let mut account = config
-        .accounts
-        .into_iter()
-        .find(|a| a.id.as_str() == MULTI_WORK_ID)
-        .unwrap();
-    account.identities[0].crypto.get_or_insert_default().encrypt = encrypt;
-    assert!(matches!(
-        request(
-            f,
-            Request::UpdateAccount {
-                config: Box::new(account),
-                secrets: vec![]
-            }
-        )
-        .await,
-        Response::AccountSaved { .. }
-    ));
+    update_account(&f.service, MULTI_WORK_ID, |account| {
+        account.identities[0].crypto.get_or_insert_default().encrypt = encrypt;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -1301,19 +1180,7 @@ async fn encrypted_drafts_never_reach_the_server_drafts_folder() {
             .unwrap();
     deliver_work(&f, &raw, "Hi with Autocrypt").await;
     eventually("Autocrypt recommends encryption", || async {
-        match request(
-            &f,
-            Request::CheckRecipientKeys {
-                identity_id: MULTI_WORK_EMAIL.into(),
-                recipients: vec!["alice@example.org".into()],
-                lookup: false,
-            },
-        )
-        .await
-        {
-            Response::RecipientKeys { report } => report.suggested.encrypt,
-            other => panic!("unexpected {other:?}"),
-        }
+        alice_keys(&f).await.suggested.encrypt
     })
     .await;
     save_draft(&f, draft("alice@example.org", "Autocrypt draft", "x")).await;
@@ -1335,32 +1202,18 @@ async fn encrypted_drafts_never_reach_the_server_drafts_folder() {
 }
 
 async fn set_work_authserv_ids(f: &Fixture, ids: Vec<String>) {
-    let Response::AccountsConfig { config } = request(f, Request::GetAccountsConfig).await else {
-        panic!()
-    };
-    let mut account = config
-        .accounts
-        .into_iter()
-        .find(|a| a.id.as_str() == MULTI_WORK_ID)
-        .unwrap();
-    account.authserv_ids = ids;
-    assert!(matches!(
-        request(
-            f,
-            Request::UpdateAccount {
-                config: Box::new(account),
-                secrets: vec![]
-            }
-        )
-        .await,
-        Response::AccountSaved { .. }
-    ));
+    update_account(&f.service, MULTI_WORK_ID, |account| {
+        account.authserv_ids = ids;
+    })
+    .await;
 }
 
 /// Delivers `count` messages carrying `auth` as their topmost
 /// `Authentication-Results` to the work inbox and waits for them.
 async fn deliver_auth_burst(f: &Fixture, tag: &str, hour: u8, auth: &str, count: usize) {
-    let before = inbox(f, MULTI_WORK_ID).await.len();
+    let before = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+        .await
+        .len();
     for n in 0..count {
         let raw = format!(
             "Received: from evil.example by mx.nail.example; Wed, 30 Dec 2026 08:00:00 +0000\r\n\
@@ -1369,24 +1222,27 @@ async fn deliver_auth_burst(f: &Fixture, tag: &str, hour: u8, auth: &str, count:
              Date: Wed, 30 Dec 2026 {hour:02}:{n:02}:00 +0000\r\nMessage-ID: <{tag}-{n}@bank.example>\r\n\
              Content-Type: text/plain\r\n\r\nPay now.\r\n"
         );
-        control(f, "imap-deliver", &json!({ "raw": raw }));
+        f.control("imap-deliver", &json!({ "raw": raw }));
     }
     request(
-        f,
+        &f.service,
         Request::SyncNow {
             account_id: Some(AccountId::new(MULTI_WORK_ID)),
         },
     )
     .await;
     eventually("the burst synced", || async {
-        inbox(f, MULTI_WORK_ID).await.len() >= before + count
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .len()
+            >= before + count
     })
     .await;
 }
 
 async fn suggestion(f: &Fixture) -> Option<String> {
     match request(
-        f,
+        &f.service,
         Request::SuggestAuthservId {
             account_id: AccountId::new(MULTI_WORK_ID),
         },
@@ -1421,12 +1277,12 @@ async fn authserv_ids_are_trusted_only_when_configured() {
     )
     .await;
     assert_eq!(suggestion(&f).await, None, "not the receiving server");
-    let forged = inbox(&f, MULTI_WORK_ID)
+    let forged = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
         .await
         .into_iter()
         .find(|m| m.subject == "Forged 0")
         .unwrap();
-    assert!(body(&f, &forged).await.auth_results.is_none());
+    assert!(body(&f.service, &forged.id).await.auth_results.is_none());
 
     // Mail whose topmost results name the receiving server's domain: a
     // suggestion, still not trusted.
@@ -1440,23 +1296,26 @@ async fn authserv_ids_are_trusted_only_when_configured() {
     .await;
     let suggested = suggestion(&f).await;
     assert_eq!(suggested.as_deref(), Some("mx.nail.example"));
-    let checked = inbox(&f, MULTI_WORK_ID)
+    let checked = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
         .await
         .into_iter()
         .find(|m| m.subject == "Checked 0")
         .unwrap();
-    assert!(body(&f, &checked).await.auth_results.is_none());
+    assert!(body(&f.service, &checked.id).await.auth_results.is_none());
 
     // The user confirms it: now the badge counts.
     set_work_authserv_ids(&f, vec![suggested.unwrap()]).await;
-    let auth = body(&f, &checked).await.auth_results.expect("trusted now");
+    let auth = body(&f.service, &checked.id)
+        .await
+        .auth_results
+        .expect("trusted now");
     assert_eq!(auth.summary(), AuthVerdict::Pass);
-    assert!(body(&f, &forged).await.auth_results.is_none());
+    assert!(body(&f.service, &forged.id).await.auth_results.is_none());
 
     // An unknown account is an error.
     assert!(matches!(
         request(
-            &f,
+            &f.service,
             Request::SuggestAuthservId {
                 account_id: AccountId::new("nope")
             }

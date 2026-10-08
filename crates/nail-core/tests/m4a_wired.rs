@@ -10,101 +10,37 @@
 
 #![cfg(test)]
 
-use std::future::Future;
-use std::time::Duration;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{Multi, eventually, install_package, messages_in, until_some};
+use nail_core::testing::TempService;
 
 use nail_api::agents::{
-    ActionActor, ActionAttribution, ActionKind, ActionTarget, ActionTargetKind,
+    ActionActor, ActionAttribution, ActionKind, ActionTarget, ActionTargetKind, Confirmation,
     ConfirmationDecision, ConfirmationFilter, ConfirmationState, McpClientRef, NewConfirmation,
 };
 use nail_api::mcp::McpGrant;
-use nail_api::plugins::{PluginGrant, PluginPackageSource, PluginPermission};
 use nail_api::{
-    Address, Draft, ErrorCode, FolderRole, LocalizedMessage, MessageSummary, PluginId, Request,
-    Response, UiContext,
+    Address, Draft, ErrorCode, FolderRole, LocalizedMessage, PluginId, Request, Response, UiContext,
 };
-use nail_core::demo::{DemoMulti, MULTI_WORK_EMAIL, MULTI_WORK_ID, start_demo_multi};
-use nail_core::{Service, ServiceOptions};
+use nail_core::Service;
+use nail_core::demo::{MULTI_WORK_EMAIL, MULTI_WORK_ID};
 use nail_mcp::CoreAccess as _;
 use nail_plugins::package::build_package;
 use serde_json::{Value, json};
-use tempfile::TempDir;
 
-const TIMEOUT: Duration = Duration::from_secs(30);
-
-struct Fixture {
-    service: Service,
-    demo: DemoMulti,
-    files: TempDir,
-    _config: TempDir,
-    _data: TempDir,
-}
+type Fixture = Multi;
 
 async fn setup() -> Fixture {
-    let demo = start_demo_multi().await.unwrap();
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    demo.write_config(config.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data.path(), config.path()));
-    let service = Service::open(options).unwrap();
-    Fixture {
-        service,
-        demo,
-        files: tempfile::tempdir().unwrap(),
-        _config: config,
-        _data: data,
-    }
-}
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    while !check().await {
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
-fn control(f: &Fixture, command: &str, args: &Value) -> Value {
-    f.demo.control(command, args).unwrap()
-}
-
-async fn inbox(f: &Fixture, role: FolderRole) -> Vec<MessageSummary> {
-    let Response::Folders { folders } = f
-        .service
-        .handle(Request::ListFolders {
-            account_id: MULTI_WORK_ID.into(),
-        })
-        .await
-    else {
-        panic!("folders expected")
-    };
-    let Some(folder) = folders.into_iter().find(|x| x.role == role) else {
-        return Vec::new();
-    };
-    match f
-        .service
-        .handle(Request::ListMessages {
-            folder_id: folder.id,
-            offset: 0,
-            limit: 500,
-        })
-        .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("{other:?}"),
-    }
+    Multi::start().await
 }
 
 async fn synced(f: &Fixture) {
     eventually("the work inbox synced", || async {
-        inbox(f, FolderRole::Inbox).await.len() >= 15
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .len()
+            >= 15
     })
     .await;
 }
@@ -117,11 +53,11 @@ async fn install(f: &Fixture, manifest: Value, js: &str) -> PluginId {
 /// [`install`] with more files in the package (catalogs).
 async fn install_with(f: &Fixture, manifest: Value, js: &str, files: &[(&str, &str)]) -> PluginId {
     let id = manifest["id"].as_str().unwrap().to_owned();
-    let permissions: Vec<String> = manifest["permissions"]
+    let permissions: Vec<&str> = manifest["permissions"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|p| p.as_str().unwrap().to_owned())
+        .map(|p| p.as_str().unwrap())
         .collect();
     let text = manifest.to_string();
     let mut entries = vec![
@@ -130,35 +66,10 @@ async fn install_with(f: &Fixture, manifest: Value, js: &str, files: &[(&str, &s
     ];
     entries.extend(files.iter().map(|(path, body)| (*path, body.as_bytes())));
     let bytes = build_package(entries).unwrap();
-    let path = f.files.path().join(format!("{id}.nailplugin"));
+    // Packages wait in the data directory (any folder would do).
+    let path = f.data_dir.path().join(format!("{id}.nailplugin"));
     std::fs::write(&path, bytes).unwrap();
-    let source = PluginPackageSource::File {
-        path: path.display().to_string(),
-    };
-    let sha = match f
-        .service
-        .handle(Request::PreviewPluginInstall {
-            source: source.clone(),
-        })
-        .await
-    {
-        Response::PluginInstallPreview { preview } => preview.package_sha256,
-        other => panic!("{other:?}"),
-    };
-    let grants = permissions
-        .iter()
-        .map(|p| PluginGrant::all(PluginPermission::parse(p).unwrap()))
-        .collect();
-    match f
-        .service
-        .handle(Request::InstallPlugin {
-            source,
-            package_sha256: sha,
-            grants,
-            enable: true,
-        })
-        .await
-    {
+    match install_package(&f.service, &path, &permissions).await {
         Response::Plugin { .. } => {}
         other => panic!("{other:?}"),
     }
@@ -202,15 +113,6 @@ fn send(draft_id: nail_api::DraftId) -> Request {
     }
 }
 
-fn smtp_data(f: &Fixture) -> Vec<String> {
-    control(f, "smtp-messages", &json!({}))
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| m["data"].as_str().unwrap().to_owned())
-        .collect()
-}
-
 const HOOKS_JS: &str = r#"
 export default {
   activate(ctx) {
@@ -228,12 +130,10 @@ export default {
 };
 "#;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
-    let f = setup().await;
-    synced(&f).await;
-    let plugin = install(
-        &f,
+/// Installs the hooks plug-in "checker" (arrival, before-send, open).
+async fn install_checker(f: &Fixture) -> PluginId {
+    install(
+        f,
         manifest(
             "checker",
             &[
@@ -247,22 +147,61 @@ async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
         ),
         HOOKS_JS,
     )
-    .await;
+    .await
+}
+
+/// The first pending confirmation, once there is one.
+async fn first_pending(service: &Service) -> Confirmation {
+    until_some("a pending confirmation", || async {
+        let Response::Confirmations { confirmations } = service
+            .handle(Request::ListConfirmations {
+                filter: ConfirmationFilter::Pending,
+                actor: None,
+                before: None,
+                limit: 10,
+            })
+            .await
+        else {
+            panic!("confirmations expected")
+        };
+        confirmations.into_iter().next()
+    })
+    .await
+}
+
+/// Approves a confirmation once.
+async fn approve(service: &Service, pending: &Confirmation) {
+    let decided = service
+        .handle(Request::DecideConfirmation {
+            confirmation_id: pending.id.clone(),
+            decision: ConfirmationDecision::Approve,
+            always_allow: false,
+        })
+        .await;
+    assert!(
+        matches!(decided, Response::ConfirmationDecided { .. }),
+        "{decided:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
+    let f = setup().await;
+    synced(&f).await;
+    let plugin = install_checker(&f).await;
 
     // An arrival hook tags new mail through the plug-in write path.
-    control(
-        &f,
-        "imap-deliver",
+    f.control("imap-deliver",
         &json!({"raw": "From: ann@example.org\r\nTo: me@work.example\r\nSubject: Hooked message\r\nMessage-ID: <hooked@example.org>\r\nDate: Thu, 01 Oct 2026 09:00:00 +0000\r\n\r\nHello\r\n"}),
     );
     eventually("the arrival hook tagged the new mail", || async {
-        inbox(&f, FolderRole::Inbox)
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.subject == "Hooked message" && m.tags.iter().any(|t| t == "from-plugin"))
     })
     .await;
-    let hooked = inbox(&f, FolderRole::Inbox)
+    let hooked = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
         .await
         .into_iter()
         .find(|m| m.subject == "Hooked message")
@@ -319,7 +258,7 @@ async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
         }
     ));
     eventually("the vetoed message went out anyway", || async {
-        smtp_data(&f)
+        f.smtp_data()
             .iter()
             .any(|d| d.contains("Subject: Please veto"))
     })
@@ -332,7 +271,7 @@ async fn hooks_tag_arrivals_veto_sends_and_annotate_messages() {
         Response::SendQueued { .. }
     ));
     eventually("the checked message went out", || async {
-        smtp_data(&f).iter().any(|d| {
+        f.smtp_data().iter().any(|d| {
             d.contains("Subject: Normal mail")
                 && d.contains("X-Checked: yes")
                 && d.contains("-- checked")
@@ -421,7 +360,9 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
         )],
     )
     .await;
-    let target = inbox(&f, FolderRole::Inbox).await.remove(0);
+    let target = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+        .await
+        .remove(0);
 
     let response = f
         .service
@@ -445,24 +386,7 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
             .any(|l| l.starts_with("TASK done"))
     })
     .await;
-    let pending = loop {
-        let Response::Confirmations { confirmations } = f
-            .service
-            .handle(Request::ListConfirmations {
-                filter: ConfirmationFilter::Pending,
-                actor: None,
-                before: None,
-                limit: 10,
-            })
-            .await
-        else {
-            panic!()
-        };
-        if let Some(first) = confirmations.into_iter().next() {
-            break first;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    };
+    let pending = first_pending(&f.service).await;
     assert_eq!(pending.kind, ActionKind::Trash);
     assert_eq!(
         pending.requested_by.actor,
@@ -472,24 +396,13 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     );
     assert_eq!(pending.operation, "nail.mail.delete");
     assert!(
-        inbox(&f, FolderRole::Inbox)
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.id == target.id),
         "nothing moved before the decision"
     );
-    let decided = f
-        .service
-        .handle(Request::DecideConfirmation {
-            confirmation_id: pending.id.clone(),
-            decision: ConfirmationDecision::Approve,
-            always_allow: false,
-        })
-        .await;
-    assert!(
-        matches!(decided, Response::ConfirmationDecided { .. }),
-        "{decided:?}"
-    );
+    approve(&f.service, &pending).await;
     eventually("the approved Trash ran", || async {
         log_lines(&f, &plugin)
             .await
@@ -498,7 +411,7 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     })
     .await;
     eventually("the message left the inbox", || async {
-        !inbox(&f, FolderRole::Inbox)
+        !messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
             .await
             .iter()
             .any(|m| m.id == target.id)
@@ -513,7 +426,7 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     );
 
     // The hourly job runs when the core's clock passes the hour.
-    control(&f, "clock-advance", &json!({"seconds": 7200}));
+    f.control("clock-advance", &json!({"seconds": 7200}));
     f.service.clock_moved();
     eventually("the job ran on the controlled clock", || async {
         let Response::PluginActivity { activity } = f
@@ -585,7 +498,9 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
         client_id: client.id.clone(),
         name: "Agent".into(),
     };
-    let message = inbox(&f, FolderRole::Inbox).await.remove(0);
+    let message = messages_in(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+        .await
+        .remove(0);
     let args = json!({"q": "ada", "id": message.id.as_str()});
     let answer = core
         .call_plugin_tool("writer__lookup", args.clone(), by.clone())
@@ -709,22 +624,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
 
     // With before-send hooks: a stale revision never reaches them, the
     // current one is sent with the hook's content.
-    install(
-        &f,
-        manifest(
-            "checker",
-            &[
-                "mail.read",
-                "mail.organize",
-                "hooks.arrival",
-                "hooks.beforeSend",
-                "hooks.open",
-            ],
-            json!({"hooks": [{"hook": "arrival"}, {"hook": "beforeSend"}, {"hook": "open"}]}),
-        ),
-        HOOKS_JS,
-    )
-    .await;
+    install_checker(&f).await;
     let current = nail_store::draft_revision(&stored_draft(&f, &id).await);
     let mut again = stored_draft(&f, &id).await;
     again.subject = "Approved send (edited)".into();
@@ -739,7 +639,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
     eventually(
         "the approved draft went out with the hook's content",
         || async {
-            smtp_data(&f).iter().any(|d| {
+            f.smtp_data().iter().any(|d| {
                 d.contains("Subject: Approved send (edited)")
                     && d.contains("mallory@example.org")
                     && d.contains("-- checked")
@@ -748,7 +648,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
     )
     .await;
     assert!(
-        !smtp_data(&f)
+        !f.smtp_data()
             .iter()
             .any(|d| d.contains("Subject: Approved send\r\n")),
         "the stale revisions were never sent"
@@ -792,24 +692,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
         })
         .await;
     assert_eq!(response, Response::Done);
-    let pending = loop {
-        let Response::Confirmations { confirmations } = f
-            .service
-            .handle(Request::ListConfirmations {
-                filter: ConfirmationFilter::Pending,
-                actor: None,
-                before: None,
-                limit: 10,
-            })
-            .await
-        else {
-            panic!()
-        };
-        if let Some(first) = confirmations.into_iter().next() {
-            break first;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    };
+    let pending = first_pending(&f.service).await;
     assert_eq!(pending.kind, ActionKind::Send);
     let mut changed = stored_draft(&f, &pinned).await;
     changed.bcc.push(Address {
@@ -817,18 +700,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
         email: "eve@example.org".into(),
     });
     save(&f, changed).await;
-    let decided = f
-        .service
-        .handle(Request::DecideConfirmation {
-            confirmation_id: pending.id.clone(),
-            decision: ConfirmationDecision::Approve,
-            always_allow: false,
-        })
-        .await;
-    assert!(
-        matches!(decided, Response::ConfirmationDecided { .. }),
-        "{decided:?}"
-    );
+    approve(&f.service, &pending).await;
     eventually("the plug-in heard the send failed", || async {
         log_lines(&f, &sender)
             .await
@@ -856,7 +728,7 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
     assert_eq!(ended.error.unwrap().id, "mcp-tool-error-draft-changed");
     assert_eq!(outbox_len(&f).await, 0, "nothing queued");
     assert!(
-        !smtp_data(&f)
+        !f.smtp_data()
             .iter()
             .any(|d| d.contains("Subject: Plug-in send")),
         "nothing sent"
@@ -865,12 +737,8 @@ async fn a_confirmed_send_queues_only_the_approved_draft() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn revoking_a_client_cancels_its_confirmations() {
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.start_engines = false;
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+    let temp = TempService::quiet();
+    let service = &temp.service;
     let Response::McpClientCreated { client, .. } = service
         .handle(Request::CreateMcpClient {
             name: "Agent".into(),
@@ -883,11 +751,7 @@ async fn revoking_a_client_cancels_its_confirmations() {
     let actor = ActionActor::mcp_client(client.id.clone());
     let now = chrono::Utc::now().timestamp();
     let new = NewConfirmation {
-        requested_by: ActionAttribution {
-            actor: actor.clone(),
-            name: "Agent".into(),
-            on_behalf_of: None,
-        },
+        requested_by: ActionAttribution::new(actor.clone(), "Agent"),
         kind: ActionKind::Send,
         operation: "send_message".into(),
         summary: LocalizedMessage::new("confirmation-summary-send"),

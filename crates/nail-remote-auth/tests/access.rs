@@ -78,9 +78,7 @@ async fn scopes_of_the_session_decide() {
 
 #[tokio::test]
 async fn allowed_writes_are_audited() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let ctx = browser.resolve(&h).unwrap();
     assert!(h.auth.authorize(&ctx, &delete(false)).is_ok());
     assert!(h.auth.authorize(&ctx, &delete(true)).is_ok());
@@ -204,11 +202,8 @@ async fn self_service_for_own_sessions_and_devices() {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
     let bob = h.user("bob", false).await;
-    let mut phone = h.paired(&ada, "192.0.2.10").await;
-    let mut laptop = h.paired(&ada, "192.0.2.11").await;
+    let ((_, ctx), (_, laptop_ctx)) = h.two_sessions(&ada).await;
     let mut bobs = h.paired(&bob, "192.0.2.12").await;
-    let ctx = phone.resolve(&h).unwrap();
-    let laptop_ctx = laptop.resolve(&h).unwrap();
     let bob_ctx = bobs.resolve(&h).unwrap();
 
     let own_list = Request::ListRemoteSessions {

@@ -2,6 +2,7 @@
 //! attaching / detaching bodies, fetch targets and the MCP settings.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use common::{message, seeded_store};

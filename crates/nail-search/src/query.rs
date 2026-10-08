@@ -1040,6 +1040,24 @@ impl fmt::Display for Query {
 }
 
 impl Query {
+    /// The same query with nested ANDs inside an AND (ORs inside an OR)
+    /// merged into one level, recursively: the form the parser produces.
+    #[must_use]
+    pub fn flattened(self) -> Self {
+        match self {
+            Query::And(items) => Query::And(flatten(
+                items.into_iter().map(Self::flattened).collect(),
+                false,
+            )),
+            Query::Or(items) => Query::Or(flatten(
+                items.into_iter().map(Self::flattened).collect(),
+                true,
+            )),
+            Query::Not(inner) => Query::Not(Box::new(inner.flattened())),
+            other => other,
+        }
+    }
+
     /// The same query with every span reset (for comparing ASTs).
     #[must_use]
     pub fn without_spans(&self) -> Query {

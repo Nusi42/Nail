@@ -2,11 +2,13 @@
 //! every inline example in its condition and action tables parses.
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
+use common::{kdl_blocks, user_doc};
 
 fn doc() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../userDocs/en/rules.md");
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    user_doc("rules.md")
 }
 
 fn check(text: &str) {
@@ -24,23 +26,7 @@ fn check(text: &str) {
 
 #[test]
 fn code_blocks_are_valid() {
-    let text = doc();
-    let mut blocks = Vec::new();
-    let mut current: Option<String> = None;
-    for line in text.lines() {
-        match (&mut current, line.trim_start()) {
-            (None, "```kdl") => current = Some(String::new()),
-            (Some(block), "```") => {
-                blocks.push(std::mem::take(block));
-                current = None;
-            }
-            (Some(block), _) => {
-                block.push_str(line);
-                block.push('\n');
-            }
-            (None, _) => {}
-        }
-    }
+    let blocks = kdl_blocks(&doc());
     assert!(blocks.len() >= 3, "found only {} examples", blocks.len());
     for block in blocks {
         check(&block);

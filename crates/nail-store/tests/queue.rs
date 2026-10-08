@@ -1,6 +1,7 @@
 //! Operation queue: local apply, ordering, retry and crash recovery.
 #![cfg(test)]
 
+#[expect(dead_code, reason = "these tests use only some of the shared fixtures")]
 mod common;
 
 use std::collections::VecDeque;
@@ -188,11 +189,17 @@ async fn replay_runs_in_enqueue_order() {
     assert_eq!(store.list_ops(None).unwrap().len(), 0);
 }
 
-#[tokio::test]
-async fn retry_stops_the_pass_and_keeps_order() {
+/// A store with two queued "mark seen" operations (`m1`, then `m2`).
+fn two_queued_ops() -> (Store, OpId, OpId) {
     let store = store_with_messages(&["m1", "m2"]);
     let first = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
     let second = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
+    (store, first, second)
+}
+
+#[tokio::test]
+async fn retry_stops_the_pass_and_keeps_order() {
+    let (store, first, second) = two_queued_ops();
 
     let replayer = ScriptedReplayer::with_script([ReplayOutcome::Retry("offline".into())]);
     let report = store
@@ -328,9 +335,7 @@ async fn in_flight_ops_are_recovered_after_restart() {
 /// `in_flight` until the next restart, so it was never replayed.
 #[tokio::test]
 async fn a_cancelled_pass_puts_the_op_back() {
-    let store = store_with_messages(&["m1", "m2"]);
-    let first = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
-    let second = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
+    let (store, first, second) = two_queued_ops();
 
     let pass = store.replay_pending(&Hanging, ReplayPolicy::default());
     assert!(

@@ -31,7 +31,7 @@ pub fn accounts_schema() -> Schema {
 struct AccountsFileSchema {
     /// `undo-send-delay <seconds>`: default delay before a sent message
     /// really leaves (0 to 600, default 10).
-    #[schemars(range(max = 600))]
+    #[schemars(range(max = super::MAX_UNDO_SEND_SECS))]
     undo_send_delay: Option<u32>,
     /// `oauth-provider "<id>" client-id=… { scopes … }`: OAuth2 client
     /// registrations. `google` and `microsoft` are built in and need only

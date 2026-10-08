@@ -5,7 +5,10 @@
 //! and conflicts with changes on disk.
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
+use std::path::Path;
 
 use nail_api::ErrorCode;
 use nail_api::appearance::{ThemeKind, ThemeSource};
@@ -16,18 +19,7 @@ use nail_config::ConfigManager;
 use pretty_assertions::assert_eq;
 
 fn golden(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/theme_edit")
-        .join(format!("{name}.kdl"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_GOLDEN=1)", path.display()))
-        .replace("\r\n", "\n");
-    assert_eq!(expected, actual, "golden file {}", path.display());
+    common::golden("theme_edit", name, actual);
 }
 
 fn error_id(error: &nail_api::ApiError) -> (ErrorCode, &str) {

@@ -26,11 +26,12 @@ use kdl::{KdlDocument, KdlNode, KdlValue};
 use nail_api::plugins::{
     PLUGIN_PANEL_WIDGET, PluginManifest, PluginPlacement, plugin_command_id, plugin_panel_id,
 };
-use nail_api::{LayoutNode, MenuItem, PluginId, ResolvedLayout, ToolbarItem};
+use nail_api::{ActionItem, LayoutNode, MenuItem, PluginId, ResolvedLayout, ToolbarItem};
 
 use crate::kdl_edit::{
     Style, append_rendered, ensure_multiline, parse_rendered, replace_rendered, set_prop, str_prop,
 };
+use crate::kdl_write::quote;
 use crate::layout::normalize_key;
 use crate::render;
 use crate::write_back::{EditError, LayoutEditor, NEW_LAYOUT};
@@ -54,16 +55,7 @@ fn window_has(body: &KdlDocument, window: &str, kind: &str) -> bool {
     }
     LayoutEditor::window_sites(body, window)
         .into_iter()
-        .any(|site| {
-            let top = &body.nodes()[site.top];
-            match site.inner {
-                None => has(top, kind),
-                Some(inner) => top
-                    .children()
-                    .and_then(|c| c.nodes().get(inner))
-                    .is_some_and(|w| has(w, kind)),
-            }
-        })
+        .any(|site| site.node(body).is_some_and(|w| has(w, kind)))
 }
 
 /// The window a panel goes into: the file's own main window when it shows
@@ -132,7 +124,7 @@ pub fn placement_layout(
                     &action,
                     placement,
                     |item| match item {
-                        ToolbarItem::Action { action, .. } => Some(action.as_str()),
+                        ToolbarItem::Action { item, .. } => Some(item.action.as_str()),
                         _ => None,
                     },
                     ToolbarItem::action,
@@ -148,15 +140,10 @@ pub fn placement_layout(
                     &action,
                     placement,
                     |item| match item {
-                        MenuItem::Action { action, .. } => Some(action.as_str()),
+                        MenuItem::Action(item) => Some(item.action.as_str()),
                         _ => None,
                     },
-                    |action| MenuItem::Action {
-                        action,
-                        args: Vec::new(),
-                        label: None,
-                        icon: None,
-                    },
+                    |action| MenuItem::Action(ActionItem::new(action)),
                 );
             }
             _ if placement.panel.is_some() => panels.push(placement),
@@ -324,13 +311,8 @@ fn place_panel(
     let after = placement.after.is_some();
     let sites = LayoutEditor::window_sites(editor.body(), target);
     for site in sites {
-        let body = editor.body();
-        let window = match site.inner {
-            None => &mut body.nodes_mut()[site.top],
-            Some(inner) => &mut body.nodes_mut()[site.top].ensure_children().nodes_mut()[inner],
-        };
-        // Depth of the window node: 1 at the top, 2 inside a breakpoint.
-        let window_depth = if site.inner.is_some() { 2 } else { 1 };
+        let window = site.node_mut(editor.body());
+        let window_depth = site.depth();
         let Some(root) = window
             .children_mut()
             .as_mut()
@@ -435,11 +417,6 @@ fn insert_child(parent: &mut KdlNode, at: usize, panel: &str, depth: usize, styl
     }
 }
 
-/// A quoted KDL string (panel ids are kebab-case with one dot).
-fn quote(text: &str) -> String {
-    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,7 +455,7 @@ mod tests {
         layout.toolbars[name]
             .iter()
             .filter_map(|i| match i {
-                ToolbarItem::Action { action, .. } => Some(action.clone()),
+                ToolbarItem::Action { item, .. } => Some(item.action.clone()),
                 _ => None,
             })
             .collect()
@@ -495,7 +472,7 @@ mod tests {
         let menu: Vec<&str> = layout.menus["context:message-list.row"]
             .iter()
             .filter_map(|i| match i {
-                MenuItem::Action { action, .. } => Some(action.as_str()),
+                MenuItem::Action(item) => Some(item.action.as_str()),
                 _ => None,
             })
             .collect();
@@ -584,7 +561,7 @@ mod tests {
         );
         assert!(matches!(
             layout.menus["app"].last(),
-            Some(MenuItem::Action { action, .. }) if action == "plugin.follow-up.follow-up"
+            Some(MenuItem::Action(item)) if item.action == "plugin.follow-up.follow-up"
         ));
     }
 

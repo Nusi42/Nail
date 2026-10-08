@@ -82,9 +82,7 @@ async fn logout(h: &Harness, browser: &mut Browser) {
 
 #[tokio::test]
 async fn register_then_log_in_with_a_passkey() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, ada, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(1);
 
     let registered = register(&h, &mut browser, &mut key, " Phone passkey ").await;
@@ -127,9 +125,7 @@ async fn register_then_log_in_with_a_passkey() {
 
 #[tokio::test]
 async fn registering_needs_a_fresh_login() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     h.clock
         .advance(i64::from(h.auth.settings().reauth_minutes) * 60 + 1);
     let reply = browser
@@ -167,9 +163,7 @@ async fn registering_needs_a_fresh_login() {
 
 #[tokio::test]
 async fn replayed_answers_and_challenges_are_refused() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(4);
     register(&h, &mut browser, &mut key, "Phone").await;
     logout(&h, &mut browser).await;
@@ -234,9 +228,7 @@ async fn replayed_answers_and_challenges_are_refused() {
 
 #[tokio::test]
 async fn challenges_expire() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(5);
     register(&h, &mut browser, &mut key, "Phone").await;
     logout(&h, &mut browser).await;
@@ -268,8 +260,7 @@ async fn challenges_expire() {
 async fn a_challenge_belongs_to_the_browser_that_asked() {
     let h = Harness::new();
     let ada = h.user("ada", false).await;
-    let mut phone = h.paired(&ada, "192.0.2.10").await;
-    let mut laptop = h.paired(&ada, "192.0.2.11").await;
+    let (mut phone, mut laptop) = h.two_browsers(&ada).await;
     let mut key = Authenticator::new(6);
     register(&h, &mut phone, &mut key, "Phone").await;
     logout(&h, &mut phone).await;
@@ -300,9 +291,7 @@ async fn a_challenge_belongs_to_the_browser_that_asked() {
 
 #[tokio::test]
 async fn a_cloned_authenticator_is_refused() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, ada, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(7);
     register(&h, &mut browser, &mut key, "Phone").await;
     logout(&h, &mut browser).await;
@@ -332,20 +321,14 @@ async fn a_cloned_authenticator_is_refused() {
             },
         )
         .await;
-    assert_eq!(failure(&reply).0, AuthFailure::InvalidCredentials);
+    h.assert_refused(&reply, "passkey verification failed");
     let audit = h.store.list_remote_audit(None, None, 1).unwrap();
-    assert_eq!(
-        audit[0].detail.as_deref(),
-        Some("passkey verification failed")
-    );
     assert_eq!(audit[0].user_id.as_ref(), Some(&ada.id));
 }
 
 #[tokio::test]
 async fn answers_for_another_origin_or_key_are_refused() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(8);
     register(&h, &mut browser, &mut key, "Phone").await;
     logout(&h, &mut browser).await;
@@ -407,9 +390,7 @@ async fn a_passkey_logs_in_only_on_its_users_devices() {
 
 #[tokio::test]
 async fn reauthentication_with_a_passkey() {
-    let h = Harness::new();
-    let ada = h.user("ada", false).await;
-    let mut browser = h.paired(&ada, "192.0.2.10").await;
+    let (h, _, mut browser) = Harness::with_ada().await;
     let mut key = Authenticator::new(11);
     register(&h, &mut browser, &mut key, "Phone").await;
     h.clock

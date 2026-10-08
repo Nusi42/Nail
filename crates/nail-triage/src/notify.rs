@@ -415,18 +415,11 @@ pub fn test_notification(settings: &NotificationSettings, sequence: u64) -> Mail
 mod tests {
     use super::*;
     use crate::localtime::resolve_local;
-    use crate::localtime::testzone::{BERLIN, NEW_YORK};
-    use chrono::{FixedOffset, NaiveDate, NaiveDateTime, Utc};
+    use crate::localtime::testzone::{BERLIN, NEW_YORK, dt};
+    use chrono::{FixedOffset, Utc};
     use nail_api::triage::NotificationOverride;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
-
-    fn dt(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, mo, d)
-            .unwrap()
-            .and_hms_opt(h, mi, 0)
-            .unwrap()
-    }
 
     fn quiet(start: &str, end: &str, days: &[Weekday]) -> QuietHours {
         QuietHours {

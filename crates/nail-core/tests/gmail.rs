@@ -7,132 +7,58 @@
 
 #![cfg(test)]
 
-use std::sync::Arc;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{TIMEOUT, api_service, eventually, messages_in, mock_oauth, oauth_provider, ok};
+use nail_core::testing::TempService;
+
 use std::time::Duration;
 
-use nail_api::accounts::{AccountsConfig, SecretKind, SecretRef};
-use nail_api::engine::{MemorySecretStore, SecretStore};
+use nail_api::accounts::{AccountsConfig, SecretKind};
 use nail_api::gmail::{GmailCategory, GmailLabelKind, GmailLabelSettings};
 use nail_api::{
     AccountId, AccountState, Address, Draft, Event, FlagChange, FolderRole, MessageSummary,
     MoveTarget, Request, Response, SearchQuery,
 };
-use nail_core::{EngineTiming, Service, ServiceOptions};
+use nail_core::Service;
 use nail_proto_gmail::testing::{InjectedError, MockGmailServer};
-use nail_testkit_net::{MockOAuthConfig, MockOAuthServer};
+use nail_testkit_net::MockOAuthServer;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
 const ACCOUNT: &str = "gm";
 
 struct Env {
     service: Service,
     gmail: MockGmailServer,
     _oauth: MockOAuthServer,
-    _dirs: (tempfile::TempDir, tempfile::TempDir),
+    _temp: TempService,
 }
 
 async fn setup() -> Env {
     let gmail = MockGmailServer::start_demo().await.unwrap();
-    let oauth = MockOAuthServer::start(MockOAuthConfig::default())
-        .await
-        .unwrap();
-    oauth.add_refresh_token("refresh-gm", "ada@gmail.example", "mail");
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            r#"oauth-provider "mockg" client-id="nail-test-client" auth-url="{auth}" token-url="{token}" {{
-    scopes "mail"
-}}
-account "{ACCOUNT}" email="ada@gmail.example" name="Gmail" {{
+    let oauth = mock_oauth(&[("refresh-gm", "ada@gmail.example", "mail")]).await;
+    let temp = api_service(
+        &format!(
+            r#"{provider}account "{ACCOUNT}" email="ada@gmail.example" name="Gmail" {{
     gmail host="127.0.0.1" port={port} tls="plaintext" poll-interval=10 max-poll-interval=10 {{
         auth "oauth2" provider="mockg"
     }}
 }}
 "#,
-            auth = oauth.authorize_url(),
-            token = oauth.token_url(),
+            provider = oauth_provider("mockg", &oauth, "mail"),
             port = gmail.addr().port(),
         ),
-    )
-    .unwrap();
-    let secrets = Arc::new(MemorySecretStore::new());
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(ACCOUNT), SecretKind::OAuth2),
-            "refresh-gm",
-        )
-        .unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.secrets = Some(secrets);
-    options.timing = EngineTiming::fast();
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+        &[(ACCOUNT, SecretKind::OAuth2, "refresh-gm")],
+    );
     Env {
-        service,
+        service: temp.service.clone(),
         gmail,
         _oauth: oauth,
-        _dirs: (data, config),
-    }
-}
-
-async fn request(service: &Service, request: Request) -> Response {
-    let response = service.handle(request).await;
-    if let Response::Error { message, .. } = &response {
-        panic!("request failed: {message}");
-    }
-    response
-}
-
-async fn folder(service: &Service, role: FolderRole) -> nail_api::Folder {
-    match request(
-        service,
-        Request::ListFolders {
-            account_id: AccountId::new(ACCOUNT),
-        },
-    )
-    .await
-    {
-        Response::Folders { folders, .. } => folders
-            .into_iter()
-            .find(|f| f.role == role)
-            .expect("folder"),
-        other => panic!("unexpected {other:?}"),
+        _temp: temp,
     }
 }
 
 async fn messages(service: &Service, role: FolderRole) -> Vec<MessageSummary> {
-    let folder = folder(service, role).await;
-    match request(
-        service,
-        Request::ListMessages {
-            folder_id: folder.id,
-            offset: 0,
-            limit: 100,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-/// Waits until `check` holds (polling the core).
-async fn until<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
+    messages_in(service, ACCOUNT, role).await
 }
 
 /// The account's status.
@@ -151,7 +77,7 @@ async fn state(service: &Service) -> AccountState {
 /// alone does not say the pass is done: the engine reports `Online` only
 /// after the whole pass (labels, every folder) succeeded (WP175).
 async fn synced(env: &Env) {
-    until("the first Gmail sync", || async {
+    eventually("the first Gmail sync", || async {
         state(&env.service).await == AccountState::Online
             && messages(&env.service, FolderRole::Inbox).await.len() >= 4
     })
@@ -192,7 +118,7 @@ async fn gmail_syncs_folders_labels_and_categories() {
     );
 
     // Labels with counts; user labels carry their tag.
-    let Response::GmailLabels { labels, .. } = request(
+    let Response::GmailLabels { labels, .. } = ok(
         &env.service,
         Request::ListGmailLabels {
             account_id: AccountId::new(ACCOUNT),
@@ -212,7 +138,7 @@ async fn gmail_syncs_folders_labels_and_categories() {
     assert!(labels.iter().any(|l| l.kind == GmailLabelKind::System));
 
     // Categories are a search field (local index, M3b).
-    let Response::SearchResults { hits, .. } = request(
+    let Response::SearchResults { hits, .. } = ok(
         &env.service,
         Request::Search {
             query: SearchQuery {
@@ -242,7 +168,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
     let sale = by_subject(&inbox, "Autumn sale").clone();
 
     // Read + a new tag (creates the label on the server).
-    request(
+    ok(
         &env.service,
         Request::UpdateFlags {
             message_ids: vec![lunch.id.clone()],
@@ -254,7 +180,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
         },
     )
     .await;
-    until("the read flag and the new label reach Gmail", || async {
+    eventually("the read flag and the new label reach Gmail", || async {
         let labels = env.gmail.labels_of("18c0000000000001");
         let has_friends = env
             .gmail
@@ -266,7 +192,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
     .await;
 
     // Archive: INBOX goes.
-    request(
+    ok(
         &env.service,
         Request::MoveMessages {
             message_ids: vec![sale.id.clone()],
@@ -274,7 +200,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
         },
     )
     .await;
-    until("the archive reaches Gmail", || async {
+    eventually("the archive reaches Gmail", || async {
         !env.gmail
             .labels_of("18c0000000000003")
             .iter()
@@ -287,7 +213,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the archived message stays in the archive", || async {
+    eventually("the archived message stays in the archive", || async {
         let archive = messages(&env.service, FolderRole::Archive).await;
         archive.iter().any(|m| m.id == sale.id)
     })
@@ -307,12 +233,11 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
     }];
     draft.subject = "Sent through the Gmail API".into();
     draft.text = "Hello".into();
-    let Response::DraftSaved { draft_id } =
-        request(&env.service, Request::SaveDraft { draft }).await
+    let Response::DraftSaved { draft_id } = ok(&env.service, Request::SaveDraft { draft }).await
     else {
         panic!()
     };
-    request(
+    ok(
         &env.service,
         Request::SendDraft {
             draft_id,
@@ -323,7 +248,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
         },
     )
     .await;
-    until("Gmail received the sent message", || async {
+    eventually("Gmail received the sent message", || async {
         env.gmail
             .sent()
             .iter()
@@ -336,7 +261,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the sent message shows in Sent once", || async {
+    eventually("the sent message shows in Sent once", || async {
         messages(&env.service, FolderRole::Sent)
             .await
             .iter()
@@ -361,7 +286,7 @@ async fn server_side_changes_arrive_by_history_and_expiry_resyncs() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the new message arrives", || async {
+    eventually("the new message arrives", || async {
         messages(&env.service, FolderRole::Inbox)
             .await
             .iter()
@@ -387,7 +312,7 @@ async fn server_side_changes_arrive_by_history_and_expiry_resyncs() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the server's flags arrive", || async {
+    eventually("the server's flags arrive", || async {
         messages(&env.service, FolderRole::Inbox)
             .await
             .iter()
@@ -403,7 +328,7 @@ async fn server_side_changes_arrive_by_history_and_expiry_resyncs() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the resync removes the deleted message", || async {
+    eventually("the resync removes the deleted message", || async {
         let inbox = messages(&env.service, FolderRole::Inbox).await;
         !inbox.iter().any(|m| m.subject == "Compiler news")
             && inbox.iter().any(|m| m.subject.contains("Lunch on Friday"))
@@ -416,7 +341,7 @@ async fn labels_are_created_renamed_and_deleted_through_the_queue() {
     let env = setup().await;
     synced(&env).await;
     let account = AccountId::new(ACCOUNT);
-    let Response::GmailLabelSaved { label, op_ids } = request(
+    let Response::GmailLabelSaved { label, op_ids } = ok(
         &env.service,
         Request::CreateGmailLabel {
             account_id: account.clone(),
@@ -429,7 +354,7 @@ async fn labels_are_created_renamed_and_deleted_through_the_queue() {
     };
     assert!(label.id.as_str().starts_with("local-"));
     assert_eq!(op_ids.len(), 1);
-    until("the label is created on the server", || async {
+    eventually("the label is created on the server", || async {
         env.gmail.labels().iter().any(|l| l.name == "Travel")
     })
     .await;
@@ -451,7 +376,7 @@ async fn labels_are_created_renamed_and_deleted_through_the_queue() {
 
     // The server id replaced the local one; rename it.
     let server_id = until_label(&env, "Travel").await;
-    request(
+    ok(
         &env.service,
         Request::UpdateGmailLabel {
             account_id: account.clone(),
@@ -460,11 +385,11 @@ async fn labels_are_created_renamed_and_deleted_through_the_queue() {
         },
     )
     .await;
-    until("the rename reaches the server", || async {
+    eventually("the rename reaches the server", || async {
         env.gmail.labels().iter().any(|l| l.name == "Trips")
     })
     .await;
-    request(
+    ok(
         &env.service,
         Request::DeleteGmailLabel {
             account_id: account.clone(),
@@ -472,7 +397,7 @@ async fn labels_are_created_renamed_and_deleted_through_the_queue() {
         },
     )
     .await;
-    until("the label is deleted on the server", || async {
+    eventually("the label is deleted on the server", || async {
         !env.gmail.labels().iter().any(|l| l.name == "Trips")
     })
     .await;
@@ -544,7 +469,7 @@ fn gmail_invitation(uid: &str, subject: &str) -> Vec<u8> {
 }
 
 async fn invitation_event(env: &Env, message: &MessageSummary) -> Option<nail_api::EventId> {
-    match request(
+    match ok(
         &env.service,
         Request::GetInvitation {
             message_id: message.id.clone(),
@@ -582,7 +507,7 @@ async fn only_inbox_mail_counts_as_arriving() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the inbox invitation is added to the calendar", || async {
+    eventually("the inbox invitation is added to the calendar", || async {
         let inbox = messages(&env.service, FolderRole::Inbox).await;
         match inbox
             .iter()
@@ -626,7 +551,7 @@ async fn a_resumed_full_listing_still_removes_deleted_messages() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until("the message arrives", || async {
+    eventually("the message arrives", || async {
         messages(&env.service, FolderRole::Inbox)
             .await
             .iter()
@@ -649,7 +574,7 @@ async fn a_resumed_full_listing_still_removes_deleted_messages() {
             account_id: Some(AccountId::new(ACCOUNT)),
         })
         .await;
-    until(
+    eventually(
         "the resumed listing removes the deleted message",
         || async {
             let resumed = env
@@ -698,7 +623,7 @@ async fn mail_actions_replay_as_one_batch_modify() {
         })
         .collect();
     env.gmail.clear_requests();
-    let result = match request(
+    let result = match ok(
         &env.service,
         Request::ApplyMailAction {
             targets,
@@ -711,7 +636,7 @@ async fn mail_actions_replay_as_one_batch_modify() {
         other => panic!("unexpected {other:?}"),
     };
     assert_eq!(result.message_ids.len(), 3);
-    until("archived on Gmail", || async {
+    eventually("archived on Gmail", || async {
         remote
             .iter()
             .all(|id| !env.gmail.labels_of(id).contains(&"INBOX".to_owned()))
@@ -726,14 +651,14 @@ async fn mail_actions_replay_as_one_batch_modify() {
     };
     assert_eq!(calls("/batchModify"), 1);
     assert_eq!(calls("/modify"), 0);
-    request(
+    ok(
         &env.service,
         Request::UndoMailAction {
             batch_id: result.batch_id.unwrap(),
         },
     )
     .await;
-    until("back in the Gmail inbox", || async {
+    eventually("back in the Gmail inbox", || async {
         remote
             .iter()
             .all(|id| env.gmail.labels_of(id).contains(&"INBOX".to_owned()))
@@ -757,7 +682,7 @@ async fn undoing_a_delete_returns_sent_mail_on_gmail() {
         .message_remote_id(&reply.id)
         .unwrap()
         .unwrap();
-    let result = match request(
+    let result = match ok(
         &env.service,
         Request::ApplyMailAction {
             targets: vec![nail_api::MessageTarget::message(reply.id.clone())],
@@ -769,23 +694,23 @@ async fn undoing_a_delete_returns_sent_mail_on_gmail() {
         Response::MailActionQueued { result } => result,
         other => panic!("unexpected {other:?}"),
     };
-    until("in Trash on Gmail", || async {
+    eventually("in Trash on Gmail", || async {
         env.gmail.labels_of(&remote).contains(&"TRASH".to_owned())
     })
     .await;
-    request(
+    ok(
         &env.service,
         Request::UndoMailAction {
             batch_id: result.batch_id.unwrap(),
         },
     )
     .await;
-    until("out of Trash on Gmail", || async {
+    eventually("out of Trash on Gmail", || async {
         let labels = env.gmail.labels_of(&remote);
         !labels.contains(&"TRASH".to_owned()) && labels.contains(&"SENT".to_owned())
     })
     .await;
-    until("no failed operation", || async {
+    eventually("no failed operation", || async {
         env.service.store().pending_op_count().unwrap() == 0
     })
     .await;

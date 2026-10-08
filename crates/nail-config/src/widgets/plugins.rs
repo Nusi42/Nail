@@ -25,35 +25,16 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
 
 /// Prefixes every widget kind of this feature starts with.
 #[cfg(test)]
-const PREFIXES: &[&str] = &["plugin-"];
-
-#[cfg(test)]
 mod tests {
+    use crate::widgets::testing::{assert_prefixed, layout_with};
+
     #[test]
-    fn plugin_widgets_are_unique_and_kebab_case() {
-        for spec in super::WIDGETS {
-            assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
-            assert!(
-                super::PREFIXES.iter().any(|p| spec.kind.starts_with(p)),
-                "{}",
-                spec.kind
-            );
-            assert!(crate::widgets::find(spec.kind).is_some());
-        }
+    fn plugin_widgets_are_prefixed() {
+        assert_prefixed(super::WIDGETS, &["plugin-"]);
     }
 
     fn layout(panel: &str) -> String {
-        format!(
-            "layout \"x\" extends=\"default\" {{
-    window \"y\" {{
-        split \"horizontal\" {{
-            message-list
-            {panel}
-        }}
-    }}
-}}
-"
-        )
+        layout_with(&["message-list", panel])
     }
 
     fn panel_options(text: &str) -> serde_json::Map<String, serde_json::Value> {

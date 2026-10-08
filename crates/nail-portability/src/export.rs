@@ -522,12 +522,9 @@ fn collect_collection(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::import;
-    use crate::sink::NullSink;
+
     use nail_api::Flags;
-    use nail_api::portability::{
-        ImportFormat, ImportOptions, ImportSource, JobKind, JobReport, MboxVariant,
-    };
+    use nail_api::portability::{ImportFormat, ImportSource, JobKind, JobReport, MboxVariant};
     use pretty_assertions::assert_eq;
 
     /// Mail held in memory, like the core's store.
@@ -641,22 +638,13 @@ pub(crate) mod tests {
         assert!(ctx.report.issues.is_empty(), "{:?}", ctx.report.issues);
         assert!(!dir.path().join("inbox.mbox.nail-part").exists());
         // Re-import: identical messages (a final line end is added).
-        let mut sink = import::tests::MemorySink::default();
+        let mut sink = crate::testing::MemorySink::default();
         let source = ImportSource {
             format: ImportFormat::Mbox,
             path: target.display().to_string(),
         };
-        let mut import_ctx =
-            JobContext::silent(JobReport::started("i".into(), JobKind::Import, "t"));
-        import::run(
-            &source,
-            &ImportOptions::default(),
-            &mut sink,
-            &mut NullSink,
-            &mut import_ctx,
-        )
-        .unwrap();
-        let back = &sink.messages["inbox"];
+        sink.import(&source).unwrap();
+        let back = &sink.messages("inbox");
         assert_eq!(back.len(), 2);
         assert_eq!(back[0].raw, one.folders[0].1[0].raw);
         let mut expected = one.folders[0].1[1].raw.clone();
@@ -730,22 +718,13 @@ pub(crate) mod tests {
             now(),
         )
         .unwrap();
-        let mut sink = import::tests::MemorySink::default();
+        let mut sink = crate::testing::MemorySink::default();
         let source = ImportSource {
             format: ImportFormat::Maildir,
             path: target.display().to_string(),
         };
-        let mut import_ctx =
-            JobContext::silent(JobReport::started("i".into(), JobKind::Import, "t"));
-        import::run(
-            &source,
-            &ImportOptions::default(),
-            &mut sink,
-            &mut NullSink,
-            &mut import_ctx,
-        )
-        .unwrap();
-        let inbox = &sink.messages["Inbox"];
+        sink.import(&source).unwrap();
+        let inbox = &sink.messages("Inbox");
         assert_eq!(inbox.len(), 2);
         let one = inbox
             .iter()
@@ -753,7 +732,7 @@ pub(crate) mod tests {
             .unwrap();
         assert!(one.flags.seen);
         assert_eq!(one.keywords, vec!["work"]);
-        let lists = &sink.messages["Lists"];
+        let lists = &sink.messages("Lists");
         assert!(lists[0].flags.flagged);
         assert_eq!(lists[0].raw, mail.folders[1].1[0].raw);
     }
@@ -820,29 +799,6 @@ pub(crate) mod tests {
         assert!(matches!(result, Err(PortabilityError::InvalidOptions(_))));
     }
 
-    struct MemoryPim(Vec<(ExportCollection, Vec<String>)>);
-
-    impl PimExportSource for MemoryPim {
-        fn collections(&mut self) -> std::result::Result<Vec<ExportCollection>, SinkError> {
-            Ok(self.0.iter().map(|(c, _)| c.clone()).collect())
-        }
-        fn items(
-            &mut self,
-            collection: &ExportCollection,
-            visit: &mut dyn FnMut(std::result::Result<String, SinkError>) -> Visit,
-        ) -> std::result::Result<(), SinkError> {
-            let (_, items) = self
-                .0
-                .iter()
-                .find(|(c, _)| c.key == collection.key)
-                .unwrap();
-            for item in items {
-                visit(Ok(item.clone()));
-            }
-            Ok(())
-        }
-    }
-
     fn collection(key: &str, name: &str) -> ExportCollection {
         ExportCollection {
             key: key.into(),
@@ -856,7 +812,7 @@ pub(crate) mod tests {
         let dir = tempfile::tempdir().unwrap();
         let event = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:e1\r\nDTSTART:20261001T100000Z\r\nSUMMARY:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         let task = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:t1\r\nSUMMARY:y\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        let mut source = MemoryPim(vec![
+        let mut source = crate::testing::MemoryPim::new(vec![
             (
                 collection("c1", "Home"),
                 vec![event.into(), task.into(), "garbage".into()],
@@ -883,7 +839,8 @@ pub(crate) mod tests {
         assert!(text.contains("X-WR-CALNAME:Home"));
 
         let card = "BEGIN:VCARD\r\nVERSION:4.0\r\nUID:c1\r\nFN:Ada\r\nEND:VCARD\r\n";
-        let mut books = MemoryPim(vec![(collection("b1", "People"), vec![card.into()])]);
+        let mut books =
+            crate::testing::MemoryPim::new(vec![(collection("b1", "People"), vec![card.into()])]);
         let file = dir.path().join("people.vcf");
         let mut ctx = ctx_new();
         run_pim(

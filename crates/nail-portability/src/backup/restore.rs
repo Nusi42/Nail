@@ -449,18 +449,9 @@ impl BackupArchive {
         outcome: &mut RunOutcome,
     ) -> Result<()> {
         for entry in entries {
-            ctx.check_cancelled()?;
-            let bytes = match self.read_checked(entry) {
-                Ok(bytes) => bytes,
-                Err(issue) => {
-                    ctx.issue(*issue);
-                    continue;
-                }
+            let Some(bytes) = self.next_file(entry, dry_run, ctx)? else {
+                continue;
             };
-            ctx.advance(1, entry.size_bytes);
-            if !dry_run {
-                ctx.report.counts.files += 1;
-            }
             let name = relative_name(item, &entry.name);
             let current = target
                 .current_file(item, name)
@@ -474,21 +465,58 @@ impl BackupArchive {
                 None => action.added += 1,
             }
             if !dry_run {
-                match target.replace_file(item, name, &bytes) {
-                    Ok(Some(backup)) => outcome.config_backups.push(backup),
-                    Ok(None) => {}
-                    Err(SinkError::Item(detail)) => {
-                        ctx.skipped(
-                            PortabilityIssueCode::WriteFailed,
-                            self.entry_ref(&entry.name),
-                            detail,
-                        );
-                    }
-                    Err(SinkError::Fatal(detail)) => return Err(PortabilityError::Sink(detail)),
+                let written = target.replace_file(item, name, &bytes);
+                if let Some(Some(backup)) = self.written(entry, written, ctx)? {
+                    outcome.config_backups.push(backup);
                 }
             }
         }
         Ok(())
+    }
+
+    /// The verified bytes of a file entry (counted and advanced); `None`
+    /// (recorded as an issue) when it cannot be read.
+    fn next_file(
+        &mut self,
+        entry: &BackupEntry,
+        dry_run: bool,
+        ctx: &mut JobContext<'_>,
+    ) -> Result<Option<Vec<u8>>> {
+        ctx.check_cancelled()?;
+        let bytes = match self.read_checked(entry) {
+            Ok(bytes) => bytes,
+            Err(issue) => {
+                ctx.issue(*issue);
+                return Ok(None);
+            }
+        };
+        ctx.advance(1, entry.size_bytes);
+        if !dry_run {
+            ctx.report.counts.files += 1;
+        }
+        Ok(Some(bytes))
+    }
+
+    /// The outcome of writing an entry: `None` when the target refused
+    /// this item (recorded as skipped); a fatal target error ends the job.
+    fn written<T>(
+        &self,
+        entry: &BackupEntry,
+        result: std::result::Result<T, SinkError>,
+        ctx: &mut JobContext<'_>,
+    ) -> Result<Option<T>> {
+        match result {
+            Ok(value) => Ok(Some(value)),
+            Err(SinkError::Item(detail)) => {
+                ctx.skipped(
+                    PortabilityIssueCode::WriteFailed,
+                    self.entry_ref(&entry.name),
+                    detail,
+                );
+                Ok(None)
+            }
+            Err(SinkError::Fatal(detail)) => Err(PortabilityError::Sink(detail)),
+        }
     }
 
     fn restore_merged_files(
@@ -501,32 +529,14 @@ impl BackupArchive {
         action: &mut RestoreAction,
     ) -> Result<()> {
         for entry in entries {
-            ctx.check_cancelled()?;
-            let bytes = match self.read_checked(entry) {
-                Ok(bytes) => bytes,
-                Err(issue) => {
-                    ctx.issue(*issue);
-                    continue;
-                }
+            let Some(bytes) = self.next_file(entry, dry_run, ctx)? else {
+                continue;
             };
-            ctx.advance(1, entry.size_bytes);
-            if !dry_run {
-                ctx.report.counts.files += 1;
-            }
-            match target.merge_file(item, relative_name(item, &entry.name), &bytes, dry_run) {
-                Ok(merged) => {
-                    action.added += merged.added;
-                    action.replaced += merged.replaced;
-                    action.unchanged += merged.unchanged;
-                }
-                Err(SinkError::Item(detail)) => {
-                    ctx.skipped(
-                        PortabilityIssueCode::WriteFailed,
-                        self.entry_ref(&entry.name),
-                        detail,
-                    );
-                }
-                Err(SinkError::Fatal(detail)) => return Err(PortabilityError::Sink(detail)),
+            let merged = target.merge_file(item, relative_name(item, &entry.name), &bytes, dry_run);
+            if let Some(merged) = self.written(entry, merged, ctx)? {
+                action.added += merged.added;
+                action.replaced += merged.replaced;
+                action.unchanged += merged.unchanged;
             }
         }
         Ok(())

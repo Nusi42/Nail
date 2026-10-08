@@ -22,6 +22,8 @@ sha2.workspace = true
 hex.workspace = true
 
 [dev-dependencies]
+# Sample contract values and test instants (`nail_api::testing`).
+nail-api = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 # Property tests (tokenizer, timer wheel, quiet hours); same as nail-search.
 proptest = "1.11"

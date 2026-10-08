@@ -51,8 +51,7 @@ async fn outcome(fake: &Fake, plugin: &str) -> Result<serde_json::Value, String>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_follow_up_example_creates_a_task_through_the_core() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = script(
         r#"const msg = await nail.mail.get("m1");
            const lists = await nail.tasks.lists();
@@ -88,8 +87,7 @@ async fn the_follow_up_example_creates_a_task_through_the_core() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn every_write_needs_its_permission() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let cases = [
         (
             "w1",
@@ -187,8 +185,7 @@ async fn every_write_needs_its_permission() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn message_writes_stay_inside_the_granted_accounts() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     // m1 is in `work`, m2 in `home`; organize is granted for `work` only.
     let js = script(
         r#"const ok = await nail.mail.update(["m1"], {addTags: ["crm"], read: true});
@@ -221,8 +218,7 @@ async fn message_writes_stay_inside_the_granted_accounts() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn deletes_and_sends_carry_their_kind_and_the_core_decides() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     *fake.write_result.lock().unwrap() = Some(Ok(McpWriteResult::Denied {
         confirmation_id: "conf-1".into(),
     }));
@@ -276,8 +272,7 @@ async fn deletes_and_sends_carry_their_kind_and_the_core_decides() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drafts_take_bytes_and_copy_only_readable_attachments() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = script(
         r#"const bytes = new Uint8Array([104, 105]);
            const made = await nail.mail.createDraft({
@@ -315,8 +310,7 @@ async fn drafts_take_bytes_and_copy_only_readable_attachments() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn invalid_write_arguments_are_refused_before_the_core() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     for (id, body) in [
         ("bad1", r#"return await nail.mail.update(["m1"], {});"#),
         ("bad2", r"return await nail.mail.update([], {read: true});"),
@@ -356,8 +350,7 @@ async fn invalid_write_arguments_are_refused_before_the_core() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn collections_are_listed_with_the_write_permissions() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = script(
         r#"return {
              books: await nail.contacts.addressBooks(),
@@ -385,8 +378,7 @@ async fn collections_are_listed_with_the_write_permissions() {
 /// plug-in's grant.
 #[tokio::test(flavor = "multi_thread")]
 async fn conversations_reach_the_core_as_conversation_targets() {
-    let fake = Fake::new();
-    let host = host(&fake);
+    let (fake, host) = fake_host();
     let js = script(
         r#"const archived = await nail.mail.update(
              {conversations: [{threadId: "t1", folderId: "work-inbox"}]}, {archive: true});

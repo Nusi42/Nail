@@ -4,6 +4,10 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::files_under;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,14 +53,7 @@ async fn vault(service: &Service) -> VaultState {
 async fn hits(service: &Service, text: &str) -> u32 {
     match service
         .handle(Request::Search {
-            query: SearchQuery {
-                text: text.into(),
-                account_id: None,
-                folder_id: None,
-                offset: 0,
-                limit: 50,
-                sort: nail_api::search::SearchSort::default(),
-            },
+            query: SearchQuery::new(text, 50),
         })
         .await
     {
@@ -70,19 +67,6 @@ async fn read(service: &Service, id: &nail_api::MessageId) -> MessageBody {
         Response::Message { message } => *message,
         other => panic!("{other:?}"),
     }
-}
-
-fn files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            out.extend(files(&path));
-        } else {
-            out.push(path);
-        }
-    }
-    out
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -131,7 +115,7 @@ async fn an_encrypted_profile_reads_again_after_a_restart() {
     drop(first);
 
     // Every blob on disk is sealed.
-    let blobs = files(&data.path().join("blobs"));
+    let blobs = files_under(&data.path().join("blobs"));
     assert!(!blobs.is_empty(), "{blobs:?}");
     assert!(
         blobs.iter().all(|p| std::fs::read(p)

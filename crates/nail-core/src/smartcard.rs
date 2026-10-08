@@ -279,11 +279,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         Request::SetSmartcardSettings { settings } => {
             if let Some(issue) = settings.issues().first() {
-                return Err(ApiError::invalid_request(format!(
-                    "smartcard settings: {}",
-                    issue.as_str()
-                ))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
+                return Err(ApiError::invalid_localized(
+                    format!("smartcard settings: {}", issue.as_str()),
+                    issue.message_id(),
+                )
                 .into());
             }
             let saved = settings.clone();
@@ -340,7 +339,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }),
         other => Err(ApiError::internal(format!(
             "{} routed to the smartcard module",
-            crate::service::request_name(&other)
+            other.wire_type()
         ))
         .into()),
     }
@@ -465,17 +464,7 @@ mod tests {
                 (prompts, closed)
             })
         };
-        let signature = tokio::task::spawn_blocking({
-            let ctl = Arc::clone(&ctl);
-            move || {
-                let card = ctl.card_key(&key()).unwrap();
-                let input = digest_info(HashKind::Sha256, &[7u8; 32]).unwrap();
-                card.sign(SignMechanism::RsaPkcs1, &input)
-            }
-        })
-        .await
-        .unwrap()
-        .unwrap();
+        let signature = sign_on_card(&ctl).await.unwrap();
         assert!(!signature.is_empty(), "{signature:?}");
         let (prompts, closed) = answering.await.unwrap();
         assert_eq!(prompts.len(), 2);
@@ -484,6 +473,18 @@ mod tests {
         assert!(closed.iter().all(|r| *r == PinPromptCloseReason::Answered));
         // A prompt that is gone cannot be answered.
         assert!(!ctl.answer(&PinPromptId::new("pin-99"), None));
+    }
+
+    /// Signs a digest with the test card's key (asking for its PIN).
+    async fn sign_on_card(ctl: &Arc<SmartcardCtl>) -> Result<Vec<u8>, CardError> {
+        let ctl = Arc::clone(ctl);
+        tokio::task::spawn_blocking(move || {
+            let card = ctl.card_key(&key()).unwrap();
+            let input = digest_info(HashKind::Sha256, &[7u8; 32]).unwrap();
+            card.sign(SignMechanism::RsaPkcs1, &input)
+        })
+        .await
+        .unwrap()
     }
 
     /// Cancelling the prompt stops the operation.
@@ -502,16 +503,7 @@ mod tests {
                 }
             });
         }
-        let result = tokio::task::spawn_blocking({
-            let ctl = Arc::clone(&ctl);
-            move || {
-                let card = ctl.card_key(&key()).unwrap();
-                let input = digest_info(HashKind::Sha256, &[7u8; 32]).unwrap();
-                card.sign(SignMechanism::RsaPkcs1, &input)
-            }
-        })
-        .await
-        .unwrap();
+        let result = sign_on_card(&ctl).await;
         assert!(result.is_err());
         // After a reset nothing is loaded until the next use.
         ctl.reset();

@@ -18,6 +18,7 @@ use nail_api::mcp::tools::{
     UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::mcp::{McpCallKind, McpClient, McpOutcome, McpScope};
+use nail_api::search::RESTRICTED_SCAN;
 use nail_api::search::SearchSort;
 use nail_api::{AccountId, FolderId, MessageId, MessageSummary, SearchQuery, ThreadId};
 use rmcp::ErrorData;
@@ -593,10 +594,6 @@ async fn search<D: McpData>(
     }
     restricted_search(shared, access, query, hide_encrypted).await
 }
-
-/// Hits a restricted search looks at, at most. Past this the result is
-/// cut short (no `next_offset`).
-const RESTRICTED_SCAN: u32 = 5000;
 
 fn invalid_query(error: &nail_api::SearchError) -> CallToolResult {
     CallToolResult::structured_error(json!({

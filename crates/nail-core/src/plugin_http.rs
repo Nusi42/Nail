@@ -20,15 +20,18 @@
 //!    body is read up to `max_response_bytes` (`too_large` beyond) and the
 //!    whole request is bounded by its `timeout`.
 
-use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, OnceLock};
 
 use nail_api::{ApiError, ErrorCode};
 use nail_plugins::gate::host_allowed;
 use nail_plugins::{HttpRequest, HttpResponse};
-use nail_proxy::{Resolver, SystemResolver, is_public_ip};
+use nail_proxy::{Resolver, SystemResolver};
 use reqwest::header::{HeaderName, HeaderValue};
 use url::{Host, Url};
+
+use crate::pinned_http::{
+    check_peer, hop_host, is_loopback_host, network, redirect_target, refused, resolve_public,
+};
 
 /// Redirects followed per request.
 pub(crate) const MAX_REDIRECTS: u8 = 5;
@@ -58,22 +61,6 @@ impl Default for PluginHttp {
     }
 }
 
-fn network(message: impl Into<String>) -> ApiError {
-    ApiError::new(ErrorCode::Network, message)
-}
-
-fn refused(message: impl Into<String>) -> ApiError {
-    ApiError::new(ErrorCode::Forbidden, message)
-}
-
-fn is_loopback_host(host: &Host<&str>) -> bool {
-    match host {
-        Host::Domain(name) => name.eq_ignore_ascii_case("localhost"),
-        Host::Ipv4(ip) => ip.is_loopback(),
-        Host::Ipv6(ip) => ip.is_loopback(),
-    }
-}
-
 /// The host as a permission pattern compares it.
 fn host_text(host: &Host<&str>) -> String {
     match host {
@@ -85,12 +72,7 @@ fn host_text(host: &Host<&str>) -> String {
 
 /// The URL rules of one hop.
 pub(crate) fn check_hop(url: &Url, allowed_hosts: &[String]) -> Result<(), ApiError> {
-    let Some(host) = url.host() else {
-        return Err(refused(format!("{url} has no host")));
-    };
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(refused("URLs with credentials are refused"));
-    }
+    let host = hop_host(url, "URLs")?;
     let loopback = is_loopback_host(&host);
     match url.scheme() {
         "https" if loopback || url.port().is_none() => {}
@@ -159,11 +141,7 @@ impl PluginHttp {
                     return Err(network("too many redirects"));
                 }
                 redirects += 1;
-                let location = location.to_str().map_err(|_| network("invalid redirect"))?;
-                let mut next = url
-                    .join(location)
-                    .map_err(|_| network("invalid redirect"))?;
-                next.set_fragment(None);
+                let next = redirect_target(&url, location, "invalid redirect")?;
                 let code = status.as_u16();
                 if code == 303 || (matches!(code, 301 | 302) && method == "POST") {
                     "GET".clone_into(&mut method);
@@ -187,41 +165,17 @@ impl PluginHttp {
         let port = url
             .port_or_known_default()
             .ok_or_else(|| refused(format!("{url} has no port")))?;
-        let mut builder = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .referer(false)
-            .pool_max_idle_per_host(0)
-            .user_agent(USER_AGENT)
-            .timeout(request.timeout)
-            .dns_resolver(Arc::new(RefuseResolver));
-        // Also for `http:` (reqwest needs a crypto provider to build).
-        builder = builder.tls_backend_preconfigured((*self.tls()?).clone());
-        let allowed: Vec<IpAddr> = match url.host() {
-            Some(Host::Domain(name)) => {
-                let addrs = self
-                    .resolver
-                    .lookup(name)
-                    .await
-                    .map_err(|e| network(format!("cannot resolve {name}: {e}")))?;
-                if addrs.is_empty() {
-                    return Err(network(format!("cannot resolve {name}")));
-                }
-                if let Some(bad) = addrs.iter().find(|ip| !is_public_ip(**ip)) {
-                    return Err(refused(format!(
-                        "{name} resolves to the private or local address {bad}"
-                    )));
-                }
-                let pinned: Vec<SocketAddr> =
-                    addrs.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
-                builder = builder.resolve_to_addrs(name, &pinned);
-                addrs
-            }
-            // A literal the plug-in's permission names (checked above).
-            Some(Host::Ipv4(ip)) => vec![IpAddr::V4(ip)],
-            Some(Host::Ipv6(ip)) => vec![IpAddr::V6(ip)],
-            None => return Err(refused(format!("{url} has no host"))),
-        };
+        // TLS also for `http:` (reqwest needs a crypto provider to build).
+        let builder = nail_proxy::pinned_builder(&*self.tls()?, USER_AGENT, request.timeout);
+        // An IP literal is one the plug-in's permission names (checked above).
+        let (builder, allowed) = nail_proxy::pin_host(
+            builder,
+            url,
+            port,
+            async |name: &str| resolve_public(self.resolver.as_ref(), name).await,
+            || refused(format!("{url} has no host")),
+        )
+        .await?;
         let client = builder.build().map_err(|e| network(e.to_string()))?;
         let method = reqwest::Method::from_bytes(method.as_bytes())
             .map_err(|_| refused(format!("method {method} is refused")))?;
@@ -245,12 +199,7 @@ impl PluginHttp {
                 network(e.to_string())
             }
         })?;
-        if let Some(peer) = response.remote_addr() {
-            let ip = canonical(peer.ip());
-            if !allowed.iter().any(|a| canonical(*a) == ip) {
-                return Err(refused(format!("connected to an unchecked address {ip}")));
-            }
-        }
+        check_peer(&response, &allowed)?;
         Ok(response)
     }
 }
@@ -262,27 +211,20 @@ async fn read(mut response: reqwest::Response, max: u64) -> Result<HttpResponse,
             format!("the response is larger than {max} bytes"),
         )
     };
-    if response.content_length().is_some_and(|len| len > max) {
-        return Err(too_large());
-    }
     let status = response.status().as_u16();
+    // Header names are lower case already (`http` crate); values that are
+    // not visible ASCII are left out.
     let headers = response
         .headers()
         .iter()
-        .filter_map(|(name, value)| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| (name.as_str().to_ascii_lowercase(), v.to_owned()))
-        })
+        .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_owned())))
         .collect();
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|e| network(e.to_string()))? {
-        if body.len() as u64 + chunk.len() as u64 > max {
-            return Err(too_large());
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = nail_proxy::read_limited(&mut response, max)
+        .await
+        .map_err(|e| match e {
+            nail_proxy::BodyError::TooLarge => too_large(),
+            nail_proxy::BodyError::Network(e) => network(e.to_string()),
+        })?;
     Ok(HttpResponse {
         status,
         headers,
@@ -290,34 +232,9 @@ async fn read(mut response: reqwest::Response, max: u64) -> Result<HttpResponse,
     })
 }
 
-/// IPv4-mapped IPv6 peers compare as IPv4.
-pub(crate) fn canonical(ip: IpAddr) -> IpAddr {
-    match ip {
-        IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
-        IpAddr::V4(_) => ip,
-    }
-}
-
-/// reqwest's resolver for pinned clients: every name must come from the
-/// override map.
-pub(crate) struct RefuseResolver;
-
-impl reqwest::dns::Resolve for RefuseResolver {
-    fn resolve(&self, _name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        Box::pin(async {
-            Err::<reqwest::dns::Addrs, _>(
-                std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "unpinned lookup refused",
-                )
-                .into(),
-            )
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::net::IpAddr;
     use std::time::Duration;
 
     use nail_proxy::fetch::Lookup;

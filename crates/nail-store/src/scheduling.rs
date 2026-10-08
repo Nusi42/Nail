@@ -195,18 +195,7 @@ fn method_str(method: ItipMethod) -> String {
     enum_str(&method)
 }
 
-fn enum_str<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_owned))
-        .unwrap_or_default()
-}
-
-fn enum_parse<T: serde::de::DeserializeOwned>(text: &str) -> rusqlite::Result<T> {
-    serde_json::from_value(serde_json::Value::String(text.to_owned())).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
+use crate::util::{enum_parse, enum_str};
 
 const STATE_COLS: &str =
     "uid, recurrence_id, address, role, sequence, dtstamp, partstat, message_id, updated_at";
@@ -507,50 +496,22 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::{Account, AccountKind, Flags, Folder, FolderRole, MessageSummary};
+    use crate::test_store::{add, store_with};
+    use nail_api::testing;
+    use nail_api::{AccountKind, FolderRole, MessageSummary};
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: "a".into(),
-                name: "A".into(),
-                email: "ada@example.org".into(),
-                kind: AccountKind::Imap,
-            })
-            .unwrap();
-        store
-            .upsert_folder(&Folder {
-                id: "inbox".into(),
-                account_id: "a".into(),
-                parent_id: None,
-                name: "INBOX".into(),
-                path: "INBOX".into(),
-                role: FolderRole::Inbox,
-                unread: 0,
-                total: 0,
-            })
-            .unwrap();
-        store
-            .upsert_message(&crate::StoredMessage::new(MessageSummary {
-                id: "m1".into(),
-                folder_id: "inbox".into(),
-                account_id: "a".into(),
+        let store = store_with(
+            &testing::account("a", AccountKind::Imap),
+            &[testing::folder("inbox", "a", "INBOX", FolderRole::Inbox)],
+        );
+        add(
+            &store,
+            MessageSummary {
                 subject: "Invitation".into(),
-                from: None,
-                to: vec![],
-                date: "2026-10-01T10:00:00Z".into(),
-                flags: Flags::default(),
-                has_attachments: false,
-                preview: String::new(),
-                thread_id: None,
-                tags: vec![],
-                duplicates: vec![],
-                headers_only: false,
-                gmail: None,
-                exchange: None,
-            }))
-            .unwrap();
+                ..testing::summary("m1", "a", "inbox")
+            },
+        );
         store
     }
 

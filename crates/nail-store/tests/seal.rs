@@ -7,49 +7,19 @@ mod common;
 
 use std::sync::Arc;
 
-use common::{account, folder, message};
-use nail_api::{Draft, FolderRole};
+use common::{add_inbox, file_store, message};
+use nail_api::Draft;
+use nail_store::testing::XorCipher;
 use nail_store::{
     CipherError, DataCipher, Error, SEALED_FIELD_PREFIX, SEALED_MAGIC, SealMode, Store,
 };
 
-/// A reversible stand-in cipher (the real one lives in nail-vault):
-/// magic + context + bytes XOR key. It hides ASCII text from a byte search,
-/// which is all these tests look for.
-#[derive(Debug)]
-struct TestCipher(u8);
-
-impl DataCipher for TestCipher {
-    fn seal(&self, context: &[u8], plain: &[u8]) -> Result<Vec<u8>, CipherError> {
-        let mut out = SEALED_MAGIC.to_vec();
-        out.push(u8::try_from(context.len()).unwrap());
-        out.extend_from_slice(context);
-        out.extend(plain.iter().map(|b| b ^ self.0));
-        Ok(out)
-    }
-
-    fn open(&self, context: &[u8], sealed: &[u8]) -> Result<Vec<u8>, CipherError> {
-        let rest = sealed
-            .strip_prefix(&SEALED_MAGIC)
-            .ok_or_else(|| CipherError::Failed("magic".into()))?;
-        let (&len, rest) = rest.split_first().unwrap();
-        let (ctx, body) = rest.split_at(usize::from(len));
-        if ctx != context {
-            return Err(CipherError::Failed("context".into()));
-        }
-        Ok(body.iter().map(|b| b ^ self.0).collect())
-    }
-}
-
 fn cipher() -> Arc<dyn DataCipher> {
-    Arc::new(TestCipher(0x77))
+    Arc::new(XorCipher(0x77))
 }
 
 fn seed(store: &Store) {
-    store.upsert_account(&account("a1")).unwrap();
-    store
-        .upsert_folder(&folder("inbox", "a1", "INBOX", None, FolderRole::Inbox))
-        .unwrap();
+    add_inbox(store, "a1", "inbox");
 }
 
 fn draft(body: &str) -> Draft {
@@ -144,9 +114,7 @@ impl DataCipher for WrongContext {
 #[test]
 fn convert_fields_both_ways_in_batches_and_compact_removes_plaintext() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("nail.sqlite3");
-    let store = Store::open(&path).unwrap();
-    seed(&store);
+    let (path, store) = file_store(dir.path());
     for i in 0..25 {
         let mut m = message(&format!("m{i}"), "a1", "inbox", "2026-09-01T10:00:00Z");
         m.summary.preview = format!("confidential-preview-{i}");
@@ -265,10 +233,10 @@ impl DataCipher for FailAfter {
             return Err(CipherError::Failed("simulated failure".into()));
         }
         self.0.store(left - 1, std::sync::atomic::Ordering::SeqCst);
-        TestCipher(0x77).seal(context, plain)
+        XorCipher(0x77).seal(context, plain)
     }
     fn open(&self, context: &[u8], sealed: &[u8]) -> Result<Vec<u8>, CipherError> {
-        TestCipher(0x77).open(context, sealed)
+        XorCipher(0x77).open(context, sealed)
     }
 }
 

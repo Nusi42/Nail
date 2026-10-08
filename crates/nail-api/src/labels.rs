@@ -8,9 +8,9 @@
 //! * `as_str()` — the wire name (the same string serde writes);
 //! * `message_id()` — `<prefix>-<wire name>`, the Fluent id the UI shows.
 //!
-//! `tests::wire_names_match_serde` style checks live with each enum's
-//! module (`assert_labels`), so a renamed variant cannot drift from its
-//! catalog entry.
+//! `tests::labels_match_the_wire` style checks live with each enum's
+//! module (`assert_wire_labels!`), so a renamed variant cannot drift from
+//! its catalog entry.
 
 /// Declares a labeled enum (see the module docs).
 macro_rules! labeled_enum {
@@ -50,6 +50,57 @@ macro_rules! labeled_enum {
                 Self::ALL.iter().copied().find(|v| v.as_str() == text)
             }
         }
+    };
+}
+
+/// Adds `ALL`, `as_str()` and `parse()` to an existing fieldless enum whose
+/// serde names are the listed wire names (the one table of those names;
+/// `assert_wire_names` checks it against serde in tests).
+macro_rules! wire_names {
+    ($name:ident { $($variant:ident = $wire:literal),+ $(,)? }) => {
+        impl $name {
+            /// Every variant, in declaration order.
+            pub const ALL: &'static [$name] = &[$($name::$variant),+];
+
+            /// The wire name (as serde writes it; also the config-file name).
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $($name::$variant => $wire),+
+                }
+            }
+
+            /// The variant with this wire name.
+            pub fn parse(text: &str) -> Option<Self> {
+                Self::ALL.iter().copied().find(|v| v.as_str() == text)
+            }
+        }
+    };
+}
+
+/// Checks that every variant's `as_str` is what serde writes and that the
+/// names are unique (tests of [`wire_names!`] enums).
+#[cfg(test)]
+pub(crate) fn assert_wire_names<T>(all: &[T], as_str: fn(T) -> &'static str)
+where
+    T: Copy + serde::Serialize + std::fmt::Debug,
+{
+    let mut seen = std::collections::BTreeSet::new();
+    for &v in all {
+        assert_eq!(
+            serde_json::to_value(v).expect("serializes"),
+            serde_json::json!(as_str(v)),
+            "{v:?}"
+        );
+        assert!(seen.insert(as_str(v)), "duplicate wire name {}", as_str(v));
+    }
+}
+
+/// [`assert_labels`] for each listed type (tests only):
+/// `assert_wire_labels!(BackupItem, BackupIssue);`.
+#[cfg(test)]
+macro_rules! assert_wire_labels {
+    ($($ty:ty),+ $(,)?) => {
+        $( $crate::labels::assert_labels(<$ty>::ALL, <$ty>::as_str, <$ty>::message_id); )+
     };
 }
 
@@ -94,6 +145,6 @@ mod tests {
         assert_eq!(Sample::TwoWords.message_id(), "sample-two-words");
         assert_eq!(Sample::parse("one"), Some(Sample::One));
         assert_eq!(Sample::parse("three"), None);
-        super::assert_labels(Sample::ALL, Sample::as_str, Sample::message_id);
+        assert_wire_labels!(Sample);
     }
 }

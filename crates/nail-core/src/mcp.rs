@@ -53,32 +53,23 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         // cancelled (its waiting calls answer `expired`), its policies go.
         Request::RevokeMcpClient { ref client_id } => {
             let actor = nail_api::agents::ActionActor::mcp_client(client_id.clone());
-            let events = service.clone();
-            let response = nail_mcp::admin::handle(service.store(), info, request, move |event| {
-                events.broadcast(event);
-            })
-            .await?;
+            let response = admin(service, info, request).await?;
             service.forget_actor(&actor).await;
             return Ok(response);
         }
         // Review M4a: pending writes were checked under the old grant.
         Request::UpdateMcpGrants { ref client_id, .. } => {
             let actor = nail_api::agents::ActionActor::mcp_client(client_id.clone());
-            let events = service.clone();
-            let response = nail_mcp::admin::handle(service.store(), info, request, move |event| {
-                events.broadcast(event);
-            })
-            .await?;
+            let response = admin(service, info, request).await?;
             service.cancel_confirmations_of(&actor).await;
             return Ok(response);
         }
         Request::UpdateMcpSettings { settings } => {
             if let Some(issue) = settings.issues().first() {
-                return Err(ApiError::invalid_request(format!(
-                    "invalid MCP settings ({})",
-                    issue.message_id()
-                ))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
+                return Err(ApiError::invalid_localized(
+                    format!("invalid MCP settings ({})", issue.message_id()),
+                    issue.message_id(),
+                )
                 .into());
             }
             let saved = settings.clone();
@@ -94,6 +85,16 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         _ => {}
     }
+    admin(service, info, request).await
+}
+
+/// An MCP administration request answered by `nail-mcp`, its events
+/// broadcast.
+async fn admin(
+    service: &Service,
+    info: Option<nail_api::mcp::McpServerInfo>,
+    request: Request,
+) -> Result<Response> {
     let events = service.clone();
     Ok(
         nail_mcp::admin::handle(service.store(), info, request, move |event| {

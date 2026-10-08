@@ -33,16 +33,16 @@
 use std::collections::HashSet;
 
 use nail_api::pim::{
-    CalendarEvent, Contact, ContactGroup, PimItemKind, PimItemRef, PimItemSync, PimSearchHit,
-    PimSourceKind, Task,
+    Calendar, CalendarEvent, Contact, ContactGroup, PimItemKind, PimItemRef, PimItemSync,
+    PimSearchHit, PimSourceKind, Task,
 };
 use nail_api::{AddressBookId, CalendarId, ContactGroupId, ContactId, EventId, TaskId};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
+use super::PimItem;
 use super::collections::{CollectionInfo, CollectionKind, collection_info};
 use super::ops::{PimOpId, PimOperation, cancel_object_ops, enqueue_in_tx};
 use super::time::{cache_time, parse_instant};
-use super::{PimItem, item_ref, ref_id};
 use crate::error::{Error, Result};
 use crate::store::Store;
 
@@ -116,6 +116,15 @@ impl ServerApply {
     pub fn changed(&self) -> bool {
         !matches!(self, Self::Unchanged(_) | Self::KeptLocal(_))
     }
+
+    /// The item when the server's version now shows (new, updated, or in
+    /// a conflict), `None` when the local view stays as it was.
+    pub fn shown_item(&self) -> Option<&PimItemRef> {
+        match self {
+            Self::Inserted(i) | Self::Updated(i) | Self::Conflict(i) => Some(i),
+            Self::Unchanged(_) | Self::KeptLocal(_) => None,
+        }
+    }
 }
 
 /// What [`Store::remove_server_item`] did.
@@ -127,6 +136,16 @@ pub enum ServerRemove {
     KeptAsConflict(PimItemRef),
     /// No such item.
     Missing,
+}
+
+impl ServerRemove {
+    /// The item that left the view (removed, or kept as a conflict copy).
+    pub fn item(self) -> Option<PimItemRef> {
+        match self {
+            Self::Removed(i) | Self::KeptAsConflict(i) => Some(i),
+            Self::Missing => None,
+        }
+    }
 }
 
 /// A stored resource as sync sees it (to diff against the server).
@@ -274,7 +293,7 @@ pub(crate) fn object_of_item(conn: &Connection, item: &PimItemRef) -> Result<Opt
                 "SELECT object_id FROM {} WHERE id = ?1{group_filter}",
                 item_table(kind)
             ),
-            [ref_id(item)],
+            [item.id()],
             |r| r.get(0),
         )
         .optional()?)
@@ -777,16 +796,22 @@ pub(crate) fn save_item_tx(
     })
 }
 
+/// The stored object of an item, with its id.
+fn item_object(tx: &Transaction<'_>, item: &PimItemRef) -> Result<(i64, PimObject)> {
+    let object_id =
+        object_of_item(tx, item)?.ok_or_else(|| Error::not_found("PIM item", item.id()))?;
+    let obj =
+        object_by_id(tx, object_id)?.ok_or_else(|| Error::not_found("PIM object", object_id))?;
+    Ok((object_id, obj))
+}
+
 /// The transaction part of [`Store::delete_pim_item`].
 pub(crate) fn delete_item_tx(
     tx: &Transaction<'_>,
     item: &PimItemRef,
     now: i64,
 ) -> Result<PimWrite> {
-    let object_id =
-        object_of_item(tx, item)?.ok_or_else(|| Error::not_found("PIM item", ref_id(item)))?;
-    let obj =
-        object_by_id(tx, object_id)?.ok_or_else(|| Error::not_found("PIM object", object_id))?;
+    let (object_id, obj) = item_object(tx, item)?;
     let info = info_of(tx, &obj.collection_id)?;
     writable(&info)?;
     let mut op_ids = Vec::new();
@@ -855,10 +880,7 @@ impl Store {
     /// queued as an upload to the new place and a delete at the old one.
     pub fn move_pim_item(&self, item: &PimItemRef, to: &str, now: i64) -> Result<PimWrite> {
         self.with_tx(|tx| {
-            let object_id = object_of_item(tx, item)?
-                .ok_or_else(|| Error::not_found("PIM item", ref_id(item)))?;
-            let obj = object_by_id(tx, object_id)?
-                .ok_or_else(|| Error::not_found("PIM object", object_id))?;
+            let (object_id, obj) = item_object(tx, item)?;
             let from = info_of(tx, &obj.collection_id)?;
             let target = info_of(tx, to)?;
             check_kind(&target, item.kind())?;
@@ -877,7 +899,7 @@ impl Store {
                     obj.uid
                 )));
             }
-            let mut moved = load_item(tx, item.kind(), ref_id(item))?;
+            let mut moved = load_item(tx, item.kind(), item.id())?;
             moved.set_collection(&target.id);
             let to_remote = target.source_kind != PimSourceKind::Local;
             // Uploads queued for the old place must not run any more.
@@ -1048,7 +1070,7 @@ impl Store {
                 return Ok(ServerRemove::Missing);
             };
             let id = item_id_of_object(tx, obj.id, obj.kind)?;
-            let reference = item_ref(obj.kind, id.as_deref().unwrap_or_default());
+            let reference = PimItemRef::new(obj.kind, id.as_deref().unwrap_or_default());
             if obj.sync == PimItemSync::Pending && !obj.deleted {
                 cancel_object_ops(tx, obj.id, "conflict")?;
                 tx.execute(
@@ -1191,15 +1213,7 @@ impl Store {
         calendars: Option<&[CalendarId]>,
         include_completed: bool,
     ) -> Result<Vec<Task>> {
-        let ids: Vec<String> = match calendars {
-            Some(ids) => ids.iter().map(|c| c.0.clone()).collect(),
-            None => self
-                .calendars(None)?
-                .into_iter()
-                .filter(|c| c.settings.visible && c.has_tasks())
-                .map(|c| c.id.0)
-                .collect(),
-        };
+        let ids = self.visible_calendars(calendars, Calendar::has_tasks)?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1512,8 +1526,8 @@ fn load_groups(conn: &Connection, filter: &str, args: &[&str]) -> Result<Vec<Con
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pim::PimOperation;
     use crate::pim::testing::{self, BOOK, CAL, DAV_BOOK, DAV_CAL, ICS_CAL, raw};
-    use crate::pim::{PimOperation, item_ref};
     use nail_api::pim::{PimTime, TaskStatus};
     use pretty_assertions::assert_eq;
 
@@ -1636,7 +1650,7 @@ mod tests {
                 5,
             )
             .unwrap();
-        let reference = item_ref(PimItemKind::Event, "ev1");
+        let reference = PimItemRef::new(PimItemKind::Event, "ev1");
         let write = store.delete_pim_item(&reference, 6).unwrap();
         assert_eq!(write.op_ids.len(), 1);
         assert_eq!(
@@ -1857,7 +1871,7 @@ mod tests {
         assert!(e.read_only);
         assert!(
             store
-                .delete_pim_item(&item_ref(PimItemKind::Event, "h2"), 2)
+                .delete_pim_item(&PimItemRef::new(PimItemKind::Event, "h2"), 2)
                 .is_err()
         );
     }
@@ -1904,7 +1918,7 @@ mod tests {
         store
             .save_pim_item(&PimItem::Contact(c.clone()), &raw("c"), 1)
             .unwrap();
-        let reference = item_ref(PimItemKind::Contact, "c1");
+        let reference = PimItemRef::new(PimItemKind::Contact, "c1");
         let moved = store.move_pim_item(&reference, DAV_BOOK, 2).unwrap();
         assert_eq!(moved.op_ids.len(), 1);
         let stored = store.contact(&"c1".into()).unwrap().unwrap();
@@ -2103,9 +2117,9 @@ mod tests {
             .unwrap();
         let hits = store
             .pim_search_hits(&[
-                item_ref(PimItemKind::Contact, "c1"),
-                item_ref(PimItemKind::Event, "missing"),
-                item_ref(PimItemKind::Event, "e1"),
+                PimItemRef::new(PimItemKind::Contact, "c1"),
+                PimItemRef::new(PimItemKind::Event, "missing"),
+                PimItemRef::new(PimItemKind::Event, "e1"),
             ])
             .unwrap();
         assert_eq!(hits.len(), 2);
@@ -2131,7 +2145,7 @@ mod tests {
         let store = testing::store();
         store
             .set_cipher(
-                Some(std::sync::Arc::new(crate::seal::tests::XorCipher)),
+                Some(std::sync::Arc::new(crate::seal::tests::XOR)),
                 crate::SealMode::Seal,
             )
             .unwrap();
@@ -2156,7 +2170,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .pim_object(&item_ref(PimItemKind::Contact, "c1"))
+                .pim_object(&PimItemRef::new(PimItemKind::Contact, "c1"))
                 .unwrap()
                 .unwrap()
                 .raw,

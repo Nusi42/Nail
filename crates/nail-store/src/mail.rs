@@ -920,6 +920,16 @@ impl Store {
         self.with_tx(|tx| message_in_tx(tx, id))
     }
 
+    /// One message with sync metadata, `None` when there is none with
+    /// this id.
+    pub fn find_message(&self, id: &MessageId) -> Result<Option<StoredMessage>> {
+        match self.get_message(id) {
+            Ok(m) => Ok(Some(m)),
+            Err(err) if err.is_not_found() => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
     /// The id of the message with this UID in a folder, if present (the
     /// sync's lookup; [`Store::find_message_by_uid`] loads the message).
     pub fn message_id_by_uid(&self, folder: &FolderId, uid: u32) -> Result<Option<MessageId>> {
@@ -1283,10 +1293,7 @@ impl Store {
                 "SELECT DISTINCT blob_hash FROM messages \
                  WHERE folder_id = ?1 AND blob_hash IS NOT NULL",
             )?;
-            let hashes = stmt
-                .query_map([folder.as_str()], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
-            hashes.iter().map(|h| BlobHash::parse(h)).collect()
+            crate::util::blob_hashes(&mut stmt, [folder.as_str()])
         })
     }
 

@@ -5,12 +5,14 @@ use std::collections::HashSet;
 
 use indexmap::IndexMap;
 use kdl::{KdlEntry, KdlNode};
+use nail_api::config::layout::used_actions;
 use nail_api::views::{NAV_RAIL_WIDGET, SETTINGS_PAGE_WIDGET, VIEW_HOST_WIDGET};
 use nail_api::windows::{WindowFrame, WindowInstances, WindowSize};
 use nail_api::{
-    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LayoutPreset,
-    LocalizedMessage, MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout, SettingsGroup,
-    SettingsSection, SourceLocation, ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
+    ActionDef, ActionItem, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode,
+    LayoutPreset, LocalizedMessage, MenuItem, Orientation, PresetNode, RailItem, ResolvedLayout,
+    SettingsGroup, SettingsSection, SourceLocation, ToolbarItem, ToolbarOverflow, ToolbarSettings,
+    ViewDef,
 };
 use schemars::JsonSchema;
 use serde_json::{Map, Value};
@@ -18,15 +20,15 @@ use serde_json::{Map, Value};
 use crate::error::ConfigError;
 use crate::kdl_util::{
     self as k, Errors, Located, Source, arg_str, args, check_max_args, check_no_children,
-    check_props, children, describe, is_dotted_kebab, is_kebab, prop_str, prop_u32, sort_errors,
-    to_json,
+    check_props, children, describe, is_dotted_kebab, is_kebab, kebab_arg, kebab_prop, prop_str,
+    prop_u32, sort_errors, to_json,
 };
 use crate::l10n::msg;
 use crate::schema::{
     ActionSchema, BreakpointSchema, MenuItemSchema, PresetSchema, RailItemSchema,
     SettingsGroupSchema, ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema, WindowFrameSchema,
 };
-use crate::theme::{read_extends, single_root};
+use crate::theme::{read_extends, read_root_file, root_name};
 use crate::widgets::{self, OptionType};
 
 /// The window-model properties a `window` node may carry (M5c, ADR 0116).
@@ -152,16 +154,9 @@ impl LayoutFile {
     /// error of the file in file order: a bad item is recorded and skipped,
     /// and reading goes on with the next one.
     pub fn parse_all(text: &str, file: &str) -> Result<Self, Vec<ConfigError>> {
-        let src = Source::new(file, text);
-        let doc = src.parse_all()?;
-        let root = single_root(&src, &doc, "layout").map_err(|e| vec![e])?;
-        let errors = Errors::default();
-        let layout = LayoutReader {
-            src: &src,
-            errors: &errors,
-        }
-        .layout(root);
-        errors.finish(layout)
+        read_root_file(text, file, "layout", |src, errors, root| {
+            LayoutReader { src, errors }.layout(root)
+        })
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
@@ -219,12 +214,7 @@ impl LayoutReader<'_, '_> {
     fn layout(&self, node: &KdlNode) -> LayoutFile {
         let src = self.src;
         let e = self.errors;
-        e.ok(check_props(src, node, &["extends"]));
-        e.ok(check_max_args(src, node, 1));
-        let name = match e.ok(arg_str(src, node, 0)) {
-            Some((name, entry)) => src.located(entry, name.to_owned()),
-            None => Located::new(String::new(), src.node_loc(node)),
-        };
+        let name = root_name(src, e, node, &["extends"]);
         let mut file = LayoutFile {
             name,
             extends: e.ok(read_extends(src, node)).flatten(),
@@ -450,15 +440,7 @@ impl LayoutReader<'_, '_> {
     /// Common `id` / `label` properties.
     fn id_label(&self, node: &KdlNode) -> Result<(Option<String>, Option<String>), ConfigError> {
         let src = self.src;
-        let id = match prop_str(src, node, "id")? {
-            None => None,
-            Some((id, entry)) => {
-                if !is_kebab(id) {
-                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-                }
-                Some(id.to_owned())
-            }
-        };
+        let id = kebab_prop(src, node, "id")?;
         let label = match prop_str(src, node, "label")? {
             None => None,
             Some((label, entry)) => Some(self.label(label, entry)?),
@@ -524,16 +506,7 @@ impl LayoutReader<'_, '_> {
                     .or_else(|| node.entry("orientation"));
                 let orientation = match orientation_entry {
                     None => Orientation::Horizontal,
-                    Some(entry) => match k::entry_str(src, entry, "`orientation`")? {
-                        "horizontal" => Orientation::Horizontal,
-                        "vertical" => Orientation::Vertical,
-                        other => {
-                            return Err(src.entry_err(
-                                entry,
-                                msg("config-orientation-unknown").arg("found", other),
-                            ));
-                        }
-                    },
+                    Some(entry) => orientation(src, entry)?,
                 };
                 let children = self.children(node)?;
                 let n = children.len();
@@ -1023,8 +996,7 @@ impl LayoutReader<'_, '_> {
             "item" => {
                 check_props(src, item, &["label", "icon", "rank", "display"])?;
                 check_no_children(src, item)?;
-                let (action, args) = self.action_ref(item, 0)?;
-                let (label, icon) = self.item_overrides(item)?;
+                let action = self.action_item(item)?;
                 let rank = prop_u32(src, item, "rank")?;
                 if rank == Some(0)
                     && let Some(entry) = item.entry("rank")
@@ -1044,10 +1016,7 @@ impl LayoutReader<'_, '_> {
                     })?),
                 };
                 Ok(ToolbarItem::Action {
-                    action,
-                    args,
-                    label,
-                    icon,
+                    item: action,
                     rank,
                     display,
                 })
@@ -1072,6 +1041,18 @@ impl LayoutReader<'_, '_> {
             }
             other => Err(src.node_err(item, msg("config-toolbar-unexpected").arg("node", other))),
         }
+    }
+
+    /// A toolbar or menu `item`: its action reference and overrides.
+    fn action_item(&self, item: &KdlNode) -> Result<ActionItem, ConfigError> {
+        let (action, args) = self.action_ref(item, 0)?;
+        let (label, icon) = self.item_overrides(item)?;
+        Ok(ActionItem {
+            action,
+            args,
+            label,
+            icon,
+        })
     }
 
     fn item_overrides(
@@ -1128,10 +1109,7 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &["window", "label", "icon"])?;
         check_max_args(src, node, 1)?;
-        let (id, entry) = arg_str(src, node, 0)?;
-        if !is_kebab(id) {
-            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-        }
+        let id = kebab_arg(src, node, 0)?.0;
         let Some((window, _)) = prop_str(src, node, "window")? else {
             return Err(src.node_err(node, msg("config-preset-window-missing").arg("preset", id)));
         };
@@ -1180,16 +1158,7 @@ impl LayoutReader<'_, '_> {
                 check_max_args(src, node, 1)?;
                 let orientation = match args(node).first() {
                     None => Orientation::Horizontal,
-                    Some(entry) => match k::entry_str(src, entry, "`orientation`")? {
-                        "horizontal" => Orientation::Horizontal,
-                        "vertical" => Orientation::Vertical,
-                        other => {
-                            return Err(src.entry_err(
-                                entry,
-                                msg("config-orientation-unknown").arg("found", other),
-                            ));
-                        }
-                    },
+                    Some(entry) => orientation(src, entry)?,
                 };
                 let children = kids(node)?;
                 let sizes = self
@@ -1221,10 +1190,7 @@ impl LayoutReader<'_, '_> {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 1)?;
                 check_no_children(src, node)?;
-                let (id, entry) = arg_str(src, node, 0)?;
-                if !is_kebab(id) {
-                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-                }
+                let id = kebab_arg(src, node, 0)?.0;
                 Ok(PresetNode::Pane { id: id.to_owned() })
             }
             other => Err(src.node_err(node, msg("config-preset-node-unknown").arg("node", other))),
@@ -1237,15 +1203,7 @@ impl LayoutReader<'_, '_> {
         self.once(node, file.views.is_some())?;
         check_props(src, node, &["default"])?;
         check_max_args(src, node, 0)?;
-        let default = match prop_str(src, node, "default")? {
-            None => None,
-            Some((id, entry)) => {
-                if !is_kebab(id) {
-                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-                }
-                Some(id.to_owned())
-            }
-        };
+        let default = kebab_prop(src, node, "default")?;
         let mut section = ViewsSection {
             default,
             views: IndexMap::new(),
@@ -1273,10 +1231,7 @@ impl LayoutReader<'_, '_> {
         check_props(src, node, &["label", "icon", "window", "badge"])?;
         check_max_args(src, node, 1)?;
         check_no_children(src, node)?;
-        let (id, entry) = arg_str(src, node, 0)?;
-        if !is_kebab(id) {
-            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-        }
+        let id = kebab_arg(src, node, 0)?.0;
         let window = match prop_str(src, node, "window")? {
             None => {
                 return Err(src.node_err(
@@ -1326,10 +1281,7 @@ impl LayoutReader<'_, '_> {
                 check_props(src, item, &[])?;
                 check_max_args(src, item, 1)?;
                 check_no_children(src, item)?;
-                let (view, entry) = arg_str(src, item, 0)?;
-                if !is_kebab(view) {
-                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", view)));
-                }
+                let view = kebab_arg(src, item, 0)?.0;
                 Ok(RailItem::View {
                     view: view.to_owned(),
                 })
@@ -1385,10 +1337,7 @@ impl LayoutReader<'_, '_> {
 
     fn page_id(&self, node: &KdlNode, ids: &mut HashSet<String>) -> Result<String, ConfigError> {
         let src = self.src;
-        let (id, entry) = arg_str(src, node, 0)?;
-        if !is_kebab(id) {
-            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
-        }
+        let (id, entry) = kebab_arg(src, node, 0)?;
         if !ids.insert(id.to_owned()) {
             return Err(src.entry_err(entry, msg("config-id-duplicate").arg("id", id)));
         }
@@ -1485,14 +1434,7 @@ impl LayoutReader<'_, '_> {
                 "item" => {
                     check_props(src, item, &["label", "icon"])?;
                     check_no_children(src, item)?;
-                    let (action, args) = self.action_ref(item, 0)?;
-                    let (label, icon) = self.item_overrides(item)?;
-                    MenuItem::Action {
-                        action,
-                        args,
-                        label,
-                        icon,
-                    }
+                    MenuItem::Action(self.action_item(item)?)
                 }
                 "separator" => {
                     self.block(item)?;
@@ -1569,6 +1511,13 @@ fn check_option(
         .arg("key", key)
         .arg("found", describe(value)),
     ))
+}
+
+/// A split's orientation (`"horizontal"` / `"vertical"`) from `entry`.
+fn orientation(src: &Source<'_>, entry: &KdlEntry) -> Result<Orientation, ConfigError> {
+    let text = k::entry_str(src, entry, "`orientation`")?;
+    Orientation::parse(text)
+        .ok_or_else(|| src.entry_err(entry, msg("config-orientation-unknown").arg("found", text)))
 }
 
 fn check_action_id(src: &Source<'_>, entry: &KdlEntry, id: &str) -> Result<(), ConfigError> {
@@ -1696,15 +1645,6 @@ impl LayoutFile {
     /// All resolution errors in the order they are found; the first one is
     /// what [`Self::resolve`] reports.
     fn resolve_unsorted(&self) -> Result<ResolvedLayout, Vec<ConfigError>> {
-        fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
-            for item in items {
-                match item {
-                    MenuItem::Action { action, .. } => out.push(action),
-                    MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                    MenuItem::Separator | MenuItem::Header { .. } => {}
-                }
-            }
-        }
         let mut errors = Vec::new();
         if !self.windows.contains_key("main") {
             errors.push(ConfigError::invalid(
@@ -1761,24 +1701,7 @@ impl LayoutFile {
 
         // Every used action gets an entry in `actions`.
         let mut actions = self.actions.clone();
-        let mut used: Vec<&str> = keys.iter().map(|k| k.action.as_str()).collect();
-        for items in self.toolbars.values() {
-            for item in items {
-                match item {
-                    ToolbarItem::Action { action, .. } => used.push(action),
-                    ToolbarItem::More { items, .. } => menu_actions(items, &mut used),
-                    ToolbarItem::Spacer | ToolbarItem::Separator => {}
-                }
-            }
-        }
-        for items in self.menus.values() {
-            menu_actions(items, &mut used);
-        }
-        for item in &rail {
-            if let RailItem::Action { action, .. } = item {
-                used.push(action);
-            }
-        }
+        let used = used_actions(&keys, self.toolbars.values(), self.menus.values(), &rail);
         for action in used {
             if !actions.contains_key(action) {
                 actions.insert(action.to_owned(), ActionDef::default());

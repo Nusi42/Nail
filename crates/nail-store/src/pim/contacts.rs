@@ -720,8 +720,8 @@ impl Store {
             .filter(|b| b.settings.autocomplete && b.role.is_none())
             .map(|b| b.id.0)
             .collect();
-        let pattern = format!("{}%", escape_like(&prefix));
-        let word = format!("% {}%", escape_like(&prefix));
+        let pattern = format!("{}%", crate::util::escape_like(&prefix));
+        let word = format!("% {}%", crate::util::escape_like(&prefix));
         // Contacts: (contact id, name, email, preferred).
         let contact_rows: Vec<(String, String, String, bool)> = if books.is_empty() {
             Vec::new()
@@ -743,10 +743,7 @@ impl Store {
                 let mut args: Vec<String> = books.clone();
                 args.push(pattern.clone());
                 args.push(word.clone());
-                let rows = stmt.query_map(rusqlite::params_from_iter(args), |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-                })?;
-                Ok(rows.collect::<rusqlite::Result<_>>()?)
+                crate::util::collect_rows(&mut stmt, rusqlite::params_from_iter(args))
             })?
         };
         // Collected: (email, name, use_count, last_used).
@@ -757,10 +754,7 @@ impl Store {
                     OR name LIKE ?2 ESCAPE '\\'
                  ORDER BY use_count DESC, last_used DESC LIMIT 500",
             )?;
-            let rows = stmt.query_map(params![pattern, word], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-            })?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
+            crate::util::collect_rows(&mut stmt, params![pattern, word])
         })?;
         // Usage of the contacts' addresses.
         let mut usage: HashMap<String, (i64, i64)> = collected_rows
@@ -862,18 +856,6 @@ impl Store {
     }
 }
 
-/// Escapes `%`, `_` and `\` for a `LIKE … ESCAPE '\'` pattern.
-fn escape_like(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        if matches!(c, '%' | '_' | '\\') {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use nail_api::pim::contact::ContactOrg;
@@ -881,7 +863,6 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::pim::item_ref;
     use crate::pim::testing::{self, BOOK, DAV_BOOK, raw};
 
     fn save(store: &Store, contact: &Contact) {
@@ -1269,7 +1250,7 @@ mod tests {
         assert_eq!(eve.address_book_id.as_str(), COLLECTED_BOOK_ID);
         assert_eq!(eve.fields.display_name, "eve@example.org");
         let object = store
-            .pim_object(&item_ref(PimItemKind::Contact, written[0].as_str()))
+            .pim_object(&PimItemRef::new(PimItemKind::Contact, written[0].as_str()))
             .unwrap()
             .unwrap();
         assert!(object.raw.contains("EMAIL:eve@example.org"));

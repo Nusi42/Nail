@@ -51,7 +51,7 @@ pub fn draft_revision(draft: &Draft) -> String {
 }
 
 /// Fails with [`Error::DraftChanged`] unless `current` is at `expected`.
-fn check_revision(current: &Draft, expected: Option<&str>) -> Result<()> {
+pub fn check_revision(current: &Draft, expected: Option<&str>) -> Result<()> {
     match expected {
         Some(expected) if draft_revision(current) != expected => Err(Error::DraftChanged(
             current
@@ -64,7 +64,7 @@ fn check_revision(current: &Draft, expected: Option<&str>) -> Result<()> {
     }
 }
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+use crate::util::SQL_NOW as NOW;
 
 fn draft_id(n: i64) -> DraftId {
     DraftId(format!("draft-{n}"))
@@ -638,10 +638,7 @@ impl Store {
             let mut stmt = conn.prepare_cached(
                 "SELECT DISTINCT blob_hash FROM draft_attachments ORDER BY blob_hash",
             )?;
-            let hashes = stmt
-                .query_map([], |r| r.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
-            hashes.iter().map(|h| BlobHash::parse(h)).collect()
+            crate::util::blob_hashes(&mut stmt, [])
         })
     }
 
@@ -732,21 +729,14 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use nail_api::accounts::ComposerMode;
-    use nail_api::{Account, AccountKind};
+    use nail_api::{AccountKind, testing};
+
+    use crate::test_store::store_with;
 
     use super::*;
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: "a1".into(),
-                name: "A".into(),
-                email: "a@example.org".into(),
-                kind: AccountKind::Imap,
-            })
-            .unwrap();
-        store
+        store_with(&testing::account("a1", AccountKind::Imap), &[])
     }
 
     fn draft(subject: &str) -> Draft {
@@ -1125,12 +1115,7 @@ mod tests {
         let entry = {
             let store = Store::open(&path).unwrap();
             store
-                .upsert_account(&Account {
-                    id: "a1".into(),
-                    name: "A".into(),
-                    email: "a@example.org".into(),
-                    kind: AccountKind::Imap,
-                })
+                .upsert_account(&testing::account("a1", AccountKind::Imap))
                 .unwrap();
             let id = store.save_draft(&draft("Hi")).unwrap();
             let entry = store.schedule_send(&id, &"a1".into(), 0).unwrap();

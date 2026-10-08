@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use crate::config::layout::{MenuItem, ResolvedLayout};
+use crate::config::layout::{ActionItem, MenuItem, ResolvedLayout};
 
 /// Prefix of context-menu names in the layout.
 pub const CONTEXT_MENU_PREFIX: &str = "context:";
@@ -161,12 +161,12 @@ fn resolve_items(
     let mut out: Vec<ResolvedMenuEntry> = Vec::new();
     for item in items {
         match item {
-            MenuItem::Action {
+            MenuItem::Action(ActionItem {
                 action,
                 args,
                 label,
                 icon,
-            } => {
+            }) => {
                 let def = layout.actions.get(action);
                 out.push(ResolvedMenuEntry::Action {
                     action: action.clone(),
@@ -254,12 +254,7 @@ mod tests {
     use serde_json::json;
 
     fn item(action: &str) -> MenuItem {
-        MenuItem::Action {
-            action: action.into(),
-            args: vec![],
-            label: None,
-            icon: None,
-        }
+        MenuItem::Action(ActionItem::new(action))
     }
 
     fn layout(menu: Vec<MenuItem>) -> ResolvedLayout {
@@ -360,12 +355,11 @@ mod tests {
             MenuItem::Separator,
             MenuItem::Separator,
             item("mail.archive"),
-            MenuItem::Action {
-                action: "view.toggle".into(),
+            MenuItem::Action(ActionItem {
                 args: vec![json!("reader")],
                 label: Some("Reader".into()),
-                icon: None,
-            },
+                ..ActionItem::new("view.toggle")
+            }),
             MenuItem::Submenu {
                 label: "@menu.empty".into(),
                 items: vec![MenuItem::Separator],

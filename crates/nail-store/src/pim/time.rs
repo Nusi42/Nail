@@ -13,7 +13,7 @@
 
 use std::str::FromStr;
 
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use nail_api::pim::{PimTime, UTC_ZONE};
 
@@ -56,15 +56,8 @@ pub fn parse_date(text: &str) -> Option<NaiveDate> {
 }
 
 /// The instant of a wall-clock time in `tz` (gaps move forward, repeated
-/// times take the earlier instant).
-pub fn resolve_wall<Z: TimeZone>(tz: &Z, local: NaiveDateTime) -> DateTime<Z> {
-    if let Some(earliest) = tz.from_local_datetime(&local).earliest() {
-        return earliest;
-    }
-    let before = tz.offset_from_utc_datetime(&(local - Duration::days(1)));
-    let utc = local - Duration::seconds(i64::from(before.fix().local_minus_utc()));
-    tz.from_utc_datetime(&utc)
-}
+/// times take the earlier instant; [`nail_triage::localtime::resolve_local`]).
+pub use nail_triage::localtime::resolve_local as resolve_wall;
 
 /// A calendar time in cache seconds; `None` when it is malformed.
 pub fn cache_time(time: &PimTime) -> Option<CacheTime> {

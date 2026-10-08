@@ -44,6 +44,7 @@ use webauthn_rp::{
 };
 
 use crate::error::{AuthError, Result};
+use nail_api::hosts::{MAX_DNS_NAME_LEN, has_numeric_last_label, is_dns_label};
 
 /// Length of our user handles.
 const USER_HANDLE_LEN: usize = 64;
@@ -72,21 +73,10 @@ pub fn check_rp_host(host: &str) -> Result<String> {
     if bare.parse::<IpAddr>().is_ok() {
         return refuse("an IP address cannot be a relying-party id");
     }
-    let labels: Vec<&str> = host.split('.').collect();
-    let label_ok = |l: &&str| {
-        !l.is_empty()
-            && l.len() <= 63
-            && !l.starts_with('-')
-            && !l.ends_with('-')
-            && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
-    };
-    if host.is_empty() || host.len() > 253 || !labels.iter().all(label_ok) {
+    if host.is_empty() || host.len() > MAX_DNS_NAME_LEN || !host.split('.').all(is_dns_label) {
         return refuse("not a DNS name");
     }
-    if labels
-        .last()
-        .is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit()))
-    {
+    if has_numeric_last_label(&host) {
         return refuse("the last label is numeric");
     }
     Ok(host)
@@ -120,7 +110,7 @@ impl RelyingParty {
     /// A relying party for `host` served on `https://host:port`.
     pub fn for_port(host: &str, port: u16) -> Result<Self> {
         let host = check_rp_host(host)?;
-        let origin = if port == 443 {
+        let origin = if port == nail_api::hosts::HTTPS_PORT {
             format!("https://{host}")
         } else {
             format!("https://{host}:{port}")
@@ -373,12 +363,19 @@ pub fn start_login(rp: &RelyingParty) -> Result<(LoginCeremony, serde_json::Valu
     Ok((LoginCeremony(server), options))
 }
 
-/// The credential id of a login answer (to look the credential up).
-pub fn login_credential_id(credential: &serde_json::Value) -> Result<Vec<u8>, PasskeyError> {
+/// The browser's login answer.
+fn login_answer(
+    credential: &serde_json::Value,
+) -> Result<DiscoverableAuthentication64, PasskeyError> {
     let bytes =
         serde_json::to_vec(credential).map_err(|e| PasskeyError::Malformed(e.to_string()))?;
-    let authentication = DiscoverableAuthentication64::from_json_relaxed(&bytes)
-        .map_err(|e| PasskeyError::Malformed(e.to_string()))?;
+    DiscoverableAuthentication64::from_json_relaxed(&bytes)
+        .map_err(|e| PasskeyError::Malformed(e.to_string()))
+}
+
+/// The credential id of a login answer (to look the credential up).
+pub fn login_credential_id(credential: &serde_json::Value) -> Result<Vec<u8>, PasskeyError> {
+    let authentication = login_answer(credential)?;
     Ok(authentication.raw_id().as_ref().to_vec())
 }
 
@@ -392,10 +389,7 @@ pub fn finish_login(
     credential_id: &[u8],
     stored: &StoredCredential,
 ) -> Result<StoredCredential, PasskeyError> {
-    let bytes =
-        serde_json::to_vec(credential).map_err(|e| PasskeyError::Malformed(e.to_string()))?;
-    let authentication = DiscoverableAuthentication64::from_json_relaxed(&bytes)
-        .map_err(|e| PasskeyError::Malformed(e.to_string()))?;
+    let authentication = login_answer(credential)?;
     let handle = stored.user_handle()?;
     let id = CredentialId::<&[u8]>::decode(credential_id)
         .map_err(|e| PasskeyError::Stored(e.to_string()))?;

@@ -171,6 +171,13 @@ impl BackupKey {
     }
 }
 
+/// The app settings a backup carries (all but [`EXCLUDED_SETTINGS`]).
+fn backed_up_settings(service: &Service) -> Result<BTreeMap<String, serde_json::Value>, SinkError> {
+    let mut all = service.store().all_settings().map_err(fatal)?;
+    all.retain(|k, _| !EXCLUDED_SETTINGS.contains(&k.as_str()));
+    Ok(all)
+}
+
 /// The core as a backup's source (blocking).
 pub(crate) struct CoreBackupSource {
     pub(crate) service: Service,
@@ -178,9 +185,7 @@ pub(crate) struct CoreBackupSource {
 
 impl CoreBackupSource {
     fn settings(&self) -> Result<BTreeMap<String, serde_json::Value>, SinkError> {
-        let mut all = self.service.store().all_settings().map_err(fatal)?;
-        all.retain(|k, _| !EXCLUDED_SETTINGS.contains(&k.as_str()));
-        Ok(all)
+        backed_up_settings(&self.service)
     }
 
     fn keyring(&self) -> Result<Vec<BackupKey>, SinkError> {
@@ -428,9 +433,7 @@ impl CoreRestoreTarget {
     }
 
     fn current_settings(&self) -> Result<BTreeMap<String, serde_json::Value>, SinkError> {
-        let mut all = self.service.store().all_settings().map_err(fatal)?;
-        all.retain(|k, _| !EXCLUDED_SETTINGS.contains(&k.as_str()));
-        Ok(all)
+        backed_up_settings(&self.service)
     }
 
     fn merge_keys(&self, content: &[u8], dry_run: bool) -> Result<MergeOutcome, SinkError> {
@@ -723,13 +726,8 @@ mod tests {
     use super::*;
 
     fn service() -> (Service, tempfile::TempDir, tempfile::TempDir) {
-        let data = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        let mut options = crate::ServiceOptions::new(data.path(), config.path());
-        options.watch_config = false;
-        options.start_engines = false;
-        let service = Service::open(crate::demo::demo_options(options)).unwrap();
-        (service, data, config)
+        let t = crate::testing::TempService::quiet();
+        (t.service, t.data, t.config)
     }
 
     fn restore_settings(service: &Service, settings: &serde_json::Value) -> Result<(), SinkError> {

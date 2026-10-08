@@ -5,7 +5,14 @@
 
 #![cfg(test)]
 
-use std::future::Future;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{
+    Multi, TIMEOUT, eventually, find, folder, folders, inbox_count, messages, next_matching,
+    op_ids, request, save, statuses,
+};
+use nail_core::testing::error_of;
+
 use std::time::Duration;
 
 use nail_api::accounts::{
@@ -13,106 +20,21 @@ use nail_api::accounts::{
     VirtualAccountConfig,
 };
 use nail_api::{
-    AccountId, AccountState, Address, Draft, ErrorCode, Event, FlagChange, Folder, FolderId,
-    FolderRole, MessageSummary, MoveTarget, OutboxState, Request, Response, SearchQuery,
+    AccountId, AccountState, Address, Draft, ErrorCode, Event, FlagChange, FolderId, FolderRole,
+    MessageSummary, MoveTarget, OutboxState, Request, Response, SearchQuery,
 };
+use nail_core::Service;
 use nail_core::demo::{
-    DemoMulti, MULTI_HOME_EMAIL, MULTI_HOME_ID, MULTI_NEW_EMAIL, MULTI_NEW_PASSWORD,
-    MULTI_WORK_EMAIL, MULTI_WORK_ID, start_demo_multi,
+    MULTI_HOME_EMAIL, MULTI_HOME_ID, MULTI_NEW_EMAIL, MULTI_NEW_PASSWORD, MULTI_WORK_EMAIL,
+    MULTI_WORK_ID, start_demo_multi,
 };
-use nail_core::{Service, ServiceOptions};
 use serde_json::json;
-use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
-
-struct Fixture {
-    service: Service,
-    demo: DemoMulti,
-    config_dir: TempDir,
-    _data_dir: TempDir,
-}
+type Fixture = Multi;
 
 async fn setup() -> Fixture {
-    let demo = start_demo_multi().await.unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    demo.write_config(config_dir.path()).unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    Fixture {
-        service,
-        demo,
-        config_dir,
-        _data_dir: data_dir,
-    }
-}
-
-async fn eventually<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for: {what}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
-async fn request(service: &Service, request: Request) -> Response {
-    service.handle(request).await
-}
-
-async fn folders(service: &Service, account: &str) -> Vec<Folder> {
-    match request(
-        service,
-        Request::ListFolders {
-            account_id: AccountId::new(account),
-        },
-    )
-    .await
-    {
-        Response::Folders { folders } => folders,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn folder(service: &Service, account: &str, role: FolderRole) -> Option<Folder> {
-    folders(service, account)
-        .await
-        .into_iter()
-        .find(|f| f.role == role)
-}
-
-async fn messages(service: &Service, folder: &FolderId) -> Vec<MessageSummary> {
-    match request(
-        service,
-        Request::ListMessages {
-            folder_id: folder.clone(),
-            offset: 0,
-            limit: 500,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn inbox_count(service: &Service, account: &str) -> usize {
-    match folder(service, account, FolderRole::Inbox).await {
-        Some(f) => messages(service, &f.id).await.len(),
-        None => 0,
-    }
+    Multi::start().await
 }
 
 async fn synced(f: &Fixture) {
@@ -123,21 +45,8 @@ async fn synced(f: &Fixture) {
     .await;
 }
 
-async fn find(service: &Service, account: &str, role: FolderRole, subject: &str) -> MessageSummary {
-    let folder = folder(service, account, role).await.unwrap();
-    messages(service, &folder.id)
-        .await
-        .into_iter()
-        .find(|m| m.subject.contains(subject))
-        .unwrap_or_else(|| panic!("no message {subject:?} in {account} {role:?}"))
-}
-
-fn control(f: &Fixture, command: &str, args: &serde_json::Value) -> serde_json::Value {
-    f.demo.control(command, args).unwrap()
-}
-
 fn server_flags(f: &Fixture, mailbox: &str, subject: &str) -> Option<Vec<String>> {
-    let list = control(f, "imap-messages", &json!({ "mailbox": mailbox }));
+    let list = f.control("imap-messages", &json!({ "mailbox": mailbox }));
     list.as_array()?
         .iter()
         .find(|m| m["subject"].as_str().unwrap_or_default().contains(subject))
@@ -151,21 +60,16 @@ fn server_flags(f: &Fixture, mailbox: &str, subject: &str) -> Option<Vec<String>
         })
 }
 
-async fn statuses(service: &Service) -> Vec<(AccountId, AccountState)> {
-    match request(service, Request::ListAccountStatuses).await {
-        Response::AccountStatuses { statuses } => statuses
-            .into_iter()
-            .map(|s| (s.account_id, s.state))
-            .collect(),
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-fn op_ids(response: Response) -> Vec<nail_api::OpId> {
-    match response {
-        Response::Queued { op_ids } => op_ids,
-        other => panic!("expected Queued, got {other:?}"),
-    }
+/// "Sync now" for the work account, then a moment for the pass.
+async fn sync_and_settle(service: &Service) {
+    request(
+        service,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
 }
 
 #[tokio::test]
@@ -380,8 +284,7 @@ async fn server_flag_changes_arrive_through_idle() {
     )
     .await;
     assert!(!before.flags.flagged);
-    control(
-        &f,
+    f.control(
         "imap-flags",
         &json!({ "subject": "Welcome to Nail", "flags": ["\\Flagged", "\\Seen"] }),
     );
@@ -398,9 +301,7 @@ async fn server_flag_changes_arrive_through_idle() {
     .await;
     // New mail arrives the same way (and is announced).
     let mut events = f.service.subscribe();
-    control(
-        &f,
-        "imap-deliver",
+    f.control("imap-deliver",
         &json!({ "raw": "From: x@y.example\r\nSubject: Pushed by IDLE\r\nMessage-ID: <idle@y.example>\r\n\r\nhi" }),
     );
     eventually("new mail pushed", || async {
@@ -422,13 +323,7 @@ async fn server_flag_changes_arrive_through_idle() {
 async fn writes_made_offline_replay_after_reconnecting() {
     let f = setup().await;
     synced(&f).await;
-    control(&f, "imap-offline", &json!({ "offline": true }));
-    eventually("work offline", || async {
-        statuses(&f.service)
-            .await
-            .contains(&(AccountId::new(MULTI_WORK_ID), AccountState::Offline))
-    })
-    .await;
+    go_offline(&f).await;
     let message = find(
         &f.service,
         MULTI_WORK_ID,
@@ -436,19 +331,7 @@ async fn writes_made_offline_replay_after_reconnecting() {
         "Welcome to Nail",
     )
     .await;
-    op_ids(
-        request(
-            &f.service,
-            Request::UpdateFlags {
-                message_ids: vec![message.id.clone()],
-                change: FlagChange {
-                    flagged: Some(true),
-                    ..FlagChange::default()
-                },
-            },
-        )
-        .await,
-    );
+    flag(&f.service, &message).await;
     // Applied locally at once, queued for the server.
     assert!(
         find(
@@ -468,7 +351,7 @@ async fn writes_made_offline_replay_after_reconnecting() {
             .is_some_and(|flags| !flags.iter().any(|x| x == "\\Flagged"))
     );
 
-    control(&f, "imap-offline", &json!({ "offline": false }));
+    f.control("imap-offline", &json!({ "offline": false }));
     eventually("replayed after reconnecting", || async {
         server_flags(&f, "INBOX", "Welcome to Nail")
             .is_some_and(|flags| flags.iter().any(|x| x == "\\Flagged"))
@@ -485,9 +368,7 @@ async fn writes_made_offline_replay_after_reconnecting() {
 async fn pop3_receives_and_deletes_by_policy() {
     let f = setup().await;
     synced(&f).await;
-    control(
-        &f,
-        "pop3-deliver",
+    f.control("pop3-deliver",
         &json!({ "raw": "From: grace@home.example\r\nSubject: Fresh from POP3\r\nMessage-ID: <fresh@home.example>\r\n\r\nnew", "uid": "home-3" }),
     );
     request(
@@ -528,7 +409,7 @@ async fn pop3_receives_and_deletes_by_policy() {
     )
     .await;
     eventually("deleted on the POP3 server", || async {
-        control(&f, "pop3-state", &json!({}))["deleted"]
+        f.control("pop3-state", &json!({}))["deleted"]
             .as_array()
             .is_some_and(|d| d.iter().any(|u| u == "home-3"))
     })
@@ -561,22 +442,6 @@ fn draft(identity: &str, to: &str, subject: &str) -> Draft {
     }
 }
 
-async fn save(service: &Service, draft: Draft) -> nail_api::DraftId {
-    match request(service, Request::SaveDraft { draft }).await {
-        Response::DraftSaved { draft_id } => draft_id,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-fn smtp_subjects(f: &Fixture) -> Vec<String> {
-    control(f, "smtp-messages", &json!({}))
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| m["data"].as_str().unwrap().to_owned())
-        .collect()
-}
-
 /// M2a (ADRs 0029, 0034): a message that should be signed or encrypted is
 /// refused with `no_key` when the keys are missing, never sent unprotected;
 /// the choice comes from the request, the draft or the identity.
@@ -607,16 +472,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         },
     )
     .await;
-    assert!(
-        matches!(
-            &refused,
-            Response::Error {
-                code: ErrorCode::NoKey,
-                ..
-            }
-        ),
-        "{refused:?}"
-    );
+    assert_eq!(error_of(&refused).0, ErrorCode::NoKey, "{refused:?}");
     // Kept with the draft.
     let encrypted = Draft {
         id: Some(id.clone()),
@@ -638,16 +494,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         },
     )
     .await;
-    assert!(
-        matches!(
-            &refused,
-            Response::Error {
-                code: ErrorCode::NoKey,
-                ..
-            }
-        ),
-        "{refused:?}"
-    );
+    assert_eq!(error_of(&refused).0, ErrorCode::NoKey, "{refused:?}");
     // An explicit "neither" in the request wins over the draft.
     let Response::SendQueued { .. } = request(
         &f.service,
@@ -708,17 +555,8 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         },
     )
     .await;
-    assert!(
-        matches!(
-            &refused,
-            Response::Error {
-                code: ErrorCode::NoKey,
-                ..
-            }
-        ),
-        "{refused:?}"
-    );
-    assert!(!smtp_subjects(&f).iter().any(|d| d.contains("Default")));
+    assert_eq!(error_of(&refused).0, ErrorCode::NoKey, "{refused:?}");
+    assert!(!f.smtp_data().iter().any(|d| d.contains("Default")));
 }
 
 #[tokio::test]
@@ -787,17 +625,15 @@ async fn sending_with_undo_and_for_real() {
         panic!()
     };
     eventually("SMTP received it", || async {
-        smtp_subjects(&f)
-            .iter()
-            .any(|d| d.contains("Sent for real"))
+        f.smtp_data().iter().any(|d| d.contains("Sent for real"))
     })
     .await;
     assert!(
-        !smtp_subjects(&f)
+        !f.smtp_data()
             .iter()
             .any(|d| d.contains("Cancelled by undo"))
     );
-    let data = smtp_subjects(&f).remove(0);
+    let data = f.smtp_data().remove(0);
     assert!(
         data.contains("From: \"Ada Lovelace\" <ada@work.example>"),
         "{data}"
@@ -1319,17 +1155,12 @@ async fn hand_edits_of_accounts_kdl_apply_or_report_errors() {
     })
     .await;
     std::fs::write(&path, "account \"broken\" {").unwrap();
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        let event = tokio::time::timeout_at(deadline, events.recv())
-            .await
-            .expect("an accounts.kdl error")
-            .unwrap();
-        if let Event::ConfigError { file, .. } = event {
-            assert_eq!(file, "accounts.kdl");
-            break;
-        }
-    }
+    let file = next_matching(&mut events, "an accounts.kdl error", |e| match e {
+        Event::ConfigError { file, .. } => Some(file),
+        _ => None,
+    })
+    .await;
+    assert_eq!(file, "accounts.kdl");
     // The last valid accounts stay, and edits are refused meanwhile.
     assert_eq!(inbox_count(&f.service, MULTI_HOME_ID).await, 3);
     assert!(matches!(
@@ -1413,7 +1244,7 @@ async fn failed_sends_are_retried_or_reported() {
     assert_eq!(retry, (OutboxState::Scheduled, Some(ErrorCode::Network)));
     let sent = send_outcome(&mut events).await;
     assert_eq!(sent, (OutboxState::Sent, None));
-    assert!(smtp_subjects(&f).iter().any(|d| d.contains("Second try")));
+    assert!(f.smtp_data().iter().any(|d| d.contains("Second try")));
 
     // Drafts need a known identity; attachments must be uploaded blobs.
     let mut bad = draft("nobody@nowhere.example", "bob@example.org", "x");
@@ -1631,31 +1462,18 @@ async fn send_later_waits_for_its_time() {
         request(&f.service, Request::DeleteDraft { draft_id: later }).await,
         Response::Done
     );
-    assert_eq!(smtp_subjects(&f).len(), 0);
+    assert_eq!(f.smtp_data().len(), 0);
     f.service.shutdown().await;
 }
 
 async fn go_offline(f: &Fixture) {
-    control(f, "imap-offline", &json!({ "offline": true }));
+    f.control("imap-offline", &json!({ "offline": true }));
     eventually("work offline", || async {
         statuses(&f.service)
             .await
             .contains(&(AccountId::new(MULTI_WORK_ID), AccountState::Offline))
     })
     .await;
-}
-
-fn server_subjects(f: &Fixture, account: &str, mailbox: &str) -> Vec<String> {
-    control(
-        f,
-        "imap-messages",
-        &json!({ "account": account, "mailbox": mailbox }),
-    )
-    .as_array()
-    .unwrap()
-    .iter()
-    .map(|m| m["subject"].as_str().unwrap_or_default().to_owned())
-    .collect()
 }
 
 fn count(subjects: &[String], subject: &str) -> usize {
@@ -1763,22 +1581,19 @@ async fn queued_writes_survive_a_uidvalidity_change() {
         .unwrap();
     f.demo.work.store().expunge("INBOX", first.uid);
     f.demo.work.store().reset_uid_validity("INBOX").unwrap();
-    let before = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+    let before = f.server_subjects(MULTI_WORK_ID, "INBOX");
     assert_eq!(count(&before, "Grüße aus München"), 1);
 
-    control(&f, "imap-offline", &json!({ "offline": false }));
+    f.control("imap-offline", &json!({ "offline": false }));
     queue_empty(&f).await;
     eventually("the right messages changed on the server", || async {
-        let inbox = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+        let inbox = f.server_subjects(MULTI_WORK_ID, "INBOX");
         count(&inbox, "Photo of the new lab bench") == 0
             && count(&inbox, "Your invoice") == 0
-            && count(
-                &server_subjects(&f, MULTI_WORK_ID, "Archive"),
-                "Your invoice",
-            ) == 1
+            && count(&f.server_subjects(MULTI_WORK_ID, "Archive"), "Your invoice") == 1
     })
     .await;
-    let after = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+    let after = f.server_subjects(MULTI_WORK_ID, "INBOX");
     assert_eq!(after.len(), before.len() - 2, "{after:?}");
     assert_eq!(count(&after, "Grüße aus München"), 1, "{after:?}");
     assert_eq!(count(&after, "Welcome to Nail"), 1, "{after:?}");
@@ -1843,7 +1658,7 @@ async fn moves_and_deletes_made_before_replay_are_all_applied() {
     flag(&f.service, &invoice).await;
     move_to(&f.service, &invoice, FolderRole::Inbox).await;
 
-    control(&f, "imap-offline", &json!({ "offline": false }));
+    f.control("imap-offline", &json!({ "offline": false }));
     queue_empty(&f).await;
     let failed = f
         .service
@@ -1852,9 +1667,9 @@ async fn moves_and_deletes_made_before_replay_are_all_applied() {
         .unwrap();
     assert!(failed.is_empty(), "{failed:?}");
     let (inbox, archive, trash) = (
-        server_subjects(&f, MULTI_WORK_ID, "INBOX"),
-        server_subjects(&f, MULTI_WORK_ID, "Archive"),
-        server_subjects(&f, MULTI_WORK_ID, "Trash"),
+        f.server_subjects(MULTI_WORK_ID, "INBOX"),
+        f.server_subjects(MULTI_WORK_ID, "Archive"),
+        f.server_subjects(MULTI_WORK_ID, "Trash"),
     );
     for mailbox in [&inbox, &archive, &trash] {
         assert_eq!(count(mailbox, "Welcome to Nail"), 0, "{mailbox:?}");
@@ -1869,14 +1684,7 @@ async fn moves_and_deletes_made_before_replay_are_all_applied() {
     );
 
     // After a sync every message shows once, where the user put it.
-    request(
-        &f.service,
-        Request::SyncNow {
-            account_id: Some(AccountId::new(MULTI_WORK_ID)),
-        },
-    )
-    .await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    sync_and_settle(&f.service).await;
     eventually("local folders match", || async {
         let inbox = local_subjects(&f.service, FolderRole::Inbox).await;
         let archive = local_subjects(&f.service, FolderRole::Archive).await;
@@ -1926,31 +1734,23 @@ async fn a_session_failing_right_after_login_backs_off() {
 async fn setup_with_new_account() -> Fixture {
     use nail_api::engine::SecretStore;
     let demo = start_demo_multi().await.unwrap();
-    let data_dir = tempfile::tempdir().unwrap();
-    let config_dir = tempfile::tempdir().unwrap();
-    let kdl = format!(
-        "{}\naccount \"new\" email=\"{MULTI_NEW_EMAIL}\" name=\"New\" {{\n    imap host=\"127.0.0.1\" port={} tls=\"plaintext\"\n}}\n",
-        demo.accounts_kdl(),
-        demo.new_imap.port()
-    );
-    std::fs::write(config_dir.path().join("accounts.kdl"), kdl).unwrap();
-    demo.secrets
-        .set(
-            &nail_api::SecretRef::default_for(
-                &AccountId::new("new"),
-                nail_api::accounts::SecretKind::Password,
-            ),
-            MULTI_NEW_PASSWORD,
-        )
-        .unwrap();
-    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
-    let service = Service::open(options).unwrap();
-    Fixture {
-        service,
-        demo,
-        config_dir,
-        _data_dir: data_dir,
-    }
+    Multi::with(demo, |demo, config_dir| {
+        let kdl = format!(
+            "{}\naccount \"new\" email=\"{MULTI_NEW_EMAIL}\" name=\"New\" {{\n    imap host=\"127.0.0.1\" port={} tls=\"plaintext\"\n}}\n",
+            demo.accounts_kdl(),
+            demo.new_imap.port()
+        );
+        std::fs::write(config_dir.join("accounts.kdl"), kdl).unwrap();
+        demo.secrets
+            .set(
+                &nail_api::SecretRef::default_for(
+                    &AccountId::new("new"),
+                    nail_api::accounts::SecretKind::Password,
+                ),
+                MULTI_NEW_PASSWORD,
+            )
+            .unwrap();
+    })
 }
 
 /// Review M1a: a cross-account move whose source step fails after the copy
@@ -1985,7 +1785,7 @@ async fn a_retried_cross_account_move_files_one_copy() {
         .await,
     );
     eventually("copy filed in the target", || async {
-        count(&server_subjects(&f, "new", "INBOX"), "Welcome to Nail") == 1
+        count(&f.server_subjects("new", "INBOX"), "Welcome to Nail") == 1
     })
     .await;
     // Let the engine fail and retry a few times.
@@ -1995,13 +1795,13 @@ async fn a_retried_cross_account_move_files_one_copy() {
     queue_empty(&f).await;
     eventually("gone from the source", || async {
         count(
-            &server_subjects(&f, MULTI_WORK_ID, "INBOX"),
+            &f.server_subjects(MULTI_WORK_ID, "INBOX"),
             "Welcome to Nail",
         ) == 0
     })
     .await;
     assert_eq!(
-        count(&server_subjects(&f, "new", "INBOX"), "Welcome to Nail"),
+        count(&f.server_subjects("new", "INBOX"), "Welcome to Nail"),
         1,
         "the retry filed another copy"
     );
@@ -2033,7 +1833,7 @@ async fn the_sent_copy_waits_for_the_imap_server() {
     )
     .await;
     eventually("SMTP received it", || async {
-        smtp_subjects(&f).iter().any(|d| d.contains(SUBJECT))
+        f.smtp_data().iter().any(|d| d.contains(SUBJECT))
     })
     .await;
     eventually("local Sent copy at once", || async {
@@ -2041,26 +1841,16 @@ async fn the_sent_copy_waits_for_the_imap_server() {
     })
     .await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(
-        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT),
-        0
-    );
+    assert_eq!(count(&f.server_subjects(MULTI_WORK_ID, "Sent"), SUBJECT), 0);
     assert!(f.service.store().pending_op_count().unwrap() >= 1);
 
-    control(&f, "imap-offline", &json!({ "offline": false }));
+    f.control("imap-offline", &json!({ "offline": false }));
     eventually("filed on the server", || async {
-        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT) == 1
+        count(&f.server_subjects(MULTI_WORK_ID, "Sent"), SUBJECT) == 1
     })
     .await;
     queue_empty(&f).await;
-    request(
-        &f.service,
-        Request::SyncNow {
-            account_id: Some(AccountId::new(MULTI_WORK_ID)),
-        },
-    )
-    .await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    sync_and_settle(&f.service).await;
     assert_eq!(
         count(&local_subjects(&f.service, FolderRole::Sent).await, SUBJECT),
         1,
@@ -2082,9 +1872,6 @@ async fn the_sent_copy_waits_for_the_imap_server() {
             .uid
             .is_some()
     );
-    assert_eq!(
-        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT),
-        1
-    );
+    assert_eq!(count(&f.server_subjects(MULTI_WORK_ID, "Sent"), SUBJECT), 1);
     f.service.shutdown().await;
 }

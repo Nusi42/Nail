@@ -36,9 +36,7 @@ use nail_api::sieve::{
     ManageSieveConfig, RulePlacement, RuleSieveStatus, SieveAccountStatus, SieveState,
     VacationSettings,
 };
-use nail_api::{
-    AccountId, ApiError, Event, FolderRole, LocalizedMessage, Request, Response, RuleId,
-};
+use nail_api::{AccountId, ApiError, Event, FolderRole, Request, Response, RuleId};
 use nail_sieve::{
     CompileOptions, CompiledScript, FolderMap, FolderResolver, SieveAuth, SieveConfig, SieveError,
     SieveSession, reasons,
@@ -151,14 +149,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             settings,
         } => {
             if crate::exchange::exchange_account(service, &account_id).is_ok() {
-                if let Some(issue) = settings.issues().first() {
-                    return Err(ApiError::invalid_request(format!(
-                        "invalid vacation settings ({})",
-                        issue.message_id()
-                    ))
-                    .with_localized(LocalizedMessage::new(issue.message_id()))
-                    .into());
-                }
+                check_vacation(&settings)?;
                 crate::exchange::settings::set_vacation(service, &account_id, &settings).await?;
                 return Ok(Response::Vacation {
                     settings: crate::exchange::settings::vacation(service, &account_id).await?,
@@ -167,14 +158,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             let config = service.inner.accounts.config();
             sieve_account(&config, &account_id)?;
-            if let Some(issue) = settings.issues().first() {
-                return Err(ApiError::invalid_request(format!(
-                    "invalid vacation settings ({})",
-                    issue.message_id()
-                ))
-                .with_localized(LocalizedMessage::new(issue.message_id()))
-                .into());
-            }
+            check_vacation(&settings)?;
             let (id, saved) = (account_id.clone(), settings.clone());
             service
                 .store()
@@ -192,7 +176,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         other => {
             return Err(ApiError::internal(format!(
                 "{} is not a Sieve request",
-                crate::service::request_name(&other)
+                other.wire_type()
             ))
             .into());
         }
@@ -241,6 +225,18 @@ fn sieve_enabled(account: &AccountConfig) -> bool {
             .is_some_and(ManageSieveConfig::is_enabled)
 }
 
+/// Refuses vacation settings with an issue (the first one named).
+fn check_vacation(settings: &VacationSettings) -> Result<()> {
+    match settings.issues().first() {
+        Some(issue) => Err(ApiError::invalid_localized(
+            format!("invalid vacation settings ({})", issue.message_id()),
+            issue.message_id(),
+        )
+        .into()),
+        None => Ok(()),
+    }
+}
+
 /// The account's IMAP server.
 fn imap_server(account: &AccountConfig) -> Option<&ServerEndpoint> {
     match &account.incoming {
@@ -251,26 +247,21 @@ fn imap_server(account: &AccountConfig) -> Option<&ServerEndpoint> {
     }
 }
 
-/// Mailbox names from the account's stored folders: roles map to the
-/// folder that has them, paths to the stored folder with that path (the
-/// server's own spelling), else the path with `/` as the delimiter.
+/// Mailbox names from the account's stored folders: paths to the stored
+/// folder with that path (the server's own spelling), else `map` (roles to
+/// the folder that has them, other paths with `/` as the delimiter).
 struct StoreFolders {
-    roles: HashMap<FolderRole, String>,
     paths: HashSet<String>,
-    fallback: FolderMap,
+    map: FolderMap,
 }
 
 impl FolderResolver for StoreFolders {
     fn mailbox(&self, folder: &nail_api::rules::FolderRef) -> Option<String> {
-        use nail_api::rules::FolderRef;
         match folder {
-            FolderRef::Role {
-                role: FolderRole::Inbox,
-                ..
-            } => Some("INBOX".to_owned()),
-            FolderRef::Role { role, .. } => self.roles.get(role).cloned(),
-            FolderRef::Path { path, .. } if self.paths.contains(path) => Some(path.clone()),
-            other @ FolderRef::Path { .. } => self.fallback.mailbox(other),
+            nail_api::rules::FolderRef::Path { path, .. } if self.paths.contains(path) => {
+                Some(path.clone())
+            }
+            other => self.map.mailbox(other),
         }
     }
 }
@@ -309,7 +300,7 @@ impl Inputs {
         for part in [
             serde_json::to_string(&self.rules).unwrap_or_default(),
             serde_json::to_string(&self.vacation).unwrap_or_default(),
-            format!("{:?}", sorted(&self.folders.roles)),
+            format!("{:?}", sorted(&self.folders.map.roles)),
             format!("{:?}", {
                 let mut p: Vec<&String> = self.folders.paths.iter().collect();
                 p.sort();
@@ -418,9 +409,11 @@ impl Service {
                 rules: self.inner.rules.rules(),
                 vacation: record.vacation.clone(),
                 folders: StoreFolders {
-                    roles,
                     paths,
-                    fallback: FolderMap::default(),
+                    map: FolderMap {
+                        roles,
+                        delimiter: None,
+                    },
                 },
                 aliases,
                 own_addresses,
@@ -863,29 +856,11 @@ pub(crate) fn account_status(account: &AccountConfig, record: SieveRecord) -> Si
 mod tests {
     use super::*;
     use nail_api::ErrorCode;
-    use nail_api::accounts::{AuthConfig, ImapOptions, SyncPolicy, TlsMode};
 
     fn account(sieve: Option<ManageSieveConfig>) -> AccountConfig {
         AccountConfig {
-            id: "work".into(),
-            name: "Work".into(),
-            email: "ada@example.org".into(),
-            enabled: true,
-            incoming: IncomingServer::Imap {
-                server: ServerEndpoint {
-                    host: "imap.example.org".into(),
-                    port: 993,
-                    tls: TlsMode::Implicit,
-                    auth: AuthConfig::None,
-                },
-                options: ImapOptions::default(),
-            },
-            outgoing: None,
-            identities: vec![],
-            sync: SyncPolicy::default(),
-            save_sent_copy: None,
-            authserv_ids: vec![],
             sieve,
+            ..nail_api::testing::imap_account()
         }
     }
 
@@ -917,7 +892,7 @@ mod tests {
         let failed = SieveRecord {
             last_error: Some(
                 ApiError::new(ErrorCode::Network, "refused")
-                    .with_localized(LocalizedMessage::new("sieve-error-connect")),
+                    .with_localized(nail_api::LocalizedMessage::new("sieve-error-connect")),
             ),
             ..uploaded
         };
@@ -943,9 +918,8 @@ mod tests {
     fn folders_resolve_to_the_stored_names() {
         use nail_api::rules::FolderRef;
         let folders = StoreFolders {
-            roles: HashMap::from([(FolderRole::Junk, "Spam".to_owned())]),
             paths: HashSet::from(["Lists.Rust".to_owned()]),
-            fallback: FolderMap::default(),
+            map: FolderMap::new(None, &[(FolderRole::Junk, "Spam")]),
         };
         let role = |role| FolderRef::Role {
             account_id: None,

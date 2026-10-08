@@ -43,6 +43,20 @@ impl nail_triage::Clock for AdjustableClock {
     }
 }
 
+/// How long a timer task sleeps until `next` (Unix seconds; `None` =
+/// nothing due): at least 50 ms, at most `cap`.
+pub(crate) fn timer_wait(
+    next: Option<i64>,
+    now: i64,
+    cap: std::time::Duration,
+) -> std::time::Duration {
+    next.map_or(cap, |at| {
+        let secs = (at - now).max(0);
+        std::time::Duration::from_secs(u64::try_from(secs).unwrap_or(0))
+            .clamp(std::time::Duration::from_millis(50), cap)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

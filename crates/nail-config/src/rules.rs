@@ -38,6 +38,7 @@ mod write;
 
 use std::path::Path;
 
+use nail_api::ids::{MAX_CONFIG_ID_LEN, first_free_id};
 use nail_api::rules::{Condition, Rule};
 use nail_api::{RuleId, SourceLocation};
 
@@ -53,9 +54,6 @@ pub const RULES_FILE: &str = "rules.kdl";
 /// File name used for errors of a single rule's text form
 /// ([`parse_rule_text`]).
 pub const RULE_TEXT_SOURCE: &str = "rule";
-
-/// Longest rule id.
-pub const MAX_RULE_ID_LEN: usize = 64;
 
 /// Parses and validates `rules.kdl`. `file` is the name used in error
 /// messages (e.g. `"rules.kdl"`). An empty file has no rules. On failure
@@ -104,15 +102,7 @@ pub fn render_rules(rules: &[Rule]) -> String {
 /// Whether `id` is a valid rule id: 1 to 64 characters from
 /// `a-z 0-9 - _ .`, starting with a letter or digit.
 pub fn is_valid_rule_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= MAX_RULE_ID_LEN
-        && id
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        && id
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.'))
+    nail_api::ids::is_config_id(id)
 }
 
 /// The id a rule named `name` gets when its node has no `id=`: the name
@@ -131,7 +121,7 @@ pub fn rule_id_base(name: &str) -> String {
     let slug: String = slug
         .trim_matches('-')
         .chars()
-        .take(MAX_RULE_ID_LEN - 4)
+        .take(MAX_CONFIG_ID_LEN - 4)
         .collect();
     let slug = slug.trim_end_matches('-').to_owned();
     if slug.is_empty() {
@@ -144,18 +134,7 @@ pub fn rule_id_base(name: &str) -> String {
 /// A free rule id for `name`: [`rule_id_base`], suffixed with `-2`, `-3`, …
 /// while `taken`.
 pub fn derive_rule_id(name: &str, taken: impl Fn(&str) -> bool) -> RuleId {
-    let base = rule_id_base(name);
-    if !taken(&base) {
-        return RuleId::new(base);
-    }
-    let mut n: u64 = 2;
-    loop {
-        let id = format!("{base}-{n}");
-        if !taken(&id) {
-            return RuleId::new(id);
-        }
-        n += 1;
-    }
+    RuleId::new(first_free_id(&rule_id_base(name), taken))
 }
 
 /// The form a rule has after being written and read back: the conditions'
@@ -216,9 +195,9 @@ impl RulesDocument {
 
     /// Loads `<dir>/rules.kdl`; a missing file gives an empty document.
     pub fn load(dir: &Path) -> Result<Self, Vec<ConfigError>> {
-        match std::fs::read_to_string(dir.join(RULES_FILE)) {
-            Ok(text) => Self::parse(&text, RULES_FILE),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::empty(RULES_FILE)),
+        match crate::backup::read_optional(&dir.join(RULES_FILE)) {
+            Ok(Some(text)) => Self::parse(&text, RULES_FILE),
+            Ok(None) => Ok(Self::empty(RULES_FILE)),
             Err(e) => Err(vec![ConfigError::io(RULES_FILE, &e)]),
         }
     }
@@ -226,15 +205,8 @@ impl RulesDocument {
     /// Writes the document to `<dir>/rules.kdl` atomically (a temporary
     /// file in the same directory, then a rename), creating `dir` if needed.
     pub fn save(&self, dir: &Path) -> Result<(), ConfigError> {
-        let io = |e: std::io::Error| ConfigError::io(&self.file, &e);
-        std::fs::create_dir_all(dir).map_err(io)?;
-        let target = dir.join(RULES_FILE);
-        let temp = dir.join(format!(".{RULES_FILE}.tmp"));
-        std::fs::write(&temp, self.text.as_bytes()).map_err(io)?;
-        std::fs::rename(&temp, &target).map_err(|e| {
-            crate::backup::remove_temp(&temp);
-            io(e)
-        })
+        crate::backup::write_atomic(&dir.join(RULES_FILE), &self.text)
+            .map_err(|e| ConfigError::io(&self.file, &e))
     }
 
     /// The file text.

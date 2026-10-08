@@ -21,7 +21,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use nail_api::{ApiError, Event, FolderId, LocalizedMessage, MessageId, OpId};
+use nail_api::{ApiError, Event, FolderId, MessageId, OpId};
 use nail_store::Store;
 use nail_triage::snooze::{SnoozeRequest, WakePlan};
 use nail_triage::{Clock, SnoozeEntry, SnoozeScheduler, SnoozeStore};
@@ -167,9 +167,7 @@ impl Service {
                 service.with_scheduler(|s| {
                     s.snooze(&requests).map_err(|err| {
                         let id = err.message_id();
-                        ApiError::invalid_request(err.to_string())
-                            .with_localized(LocalizedMessage::new(id))
-                            .into()
+                        ApiError::invalid_localized(err.to_string(), id).into()
                     })
                 })
             })
@@ -384,11 +382,7 @@ pub(crate) async fn run_snoozes(service: Service) {
             Err(err) => tracing::warn!(%err, "cannot wake snoozed messages"),
         }
         let next = service.next_snooze_wake().await.ok().flatten();
-        let wait = next.map_or(cap, |at| {
-            let secs = (at - service.triage_now()).max(0);
-            std::time::Duration::from_secs(u64::try_from(secs).unwrap_or(0))
-                .clamp(std::time::Duration::from_millis(50), cap)
-        });
+        let wait = crate::clock::timer_wait(next, service.triage_now(), cap);
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = service.inner.snooze.wake.notified() => {}

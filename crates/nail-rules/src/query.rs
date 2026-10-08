@@ -82,18 +82,6 @@ fn text_candidates(message: &dyn MessageView, field: TextField) -> Vec<String> {
     }
 }
 
-fn role_name(role: FolderRole) -> &'static str {
-    match role {
-        FolderRole::Inbox => "inbox",
-        FolderRole::Sent => "sent",
-        FolderRole::Drafts => "drafts",
-        FolderRole::Archive => "archive",
-        FolderRole::Junk => "junk",
-        FolderRole::Trash => "trash",
-        FolderRole::Other => "",
-    }
-}
-
 /// When a date value starts, Unix seconds.
 pub(crate) fn resolve_date(date: DateValue, env: &Env<'_>) -> i64 {
     match date {
@@ -146,7 +134,7 @@ fn term_matches(kind: &TermKind, message: &dyn MessageView, env: &Env<'_>) -> bo
             let wanted = v.text.trim_matches('/');
             f.name.eq_ignore_ascii_case(wanted)
                 || f.path.eq_ignore_ascii_case(wanted)
-                || (f.role != FolderRole::Other && role_name(f.role).eq_ignore_ascii_case(wanted))
+                || (f.role != FolderRole::Other && f.role.as_str().eq_ignore_ascii_case(wanted))
         }),
         TermKind::Before(date) => message.date() < resolve_date(*date, env),
         TermKind::After(date) => message.date() >= resolve_date(*date, env),

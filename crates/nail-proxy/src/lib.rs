@@ -40,7 +40,10 @@ mod service;
 pub mod testing;
 pub mod token;
 
-pub use fetch::{FetchError, FetchLimits, Fetched, Fetcher, Resolver, SystemResolver};
+pub use fetch::{
+    BodyError, FetchError, FetchLimits, Fetched, Fetcher, Resolver, SystemResolver, canonical,
+    pin_host, pinned_builder, read_limited, unchecked_peer,
+};
 pub use key::{KEY_LEN, KEY_SECRET_REF, KeyError, ProxyKey};
 pub use policy::{UrlRefusal, is_public_ip};
 pub use service::{Check, Proxy, ProxyError, ProxyResponse, RESPONSE_HEADERS, TargetCheck};

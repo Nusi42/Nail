@@ -4,7 +4,8 @@
 //! (`NAIL_UPDATE_GOLDEN=1` rewrites them).
 #![cfg(test)]
 
-use std::path::PathBuf;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
 
 use nail_api::customize::{
     ConfigMergePreview, MergeChange, MergeChoice, MergeConflictKind, MergeSection, MergeTake,
@@ -14,18 +15,7 @@ use nail_config::{EditError, preview_merge, resolve_merge};
 use pretty_assertions::assert_eq;
 
 fn golden(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/merge")
-        .join(format!("{name}.kdl"));
-    if std::env::var_os("NAIL_UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with NAIL_UPDATE_GOLDEN=1)", path.display()))
-        .replace("\r\n", "\n");
-    assert_eq!(expected, actual, "golden file {}", path.display());
+    common::golden("merge", name, actual);
 }
 
 const MY_THEME: &str = r##"// My colours.

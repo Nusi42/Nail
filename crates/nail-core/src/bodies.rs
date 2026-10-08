@@ -14,6 +14,14 @@ use crate::error::Result;
 use crate::service::Service;
 use crate::sync::connect;
 
+/// The bodies fetched and the ones that could not be.
+type Fetched = (Vec<MessageId>, Vec<MessageId>);
+
+/// The message ids of `targets`.
+fn ids_of(targets: &[BodyFetchTarget]) -> Vec<MessageId> {
+    targets.iter().map(|t| t.message_id.clone()).collect()
+}
+
 impl Service {
     /// Fetches the bodies of `ids` that are not stored. Returns the
     /// messages whose body is stored now (fetched, or stored before) and
@@ -68,13 +76,55 @@ impl Service {
         Ok((fetched, failed))
     }
 
+    /// Stores a fetched body (blob, row, index) of `target`; the target
+    /// lands in `ok` (its folder in `changed`) or in `bad`.
+    async fn store_body(
+        &self,
+        account: &AccountId,
+        target: BodyFetchTarget,
+        raw: Vec<u8>,
+        changed: &mut Vec<FolderId>,
+        ok: &mut Vec<MessageId>,
+        bad: &mut Vec<MessageId>,
+    ) {
+        let id = target.message_id.clone();
+        let blobs = self.blobs().clone();
+        let index = self.inner.search.get();
+        let account_id = account.clone();
+        let stored = self
+            .store()
+            .call(move |s| {
+                let hash = blobs.put(&raw)?;
+                let old = s.attach_body(&id, &hash, raw.len() as u64)?;
+                s.remove_unreferenced_blobs(&blobs, &old.into_iter().collect::<Vec<_>>())?;
+                let doc = IndexDocument::from_raw(id.clone(), account_id, &raw);
+                if let Err(err) = index.add(&[doc]) {
+                    tracing::warn!(%err, "cannot index a fetched body");
+                }
+                Ok(())
+            })
+            .await;
+        match stored {
+            Ok(()) => {
+                if !changed.contains(&target.folder_id) {
+                    changed.push(target.folder_id.clone());
+                }
+                ok.push(target.message_id);
+            }
+            Err(err) => {
+                tracing::warn!(%err, "cannot store a fetched body");
+                bad.push(target.message_id);
+            }
+        }
+    }
+
     async fn fetch_account_bodies(
         &self,
         account: &AccountId,
         targets: Vec<BodyFetchTarget>,
         changed: &mut Vec<FolderId>,
-    ) -> (Vec<MessageId>, Vec<MessageId>) {
-        let all: Vec<MessageId> = targets.iter().map(|t| t.message_id.clone()).collect();
+    ) -> Fetched {
+        let all = ids_of(&targets);
         // M4c: Exchange folders with a headers-only policy fetch the MIME.
         if let Some(config) = self.inner.accounts.config().account(account).cloned()
             && matches!(
@@ -115,35 +165,8 @@ impl Service {
                     continue;
                 }
             };
-            let id = target.message_id.clone();
-            let blobs = self.blobs().clone();
-            let index = self.inner.search.get();
-            let account_id = account.clone();
-            let stored = self
-                .store()
-                .call(move |s| {
-                    let hash = blobs.put(&message.raw)?;
-                    let old = s.attach_body(&id, &hash, message.raw.len() as u64)?;
-                    s.remove_unreferenced_blobs(&blobs, &old.into_iter().collect::<Vec<_>>())?;
-                    let doc = IndexDocument::from_raw(id.clone(), account_id, &message.raw);
-                    if let Err(err) = index.add(&[doc]) {
-                        tracing::warn!(%err, "cannot index a fetched body");
-                    }
-                    Ok(())
-                })
+            self.store_body(account, target, message.raw, changed, &mut ok, &mut bad)
                 .await;
-            match stored {
-                Ok(()) => {
-                    if !changed.contains(&target.folder_id) {
-                        changed.push(target.folder_id.clone());
-                    }
-                    ok.push(target.message_id);
-                }
-                Err(err) => {
-                    tracing::warn!(%err, "cannot store a fetched body");
-                    bad.push(target.message_id);
-                }
-            }
         }
         drop(client.logout().await);
         (ok, bad)
@@ -156,8 +179,8 @@ impl Service {
         account: &nail_api::accounts::AccountConfig,
         targets: Vec<BodyFetchTarget>,
         changed: &mut Vec<FolderId>,
-    ) -> (Vec<MessageId>, Vec<MessageId>) {
-        let all: Vec<MessageId> = targets.iter().map(|t| t.message_id.clone()).collect();
+    ) -> Fetched {
+        let all = ids_of(&targets);
         let engine = match crate::exchange::engine_of(self, account) {
             Ok(engine) => engine,
             Err(err) => {
@@ -189,35 +212,8 @@ impl Service {
                     continue;
                 }
             };
-            let id = target.message_id.clone();
-            let blobs = self.blobs().clone();
-            let index = self.inner.search.get();
-            let account_id = account.id.clone();
-            let stored = self
-                .store()
-                .call(move |s| {
-                    let hash = blobs.put(&raw)?;
-                    let old = s.attach_body(&id, &hash, raw.len() as u64)?;
-                    s.remove_unreferenced_blobs(&blobs, &old.into_iter().collect::<Vec<_>>())?;
-                    let doc = IndexDocument::from_raw(id.clone(), account_id, &raw);
-                    if let Err(err) = index.add(&[doc]) {
-                        tracing::warn!(%err, "cannot index a fetched body");
-                    }
-                    Ok(())
-                })
+            self.store_body(&account.id, target, raw, changed, &mut ok, &mut bad)
                 .await;
-            match stored {
-                Ok(()) => {
-                    if !changed.contains(&target.folder_id) {
-                        changed.push(target.folder_id.clone());
-                    }
-                    ok.push(target.message_id);
-                }
-                Err(err) => {
-                    tracing::warn!(%err, "cannot store a fetched body");
-                    bad.push(target.message_id);
-                }
-            }
         }
         (ok, bad)
     }

@@ -618,34 +618,19 @@ pub(crate) fn filter_declarations(block: &str, ctx: &Context) -> Vec<String> {
 
 /// `block` split at `;` outside strings and parentheses.
 fn split_declarations(block: &str) -> Vec<&str> {
-    let bytes = block.as_bytes();
     let mut parts = Vec::new();
-    let mut quote: Option<u8> = None;
     let mut parens = 0usize;
     let mut start = 0;
-    let mut i = 0;
-    while i < bytes.len() {
-        let b = bytes[i];
-        match quote {
-            Some(q) => {
-                if b == b'\\' {
-                    i += 1;
-                } else if b == q {
-                    quote = None;
-                }
+    for (i, b) in crate::css::outside_strings(block.as_bytes(), 0, false) {
+        match b {
+            b'(' => parens += 1,
+            b')' => parens = parens.saturating_sub(1),
+            b';' if parens == 0 => {
+                parts.push(&block[start..i]);
+                start = i + 1;
             }
-            None => match b {
-                b'"' | b'\'' => quote = Some(b),
-                b'(' => parens += 1,
-                b')' => parens = parens.saturating_sub(1),
-                b';' if parens == 0 => {
-                    parts.push(&block[start..i]);
-                    start = i + 1;
-                }
-                _ => {}
-            },
+            _ => {}
         }
-        i += 1;
     }
     if let Some(rest) = block.get(start..) {
         parts.push(rest);

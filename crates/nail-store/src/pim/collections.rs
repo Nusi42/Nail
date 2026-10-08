@@ -470,25 +470,37 @@ impl Store {
         })
     }
 
+    /// The collections of one kind, of one source or all, sorted by `key`
+    /// (order setting, lowercased name, id).
+    fn collections_of<T>(
+        &self,
+        kind: &str,
+        source: Option<&PimSourceId>,
+        from_row: fn(&Row<'_>) -> rusqlite::Result<T>,
+        key: impl Fn(&T) -> (i32, String, String),
+    ) -> Result<Vec<T>> {
+        let mut out: Vec<T> = self.with_conn(|conn| {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT {COLLECTION_COLS} FROM pim_collections c
+                 WHERE c.kind = ?2 AND (?1 IS NULL OR c.source_id = ?1)"
+            ))?;
+            let rows = stmt.query_map(params![source.map(PimSourceId::as_str), kind], from_row)?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })?;
+        out.sort_by_cached_key(key);
+        Ok(out)
+    }
+
     /// Calendars and task lists, of one source or all, by their order
     /// setting and name. `account_id` is `None` (the core fills it in).
     pub fn calendars(&self, source: Option<&PimSourceId>) -> Result<Vec<Calendar>> {
-        let mut out: Vec<Calendar> = self.with_conn(|conn| {
-            let mut stmt = conn.prepare(&format!(
-                "SELECT {COLLECTION_COLS} FROM pim_collections c
-                 WHERE c.kind = 'calendar' AND (?1 IS NULL OR c.source_id = ?1)"
-            ))?;
-            let rows = stmt.query_map([source.map(PimSourceId::as_str)], calendar_from_row)?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
-        })?;
-        out.sort_by(|a, b| {
-            (a.settings.order, a.settings.name.to_lowercase(), &a.id).cmp(&(
-                b.settings.order,
-                b.settings.name.to_lowercase(),
-                &b.id,
-            ))
-        });
-        Ok(out)
+        self.collections_of("calendar", source, calendar_from_row, |c| {
+            (
+                c.settings.order,
+                c.settings.name.to_lowercase(),
+                c.id.to_string(),
+            )
+        })
     }
 
     /// One calendar.
@@ -509,22 +521,13 @@ impl Store {
 
     /// Address books, of one source or all, by order and name.
     pub fn address_books(&self, source: Option<&PimSourceId>) -> Result<Vec<AddressBook>> {
-        let mut out: Vec<AddressBook> = self.with_conn(|conn| {
-            let mut stmt = conn.prepare(&format!(
-                "SELECT {COLLECTION_COLS} FROM pim_collections c
-                 WHERE c.kind = 'address-book' AND (?1 IS NULL OR c.source_id = ?1)"
-            ))?;
-            let rows = stmt.query_map([source.map(PimSourceId::as_str)], address_book_from_row)?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
-        })?;
-        out.sort_by(|a, b| {
-            (a.settings.order, a.settings.name.to_lowercase(), &a.id).cmp(&(
-                b.settings.order,
-                b.settings.name.to_lowercase(),
-                &b.id,
-            ))
-        });
-        Ok(out)
+        self.collections_of("address-book", source, address_book_from_row, |c| {
+            (
+                c.settings.order,
+                c.settings.name.to_lowercase(),
+                c.id.to_string(),
+            )
+        })
     }
 
     /// One address book.

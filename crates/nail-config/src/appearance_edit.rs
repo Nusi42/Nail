@@ -17,11 +17,11 @@
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use nail_api::appearance::{APPEARANCE_NODE, Density, ThemeOverrides, ThemePreferences};
 
-use crate::accounts::write::quote;
 use crate::kdl_edit::{
     Style, append_rendered, ensure_multiline, first_arg, parse_rendered, remove_node,
     replace_rendered, set_prop, to_text,
 };
+use crate::kdl_write::quote;
 use crate::l10n::msg;
 use crate::theme::ThemeFile;
 use crate::themes::{ACCENT_TOKEN, FONT_SIZE_TOKEN, RADIUS_TOKEN};

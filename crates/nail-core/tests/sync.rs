@@ -2,10 +2,15 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::files_under;
+use nail_core::testing::plain_options;
+
 use std::time::Duration;
 
 use nail_api::{Account, AccountId, AccountKind, ErrorCode, Event, FolderRole, Request, Response};
-use nail_core::{ImapAccount, Service, ServiceOptions};
+use nail_core::{ImapAccount, Service};
 use nail_proto_imap::{Credentials, FetchBatchLimits, ImapConfig, Security};
 use nail_testkit::{MailStore, MockImapConfig, MockImapServer, corpus_message, demo_corpus};
 use pretty_assertions::assert_eq;
@@ -32,9 +37,7 @@ async fn setup_with(password: &str, tweak: impl FnOnce(ImapConfig) -> ImapConfig
         .unwrap();
     let data_dir = tempfile::tempdir().unwrap();
     let config_dir = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
-    options.watch_config = false;
-    let service = Service::open(options).unwrap();
+    let service = Service::open(plain_options(data_dir.path(), config_dir.path())).unwrap();
     let account = Account {
         id: AccountId::new("imap-1"),
         name: "Mock".into(),
@@ -435,7 +438,8 @@ async fn raw_mail_of_deleted_folders_is_removed() {
     f.service.sync_account(&f.account).await.unwrap();
     let hash = nail_store::BlobHash::of(raw);
     assert!(f.service.blobs().contains(&hash));
-    let blob_count = |dir: &std::path::Path| walk(dir).into_iter().filter(|p| p.is_file()).count();
+    let blob_count =
+        |dir: &std::path::Path| files_under(dir).into_iter().filter(|p| p.is_file()).count();
     let before = blob_count(f.service.blobs().root());
 
     assert!(f.server.store().delete_mailbox("Receipts"));
@@ -449,17 +453,4 @@ async fn raw_mail_of_deleted_folders_is_removed() {
     f.server.store().reset_uid_validity("Sent").unwrap();
     f.service.sync_account(&f.account).await.unwrap();
     assert_eq!(blob_count(f.service.blobs().root()), before - 1);
-}
-
-fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            out.extend(walk(&path));
-        } else {
-            out.push(path);
-        }
-    }
-    out
 }

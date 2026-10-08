@@ -232,11 +232,10 @@ async fn core_data_reads_through_requests_store_and_blobs() {
 async fn core_data_writes_through_the_handler() {
     let dir = tempfile::tempdir().unwrap();
     let data = CoreData(core(dir.path()));
-    let by = nail_api::agents::ActionAttribution {
-        actor: nail_api::agents::ActionActor::mcp_client("c1"),
-        name: "Claude".into(),
-        on_behalf_of: None,
-    };
+    let by = nail_api::agents::ActionAttribution::new(
+        nail_api::agents::ActionActor::mcp_client("c1"),
+        "Claude",
+    );
     let response = data
         .write(
             &by,

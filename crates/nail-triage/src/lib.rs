@@ -58,6 +58,18 @@ pub const FLUENT_IDS: &[&str] = &[
     "snooze-error-store",
 ];
 
+/// The `keys` that `map` holds, in their order (the schedulers ignore
+/// unknown ids).
+pub(crate) fn known_keys<K, V>(map: &std::collections::HashMap<K, V>, keys: &[K]) -> Vec<K>
+where
+    K: Clone + Eq + std::hash::Hash,
+{
+    keys.iter()
+        .filter(|k| map.contains_key(*k))
+        .cloned()
+        .collect()
+}
+
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");
 

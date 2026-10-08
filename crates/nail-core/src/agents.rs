@@ -37,7 +37,7 @@ use nail_api::plugins::hooks::{
 use nail_api::plugins::jobs::CPU_QUOTA_MS_PER_HOUR;
 use nail_api::plugins::jobs::PluginJobStatus;
 use nail_api::plugins::{PluginActivity, PluginAttachment};
-use nail_api::{ApiError, DraftId, Event, LocalizedMessage, Request, Response, SendCrypto};
+use nail_api::{ApiError, DraftId, Event, Request, Response, SendCrypto};
 use nail_mcp::broker::{ConfirmationBroker as _, StoreBroker};
 use nail_mcp::{CoreData, WriteSettings};
 use nail_triage::Clock as _;
@@ -85,11 +85,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 .await?;
             if approve && always_allow {
                 check_policy(current.kind, ActionPolicyMode::Allow).map_err(|issue| {
-                    ApiError::invalid_request(format!(
-                        "{} cannot be allowed without asking",
-                        current.kind
-                    ))
-                    .with_localized(LocalizedMessage::new(issue.message_id()))
+                    ApiError::invalid_localized(
+                        format!("{} cannot be allowed without asking", current.kind),
+                        issue.message_id(),
+                    )
                 })?;
             }
             let id = confirmation_id.clone();
@@ -130,8 +129,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::SetActionPolicy { actor, kind, mode } => {
             if let Some(mode) = mode {
                 check_policy(kind, mode).map_err(|issue| {
-                    ApiError::invalid_request(format!("{kind} cannot be allowed without asking"))
-                        .with_localized(LocalizedMessage::new(issue.message_id()))
+                    ApiError::invalid_localized(
+                        format!("{kind} cannot be allowed without asking"),
+                        issue.message_id(),
+                    )
                 })?;
             }
             ensure_actor(service, &actor).await?;
@@ -449,12 +450,7 @@ impl Service {
             let id = draft_id.clone();
             let draft = self.inner.store.call(move |s| s.get_draft(&id)).await?;
             // Hooks only ever see the approved draft.
-            if expected
-                .as_deref()
-                .is_some_and(|rev| nail_store::draft_revision(&draft) != rev)
-            {
-                return Err(nail_store::Error::DraftChanged(draft_id.to_string()).into());
-            }
+            nail_store::check_revision(&draft, expected.as_deref())?;
             let message = self.outgoing_message(&draft_id, &draft, crypto.as_ref())?;
             let report = host.before_send_hooks(&message).await;
             self.hooks_ran(report.runs.iter().map(|r| &r.plugin_id));

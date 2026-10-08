@@ -652,7 +652,10 @@ pub async fn start_demo_multi_with(mail: DemoMail) -> Result<DemoMulti> {
         "_imaps._tcp.elsewhere.example",
         0,
         0,
-        993,
+        nail_api::accounts::default_port(
+            nail_api::accounts::MailProtocol::Imap,
+            nail_api::accounts::TlsMode::Implicit,
+        ),
         "imap.mailhost.test",
     );
     let dns = MockDnsServer::start(zone).await.map_err(io_error)?;
@@ -1588,12 +1591,17 @@ mod tests {
     use super::*;
     use nail_api::FolderRole;
 
-    #[test]
-    fn seeds_the_corpus_idempotently() {
+    /// An empty in-memory store with blobs in a temporary directory.
+    fn empty_store() -> (tempfile::TempDir, Store, BlobStore) {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open_in_memory().unwrap();
         let blobs = BlobStore::open(dir.path().join("blobs")).unwrap();
+        (dir, store, blobs)
+    }
 
+    #[test]
+    fn seeds_the_corpus_idempotently() {
+        let (_dir, store, blobs) = empty_store();
         let seed = seed_demo(&store, &blobs).unwrap();
         let corpus = demo_corpus();
         let expected: usize = corpus.iter().map(|f| f.messages.len()).sum();
@@ -1611,9 +1619,7 @@ mod tests {
 
     #[test]
     fn seeds_the_demo_conversations_on_request() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::open_in_memory().unwrap();
-        let blobs = BlobStore::open(dir.path().join("blobs")).unwrap();
+        let (_dir, store, blobs) = empty_store();
         let seed = seed_demo_with(&store, &blobs, DemoMail::WithConversations).unwrap();
         let expected: usize = demo_corpus_with_conversations()
             .iter()

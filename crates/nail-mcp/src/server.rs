@@ -219,6 +219,19 @@ impl<D: McpData> Shared<D> {
     }
 
     /// The client's grant, resolved against the current virtual accounts.
+    /// A resource request counted against the client's limit: the resource
+    /// `uri` names and the client's access.
+    async fn counted_resource(
+        &self,
+        client: &McpClient,
+        uri: &str,
+    ) -> Result<(ResourceRef, Access), Failure> {
+        self.count_request(client)?;
+        let resource = ResourceRef::parse(uri)
+            .ok_or_else(|| Failure::Api(ApiError::not_found(format!("unknown resource {uri}"))))?;
+        Ok((resource, self.access(client).await))
+    }
+
     pub(crate) async fn access(&self, client: &McpClient) -> Access {
         if client.grant.is_empty() {
             return Access::none();
@@ -569,14 +582,7 @@ impl<D: McpData> Shared<D> {
         if !account.is_some_and(|a| access.allows_account(&a)) {
             return hidden;
         }
-        let original = draft
-            .context
-            .as_ref()
-            .map(|c| c.message_id.clone())
-            .or_else(|| match &draft.automatic {
-                Some(nail_api::AutomaticMail::Redirect { message_id }) => Some(message_id.clone()),
-                _ => None,
-            });
+        let original = draft.original_message();
         if let Some(original) = original
             && self.readable_message(access, &original).await.is_err()
         {
@@ -876,19 +882,13 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, ErrorData> {
         let client = self.client(&context.extensions).await?;
-        let counted = self.shared.count_request(&client);
-        let result = match counted.map(|()| ResourceRef::parse(&request.uri)) {
-            Err(limited) => Err(limited),
-            Ok(Some(resource)) => {
-                let access = self.shared.access(&client).await;
+        let result = match self.shared.counted_resource(&client, &request.uri).await {
+            Ok((resource, access)) => {
                 self.shared
                     .read(&access, &client, &resource, &request.uri)
                     .await
             }
-            Ok(None) => Err(Failure::Api(ApiError::not_found(format!(
-                "unknown resource {}",
-                request.uri
-            )))),
+            Err(failure) => Err(failure),
         };
         self.shared
             .audited(&client, McpCallKind::Resource, &request.uri, result)
@@ -903,20 +903,13 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         context: RequestContext<RoleServer>,
     ) -> Result<(), ErrorData> {
         let client = self.client(&context.extensions).await?;
-        let counted = self.shared.count_request(&client);
-        let result = match counted.map(|()| ResourceRef::parse(&request.uri)) {
-            Err(limited) => Err(limited),
-            Ok(Some(resource)) => {
-                let access = self.shared.access(&client).await;
-                self.shared
-                    .may_subscribe(&access, &resource)
-                    .await
-                    .map(|()| resource)
-            }
-            Ok(None) => Err(Failure::Api(ApiError::not_found(format!(
-                "unknown resource {}",
-                request.uri
-            )))),
+        let result = match self.shared.counted_resource(&client, &request.uri).await {
+            Ok((resource, access)) => self
+                .shared
+                .may_subscribe(&access, &resource)
+                .await
+                .map(|()| resource),
+            Err(failure) => Err(failure),
         };
         let resource = self
             .shared

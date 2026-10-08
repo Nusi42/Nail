@@ -8,6 +8,18 @@ import type { JsonValue } from "./serde_json/JsonValue";
  */
 export type ToolbarItem = { "type": "action", 
 /**
+ * Overflow rank (M5b): when the bar is too narrow, items move into
+ * "More" highest rank first (`rank=1` stays longest); unranked
+ * items go before every ranked one, from the end of the bar
+ * ([`crate::views::overflow_order`]). Absent = unranked.
+ */
+rank?: number, 
+/**
+ * Icon, label or both (M5b). Absent = the renderer's default (icon
+ * and label).
+ */
+display?: ItemDisplay, 
+/**
  * Action id.
  */
 action: string, 
@@ -23,19 +35,7 @@ label: string | null,
  * Icon override (a Lucide name or a theme icon, [`crate::icons`]),
  * `null` = the action's icon.
  */
-icon: string | null, 
-/**
- * Overflow rank (M5b): when the bar is too narrow, items move into
- * "More" highest rank first (`rank=1` stays longest); unranked
- * items go before every ranked one, from the end of the bar
- * ([`crate::views::overflow_order`]). Absent = unranked.
- */
-rank?: number, 
-/**
- * Icon, label or both (M5b). Absent = the renderer's default (icon
- * and label).
- */
-display?: ItemDisplay, } | { "type": "more", 
+icon: string | null, } | { "type": "more", 
 /**
  * Label override, `null` = `@toolbar.more` ("More").
  */

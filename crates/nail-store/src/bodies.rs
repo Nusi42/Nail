@@ -14,7 +14,7 @@
 
 use nail_api::sync::BodyState;
 use nail_api::{AccountId, FolderId, MessageId};
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{OptionalExtension, Transaction, params};
 use std::collections::BTreeMap;
 
 use crate::blob::BlobHash;
@@ -54,6 +54,17 @@ pub struct StoredBody {
 
 fn parse_state(text: &str) -> Result<BodyState> {
     BodyState::parse(text).ok_or_else(|| Error::InvalidData(format!("unknown body state {text:?}")))
+}
+
+/// A message's body state and blob.
+fn body_of(tx: &Transaction<'_>, id: &MessageId) -> Result<(String, Option<String>)> {
+    tx.query_row(
+        "SELECT body_state, blob_hash FROM messages WHERE id = ?1",
+        [id.as_str()],
+        |r| r.try_into(),
+    )
+    .optional()?
+    .ok_or_else(|| Error::not_found("message", id))
 }
 
 impl Store {
@@ -160,14 +171,7 @@ impl Store {
         let size = i64::try_from(size)
             .map_err(|_| Error::InvalidData(format!("size {size} too large")))?;
         self.with_tx(|tx| {
-            let (state, old): (String, Option<String>) = tx
-                .query_row(
-                    "SELECT body_state, blob_hash FROM messages WHERE id = ?1",
-                    [id.as_str()],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("message", id))?;
+            let (state, old) = body_of(tx, id)?;
             let state = match parse_state(&state)? {
                 BodyState::HeadersOnly => BodyState::OnDemand,
                 other => other,
@@ -189,14 +193,7 @@ impl Store {
     /// body to drop.
     pub fn detach_body(&self, id: &MessageId, headers: &BlobHash) -> Result<Option<BlobHash>> {
         self.with_tx(|tx| {
-            let (state, old): (String, Option<String>) = tx
-                .query_row(
-                    "SELECT body_state, blob_hash FROM messages WHERE id = ?1",
-                    [id.as_str()],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("message", id))?;
+            let (state, old) = body_of(tx, id)?;
             if parse_state(&state)? == BodyState::HeadersOnly {
                 return Ok(None);
             }
@@ -225,13 +222,7 @@ impl Store {
             for id in ids {
                 let row = stmt
                     .query_row([id.as_str()], |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, Option<u32>>(3)?,
-                            r.get::<_, String>(4)?,
-                        ))
+                        <(String, String, String, Option<u32>, String)>::try_from(r)
                     })
                     .optional()?;
                 if let Some((account, folder, path, uid, state)) = row {
@@ -266,11 +257,7 @@ impl Store {
                  ORDER BY date_sort, id LIMIT ?3",
             )?;
             let rows = stmt.query_map(params![folder.as_str(), cutoff, limit], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                ))
+                <(String, String, String)>::try_from(r)
             })?;
             let mut out = Vec::new();
             for row in rows {

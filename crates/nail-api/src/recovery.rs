@@ -169,7 +169,6 @@ pub fn parse_recovery_key(text: &str) -> Result<[u8; RECOVERY_KEY_BYTES], Recove
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labels::assert_labels;
     use pretty_assertions::assert_eq;
 
     fn sample() -> [u8; RECOVERY_KEY_BYTES] {
@@ -226,10 +225,6 @@ mod tests {
             parse_recovery_key(&typo),
             Err(RecoveryKeyIssue::ChecksumMismatch)
         );
-        assert_labels(
-            RecoveryKeyIssue::ALL,
-            RecoveryKeyIssue::as_str,
-            RecoveryKeyIssue::message_id,
-        );
+        assert_wire_labels!(RecoveryKeyIssue);
     }
 }

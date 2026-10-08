@@ -21,9 +21,6 @@ const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR fake image";
 
 fn identity() -> Identity {
     Identity {
-        id: "ada@work.example".into(),
-        account_id: "work".into(),
-        email: "ada@work.example".into(),
         name: Some("Ada Lovelace".into()),
         reply_to: Some("replies@work.example".into()),
         bcc: vec!["archive@work.example".into()],
@@ -32,11 +29,7 @@ fn identity() -> Identity {
             html: None,
             markdown: None,
         }),
-        composer_mode: None,
-        posting: None,
-        mail_style: None,
-        crypto: None,
-        send_as: None,
+        ..Identity::new("work".into(), "ada@work.example")
     }
 }
 

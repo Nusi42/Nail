@@ -78,12 +78,20 @@ pub(crate) fn alternatives(message: &Message<'_>) -> Vec<(u32, String)> {
 /// Nail's composer writes; raw HTML in the source is not passed through
 /// (the result is sanitized afterwards anyway).
 pub(crate) fn to_html(source: &str) -> String {
+    comrak::markdown_to_html(source, &markdown_options(false))
+}
+
+/// The Markdown dialect Nail writes and reads: CommonMark with the GFM
+/// extensions (strikethrough, tables, autolinks, task lists, footnotes);
+/// raw HTML in the source passes through only with `raw_html` (the
+/// composer's own text, sanitized afterwards).
+pub fn markdown_options(raw_html: bool) -> comrak::Options<'static> {
     let mut options = comrak::Options::default();
     options.extension.strikethrough = true;
     options.extension.table = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
     options.extension.footnotes = true;
-    options.render.r#unsafe = false;
-    comrak::markdown_to_html(source, &options)
+    options.render.r#unsafe = raw_html;
+    options
 }

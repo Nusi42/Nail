@@ -80,11 +80,11 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
     match request {
         Request::CreatePrintJob { target, options } => {
             if let Some(issue) = target.issues().first() {
-                return Err(
-                    ApiError::invalid_request(format!("print target: {}", issue.as_str()))
-                        .with_localized(LocalizedMessage::new(issue.message_id()))
-                        .into(),
-                );
+                return Err(ApiError::invalid_localized(
+                    format!("print target: {}", issue.as_str()),
+                    issue.message_id(),
+                )
+                .into());
             }
             let job = ctl.insert(PrintJob {
                 job_id: PrintJobId::new(String::new()),
@@ -144,11 +144,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 file: PdfFile { path, size_bytes },
             })
         }
-        other => Err(ApiError::internal(format!(
-            "not a print request: {}",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        other => {
+            Err(ApiError::internal(format!("not a print request: {}", other.wire_type())).into())
+        }
     }
 }
 

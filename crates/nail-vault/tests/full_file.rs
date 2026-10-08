@@ -11,9 +11,7 @@ use std::sync::Arc;
 use nail_api::engine::{MemorySecretStore, SecretStore};
 use nail_api::recovery::RecoveryKeyIssue;
 use nail_api::security::{VaultPhase, VaultState, VaultStatus};
-use nail_api::{
-    Account, AccountKind, Address, ErrorCode, Flags, Folder, FolderRole, MessageSummary, SecretRef,
-};
+use nail_api::{Address, ErrorCode, MessageSummary, SecretRef};
 use nail_store::{FileEncryption, Store, StoredMessage, file_encryption};
 use nail_vault::{
     OpenedDataDir, ReadyDataDir, VAULT_FILE_NAME, Vault, VaultError, VaultFile, open_data_dir,
@@ -89,46 +87,15 @@ fn contains(haystack: &[u8], needle: &str) -> bool {
 }
 
 fn seed(store: &Store) {
-    store
-        .upsert_account(&Account {
-            id: "a1".into(),
-            name: "Ada".into(),
-            email: "ada@example.org".into(),
-            kind: AccountKind::Imap,
-        })
-        .unwrap();
-    store
-        .upsert_folder(&Folder {
-            id: "inbox".into(),
-            account_id: "a1".into(),
-            parent_id: None,
-            name: "INBOX".into(),
-            path: "INBOX".into(),
-            role: FolderRole::Inbox,
-            unread: 0,
-            total: 0,
-        })
-        .unwrap();
+    nail_store::testing::add_inbox(store, "a1", "inbox");
     let m = StoredMessage::new(MessageSummary {
-        id: "m1".into(),
-        folder_id: "inbox".into(),
-        account_id: "a1".into(),
         subject: SUBJECT.into(),
+        preview: PREVIEW.into(),
         from: Some(Address {
             name: Some("Ada".into()),
             email: "ada@example.org".into(),
         }),
-        to: Vec::new(),
-        date: "2026-09-01T10:00:00Z".into(),
-        flags: Flags::default(),
-        has_attachments: false,
-        preview: PREVIEW.into(),
-        thread_id: None,
-        tags: Vec::new(),
-        duplicates: Vec::new(),
-        headers_only: false,
-        gmail: None,
-        exchange: None,
+        ..nail_api::testing::summary("m1", "a1", "inbox")
     });
     store.upsert_message(&m).unwrap();
 }

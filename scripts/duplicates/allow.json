@@ -2,6 +2,73 @@
   "const-value": {
     "rs CRATE = env!(\"CARGO_PKG_NAME\")": {
       "reason": "each crate's own name (the tracing target of its logs): one fact per crate, evaluated by the compiler in each crate"
+    },
+    "rs MAX_NAME_LEN = 64": {
+      "reason": "two limits that happen to agree: a plug-in manifest name (nail-api plugins) and an MCP client name (nail-mcp admin)"
+    },
+    "rs MAX_NESTING = 64": {
+      "reason": "two parsers' own depth limits: KDL documents (nail-config) and search-query parentheses (nail-search)"
+    },
+    "rs ICS = \"BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-": {
+      "reason": "two different test calendars (a reminder / task tree in nail-core, a family calendar with a VTIMEZONE in nail-portability); the check cuts the values at the `//` of PRODID"
+    },
+    "rs MAX_AUDIT_PAGE = 500": {
+      "reason": "page limits of two separate logs that happen to agree: the remote-UI audit (nail-core remote) and the MCP audit (nail-mcp admin)"
+    },
+    "rs TIMEOUT = Duration::from_secs(30)": {
+      "reason": "how long tests wait in two separate Cargo workspaces (nail-core's integration tests, scripts/interop): neither can import the other's test helpers"
+    }
+  },
+  "fluent-text": {
+    "Snoozed": {
+      "reason": "two meanings: the past-tense kind of a mail action (mail-action-kind-snooze) and the name of the Snoozed favorite folder (favorite-folder-snoozed); languages word them differently"
+    },
+    "Comment": {
+      "reason": "two meanings in two mail languages: the field label of an MCP confirmation (in the app's language) and the row label of an iMIP mail (itip.ftl, rendered in the mail's language by nail-itip)"
+    }
+  },
+  "magic-number": {
+    "WP-rust-core 300": {
+      "reason": "unrelated values that happen to agree: default IMAP poll interval (s), confirmation timeout (s), longest engine back-off (s), a draft-upload delay (ms), a reconnect fallback (s), the plug-in dev reload debounce (ms), the HTTP 3xx bound in prelude.js, proxy requests per minute"
+    },
+    "WP-rust-core 512": {
+      "reason": "unrelated limits that happen to agree: a server-name length, a plug-in UI image (KiB), UI-state keys, a plug-in write id length, the Thunderbird file-head sniff (bytes), a blocked port in the proxy's Fetch bad-port list, a Message-ID length in proxy tokens"
+    },
+    "WP-rust-core 600": {
+      "reason": "unrelated values that happen to agree: the Gmail / Exchange default poll interval (s), a print job's lifetime (s), the longest undo-send delay (s; nail-config, with its schema), plug-in log lines per minute"
+    },
+    "WP-rust-core 4096": {
+      "reason": "unrelated byte limits that happen to agree: the diagnostics preview, a log line, the plug-in log queue length, a CSS at-rule prelude, an mbox From_ line, a proxied URL, a search query"
+    },
+    "WP-rust-core 10000": {
+      "reason": "unrelated limits that happen to agree: messages per mail action, the MCP rate-limit maximum, a hook timeout (ms), a plug-in setting string, junk training, the bench corpus name modulus, a subtask walk, reminders per plan, proxy rate counters, a ManageSieve response line"
+    },
+    "WP-rust-core 120": {
+      "reason": "unrelated values that happen to agree: MCP requests per minute, the PIN prompt timeout (s), the smallest window edge (px), an export file-name length, a rule-text excerpt length"
+    },
+    "WP-rust-core 128": {
+      "reason": "unrelated values that happen to agree: an idempotency key length, a plug-in name length, the IPv6 prefix length, a Sieve script name length, a tag length, the Thunderbird archive flag bit, a session id length in proxy tokens"
+    },
+    "WP-rust-core 366": {
+      "reason": "a year at most (leap year) as separate limits of separate features: RRULE BYYEARDAY, MCP event range, print agenda days, plug-in job look-ahead, reminder snooze, message snooze"
+    },
+    "WP-rust-core 2000": {
+      "reason": "unrelated values that happen to agree: plug-in log lines, the arrival-hook budget (ms), job event coalescing (ms), an iTIP comment length, bench corpus years / sizes, kept log lines, plug-in filter and rule scan limits, a plug-in search query length, a stored activity error"
+    },
+    "WP-rust-core 254": {
+      "reason": "two meanings: the IPv4 link-local range 169.254/16 (nail-api local addresses, nail-proxy private ranges) and the longest e-mail address (RFC 5321) in MCP write plans"
+    },
+    "WP-rust-core 365": {
+      "reason": "unrelated uses of a year's days: the longest vacation interval (Sieve), the bench corpus span, `years` in search queries, the civil-date algorithm in nail-util"
+    },
+    "WP-rust-core 150": {
+      "reason": "unrelated values that happen to agree: the config watcher debounce (ms), vault-migration progress interval (ms), the junk classifier's clue count"
+    },
+    "WP-rust-core 250": {
+      "reason": "unrelated intervals that happen to agree: outbox send-progress events (ms), a plug-in interrupt check (ms), portability job progress (ms)"
+    },
+    "WP-rust-engines 365": {
+      "reason": "unrelated uses of a year's days: an open-ended automatic-reply schedule, a common year in RRULE expansion, the time-zone sampling span, the Graph calendar window, the civil-date algorithm in nail-dav (that copy goes with q2-rust-engines; this entry then matches nothing and is removed at the merge)"
     }
   }
 }

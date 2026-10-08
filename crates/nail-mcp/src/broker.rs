@@ -282,32 +282,17 @@ impl ConfirmationBroker for StoreBroker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::agents::{ActionAttribution, ActionTarget, ActionTargetKind, ConfirmationState};
+    use nail_api::agents::{ActionAttribution, ConfirmationState};
     use std::sync::Mutex;
 
     fn new(key: Option<&str>, timeout_secs: u64) -> NewConfirmation {
         NewConfirmation {
-            requested_by: ActionAttribution {
-                actor: ActionActor::mcp_client("1"),
-                name: "Claude".into(),
-                on_behalf_of: None,
-            },
-            kind: ActionKind::Send,
-            operation: "send_message".into(),
-            summary: LocalizedMessage::new("confirmation-summary-send")
-                .arg("actor", "Claude")
-                .arg("subject", "Hi")
-                .arg("count", 1),
-            targets: vec![ActionTarget {
-                kind: ActionTargetKind::Draft,
-                id: "d1".into(),
-                label: "Hi".into(),
-            }],
-            changes: vec![],
-            account_ids: vec!["work".into()],
-            payload: serde_json::json!({"draft_id": "d1"}),
             idempotency_key: key.map(str::to_owned),
             timeout_secs,
+            ..nail_api::testing::send_confirmation(ActionAttribution::new(
+                ActionActor::mcp_client("1"),
+                "Claude",
+            ))
         }
     }
 

@@ -16,8 +16,7 @@ use nail_store::pim::{COLLECTED_BOOK_ID, PimItem};
 
 use super::engine::{calendar_items, card_items};
 use super::{forbidden, new_id, op_ids};
-use crate::error::Result;
-use crate::service::Service;
+use crate::{error::Result, service::Service};
 
 pub(super) async fn handle(service: &Service, request: Request) -> Result<Response> {
     Ok(match request {
@@ -49,11 +48,9 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
             fields: Box::new(service.task_from_message(message_id).await?),
         },
         other => {
-            return Err(ApiError::internal(format!(
-                "{} routed to PIM imports",
-                crate::service::request_name(&other)
-            ))
-            .into());
+            return Err(
+                ApiError::internal(format!("{} routed to PIM imports", other.wire_type())).into(),
+            );
         }
     })
 }
@@ -249,12 +246,7 @@ impl Service {
                             PimItemKind::ContactGroup => "grp",
                         })
                     });
-                    match &mut item {
-                        PimItem::Event(e) => e.id = id.into(),
-                        PimItem::Task { task, .. } => task.id = id.into(),
-                        PimItem::Contact(c) => c.id = id.into(),
-                        PimItem::Group { group, .. } => group.id = id.into(),
-                    }
+                    item.set_id(&id);
                     match s.save_pim_item(&item, &raw, now) {
                         Ok(write) => {
                             if is_update {

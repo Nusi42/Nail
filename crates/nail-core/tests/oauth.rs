@@ -4,6 +4,11 @@
 
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::oauth_provider;
+use nail_core::testing::TempService;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -74,22 +79,17 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
     )
     .await
     .unwrap();
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            "oauth-provider \"mock\" client-id=\"nail-test-client\" auth-url=\"{}\" token-url=\"{}\" {{\n    scopes \"mail\"\n}}\n",
-            oauth.authorize_url(),
-            oauth.token_url()
-        ),
-    )
-    .unwrap();
     let secrets = Arc::new(MemorySecretStore::new());
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.secrets = Some(secrets.clone());
-    options.timing = EngineTiming::fast();
-    let service = Service::open(options).unwrap();
+    let temp = TempService::open_with(
+        &[("accounts.kdl", &oauth_provider("mock", &oauth, "mail"))],
+        |data, config| {
+            let mut options = ServiceOptions::new(data, config);
+            options.secrets = Some(secrets.clone());
+            options.timing = EngineTiming::fast();
+            options
+        },
+    );
+    let service = temp.service.clone();
     let mut events = service.subscribe();
 
     // Sign in: the mock plays the browser.
@@ -207,20 +207,17 @@ async fn sign_ins_can_be_cancelled_and_unknown_providers_fail() {
     let oauth = MockOAuthServer::start(MockOAuthConfig::default())
         .await
         .unwrap();
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            "oauth-provider \"mock\" client-id=\"nail-test-client\" auth-url=\"{}\" token-url=\"{}\"\n",
-            oauth.authorize_url(),
-            oauth.token_url()
-        ),
-    )
-    .unwrap();
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.secrets = Some(Arc::new(MemorySecretStore::new()));
-    let service = Service::open(options).unwrap();
+    let provider = format!(
+        "oauth-provider \"mock\" client-id=\"nail-test-client\" auth-url=\"{}\" token-url=\"{}\"\n",
+        oauth.authorize_url(),
+        oauth.token_url()
+    );
+    let temp = TempService::open_with(&[("accounts.kdl", &provider)], |data, config| {
+        let mut options = ServiceOptions::new(data, config);
+        options.secrets = Some(Arc::new(MemorySecretStore::new()));
+        options
+    });
+    let service = temp.service.clone();
     let mut events = service.subscribe();
     let (flow, _) = start(&service).await;
     assert_eq!(

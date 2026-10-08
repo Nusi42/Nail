@@ -2,6 +2,9 @@
 //! M3c, ADR 0072).
 #![cfg(test)]
 
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+
 use nail_api::accounts::{AuthConfig, IncomingServer, MailProtocol, SspiPackage, TlsMode};
 use nail_api::domain::AccountKind;
 use nail_api::exchange::{ExchangeEngine, ExchangeOptions, GRAPH_HOST};
@@ -216,10 +219,7 @@ fn exchange_rules_are_checked() {
 fn exchange_accounts_are_written_and_round_trip() {
     for text in [GRAPH, EWS] {
         let config = parse_accounts(text, "accounts.kdl").unwrap();
-        let mut d = AccountsDocument::empty("accounts.kdl");
-        d.set_config(config.clone()).unwrap();
-        assert!(d.text().contains("exchange engine="), "{}", d.text());
-        assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+        common::assert_renders(&config, "exchange engine=");
     }
 
     // Editing keeps the hand-written file minimal.

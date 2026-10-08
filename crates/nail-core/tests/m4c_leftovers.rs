@@ -5,26 +5,24 @@
 
 #![cfg(test)]
 
-use std::future::Future;
-use std::sync::Arc;
-use std::time::Duration;
+#[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
+mod common;
+use common::{TIMEOUT, api_service, eventually, folders, messages, mock_oauth, oauth_provider, ok};
+use nail_core::testing::TempService;
 
-use nail_api::accounts::{SecretKind, SecretRef};
-use nail_api::engine::{MemorySecretStore, SecretStore};
+use nail_api::accounts::SecretKind;
 use nail_api::exchange::ExchangeMailboxSettings;
 use nail_api::{AccountId, FolderRole, MessageSummary, MoveTarget, Request, Response};
-use nail_core::{EngineTiming, Service, ServiceOptions};
+use nail_core::Service;
 use nail_proto_graph::testing::MockGraphServer;
-use nail_testkit_net::{MockOAuthConfig, MockOAuthServer};
-
-const TIMEOUT: Duration = Duration::from_secs(30);
+use nail_testkit_net::MockOAuthServer;
 
 struct Env {
     service: Service,
     graph: MockGraphServer,
     other: MockGraphServer,
     _oauth: MockOAuthServer,
-    _dirs: (tempfile::TempDir, tempfile::TempDir),
+    _temp: TempService,
 }
 
 /// Two Graph accounts (`contoso`, and `fabrikam` on a second mock
@@ -32,20 +30,14 @@ struct Env {
 async fn setup(sync: &str) -> Env {
     let graph = MockGraphServer::start_demo().await.unwrap();
     let other = MockGraphServer::start("bo@fabrikam.example").await.unwrap();
-    let oauth = MockOAuthServer::start(MockOAuthConfig::default())
-        .await
-        .unwrap();
-    oauth.add_refresh_token("refresh-ex", "ada@contoso.example", "graph");
-    oauth.add_refresh_token("refresh-fab", "bo@fabrikam.example", "graph");
-    let data = tempfile::tempdir().unwrap();
-    let config = tempfile::tempdir().unwrap();
-    std::fs::write(
-        config.path().join("accounts.kdl"),
-        format!(
-            r#"oauth-provider "mockms" client-id="nail-test-client" auth-url="{auth}" token-url="{token}" {{
-    scopes "graph"
-}}
-account "contoso" email="ada@contoso.example" name="Contoso" {{
+    let oauth = mock_oauth(&[
+        ("refresh-ex", "ada@contoso.example", "graph"),
+        ("refresh-fab", "bo@fabrikam.example", "graph"),
+    ])
+    .await;
+    let temp = api_service(
+        &format!(
+            r#"{provider}account "contoso" email="ada@contoso.example" name="Contoso" {{
     exchange host="127.0.0.1" port={port} tls="plaintext" poll-interval=10 max-poll-interval=10 {{
         auth "oauth2" provider="mockms"
     }}
@@ -59,72 +51,26 @@ account "fabrikam" email="bo@fabrikam.example" name="Fabrikam" {{
     identity "bo@fabrikam.example" name="Bo"
 }}
 "#,
-            auth = oauth.authorize_url(),
-            token = oauth.token_url(),
+            provider = oauth_provider("mockms", &oauth, "graph"),
             port = graph.addr().port(),
             other_port = other.addr().port(),
         ),
-    )
-    .unwrap();
-    let secrets = Arc::new(MemorySecretStore::new());
-    for (account, token) in [("contoso", "refresh-ex"), ("fabrikam", "refresh-fab")] {
-        secrets
-            .set(
-                &SecretRef::default_for(&AccountId::new(account), SecretKind::OAuth2),
-                token,
-            )
-            .unwrap();
-    }
-    let mut options = ServiceOptions::new(data.path(), config.path());
-    options.watch_config = false;
-    options.secrets = Some(secrets);
-    options.timing = EngineTiming::fast();
-    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+        &[
+            ("contoso", SecretKind::OAuth2, "refresh-ex"),
+            ("fabrikam", SecretKind::OAuth2, "refresh-fab"),
+        ],
+    );
     Env {
-        service,
+        service: temp.service.clone(),
         graph,
         other,
         _oauth: oauth,
-        _dirs: (data, config),
+        _temp: temp,
     }
 }
 
-async fn request(service: &Service, request: Request) -> Response {
-    let response = service.handle(request).await;
-    if let Response::Error { message, .. } = &response {
-        panic!("request failed: {message}");
-    }
-    response
-}
-
-async fn folders(service: &Service, account: &str) -> Vec<nail_api::Folder> {
-    match request(
-        service,
-        Request::ListFolders {
-            account_id: AccountId::new(account),
-        },
-    )
-    .await
-    {
-        Response::Folders { folders, .. } => folders,
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
-async fn messages_in(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSummary> {
-    match request(
-        service,
-        Request::ListMessages {
-            folder_id: folder.id.clone(),
-            offset: 0,
-            limit: 100,
-        },
-    )
-    .await
-    {
-        Response::Messages { messages, .. } => messages,
-        other => panic!("unexpected {other:?}"),
-    }
+async fn folder_messages(service: &Service, folder: &nail_api::Folder) -> Vec<MessageSummary> {
+    messages(service, &folder.id).await
 }
 
 async fn inbox_folder(service: &Service, account: &str) -> Option<nail_api::Folder> {
@@ -136,23 +82,8 @@ async fn inbox_folder(service: &Service, account: &str) -> Option<nail_api::Fold
 
 async fn inbox(service: &Service, account: &str) -> Vec<MessageSummary> {
     match inbox_folder(service, account).await {
-        Some(folder) => messages_in(service, &folder).await,
+        Some(folder) => folder_messages(service, &folder).await,
         None => Vec::new(),
-    }
-}
-
-async fn until<F, Fut>(what: &str, mut check: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        if check().await {
-            return;
-        }
-        assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
-        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
 
@@ -160,7 +91,7 @@ where
 async fn exchange_folders_follow_their_sync_policy_and_fetch_bodies_on_demand() {
     let env = setup(r#"sync bodies="headers-only""#).await;
     let service = &env.service;
-    until("the Graph inbox", || async {
+    eventually("the Graph inbox", || async {
         inbox(service, "contoso").await.len() == 2
     })
     .await;
@@ -168,13 +99,12 @@ async fn exchange_folders_follow_their_sync_policy_and_fetch_bodies_on_demand() 
     assert!(list.iter().all(|m| m.headers_only), "{list:?}");
     // Opening one downloads its body.
     let id = list[0].id.clone();
-    let Response::Message { message } =
-        request(service, Request::GetMessage { id: id.clone() }).await
+    let Response::Message { message } = ok(service, Request::GetMessage { id: id.clone() }).await
     else {
         panic!("message expected");
     };
     assert!(!message.text.is_empty() || message.sanitized_html.is_some());
-    until("the body is stored", || async {
+    eventually("the body is stored", || async {
         inbox(service, "contoso")
             .await
             .iter()
@@ -187,7 +117,7 @@ async fn exchange_folders_follow_their_sync_policy_and_fetch_bodies_on_demand() 
 async fn graph_conversations_are_nail_threads() {
     let env = setup("").await;
     let service = &env.service;
-    until("the Graph inbox", || async {
+    eventually("the Graph inbox", || async {
         inbox(service, "contoso").await.len() == 2
     })
     .await;
@@ -199,14 +129,14 @@ async fn graph_conversations_are_nail_threads() {
         );
         env.graph.deliver(None, "inbox", raw.as_bytes());
     }
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(AccountId::new("contoso")),
         },
     )
     .await;
-    until("both delivered messages", || async {
+    eventually("both delivered messages", || async {
         inbox(service, "contoso")
             .await
             .iter()
@@ -229,12 +159,12 @@ async fn graph_conversations_are_nail_threads() {
 async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
     let env = setup("").await;
     let service = &env.service;
-    until("both inboxes", || async {
+    eventually("both inboxes", || async {
         inbox(service, "contoso").await.len() == 2
             && inbox_folder(service, "fabrikam").await.is_some()
     })
     .await;
-    request(
+    ok(
         service,
         Request::AddExchangeMailbox {
             account_id: AccountId::new("contoso"),
@@ -242,7 +172,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
         },
     )
     .await;
-    request(
+    ok(
         service,
         Request::SyncNow {
             account_id: Some(AccountId::new("contoso")),
@@ -255,7 +185,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
             .into_iter()
             .find(|f| f.path == "@support@contoso.example/Inbox")
     };
-    until("the shared mailbox", || async {
+    eventually("the shared mailbox", || async {
         shared_inbox().await.is_some()
     })
     .await;
@@ -265,7 +195,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
     let second = list[1].clone();
 
     // Into the shared mailbox of the same account.
-    request(
+    ok(
         service,
         Request::MoveMessages {
             message_ids: vec![first.id.clone()],
@@ -276,7 +206,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
     let shared_remote = env
         .graph
         .folder_id(Some("support@contoso.example"), "inbox");
-    until("the move into the shared mailbox", || async {
+    eventually("the move into the shared mailbox", || async {
         env.graph
             .messages_in(Some("support@contoso.example"), &shared_remote)
             .iter()
@@ -286,7 +216,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
 
     // Into another Exchange account.
     let target = inbox_folder(service, "fabrikam").await.unwrap();
-    request(
+    ok(
         service,
         Request::MoveMessages {
             message_ids: vec![second.id.clone()],
@@ -295,7 +225,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
     )
     .await;
     let other_inbox = env.other.folder_id(None, "inbox");
-    until("the move into the other account", || async {
+    eventually("the move into the other account", || async {
         env.other
             .messages_in(None, &other_inbox)
             .iter()
@@ -303,7 +233,7 @@ async fn messages_move_into_a_shared_mailbox_and_into_another_account() {
     })
     .await;
     let own_inbox = env.graph.folder_id(None, "inbox");
-    until("gone from the source", || async {
+    eventually("gone from the source", || async {
         !env.graph
             .messages_in(None, &own_inbox)
             .iter()
@@ -317,7 +247,7 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
     use base64::Engine as _;
     let env = setup("").await;
     let service = &env.service;
-    until("the Graph inbox", || async {
+    eventually("the Graph inbox", || async {
         inbox(service, "contoso").await.len() == 2
     })
     .await;
@@ -325,7 +255,7 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
     let bytes: Vec<u8> = (0..5 * 1024 * 1024u32)
         .map(|i| (i.wrapping_mul(2_654_435_761) >> 13).to_le_bytes()[0])
         .collect();
-    let Response::AttachmentUploaded { attachment } = request(
+    let Response::AttachmentUploaded { attachment } = ok(
         service,
         Request::UploadAttachment {
             filename: "scan.bin".into(),
@@ -346,12 +276,11 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
     draft.subject = "The scan".into();
     draft.text = "Attached.".into();
     draft.attachments = vec![attachment];
-    let Response::DraftSaved { draft_id } = request(service, Request::SaveDraft { draft }).await
-    else {
+    let Response::DraftSaved { draft_id } = ok(service, Request::SaveDraft { draft }).await else {
         panic!("draft expected");
     };
     let mut events = service.subscribe();
-    request(
+    ok(
         service,
         Request::SendDraft {
             draft_id,
@@ -379,7 +308,7 @@ async fn a_large_message_goes_up_in_pieces_with_send_progress() {
     let (_, total) = progress[0];
     assert!(total > 4 * 1024 * 1024, "{progress:?}");
     assert!(progress.windows(2).all(|w| w[0].0 <= w[1].0));
-    until("sent", || async {
+    eventually("sent", || async {
         env.graph
             .sent()
             .iter()

@@ -163,62 +163,31 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::{Account, AccountKind, Flags, Folder, FolderRole, MessageSummary};
+    use nail_api::{AccountKind, Folder, FolderRole, MessageSummary, testing};
 
     fn store() -> Store {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_account(&Account {
-                id: "a".into(),
-                name: "A".into(),
-                email: "me@example.org".into(),
-                kind: AccountKind::Local,
-            })
-            .unwrap();
-        for (name, role) in [
+        let folders: Vec<Folder> = [
             ("INBOX", FolderRole::Inbox),
             ("Sent", FolderRole::Sent),
             ("Drafts", FolderRole::Drafts),
             ("Trash", FolderRole::Trash),
             ("Other", FolderRole::Other),
-        ] {
-            store
-                .upsert_folder(&Folder {
-                    id: FolderId(format!("a/{name}")),
-                    account_id: "a".into(),
-                    parent_id: None,
-                    name: name.into(),
-                    path: name.into(),
-                    role,
-                    unread: 0,
-                    total: 0,
-                })
-                .unwrap();
-        }
-        store
+        ]
+        .into_iter()
+        .map(|(name, role)| testing::folder(&format!("a/{name}"), "a", name, role))
+        .collect();
+        crate::test_store::store_with(&testing::account("a", AccountKind::Local), &folders)
     }
 
     fn put(store: &Store, id: &str, folder: &str, minute: u32, mid: &str, from: &str) {
         let summary = MessageSummary {
-            id: MessageId(id.into()),
-            folder_id: FolderId(format!("a/{folder}")),
-            account_id: "a".into(),
             subject: "Topic".into(),
             from: Some(nail_api::Address {
                 name: None,
                 email: from.into(),
             }),
-            to: Vec::new(),
             date: format!("2026-09-29T10:{minute:02}:00Z"),
-            flags: Flags::default(),
-            has_attachments: false,
-            preview: String::new(),
-            thread_id: None,
-            tags: Vec::new(),
-            duplicates: Vec::new(),
-            headers_only: false,
-            gmail: None,
-            exchange: None,
+            ..testing::summary(id, "a", &format!("a/{folder}"))
         };
         let refs = if mid == "1@x" {
             Vec::new()
@@ -316,24 +285,10 @@ mod tests {
     fn thread_reach_stays_in_the_listed_account() {
         let (store, t) = fixture();
         store
-            .upsert_account(&Account {
-                id: "b".into(),
-                name: "B".into(),
-                email: "me@example.net".into(),
-                kind: AccountKind::Local,
-            })
+            .upsert_account(&testing::account("b", AccountKind::Local))
             .unwrap();
         store
-            .upsert_folder(&Folder {
-                id: FolderId("b/INBOX".into()),
-                account_id: "b".into(),
-                parent_id: None,
-                name: "INBOX".into(),
-                path: "INBOX".into(),
-                role: FolderRole::Inbox,
-                unread: 0,
-                total: 0,
-            })
+            .upsert_folder(&testing::folder("b/INBOX", "b", "INBOX", FolderRole::Inbox))
             .unwrap();
         let mut copy = store.get_message(&MessageId("i3".into())).unwrap().summary;
         copy.id = MessageId("b3".into());

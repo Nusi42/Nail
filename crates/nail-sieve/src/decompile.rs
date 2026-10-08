@@ -23,7 +23,6 @@ use nail_api::sieve::VacationSettings;
 
 use crate::compile::{
     CompileOptions, DELIVER_VAR, FOLDER_VAR, PREVIOUS_MARKER, RULE_MARKER, address_fields,
-    auth_method, auth_result,
 };
 use crate::ere::to_posix_ere;
 use crate::parse::{Argument, Command, Test, parse};
@@ -133,21 +132,7 @@ pub fn decompile(script: &str) -> Result<Decompiled, String> {
 }
 
 fn unquote(text: &str) -> Result<String, String> {
-    let inner = text
-        .trim()
-        .strip_prefix('"')
-        .and_then(|t| t.strip_suffix('"'))
-        .ok_or_else(|| format!("not a quoted string: {text}"))?;
-    let mut out = String::new();
-    let mut chars = inner.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            out.extend(chars.next());
-        } else {
-            out.push(c);
-        }
-    }
-    Ok(out)
+    crate::writer::unquote(text.trim()).ok_or_else(|| format!("not a quoted string: {text}"))
 }
 
 fn strings(args: &[Argument]) -> Vec<String> {
@@ -394,25 +379,11 @@ fn list_id_pattern(
 }
 
 fn parse_auth_method(text: &str) -> Result<AuthMethod, String> {
-    [AuthMethod::Dkim, AuthMethod::Spf, AuthMethod::Dmarc]
-        .into_iter()
-        .find(|m| auth_method(*m) == text)
-        .ok_or_else(|| format!("unknown method {text}"))
+    AuthMethod::parse(text).ok_or_else(|| format!("unknown method {text}"))
 }
 
 fn parse_auth_result(text: &str) -> Result<AuthResult, String> {
-    [
-        AuthResult::Pass,
-        AuthResult::Fail,
-        AuthResult::Softfail,
-        AuthResult::Neutral,
-        AuthResult::None,
-        AuthResult::Temperror,
-        AuthResult::Permerror,
-    ]
-    .into_iter()
-    .find(|r| auth_result(*r) == text)
-    .ok_or_else(|| format!("unknown result {text}"))
+    AuthResult::parse(text).ok_or_else(|| format!("unknown result {text}"))
 }
 
 fn is_flush(command: &Command) -> bool {

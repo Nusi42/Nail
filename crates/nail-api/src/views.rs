@@ -311,21 +311,10 @@ pub fn step_view<'a>(layout: &'a ResolvedLayout, current: &str, step: i32) -> Op
 mod tests {
     use super::*;
     use crate::config::layout::{RailItem, ViewDef};
-    use crate::labels::assert_labels;
 
     #[test]
     fn labels() {
-        assert_labels(ListFilter::ALL, ListFilter::as_str, ListFilter::message_id);
-        assert_labels(
-            FavoriteFolder::ALL,
-            FavoriteFolder::as_str,
-            FavoriteFolder::message_id,
-        );
-        assert_labels(
-            FolderPaneSectionKind::ALL,
-            FolderPaneSectionKind::as_str,
-            FolderPaneSectionKind::message_id,
-        );
+        assert_wire_labels!(ListFilter, FavoriteFolder, FolderPaneSectionKind);
     }
 
     #[test]
@@ -392,10 +381,7 @@ mod tests {
 
     fn act(action: &str, rank: Option<u32>) -> ToolbarItem {
         ToolbarItem::Action {
-            action: action.into(),
-            args: vec![],
-            label: None,
-            icon: None,
+            item: crate::ActionItem::new(action),
             rank,
             display: None,
         }

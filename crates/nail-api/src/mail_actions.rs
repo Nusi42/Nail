@@ -439,15 +439,6 @@ mod tests {
             MailAction::MarkRead { read: false }.kind().message_id(),
             "mail-action-kind-mark-unread"
         );
-        crate::labels::assert_labels(
-            MailActionKind::ALL,
-            MailActionKind::as_str,
-            MailActionKind::message_id,
-        );
-        crate::labels::assert_labels(
-            MailActionIssue::ALL,
-            MailActionIssue::as_str,
-            MailActionIssue::message_id,
-        );
+        assert_wire_labels!(MailActionKind, MailActionIssue);
     }
 }

@@ -111,6 +111,56 @@ pub(crate) fn parse_time(text: &str, tz: Option<&str>) -> Result<PimTime, Failur
 
 /// An occurrence's original start in the kind and zone of the series
 /// start.
+/// The edit scope of an MCP edit and the occurrence it names (needed by
+/// the scopes that start at one).
+fn scoped(
+    scope: McpEditScope,
+    occurrence_text: Option<&str>,
+    event: &CalendarEvent,
+) -> Result<(EditScope, Option<PimTime>), Failure> {
+    let scope = match scope {
+        McpEditScope::This => EditScope::This,
+        McpEditScope::ThisAndFollowing => EditScope::ThisAndFollowing,
+        McpEditScope::All => EditScope::All,
+    };
+    let recurrence_id = match (occurrence_text, scope.needs_occurrence()) {
+        (Some(text), _) => Some(occurrence(text, &event.fields.start)?),
+        (None, true) => return Err(invalid("this scope needs the occurrence")),
+        (None, false) => None,
+    };
+    Ok((scope, recurrence_id))
+}
+
+/// The targets and summary of an event write (`id` = the event's, or
+/// `new`); with `invite` the attendees are targets too.
+fn event_plan_head(
+    actor: &str,
+    id: &str,
+    fields: &EventFields,
+    invite: bool,
+) -> (Vec<nail_api::agents::ActionTarget>, LocalizedMessage) {
+    let mut targets = vec![target(ActionTargetKind::Event, id, &fields.title)];
+    if invite {
+        targets.extend(
+            fields
+                .attendees
+                .iter()
+                .map(|t| target(ActionTargetKind::Recipient, t.email.as_str(), &t.email)),
+        );
+    }
+    let summary = if invite {
+        LocalizedMessage::new("confirmation-summary-invite")
+            .arg("actor", actor)
+            .arg("title", fields.title.as_str())
+            .arg("count", fields.attendees.len())
+    } else {
+        LocalizedMessage::new("confirmation-summary-calendar")
+            .arg("actor", actor)
+            .arg("title", fields.title.as_str())
+    };
+    (targets, summary)
+}
+
 fn occurrence(text: &str, series_start: &PimTime) -> Result<PimTime, Failure> {
     let text = text.trim();
     match series_start {
@@ -210,6 +260,29 @@ impl<D: McpData> Ctx<'_, D> {
             .ok_or_else(|| not_found(format!("calendar {id}")))
     }
 
+    /// A task the client may change, with its list.
+    async fn task(&self, id: &str) -> Result<(Task, Calendar), Failure> {
+        let response = self
+            .shared
+            .data
+            .query(Request::GetTask {
+                task_id: TaskId::new(id.to_owned()),
+            })
+            .await
+            .map_err(|_| not_found(format!("task {id}")))?;
+        let Response::PimTask { task } = response else {
+            return Err(unexpected(&response));
+        };
+        let list = self
+            .calendar_by_id(&task.calendar_id)
+            .await
+            .map_err(|_| not_found(format!("task {id}")))?;
+        if task.read_only || list.read_only {
+            return Err(forbidden(format!("task {id}")));
+        }
+        Ok((*task, list))
+    }
+
     /// An event the client may change.
     async fn event(&self, id: &str) -> Result<(CalendarEvent, Calendar), Failure> {
         let response = self
@@ -291,25 +364,7 @@ pub(crate) async fn create_event<D: McpData>(
     if let Some(r) = &recurrence {
         issue(&r.issues(&fields.start))?;
     }
-    let mut targets = vec![target(ActionTargetKind::Event, "new", &fields.title)];
-    if invite {
-        targets.extend(
-            fields
-                .attendees
-                .iter()
-                .map(|t| target(ActionTargetKind::Recipient, t.email.as_str(), &t.email)),
-        );
-    }
-    let summary = if invite {
-        LocalizedMessage::new("confirmation-summary-invite")
-            .arg("actor", ctx.actor())
-            .arg("title", fields.title.as_str())
-            .arg("count", fields.attendees.len())
-    } else {
-        LocalizedMessage::new("confirmation-summary-calendar")
-            .arg("actor", ctx.actor())
-            .arg("title", fields.title.as_str())
-    };
+    let (targets, summary) = event_plan_head(ctx.actor(), "new", &fields, invite);
     let mut changes = vec![
         change("action-field-title", None, Some(fields.title.clone())),
         change(
@@ -377,16 +432,7 @@ pub(crate) async fn update_event<D: McpData>(
     if event.read_only || calendar.read_only {
         return Err(forbidden(format!("event {}", a.event_id)));
     }
-    let scope = match a.scope {
-        McpEditScope::This => EditScope::This,
-        McpEditScope::ThisAndFollowing => EditScope::ThisAndFollowing,
-        McpEditScope::All => EditScope::All,
-    };
-    let recurrence_id = match (&a.occurrence, scope.needs_occurrence()) {
-        (Some(text), _) => Some(occurrence(text, &event.fields.start)?),
-        (None, true) => return Err(invalid("this scope needs the occurrence")),
-        (None, false) => None,
-    };
+    let (scope, recurrence_id) = scoped(a.scope, a.occurrence.as_deref(), &event)?;
     let before = match (&recurrence_id, scope) {
         (Some(id), EditScope::This) => event
             .overrides
@@ -489,29 +535,7 @@ pub(crate) async fn update_event<D: McpData>(
         return Err(invalid("nothing to change"));
     }
     lines.push(audit("invitations", None, Some(invite.to_string())));
-    let mut targets = vec![target(
-        ActionTargetKind::Event,
-        event.id.as_str(),
-        &fields.title,
-    )];
-    if invite {
-        targets.extend(
-            fields
-                .attendees
-                .iter()
-                .map(|t| target(ActionTargetKind::Recipient, t.email.as_str(), &t.email)),
-        );
-    }
-    let summary = if invite {
-        LocalizedMessage::new("confirmation-summary-invite")
-            .arg("actor", ctx.actor())
-            .arg("title", fields.title.as_str())
-            .arg("count", fields.attendees.len())
-    } else {
-        LocalizedMessage::new("confirmation-summary-calendar")
-            .arg("actor", ctx.actor())
-            .arg("title", fields.title.as_str())
-    };
+    let (targets, summary) = event_plan_head(ctx.actor(), event.id.as_str(), &fields, invite);
     let recurrence = (scope != EditScope::This)
         .then(|| event.recurrence.clone())
         .flatten();
@@ -821,25 +845,8 @@ pub(crate) async fn upsert_task<D: McpData>(
     }
     let (existing, list): (Option<Task>, Calendar) = match &a.task_id {
         Some(id) => {
-            let response = ctx
-                .shared
-                .data
-                .query(Request::GetTask {
-                    task_id: TaskId::new(id.clone()),
-                })
-                .await
-                .map_err(|_| not_found(format!("task {id}")))?;
-            let Response::PimTask { task } = response else {
-                return Err(unexpected(&response));
-            };
-            let list = ctx
-                .calendar_by_id(&task.calendar_id)
-                .await
-                .map_err(|_| not_found(format!("task {id}")))?;
-            if task.read_only || list.read_only {
-                return Err(forbidden(format!("task {id}")));
-            }
-            (Some(*task), list)
+            let (task, list) = ctx.task(id).await?;
+            (Some(task), list)
         }
         None => (None, ctx.calendar(a.list_id.as_deref(), true).await?),
     };
@@ -1054,16 +1061,7 @@ pub(crate) async fn delete_item<D: McpData>(
             if event.read_only || calendar.read_only {
                 return Err(forbidden(format!("event {event_id}")));
             }
-            let scope = match scope {
-                McpEditScope::This => EditScope::This,
-                McpEditScope::ThisAndFollowing => EditScope::ThisAndFollowing,
-                McpEditScope::All => EditScope::All,
-            };
-            let recurrence_id = match (&when, scope.needs_occurrence()) {
-                (Some(text), _) => Some(occurrence(text, &event.fields.start)?),
-                (None, true) => return Err(invalid("this scope needs the occurrence")),
-                (None, false) => None,
-            };
+            let (scope, recurrence_id) = scoped(scope, when.as_deref(), &event)?;
             let line = audit(
                 "occurrence",
                 recurrence_id.as_ref().map(pim_time_text),
@@ -1115,24 +1113,7 @@ pub(crate) async fn delete_item<D: McpData>(
             )
         }
         PimDelete::Task { task_id } => {
-            let response = ctx
-                .shared
-                .data
-                .query(Request::GetTask {
-                    task_id: TaskId::new(task_id.clone()),
-                })
-                .await
-                .map_err(|_| not_found(format!("task {task_id}")))?;
-            let Response::PimTask { task } = response else {
-                return Err(unexpected(&response));
-            };
-            let list = ctx
-                .calendar_by_id(&task.calendar_id)
-                .await
-                .map_err(|_| not_found(format!("task {task_id}")))?;
-            if task.read_only || list.read_only {
-                return Err(forbidden(format!("task {task_id}")));
-            }
+            let (task, list) = ctx.task(&task_id).await?;
             (
                 ActionTargetKind::Task,
                 task.id.as_str().to_owned(),

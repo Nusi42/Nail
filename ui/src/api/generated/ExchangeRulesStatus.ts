@@ -33,10 +33,10 @@ server_rules: Array<ExchangeInboxRule>,
  */
 synced_at: string | null, 
 /**
- * Error class of the last failure.
- */
-error: ErrorCode | null, 
-/**
  * The user-facing text of the failure (ADR 0043).
  */
-localized?: LocalizedMessage, };
+localized?: LocalizedMessage, 
+/**
+ * Error class of the last failure.
+ */
+error: ErrorCode | null, };

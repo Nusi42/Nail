@@ -45,14 +45,30 @@ impl FlagChange {
         }
     }
 
+    /// Applies the tag part: removes `remove_tags`, then adds `add_tags`
+    /// (no duplicates). The result is sorted.
+    pub fn apply_tags(&self, tags: &mut Vec<String>) {
+        tags.retain(|t| !self.remove_tags.contains(t));
+        for tag in &self.add_tags {
+            if !tag.is_empty() && !tags.contains(tag) {
+                tags.push(tag.clone());
+            }
+        }
+        tags.sort();
+    }
+
     /// Whether the change sets nothing.
     pub fn is_empty(&self) -> bool {
         self.seen.is_none()
             && self.flagged.is_none()
             && self.answered.is_none()
             && self.draft.is_none()
-            && self.add_tags.is_empty()
-            && self.remove_tags.is_empty()
+            && !self.changes_tags()
+    }
+
+    /// Whether the change touches tags.
+    pub fn changes_tags(&self) -> bool {
+        !self.add_tags.is_empty() || !self.remove_tags.is_empty()
     }
 }
 
@@ -98,13 +114,13 @@ pub struct OpStatus {
     pub state: OpState,
     /// Error class when `failed` (or when a retry is pending), else `null`.
     pub error: Option<ErrorCode>,
-    /// Diagnostic detail (English), else `null`.
-    pub message: Option<String>,
     /// The user-facing text (Fluent id + arguments) when the core has a more
     /// specific one than the error class; else `null` (ADR 0043).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub localized: Option<LocalizedMessage>,
+    /// Diagnostic detail (English), else `null`.
+    pub message: Option<String>,
 }
 
 #[cfg(test)]

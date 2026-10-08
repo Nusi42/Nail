@@ -11,9 +11,7 @@ use std::path::{Path, PathBuf};
 
 use nail_api::config::layout::label_message_id;
 use nail_api::config::theme::css_var_name;
-use nail_api::{
-    ErrorCode, LayoutNode, MenuItem, RailItem, ResolvedLayout, ResolvedTheme, ToolbarItem,
-};
+use nail_api::{ErrorCode, LayoutNode, RailItem, ResolvedLayout, ResolvedTheme};
 use pretty_assertions::assert_eq;
 
 fn repo_root() -> PathBuf {
@@ -267,15 +265,6 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
 
 #[test]
 fn layout_references_resolve() {
-    fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
-        for item in items {
-            match item {
-                MenuItem::Action { action, .. } => out.push(action),
-                MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                MenuItem::Separator | MenuItem::Header { .. } => {}
-            }
-        }
-    }
     let layout = layout();
 
     // j/k navigate the list.
@@ -289,24 +278,12 @@ fn layout_references_resolve() {
         );
     }
 
-    let mut used_actions: Vec<&str> = layout.keys.iter().map(|k| k.action.as_str()).collect();
-    for items in layout.toolbars.values() {
-        for item in items {
-            match item {
-                ToolbarItem::Action { action, .. } => used_actions.push(action),
-                ToolbarItem::More { items, .. } => menu_actions(items, &mut used_actions),
-                ToolbarItem::Spacer | ToolbarItem::Separator => {}
-            }
-        }
-    }
-    for items in layout.menus.values() {
-        menu_actions(items, &mut used_actions);
-    }
-    for item in &layout.rail {
-        if let RailItem::Action { action, .. } = item {
-            used_actions.push(action);
-        }
-    }
+    let used_actions = nail_api::config::layout::used_actions(
+        &layout.keys,
+        layout.toolbars.values(),
+        layout.menus.values(),
+        &layout.rail,
+    );
     for action in used_actions {
         assert!(
             layout.actions.contains_key(action),

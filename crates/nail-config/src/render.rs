@@ -7,53 +7,22 @@
 //! inserted with [`crate::kdl_edit::append_rendered`]. Rendering and
 //! reading round-trip: reading the text back gives the same item.
 
-use std::fmt::Write as _;
-
 use nail_api::windows::WindowFrame;
 use nail_api::{
-    ActionDef, Breakpoint, LayoutNode, MenuItem, Orientation, ToolbarItem, ToolbarOverflow,
+    ActionDef, ActionItem, Breakpoint, LayoutNode, MenuItem, ToolbarItem, ToolbarOverflow,
     ToolbarSettings,
 };
 use serde_json::Value;
 
-use crate::accounts::write::quote;
 use crate::kdl_edit::{Style, json_text};
+use crate::kdl_write::Line;
 use crate::theme::{IconDef, TokenDef};
 
-/// A line builder: `name arg… key=value…`.
-struct Line(String);
-
 impl Line {
-    fn new(name: &str) -> Self {
-        Self(name.to_owned())
-    }
-
-    fn arg(mut self, text: &str) -> Self {
-        self.0.push(' ');
-        self.0.push_str(text);
-        self
-    }
-
-    fn str_arg(self, value: &str) -> Self {
-        self.arg(&quote(value))
-    }
-
-    fn prop(mut self, key: &str, text: &str) -> Self {
-        let _ = write!(self.0, " {key}={text}");
-        self
-    }
-
-    fn str_prop(self, key: &str, value: Option<&str>) -> Self {
-        match value {
-            Some(v) => self.prop(key, &quote(v)),
-            None => self,
-        }
-    }
-
     /// `hidden=#true` on a hidden layout node (M5d); nothing when shown.
     fn hidden(self, hidden: bool) -> Self {
         if hidden {
-            self.prop("hidden", "#true")
+            self.raw_prop("hidden", "#true")
         } else {
             self
         }
@@ -62,7 +31,7 @@ impl Line {
     /// Positional JSON arguments; `None` when one is an array or object.
     fn json_args(mut self, args: &[Value]) -> Option<Self> {
         for arg in args {
-            self = self.arg(&json_text(arg)?);
+            self = self.raw_arg(json_text(arg)?);
         }
         Some(self)
     }
@@ -109,34 +78,31 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             hidden,
             children: kids,
         } => {
-            let orientation = match orientation {
-                Orientation::Horizontal => "horizontal",
-                Orientation::Vertical => "vertical",
-            };
+            let orientation = orientation.as_str();
             let optional = |list: &[Option<String>]| {
                 list.iter()
                     .map(|s| s.clone().unwrap_or_else(|| "none".to_owned()))
                     .collect::<Vec<_>>()
             };
             let mut line = Line::new("split")
-                .str_arg(orientation)
-                .str_prop("id", id.as_deref())
-                .str_prop("label", label.as_deref());
+                .arg(orientation)
+                .prop_opt("id", id.as_deref())
+                .prop_opt("label", label.as_deref());
             if !sizes.is_empty() {
-                line = line.prop("sizes", &quote(&joined(sizes)));
+                line = line.prop("sizes", &joined(sizes));
             }
             if !min_sizes.is_empty() {
-                line = line.prop("min-sizes", &quote(&joined(&optional(min_sizes))));
+                line = line.prop("min-sizes", &joined(&optional(min_sizes)));
             }
             if !max_sizes.is_empty() {
-                line = line.prop("max-sizes", &quote(&joined(&optional(max_sizes))));
+                line = line.prop("max-sizes", &joined(&optional(max_sizes)));
             }
             if !collapsible.is_empty() {
                 let flags: Vec<String> = collapsible.iter().map(bool::to_string).collect();
-                line = line.prop("collapsible", &quote(&joined(&flags)));
+                line = line.prop("collapsible", &joined(&flags));
             }
             if !resizable {
-                line = line.prop("resizable", "#false");
+                line = line.raw_prop("resizable", "#false");
             }
             line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
@@ -148,10 +114,10 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             children: kids,
         } => {
             let mut line = Line::new("stack")
-                .str_prop("id", id.as_deref())
-                .str_prop("label", label.as_deref());
+                .prop_opt("id", id.as_deref())
+                .prop_opt("label", label.as_deref());
             if !sizes.is_empty() {
-                line = line.prop("sizes", &quote(&joined(sizes)));
+                line = line.prop("sizes", &joined(sizes));
             }
             line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
@@ -163,10 +129,10 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             children: kids,
         } => {
             let mut line = Line::new("tabs")
-                .str_prop("id", id.as_deref())
-                .str_prop("label", label.as_deref());
+                .prop_opt("id", id.as_deref())
+                .prop_opt("label", label.as_deref());
             if *active != 0 {
-                line = line.prop("active", &active.to_string());
+                line = line.raw_prop("active", active);
             }
             line.hidden(*hidden).block(depth, style, &children(kids)?)
         }
@@ -180,10 +146,10 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             ..
         } => {
             let mut line = Line::new(kind)
-                .str_prop("id", id.as_deref())
-                .str_prop("label", label.as_deref());
+                .prop_opt("id", id.as_deref())
+                .prop_opt("label", label.as_deref());
             for (key, value) in options {
-                line = line.prop(key, &json_text(value)?);
+                line = line.raw_prop(key, &json_text(value)?);
             }
             line = line.hidden(*hidden);
             if rows.is_empty() {
@@ -191,7 +157,7 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
             } else {
                 let mut out = String::new();
                 for row in rows {
-                    out.push_str(&Line::new("row").str_arg(row).end(depth + 1, style));
+                    out.push_str(&Line::new("row").arg(row).end(depth + 1, style));
                 }
                 line.block(depth, style, &out)
             }
@@ -212,7 +178,7 @@ pub(crate) fn window(
     // The window-model properties (M5c) go on the first node only.
     let mut frame = frame.filter(|f| !f.is_empty());
     let mut head = || {
-        let line = Line::new("window").str_arg(name);
+        let line = Line::new("window").arg(name);
         match frame.take() {
             Some(f) => window_frame(line, f),
             None => line,
@@ -227,10 +193,10 @@ pub(crate) fn window(
             let win = head().block(depth + 1, style, &root);
             let mut line = Line::new("breakpoint");
             if let Some(min) = bp.min_width {
-                line = line.prop("min-width", &min.to_string());
+                line = line.raw_prop("min-width", min);
             }
             if let Some(max) = bp.max_width {
-                line = line.prop("max-width", &max.to_string());
+                line = line.raw_prop("max-width", max);
             }
             out.push_str(&line.block(depth, style, &win));
         }
@@ -242,18 +208,18 @@ pub(crate) fn window(
 fn window_frame(line: Line, frame: &WindowFrame) -> Line {
     let flag = |b: bool| if b { "#true" } else { "#false" };
     let mut line = line
-        .str_prop("size", frame.size.map(|s| s.to_string()).as_deref())
-        .str_prop("min-size", frame.min_size.map(|s| s.to_string()).as_deref());
+        .prop_opt("size", frame.size.map(|s| s.to_string()).as_deref())
+        .prop_opt("min-size", frame.min_size.map(|s| s.to_string()).as_deref());
     for (key, value) in [
         ("modal", frame.modal),
         ("resizable", frame.resizable),
         ("pop-out", frame.pop_out),
     ] {
         if let Some(value) = value {
-            line = line.prop(key, flag(value));
+            line = line.raw_prop(key, flag(value));
         }
     }
-    line.str_prop(
+    line.prop_opt(
         "instances",
         frame
             .instances
@@ -264,10 +230,10 @@ fn window_frame(line: Line, frame: &WindowFrame) -> Line {
 /// `action "<id>" label=… icon=… alias-of=… <args>…`.
 pub(crate) fn action(id: &str, def: &ActionDef, depth: usize, style: &Style) -> Option<String> {
     let line = Line::new("action")
-        .str_arg(id)
-        .str_prop("label", def.label.as_deref())
-        .str_prop("icon", def.icon.as_deref())
-        .str_prop("alias-of", def.alias_of.as_deref())
+        .arg(id)
+        .prop_opt("label", def.label.as_deref())
+        .prop_opt("icon", def.icon.as_deref())
+        .prop_opt("alias-of", def.alias_of.as_deref())
         .json_args(&def.args)?;
     Some(line.end(depth, style))
 }
@@ -280,39 +246,31 @@ pub(crate) fn bind(
     depth: usize,
     style: &Style,
 ) -> Option<String> {
-    let line = Line::new("bind")
-        .str_arg(key)
-        .str_arg(action)
-        .json_args(args)?;
+    let line = Line::new("bind").arg(key).arg(action).json_args(args)?;
     Some(line.end(depth, style))
 }
 
 /// `unbind "<key>"`.
 pub(crate) fn unbind(key: &str, depth: usize, style: &Style) -> String {
-    Line::new("unbind").str_arg(key).end(depth, style)
+    Line::new("unbind").arg(key).end(depth, style)
 }
 
 /// `keys context="…" { <lines> }` (no `context` for `global`).
 pub(crate) fn keys_block(context: &str, lines: &str, depth: usize, style: &Style) -> String {
     let mut line = Line::new("keys");
     if context != "global" {
-        line = line.prop("context", &quote(context));
+        line = line.prop("context", context);
     }
     line.block(depth, style, lines)
 }
 
-fn item_line(
-    action: &str,
-    args: &[Value],
-    label: Option<&str>,
-    icon: Option<&str>,
-) -> Option<Line> {
+fn item_line(item: &ActionItem) -> Option<Line> {
     Some(
         Line::new("item")
-            .str_arg(action)
-            .json_args(args)?
-            .str_prop("label", label)
-            .str_prop("icon", icon),
+            .arg(&item.action)
+            .json_args(&item.args)?
+            .prop_opt("label", item.label.as_deref())
+            .prop_opt("icon", item.icon.as_deref()),
     )
 }
 
@@ -320,24 +278,21 @@ fn item_line(
 pub(crate) fn toolbar_item(item: &ToolbarItem, depth: usize, style: &Style) -> Option<String> {
     Some(match item {
         ToolbarItem::Action {
-            action,
-            args,
-            label,
-            icon,
+            item,
             rank,
             display,
         } => {
-            let mut line = item_line(action, args, label.as_deref(), icon.as_deref())?;
+            let mut line = item_line(item)?;
             if let Some(rank) = rank {
-                line = line.prop("rank", &rank.to_string());
+                line = line.raw_prop("rank", rank);
             }
-            line.str_prop("display", display.map(nail_api::ItemDisplay::as_str))
+            line.prop_opt("display", display.map(nail_api::ItemDisplay::as_str))
                 .end(depth, style)
         }
         ToolbarItem::More { label, icon, items } => {
             let line = Line::new("more")
-                .str_prop("label", label.as_deref())
-                .str_prop("icon", icon.as_deref());
+                .prop_opt("label", label.as_deref())
+                .prop_opt("icon", icon.as_deref());
             if items.is_empty() {
                 line.end(depth, style)
             } else {
@@ -362,12 +317,12 @@ pub(crate) fn toolbar(
     for item in items {
         out.push_str(&toolbar_item(item, depth + 1, style)?);
     }
-    let mut line = Line::new("toolbar").str_arg(name);
+    let mut line = Line::new("toolbar").arg(name);
     if settings.hide_disabled {
-        line = line.prop("hide-disabled", "#true");
+        line = line.raw_prop("hide-disabled", "#true");
     }
     if settings.overflow != ToolbarOverflow::default() {
-        line = line.str_prop("overflow", Some(settings.overflow.as_str()));
+        line = line.prop_opt("overflow", Some(settings.overflow.as_str()));
     }
     Some(if items.is_empty() {
         format!("{}{} {{}}{}", style.pad(depth), line.0, style.nl)
@@ -380,19 +335,14 @@ fn menu_items(items: &[MenuItem], depth: usize, style: &Style) -> Option<String>
     let mut out = String::new();
     for item in items {
         out.push_str(&match item {
-            MenuItem::Action {
-                action,
-                args,
-                label,
-                icon,
-            } => item_line(action, args, label.as_deref(), icon.as_deref())?.end(depth, style),
+            MenuItem::Action(item) => item_line(item)?.end(depth, style),
             MenuItem::Separator => Line::new("separator").end(depth, style),
-            MenuItem::Submenu { label, items } => Line::new("submenu").str_arg(label).block(
+            MenuItem::Submenu { label, items } => Line::new("submenu").arg(label).block(
                 depth,
                 style,
                 &menu_items(items, depth + 1, style)?,
             ),
-            MenuItem::Header { label } => Line::new("header").str_arg(label).end(depth, style),
+            MenuItem::Header { label } => Line::new("header").arg(label).end(depth, style),
         });
     }
     Some(out)
@@ -400,7 +350,7 @@ fn menu_items(items: &[MenuItem], depth: usize, style: &Style) -> Option<String>
 
 /// `menu "<name>" { … }`.
 pub(crate) fn menu(name: &str, items: &[MenuItem], depth: usize, style: &Style) -> Option<String> {
-    let line = Line::new("menu").str_arg(name);
+    let line = Line::new("menu").arg(name);
     Some(if items.is_empty() {
         format!("{}{} {{}}{}", style.pad(depth), line.0, style.nl)
     } else {
@@ -419,12 +369,12 @@ pub(crate) fn token(
     depth: usize,
     style: &Style,
 ) -> String {
-    let mut line = Line::new(category).str_arg(name);
+    let mut line = Line::new(category).arg(name);
     if let Some(value) = &def.value {
-        line = line.str_arg(&value.value);
+        line = line.arg(&value.value);
     }
     for (mode, value) in &def.modes {
-        line = line.prop(mode, &quote(&value.value));
+        line = line.prop(mode, &value.value);
     }
     line.end(depth, style)
 }
@@ -438,19 +388,17 @@ pub(crate) fn part<'a>(
 ) -> String {
     let mut out = String::new();
     for (property, value) in declarations {
-        out.push_str(&Line::new(property).str_arg(value).end(depth + 1, style));
+        out.push_str(&Line::new(property).arg(value).end(depth + 1, style));
     }
-    Line::new("part")
-        .str_arg(selector)
-        .block(depth, style, &out)
+    Line::new("part").arg(selector).block(depth, style, &out)
 }
 
 /// `icon "<name>" svg="…" view-box="…"`.
 pub(crate) fn icon(name: &str, def: &IconDef, depth: usize, style: &Style) -> String {
     Line::new("icon")
-        .str_arg(name)
-        .prop("svg", &quote(&def.svg))
-        .str_prop("view-box", def.view_box.as_deref())
+        .arg(name)
+        .prop("svg", &def.svg)
+        .prop_opt("view-box", def.view_box.as_deref())
         .end(depth, style)
 }
 
@@ -458,7 +406,7 @@ pub(crate) fn icon(name: &str, def: &IconDef, depth: usize, style: &Style) -> St
 pub(crate) fn setting(key: &str, values: &[String], depth: usize, style: &Style) -> String {
     let mut line = Line::new(key);
     for value in values {
-        line = line.str_arg(value);
+        line = line.arg(value);
     }
     line.end(depth, style)
 }
@@ -466,8 +414,8 @@ pub(crate) fn setting(key: &str, values: &[String], depth: usize, style: &Style)
 /// `raw-css "<part>" "<declarations>"`.
 pub(crate) fn raw_css(selector: &str, css: &str, depth: usize, style: &Style) -> String {
     Line::new("raw-css")
-        .str_arg(selector)
-        .str_arg(css)
+        .arg(selector)
+        .arg(css)
         .end(depth, style)
 }
 
@@ -527,10 +475,10 @@ mod tests {
         );
         let items = vec![
             ToolbarItem::Action {
-                action: "mail.reply".into(),
-                args: vec![],
-                label: Some("@x".into()),
-                icon: None,
+                item: ActionItem {
+                    label: Some("@x".into()),
+                    ..ActionItem::new("mail.reply")
+                },
                 rank: None,
                 display: None,
             },
@@ -548,10 +496,7 @@ mod tests {
         // M5b: settings, rank / display and the More menu with a header.
         let items = vec![
             ToolbarItem::Action {
-                action: "mail.archive".into(),
-                args: vec![],
-                label: None,
-                icon: None,
+                item: ActionItem::new("mail.archive"),
                 rank: Some(4),
                 display: Some(nail_api::ItemDisplay::Icon),
             },
@@ -562,12 +507,7 @@ mod tests {
                     MenuItem::Header {
                         label: "@toolbar.group.message".into(),
                     },
-                    MenuItem::Action {
-                        action: "mail.toggle-read".into(),
-                        args: vec![],
-                        label: None,
-                        icon: None,
-                    },
+                    MenuItem::Action(ActionItem::new("mail.toggle-read")),
                 ],
             },
         ];

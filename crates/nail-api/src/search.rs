@@ -34,6 +34,21 @@ pub struct SearchQuery {
     pub sort: SearchSort,
 }
 
+impl SearchQuery {
+    /// Messages matching `text` in every account and folder: the first
+    /// `limit` hits in the default order.
+    pub fn new(text: impl Into<String>, limit: u32) -> Self {
+        Self {
+            text: text.into(),
+            account_id: None,
+            folder_id: None,
+            offset: 0,
+            limit,
+            sort: SearchSort::default(),
+        }
+    }
+}
+
 /// The server-side part of a search (M2c): messages whose body is not
 /// stored locally ([`crate::MessageSummary::headers_only`]) are searched on
 /// the server (IMAP `SEARCH`) and the hits merged into the result.
@@ -171,12 +186,13 @@ pub struct SavedSearch {
 /// Converts a byte offset into `text` to a UTF-16 offset for
 /// [`SearchError`]. Offsets inside a character round down to its start.
 pub fn utf16_offset(text: &str, byte_offset: usize) -> u32 {
-    let mut end = byte_offset.min(text.len());
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(byte_offset.min(text.len()));
     u32::try_from(text[..end].encode_utf16().count()).unwrap_or(u32::MAX)
 }
+
+/// Hits a restricted search (MCP clients, remote sessions with a narrowed
+/// grant) looks at, at most; past this the result is cut short.
+pub const RESTRICTED_SCAN: u32 = 5000;
 
 #[cfg(test)]
 mod tests {

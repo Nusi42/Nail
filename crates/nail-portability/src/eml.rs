@@ -5,11 +5,12 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use nail_api::portability::{ItemRef, MAX_IMPORT_MESSAGE_BYTES, PortabilityIssueCode};
+use nail_api::portability::ItemRef;
 
 use crate::error::{PortabilityError, Result};
+use crate::files::require_folder;
 use crate::folder::{safe_file_name, source_folder};
-use crate::import::{FolderLocation, MailFolderSource, RawMessage};
+use crate::import::{FolderLocation, MailFolderSource, RawMessage, read_message_file};
 use crate::job::JobContext;
 use crate::message::{header_facts, issue_label};
 
@@ -53,12 +54,7 @@ fn display_name(path: &Path) -> String {
 /// The folders of an `.eml` folder tree: the root (named after its
 /// directory) and every subfolder, parents first.
 pub fn scan(root: &Path) -> Result<Vec<MailFolderSource>> {
-    if !root.is_dir() {
-        return Err(PortabilityError::InvalidSource(format!(
-            "{} is not a folder",
-            root.display()
-        )));
-    }
+    require_folder(root)?;
     let mut out = Vec::new();
     scan_dir(root, &mut vec![display_name(root)], 0, &mut out)?;
     Ok(out)
@@ -120,28 +116,8 @@ pub fn read_dir(
             index: Some(index),
             ..ItemRef::default()
         };
-        let size = fs::metadata(&path).map_or(0, |m| m.len());
-        if size > MAX_IMPORT_MESSAGE_BYTES {
-            ctx.advance(0, size);
-            visit(
-                ctx,
-                RawMessage::problem(
-                    origin,
-                    PortabilityIssueCode::TooLarge,
-                    format!("{size} bytes"),
-                ),
-            )?;
-            continue;
-        }
-        match fs::read(&path) {
-            Ok(raw) => {
-                ctx.advance(0, raw.len() as u64);
-                visit(ctx, RawMessage::new(raw, origin))?;
-            }
-            Err(e) => visit(
-                ctx,
-                RawMessage::problem(origin, PortabilityIssueCode::UnreadableFile, e.to_string()),
-            )?,
+        if let Some(raw) = read_message_file(&path, &origin, ctx, visit)? {
+            visit(ctx, RawMessage::new(raw, origin))?;
         }
     }
     Ok(())

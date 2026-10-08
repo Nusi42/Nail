@@ -369,6 +369,22 @@ pub enum AuthResult {
     Permerror,
 }
 
+wire_names!(AuthMethod {
+    Dkim = "dkim",
+    Spf = "spf",
+    Dmarc = "dmarc",
+});
+
+wire_names!(AuthResult {
+    Pass = "pass",
+    Fail = "fail",
+    Softfail = "softfail",
+    Neutral = "neutral",
+    None = "none",
+    Temperror = "temperror",
+    Permerror = "permerror",
+});
+
 /// What a rule does with a matching message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -517,17 +533,25 @@ pub struct RuleRun {
     /// Whether [`crate::Request::UndoRuleRun`] can still undo it (not for
     /// sent forwards / replies, permanent deletes, or runs already undone).
     pub undoable: bool,
-    /// Diagnostic detail when `failed` (English), else `null`.
-    pub message: Option<String>,
     /// The user-facing text (Fluent id + arguments) when the core has a more
     /// specific one than the error class; else `null` (ADR 0043).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub localized: Option<LocalizedMessage>,
+    /// Diagnostic detail when `failed` (English), else `null`.
+    pub message: Option<String>,
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn auth_wire_names_match_serde() {
+        use super::{AuthMethod, AuthResult};
+        crate::labels::assert_wire_names(AuthMethod::ALL, AuthMethod::as_str);
+        crate::labels::assert_wire_names(AuthResult::ALL, AuthResult::as_str);
+        assert_eq!(AuthResult::parse("softfail"), Some(AuthResult::Softfail));
+    }
+
     use super::*;
     use pretty_assertions::assert_eq;
     use serde_json::json;
