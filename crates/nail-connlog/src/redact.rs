@@ -452,7 +452,10 @@ mod tests {
         secrets.add("s3cret-pass");
         secrets.add("s3cret");
         assert_eq!(
-            scrub("NO login s3cret-pass for sam@example.net (s3cret)", &secrets),
+            scrub(
+                "NO login s3cret-pass for sam@example.net (s3cret)",
+                &secrets
+            ),
             "NO login <redacted> for s***@example.net (<redacted>)"
         );
         for n in 0..20 {

@@ -22,7 +22,13 @@ integrator merges the branches into `work-1`.
 3. Write its arguments as `args/<wave>.json` (see `args/m5d.json` for the
    shape) and set `since` to the commit the wave starts from.
 4. Ask Claude to run the `nail-wave` workflow with those arguments
-   (`Workflow({ scriptPath: ".claude/workflows/nail-wave.js", args: … })`).
+   (`Workflow({ scriptPath: ".claude/workflows/nail-wave.js", args: … })`;
+   the session runs in the master, so a relative path resolves to
+   `<master>\.claude\workflows\nail-wave.js`; pass that path
+   with `%USERPROFILE%` expanded if the tool needs an absolute one). The
+   script names folders as `%USERPROFILE%\…` in prose and `~/…` in Git Bash
+   commands: the Workflow runtime has no Node APIs to look up the home
+   folder, and no user name may enter the repository (ADR 0192).
 
 ## Arguments
 

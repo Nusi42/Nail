@@ -1,6 +1,6 @@
 # ADR 0191: Resilient IMAP folder sync — one bad message never fails a folder
 
-Status: accepted · 2026-10-08 · owner report (the provider: "The folder INBOX could not be synchronized"; INBOX stopped
+Status: accepted · 2026-10-08 · finding from real-account testing (a real IMAP account: "The folder INBOX could not be synchronized"; INBOX stopped
 after 150 messages, every other folder synced)
 
 ## Context

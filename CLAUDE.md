@@ -1411,7 +1411,7 @@ like this:
    half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent finish it.
 3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`): packages in `nail-work-2` and up, reset to
    `main`; reviewers with a fresh context; merge into `work-1`, full suite, push `work-1`,
-   `git -C <master> merge --ff-only work-1`.
+   `git -C <master> merge --ff-only work-1` (Git Bash).
 4. CodeGraph's index lives in `nail-work-1/.codegraph` (the master has none): pass
    `projectPath: <work root>\nail-work-1` to `codegraph_explore`, or run `codegraph explore` there.
 5. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and

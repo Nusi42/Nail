@@ -19,21 +19,26 @@ const A = args
 // each green lead stage main is fast-forwarded to work-<lead> (FF below), so
 // main is always green. Parallel package i resets nail-work-<lead+1+i> (or
 // b.folder) to main, works on its branch and pushes it.
+// The Workflow runtime has no Node APIs (no process / os), so the home folder
+// cannot be computed here: prose names Windows paths with %USERPROFILE%,
+// commands use Git Bash's ~ (agents run Git Bash; ~ expands to the home
+// folder). No user name in the repository (ADR 0192).
 const MASTER = '<master>'
-const WORK = 'C:\\Users\\<user>\\<work root>'
+const MASTER_SH = '<master>'
 const LEAD = A.lead || 1
-const folder = n => `${WORK}\\nail.win${n}`
-const posix = p => p.replace(/^([A-Za-z]):/, (m, d) => '/' + d.toLowerCase()).replace(/\\/g, '/')
+const folder = n => `<work root>\\nail.win${n}`
+const folderSh = n => `<work root>/nail.win${n}`
 const REPO = folder(LEAD)
+const REPO_SH = folderSh(LEAD)
 const LEAD_BRANCH = `WIN${LEAD}`
 const slotOf = (b, i) => b.folder || LEAD + 1 + i
 // The last step of every green lead stage that commits.
-const FF = `then fast-forward the master: \`git push origin ${LEAD_BRANCH} && git -C ${posix(MASTER)} merge --ff-only ${LEAD_BRANCH}\` (the only write ever made in the master; if it fails, report it and stop — never edit files there)`
+const FF = `then fast-forward the master: \`git push origin ${LEAD_BRANCH} && git -C ${MASTER_SH} merge --ff-only ${LEAD_BRANCH}\` (the only write ever made in the master; if it fails, report it and stop — never edit files there)`
 const OPTS = { model: 'opus', effort: 'medium' }
 const TRAILER = `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: a published page, not linked here`
 
-const COMMON = `You are implementing "Nail", a Rust + TypeScript/React email & PIM client (Windows 11; Bash tool = Git Bash with POSIX paths like ${posix(REPO)}; PowerShell also available). Your shell may start in another directory: cd into your work folder in every command or use absolute paths.
+const COMMON = `You are implementing "Nail", a Rust + TypeScript/React email & PIM client (Windows 11; Bash tool = Git Bash with POSIX paths like ${REPO_SH}; %USERPROFILE% in this prompt is your home folder, ~ in Git Bash; PowerShell also available). Your shell may start in another directory: cd into your work folder in every command or use absolute paths.
 WHERE YOU WORK: ${MASTER} (OneDrive) is the MASTER repository. Never edit, build, test, run or commit anything there (its npm scripts, cargo and git hook refuse anyway). Your work folder is named in your task; the lead's is ${REPO} (branch ${LEAD_BRANCH}). Build output stays inside your work folder (target/, .nail-build/).
 Earlier milestones are done (git log; .claude/memory/*status*.md). We are now in wave ${A.wave}. Read docs/plan.md ${A.planRef} fully (including its "Scope decisions"), the ADRs in docs/adr/ relevant to your area, docs/dev-setup.md, and the relevant sections of docs/design.md. CLAUDE.md (in your context; re-read your work folder's copy, it may be newer) lists commands and conventions — follow them.
 Mandatory rules:
@@ -137,7 +142,7 @@ const reviews = await parallel(A.reviews.map(r => () =>
 
 YOUR TASK: review ${A.wave} in ${REPO} (read-only: do not modify tracked files, do not commit). Lens: ${r.lens}
 Integration report: ${integ ? integ.summary + '\nTests: ' + integ.testReport : 'integration agent failed'}
-Use CARGO_TARGET_DIR=${posix(REPO)}/.nail-build/target-review-${r.key}. Report only real, verified problems with concrete evidence; no nits. Rank by severity.
+Use CARGO_TARGET_DIR=${REPO_SH}/.nail-build/target-review-${r.key}. Report only real, verified problems with concrete evidence; no nits. Rank by severity.
 Always also check the wave's changes (git diff ${A.since}..HEAD) for SSOT / ODR / DRY violations: a fact defined or hand-mirrored in more than one place, copy-pasted logic, a second definition of an existing type / constant / helper. Report each as severity "medium" or higher (must-fix), naming both places and the single source it should come from.`, { ...OPTS, label: `review:${r.key}`, phase: 'Review', schema: FINDINGS })
 ))
 const all = reviews.filter(Boolean).flatMap(r => r.findings)
@@ -169,7 +174,7 @@ const GATE = {
 }
 const verify = await agent(`${COMMON}
 
-YOUR TASK: independent final verification of ${A.wave} in ${REPO} (read-only; do not modify tracked files; do not commit). Use CARGO_TARGET_DIR=${posix(REPO)}/.nail-build/target-verify-${A.key}.
+YOUR TASK: independent final verification of ${A.wave} in ${REPO} (read-only; do not modify tracked files; do not commit). Use CARGO_TARGET_DIR=${REPO_SH}/.nail-build/target-verify-${A.key}.
 Run from scratch: npm ci (or npm install if a dev server locks files — say so); npm run build; cargo fmt --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace; npm run lint; npm test (run it twice); npm run e2e; cargo build -p nail-app.
 Then: ${A.verify}
 Also check docs/CLAUDE.md/plan/memory updated, git status clean, ${LEAD_BRANCH} pushed and the master's main fast-forwarded to it (origin/${LEAD_BRANCH} = origin/main = HEAD), and list commits since ${A.since}. Evidence for each check.`, { ...OPTS, label: `verify ${A.wave}`, phase: 'Verify', schema: GATE })

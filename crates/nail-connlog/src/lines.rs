@@ -207,7 +207,10 @@ mod tests {
             state.received(&[Part::Text("334 VXNlcm5hbWU6")]),
             "334 <challenge>"
         );
-        assert_eq!(state.sent(&[Part::Text("c2FtQGV4YW1wbGUubmV0")]), "<redacted>");
+        assert_eq!(
+            state.sent(&[Part::Text("c2FtQGV4YW1wbGUubmV0")]),
+            "<redacted>"
+        );
         assert_eq!(
             state.received(&[Part::Text("334 UGFzc3dvcmQ6")]),
             "334 <challenge>"
@@ -229,7 +232,7 @@ mod tests {
     fn smtp_auth_plain_and_xoauth2() {
         let mut state = SmtpState::default();
         assert_eq!(
-            state.sent(&[Part::Text("AUTH PLAIN AHNhbQBodW50ZXIy")]),
+            state.sent(&[Part::Text("AUTH PLAIN AHNhbQBodW50ZXIy")]), // spellchecker:disable-line
             "AUTH PLAIN <redacted>"
         );
         assert_eq!(
@@ -261,10 +264,7 @@ mod tests {
         );
         assert_eq!(state.sent(&[Part::Text("AUTH PLAIN")]), "AUTH PLAIN");
         assert_eq!(state.received(&[Part::Text("+ ")]), "+ <challenge>");
-        assert_eq!(
-            state.sent(&[Part::Text("AHNhbQBodW50ZXIy")]),
-            "<redacted>"
-        );
+        assert_eq!(state.sent(&[Part::Text("AHNhbQBodW50ZXIy")]), "<redacted>"); // spellchecker:disable-line
         assert_eq!(
             state.received(&[Part::Text("+OK logged in")]),
             "+OK logged in"
@@ -277,9 +277,7 @@ mod tests {
     fn sieve_auth_and_scripts() {
         let mut state = SieveState::default();
         assert_eq!(
-            state.sent(&[Part::Text(
-                "AUTHENTICATE \"PLAIN\" \"AHNhbQBodW50ZXIy\""
-            )]),
+            state.sent(&[Part::Text("AUTHENTICATE \"PLAIN\" \"AHNhbQBodW50ZXIy\"")]), // spellchecker:disable-line
             "AUTHENTICATE \"PLAIN\" <redacted>"
         );
         assert_eq!(

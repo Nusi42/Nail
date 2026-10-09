@@ -299,7 +299,10 @@ mod tests {
     fn login_with_quoted_strings_and_literals() {
         let mut state = ImapState::default();
         assert_eq!(
-            sent(&mut state, "A0001 LOGIN \"sam@example.net\" \"hunter2\"\r\n"),
+            sent(
+                &mut state,
+                "A0001 LOGIN \"sam@example.net\" \"hunter2\"\r\n"
+            ),
             "A0001 LOGIN \"s***@example.net\" <redacted>"
         );
         let literal = state.sent(&[
@@ -314,7 +317,7 @@ mod tests {
     fn authenticate_hides_every_answer() {
         let mut state = ImapState::default();
         assert_eq!(
-            sent(&mut state, "A0001 AUTHENTICATE PLAIN AHNhbQBodW50ZXIy"),
+            sent(&mut state, "A0001 AUTHENTICATE PLAIN AHNhbQBodW50ZXIy"), // spellchecker:disable-line
             "A0001 AUTHENTICATE PLAIN <redacted>"
         );
         assert_eq!(
@@ -365,7 +368,14 @@ mod tests {
             "{line}"
         );
         assert!(line.contains("BODY[] {4211 bytes})"), "{line}");
-        for content in ["Quarterly", "Ada", "ada", "example.org", "example.net", "abc@"] {
+        for content in [
+            "Quarterly",
+            "Ada",
+            "ada",
+            "example.org",
+            "example.net",
+            "abc@",
+        ] {
             assert!(!line.contains(content), "{content} in {line}");
         }
         let bodystructure = received(
