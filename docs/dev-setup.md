@@ -213,6 +213,31 @@ plug-in SDK); rules the UI ports from Rust are checked against generated
 test vectors (`crates/nail-api/fixtures/ts-vectors/`, `ui/src/test/vectors.ts`;
 ADR 0175).
 
+Where shared things live (Q2, ADRs 0172–0177):
+
+- Rust helpers without dependencies are in `nail-util` (`time`: `unix_now`,
+  `rfc3339_utc`, `rfc3339_now` and the millis forms; `color`: WCAG colour
+  math; `snapshot`: snapshot and golden files); transport / HTTP / XML
+  plumbing in `nail-net`; provider domains in `nail_api::hosts`.
+- Contract samples are in `nail_api::testing` (feature `testing`); test
+  support in the `testing` features of nail-core / nail-store / nail-rules /
+  nail-portability / nail-proxy and in nail-testkit(-net).
+- TypeScript constants come from the generated
+  `ui/src/api/generated/constants.ts` (`nail_api::ts_constants`); a contract
+  enum the UI lists is exported as `<ENUM>_VALUES` (`enum_values` with `ALL`
+  or `every!`) and imported, never typed out (the check's `generated-list`
+  finds hand copies, `ts-list` a list defined twice in TypeScript; the UI's
+  mock core counts as contract code). Other contract values are in
+  `ui/src/api/contract.ts`, test ids in `ui/src/test/mockIds.ts`.
+- Skins use the one token map `ui/src/theme/tokens.ts` (`T`) and
+  `VISUALLY_HIDDEN`; shared skin rules / lengths are in
+  `ui/src/theme/declarations.ts`; WCAG colour math in the UI is
+  `ui/src/theme/contrast.ts`.
+- One English text under two ids is a Fluent reference
+  (`id = { common-… }`; generic labels in `locales/en/common.ftl`).
+- Vitest `must` / `mailEnv` live in `ui/src/test`; e2e `windowById` /
+  `closeWindow` / `screenshotFile` in `e2e/support`.
+
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
 select some, `--fail-fast` stops at the first failure. Cargo runs with
@@ -329,6 +354,19 @@ Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
 / `NAIL_UPDATER_KEY_PASSWORD`; variables `NAIL_UPDATER_PUBKEY`,
 `NAIL_UPDATE_BASE_URL`. Key handling, signing and the release steps:
 [`docs/release.md`](release.md).
+
+### Core tests and other pitfalls
+
+- Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets`
+  (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine
+  timing for tests: `EngineTiming::fast()`. Core tests of plug-ins need
+  `#[tokio::test(flavor = "multi_thread")]` (plug-in threads call back into
+  the runtime).
+- Python on Windows writes CRLF in text mode: when scripting file edits,
+  write with `newline=''` (the repository is LF, `.gitattributes`); the
+  `nail-compose` golden `.eml` files are CRLF on purpose.
+- `tauri-build`'s static VC runtime is limited to release builds (ADR 0004),
+  otherwise the workspace doctests fail to link.
 
 ### Installer, portable zip and SBOMs (ADR 0040)
 
@@ -873,7 +911,7 @@ and connect to `http://127.0.0.1:9333`, for example with Playwright's
 
 ## Layout of the code
 
-See [`CLAUDE.md`](../CLAUDE.md) for the crate map, [`plan.md`](plan.md) for
+See [`architecture.md`](architecture.md) for the crate map, [`plan.md`](plan.md) for
 milestones and [`adr/`](adr/) for decisions. The main ADRs for the M0
 architecture are:
 

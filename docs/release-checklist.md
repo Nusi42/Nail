@@ -30,7 +30,7 @@ items: [`docs/backlog.md`](backlog.md).
 2. Move the `[Unreleased]` / candidate entries of `CHANGELOG.md` under the
    version and date; write `packaging/release-notes/1.0.0.md` and the user
    page `userDocs/en/release-notes.md`.
-3. Full local run (CLAUDE.md "Commands"), then tag `v1.0.0`; `release.yml`
+3. Full local run (`docs/dev-setup.md` "Test"), then tag `v1.0.0`; `release.yml`
    builds, signs and drafts the GitHub release with the update manifests.
 4. Publish the manifests at the update base URL (`stable/latest.json`,
    `beta/latest.json`), the installers at the release URLs; submit the
