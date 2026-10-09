@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // `prepare` (npm install / npm ci): points git at the repository's hooks in
-// .githooks (the pre-commit checks, ADR 0123). Does nothing outside a git
+// .githooks (pre-commit: the private-data guard + the per-file checks;
+// commit-msg: the private-data guard; pre-push: the guard on the pushed
+// commits + `npm run check`; ADRs 0123, 0192). Does nothing outside a git
 // checkout (an unpacked tarball) or when git is not installed.
 import { execFileSync } from "node:child_process";
 import path from "node:path";

@@ -1,0 +1,4 @@
+#!/bin/sh
+# No private data in the commit message (scripts/check-private.mjs, ADR 0192;
+# the patterns stay outside the repository). Never bypass with --no-verify.
+exec node scripts/check-private.mjs --message "$1"

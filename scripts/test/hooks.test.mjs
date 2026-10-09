@@ -22,6 +22,21 @@ test("the Git hooks run the pre-commit checks and `npm run check` before a push"
   assert.match(read(".githooks/pre-push"), /^exec node scripts\/check\.mjs$/m);
 });
 
+test("the Git hooks run the private-data guard (ADR 0192)", () => {
+  assert.match(
+    read(".githooks/pre-commit"),
+    /^node scripts\/check-private\.mjs --staged \|\| exit 1$/m,
+  );
+  assert.match(
+    read(".githooks/commit-msg"),
+    /^exec node scripts\/check-private\.mjs --message "\$1"$/m,
+  );
+  assert.match(
+    read(".githooks/pre-push"),
+    /^node scripts\/check-private\.mjs --push \|\| exit 1$/m,
+  );
+});
+
 test("the Claude Code post-edit hook runs scripts/post-edit.mjs of the session folder", () => {
   /** @typedef {{ type: string, command: string }} Hook */
   const settings = /** @type {{ hooks: { PostToolUse: { matcher: string, hooks: Hook[] }[] } }} */ (

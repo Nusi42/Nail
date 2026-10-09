@@ -1,5 +1,8 @@
 #!/bin/sh
-# Everything `npm run check` checks, before a branch reaches the master
+# The private-data guard on the commits being pushed (messages and added
+# lines; ADR 0192; reads git's ref lines on stdin), then everything
+# `npm run check` checks, before a branch reaches the master
 # (scripts/check.mjs, ADRs 0123 and 0132). It refuses inside the OneDrive
 # master. Never bypass with --no-verify: fix the finding instead.
+node scripts/check-private.mjs --push || exit 1
 exec node scripts/check.mjs

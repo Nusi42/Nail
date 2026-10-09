@@ -40,8 +40,10 @@ node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuse
 ```
 
 `main` is always green: it only moves to a `work-1` commit whose full suite
-passed. Hooks in every work folder: pre-commit = the fast per-file checks,
-pre-push = `npm run check` (`.githooks/`), and Claude Code's post-edit hook
+passed. Hooks in every work folder: pre-commit = the private-data guard on
+the staged content + the fast per-file checks, commit-msg = the private-data
+guard on the message, pre-push = the private-data guard on the pushed commits +
+`npm run check` (`.githooks/`), and Claude Code's post-edit hook
 runs the per-file checks on every file an agent edits
 (`.claude/settings.json` → `scripts/post-edit.mjs`, which finds the work
 folder from the edited file and runs that folder's checks; findings go back
@@ -225,6 +227,34 @@ check and the duplicate check (every finding touching the staged files; about
 commit with TypeScript files, most of it type-aware ESLint starting up;
 0.2 s for Rust / Markdown / TOML only). It reads the
 working-tree copy of each staged file, so stage the whole file you fixed.
+
+### No private data in git
+
+None of the owner's private information may reach git (ADR 0192): addresses,
+domains, providers and server names of real accounts, folder names, mailbox
+contents, the Windows user name (write `%USERPROFILE%\…` in prose,
+`~/…` in Git Bash commands). Test data uses `example.com` / `example.net` /
+`example.org` and the demo personas.
+
+`scripts/check-private.mjs` enforces it with patterns kept **outside every
+repository** in `%USERPROFILE%\.nail-private\patterns.txt` (one regular
+expression per line, `#` comments, case-insensitive; `NAIL_PRIVATE_PATTERNS`
+names another file). Never commit that file or copy its values anywhere in a
+repository, a commit message, an ADR or memory. Without the file the guard
+prints "no private patterns configured" and passes (CI, other machines). For
+each literal pattern it also searches the base64 forms (three alignments).
+Findings name file and line with the match masked.
+
+```bash
+node scripts/check-private.mjs              # every tracked file + name (step `private` of npm run check)
+node scripts/check-private.mjs --staged     # staged content + names (pre-commit hook)
+node scripts/check-private.mjs --message F  # a commit message (commit-msg hook)
+node scripts/check-private.mjs --push       # pushed commits: messages, names, added lines (pre-push; refs on stdin)
+```
+
+A finding is fixed by replacing the value with neutral example data; never
+bypass a hook with `--no-verify`. New private details go into the patterns
+file, which makes the next `npm run check` scan the whole tree for them.
 
 ### Console output in UI tests
 

@@ -25,6 +25,13 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - **Windows first.** macOS, Linux and mobile come later.
 - **No fixed development ports.** Take a free port or fall back to one, so Nail runs next to other projects (`scripts/dev.mjs`: Vite on `NAIL_DEV_PORT` / 5791 / a free port + Tauri `devUrl`; `nail serve` falls back from 4780; tests bind port 0).
 - **No non-loopback sockets.** Never open sockets on non-loopback/unspecified addresses (TCP or UDP), except the user-enabled remote UI listener; use the OS DNS API; tests bind 127.0.0.1 (ADR 0057; `scripts/check-socket-binds.mjs` runs in `npm test`).
+- **No private data in git (ADR 0192, maintainer rule).** Nothing of the maintainer's accounts or profile — addresses, domains,
+  providers / server names, folder names, mailbox contents, account ids, the Windows user name — in code, tests, docs,
+  ADRs, memory, workflow args or commit messages. Write paths as `%USERPROFILE%\…` (prose) / `~/…` (Git Bash); test
+  data = `example.com` / `.net` / `.org` and the demo personas; pass the maintainer's bug reports to agents generically. The guard
+  `scripts/check-private.mjs` (pre-commit staged content, commit-msg, pre-push, step `private` of `npm run check`)
+  reads its patterns from `%USERPROFILE%\.nail-private\patterns.txt`, which lives outside every repository: never
+  commit it or copy its values anywhere (absent file = passes, for CI).
 - **Zero warnings (Q1, ADR 0123).** 0 warnings, 0 errors; never relax lint levels or `-D warnings` (no new `allow`
   in `[workspace.lints]`, no ESLint rule switched off, no `--no-verify`). An unavoidable exception needs
   `#[expect(lint, reason = "…")]` (Rust; `#[allow]` is denied) / `// eslint-disable-next-line rule -- reason` at the
@@ -855,7 +862,8 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
                        import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
-                       ADR 0089), check-socket-binds.mjs (ADR 0057), test/ (node:test);
+                       ADR 0089), check-socket-binds.mjs (ADR 0057), check-private.mjs + lib/private-patterns.mjs
+                       (private-data guard, ADR 0192), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040);
                        dev.mjs + tauri.mjs + lib/dev-port.mjs (free dev-server port, Tauri devUrl override);
                        Q1 (ADR 0123): check.mjs + lib/check-steps.mjs (`npm run check`), pre-commit.mjs +
@@ -892,6 +900,7 @@ cargo fmt --all --check
 npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`, perf + visual script tests
 cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
+node scripts/check-private.mjs [--staged | --message F | --push]   # private-data guard (patterns outside the repo, ADR 0192)
 npm run check:duplicates                   # duplicate / SSOT check (Q2, ADRs 0171, 0176; `--strict` in npm run check, `--files` in the hooks): every finding fails
 node scripts/check-duplicates.mjs --list   # print every finding (--owner WP-… = one Q2 package's; --update-baseline only for a future ratchet wave)
 npm run check                              # everything, 0 warnings (ADR 0123): rustfmt, taplo, Prettier, EditorConfig, typos, markdownlint, actionlint, ESLint, tsc, clippy + rustdoc -D warnings, cargo machete, cargo deny

@@ -39,6 +39,7 @@ test("check covers every formatter and linter the quality baseline names", () =>
     "taplo-lint",
     "prettier",
     "editorconfig",
+    "private",
     "typos",
     "markdownlint",
     "actionlint",

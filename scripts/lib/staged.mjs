@@ -23,6 +23,9 @@ const DUPLICATES = /\.(rs|ts|tsx|mts|cts|js|mjs|cjs|ftl|kdl)$|^scripts\/duplicat
 /** Extensions Prettier formats in this repository (it skips ignored files itself). */
 const PRETTIER = /\.(ts|tsx|mts|cts|js|mjs|cjs|json|jsonc|ya?ml|css|html)$/;
 
+/** The git arguments that list the staged files (added, copied, modified, renamed). */
+export const STAGED_FILES_ARGS = ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"];
+
 /**
  * Parses `git diff --cached --name-only -z` output.
  *
